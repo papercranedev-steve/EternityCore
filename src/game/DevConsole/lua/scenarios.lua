@@ -37,9 +37,12 @@ scenario.list = {
     },
     {
         -- level 60: premade gear only exists for 49 and 60, 49 gear is far too weak here
-        id = "strat", title = "斯坦索姆 亡灵怪群（场景 4）", level = 60,
+        -- Pack: creature_groups 52157 (Ravaged Cadaver + Mangled Cadaver, elites, and 3 skeletons).
+        -- Not the scenario 4 doc pack at (3973, -3649): that street is crossed by gargoyle / Eye of
+        -- Naxxramas patrols and every spot near it got the party feared into other packs.
+        id = "strat", title = "斯坦索姆 尸体与骷髅群", level = 60,
         entry = { map = 329, x = 3392.92, y = -3395.03, z = 143.14, o = 1.57 },
-        pack = { x = 3973.0, y = -3649.0, z = 134.5 },
+        pack = { x = 3687.0, y = -3597.0, z = 138.0 },
         -- No computed spot: the street is packed with mobs that are not in creature_groups, and the
         -- 1.14 client falls through the floor at many navmesh points. Record one with .scenario setspot.
         needsRecordedSpot = true,
@@ -177,6 +180,7 @@ local function respawnPack(leader, s, radius)
 end
 
 local function fail(p, msg)
+    if p:exists() and p:gm() then p:gm(false) end
     say(p, "失败：" .. msg)
     status(p, "error", msg)
     scenario.running = nil
@@ -198,6 +202,7 @@ local function finish(leader, s)
         local ang = back + (i - (#bots + 1) / 2) * 0.6
         b:tp(spot.x + math.cos(ang) * 3.0, spot.y + math.sin(ang) * 3.0, spot.z, spot.o)
     end
+    leader:gm(false)
     leader:refill()
     leader:resetcd()
     local respawned = respawnPack(leader, s)
@@ -298,7 +303,8 @@ function scenario.load(leader, id)
         -- 2. leader: alive, out of GM mode, level, spec, gear
         leader:revive()
         leader:combatstop()
-        if leader:gm() then leader:gm(false) end
+        -- GM mode while setting up: mobs ignore the leader until the party is in place
+        leader:gm(true)
         leader:setlevel(s.level)
         applyPremades(leader, s.level, LEADER_ROLE[leader:class()] or "meleedps")
         leader:refill()
