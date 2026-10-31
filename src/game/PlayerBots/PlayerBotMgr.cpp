@@ -18,6 +18,9 @@
 #include "Language.h"
 #include "Utilities/Random.h"
 #include "Spell.h"
+#include "Bag.h"
+
+#include <sstream>
 
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
@@ -1876,6 +1879,249 @@ bool ChatHandler::HandlePartyBotUnequipCommand(char* args)
     SendSysMessage("Target is not a party bot.");
     SetSentErrorMessage(true);
     return false;
+}
+
+// ---------------------------------------------------------------------------
+// Inventory commands used by the PartyBotBags addon.
+// Replies are system messages in a machine readable form, ';' separated:
+//   PBINV;<name>;BEGIN
+//   PBINV;<name>;B;<bag 0-4>;<size>;<id:count|0>,...   (bag 0 = backpack)
+//   PBINV;<name>;END
+//   PBOK;<name>;equip;<itemId>
+//   PBOK;<name>;unequip;<itemId>;<mailed 0/1>
+//   PBERR;<name>;<code>[;<detail>]
+// ---------------------------------------------------------------------------
+
+static char const* PartyBotInventoryErrorCode(InventoryResult msg)
+{
+    switch (msg)
+    {
+        case EQUIP_ERR_CANT_EQUIP_LEVEL_I:
+            return "level";
+        case EQUIP_ERR_CANT_EQUIP_SKILL:
+        case EQUIP_ERR_NO_REQUIRED_PROFICIENCY:
+            return "skill";
+        case EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM:
+        case EQUIP_ERR_YOU_CAN_NEVER_USE_THAT_ITEM2:
+            return "class";
+        case EQUIP_ERR_NOT_IN_COMBAT:
+            return "combat";
+        case EQUIP_ERR_ITEM_CANT_BE_EQUIPPED:
+        case EQUIP_ERR_ITEM_DOESNT_GO_TO_SLOT:
+            return "notequip";
+        case EQUIP_ERR_INVENTORY_FULL:
+        case EQUIP_ERR_BAG_FULL:
+            return "bagsfull";
+        case EQUIP_ERR_NO_EQUIPMENT_SLOT_AVAILABLE:
+        case EQUIP_ERR_NO_EQUIPMENT_SLOT_AVAILABLE2:
+        case EQUIP_ERR_NO_EQUIPMENT_SLOT_AVAILABLE3:
+            return "noslot";
+        default:
+            return "other";
+    }
+}
+
+Player* ChatHandler::ExtractPartyBotTarget(char** args, std::string& name)
+{
+    Player* pBot = nullptr;
+    if (*args && **args)
+    {
+        name = ExtractPlayerNameFromLink(args);
+        if (!name.empty())
+            pBot = sObjectMgr.GetPlayer(name.c_str());
+    }
+    else if ((pBot = GetSelectedPlayer()))
+        name = pBot->GetName();
+
+    if (!pBot || !pBot->IsInWorld())
+    {
+        PSendSysMessage("PBERR;%s;notfound", name.c_str());
+        SetSentErrorMessage(true);
+        return nullptr;
+    }
+
+    name = pBot->GetName();
+    if (!pBot->AI() || !dynamic_cast<PartyBotAI*>(pBot->AI()))
+    {
+        PSendSysMessage("PBERR;%s;notbot", name.c_str());
+        SetSentErrorMessage(true);
+        return nullptr;
+    }
+
+    return pBot;
+}
+
+// .partybot bags [name]
+bool ChatHandler::HandlePartyBotBagsCommand(char* args)
+{
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+
+    PSendSysMessage("PBINV;%s;BEGIN", name.c_str());
+
+    for (uint8 bagIndex = 0; bagIndex <= 4; ++bagIndex)
+    {
+        std::ostringstream ss;
+        ss << "PBINV;" << name << ";B;" << uint32(bagIndex) << ";";
+
+        if (bagIndex == 0)
+        {
+            ss << uint32(INVENTORY_SLOT_ITEM_END - INVENTORY_SLOT_ITEM_START) << ";";
+            for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+            {
+                if (i != INVENTORY_SLOT_ITEM_START)
+                    ss << ",";
+                if (Item* pItem = pBot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                    ss << pItem->GetEntry() << ":" << pItem->GetCount();
+                else
+                    ss << "0";
+            }
+        }
+        else
+        {
+            Bag* pBag = (Bag*)pBot->GetItemByPos(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_BAG_START + bagIndex - 1);
+            uint32 size = pBag ? pBag->GetBagSize() : 0;
+            ss << size << ";";
+            for (uint32 j = 0; j < size; ++j)
+            {
+                if (j)
+                    ss << ",";
+                if (Item* pItem = pBag->GetItemByPos(uint8(j)))
+                    ss << pItem->GetEntry() << ":" << pItem->GetCount();
+                else
+                    ss << "0";
+            }
+        }
+
+        SendSysMessage(ss.str().c_str());
+    }
+
+    PSendSysMessage("PBINV;%s;END", name.c_str());
+    return true;
+}
+
+// .partybot equipslot <name> <bag 0-4> <slot>   (slot is 0 based inside the bag)
+bool ChatHandler::HandlePartyBotEquipSlotCommand(char* args)
+{
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+
+    uint32 bagIndex = 0;
+    uint32 slotIndex = 0;
+    if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) || bagIndex > 4)
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot equipslot <name> <bag 0-4> <slot>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint8 bag = INVENTORY_SLOT_BAG_0;
+    uint8 slot = 0;
+    if (bagIndex == 0)
+    {
+        if (slotIndex >= uint32(INVENTORY_SLOT_ITEM_END - INVENTORY_SLOT_ITEM_START))
+        {
+            PSendSysMessage("PBERR;%s;empty", name.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+        slot = uint8(INVENTORY_SLOT_ITEM_START + slotIndex);
+    }
+    else
+    {
+        bag = uint8(INVENTORY_SLOT_BAG_START + bagIndex - 1);
+        slot = uint8(slotIndex);
+    }
+
+    Item* pItem = pBot->GetItemByPos(bag, slot);
+    if (!pItem)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 itemId = pItem->GetEntry();
+    uint16 dest = 0;
+    InventoryResult msg = pBot->CanEquipItem(NULL_SLOT, dest, pItem, !pItem->IsBag());
+    if (msg != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;%s;%u", name.c_str(), PartyBotInventoryErrorCode(msg), uint32(msg));
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    WorldPackets::Item::AutoEquipItem packet;
+    packet.srcbag = bag;
+    packet.srcslot = slot;
+    pBot->GetSession()->HandleAutoEquipItemOpcode(packet);
+
+    // equipment slots and bag slots are both directly in bag 0, below INVENTORY_SLOT_BAG_END
+    if (pItem->IsInBag() || pItem->GetSlot() >= INVENTORY_SLOT_BAG_END)
+    {
+        PSendSysMessage("PBERR;%s;other", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    pBot->SaveInventoryAndGoldToDB();
+    PSendSysMessage("PBOK;%s;equip;%u", name.c_str(), itemId);
+    return true;
+}
+
+// .partybot unequipslot <name> <equipment slot 0-18>
+bool ChatHandler::HandlePartyBotUnequipSlotCommand(char* args)
+{
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+
+    uint32 slotIndex = 0;
+    if (!ExtractUInt32(&args, slotIndex) || slotIndex >= EQUIPMENT_SLOT_END)
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot unequipslot <name> <slot 0-18>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Item* pItem = pBot->GetItemByPos(INVENTORY_SLOT_BAG_0, uint8(slotIndex));
+    if (!pItem)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    InventoryResult msg = pBot->CanUnequipItem(pItem->GetPos(), false);
+    if (msg != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;%s;%u", name.c_str(), PartyBotInventoryErrorCode(msg), uint32(msg));
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    ItemPosCountVec dest;
+    uint8 bagSlot = 0;
+    bool fitsInBags = pBot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false) == EQUIP_ERR_OK;
+
+    // temporary bots are never saved, do not create mail for them
+    if (!fitsInBags && pBot->IsSavingDisabled())
+    {
+        PSendSysMessage("PBERR;%s;bagsfull", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 itemId = pItem->GetEntry();
+    pBot->AutoUnequipItemFromSlot(slotIndex); // to bags, or mail to the bot itself when full
+    pBot->SaveInventoryAndGoldToDB();
+    PSendSysMessage("PBOK;%s;unequip;%u;%u", name.c_str(), itemId, fitsInBags ? 0u : 1u);
+    return true;
 }
 
 bool ChatHandler::HandlePartyBotRemoveCommand(char* args)

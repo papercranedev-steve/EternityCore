@@ -2999,6 +2999,14 @@ void CombatBotBaseAI::EquipOrUseNewItem()
                 case ITEM_CLASS_CONTAINER:
                 case ITEM_CLASS_QUIVER:
                 {
+                    // only replace an equipped item if the new one is not lower item level
+                    uint16 dest = 0;
+                    if (me->CanEquipItem(NULL_SLOT, dest, pItem, !pItem->IsBag()) != EQUIP_ERR_OK)
+                        break;
+                    if (Item* pOld = me->GetItemByPos(dest))
+                        if (pOld->GetProto()->ItemLevel > pItem->GetProto()->ItemLevel)
+                            break;
+
                     WorldPackets::Item::AutoEquipItem packet;
                     packet.srcbag = pItem->GetBagSlot();
                     packet.srcslot = pItem->GetSlot();

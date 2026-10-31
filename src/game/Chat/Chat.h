@@ -296,6 +296,10 @@ class ChatHandler
         bool HandlePartyBotPauseCommand(char * args);
         bool HandlePartyBotUnpauseCommand(char * args);
         bool HandlePartyBotUnequipCommand(char * args);
+        bool HandlePartyBotBagsCommand(char * args);
+        bool HandlePartyBotEquipSlotCommand(char * args);
+        bool HandlePartyBotUnequipSlotCommand(char * args);
+        Player* ExtractPartyBotTarget(char** args, std::string& name);
         bool HandlePartyBotRemoveCommand(char * args);
         bool HandleBattleBotAddCommand(char* args, uint8 bg);
         bool HandleBattleBotAddAlteracCommand(char* args);
