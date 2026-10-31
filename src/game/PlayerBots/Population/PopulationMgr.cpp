@@ -61,6 +61,18 @@ namespace Population
         return "?";
     }
 
+    char const* CityRoleName(CityRole role)
+    {
+        switch (role)
+        {
+            case CityRole::None:     return "-";
+            case CityRole::Stand:    return "stand";
+            case CityRole::Mover:    return "mover";
+            case CityRole::Showcase: return "showcase";
+        }
+        return "?";
+    }
+
     PopulationMgr& PopulationMgr::Instance()
     {
         static PopulationMgr instance;
@@ -86,6 +98,8 @@ namespace Population
         m_lifetimeMinMs = minMinutes * MINUTE * IN_MILLISECONDS;
         m_lifetimeMaxMs = maxMinutes * MINUTE * IN_MILLISECONDS;
 
+        m_city.LoadConfig();
+
         if (wasEnabled && !IsEnabled())
         {
             m_queue.clear();
@@ -97,6 +111,7 @@ namespace Population
     {
         m_identity.Load();
         m_points.Load();
+        m_city.LoadAnchors(m_points);
         m_dataLoaded = true;
     }
 
@@ -137,6 +152,8 @@ namespace Population
         for (Record& r : m_bots)
             if (!r.removing && r.expireMs && m_nowMs >= r.expireMs)
                 RequestRemoval(r);
+
+        m_city.Update(*this, m_nowMs);
 
         if (!m_queue.empty() && m_nowMs >= m_nextSpawnMs)
         {
@@ -242,6 +259,71 @@ namespace Population
         return false;
     }
 
+    CityCounts PopulationMgr::CountCity(uint32 zone, size_t anchorCount) const
+    {
+        CityCounts counts;
+        counts.anchorUse.assign(anchorCount, 0);
+
+        auto add = [&counts](SpawnRequest const& r)
+        {
+            ++counts.total;
+            switch (r.role)
+            {
+                case CityRole::Showcase: ++counts.showcase; break;
+                case CityRole::Mover:    ++counts.mover; break;
+                default:                 ++counts.stand; break;
+            }
+            if (r.anchorIndex >= 0 && size_t(r.anchorIndex) < counts.anchorUse.size())
+                ++counts.anchorUse[r.anchorIndex];
+        };
+
+        for (Record const& r : m_bots)
+            if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone)
+                add(r.request);
+        for (SpawnRequest const& q : m_queue)
+            if (q.kind == BotKind::City && q.cityZone == zone)
+                add(q);
+        return counts;
+    }
+
+    void PopulationMgr::DespawnCity(uint32 zone)
+    {
+        m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(),
+            [zone](SpawnRequest const& q) { return q.kind == BotKind::City && q.cityZone == zone; }), m_queue.end());
+
+        for (Record& r : m_bots)
+            if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone)
+                RequestRemoval(r);
+    }
+
+    bool PopulationMgr::DespawnOneCity(uint32 zone)
+    {
+        // Drop a queued request first: nobody saw it yet.
+        for (auto it = m_queue.rbegin(); it != m_queue.rend(); ++it)
+        {
+            if (it->kind == BotKind::City && it->cityZone == zone)
+            {
+                m_queue.erase(std::next(it).base());
+                return true;
+            }
+        }
+
+        for (CityRole role : { CityRole::Stand, CityRole::Mover, CityRole::Showcase })
+        {
+            Record* oldest = nullptr;
+            for (Record& r : m_bots)
+                if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone && r.request.role == role)
+                    if (!oldest || r.bornMs < oldest->bornMs)
+                        oldest = &r;
+            if (oldest)
+            {
+                RequestRemoval(*oldest);
+                return true;
+            }
+        }
+        return false;
+    }
+
     uint32 PopulationMgr::GetBotCount() const
     {
         return uint32(std::count_if(m_bots.begin(), m_bots.end(), [](Record const& r) { return !r.removing; }));
@@ -256,6 +338,8 @@ namespace Population
             info.name = r.name;
             info.kind = r.request.kind;
             info.tier = r.request.tier;
+            info.role = r.request.role;
+            info.cityZone = r.request.cityZone;
             info.race = r.request.race;
             info.classId = r.request.classId;
             info.level = r.request.level;

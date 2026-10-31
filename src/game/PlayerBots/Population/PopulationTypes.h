@@ -8,6 +8,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include <string>
+#include <vector>
 
 namespace Population
 {
@@ -16,7 +17,7 @@ namespace Population
     enum class BotKind : uint8
     {
         Test,       // .popbot spawn
-        City,       // phase 1b
+        City,       // filled by the city director while a player is in the city
         Field,      // phase 1c
     };
 
@@ -27,8 +28,24 @@ namespace Population
         Showcase,   // premade phase 6 set ("geared veteran"), forces level 60
     };
 
+    // What a city bot does (phase 1b).
+    enum class CityRole : uint8
+    {
+        None,       // not a city bot
+        Stand,      // stands at an auctioneer / banker / mailbox, sometimes steps away and back
+        Mover,      // runs between the city's stand spots, waits at each
+        Showcase,   // geared veteran standing in view near the auction house / bank
+    };
+
     char const* BotKindName(BotKind kind);
     char const* GearTierName(GearTier tier);
+    char const* CityRoleName(CityRole role);
+
+    struct Waypoint
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float faceX = 0.0f, faceY = 0.0f;   // look at this point after arriving
+    };
 
     struct SpawnRequest
     {
@@ -42,6 +59,14 @@ namespace Population
         float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
         uint32 lifetimeMs = 0;      // 0 = random from PopBot.Lifetime*
         ObjectGuid faceGuid;        // face this unit once spawned (optional)
+        bool hasFacePoint = false;  // face (faceX, faceY) once spawned
+        float faceX = 0.0f, faceY = 0.0f;
+
+        // City bots
+        uint32 cityZone = 0;
+        CityRole role = CityRole::None;
+        int32 anchorIndex = -1;         // stand / showcase: which anchor of the city
+        std::vector<Waypoint> route;    // mover: spots to run between
     };
 
     // Shared between PopulationMgr (world thread) and the bot AI. The AI clears `alive`

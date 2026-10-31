@@ -14,6 +14,7 @@
 #include "Population/PopulationTypes.h"
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
+#include "Population/CityPopulation.h"
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -30,6 +31,8 @@ namespace Population
         std::string name;
         BotKind kind = BotKind::Test;
         GearTier tier = GearTier::Normal;
+        CityRole role = CityRole::None;
+        uint32 cityZone = 0;
         uint8 race = 0, classId = 0, level = 0;
         bool online = false;
         bool removing = false;
@@ -76,6 +79,16 @@ namespace Population
 
         Identity const& GetIdentity() { EnsureDataLoaded(); return m_identity; }
         ScenePoints& GetScenePoints() { EnsureDataLoaded(); return m_points; }
+        CityDirector& GetCityDirector() { EnsureDataLoaded(); return m_city; }
+        // After scene points were added or deleted.
+        void ReloadAnchors() { m_city.LoadAnchors(m_points); }
+
+        // City director helpers. Counts include queued requests.
+        CityCounts CountCity(uint32 zone, size_t anchorCount) const;
+        // Every bot of the city leaves, queued requests are dropped.
+        void DespawnCity(uint32 zone);
+        // One bot leaves (oldest stand bot, else oldest mover; veterans last).
+        bool DespawnOneCity(uint32 zone);
 
         // Cost of PopulationBotAI::UpdateAI ticks.
         void RecordBotTick(uint64 micros);
@@ -115,6 +128,7 @@ namespace Population
         std::deque<SpawnRequest> m_queue;
         Identity m_identity;
         ScenePoints m_points;
+        CityDirector m_city;
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

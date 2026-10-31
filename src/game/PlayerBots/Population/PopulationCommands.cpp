@@ -8,7 +8,10 @@
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
  *   .popbot despawn                      log out the selected population bot
- *   .popbot clear                        log out every population bot
+ *   .popbot clear                        log out every population bot (cities refill while you are there)
+ *   .popbot city                         per city: anchors, bots by role, targets for this hour
+ *   .popbot city anchors                 anchors of your city within 60 yards and how full they are
+ *   .popbot fill                         run the city director now instead of within 5 seconds
  *   .popbot point add <city> <type> [route] [capacity]
  *                                        record your position and facing as a scene point
  *   .popbot point list                   scene points within 60 yards
@@ -147,9 +150,15 @@ namespace
             else
                 snprintf(where, sizeof(where), "map %u", b.mapId);
 
+            char kind[48];
+            if (b.role != Population::CityRole::None)
+                snprintf(kind, sizeof(kind), "%s %s", Population::BotKindName(b.kind), Population::CityRoleName(b.role));
+            else
+                snprintf(kind, sizeof(kind), "%s", Population::BotKindName(b.kind));
+
             handler->PSendSysMessage("%s %u %s %s [%s/%s] %s, %s, %u min left%s",
                 b.name.c_str(), b.level, Population::Identity::IsValidCombo(b.race, b.classId) ? RaceName(b.race) : "?",
-                ClassName(b.classId), Population::BotKindName(b.kind), Population::GearTierName(b.tier),
+                ClassName(b.classId), kind, Population::GearTierName(b.tier),
                 b.online ? "online" : "loading", where, b.leftMs / (MINUTE * IN_MILLISECONDS),
                 b.removing ? " (leaving)" : "");
         }
@@ -300,12 +309,63 @@ namespace
             handler->SendSysMessage("Insert failed, see the server log.");
             return false;
         }
+        sPopulationMgr.ReloadAnchors();
 
         if (p.route.empty())
             handler->PSendSysMessage("Scene point %u: %s %s, capacity %u.", id, p.city.c_str(), p.type.c_str(), p.capacity);
         else
             handler->PSendSysMessage("Scene point %u: %s route %s #%u.", id, p.city.c_str(), p.route.c_str(), p.seq);
         return true;
+    }
+
+    void ShowCities(ChatHandler* handler)
+    {
+        Population::CityDirector& city = sPopulationMgr.GetCityDirector();
+        Population::CityTargets const t = city.TargetsNow();
+        handler->PSendSysMessage("Cities: %s. Hour factor %.2f -> target %u bots (%u movers, %u veterans) per city with a player.",
+            city.IsEnabled() ? "on" : "off", city.HourFactor(), t.total, t.mover, t.showcase);
+
+        for (Population::CityState const& s : city.States())
+        {
+            uint32 ah = 0, bank = 0, mail = 0, other = 0;
+            for (Population::CityAnchor const& a : s.anchors)
+            {
+                if (a.type == "ah") ++ah;
+                else if (a.type == "bank") ++bank;
+                else if (a.type == "mail") ++mail;
+                else ++other;
+            }
+            Population::CityCounts const c = sPopulationMgr.CountCity(s.def->zone, s.anchors.size());
+            handler->PSendSysMessage("%s (zone %u): %s%s, anchors ah %u bank %u mail %u other %u, bots %u (stand %u, movers %u, veterans %u)",
+                s.def->title, s.def->zone, s.enabled ? "enabled" : "disabled", s.playerPresent ? ", player here" : "",
+                ah, bank, mail, other, c.total, c.stand, c.mover, c.showcase);
+        }
+    }
+
+    void ShowAnchors(ChatHandler* handler, Player* player)
+    {
+        Population::CityDirector& city = sPopulationMgr.GetCityDirector();
+        Population::CityState const* state = city.FindState(player->GetCachedZoneId());
+        if (!state)
+        {
+            handler->SendSysMessage("You are not in a city zone.");
+            return;
+        }
+
+        Population::CityCounts const c = sPopulationMgr.CountCity(state->def->zone, state->anchors.size());
+        uint32 shown = 0;
+        for (size_t i = 0; i < state->anchors.size(); ++i)
+        {
+            Population::CityAnchor const& a = state->anchors[i];
+            float const dist = player->GetDistance(a.x, a.y, a.z);
+            if (dist > 60.0f)
+                continue;
+            if (++shown > 20)
+                break;
+            handler->PSendSysMessage("[%u] %s %s, %.1f yd, %u/%u used%s", uint32(i), a.type.c_str(), a.label.c_str(),
+                dist, i < c.anchorUse.size() ? c.anchorUse[i] : 0, a.capacity, a.exactSpot ? ", exact spot" : "");
+        }
+        handler->PSendSysMessage("%s: %u anchors, %u within 60 yards.", state->def->title, uint32(state->anchors.size()), shown);
     }
 
     bool PointList(ChatHandler* handler, Player* player)
@@ -402,6 +462,28 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "city"))
+    {
+        char* opt = ExtractLiteralArg(&args);
+        if (opt && !strcmp(opt, "anchors"))
+            ShowAnchors(this, player);
+        else
+            ShowCities(this);
+        return true;
+    }
+
+    if (!strcmp(sub, "fill"))
+    {
+        if (!sPopulationMgr.IsEnabled())
+        {
+            SendSysMessage("Population bots are off. Use .popbot on first.");
+            return false;
+        }
+        sPopulationMgr.GetCityDirector().ForceTick();
+        SendSysMessage("City director runs on the next update.");
+        return true;
+    }
+
     if (!strcmp(sub, "clear"))
     {
         PSendSysMessage("%u population bots are logging out.", sPopulationMgr.DespawnAll());
@@ -428,6 +510,7 @@ bool ChatHandler::HandlePopBotCommand(char* args)
                 PSendSysMessage("No scene point %u.", id);
                 return false;
             }
+            sPopulationMgr.ReloadAnchors();
             PSendSysMessage("Scene point %u deleted.", id);
             return true;
         }
@@ -443,6 +526,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|spawn ...|despawn|clear|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

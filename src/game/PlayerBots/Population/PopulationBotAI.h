@@ -60,6 +60,11 @@ namespace Population
         void RefreshAppearanceForNearbyPlayers();
         void UpdateSocial(uint32 diff);
         void UpdateIdle();
+        void UpdateStand();
+        void UpdateMover();
+        void MoveTo(float x, float y, float z);
+        bool ReachedTarget() const;
+        void FacePoint(float x, float y);
         void DeclineInviteNow();
 
         SpawnRequest m_request;
@@ -69,6 +74,22 @@ namespace Population
         ShortTimeTracker m_updateTimer;
         uint32 m_nextIdleAtMs = 0;      // WorldTimer::getMSTime()
         // m_initialized comes from CombatBotBaseAI.
+
+        // Movement target of the current MovePoint (stand shuffle or mover leg).
+        float m_targetX = 0.0f, m_targetY = 0.0f, m_targetZ = 0.0f;
+        uint32 m_moveDeadlineMs = 0;
+
+        // Stand: step away a few yards now and then, come back.
+        enum class Shuffle : uint8 { Home, Leaving, Away, Returning };
+        Shuffle m_shuffle = Shuffle::Home;
+        float m_homeX = 0.0f, m_homeY = 0.0f, m_homeZ = 0.0f;
+        uint32 m_nextShuffleAtMs = 0;
+        uint32 m_shuffleUntilMs = 0;
+
+        // Mover: run between the route spots, wait at each.
+        size_t m_routeIndex = 0;
+        bool m_moving = false;
+        uint32 m_waitUntilMs = 0;
 
         // Pending refusals (ms countdowns, 0 = none).
         uint32 m_declineInviteInMs = 0;

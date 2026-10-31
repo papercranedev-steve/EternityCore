@@ -10,6 +10,9 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "Utilities/Random.h"
+#include "MotionMaster.h"
+#include "GridMap.h"
+#include <cmath>
 
 namespace Population
 {
@@ -97,7 +100,134 @@ namespace Population
         if (me->IsDead())
             return;
 
-        UpdateIdle();
+        switch (m_request.role)
+        {
+            case CityRole::Mover: UpdateMover(); break;
+            case CityRole::Stand: UpdateStand(); break;
+            default:              UpdateIdle(); break;
+        }
+    }
+
+    void PopulationBotAI::MoveTo(float x, float y, float z)
+    {
+        if (me->IsSittingDown())
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+        m_targetX = x;
+        m_targetY = y;
+        m_targetZ = z;
+        m_moveDeadlineMs = WorldTimer::getMSTime() + 120 * IN_MILLISECONDS;
+        me->GetMotionMaster()->MovePoint(1, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE | MOVE_EXCLUDE_STEEP_SLOPES);
+    }
+
+    bool PopulationBotAI::ReachedTarget() const
+    {
+        if (me->GetDistance2d(m_targetX, m_targetY, SizeFactor::None) < 1.5f)
+            return true;
+        // Point movement finished or was replaced (path not found, pushed away, ...).
+        return !me->IsMoving() && me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE;
+    }
+
+    void PopulationBotAI::FacePoint(float x, float y)
+    {
+        if (std::fabs(x - me->GetPositionX()) < 0.1f && std::fabs(y - me->GetPositionY()) < 0.1f)
+            return;
+        me->SetFacingTo(me->GetAngle(x, y));
+    }
+
+    void PopulationBotAI::UpdateStand()
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        switch (m_shuffle)
+        {
+            case Shuffle::Home:
+            {
+                UpdateIdle();
+                if (now < m_nextShuffleAtMs)
+                    return;
+                m_nextShuffleAtMs = now + urand(120, 300) * IN_MILLISECONDS;
+                if (urand(0, 99) >= 35)
+                    return;
+
+                // A few yards away, on the ground and in line of sight of the stand spot.
+                float const angle = frand(0.0f, 2.0f * float(M_PI));
+                float const dist = frand(3.0f, 6.0f);
+                float const x = m_homeX + std::cos(angle) * dist;
+                float const y = m_homeY + std::sin(angle) * dist;
+                float const z = me->GetMap()->GetHeight(x, y, m_homeZ + 3.0f);
+                if (z <= INVALID_HEIGHT || std::fabs(z - m_homeZ) > 2.0f ||
+                    !me->GetMap()->isInLineOfSight(m_homeX, m_homeY, m_homeZ + 2.0f, x, y, z + 2.0f))
+                    return;
+                MoveTo(x, y, z);
+                m_shuffle = Shuffle::Leaving;
+                return;
+            }
+            case Shuffle::Leaving:
+            {
+                if (!ReachedTarget() && now < m_moveDeadlineMs)
+                    return;
+                m_shuffle = Shuffle::Away;
+                m_shuffleUntilMs = now + urand(8, 25) * IN_MILLISECONDS;
+                me->SetFacingTo(frand(0.0f, 2.0f * float(M_PI)));
+                return;
+            }
+            case Shuffle::Away:
+            {
+                if (now < m_shuffleUntilMs)
+                {
+                    if (urand(0, 9) == 0)
+                        me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
+                    return;
+                }
+                MoveTo(m_homeX, m_homeY, m_homeZ);
+                m_shuffle = Shuffle::Returning;
+                return;
+            }
+            case Shuffle::Returning:
+            {
+                if (!ReachedTarget() && now < m_moveDeadlineMs)
+                    return;
+                m_shuffle = Shuffle::Home;
+                if (m_request.hasFacePoint)
+                    FacePoint(m_request.faceX, m_request.faceY);
+                return;
+            }
+        }
+    }
+
+    void PopulationBotAI::UpdateMover()
+    {
+        std::vector<Waypoint> const& route = m_request.route;
+        if (route.size() < 2)
+        {
+            UpdateIdle();
+            return;
+        }
+
+        uint32 const now = WorldTimer::getMSTime();
+        if (m_moving)
+        {
+            if (!ReachedTarget() && now < m_moveDeadlineMs)
+                return;
+            m_moving = false;
+            FacePoint(route[m_routeIndex].faceX, route[m_routeIndex].faceY);
+            m_waitUntilMs = now + urand(10, 30) * IN_MILLISECONDS;
+            m_nextIdleAtMs = now + urand(3, 9) * IN_MILLISECONDS;
+            return;
+        }
+
+        if (now < m_waitUntilMs)
+        {
+            UpdateIdle();
+            return;
+        }
+
+        size_t next = urand(0, uint32(route.size()) - 2);
+        if (next >= m_routeIndex)
+            ++next;
+        m_routeIndex = next;
+        Waypoint const& w = route[m_routeIndex];
+        MoveTo(w.x + frand(-0.7f, 0.7f), w.y + frand(-0.7f, 0.7f), w.z);
+        m_moving = true;
     }
 
     void PopulationBotAI::Initialize()
@@ -132,8 +262,19 @@ namespace Population
         me->UpdateZone(newzone, newarea);
 
         if (!m_request.faceGuid.IsEmpty())
+        {
             if (Unit* pFace = me->GetMap()->GetUnit(m_request.faceGuid))
                 me->SetFacingToObject(pFace);
+        }
+        else if (m_request.hasFacePoint)
+            FacePoint(m_request.faceX, m_request.faceY);
+
+        m_homeX = me->GetPositionX();
+        m_homeY = me->GetPositionY();
+        m_homeZ = me->GetPositionZ();
+        uint32 const startMs = WorldTimer::getMSTime();
+        m_nextShuffleAtMs = startMs + urand(60, 240) * IN_MILLISECONDS;
+        m_waitUntilMs = startMs + urand(5, 20) * IN_MILLISECONDS;
 
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         RefreshAppearanceForNearbyPlayers();
