@@ -409,11 +409,18 @@ namespace
 
 bool ChatHandler::HandlePopBotCommand(char* args)
 {
+    // Status-type subcommands also work from the console (SOAP / wowdbg.ps1 -Cmd);
+    // spawn, despawn, point and city anchors need a character.
     Player* player = m_session ? m_session->GetPlayer() : nullptr;
-    if (!player)
-        return false;
 
     char* sub = ExtractLiteralArg(&args);
+    bool const needsPlayer = sub && (!strcmp(sub, "spawn") || !strcmp(sub, "despawn") || !strcmp(sub, "point") ||
+        (!strcmp(sub, "city") && args && strstr(args, "anchors")));
+    if (needsPlayer && !player)
+    {
+        SendSysMessage("This subcommand needs a character (use it in game).");
+        return false;
+    }
     if (!sub || !strcmp(sub, "status"))
     {
         ShowStatus(this);
