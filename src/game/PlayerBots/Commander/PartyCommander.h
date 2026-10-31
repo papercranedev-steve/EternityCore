@@ -11,6 +11,7 @@
 #include "Commander/Perception/ThreatHistory.h"
 #include "Commander/Perception/CombatRates.h"
 #include "Commander/Registry.h"
+#include "Commander/Encounters/IEncounter.h"
 
 class PartyBotAI;
 
@@ -19,8 +20,7 @@ namespace Commander
     class PartyCommander
     {
     public:
-        PartyCommander(uint32 groupId, uint32 mapId, uint32 instanceId)
-            : m_groupId(groupId), m_mapId(mapId), m_instanceId(instanceId) {}
+        PartyCommander(uint32 groupId, uint32 mapId, uint32 instanceId);
 
         // Every bot tick, in and out of combat. Refreshes facts at most once per perceptionMs,
         // so several bots of the same party share one refresh.
@@ -44,15 +44,24 @@ namespace Commander
             PullPhase const phase = m_plan.pull.phase;
             bool const pulling = phase != PullPhase::None && phase != PullPhase::WaitReady;
             bool const planRunning = phase != PullPhase::None || m_plan.clear.active;
-            return pulling || (planRunning && !m_world.enemies.empty());
+            // A retreating bot that already dropped combat must keep running to the rally point,
+            // not sit down to drink or follow the leader back into the enemies.
+            return pulling || m_plan.retreat.active || (planRunning && !m_world.enemies.empty());
         }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }
         uint32 GetInstanceId() const { return m_instanceId; }
 
+        // Boss module matched on the last refresh, null if none. Map thread only
+        // (EncounterBehavior, debug commands).
+        IEncounter const* GetActiveEncounter() const { return m_activeEncounter; }
+
     private:
         void Refresh(PartyBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
+        // Picks the matching boss module (OnReset on the one that stops matching), then its
+        // Refresh and AddFacts. Before the assigners.
+        void UpdateEncounter(PartyBotAI* bot);
         void FlushNotes(PartyBotAI* bot);
 
         uint32 m_groupId;
@@ -62,6 +71,10 @@ namespace Commander
         TeamPlan m_plan;
         ThreatHistory m_threatHistory;
         CombatRates m_combatRates;
+
+        // Own instances (per-party state), only the modules listed for this map.
+        EncounterList m_encounters;
+        IEncounter* m_activeEncounter = nullptr;
     };
 }
 

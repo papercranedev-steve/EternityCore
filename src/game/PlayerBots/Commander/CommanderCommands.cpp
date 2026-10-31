@@ -22,6 +22,8 @@
  *                                    hostile pack) once everyone is ready; "now" skips the wait
  *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
  *                                    n mobs per pull), waiting until ready in between; "clear stop"
+ *   .partybot ai retreat [stop]      whole party stops attacking and runs to a point out of every
+ *                                    enemy's threat area until they give up (outdoors only)
  *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
  *
  * GM commands run on the world thread while map threads are idle (MapManager::Update
@@ -38,6 +40,7 @@
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/ClearPlanner.h"
+#include "Commander/Coordination/RetreatPlanner.h"
 #include "Commander/ProfileCommands.h"
 #include "Creature.h"
 #include <algorithm>
@@ -204,6 +207,11 @@ namespace
         if (plan.clear.active)
             handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
                 plan.clear.radius, plan.clear.maxMobs, plan.clear.cleared, plan.clear.skippedPacks);
+        if (plan.retreat.active)
+            handler->PSendSysMessage("Retreat: to (%.1f, %.1f, %.1f), %.0f yd from you, for %.1fs, %u enemies left",
+                plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z,
+                player->GetDistance(plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z),
+                WorldTimer::getMSTimeDiffToNow(plan.retreat.startedMs) / 1000.0f, uint32(world.enemies.size()));
 
         // Focus and intercepts (FocusAssigner). Score = harm rate / kill time.
         if (plan.focus.enemy.IsEmpty())
@@ -296,6 +304,11 @@ namespace
             handler->SendSysMessage("Module 'pull' is off (.partybot ai module pull on).");
             return false;
         }
+        if (commander->GetPlan().retreat.active)
+        {
+            handler->SendSysMessage("Retreating. '.partybot ai retreat stop' first.");
+            return false;
+        }
         if (player->IsInCombat())
         {
             handler->SendSysMessage("You are in combat.");
@@ -332,6 +345,12 @@ namespace
             return false;
         }
 
+        if (commander->GetPlan().retreat.active)
+        {
+            handler->SendSysMessage("Retreating. '.partybot ai retreat stop' first.");
+            return false;
+        }
+
         float radius = 40.0f;
         uint32 maxMobs = 4;
         if (first)
@@ -350,6 +369,45 @@ namespace
             "the tank is gone or someone dies twice. '.partybot ai clear stop' to stop.",
             radius, maxMobs, Commander::ClearPlanner::MAX_LEADER_DRIFT);
         return true;
+    }
+
+    // .partybot ai retreat [stop]
+    // Only the player starts a retreat: the player is not controlled by us, bots running on their
+    // own would leave the player to die alone (combat scenario 11, T+18s).
+    bool StartRetreat(ChatHandler* handler, Player* player, char const* option)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        if (option && !strcmp(option, "stop"))
+        {
+            if (!commander->GetPlan().retreat.active)
+            {
+                handler->SendSysMessage("No retreat is running.");
+                return true;
+            }
+            Commander::RetreatPlanner::Stop(player, *commander, "you stopped it. Bots fight normally again.");
+            handler->SendSysMessage("Retreat stopped.");
+            return true;
+        }
+        if (option)
+        {
+            handler->SendSysMessage("Usage: .partybot ai retreat [stop]");
+            return false;
+        }
+        if (!sCommanderMgr.IsModuleEnabled("retreat"))
+        {
+            handler->SendSysMessage("Module 'retreat' is off (.partybot ai module retreat on).");
+            return false;
+        }
+
+        // Running again plans a new point from where the player is now.
+        std::vector<std::string> report;
+        bool const ok = Commander::RetreatPlanner::Start(player, *commander, report);
+        for (std::string const& line : report)
+            handler->SendSysMessage(line.c_str());
+        return ok;
     }
 
     // .partybot ai packs
@@ -639,12 +697,14 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     }
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
-        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear"))
+        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "threat"))
             ok = ShowThreat(this, player);
+        else if (!strcmp(sub, "retreat"))
+            ok = StartRetreat(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "clear"))
         {
             char const* first = ExtractLiteralArg(&args);
@@ -676,7 +736,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

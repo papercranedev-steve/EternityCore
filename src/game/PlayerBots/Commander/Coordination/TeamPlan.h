@@ -92,6 +92,31 @@ namespace Commander
         bool rechecked = false;
         uint32 recheckWaitSinceMs = 0;      // prediction over the limit since then, 0 = not waiting
     };
+    enum class RetreatOutcome : uint8
+    {
+        None,
+        Done,       // every enemy gave up and every living member reached the point
+        TimedOut,   // RetreatAssigner::TIMEOUT_MS passed first
+        Stopped,    // `.partybot ai retreat stop`, or the module was switched off
+    };
+
+    // `.partybot ai retreat` (RetreatPlanner). Only the player's command starts it: the player
+    // is not controlled by us, bots running on their own would leave the player alone
+    // (combat scenario 11, T+18s).
+    struct RetreatPlan
+    {
+        bool active = false;
+        Position3 point;                    // rally point, out of every enemy's threat area
+        uint32 startedMs = 0;
+        uint32 enemiesAtStart = 0;
+        RetreatOutcome lastOutcome = RetreatOutcome::None;
+        std::vector<PullMemberName> names;  // for notes written by the pure assigner
+
+        // "Consider retreating" hint (RetreatAssigner::Advise): at most once per fight.
+        bool adviceSent = false;
+        uint32 dangerSinceMs = 0;           // 0 = not in danger now
+    };
+
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).
     struct InterruptDuty
     {
@@ -133,6 +158,7 @@ namespace Commander
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
+        RetreatPlan retreat;
         std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const

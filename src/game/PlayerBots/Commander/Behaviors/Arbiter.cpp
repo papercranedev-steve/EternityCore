@@ -4,6 +4,7 @@
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "MotionMaster.h"
+#include "Pet.h"
 #include "SpellEntry.h"
 #include "Timer.h"
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace Commander
                 case BotActionType::MoveTo: return "move";
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::HoldFire: return "holdfire";
+                case BotActionType::Retreat: return "retreat";
             }
             return "?";
         }
@@ -237,6 +239,40 @@ namespace Commander
                     if (Unit* pVictim = me->GetVictim())
                         me->SendMeleeAttackStop(pVictim);
                 }
+                return true;
+            }
+            case BotActionType::Retreat:
+            {
+                // Every hit extends the enemy's leash, and the whole assisting group shares one
+                // timer (combat scenario 11, 1.5): drop the target completely. HoldFire keeps the
+                // victim and melee would resume; AttackStop clears it.
+                if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                    me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+                if (me->GetVictim())
+                    me->AttackStop();
+
+                // Pets count as attackers too. Same server path as the player's "Follow" button
+                // (Unit::HandlePetCommand: AttackStop, interrupt, MoveFollow). Only re-sent when the
+                // pet attacks again (defensive pets hit back) so it is not restarted every tick.
+                if (Pet* pet = me->GetPet())
+                    if (pet->IsAlive() && pet->GetCharmInfo() &&
+                        (pet->GetVictim() || pet->GetCharmInfo()->GetCommandState() != COMMAND_FOLLOW))
+                        pet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
+
+                if (action.holdMs && !me->HasUnitState(UNIT_STATE_ROOT))
+                {
+                    uint32 const now = WorldTimer::getMSTime();
+                    // A new MovePoint every tick restarts the spline; only send it when the bot
+                    // stopped or the previous hold ran out.
+                    bool const onTheWay = me->IsMoving() && bot->Directives().IsMovementHeld(now);
+                    if (!onTheWay)
+                    {
+                        me->GetMotionMaster()->MovePoint(0, action.x, action.y, action.z, MOVE_PATHFINDING);
+                        bot->Directives().HoldMovement(now, action.holdMs);
+                    }
+                }
+                // True even when rooted or standing at the point: the original rotation must not
+                // run, it would pick the nearest attacker and hit it again.
                 return true;
             }
         }

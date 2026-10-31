@@ -65,6 +65,25 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/DispelBehavior.cpp
   ${COMMANDER_DIR}/ProfileCommands.h
   ${COMMANDER_DIR}/ProfileCommands.cpp
+  ${COMMANDER_DIR}/Encounters/IEncounter.h
+  ${COMMANDER_DIR}/Encounters/EncounterRegistry.h
+  ${COMMANDER_DIR}/Encounters/EncounterRegistry.cpp
+  ${COMMANDER_DIR}/Encounters/EncounterBehavior.h
+  ${COMMANDER_DIR}/Encounters/EncounterBehavior.cpp
+  ${COMMANDER_DIR}/Encounters/EncounterHelpers.h
+  ${COMMANDER_DIR}/Encounters/EncounterHelpers.cpp
+  ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.h
+  ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
+  ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.h
+  ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.cpp
+  ${COMMANDER_DIR}/Coordination/RetreatPlanner.h
+  ${COMMANDER_DIR}/Coordination/RetreatPlanner.cpp
+  ${COMMANDER_DIR}/Behaviors/RetreatBehavior.h
+  ${COMMANDER_DIR}/Behaviors/RetreatBehavior.cpp
+  ${COMMANDER_DIR}/Perception/ManaBudget.h
+  ${COMMANDER_DIR}/Perception/ManaBudget.cpp
+  ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.h
+  ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

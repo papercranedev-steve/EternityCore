@@ -4,9 +4,13 @@
 #include "Commander/Behaviors/PullBehavior.h"
 #include "Commander/Behaviors/DispelBehavior.h"
 #include "Commander/Behaviors/FocusBehavior.h"
+#include "Commander/Behaviors/ManaBudgetBehavior.h"
+#include "Commander/Behaviors/RetreatBehavior.h"
+#include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
 #include "Commander/Coordination/PullPlanner.h"
+#include "Commander/Coordination/RetreatPlanner.h"
 
 namespace Commander
 {
@@ -18,6 +22,9 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PullBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<DispelBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FocusBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RetreatBehavior>()));
     }
 
     // One line per team assignment module.
@@ -26,5 +33,6 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
     }
 }

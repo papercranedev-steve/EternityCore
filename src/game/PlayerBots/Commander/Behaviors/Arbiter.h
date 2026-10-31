@@ -3,6 +3,7 @@
  * Value-scored proposals with benefit <= cost are dropped. Veto proposals are
  * registered in BotDirectives (the original rotation keeps running). Of the
  * replace proposals, the highest tier wins, then the highest score inside the tier.
+ * ProposalTier::Override (retreat) hides every other module's replace proposal.
  * If execution fails (spell not ready, target gone) the next one in the same tier
  * is tried. Every candidate is written to the bot's decision log.
  */

@@ -1,0 +1,62 @@
+/*
+ * PartyBot Commander layer 3: healer mana budget (combat scenarios 9 and 13).
+ * Formula and its limits: Perception/ManaBudget.h.
+ *
+ * Healer bots only, in combat, once the party's damage rate has been measured.
+ * When the mana needed for the rest of the fight is more than the mana left (tension > 1):
+ *  - Veto (VetoType::Heal) the heal the rotation would cast on a target at or above the heal
+ *    ceiling for this tension (ManaBudget::HealCeilingPct; tanks keep a higher ceiling),
+ *    unless the target would die within DELAY_TICKS bot ticks, or another member is below
+ *    their ceiling (the veto would block FindAndHealInjuredAlly for them too this tick).
+ *    Benefit: saved mana as the healing it buys later. Cost: damage taken while waiting.
+ *  - When the rotation would cast a big direct heal and a smaller rank / spell with better
+ *    healing per mana covers most of it: cast the smaller one (Replace).
+ *    Benefit: saved mana as healing later. Cost: the healing it lacks.
+ * Targets below EMERGENCY_PCT are never throttled.
+ *
+ * ThreatBehavior proposes heal vetoes and smaller heals for aggro on the same target; both
+ * are scored in points, the arbiter keeps whatever is worth it.
+ *
+ * Not done: the low mana note to the leader (needs plan state, see ManaBudget::WantsLowManaWarning),
+ * future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.
+ */
+
+#ifndef MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
+#define MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
+
+#include "Commander/Behaviors/IBehavior.h"
+
+namespace Commander
+{
+    class ManaBudgetBehavior : public IBehavior
+    {
+    public:
+        // Below this health percent the target is healed as the rotation wants.
+        static constexpr float EMERGENCY_PCT = 30.0f;
+        // A smaller heal must heal at least this fraction of what the predicted heal would.
+        static constexpr float SWAP_MIN_COVER = 0.6f;
+        // A delayed heal waits about this many bot ticks (same as ThreatBehavior's heal veto).
+        static constexpr float DELAY_TICKS = 2.0f;
+
+        struct Budget
+        {
+            float fightSec = 0.0f;       // T
+            float mana = 0.0f;           // M
+            float headroom = 0.0f;       // health the members being hit can lose without a heal
+            float neededHealing = 0.0f;  // H (this healer's share)
+            float healPerMana = 0.0f;    // E
+            float neededMana = 0.0f;     // N
+            float tension = 0.0f;        // N / M
+        };
+
+        // Map thread. False when the bot has no mana pool or the fight rate is not measured yet.
+        static bool ComputeBudget(PartyBotAI const* bot, WorldModel const& world, Budget& out);
+
+        char const* GetId() const override { return "mana"; }
+        bool AppliesTo(PartyBotAI const* bot) const override;
+        void Propose(PartyBotAI const* bot, WorldModel const& world,
+                     TeamPlan const& plan, std::vector<Proposal>& out) const override;
+    };
+}
+
+#endif
