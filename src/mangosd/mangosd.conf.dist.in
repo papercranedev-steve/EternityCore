@@ -3260,6 +3260,7 @@ PartyBot.Commander.BotUpdateMs = 1000
 PartyBot.Commander.PerceptionMs = 200
 PartyBot.Commander.DisabledModules = ""
 
+
 BattleBot.AutoEquip = 1
 BattleBot.AutoJoin = 0
 
@@ -3358,3 +3359,35 @@ DynamicRespawn.AffectLevelBelow = 0
 DynamicRespawn.PlayersThreshold = 0
 DynamicRespawn.PlayersMaxLevelDiff = 0
 
+###################################################################################################
+# DEV CONSOLE (src/game/DevConsole)
+#
+#    Lua scripts run inside mangosd for debugging, test scenarios and combat recording.
+#    .lua <code> runs from the server console or SOAP (enable SOAP.Enabled, keep SOAP.IP local).
+#    .scenario is a player command, limited to DevConsole.ScenarioAccount.
+#
+#    DevConsole.Enable
+#        Default: 0 - off
+#                 1 - on
+#
+#    DevConsole.ScriptDir
+#        Folder with init.lua (the scripts are in src/game/DevConsole/lua).
+#        Default: "lua"
+#
+#    DevConsole.ScenarioAccount
+#        Account allowed to use .scenario (it changes level, talents and gear).
+#        Default: "TEST"
+#
+#    DevConsole.InstructionLimit / DevConsole.TimeLimitMs / DevConsole.MemoryLimitMB
+#        Limits for one Lua call (console call, command or timer tick). A script that goes over
+#        is stopped with an error; the server keeps running.
+#        Default: 20000000 / 2000 / 256
+#
+###################################################################################################
+
+DevConsole.Enable = 0
+DevConsole.ScriptDir = "lua"
+DevConsole.ScenarioAccount = "TEST"
+DevConsole.InstructionLimit = 20000000
+DevConsole.TimeLimitMs = 2000
+DevConsole.MemoryLimitMB = 256

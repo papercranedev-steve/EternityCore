@@ -1,0 +1,12 @@
+-- Dev console entry point. Loaded by ".lua reload" and on the first .lua / .scenario call.
+-- SCRIPT_DIR is set by the server (DevConsole.ScriptDir).
+
+local function load(name)
+    local chunk, err = loadfile(SCRIPT_DIR .. "/" .. name)
+    if not chunk then error(err, 0) end
+    chunk()
+end
+
+load("core.lua")
+load("recorder.lua")
+load("scenarios.lua")

@@ -69,6 +69,7 @@
 #include "AuctionHouseBotMgr.h"
 #include "Transports/TransportMgr.h"
 #include "PlayerBotMgr.h"
+#include "DevConsole/DevConsole.h"
 #include "ZoneScriptMgr.h"
 #include "CharacterDatabaseCache.h"
 #include "CreatureGroups.h"
@@ -987,6 +988,7 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_RELOCATION_VMAP_CHECK_TIMER, "Movement.RelocationVmapsCheckDelay", 0, 0, 2000);
 
     sPlayerBotMgr.LoadConfig();
+    sDevConsole.LoadConfig();
     setConfig(CONFIG_BOOL_PLAYER_BOT_SHOW_IN_WHO_LIST, "PlayerBot.ShowInWhoList", false);
     setConfig(CONFIG_UINT32_PARTY_BOT_MAX_BOTS, "PartyBot.MaxBots", 0);
     setConfig(CONFIG_BOOL_PARTY_BOT_SKIP_CHECKS, "PartyBot.SkipChecks", false);
@@ -2140,6 +2142,9 @@ void World::Update(uint32 diff)
 
         // And last, but not least handle the issued cli commands
         ProcessCliCommands();
+
+        // dev console Lua timers (scenarios, combat recorder); maps are idle here
+        sDevConsole.Update(diff);
 
         m_canProcessAsyncPackets = true;
     }

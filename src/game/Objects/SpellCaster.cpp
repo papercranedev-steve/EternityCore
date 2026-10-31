@@ -27,6 +27,7 @@
 #include "WorldPacket.h"
 #include "Opcodes.h"
 #include "Utilities/Random.h"
+#include "DevConsole/CombatEvents.h"
 
 Unit* SpellCaster::SelectMagnetTarget(Unit* victim, Spell* spell, SpellEffectIndex eff)
 {
@@ -1032,6 +1033,7 @@ int32 SpellCaster::DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* s
         pVictim->AI()->HealedBy(pUnit, addhealth);
 
     int32 gain = pVictim->ModifyHealth(int32(addhealth));
+    DEVCONSOLE_COMBAT_EVENT(OnHeal(this, pVictim, addhealth, gain, spellProto ? spellProto->Id : 0, critical));
 
     SpellCaster* pHealer = this;
 

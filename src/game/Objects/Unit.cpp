@@ -59,6 +59,7 @@
 #include "MovementPacketSender.h"
 #include "Errors.h"
 #include "Utilities/Random.h"
+#include "DevConsole/CombatEvents.h"
 
 #include <limits>
 
@@ -660,6 +661,8 @@ void Unit::DoKillUnit(Unit* pVictim)
 
 uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto, bool durabilityLoss, Spell* spell, bool reflected)
 {
+    DEVCONSOLE_COMBAT_EVENT(OnDamage(this, pVictim, damage, spellProto ? spellProto->Id : 0, uint32(damageSchoolMask), uint32(damagetype)));
+
     // World of Warcraft Client Patch 1.7.0 (2005-09-13)
     // - Fixed bug where self-inflicted damage, like Poisonous Blood, wouldn't
     //   break stealth.
@@ -3262,6 +3265,7 @@ bool Unit::AddSpellAuraHolder(SpellAuraHolder* holder)
     }
     // add aura, register in lists and arrays
     m_spellAuraHolders.insert(SpellAuraHolderMap::value_type(holder->GetId(), holder));
+    DEVCONSOLE_COMBAT_EVENT(OnAuraApply(this, holder->GetCasterGuid(), holder->GetId(), holder->GetAuraMaxDuration(), holder->GetStackAmount()));
 
     for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
         if (Aura* aur = holder->GetAuraByEffectIndex(SpellEffectIndex(i)))
@@ -3836,6 +3840,7 @@ void Unit::RemoveSpellAuraHolder(SpellAuraHolder* holder, AuraRemoveMode mode)
     if (!foundInMap)
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Crash/Auras] Removing aura holder *not* in holders map ! Aura %u on %s", holder->GetId(), GetName());
 
+    DEVCONSOLE_COMBAT_EVENT(OnAuraRemove(this, holder->GetCasterGuid(), holder->GetId(), uint32(mode)));
     holder->SetRemoveMode(mode);
     holder->UnregisterSingleCastHolder();
     holder->HandleCastOnAuraRemoval();
@@ -7311,6 +7316,9 @@ void Unit::SetFly(bool enable)
 
 void Unit::SetDeathState(DeathState s)
 {
+    if (s == JUST_DIED)
+        DEVCONSOLE_COMBAT_EVENT(OnDeath(this));
+
     if (s != ALIVE && s != JUST_ALIVED)
     {
         // should be before combat stop so threat is transferred in case of MC

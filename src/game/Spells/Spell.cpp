@@ -48,6 +48,7 @@
 #include "Geometry.h"
 #include "Anticheat.h"
 #include "Utilities/Random.h"
+#include "DevConsole/CombatEvents.h"
 
 using namespace Spells;
 
@@ -3522,6 +3523,9 @@ void Spell::cancel()
     if (m_spellState == SPELL_STATE_FINISHED)
         return;
 
+    if (m_spellState == SPELL_STATE_PREPARING || m_spellState == SPELL_STATE_CASTING)
+        DEVCONSOLE_COMBAT_EVENT(OnCastCancel(this));
+
     // channeled spells don't display interrupted message even if they are interrupted, possible other cases with no "Interrupted" message
     bool sendInterrupt = !(m_channeled && m_spellState != SPELL_STATE_PREPARING);
 
@@ -4494,6 +4498,8 @@ void Spell::SendSpellStart()
     if (!IsNeedSendToClient())
         return;
 
+    DEVCONSOLE_COMBAT_EVENT(OnCastStart(this));
+
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Sending SMSG_SPELL_START id=%u", m_spellInfo->Id);
 
     uint16 castFlags = CAST_FLAG_UNKNOWN2;
@@ -4534,6 +4540,8 @@ void Spell::SendSpellGo()
         SendAllTargetsMiss();
         return;
     }
+
+    DEVCONSOLE_COMBAT_EVENT(OnCastGo(this));
 
     uint16 castFlags = CAST_FLAG_UNKNOWN9;
     if (m_spellInfo->IsRangedSpell())
