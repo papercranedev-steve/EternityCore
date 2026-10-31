@@ -129,6 +129,7 @@ public:
     CombatBotRoles GetRole() const;
 
     void EquipOrUseNewItem();
+    void CollectBagItemGuids(std::set<ObjectGuid>& guids) const;
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
     uint8 GetHighestHonorRankFromEquippedItems() const;
@@ -278,6 +279,10 @@ public:
         }
         return nullptr;
     }
+
+    // items in bags before the current trade, used to find what was received
+    std::set<ObjectGuid> m_itemsBeforeTrade;
+    bool m_hasTradeSnapshot = false;
 
     SpellEntry const* m_resurrectionSpell = nullptr;
     std::vector<SpellEntry const*> m_spellListTaunt;

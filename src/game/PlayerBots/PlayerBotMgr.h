@@ -80,7 +80,8 @@ class PlayerBotMgr
         bool AddOrRemoveBot();
 
         bool AddBot(PlayerBotAI* ai);
-        bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr);
+        // fakeAccount: log in through a generated account id, so several characters of one account can be bots at once
+        bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr, bool fakeAccount = false);
         bool DeleteBot(std::map<uint64, std::shared_ptr<PlayerBotEntry>>::iterator iter);
         bool DeleteBot(uint32 playerGuid);
 

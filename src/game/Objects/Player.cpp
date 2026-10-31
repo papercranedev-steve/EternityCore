@@ -108,7 +108,7 @@ static uint32 copseReclaimDelay[MAX_DEATH_COUNT] = { 30, 60, 120 };
 //== Player ====================================================
 
 Player::Player(WorldSession* session) : Unit(),
-    m_mover(this), m_camera(this), m_reputationMgr(this), m_saveDisabled(false), m_enableInstanceSwitch(true),
+    m_mover(this), m_camera(this), m_reputationMgr(this), m_saveDisabled(false), m_dbAccountId(0), m_enableInstanceSwitch(true),
     m_currentTicketCounter(0), m_repopAtGraveyardPending(false), m_knownLanguagesMask(0),
     m_honorMgr(this), m_personalXpRate(-1.0f), m_isStandUpScheduled(false)
 {
@@ -14607,6 +14607,9 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
         return false;
     }
 
+    // bots may be logged in through a fake session account, keep the real one for saving
+    m_dbAccountId = dbAccountId;
+
     // prevent login to locked character
     m_characterFlags = fields[15].GetUInt32();
     if (m_characterFlags & (CHARACTER_FLAG_RENAME | CHARACTER_FLAG_LOCKED_FOR_TRANSFER | CHARACTER_FLAG_DELETED_BY_TRANSFER))
@@ -16387,7 +16390,7 @@ void Player::SaveToDB(bool online, bool force)
                               "?, ?, ?, ?)");
 
     uberInsert.addUInt32(GetGUIDLow());
-    uberInsert.addUInt32(GetSession()->GetAccountId());
+    uberInsert.addUInt32(m_dbAccountId ? m_dbAccountId : GetSession()->GetAccountId());
     uberInsert.addString(m_name);
     uberInsert.addUInt8(GetRace());
     uberInsert.addUInt8(GetClass());

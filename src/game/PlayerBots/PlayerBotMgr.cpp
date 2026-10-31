@@ -405,12 +405,18 @@ bool PlayerBotMgr::AddBot(PlayerBotAI* ai)
     return AddBot(e->playerGUID, false);
 }
 
-bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI)
+bool PlayerBotMgr::AddBot(uint32 playerGUID, bool chatBot, PlayerBotAI* pAI, bool fakeAccount)
 {
     uint32 accountId = 0;
     auto iter = m_bots.find(playerGUID);
     if (iter == m_bots.end())
+    {
         accountId = sObjectMgr.GetPlayerAccountIdByGUID(playerGUID);
+        // Sessions are stored per account id. A generated id lets several characters
+        // of the same account be online as bots. Player::SaveToDB keeps the real account.
+        if (accountId && fakeAccount)
+            accountId = GenBotAccountId();
+    }
     else
         accountId = iter->second->accountId;
 
@@ -1033,7 +1039,7 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
 
     PartyBotAI* pAI = new PartyBotAI(pPlayer, pPlayer->GetMapId(), pPlayer->GetMap()->GetInstanceId(), x, y, z, pPlayer->GetOrientation());
 
-    if (!sPlayerBotMgr.AddBot(guid, false, pAI))
+    if (!sPlayerBotMgr.AddBot(guid, false, pAI, true))
     {
         delete pAI;
         SendSysMessage("Error spawning bot.");
@@ -1828,7 +1834,41 @@ bool ChatHandler::HandlePartyBotUnequipCommand(char* args)
     {
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
-            pTarget->DestroyItemCount(itemId, count, true);
+            // temporary bots are never saved, just delete the item
+            if (pTarget->IsSavingDisabled())
+            {
+                pTarget->DestroyItemCount(itemId, count, true);
+                return true;
+            }
+
+            // persistent character: move equipped item to bags, or mail it to the bot itself if bags are full
+            bool found = false;
+            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            {
+                Item* pItem = pTarget->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+                if (!pItem || pItem->GetEntry() != itemId)
+                    continue;
+
+                InventoryResult msg = pTarget->CanUnequipItem(pItem->GetPos(), false);
+                if (msg != EQUIP_ERR_OK)
+                {
+                    PSendSysMessage("Cannot unequip item now (error %u).", uint32(msg));
+                    SetSentErrorMessage(true);
+                    return false;
+                }
+
+                pTarget->AutoUnequipItemFromSlot(slot);
+                found = true;
+            }
+
+            if (!found)
+            {
+                SendSysMessage("Target does not have that item equipped.");
+                SetSentErrorMessage(true);
+                return false;
+            }
+
+            pTarget->SaveInventoryAndGoldToDB();
             return true;
         }
     }

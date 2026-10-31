@@ -1260,6 +1260,7 @@ class Player final: public Unit
         void _SaveStats();
         uint32 m_nextSave;
         bool m_saveDisabled; // used for temporary bots and faction change
+        uint32 m_dbAccountId; // account stored in `characters`, may differ from session account for bots
     public:
         // Saves a new character directly in the database, without creating a Player object in memory.
         static bool SaveNewPlayer(WorldSession* session, uint32 guidlow, std::string const& name, uint8 raceId, uint8 classId, uint8 gender, uint8 skin, uint8 face, uint8 hairStyle, uint8 hairColor, uint8 facialHair);

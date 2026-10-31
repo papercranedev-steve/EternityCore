@@ -2,6 +2,7 @@
 #include "CombatBotBaseAI.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "Bag.h"
 #include "Group.h"
 #include "PlayerBotMgr.h"
 #include "Opcodes.h"
@@ -2955,8 +2956,63 @@ void CombatBotBaseAI::AddHunterAmmo()
     }
 }
 
+void CombatBotBaseAI::CollectBagItemGuids(std::set<ObjectGuid>& guids) const
+{
+    guids.clear();
+    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+        if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            guids.insert(pItem->GetObjectGuid());
+
+    for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+        if (Bag* pBag = (Bag*)me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            for (uint32 j = 0; j < pBag->GetBagSize(); ++j)
+                if (Item* pItem = pBag->GetItemByPos(uint8(j)))
+                    guids.insert(pItem->GetObjectGuid());
+}
+
 void CombatBotBaseAI::EquipOrUseNewItem()
 {
+    // Persistent character (loaded from DB with saving enabled):
+    // only equip the items received in this trade, through the normal equip
+    // handler, so level/class/proficiency checks apply and the old item goes back to the bags.
+    if (!me->IsSavingDisabled())
+    {
+        if (!m_hasTradeSnapshot)
+            return;
+
+        std::set<ObjectGuid> current;
+        CollectBagItemGuids(current);
+
+        for (ObjectGuid const& guid : current)
+        {
+            if (m_itemsBeforeTrade.find(guid) != m_itemsBeforeTrade.end())
+                continue;
+
+            Item* pItem = me->GetItemByGuid(guid);
+            if (!pItem || pItem->IsEquipped())
+                continue;
+
+            switch (pItem->GetProto()->Class)
+            {
+                case ITEM_CLASS_WEAPON:
+                case ITEM_CLASS_ARMOR:
+                case ITEM_CLASS_CONTAINER:
+                case ITEM_CLASS_QUIVER:
+                {
+                    WorldPackets::Item::AutoEquipItem packet;
+                    packet.srcbag = pItem->GetBagSlot();
+                    packet.srcslot = pItem->GetSlot();
+                    me->GetSession()->HandleAutoEquipItemOpcode(packet);
+                    break;
+                }
+            }
+        }
+
+        m_itemsBeforeTrade.clear();
+        m_hasTradeSnapshot = false;
+        return;
+    }
+
     for (int i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
     {
         Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
@@ -3363,11 +3419,16 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             uint32 status = *((uint32*)(*packet).contents());
             if (status == TRADE_STATUS_BEGIN_TRADE)
             {
+                CollectBagItemGuids(m_itemsBeforeTrade);
+                m_hasTradeSnapshot = true;
                 auto data = std::make_unique<NullClientPacket>(CMSG_BEGIN_TRADE);
                 me->GetSession()->QueuePacket(std::move(data));
             }
             else if (status == TRADE_STATUS_TRADE_ACCEPT)
             {
+                // traded items only move into the bags on completion, so this is still "before"
+                CollectBagItemGuids(m_itemsBeforeTrade);
+                m_hasTradeSnapshot = true;
                 auto data = std::make_unique<WorldPackets::Trade::AcceptTrade>();
                 me->GetSession()->QueuePacket(std::move(data));
             }
