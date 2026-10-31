@@ -170,6 +170,7 @@ namespace Commander
         TeamPlan& plan = commander.GetPlanMutable();
         PullPlan& pull = plan.pull;
         pull = PullPlan();
+        plan.lastPullOutcome = PullOutcome::None;
         pull.target = best.pullTarget->GetObjectGuid();
         pull.tank = tank->GetObjectGuid();
         pull.expected = best.expected;
@@ -217,6 +218,8 @@ namespace Commander
     void PullAssigner::Clear(TeamPlan& plan) const
     {
         plan.pull = PullPlan();
+        plan.clear = ClearPlan();
+        plan.lastPullOutcome = PullOutcome::None;
     }
 
     void PullAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
@@ -234,8 +237,9 @@ namespace Commander
         };
         auto cancel = [&](std::string const& why)
         {
-            pull.notes.push_back("Pull cancelled: " + why);
+            plan.notes.push_back("Pull cancelled: " + why);
             pull.phase = PullPhase::None;
+            plan.lastPullOutcome = PullOutcome::Cancelled;
         };
 
         PartyMemberFacts const* tank = world.FindMember(pull.tank);
@@ -259,7 +263,7 @@ namespace Commander
                 }
                 if (PullPlanner::CheckReady(world).empty())
                 {
-                    pull.notes.push_back("Everyone ready, pulling.");
+                    plan.notes.push_back("Everyone ready, pulling.");
                     enter(PullPhase::Approach);
                 }
                 else if (elapsed > WAIT_READY_TIMEOUT_MS)
@@ -278,7 +282,10 @@ namespace Commander
                 return;
             case PullPhase::Settle:
                 if (elapsed >= SETTLE_MS || world.enemies.empty())
+                {
                     pull.phase = PullPhase::None;
+                    plan.lastPullOutcome = PullOutcome::Done;
+                }
                 return;
             case PullPhase::None:
                 return;

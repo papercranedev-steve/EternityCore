@@ -36,6 +36,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
   ${COMMANDER_DIR}/Coordination/PullPlanner.h
   ${COMMANDER_DIR}/Coordination/PullPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/ClearPlanner.h
+  ${COMMANDER_DIR}/Coordination/ClearPlanner.cpp
   ${COMMANDER_DIR}/Perception/AssistPredictor.h
   ${COMMANDER_DIR}/Perception/AssistPredictor.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h

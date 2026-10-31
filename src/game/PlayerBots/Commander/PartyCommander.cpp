@@ -1,6 +1,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
+#include "Commander/Coordination/ClearPlanner.h"
 #include "PartyBotAI.h"
 #include "Chat.h"
 #include "Timer.h"
@@ -20,12 +21,13 @@ namespace Commander
 
         Refresh(bot, nowMs);
         RunAssigners(assigners);
+        ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
     }
 
     void PartyCommander::FlushNotes(PartyBotAI* bot)
     {
-        std::vector<std::string>& notes = m_plan.pull.notes;
+        std::vector<std::string>& notes = m_plan.notes;
         if (notes.empty())
             return;
         Player* leader = bot->GetPartyLeader();

@@ -23,6 +23,26 @@ namespace Commander
         Settle,     // damage dealers wait while the tank builds first threat
     };
 
+    enum class PullOutcome : uint8
+    {
+        None,
+        Done,       // pull phases finished (the fight itself may still be going)
+        Cancelled,
+    };
+
+    // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
+    struct ClearPlan
+    {
+        bool active = false;
+        Position3 anchor;               // leader position at start; moving away stops it
+        float radius = 40.0f;
+        uint32 maxMobs = 4;             // skip packs predicted to bring more
+        uint32 cleared = 0;
+        uint32 skippedPacks = 0;
+        std::vector<ObjectGuid> skipped;    // members of packs judged too hard or unpullable
+        uint32 idleSinceMs = 0;         // last time the party was in a fight
+    };
+
     struct PullPlan
     {
         PullPhase phase = PullPhase::None;
@@ -32,7 +52,6 @@ namespace Commander
         Position3 spot;                     // where the party fights (leader position at command time)
         bool returnToSpot = false;
         uint32 phaseSinceMs = 0;
-        std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
     };
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).
     struct InterruptDuty
@@ -51,6 +70,9 @@ namespace Commander
         uint32 version = 0;
         std::vector<InterruptDuty> interrupts;
         PullPlan pull;
+        PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
+        ClearPlan clear;
+        std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const
         {

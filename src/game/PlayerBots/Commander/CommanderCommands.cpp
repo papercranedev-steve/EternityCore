@@ -16,6 +16,8 @@
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
  *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
  *                                    hostile pack) once everyone is ready; "now" skips the wait
+ *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
+ *                                    n mobs per pull), waiting until ready in between; "clear stop"
  *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
  *
  * GM commands run on the world thread while map threads are idle (MapManager::Update
@@ -31,7 +33,9 @@
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Coordination/PullPlanner.h"
+#include "Commander/Coordination/ClearPlanner.h"
 #include "Creature.h"
+#include <cstdlib>
 #include "SpellMgr.h"
 #include "Group.h"
 #include "Map.h"
@@ -191,6 +195,9 @@ namespace
                 uint32(plan.pull.expected.size()), WorldTimer::getMSTimeDiffToNow(plan.pull.phaseSinceMs) / 1000.0f);
         else
             handler->SendSysMessage("Pull: none");
+        if (plan.clear.active)
+            handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
+                plan.clear.radius, plan.clear.maxMobs, plan.clear.cleared, plan.clear.skippedPacks);
 
         if (plan.interrupts.empty())
         {
@@ -250,6 +257,7 @@ namespace
         if (option && !strcmp(option, "cancel"))
         {
             commander->GetPlanMutable().pull = Commander::PullPlan();
+            Commander::ClearPlanner::Stop(*commander, "you cancelled the pull.");
             handler->SendSysMessage("Pull cancelled.");
             return true;
         }
@@ -274,6 +282,48 @@ namespace
         for (std::string const& line : report)
             handler->SendSysMessage(line.c_str());
         return ok;
+    }
+
+    // .partybot ai clear [radius] [maxmobs] | stop
+    bool StartClear(ChatHandler* handler, Player* player, char const* first, char const* second)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        if (first && !strcmp(first, "stop"))
+        {
+            Commander::TeamPlan& plan = commander->GetPlanMutable();
+            plan.pull = Commander::PullPlan();
+            if (plan.clear.active)
+                Commander::ClearPlanner::Stop(*commander, "you stopped it.");
+            else
+                handler->SendSysMessage("Clear is not running.");
+            return true;
+        }
+        if (!sCommanderMgr.IsModuleEnabled("pull"))
+        {
+            handler->SendSysMessage("Module 'pull' is off (.partybot ai module pull on).");
+            return false;
+        }
+
+        float radius = 40.0f;
+        uint32 maxMobs = 4;
+        if (first)
+            radius = float(atof(first));
+        if (second)
+            maxMobs = uint32(atoi(second));
+        if (radius < 10.0f || radius > 50.0f || maxMobs < 1 || maxMobs > 10)
+        {
+            handler->SendSysMessage("Usage: .partybot ai clear [radius 10-50, default 40] [max mobs per pull 1-10, default 4] | stop");
+            return false;
+        }
+
+        Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
+        handler->PSendSysMessage("Clearing packs within %.0f yd of here, at most %u mobs per pull. "
+            "Stops when nothing is left, someone dies, or you move more than %.0f yd. '.partybot ai clear stop' to stop.",
+            radius, maxMobs, Commander::ClearPlanner::MAX_LEADER_DRIFT);
+        return true;
     }
 
     // .partybot ai packs
@@ -514,12 +564,18 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     }
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
-        !strcmp(sub, "pull") || !strcmp(sub, "ready"))
+        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "threat"))
             ok = ShowThreat(this, player);
+        else if (!strcmp(sub, "clear"))
+        {
+            char const* first = ExtractLiteralArg(&args);
+            char const* second = ExtractLiteralArg(&args);
+            ok = StartClear(this, player, first, second);
+        }
         else if (!strcmp(sub, "ready"))
             ok = ShowReady(this, player);
         else if (!strcmp(sub, "pull"))
@@ -545,7 +601,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|ready|pull [now|cancel]|healsim <amount> [healer]]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|healsim <amount> [healer]]");
     SetSentErrorMessage(true);
     return false;
 }
