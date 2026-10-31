@@ -1,0 +1,89 @@
+#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/ThreatView.h"
+#include "SharedDefines.h"
+#include <algorithm>
+
+namespace Commander
+{
+namespace Value
+{
+    float ArmorReduction(uint32 armor, uint32 attackerLevel)
+    {
+        // SpellCaster::CalcArmorReducedDamage
+        float tmp = 0.1f * float(armor) / (8.5f * float(attackerLevel) + 40.0f);
+        tmp = tmp / (1.0f + tmp);
+        return std::min(0.75f, std::max(0.0f, tmp));
+    }
+
+    float Points(WorldModel const& world, float health)
+    {
+        if (world.rates.partyMaxHealth <= 0.0f)
+            return 0.0f;
+        return health / world.rates.partyMaxHealth * 100.0f;
+    }
+
+    float DeathPenalty(PartyMemberFacts const& member)
+    {
+        if (member.isBot && member.role == ROLE_HEALER)
+            return DEATH_PENALTY_HEALER;
+        if (member.isBot && member.role == ROLE_TANK)
+            return DEATH_PENALTY_TANK;
+        return DEATH_PENALTY_OTHER;
+    }
+
+    float DealtDps(WorldModel const& world)
+    {
+        if (world.rates.dealtMeasured && world.rates.dealtDps > 0.0f)
+            return world.rates.dealtDps;
+
+        float estimate = 0.0f;
+        for (PartyMemberFacts const& m : world.party)
+            if (!m.isPet && m.alive && !(m.isBot && m.role == ROLE_HEALER))
+                estimate += FALLBACK_DPS_PER_LEVEL * m.level;
+        return std::max(1.0f, estimate);
+    }
+
+    float FightRemainingSec(WorldModel const& world)
+    {
+        return world.rates.enemyHealth / DealtDps(world);
+    }
+
+    float FightExtension(WorldModel const& world, float seconds)
+    {
+        return Points(world, std::max(0.0f, seconds) * world.rates.incomingDps);
+    }
+
+    float ContributionPerSec(WorldModel const& world, PartyMemberFacts const& member)
+    {
+        if (!member.alive)
+            return 0.0f;
+
+        if (member.isBot && member.role == ROLE_HEALER)
+            return Points(world, world.rates.incomingDps) / float(std::max(1u, world.rates.healers));
+
+        // One second of this member's damage shortens the fight by share seconds,
+        // which saves that much incoming damage.
+        float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
+        return Points(world, world.rates.incomingDps) * share;
+    }
+
+    float LostAction(WorldModel const& world, PartyMemberFacts const& member, float seconds)
+    {
+        return ContributionPerSec(world, member) * std::max(0.0f, seconds);
+    }
+
+    float HitDps(EnemyFacts const& enemy, PartyMemberFacts const& victim)
+    {
+        return enemy.meleeDps * (1.0f - ArmorReduction(victim.armor, enemy.level));
+    }
+
+    float SurviveSec(EnemyFacts const& enemy, PartyMemberFacts const& victim)
+    {
+        float const dps = HitDps(enemy, victim);
+        if (dps <= 0.0f)
+            return ThreatView::NO_LIMIT;
+        return float(victim.health) / dps;
+    }
+}
+}

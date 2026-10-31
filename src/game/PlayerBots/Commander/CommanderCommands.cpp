@@ -9,7 +9,11 @@
  *   .partybot ai module <id> on|off  toggle one module
  *   .partybot ai reload              re-read PartyBot.Commander.* (run .reload config first
  *                                    if mangosd.conf was edited)
- *   .partybot ai bot                 state of the selected bot
+ *   .partybot ai reload overrides    re-read custom_partybot_*_override, clear profile cache
+ *   .partybot ai bot [n]             state of the selected bot and its last n arbiter decisions
+ *   .partybot ai profile             selected creature's profile (melee, spells, on-hit debuffs)
+ *   .partybot ai spell <id> [level]  one spell's profile and amounts at a caster level
+ *   .partybot ai rates               fight-wide rates and value units of your party
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai packs               out-of-combat packs within 50 yards
  *   .partybot ai plan                team plan: pull state, interrupt abilities and duties
@@ -34,7 +38,9 @@
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/ClearPlanner.h"
+#include "Commander/ProfileCommands.h"
 #include "Creature.h"
+#include <algorithm>
 #include <cstdlib>
 #include "SpellMgr.h"
 #include "Group.h"
@@ -535,8 +541,54 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "reload"))
     {
+        char* what = ExtractLiteralArg(&args);
+        if (what && !strcmp(what, "overrides"))
+        {
+            Commander::ProfileCommands::ReloadOverrides(this);
+            return true;
+        }
         sCommanderMgr.LoadConfig();
         ShowStatus(this);
+        return true;
+    }
+
+    if (!strcmp(sub, "profile"))
+    {
+        if (!Commander::ProfileCommands::ShowCreature(this, GetSelectedCreature()))
+        {
+            SetSentErrorMessage(true);
+            return false;
+        }
+        return true;
+    }
+
+    if (!strcmp(sub, "spell"))
+    {
+        uint32 spellId = 0;
+        if (!ExtractUInt32(&args, spellId))
+        {
+            SendSysMessage("Usage: .partybot ai spell <spell id> [caster level]");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        uint32 level = 0;
+        if (!ExtractOptUInt32(&args, level, 0) || !level)
+            level = GetSelectedCreature() ? GetSelectedCreature()->GetLevel() : m_session->GetPlayer()->GetLevel();
+        if (!Commander::ProfileCommands::ShowSpell(this, spellId, level))
+        {
+            SetSentErrorMessage(true);
+            return false;
+        }
+        return true;
+    }
+
+    if (!strcmp(sub, "rates"))
+    {
+        if (!Commander::ProfileCommands::ShowRates(this, m_session->GetPlayer()))
+        {
+            SetSentErrorMessage(true);
+            return false;
+        }
         return true;
     }
 
@@ -560,6 +612,9 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
             SendSysMessage("  last decision: none");
         else
             PSendSysMessage("  last decision %u ms ago: %s", WorldTimer::getMSTimeDiff(d.GetLastDecisionMs(), now), d.GetLastDecision().c_str());
+        uint32 count = 1;
+        ExtractOptUInt32(&args, count, 1);
+        Commander::ProfileCommands::ShowDecisions(this, d, std::max(1u, std::min(count, uint32(Commander::BotDirectives::LOG_SIZE))));
         return true;
     }
 
@@ -601,7 +656,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|healsim <amount> [healer]]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

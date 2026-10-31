@@ -100,6 +100,10 @@ public:
     bool IsTauntControlled() const;
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
+    // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
+    // debuffs the Commander vetoed (Commander/VetoChecks.h).
+    bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;

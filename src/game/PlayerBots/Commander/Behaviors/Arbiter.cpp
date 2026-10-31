@@ -26,14 +26,53 @@ namespace Commander
             return "?";
         }
 
-        std::string Describe(Proposal const& p)
+        char const* VetoName(VetoType type)
         {
-            char buf[160];
-            snprintf(buf, sizeof(buf), "%s tier%u score%.2f %s spell%u",
-                p.source, uint32(p.tier), p.score, ActionName(p.action.type),
-                p.action.spell ? p.action.spell->Id : 0);
+            switch (type)
+            {
+                case VetoType::None:   return "none";
+                case VetoType::Dispel: return "no-dispel";
+            }
+            return "?";
+        }
+
+        std::string TargetName(PartyBotAI const* bot, ObjectGuid guid)
+        {
+            if (guid.IsEmpty())
+                return "self";
+            if (Unit* unit = bot->me->GetMap()->GetUnit(guid))
+                return unit->GetName();
+            return guid.GetString();
+        }
+
+        CandidateRecord MakeRecord(std::string what, Proposal const& p)
+        {
+            CandidateRecord r;
+            r.source = p.source;
+            r.what = std::move(what);
+            r.kind = p.kind;
+            r.tier = uint8(p.tier);
+            r.score = p.score;
+            r.valued = p.valued;
+            r.benefit = p.benefit;
+            r.cost = p.cost;
+            r.reason = p.reason;
+            return r;
+        }
+    }
+
+    std::string Arbiter::Describe(PartyBotAI const* bot, Proposal const& p)
+    {
+        char buf[200];
+        if (p.kind == ProposalKind::Veto)
+        {
+            snprintf(buf, sizeof(buf), "%s %s spell%u", VetoName(p.veto.type),
+                TargetName(bot, p.veto.target).c_str(), p.veto.spellId);
             return buf;
         }
+        snprintf(buf, sizeof(buf), "%s %s spell%u", ActionName(p.action.type),
+            TargetName(bot, p.action.target).c_str(), p.action.spell ? p.action.spell->Id : 0);
+        return buf;
     }
 
     bool Arbiter::Run(PartyBotAI* bot, WorldModel const& world, TeamPlan const& plan,
@@ -48,6 +87,7 @@ namespace Commander
             return false;
 
         uint32 const now = WorldTimer::getMSTime();
+        BotDirectives& directives = bot->Directives();
 
         // Keeps the original rotation's own taunt switched off while a module decides taunts.
         // Expires by itself if the module is disabled or the Commander is turned off.
@@ -55,7 +95,7 @@ namespace Commander
         {
             if (b->ControlsTaunt(bot))
             {
-                bot->Directives().ControlTaunt(now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                directives.ControlTaunt(now, 3 * sCommanderMgr.GetBotUpdateInterval());
                 break;
             }
         }
@@ -70,30 +110,71 @@ namespace Commander
         for (IBehavior const* b : active)
             b->Adjust(bot, world, proposals);
 
-        std::stable_sort(proposals.begin(), proposals.end(), [](Proposal const& a, Proposal const& b)
+        DecisionRecord record;
+        record.timeMs = now;
+
+        // Value-scored proposals that are not worth it, and vetoes.
+        std::vector<Proposal> replace;
+        uint32 const vetoMs = VETO_TICKS * sCommanderMgr.GetBotUpdateInterval();
+        for (Proposal const& p : proposals)
+        {
+            if (p.valued && p.benefit <= p.cost)
+            {
+                record.candidates.push_back(MakeRecord(Describe(bot, p), p));
+                record.candidates.back().result = CandidateRecord::Result::Dropped;
+                continue;
+            }
+            if (p.kind == ProposalKind::Veto)
+            {
+                directives.AddVeto(p.veto, now, vetoMs);
+                record.candidates.push_back(MakeRecord(Describe(bot, p), p));
+                record.candidates.back().result = CandidateRecord::Result::VetoSet;
+                continue;
+            }
+            replace.push_back(p);
+        }
+
+        std::stable_sort(replace.begin(), replace.end(), [](Proposal const& a, Proposal const& b)
         {
             if (a.tier != b.tier)
                 return a.tier < b.tier;
             return a.score > b.score;
         });
 
-        ProposalTier const topTier = proposals.front().tier;
-        for (Proposal const& p : proposals)
+        bool executed = false;
+        if (!replace.empty())
         {
-            // Lower tiers are only considered when nothing in the top tier exists,
-            // not when the top tier failed to execute.
-            if (p.tier != topTier)
-                break;
-
-            if (Execute(bot, p))
+            ProposalTier const topTier = replace.front().tier;
+            for (Proposal const& p : replace)
             {
-                bot->Directives().SetLastDecision(now, Describe(p));
-                return true;
+                record.candidates.push_back(MakeRecord(Describe(bot, p), p));
+                CandidateRecord& r = record.candidates.back();
+
+                // Lower tiers are only considered when nothing in the top tier exists,
+                // not when the top tier failed to execute.
+                if (p.tier != topTier)
+                {
+                    r.result = CandidateRecord::Result::LowerTier;
+                    continue;
+                }
+                if (executed)
+                    continue;   // NotTried
+
+                if (Execute(bot, p))
+                {
+                    executed = true;
+                    r.result = CandidateRecord::Result::Executed;
+                    directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
+                }
+                else
+                    r.result = CandidateRecord::Result::Failed;
             }
+            if (!executed)
+                directives.SetLastDecision(now, "failed: " + std::string(replace.front().source) + " " + Describe(bot, replace.front()));
         }
 
-        bot->Directives().SetLastDecision(now, "failed: " + Describe(proposals.front()));
-        return false;
+        directives.RecordDecision(std::move(record));
+        return executed;
     }
 
     bool Arbiter::Execute(PartyBotAI* bot, Proposal const& proposal)

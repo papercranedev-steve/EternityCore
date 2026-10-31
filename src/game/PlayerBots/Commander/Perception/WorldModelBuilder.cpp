@@ -37,6 +37,10 @@ namespace WorldModelBuilder
             f.alive = unit->IsAlive();
             f.classId = unit->GetClass();
             f.healthPct = unit->GetHealthPercent();
+            f.health = unit->GetHealth();
+            f.maxHealth = unit->GetMaxHealth();
+            f.level = unit->GetLevel();
+            f.armor = uint32(std::max(0, unit->GetArmor()));
             f.manaPct = unit->GetPowerType() == POWER_MANA && unit->GetMaxPower(POWER_MANA)
                 ? unit->GetPowerPercent(POWER_MANA) : -1.0f;
             f.pos = PositionOf(unit);
@@ -199,6 +203,11 @@ namespace WorldModelBuilder
             e.level = creature->GetLevel();
             e.elite = creature->IsElite();
             e.healthPct = creature->GetHealthPercent();
+            e.health = creature->GetHealth();
+            e.maxHealth = creature->GetMaxHealth();
+            e.meleeHit = (creature->GetFloatValue(UNIT_FIELD_MINDAMAGE) + creature->GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2.0f;
+            if (uint32 const attackMs = creature->GetAttackTime(BASE_ATTACK))
+                e.meleeDps = e.meleeHit / (attackMs / 1000.0f);
             e.pos = PositionOf(creature);
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);

@@ -58,6 +58,7 @@ namespace Commander
         previous.enemies = std::move(m_world.enemies);
         WorldModelBuilder::RefreshCombat(bot, m_world);
         m_threatHistory.Annotate(m_world, previous, nowMs);
+        m_combatRates.Annotate(m_world, nowMs);
 
         if (m_world.version == 0 || WorldTimer::getMSTimeDiff(m_world.packsRefreshedAtMs, nowMs) >= PACK_REFRESH_MS)
         {

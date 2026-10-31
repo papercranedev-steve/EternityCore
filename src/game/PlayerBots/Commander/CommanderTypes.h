@@ -41,12 +41,52 @@ namespace Commander
         uint32 holdMs = 0;
     };
 
+    // Replace: do this action this tick instead of the original rotation.
+    // Veto: the original rotation still runs, but must not do one thing (value-scoring doc 6.1).
+    enum class ProposalKind : uint8
+    {
+        Replace,
+        Veto,
+    };
+
+    // What a veto forbids. Every type has a check in official PartyBot code, listed in
+    // .kiro/docs/2026-11-01-ai-teammate-code-structure.md section 6.2.
+    enum class VetoType : uint8
+    {
+        None,
+        Dispel,     // do not dispel aura `spellId` from `target` (PartyBotAI::IsValidDispelTarget)
+    };
+
+    struct Veto
+    {
+        VetoType type = VetoType::None;
+        ObjectGuid target;
+        uint32 spellId = 0;     // 0 = any
+    };
+
     struct Proposal
     {
+        ProposalKind kind = ProposalKind::Replace;
         ProposalTier tier = ProposalTier::Routine;
         float score = 0.0f;           // compared only within the same tier
         char const* source = "";      // behavior id, for logs and .partybot ai bot
-        BotAction action;
+        BotAction action;             // Replace
+        Veto veto;                    // Veto
+
+        // Value-scored proposals (value-scoring doc section 2): score = benefit - cost, in points.
+        // The arbiter drops them when benefit <= cost. Older modules leave valued = false.
+        bool valued = false;
+        float benefit = 0.0f;
+        float cost = 0.0f;
+        char const* reason = "";      // short note for the candidate log
+
+        void SetValue(float b, float c)
+        {
+            valued = true;
+            benefit = b;
+            cost = c;
+            score = b - c;
+        }
     };
 }
 

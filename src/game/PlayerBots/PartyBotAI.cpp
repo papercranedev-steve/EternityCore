@@ -29,6 +29,7 @@
 #include "Utilities/Random.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/VetoChecks.h"
 
 #include <random>
 
@@ -161,6 +162,39 @@ void PartyBotAI::BeginChasing(Unit* pVictim) const
         return;
 
     CombatBotBaseAI::BeginChasing(pVictim);
+}
+
+bool PartyBotAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const
+{
+    if (!CombatBotBaseAI::IsValidDispelTarget(pTarget, pSpellEntry))
+        return false;
+    // Offensive dispels (purge) are not vetoed.
+    if (!pTarget->IsFriendlyTo(me))
+        return true;
+    return Commander::VetoChecks::HasAllowedDebuff(this, pTarget, pSpellEntry);
+}
+
+// Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above.
+Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
+{
+    Group* pGroup = me->GetGroup();
+    if (pGroup)
+    {
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (Player* pMember = itr->getSource())
+            {
+                if (me->IsValidHelpfulTarget(pMember) &&
+                   !pMember->IsGameMaster() &&
+                    IsValidDispelTarget(pMember, pSpellEntry) &&
+                    me->IsWithinLOSInMap(pMember) &&
+                    me->IsWithinDist(pMember, 30.0f))
+                    return pMember;
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 bool PartyBotAI::IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy)

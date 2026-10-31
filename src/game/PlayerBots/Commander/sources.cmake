@@ -43,6 +43,22 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.cpp
+  ${COMMANDER_DIR}/Perception/SpellProfile.h
+  ${COMMANDER_DIR}/Perception/SpellProfile.cpp
+  ${COMMANDER_DIR}/Perception/CreatureProfile.h
+  ${COMMANDER_DIR}/Perception/CreatureProfile.cpp
+  ${COMMANDER_DIR}/Perception/ProfileStore.h
+  ${COMMANDER_DIR}/Perception/ProfileStore.cpp
+  ${COMMANDER_DIR}/Perception/CombatRates.h
+  ${COMMANDER_DIR}/Perception/CombatRates.cpp
+  ${COMMANDER_DIR}/Perception/ValueModel.h
+  ${COMMANDER_DIR}/Perception/ValueModel.cpp
+  ${COMMANDER_DIR}/VetoChecks.h
+  ${COMMANDER_DIR}/VetoChecks.cpp
+  ${COMMANDER_DIR}/Behaviors/DispelBehavior.h
+  ${COMMANDER_DIR}/Behaviors/DispelBehavior.cpp
+  ${COMMANDER_DIR}/ProfileCommands.h
+  ${COMMANDER_DIR}/ProfileCommands.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

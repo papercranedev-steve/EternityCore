@@ -41,6 +41,10 @@ namespace Commander
         uint8 role = 0;             // CombatBotRoles for bots, ROLE_INVALID (0) for players and pets
         uint8 classId = 0;
         float healthPct = 0.0f;
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+        uint32 level = 0;
+        uint32 armor = 0;
         float manaPct = -1.0f;      // -1 = no mana
         Position3 pos;
         ObjectGuid victim;          // who this member is attacking
@@ -68,6 +72,10 @@ namespace Commander
         uint32 level = 0;
         bool elite = false;
         float healthPct = 0.0f;
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+        float meleeHit = 0.0f;          // average main hand hit now (live unit fields, enrage included)
+        float meleeDps = 0.0f;          // meleeHit / attack time, before the victim's armor
         Position3 pos;
 
         ObjectGuid victim;              // threat manager's current victim (who it is hitting)
@@ -118,6 +126,19 @@ namespace Commander
         uint32 maxLevel = 0;
     };
 
+    // Fight-wide rates for the common value unit (value-scoring doc section 3).
+    // Filled by CombatRates (Perception/CombatRates.h) on every refresh.
+    struct RateFacts
+    {
+        float partyMaxHealth = 0.0f;    // sum over alive and dead members, pets excluded; 1 point = 1% of it
+        float incomingDps = 0.0f;       // melee of enemies hitting us, after armor (spell damage not included yet)
+        float dealtDps = 0.0f;          // measured drop of enemy health per second
+        bool dealtMeasured = false;     // false = not enough samples yet, dealtDps is an estimate
+        float enemyHealth = 0.0f;       // current health of all enemies
+        uint32 healers = 0;             // alive healer-role bots, plus the player if a healing class
+        uint32 damageDealers = 0;       // alive members that are not healers (tanks included)
+    };
+
     struct WorldModel
     {
         uint32 version = 0;          // +1 on every refresh
@@ -128,6 +149,7 @@ namespace Commander
         std::vector<PartyMemberFacts> party;
         std::vector<EnemyFacts> enemies;    // creatures with a party member or pet on their threat list
         std::vector<PackFacts> packs;       // nearby creatures not in combat
+        RateFacts rates;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
         EnemyFacts const* FindEnemy(ObjectGuid guid) const;
