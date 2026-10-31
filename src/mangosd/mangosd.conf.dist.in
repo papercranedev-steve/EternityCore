@@ -3228,6 +3228,30 @@ AHBot.itemcount = 50
 #        Comma separated behavior module ids to disable. See .partybot ai modules
 #        Default: "" (all enabled)
 #
+#    PopBot.Enable
+#        World population bots (src/game/PlayerBots/Population): temporary characters that are
+#        never saved, refuse groups / trades / duels and only make the world look busier.
+#        Needs sql/custom/popbot.sql in the world database. Toggle in game with .popbot on|off
+#        Default: 0 - off
+#                 1 - on
+#
+#    PopBot.UpdateMs
+#        How often each population bot runs its AI (200 - 5000).
+#        Default: 1000
+#
+#    PopBot.MaxBots
+#        Hard limit of population bots online at once (0 - 500).
+#        Default: 100
+#
+#    PopBot.SpawnGapMs
+#        Minimum time between two spawns, to avoid hitches (500 - 60000).
+#        Default: 3000
+#
+#    PopBot.LifetimeMinMinutes
+#    PopBot.LifetimeMaxMinutes
+#        Each bot logs out after a random time in this range, so faces keep changing.
+#        Default: 10 / 40
+#
 #    BattleBot.AutoEquip
 #        What gear will new battlebots spawn with.
 #        Default: 1 (random items)
@@ -3259,7 +3283,12 @@ PartyBot.Commander.Enable = 1
 PartyBot.Commander.BotUpdateMs = 1000
 PartyBot.Commander.PerceptionMs = 200
 PartyBot.Commander.DisabledModules = ""
-
+PopBot.Enable = 0
+PopBot.UpdateMs = 1000
+PopBot.MaxBots = 100
+PopBot.SpawnGapMs = 3000
+PopBot.LifetimeMinMinutes = 10
+PopBot.LifetimeMaxMinutes = 40
 
 BattleBot.AutoEquip = 1
 BattleBot.AutoJoin = 0

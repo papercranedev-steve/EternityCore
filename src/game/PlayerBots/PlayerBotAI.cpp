@@ -72,10 +72,10 @@ enum
 };
 
 
-bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_, uint32 mapId, uint32 instanceId, float x, float y, float z, float o, Player* pClone)
+bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_, uint32 mapId, uint32 instanceId, float x, float y, float z, float o, Player* pClone, char const* pName)
 {
     ASSERT(botEntry);
-    std::string name = sObjectMgr.GenerateFreePlayerName();
+    std::string name = pName ? std::string(pName) : sObjectMgr.GenerateFreePlayerName();
     normalizePlayerName(name);
 
     uint8 gender;

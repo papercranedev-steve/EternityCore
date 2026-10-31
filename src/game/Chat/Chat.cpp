@@ -1298,6 +1298,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "pbcast",         SEC_ADMINISTRATOR,  true,  &ChatHandler::HandlePBCastStatsCommand,         "", pbcastCommandTable },
         { "respawn",        SEC_BASIC_ADMIN,    false, &ChatHandler::HandleRespawnCommand,             "", nullptr },
         { "lua",            SEC_CONSOLE,        true,  &ChatHandler::HandleLuaCommand,                 "", nullptr },
+        { "popbot",         SEC_ADMINISTRATOR,  false, &ChatHandler::HandlePopBotCommand,              "", nullptr },
         { "scenario",       SEC_PLAYER,         false, &ChatHandler::HandleScenarioCommand,            "", nullptr },
         { "send",           SEC_MODERATOR,      true, nullptr,                                         "", sendCommandTable     },
         { "mute",           SEC_MODERATOR,      true,  &ChatHandler::HandleMuteCommand,                "", nullptr },

@@ -20,6 +20,7 @@
 #include "Spell.h"
 #include "Bag.h"
 #include "QuestDef.h"
+#include "Population/PopulationMgr.h"
 
 #include <sstream>
 #include <cstring>
@@ -65,6 +66,8 @@ void PlayerBotMgr::LoadConfig()
     m_confDebug = sConfig.GetBoolDefault("PlayerBot.Debug", false);
     m_confUpdateDiff = sConfig.GetIntDefault("PlayerBot.UpdateMs", 10000);
     m_confBattleBotAutoJoin = sConfig.GetBoolDefault("BattleBot.AutoJoin", false);
+
+    sPopulationMgr.LoadConfig();    // PlayerBots/Population/
 
     if (!sWorld.getConfig(CONFIG_BOOL_FORCE_LOGOUT_DELAY))
         m_tempBots.clear();
@@ -196,6 +199,9 @@ void PlayerBotMgr::OnPlayerInWorld(Player* player)
 
 void PlayerBotMgr::Update(uint32 diff)
 {
+    // Population bots (PlayerBots/Population/): spawn queue, lifetimes, despawn requests.
+    sPopulationMgr.Update(diff);
+
     // Temporary bots.
     std::map<uint32, uint32>::iterator it;
     for (it = m_tempBots.begin(); it != m_tempBots.end(); ++it)

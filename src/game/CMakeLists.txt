@@ -624,6 +624,7 @@ add_library(game STATIC
   ${game_SRCS}
 )
 include(PlayerBots/Commander/sources.cmake)
+include(PlayerBots/Population/sources.cmake)
 include(DevConsole/sources.cmake)
 mangos_target_flags(game)
 if(GAME_EXTRA_CXX_FLAGS)
