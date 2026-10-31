@@ -39,6 +39,7 @@
 #include "Util.h"
 #include "Anticheat.h"
 #include "Utilities/Random.h"
+#include "PlayerBotMgr.h"
 
 void WorldSession::HandleAutostoreLootItemOpcode(WorldPackets::Loot::AutoStoreLootItem const& packet)
 {
@@ -229,6 +230,10 @@ void WorldSession::HandleAutostoreLootItemOpcode(WorldPackets::Loot::AutoStoreLo
         sLog.Player(this, LOG_LOOTS, LOG_LVL_MINIMAL, "%s loots %ux%u [loot from %s]", _player->GetShortDescription().c_str(), item->count, item->itemid, lguid.GetString().c_str());
         player->SendNewItem(newitem, uint32(item->count), false, false, true);
         player->OnReceivedItem(newitem);
+
+        // quest drop: persistent party bots that need it get their own copy
+        if (item->needs_quest)
+            sPlayerBotMgr.OnPlayerLootedQuestItem(player, item->itemid, item->count, item->randomPropertyId, loot->GetLootTarget());
     }
     else
         player->SendEquipError(msg, nullptr, nullptr, 0, item->itemid);

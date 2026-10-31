@@ -32,6 +32,7 @@
 #include "ObjectAccessor.h"
 #include "ScriptMgr.h"
 #include "Group.h"
+#include "PlayerBotMgr.h"
 
 void WorldSession::HandleQuestgiverStatusQueryOpcode(WorldPackets::Quest::QuestgiverStatusQuery const& packet)
 {
@@ -169,6 +170,9 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPackets::Quest::Questg
         if (_player->CanAddQuest(qInfo, true))
         {
             _player->AddQuest(qInfo, pObject);              // pObject (if it item) can be destroyed at call
+
+            // persistent party bots take the quest too (before the party accept prompt below, so they are skipped there)
+            sPlayerBotMgr.OnPlayerAcceptedQuest(_player, qInfo);
 
             if (qInfo->HasQuestFlag(QUEST_FLAGS_PARTY_ACCEPT))
             {
@@ -453,6 +457,9 @@ void WorldSession::HandlePushQuestToParty(WorldPackets::Quest::PushQuestToParty 
 
                 pPlayer->PlayerTalkClass->SendQuestGiverQuestDetails(pQuest, _player->GetObjectGuid(), true);
                 pPlayer->SetQuestShareInfo(_player->GetObjectGuid(), pQuest->GetQuestId());
+
+                // persistent party bots accept shared quests right away
+                sPlayerBotMgr.OnQuestSharedWithBot(_player, pPlayer, pQuest);
             }
         }
     }

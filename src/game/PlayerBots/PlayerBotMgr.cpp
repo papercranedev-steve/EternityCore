@@ -19,8 +19,10 @@
 #include "Utilities/Random.h"
 #include "Spell.h"
 #include "Bag.h"
+#include "QuestDef.h"
 
 #include <sstream>
+#include <cstring>
 
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
@@ -2632,4 +2634,164 @@ bool ChatHandler::HandleBattleBotShowAllPathsCommand(char* args)
 
     PSendSysMessage("Showing %u paths for battleground.", id);
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Quests for persistent party bots
+//
+// Bots take the quests their group's real player takes and make progress like
+// real group members (kill credit is already shared by the core). Quest drops
+// the player loots are copied to bots that still need them. Turning in is left
+// to the player, who logs in the bot's own account.
+//
+// Replies to the player are system messages parsed by the PartyBotBags addon:
+//   PBQUEST;<bot>;accept;<questId>;<title>
+//   PBQUEST;<bot>;skip;<questId>;<reason>;<title>
+//   PBQUEST;<bot>;item;<itemId>;<count>
+//   PBQUEST;<bot>;itemfail;<itemId>
+// ---------------------------------------------------------------------------
+
+static bool IsPersistentPartyBot(Player* pPlayer)
+{
+    return pPlayer && pPlayer->IsInWorld() && pPlayer->IsBot() && !pPlayer->IsSavingDisabled() &&
+           pPlayer->AI() && dynamic_cast<PartyBotAI*>(pPlayer->AI());
+}
+
+// Why a bot cannot take a quest. nullptr means it can.
+// "have" means the quest is already in its log, which is not reported.
+static char const* GetBotQuestSkipReason(Player* pBot, Quest const* pQuest)
+{
+    if (!pQuest->IsRepeatable() && pBot->GetQuestRewardStatus(pQuest->GetQuestId()))
+        return "done";
+    if (!pBot->SatisfyQuestStatus(pQuest, false))
+        return "have";
+    if ((pQuest->GetMaxLevel() && pQuest->GetMaxLevel() < pBot->GetLevel()) || !pBot->SatisfyQuestLevel(pQuest, false))
+        return "level";
+    if (!pBot->SatisfyQuestClass(pQuest, false))
+        return "class";
+    if (!pBot->SatisfyQuestRace(pQuest, false))
+        return "race";
+    if (!pBot->SatisfyQuestPreviousQuest(pQuest, false) || !pBot->SatisfyQuestPrevChain(pQuest, false) ||
+        !pBot->SatisfyQuestNextChain(pQuest, false) || !pBot->SatisfyQuestExclusiveGroup(pQuest, false) ||
+        !pBot->SatisfyQuestBreadcrumbQuest(pQuest, false) || !pBot->SatisfyQuestDependentBreadcrumbQuests(pQuest, false))
+        return "prev";
+    if (!pBot->SatisfyQuestSkill(pQuest, false))
+        return "skill";
+    if (!pBot->SatisfyQuestReputation(pQuest, false))
+        return "rep";
+    if (!pBot->CanTakeQuest(pQuest, false))
+        return "other";
+    if (!pBot->SatisfyQuestLog(false))
+        return "logfull";
+    if (!pBot->CanAddQuest(pQuest, false))
+        return "bagsfull"; // no room for the item the quest gives at start
+    return nullptr;
+}
+
+// Same as an accepted shared quest (HandleQuestConfirmAccept): no quest giver,
+// so the giver's accept scripts do not run a second time.
+static void BotAddQuest(Player* pBot, Quest const* pQuest)
+{
+    pBot->AddQuest(pQuest, nullptr);
+
+    if (pBot->CanCompleteQuest(pQuest->GetQuestId()))
+        pBot->CompleteQuest(pQuest->GetQuestId());
+}
+
+void PlayerBotMgr::OnPlayerAcceptedQuest(Player* pPlayer, Quest const* pQuest)
+{
+    if (!pPlayer || !pQuest || pPlayer->IsBot())
+        return;
+
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+        return;
+
+    ChatHandler handler(pPlayer);
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pBot = itr->getSource();
+        if (pBot == pPlayer || !IsPersistentPartyBot(pBot))
+            continue;
+
+        char const* reason = nullptr;
+        if (!pBot->IsInMap(pPlayer) || !pBot->IsAtGroupRewardDistance(pPlayer))
+            reason = "far";
+        else
+            reason = GetBotQuestSkipReason(pBot, pQuest);
+
+        if (reason && strcmp(reason, "have") == 0)
+            continue;
+
+        if (reason)
+        {
+            handler.PSendSysMessage("PBQUEST;%s;skip;%u;%s;%s", pBot->GetName(), pQuest->GetQuestId(), reason, pQuest->GetTitle().c_str());
+            continue;
+        }
+
+        BotAddQuest(pBot, pQuest);
+        handler.PSendSysMessage("PBQUEST;%s;accept;%u;%s", pBot->GetName(), pQuest->GetQuestId(), pQuest->GetTitle().c_str());
+    }
+}
+
+void PlayerBotMgr::OnQuestSharedWithBot(Player* pSharer, Player* pBot, Quest const* pQuest)
+{
+    if (!pSharer || !pQuest || pSharer->IsBot() || !IsPersistentPartyBot(pBot))
+        return;
+
+    // what the client sends when the player clicks "Accept" in the shared quest window,
+    // so all the normal share checks apply and the sharer gets the normal reply
+    WorldPackets::Quest::QuestgiverAcceptQuest packet;
+    packet.guid = pSharer->GetObjectGuid();
+    packet.quest = pQuest->GetQuestId();
+    pBot->GetSession()->HandleQuestgiverAcceptQuestOpcode(packet);
+
+    if (pBot->IsCurrentQuest(pQuest->GetQuestId()))
+        ChatHandler(pSharer).PSendSysMessage("PBQUEST;%s;accept;%u;%s", pBot->GetName(), pQuest->GetQuestId(), pQuest->GetTitle().c_str());
+}
+
+void PlayerBotMgr::OnPlayerLootedQuestItem(Player* pPlayer, uint32 itemId, uint32 count, int32 randomPropertyId, WorldObject const* pSource)
+{
+    if (!pPlayer || pPlayer->IsBot() || !count)
+        return;
+
+    Group* pGroup = pPlayer->GetGroup();
+    if (!pGroup)
+        return;
+
+    if (!pSource)
+        pSource = pPlayer;
+
+    ChatHandler handler(pPlayer);
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pBot = itr->getSource();
+        if (pBot == pPlayer || !IsPersistentPartyBot(pBot))
+            continue;
+
+        // same range as kill credit, only bots that still need the item for a quest in their log
+        if (!pBot->IsInMap(pPlayer) || !pBot->IsAtGroupRewardDistance(pSource))
+            continue;
+        if (!pBot->HasQuestForItem(itemId))
+            continue;
+
+        // quest items usually have a max count, so try fewer if the full stack does not fit
+        uint32 stored = 0;
+        for (uint32 n = count; n > 0; --n)
+        {
+            ItemPosCountVec dest;
+            if (pBot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, n) == EQUIP_ERR_OK)
+            {
+                // StoreNewItem also updates the quest counters
+                if (pBot->StoreNewItem(dest, itemId, true, randomPropertyId))
+                    stored = n;
+                break;
+            }
+        }
+
+        if (stored)
+            handler.PSendSysMessage("PBQUEST;%s;item;%u;%u", pBot->GetName(), itemId, stored);
+        else
+            handler.PSendSysMessage("PBQUEST;%s;itemfail;%u", pBot->GetName(), itemId);
+    }
 }

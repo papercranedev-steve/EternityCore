@@ -13,6 +13,8 @@
 class PlayerBotAI;
 class WorldSession;
 class Player;
+class Quest;
+class WorldObject;
 
 enum PlayerBotAutoEquip
 {
@@ -104,6 +106,15 @@ class PlayerBotMgr
         bool IsPermanentBot(uint32 playerGuid);
         bool IsChatBot(uint32 playerGuid);
         bool IsSavingAllowed() { return m_confAllowSaving; }
+
+        // Quests for persistent party bots (saved characters). Bots only take quests and make progress,
+        // turning in is done by logging in the bot's own account.
+        // A real player accepted a quest: nearby bots of the group take it too.
+        void OnPlayerAcceptedQuest(Player* pPlayer, Quest const* pQuest);
+        // A real player shared a quest with a bot: accept it like a client would.
+        void OnQuestSharedWithBot(Player* pSharer, Player* pBot, Quest const* pQuest);
+        // A real player looted a quest drop: nearby bots that still need it get their own copy.
+        void OnPlayerLootedQuestItem(Player* pPlayer, uint32 itemId, uint32 count, int32 randomPropertyId, WorldObject const* pSource);
 
         uint32 GenBotAccountId() { return ++m_maxAccountId; }
         PlayerBotStats& GetStats(){ return m_stats; }
