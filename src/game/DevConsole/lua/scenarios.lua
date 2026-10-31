@@ -122,7 +122,10 @@ local function computeSpot(leader, s)
         local d = math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2)
         if d >= a.min and d <= a.max and clearOf(p.x, p.y, p.z) then
             local o = math.atan(s.pack.y - p.y, s.pack.x - p.x)
-            return { x = p.x, y = p.y, z = p.z + 0.5, o = o }
+            -- navmesh z can be below the real floor; teleporting under it drops you out of the world
+            local ground = leader:height(p.x, p.y, p.z + 4)
+            local z = (ground and ground > -100000 and math.abs(ground - p.z) < 6) and ground or p.z
+            return { x = p.x, y = p.y, z = z + 1.0, o = o }
         end
     end
     return nil, "no clear spot on the path"
@@ -178,6 +181,12 @@ end
 
 -- Step 3: leader is at the spot -> spawn bots and wait for them.
 local function spawnBots(leader, s)
+    local here = leader:pos()
+    if here.z < scenario.spot.z - 5 then
+        local e = s.entry
+        leader:tp(e.map, e.x, e.y, e.z, e.o)
+        return fail(leader, string.format("站位不对（掉到了 z=%.0f），已传回入口", here.z))
+    end
     for _, b in ipairs(s.bots) do
         addbot(leader, b.class, b.role, s.level)
     end
@@ -197,12 +206,38 @@ local function spawnBots(leader, s)
 end
 
 -- Step 2: leader is inside the map -> find the spot, move there.
-local function placeLeader(leader, s)
+-- Long paths come back incomplete (path length limit), so hop to the end of the partial path and
+-- search again from there; nearby enemies are only known once their grid is loaded anyway.
+local function placeLeader(leader, s, hops)
+    hops = hops or 0
     local spot = s.spot
     if not spot then
         local err
         spot, err = computeSpot(leader, s)
-        if not spot then return fail(leader, err) end
+        if not spot then
+            local path = leader:path(s.pack.x, s.pack.y, s.pack.z)
+            local last = path and path.points[#path.points]
+            local here = leader:pos()
+            local moved = last and math.sqrt((last.x - here.x) ^ 2 + (last.y - here.y) ^ 2) > 20
+            if hops < 6 and moved and not path.normal then
+                -- stop well short of the pack so we don't land in aggro range
+                local i = #path.points
+                while i > 1 do
+                    local p = path.points[i]
+                    if math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2) > s.approach.max + 40 then break end
+                    i = i - 1
+                end
+                local p = path.points[i]
+                local ground = leader:height(p.x, p.y, p.z + 4)
+                local z = (ground and ground > -100000 and math.abs(ground - p.z) < 6) and ground or p.z
+                leader:tp(p.x, p.y, z + 1.0, here.o)
+                return after(1500, function()
+                    local ok, e = pcall(placeLeader, leader, s, hops + 1)
+                    if not ok then fail(leader, tostring(e)) end
+                end)
+            end
+            return fail(leader, err)
+        end
     end
     scenario.spot = spot
     leader:tp(spot.x, spot.y, spot.z, spot.o)
