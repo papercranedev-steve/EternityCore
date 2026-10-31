@@ -2124,6 +2124,220 @@ bool ChatHandler::HandlePartyBotUnequipSlotCommand(char* args)
     return true;
 }
 
+// bag index used by the addon: 0 = backpack, 1-4 = bags, 5 = equipment (slot 0-18)
+static bool ResolvePartyBotItemPos(uint32 bagIndex, uint32 slotIndex, uint8& bag, uint8& slot)
+{
+    if (bagIndex == 0)
+    {
+        if (slotIndex >= uint32(INVENTORY_SLOT_ITEM_END - INVENTORY_SLOT_ITEM_START))
+            return false;
+        bag = INVENTORY_SLOT_BAG_0;
+        slot = uint8(INVENTORY_SLOT_ITEM_START + slotIndex);
+        return true;
+    }
+    if (bagIndex <= 4)
+    {
+        if (slotIndex >= MAX_BAG_SIZE)
+            return false;
+        bag = uint8(INVENTORY_SLOT_BAG_START + bagIndex - 1);
+        slot = uint8(slotIndex);
+        return true;
+    }
+    if (bagIndex == 5)
+    {
+        if (slotIndex >= EQUIPMENT_SLOT_END)
+            return false;
+        bag = INVENTORY_SLOT_BAG_0;
+        slot = uint8(slotIndex);
+        return true;
+    }
+    return false;
+}
+
+// .partybot useslot <name> <bag 0-4> <slot>   bot uses the item on itself (potion, food, scroll...)
+bool ChatHandler::HandlePartyBotUseSlotCommand(char* args)
+{
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+
+    uint32 bagIndex = 0;
+    uint32 slotIndex = 0;
+    uint8 bag = 0;
+    uint8 slot = 0;
+    if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) || bagIndex > 4 ||
+        !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot useslot <name> <bag 0-4> <slot>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Item* pItem = pBot->GetItemByPos(bag, slot);
+    if (!pItem)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    ItemPrototype const* pProto = pItem->GetProto();
+    uint32 itemId = pItem->GetEntry();
+
+    // first on-use spell; items that only work while equipped (trinkets) are not handled here
+    uint8 spellSlot = MAX_ITEM_PROTO_SPELLS;
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
+        if (pProto->Spells[i].SpellId && pProto->Spells[i].SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
+        {
+            spellSlot = i;
+            break;
+        }
+    }
+    SpellEntry const* pSpellEntry = spellSlot < MAX_ITEM_PROTO_SPELLS ? sSpellMgr.GetSpellEntry(pProto->Spells[spellSlot].SpellId) : nullptr;
+    if (!pSpellEntry || pProto->InventoryType != INVTYPE_NON_EQUIP)
+    {
+        PSendSysMessage("PBERR;%s;notusable", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (!pBot->IsAlive())
+    {
+        PSendSysMessage("PBERR;%s;dead", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    InventoryResult msg = pBot->CanUseItem(pItem);
+    if (msg != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;%s;%u", name.c_str(), PartyBotInventoryErrorCode(msg), uint32(msg));
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (pBot->IsInCombat() && pSpellEntry->IsNonCombatSpell())
+    {
+        PSendSysMessage("PBERR;%s;combat", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (!pBot->IsSpellReady(pSpellEntry, pProto))
+    {
+        PSendSysMessage("PBERR;%s;cooldown", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 countBefore = pBot->GetItemCount(itemId);
+
+    WorldPackets::Spell::UseItem packet;
+    packet.bagIndex = bag;
+    packet.slot = slot;
+    packet.spellSlot = spellSlot;
+    packet.targets.setUnitTarget(pBot);
+    pBot->GetSession()->HandleUseItemOpcode(packet);
+    // pItem may be deleted now (last charge used)
+
+    // the cast went through if the item was consumed or its cooldown started
+    if (pBot->GetItemCount(itemId) >= countBefore && pBot->IsSpellReady(pSpellEntry, pProto))
+    {
+        PSendSysMessage("PBERR;%s;castfail", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    pBot->SaveInventoryAndGoldToDB();
+    PSendSysMessage("PBOK;%s;use;%u", name.c_str(), itemId);
+    return true;
+}
+
+// .partybot giveslot <name> <bag 0-5> <slot>   move an item from the bot to the command user's bags
+bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    if (!pPlayer)
+        return false;
+
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+
+    uint32 bagIndex = 0;
+    uint32 slotIndex = 0;
+    uint8 bag = 0;
+    uint8 slot = 0;
+    if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) ||
+        !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot giveslot <name> <bag 0-5> <slot>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Item* pItem = pBot->GetItemByPos(bag, slot);
+    if (!pItem)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (pItem->IsInTrade())
+    {
+        PSendSysMessage("PBERR;%s;other", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (pItem->IsBag() && !((Bag*)pItem)->IsEmpty())
+    {
+        PSendSysMessage("PBERR;%s;bagnotempty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // equipped items: same checks as unequipping (combat, etc.)
+    if (bag == INVENTORY_SLOT_BAG_0 && slot < INVENTORY_SLOT_BAG_END)
+    {
+        InventoryResult msg = pBot->CanUnequipItem(pItem->GetPos(), false);
+        if (msg != EQUIP_ERR_OK)
+        {
+            PSendSysMessage("PBERR;%s;%s;%u", name.c_str(), PartyBotInventoryErrorCode(msg), uint32(msg));
+            SetSentErrorMessage(true);
+            return false;
+        }
+    }
+
+    ItemPosCountVec dest;
+    uint8 bagSlot = 0;
+    if (pPlayer->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false) != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;mybagsfull", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint32 itemId = pItem->GetEntry();
+    uint32 count = pItem->GetCount();
+
+    // same steps as a trade (TradeHandler): remove from bot, store into player.
+    // Items of temporary bots were never saved, so they are new rows for the player.
+    pBot->MoveItemFromInventory(bag, slot, true);
+    pPlayer->MoveItemToInventory(dest, pItem, true, !pBot->IsSavingDisabled());
+    // pItem may be merged into an existing stack and deleted now
+
+    pBot->SaveInventoryAndGoldToDB();
+    pPlayer->SaveInventoryAndGoldToDB();
+
+    PSendSysMessage("PBOK;%s;give;%u;%u", name.c_str(), itemId, count);
+    return true;
+}
+
 bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
 {
     Player* pTarget = GetSelectedPlayer();
