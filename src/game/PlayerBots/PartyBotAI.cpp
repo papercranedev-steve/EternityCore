@@ -834,9 +834,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (me->GetTargetGuid() == me->GetObjectGuid())
         me->ClearTarget();
 
+    bool const commanderOutOfCombat = !me->IsInCombat() && sCommanderMgr.WantsOutOfCombatControl(this);
+
     if (!me->IsInCombat())
     {
-        if (DrinkAndEat())
+        // (no eating or drinking while a Commander pull is under way)
+        if (!commanderOutOfCombat && DrinkAndEat())
         {
             if (!me->IsWithinDistInMap(pLeader, 100.0f))
             {
@@ -882,7 +885,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     // Commander behaviors run before the original target selection and movement,
     // so they can pick a target or a position themselves.
-    if (me->IsInCombat() && sCommanderMgr.OnBotCombatUpdate(this))
+    if ((me->IsInCombat() || commanderOutOfCombat) && sCommanderMgr.OnBotCombatUpdate(this))
         return;
 
     Unit* pVictim = me->GetVictim();

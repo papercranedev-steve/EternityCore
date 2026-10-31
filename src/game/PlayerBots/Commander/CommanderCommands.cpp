@@ -12,7 +12,10 @@
  *   .partybot ai bot                 state of the selected bot
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai packs               out-of-combat packs within 50 yards
- *   .partybot ai plan                team plan: interrupt abilities and interrupt duties
+ *   .partybot ai plan                team plan: pull state, interrupt abilities and duties
+ *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
+ *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
+ *                                    hostile pack) once everyone is ready; "now" skips the wait
  *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
  *
  * GM commands run on the world thread while map threads are idle (MapManager::Update
@@ -27,6 +30,8 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Coordination/PullPlanner.h"
+#include "Creature.h"
 #include "SpellMgr.h"
 #include "Group.h"
 #include "Map.h"
@@ -131,6 +136,19 @@ namespace
         return true;
     }
 
+    char const* PullPhaseName(Commander::PullPhase phase)
+    {
+        switch (phase)
+        {
+            case Commander::PullPhase::None:      return "none";
+            case Commander::PullPhase::WaitReady: return "waiting for ready";
+            case Commander::PullPhase::Approach:  return "tank approaching";
+            case Commander::PullPhase::Return:    return "tank returning";
+            case Commander::PullPhase::Settle:    return "tank building threat";
+        }
+        return "?";
+    }
+
     std::string SpellName(uint32 spellId)
     {
         if (!spellId)
@@ -167,6 +185,13 @@ namespace
             handler->PSendSysMessage("    %s: %s", NameOf(map, m.guid).c_str(), list.c_str());
         }
 
+        if (plan.pull.phase != Commander::PullPhase::None)
+            handler->PSendSysMessage("Pull: %s, %s -> %s, %u expected, phase for %.1fs",
+                PullPhaseName(plan.pull.phase), NameOf(map, plan.pull.tank).c_str(), NameOf(map, plan.pull.target).c_str(),
+                uint32(plan.pull.expected.size()), WorldTimer::getMSTimeDiffToNow(plan.pull.phaseSinceMs) / 1000.0f);
+        else
+            handler->SendSysMessage("Pull: none");
+
         if (plan.interrupts.empty())
         {
             handler->SendSysMessage("No interrupt duties (no enemy has cast an interruptible spell yet).");
@@ -188,6 +213,67 @@ namespace
                 NameOf(map, d.backup).c_str(), SpellName(d.backupSpellId).c_str());
         }
         return true;
+    }
+
+    // .partybot ai ready
+    bool ShowReady(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+        Map* map = player->GetMap();
+        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld());
+        if (issues.empty())
+        {
+            handler->SendSysMessage("Everyone is ready.");
+            return true;
+        }
+        for (auto const& i : issues)
+        {
+            if (!strcmp(i.what, "hp") || !strcmp(i.what, "mana"))
+                handler->PSendSysMessage("    %s: %s %.0f%%", NameOf(map, i.who).c_str(), i.what, i.value);
+            else if (!strcmp(i.what, "far"))
+                handler->PSendSysMessage("    %s: %.0f yd away", NameOf(map, i.who).c_str(), i.value);
+            else
+                handler->PSendSysMessage("    %s: %s", NameOf(map, i.who).c_str(), i.what);
+        }
+        return true;
+    }
+
+    // .partybot ai pull [now|cancel]   target = your selection, or the nearest hostile pack
+    bool StartPull(ChatHandler* handler, Player* player, char const* option, Creature* selected)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        if (option && !strcmp(option, "cancel"))
+        {
+            commander->GetPlanMutable().pull = Commander::PullPlan();
+            handler->SendSysMessage("Pull cancelled.");
+            return true;
+        }
+        if (option && strcmp(option, "now"))
+        {
+            handler->SendSysMessage("Usage: .partybot ai pull [now|cancel]");
+            return false;
+        }
+        if (!sCommanderMgr.IsModuleEnabled("pull"))
+        {
+            handler->SendSysMessage("Module 'pull' is off (.partybot ai module pull on).");
+            return false;
+        }
+        if (player->IsInCombat())
+        {
+            handler->SendSysMessage("You are in combat.");
+            return false;
+        }
+
+        std::vector<std::string> report;
+        bool const ok = Commander::PullPlanner::Plan(player, *commander, selected, option != nullptr, report);
+        for (std::string const& line : report)
+            handler->SendSysMessage(line.c_str());
+        return ok;
     }
 
     // .partybot ai packs
@@ -427,12 +513,17 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return true;
     }
 
-    if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan"))
+    if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
+        !strcmp(sub, "pull") || !strcmp(sub, "ready"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "threat"))
             ok = ShowThreat(this, player);
+        else if (!strcmp(sub, "ready"))
+            ok = ShowReady(this, player);
+        else if (!strcmp(sub, "pull"))
+            ok = StartPull(this, player, ExtractLiteralArg(&args), GetSelectedCreature());
         else if (!strcmp(sub, "plan"))
             ok = ShowPlan(this, player);
         else if (!strcmp(sub, "packs"))
@@ -454,7 +545,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|healsim <amount> [healer]]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|ready|pull [now|cancel]|healsim <amount> [healer]]");
     SetSentErrorMessage(true);
     return false;
 }

@@ -56,11 +56,15 @@ namespace Commander
         // PartyBotAI::UpdateAI, in combat, before target selection and movement.
         // True = an action was executed, skip the rest of UpdateAI for this tick.
         bool OnBotCombatUpdate(PartyBotAI* bot);
+        // True while an out-of-combat plan (pull in progress) needs the hook above to run
+        // out of combat too, and the bot must not sit down to eat or drink.
+        bool WantsOutOfCombatControl(PartyBotAI* bot);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }
         // Enables / disables every module (behavior and assigner) with this id. False if none.
         bool SetModuleEnabled(std::string const& id, bool on);
+        bool IsModuleEnabled(std::string const& id) const;
         size_t GetCommanderCount();
         // Debug commands: the commander of this player's party on the player's map, if any.
         std::shared_ptr<PartyCommander> FindCommander(Player const* member);

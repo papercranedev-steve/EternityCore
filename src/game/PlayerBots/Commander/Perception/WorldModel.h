@@ -45,6 +45,8 @@ namespace Commander
         Position3 pos;
         ObjectGuid victim;          // who this member is attacking
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
+        bool resting = false;       // eating, drinking or sitting
+        bool inCombat = false;
         std::vector<InterruptAbility> interrupts;   // bots only
     };
 

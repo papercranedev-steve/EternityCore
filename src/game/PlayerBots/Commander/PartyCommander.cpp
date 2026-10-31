@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "PartyBotAI.h"
+#include "Chat.h"
 #include "Timer.h"
 
 namespace Commander
@@ -19,6 +20,22 @@ namespace Commander
 
         Refresh(bot, nowMs);
         RunAssigners(assigners);
+        FlushNotes(bot);
+    }
+
+    void PartyCommander::FlushNotes(PartyBotAI* bot)
+    {
+        std::vector<std::string>& notes = m_plan.pull.notes;
+        if (notes.empty())
+            return;
+        Player* leader = bot->GetPartyLeader();
+        if (leader && leader->IsInWorld() && leader->GetMap() == bot->me->GetMap())
+        {
+            ChatHandler handler(leader);
+            for (std::string const& note : notes)
+                handler.PSendSysMessage("[PartyBot] %s", note.c_str());
+        }
+        notes.clear();
     }
 
     void PartyCommander::RunAssigners(AssignerList const& assigners)

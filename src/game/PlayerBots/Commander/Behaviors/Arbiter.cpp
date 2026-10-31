@@ -124,6 +124,8 @@ namespace Commander
             {
                 if (!pTarget || me->GetVictim() == pTarget || !bot->IsValidHostileTarget(pTarget))
                     return false;
+                if (me->IsMounted())    // Unit::Attack refuses while mounted
+                    me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
                 return bot->AttackStart(pTarget);
             }
             case BotActionType::MoveTo:

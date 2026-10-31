@@ -32,6 +32,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/SpellTags.cpp
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.h
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/PullBehavior.h
+  ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/PullPlanner.h
+  ${COMMANDER_DIR}/Coordination/PullPlanner.cpp
+  ${COMMANDER_DIR}/Perception/AssistPredictor.h
+  ${COMMANDER_DIR}/Perception/AssistPredictor.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.cpp

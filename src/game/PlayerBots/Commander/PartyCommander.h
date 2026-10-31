@@ -30,6 +30,15 @@ namespace Commander
 
         WorldModel const& GetWorld() const { return m_world; }
         TeamPlan const& GetPlan() const { return m_plan; }
+        // GM commands only (world thread while maps are idle).
+        TeamPlan& GetPlanMutable() { return m_plan; }
+
+        // An out-of-combat plan (pull) needs the Commander hook to run before the original AI.
+        // WaitReady is excluded: bots keep eating and drinking while the party gets ready.
+        bool WantsOutOfCombatControl() const
+        {
+            return m_plan.pull.phase != PullPhase::None && m_plan.pull.phase != PullPhase::WaitReady;
+        }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }
         uint32 GetInstanceId() const { return m_instanceId; }
@@ -37,6 +46,7 @@ namespace Commander
     private:
         void Refresh(PartyBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
+        void FlushNotes(PartyBotAI* bot);
 
         uint32 m_groupId;
         uint32 m_mapId;

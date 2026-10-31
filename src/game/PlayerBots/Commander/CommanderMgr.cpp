@@ -149,6 +149,25 @@ namespace Commander
         return false;
     }
 
+    bool CommanderMgr::WantsOutOfCombatControl(PartyBotAI* bot)
+    {
+        if (!IsEnabled() || bot->IsInDuel())
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
+        return commander && commander->WantsOutOfCombatControl();
+    }
+
+    bool CommanderMgr::IsModuleEnabled(std::string const& id) const
+    {
+        for (auto const& slot : m_assigners)
+            if (id == slot->module->GetId() && !slot->enabled.load())
+                return false;
+        for (auto const& slot : m_behaviors)
+            if (id == slot->module->GetId() && !slot->enabled.load())
+                return false;
+        return true;
+    }
+
     bool CommanderMgr::SetModuleEnabled(std::string const& id, bool on)
     {
         bool found = false;
