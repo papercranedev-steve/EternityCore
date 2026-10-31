@@ -3010,6 +3010,9 @@ void CombatBotBaseAI::EquipOrUseNewItem()
 
         m_itemsBeforeTrade.clear();
         m_hasTradeSnapshot = false;
+
+        // the trade itself is saved before this runs, save the equipment swap too
+        me->SaveInventoryAndGoldToDB();
         return;
     }
 
