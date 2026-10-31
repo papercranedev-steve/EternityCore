@@ -116,6 +116,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "unequipslot",SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotUnequipSlotCommand, "", nullptr },
         { "useslot",    SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotUseSlotCommand,     "", nullptr },
         { "giveslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotGiveSlotCommand,    "", nullptr },
+        { "takeslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTakeSlotCommand,    "", nullptr },
         { "remove",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRemoveCommand,      "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
