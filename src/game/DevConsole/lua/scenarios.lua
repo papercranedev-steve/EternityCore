@@ -36,9 +36,13 @@ scenario.list = {
         },
     },
     {
-        id = "strat", title = "斯坦索姆 亡灵怪群（场景 4）", level = 58,
+        -- level 60: premade gear only exists for 49 and 60, 49 gear is far too weak here
+        id = "strat", title = "斯坦索姆 亡灵怪群（场景 4）", level = 60,
         entry = { map = 329, x = 3392.92, y = -3395.03, z = 143.14, o = 1.57 },
         pack = { x = 3973.0, y = -3649.0, z = 134.5 },
+        -- No computed spot: the street is packed with mobs that are not in creature_groups, and the
+        -- 1.14 client falls through the floor at many navmesh points. Record one with .scenario setspot.
+        needsRecordedSpot = true,
         approach = { min = 26, max = 38, clear = 24 },
         bots = {
             { class = "warrior", role = "tank" },
@@ -48,6 +52,33 @@ scenario.list = {
         },
     },
 }
+
+-- Spots recorded in game with ".scenario setspot" (spots.lua next to this file). They win over
+-- 'spot' and the computed spot, because a point a player has stood on is known to be solid ground.
+local SPOTS_FILE = SCRIPT_DIR .. "/spots.lua"
+scenario.spots = {}
+do
+    local chunk = loadfile(SPOTS_FILE)
+    if chunk then
+        local ok, t = pcall(chunk)
+        if ok and type(t) == "table" then scenario.spots = t end
+    end
+end
+
+local function saveSpots()
+    local f, err = io.open(SPOTS_FILE, "w")
+    if not f then error("cannot write " .. SPOTS_FILE .. ": " .. tostring(err)) end
+    f:write("-- written by .scenario setspot\nreturn {\n")
+    local ids = {}
+    for id in pairs(scenario.spots) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for _, id in ipairs(ids) do
+        local s = scenario.spots[id]
+        f:write(string.format("    [%q] = { map = %d, x = %.2f, y = %.2f, z = %.2f, o = %.3f },\n", id, s.map, s.x, s.y, s.z, s.o))
+    end
+    f:write("}\n")
+    f:close()
+end
 
 function scenario.find(id)
     for _, s in ipairs(scenario.list) do
@@ -210,7 +241,10 @@ end
 -- search again from there; nearby enemies are only known once their grid is loaded anyway.
 local function placeLeader(leader, s, hops)
     hops = hops or 0
-    local spot = s.spot
+    local spot = scenario.spots[s.id] or s.spot
+    if not spot and s.needsRecordedSpot then
+        return fail(leader, "这个场景还没有站位：走到想开怪的位置，输入 .scenario setspot " .. s.id .. "，再点一次场景")
+    end
     if not spot then
         local err
         spot, err = computeSpot(leader, s)
@@ -317,7 +351,18 @@ function scenario.command(leader, args)
         if args == "" then
             for _, s in ipairs(scenario.list) do say(leader, ".scenario " .. s.id .. "  " .. s.title) end
             say(leader, ".scenario reset  重开当前场景    .scenario stop  结束")
+            say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
         end
+    elseif args:match("^setspot") then
+        local id = args:match("^setspot%s+(%S+)") or scenario.current
+        local s = id and scenario.find(id)
+        if not s then return say(leader, "用法：.scenario setspot <场景id>（例如 strat）") end
+        local p = leader:pos()
+        if p.map ~= s.entry.map then return say(leader, "你不在这个场景的地图里") end
+        if not leader:alive() or leader:incombat() then return say(leader, "活着且不在战斗中才能记录站位") end
+        scenario.spots[s.id] = { map = p.map, x = p.x, y = p.y, z = p.z + 0.5, o = p.o }
+        saveSpots()
+        say(leader, string.format("%s 的站位已保存（%.1f, %.1f, %.1f），下次点这个场景会传到这里", s.title, p.x, p.y, p.z))
     elseif args == "reset" then
         scenario.reset(leader)
     elseif args == "stop" then
