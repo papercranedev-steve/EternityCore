@@ -150,6 +150,11 @@ bool PartyBotAI::IsMovementHeld() const
     return m_directives && m_directives->IsMovementHeld(WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsTauntControlled() const
+{
+    return m_directives && m_directives->IsTauntControlled(WorldTimer::getMSTime());
+}
+
 void PartyBotAI::BeginChasing(Unit* pVictim) const
 {
     if (IsMovementHeld())
@@ -789,6 +794,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
     {
+        // Auto shot / wand would otherwise skip the Commander hook below (e.g. stop shooting near aggro).
+        if (me->IsInCombat() && me->GetVictim() && sCommanderMgr.OnBotCombatUpdate(this))
+            return;
+
         // Stop auto shot if no target.
         if (!me->GetVictim())
             me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
@@ -1021,7 +1030,8 @@ void PartyBotAI::UpdateInCombatAI()
             }
 
             // Taunt target if its attacking someone else.
-            if (pVictim && pVictim->GetVictim() != me)
+            // (skipped while a Commander module decides taunts: threat-behavior doc section 3)
+            if (pVictim && pVictim->GetVictim() != me && !IsTauntControlled())
             {
                 for (const auto& pSpellEntry : m_spellListTaunt)
                 {

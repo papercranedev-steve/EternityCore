@@ -44,6 +44,7 @@ namespace Commander
         bool onList = false;
         bool partySide = false;     // party member or pet of this party
         bool inMeleeReach = false;  // enemy can hit this unit in melee -> 110% rule instead of 130%
+        float threatPerSec = 0.0f;  // over the last few seconds (ThreatHistory); includes taunt jumps
     };
 
     struct EnemyFacts
@@ -57,6 +58,7 @@ namespace Commander
 
         ObjectGuid victim;              // threat manager's current victim (who it is hitting)
         float victimThreat = 0.0f;
+        uint32 victimSinceMs = 0;       // WorldTimer ms when it started hitting `victim`
         uint32 castingSpellId = 0;
         bool crowdControlled = false;   // cannot act (stun, fear, polymorph, ...)
         bool ignoresAssistThreat = false; // heal/buff threat is zeroed (fear, confuse, breakable stun)

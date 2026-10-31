@@ -22,7 +22,10 @@ namespace Commander
 
     void PartyCommander::Refresh(PartyBotAI* bot, uint32 nowMs)
     {
+        WorldModel previous;
+        previous.enemies = std::move(m_world.enemies);
         WorldModelBuilder::RefreshCombat(bot, m_world);
+        m_threatHistory.Annotate(m_world, previous, nowMs);
 
         if (m_world.version == 0 || WorldTimer::getMSTimeDiff(m_world.packsRefreshedAtMs, nowMs) >= PACK_REFRESH_MS)
         {

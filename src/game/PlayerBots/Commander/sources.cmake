@@ -20,6 +20,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ThreatView.cpp
   ${COMMANDER_DIR}/Perception/PackResolver.h
   ${COMMANDER_DIR}/Perception/PackResolver.cpp
+  ${COMMANDER_DIR}/Perception/ThreatHistory.h
+  ${COMMANDER_DIR}/Perception/ThreatHistory.cpp
+  ${COMMANDER_DIR}/Behaviors/ThreatBehavior.h
+  ${COMMANDER_DIR}/Behaviors/ThreatBehavior.cpp
   ${COMMANDER_DIR}/Coordination/TeamPlan.h
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h

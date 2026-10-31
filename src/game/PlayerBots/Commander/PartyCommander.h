@@ -8,6 +8,7 @@
 
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/ThreatHistory.h"
 #include "Commander/Registry.h"
 
 class PartyBotAI;
@@ -41,6 +42,7 @@ namespace Commander
         uint32 m_instanceId;
         WorldModel m_world;
         TeamPlan m_plan;
+        ThreatHistory m_threatHistory;
     };
 }
 

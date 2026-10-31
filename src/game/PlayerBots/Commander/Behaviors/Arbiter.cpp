@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "MotionMaster.h"
@@ -20,6 +21,7 @@ namespace Commander
                 case BotActionType::Attack: return "attack";
                 case BotActionType::MoveTo: return "move";
                 case BotActionType::Hold:   return "hold";
+                case BotActionType::HoldFire: return "holdfire";
             }
             return "?";
         }
@@ -45,6 +47,19 @@ namespace Commander
         if (active.empty())
             return false;
 
+        uint32 const now = WorldTimer::getMSTime();
+
+        // Keeps the original rotation's own taunt switched off while a module decides taunts.
+        // Expires by itself if the module is disabled or the Commander is turned off.
+        for (IBehavior const* b : active)
+        {
+            if (b->ControlsTaunt(bot))
+            {
+                bot->Directives().ControlTaunt(now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                break;
+            }
+        }
+
         std::vector<Proposal> proposals;
         for (IBehavior const* b : active)
             b->Propose(bot, world, plan, proposals);
@@ -62,7 +77,6 @@ namespace Commander
             return a.score > b.score;
         });
 
-        uint32 const now = WorldTimer::getMSTime();
         ProposalTier const topTier = proposals.front().tier;
         for (Proposal const& p : proposals)
         {
@@ -122,6 +136,19 @@ namespace Commander
             }
             case BotActionType::Hold:
                 return true;
+            case BotActionType::HoldFire:
+            {
+                if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                    me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+                if (me->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+                {
+                    // Keep the victim so the original AI resumes on it (AttackStart re-enables melee).
+                    me->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+                    if (Unit* pVictim = me->GetVictim())
+                        me->SendMeleeAttackStop(pVictim);
+                }
+                return true;
+            }
         }
 
         return false;

@@ -34,6 +34,17 @@ namespace Commander
             return m_holdDurationMs - WorldTimer::getMSTimeDiff(m_holdStartMs, nowMs);
         }
 
+        // While controlled, PartyBotAI::UpdateInCombatAI does not auto-taunt; a Commander module decides.
+        void ControlTaunt(uint32 nowMs, uint32 durationMs)
+        {
+            m_tauntStartMs = nowMs;
+            m_tauntDurationMs = durationMs;
+        }
+        bool IsTauntControlled(uint32 nowMs) const
+        {
+            return m_tauntDurationMs && WorldTimer::getMSTimeDiff(m_tauntStartMs, nowMs) < m_tauntDurationMs;
+        }
+
         // Debug info for .partybot ai bot
         void SetLastDecision(uint32 nowMs, std::string text)
         {
@@ -46,6 +57,8 @@ namespace Commander
     private:
         uint32 m_holdStartMs = 0;
         uint32 m_holdDurationMs = 0;
+        uint32 m_tauntStartMs = 0;
+        uint32 m_tauntDurationMs = 0;
         uint32 m_lastDecisionMs = 0;
         std::string m_lastDecision;
     };

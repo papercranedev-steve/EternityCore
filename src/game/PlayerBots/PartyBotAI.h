@@ -97,6 +97,7 @@ public:
     Commander::BotDirectives& Directives();
     Commander::BotDirectives const& Directives() const;
     bool IsMovementHeld() const;
+    bool IsTauntControlled() const;
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
 

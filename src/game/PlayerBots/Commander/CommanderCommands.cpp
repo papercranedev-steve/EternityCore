@@ -106,19 +106,21 @@ namespace
 
             ObjectGuid closest;
             float const lead = Commander::ThreatView::VictimLead(e, &closest);
-            handler->PSendSysMessage("|cffffcc00%s|r %.0f%%%s%s -> %s (%s), lead %s (%s)",
+            handler->PSendSysMessage("|cffffcc00%s|r %.0f%%%s%s -> %s (%s) for %.1fs, lead %s (%s)",
                 NameOf(map, e.guid).c_str(), e.healthPct,
                 e.crowdControlled ? " [CC]" : "",
                 e.castingSpellId ? " [casting]" : "",
                 NameOf(map, e.victim).c_str(), Num(e.victimThreat).c_str(),
+                WorldTimer::getMSTimeDiffToNow(e.victimSinceMs) / 1000.0f,
                 Num(lead).c_str(), NameOf(map, closest).c_str());
 
             for (Commander::ThreatEntry const& t : e.threat)
             {
                 if (!t.partySide)
                     continue;
-                handler->PSendSysMessage("    %s: %s%s, %s, headroom %s",
-                    NameOf(map, t.guid).c_str(), Num(t.threat).c_str(), t.onList ? "" : " (not on list)",
+                handler->PSendSysMessage("    %s: %s (%s/s)%s, %s, headroom %s",
+                    NameOf(map, t.guid).c_str(), Num(t.threat).c_str(), Num(t.threatPerSec).c_str(),
+                    t.onList ? "" : " (not on list)",
                     t.inMeleeReach ? "melee 110%" : "ranged 130%",
                     Num(Commander::ThreatView::Headroom(e, t.guid)).c_str());
             }

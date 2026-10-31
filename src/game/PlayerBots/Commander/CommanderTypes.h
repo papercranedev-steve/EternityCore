@@ -26,7 +26,8 @@ namespace Commander
         Cast,       // cast spell on target (empty target = self)
         Attack,     // switch melee/ranged attack to target
         MoveTo,     // move to x/y/z and keep original movement suppressed for holdMs
-        Hold,       // do nothing this tick and skip the original rotation (e.g. stop dps near aggro)
+        Hold,       // do nothing this tick and skip the original rotation
+        HoldFire,   // like Hold, and also stop melee swings / auto shot (keeps the target)
     };
 
     struct BotAction
