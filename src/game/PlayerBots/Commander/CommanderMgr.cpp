@@ -43,6 +43,7 @@ namespace Commander
     CommanderMgr::CommanderMgr()
     {
         RegisterBehaviors(m_behaviors);
+        RegisterAssigners(m_assigners);
         m_statResetAt.store(SteadyNowMs());
         LoadConfig();
     }
@@ -63,11 +64,11 @@ namespace Commander
         for (std::string id; iss >> id;)
             ids.push_back(id);
 
+        auto isOff = [&ids](char const* id) { return std::find(ids.begin(), ids.end(), id) != ids.end(); };
         for (auto const& slot : m_behaviors)
-        {
-            bool off = std::find(ids.begin(), ids.end(), slot->behavior->GetId()) != ids.end();
-            slot->enabled.store(!off);
-        }
+            slot->enabled.store(!isOff(slot->module->GetId()));
+        for (auto const& slot : m_assigners)
+            slot->enabled.store(!isOff(slot->module->GetId()));
     }
 
     void CommanderMgr::SetBotUpdateInterval(uint32 ms)
@@ -134,7 +135,7 @@ namespace Commander
             return;
 
         if (std::shared_ptr<PartyCommander> commander = GetCommander(bot))
-            commander->Update(bot, WorldTimer::getMSTime(), GetPerceptionInterval());
+            commander->Update(bot, WorldTimer::getMSTime(), GetPerceptionInterval(), m_assigners);
     }
 
     bool CommanderMgr::OnBotCombatUpdate(PartyBotAI* bot)
@@ -148,18 +149,26 @@ namespace Commander
         return false;
     }
 
-    IBehavior const* CommanderMgr::FindBehavior(std::string const& id, BehaviorSlot** slotOut)
+    bool CommanderMgr::SetModuleEnabled(std::string const& id, bool on)
     {
+        bool found = false;
         for (auto const& slot : m_behaviors)
         {
-            if (id == slot->behavior->GetId())
+            if (id == slot->module->GetId())
             {
-                if (slotOut)
-                    *slotOut = slot.get();
-                return slot->behavior.get();
+                slot->enabled.store(on);
+                found = true;
             }
         }
-        return nullptr;
+        for (auto const& slot : m_assigners)
+        {
+            if (id == slot->module->GetId())
+            {
+                slot->enabled.store(on);
+                found = true;
+            }
+        }
+        return found;
     }
 
     void CommanderMgr::RecordBotTick(uint64 micros)

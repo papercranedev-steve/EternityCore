@@ -25,6 +25,13 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/ThreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/ThreatBehavior.cpp
   ${COMMANDER_DIR}/Coordination/TeamPlan.h
+  ${COMMANDER_DIR}/Coordination/IAssigner.h
+  ${COMMANDER_DIR}/Coordination/InterruptAssigner.h
+  ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
+  ${COMMANDER_DIR}/Perception/SpellTags.h
+  ${COMMANDER_DIR}/Perception/SpellTags.cpp
+  ${COMMANDER_DIR}/Behaviors/InterruptBehavior.h
+  ${COMMANDER_DIR}/Behaviors/InterruptBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.cpp

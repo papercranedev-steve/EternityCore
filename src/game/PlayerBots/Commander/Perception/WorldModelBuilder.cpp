@@ -1,6 +1,8 @@
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/SpellTags.h"
 #include "PartyBotAI.h"
+#include "DBCStores.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
 #include "Group.h"
@@ -38,6 +40,9 @@ namespace WorldModelBuilder
             f.manaPct = unit->GetPowerType() == POWER_MANA && unit->GetMaxPower(POWER_MANA)
                 ? unit->GetPowerPercent(POWER_MANA) : -1.0f;
             f.pos = PositionOf(unit);
+            if (Unit const* victim = unit->GetVictim())
+                f.victim = victim->GetObjectGuid();
+            f.casting = unit->IsNonMeleeSpellCasted(false, false, true);
         }
 
         bool IgnoresAssistThreat(Unit const* enemy)
@@ -47,13 +52,74 @@ namespace WorldModelBuilder
                   (enemy->HasUnitState(UNIT_STATE_STUNNED) && enemy->HasBreakableByDamageAuraType(SPELL_AURA_MOD_STUN, 0));
         }
 
-        uint32 CastingSpellId(Unit const* unit)
+        void FillCast(Unit const* unit, EnemyFacts& e)
         {
-            if (Spell const* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-                return spell->m_spellInfo->Id;
-            if (Spell const* spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-                return spell->m_spellInfo->Id;
-            return 0;
+            Spell const* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            bool channeled = false;
+            if (!spell || spell->getState() == SPELL_STATE_FINISHED)
+            {
+                spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+                channeled = true;
+            }
+            if (!spell || spell->getState() == SPELL_STATE_FINISHED)
+                return;
+
+            SpellEntry const* info = spell->m_spellInfo;
+            e.castingSpellId = info->Id;
+            e.castChanneled = channeled;
+            e.castCategory = uint8(SpellTags::Categorize(info));
+            e.castInterruptible = SpellTags::IsInterruptible(info, channeled, spell->GetCastTime());
+            e.castRemainingMs = spell->GetCastedTime();     // m_timer counts down to 0
+            e.castTotalMs = channeled ? uint32(std::max(0, info->GetDuration())) : uint32(std::max(0, spell->GetCastTime()));
+        }
+
+        void AddInterrupt(PartyBotAI const* ai, SpellEntry const* spell, PartyMemberFacts& f)
+        {
+            if (!spell || !SpellTags::StopsCasts(spell))
+                return;
+            Player* me = ai->me;
+
+            InterruptAbility a;
+            a.spellId = spell->Id;
+            SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+            a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+            a.cooldownMs = spell->GetRecoveryTime();
+            Powers const powerType = Powers(spell->powerType);
+            a.ready = me->IsSpellReady(spell) &&
+                      (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
+                      spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
+            f.interrupts.push_back(a);
+        }
+
+        void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            auto const& s = ai->m_spells;
+            switch (ai->me->GetClass())
+            {
+                case CLASS_WARRIOR:
+                    AddInterrupt(ai, s.warrior.pPummel, f);
+                    if (ai->IsWearingShield(ai->me))
+                        AddInterrupt(ai, s.warrior.pShieldBash, f);
+                    break;
+                case CLASS_ROGUE:
+                    AddInterrupt(ai, s.rogue.pKick, f);
+                    break;
+                case CLASS_MAGE:
+                    AddInterrupt(ai, s.mage.pCounterspell, f);
+                    break;
+                case CLASS_SHAMAN:
+                    AddInterrupt(ai, s.shaman.pEarthShock, f);
+                    break;
+                case CLASS_DRUID:
+                    AddInterrupt(ai, s.druid.pBash, f);
+                    AddInterrupt(ai, s.druid.pFeralCharge, f);
+                    break;
+                case CLASS_PALADIN:
+                    AddInterrupt(ai, s.paladin.pHammerOfJustice, f);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -85,6 +151,8 @@ namespace WorldModelBuilder
                 {
                     f.isBot = true;
                     f.role = uint8(ai->m_role);
+                    if (member->IsAlive())
+                        FillInterrupts(ai, f);
                 }
             }
             world.party.push_back(f);
@@ -129,7 +197,7 @@ namespace WorldModelBuilder
             e.elite = creature->IsElite();
             e.healthPct = creature->GetHealthPercent();
             e.pos = PositionOf(creature);
-            e.castingSpellId = CastingSpellId(creature);
+            FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
 

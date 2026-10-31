@@ -41,8 +41,8 @@ namespace Commander
     {
         std::vector<IBehavior const*> active;
         for (auto const& slot : behaviors)
-            if (slot->enabled.load(std::memory_order_relaxed) && slot->behavior->AppliesTo(bot))
-                active.push_back(slot->behavior.get());
+            if (slot->enabled.load(std::memory_order_relaxed) && slot->module->AppliesTo(bot))
+                active.push_back(slot->module.get());
 
         if (active.empty())
             return false;

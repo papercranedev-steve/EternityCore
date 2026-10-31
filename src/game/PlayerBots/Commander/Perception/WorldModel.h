@@ -21,6 +21,15 @@ namespace Commander
         float z = 0.0f;
     };
 
+    // A bot spell that can stop an enemy cast (interrupt, stun, silence).
+    struct InterruptAbility
+    {
+        uint32 spellId = 0;
+        float maxRange = 0.0f;       // spell range; melee abilities are ~5
+        uint32 cooldownMs = 0;       // full cooldown, cost of using it
+        bool ready = false;          // off cooldown and enough power (target checks happen at cast time)
+    };
+
     // A party member or a party member's pet on this map.
     struct PartyMemberFacts
     {
@@ -34,6 +43,9 @@ namespace Commander
         float healthPct = 0.0f;
         float manaPct = -1.0f;      // -1 = no mana
         Position3 pos;
+        ObjectGuid victim;          // who this member is attacking
+        bool casting = false;       // busy with a cast or channel (cannot react this tick)
+        std::vector<InterruptAbility> interrupts;   // bots only
     };
 
     // One row of an enemy's threat list, plus party members not on it yet (onList = false).
@@ -60,6 +72,12 @@ namespace Commander
         float victimThreat = 0.0f;
         uint32 victimSinceMs = 0;       // WorldTimer ms when it started hitting `victim`
         uint32 castingSpellId = 0;
+        bool castChanneled = false;
+        bool castInterruptible = false;
+        uint8 castCategory = 0;         // CastCategory (SpellTags.h)
+        uint32 castRemainingMs = 0;
+        uint32 castTotalMs = 0;
+        uint32 lastCastSpellId = 0;     // most recent cast seen this fight (kept after it ends)
         bool crowdControlled = false;   // cannot act (stun, fear, polymorph, ...)
         bool ignoresAssistThreat = false; // heal/buff threat is zeroed (fear, confuse, breakable stun)
 

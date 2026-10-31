@@ -23,7 +23,7 @@ namespace Commander
 
         // Every bot tick, in and out of combat. Refreshes facts at most once per perceptionMs,
         // so several bots of the same party share one refresh.
-        void Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs);
+        void Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners);
 
         // Combat tick of one bot: behaviors + arbiter. True = action taken, skip original AI.
         bool RunCombat(PartyBotAI* bot, BehaviorList const& behaviors);
@@ -36,6 +36,7 @@ namespace Commander
 
     private:
         void Refresh(PartyBotAI* bot, uint32 nowMs);
+        void RunAssigners(AssignerList const& assigners);
 
         uint32 m_groupId;
         uint32 m_mapId;

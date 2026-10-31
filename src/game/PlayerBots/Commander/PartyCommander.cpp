@@ -12,12 +12,25 @@ namespace Commander
         uint32 const PACK_REFRESH_MS = 1000;
     }
 
-    void PartyCommander::Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs)
+    void PartyCommander::Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners)
     {
         if (m_world.version && WorldTimer::getMSTimeDiff(m_world.refreshedAtMs, nowMs) < perceptionMs)
             return;
 
         Refresh(bot, nowMs);
+        RunAssigners(assigners);
+    }
+
+    void PartyCommander::RunAssigners(AssignerList const& assigners)
+    {
+        for (auto const& slot : assigners)
+        {
+            if (slot->enabled.load(std::memory_order_relaxed))
+                slot->module->Assign(m_world, m_plan);
+            else
+                slot->module->Clear(m_plan);
+        }
+        ++m_plan.version;
     }
 
     void PartyCommander::Refresh(PartyBotAI* bot, uint32 nowMs)

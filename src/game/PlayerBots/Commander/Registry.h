@@ -9,23 +9,30 @@
 #define MANGOS_COMMANDER_REGISTRY_H
 
 #include "Commander/Behaviors/IBehavior.h"
+#include "Commander/Coordination/IAssigner.h"
 #include <atomic>
 #include <memory>
 #include <vector>
 
 namespace Commander
 {
-    struct BehaviorSlot
+    template <class T>
+    struct ModuleSlot
     {
-        explicit BehaviorSlot(std::unique_ptr<IBehavior> b) : behavior(std::move(b)) {}
-        std::unique_ptr<IBehavior> behavior;
+        explicit ModuleSlot(std::unique_ptr<T> m) : module(std::move(m)) {}
+        std::unique_ptr<T> module;
         std::atomic<bool> enabled{ true };
     };
 
+    using BehaviorSlot = ModuleSlot<IBehavior>;
+    using AssignerSlot = ModuleSlot<IAssigner>;
     using BehaviorList = std::vector<std::unique_ptr<BehaviorSlot>>;
+    using AssignerList = std::vector<std::unique_ptr<AssignerSlot>>;
 
-    // Called once at startup. Order only matters for ties in the arbiter.
+    // Called once at startup. Behavior order only matters for ties in the arbiter;
+    // assigners run in this order.
     void RegisterBehaviors(BehaviorList& out);
+    void RegisterAssigners(AssignerList& out);
 }
 
 #endif

@@ -58,7 +58,9 @@ namespace Commander
         bool OnBotCombatUpdate(PartyBotAI* bot);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
-        IBehavior const* FindBehavior(std::string const& id, BehaviorSlot** slotOut = nullptr);
+        AssignerList const& GetAssigners() const { return m_assigners; }
+        // Enables / disables every module (behavior and assigner) with this id. False if none.
+        bool SetModuleEnabled(std::string const& id, bool on);
         size_t GetCommanderCount();
         // Debug commands: the commander of this player's party on the player's map, if any.
         std::shared_ptr<PartyCommander> FindCommander(Player const* member);
@@ -77,6 +79,7 @@ namespace Commander
         std::atomic<uint32> m_perceptionMs{ 200 };
 
         BehaviorList m_behaviors;
+        AssignerList m_assigners;
 
         using Key = std::tuple<uint32, uint32, uint32>;     // group id, map id, instance id
         struct Entry

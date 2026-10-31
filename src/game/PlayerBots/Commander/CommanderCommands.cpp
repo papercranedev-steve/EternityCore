@@ -12,6 +12,7 @@
  *   .partybot ai bot                 state of the selected bot
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai packs               out-of-combat packs within 50 yards
+ *   .partybot ai plan                team plan: interrupt abilities and interrupt duties
  *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
  *
  * GM commands run on the world thread while map threads are idle (MapManager::Update
@@ -25,6 +26,8 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/ThreatView.h"
+#include "Commander/Perception/SpellTags.h"
+#include "SpellMgr.h"
 #include "Group.h"
 #include "Map.h"
 #include "ObjectMgr.h"
@@ -124,6 +127,65 @@ namespace
                     t.inMeleeReach ? "melee 110%" : "ranged 130%",
                     Num(Commander::ThreatView::Headroom(e, t.guid)).c_str());
             }
+        }
+        return true;
+    }
+
+    std::string SpellName(uint32 spellId)
+    {
+        if (!spellId)
+            return "-";
+        if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId))
+            return spell->SpellName[0];
+        return std::to_string(spellId);
+    }
+
+    // .partybot ai plan
+    bool ShowPlan(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        Commander::WorldModel const& world = commander->GetWorld();
+        Commander::TeamPlan const& plan = commander->GetPlan();
+        Map* map = player->GetMap();
+        handler->PSendSysMessage("Team plan v%u", plan.version);
+
+        handler->SendSysMessage("Interrupters:");
+        for (Commander::PartyMemberFacts const& m : world.party)
+        {
+            if (m.interrupts.empty())
+                continue;
+            std::string list;
+            for (Commander::InterruptAbility const& a : m.interrupts)
+            {
+                if (!list.empty())
+                    list += ", ";
+                list += SpellName(a.spellId) + (a.ready ? "" : " (cd)");
+            }
+            handler->PSendSysMessage("    %s: %s", NameOf(map, m.guid).c_str(), list.c_str());
+        }
+
+        if (plan.interrupts.empty())
+        {
+            handler->SendSysMessage("No interrupt duties (no enemy has cast an interruptible spell yet).");
+            return true;
+        }
+        handler->SendSysMessage("Interrupt duties:");
+        for (Commander::InterruptDuty const& d : plan.interrupts)
+        {
+            Commander::EnemyFacts const* e = world.FindEnemy(d.enemy);
+            std::string cast = "-";
+            if (e && e->castingSpellId)
+                cast = SpellName(e->castingSpellId) + (e->castInterruptible ? "" : " (not interruptible)");
+            else if (e && e->lastCastSpellId)
+                cast = "last " + SpellName(e->lastCastSpellId);
+            handler->PSendSysMessage("    |cffffcc00%s|r [%s, %s]: %s (%s), backup %s (%s)",
+                NameOf(map, d.enemy).c_str(), cast.c_str(),
+                Commander::SpellTags::CategoryName(Commander::CastCategory(d.category)),
+                NameOf(map, d.primary).c_str(), SpellName(d.primarySpellId).c_str(),
+                NameOf(map, d.backup).c_str(), SpellName(d.backupSpellId).c_str());
         }
         return true;
     }
@@ -249,13 +311,16 @@ namespace
         for (auto const& slot : sCommanderMgr.GetBehaviors())
             if (slot->enabled.load())
                 ++enabledModules;
+        for (auto const& slot : sCommanderMgr.GetAssigners())
+            if (slot->enabled.load())
+                ++enabledModules;
 
         handler->PSendSysMessage("Commander: %s, bot update %u ms, perception %u ms, %u party commanders, modules %u/%u enabled",
             sCommanderMgr.IsEnabled() ? "on" : "off",
             sCommanderMgr.GetBotUpdateInterval(),
             sCommanderMgr.GetPerceptionInterval(),
             uint32(sCommanderMgr.GetCommanderCount()),
-            enabledModules, uint32(sCommanderMgr.GetBehaviors().size()));
+            enabledModules, uint32(sCommanderMgr.GetBehaviors().size() + sCommanderMgr.GetAssigners().size()));
         ShowStats(handler);
     }
 }
@@ -305,10 +370,10 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "modules"))
     {
-        if (sCommanderMgr.GetBehaviors().empty())
-            SendSysMessage("No behavior modules registered.");
+        for (auto const& slot : sCommanderMgr.GetAssigners())
+            PSendSysMessage("  %s (team assignment): %s", slot->module->GetId(), slot->enabled.load() ? "on" : "off");
         for (auto const& slot : sCommanderMgr.GetBehaviors())
-            PSendSysMessage("  %s: %s", slot->behavior->GetId(), slot->enabled.load() ? "on" : "off");
+            PSendSysMessage("  %s (behavior): %s", slot->module->GetId(), slot->enabled.load() ? "on" : "off");
         return true;
     }
 
@@ -316,20 +381,18 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     {
         char* id = ExtractLiteralArg(&args);
         char* state = ExtractLiteralArg(&args);
-        Commander::BehaviorSlot* slot = nullptr;
         if (!id || !state || (strcmp(state, "on") && strcmp(state, "off")))
         {
             SendSysMessage("Usage: .partybot ai module <id> on|off");
             SetSentErrorMessage(true);
             return false;
         }
-        if (!sCommanderMgr.FindBehavior(id, &slot))
+        if (!sCommanderMgr.SetModuleEnabled(id, !strcmp(state, "on")))
         {
             PSendSysMessage("Unknown module '%s'. See .partybot ai modules", id);
             SetSentErrorMessage(true);
             return false;
         }
-        slot->enabled.store(!strcmp(state, "on"));
         PSendSysMessage("Module %s: %s", id, state);
         return true;
     }
@@ -364,12 +427,14 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return true;
     }
 
-    if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim"))
+    if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "threat"))
             ok = ShowThreat(this, player);
+        else if (!strcmp(sub, "plan"))
+            ok = ShowPlan(this, player);
         else if (!strcmp(sub, "packs"))
             ok = ShowPacks(this, player);
         else
@@ -389,7 +454,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|healsim <amount> [healer]]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|plan|healsim <amount> [healer]]");
     SetSentErrorMessage(true);
     return false;
 }

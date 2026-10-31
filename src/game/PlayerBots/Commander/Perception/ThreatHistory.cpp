@@ -10,6 +10,7 @@ namespace Commander
         {
             EnemyFacts const* prev = previous.FindEnemy(e.guid);
             e.victimSinceMs = (prev && prev->victim == e.victim) ? prev->victimSinceMs : nowMs;
+            e.lastCastSpellId = e.castingSpellId ? e.castingSpellId : (prev ? prev->lastCastSpellId : 0);
         }
 
         while (!m_samples.empty() && WorldTimer::getMSTimeDiff(m_samples.front().timeMs, nowMs) > MAX_WINDOW_MS)
