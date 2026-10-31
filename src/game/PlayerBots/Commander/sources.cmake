@@ -1,0 +1,24 @@
+# PartyBot Commander sources. Included from src/game/CMakeLists.txt after add_library(game ...).
+# Add new module files here; cmake --build re-runs the configure step automatically.
+
+set(COMMANDER_DIR ${CMAKE_CURRENT_LIST_DIR})
+
+set(COMMANDER_SRCS
+  ${COMMANDER_DIR}/CommanderTypes.h
+  ${COMMANDER_DIR}/BotDirectives.h
+  ${COMMANDER_DIR}/Registry.h
+  ${COMMANDER_DIR}/Registry.cpp
+  ${COMMANDER_DIR}/CommanderMgr.h
+  ${COMMANDER_DIR}/CommanderMgr.cpp
+  ${COMMANDER_DIR}/PartyCommander.h
+  ${COMMANDER_DIR}/PartyCommander.cpp
+  ${COMMANDER_DIR}/CommanderCommands.cpp
+  ${COMMANDER_DIR}/Perception/WorldModel.h
+  ${COMMANDER_DIR}/Coordination/TeamPlan.h
+  ${COMMANDER_DIR}/Behaviors/IBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Arbiter.h
+  ${COMMANDER_DIR}/Behaviors/Arbiter.cpp
+)
+
+target_sources(game PRIVATE ${COMMANDER_SRCS})
+source_group(TREE ${COMMANDER_DIR} PREFIX "PlayerBots\\Commander" FILES ${COMMANDER_SRCS})

@@ -27,6 +27,8 @@
 #include "SpellAuras.h"
 #include "Chat.h"
 #include "Utilities/Random.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/BotDirectives.h"
 
 #include <random>
 
@@ -129,6 +131,33 @@ Player* PartyBotAI::GetPartyLeader() const
     return nullptr;
 }
 
+Commander::BotDirectives& PartyBotAI::Directives()
+{
+    // Only called from the bot's map thread.
+    if (!m_directives)
+        m_directives = std::make_shared<Commander::BotDirectives>();
+    return *m_directives;
+}
+
+Commander::BotDirectives const& PartyBotAI::Directives() const
+{
+    static Commander::BotDirectives const empty;
+    return m_directives ? *m_directives : empty;
+}
+
+bool PartyBotAI::IsMovementHeld() const
+{
+    return m_directives && m_directives->IsMovementHeld(WorldTimer::getMSTime());
+}
+
+void PartyBotAI::BeginChasing(Unit* pVictim) const
+{
+    if (IsMovementHeld())
+        return;
+
+    CombatBotBaseAI::BeginChasing(pVictim);
+}
+
 bool PartyBotAI::IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy)
 {
     if (pTarget->IsInWorld() && pTarget->IsAlive() &&
@@ -173,6 +202,9 @@ Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
 
 bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
 {
+    if (IsMovementHeld())
+        return false;
+
     if (Unit* pTarget = GetDistancingTarget(pEnemy))
     {
         me->MonsterMove(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ());
@@ -605,9 +637,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 {
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
-        m_updateTimer.Reset(PB_UPDATE_INTERVAL);
+        m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval()); // was PB_UPDATE_INTERVAL
     else
         return;
+
+    Commander::BotTickCostScope commanderCost;
 
     if (!me->IsInWorld() || me->IsBeingTeleported())
         return;
@@ -692,6 +726,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!pLeader->IsInWorld())
         return;
+
+    sCommanderMgr.OnBotUpdate(this);
 
     if (pLeader->InBattleGround() &&
         !me->InBattleGround())
@@ -835,6 +871,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             return;
     }
 
+    // Commander behaviors run before the original target selection and movement,
+    // so they can pick a target or a position themselves.
+    if (me->IsInCombat() && sCommanderMgr.OnBotCombatUpdate(this))
+        return;
+
     Unit* pVictim = me->GetVictim();
 
     if (GetRole() != ROLE_HEALER)
@@ -882,7 +923,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     }
 
-    if (!me->IsMoving())
+    if (!me->IsMoving() && !IsMovementHeld())
     {
         if (!pVictim)
         {
@@ -1674,7 +1715,7 @@ void PartyBotAI::UpdateInCombatAI_Hunter()
             }
         }
 
-        if (!me->HasUnitState(UNIT_STATE_ROOT) &&
+        if (!me->HasUnitState(UNIT_STATE_ROOT) && !IsMovementHeld() &&
             (me->GetCombatDistance(pVictim) < 8.0f) &&
             (GetRole() != ROLE_MELEE_DPS) &&
              me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE)

@@ -20,6 +20,9 @@
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
+#include <memory>
+
+namespace Commander { class BotDirectives; }
 
 class PartyBotAI : public CombatBotBaseAI
 {
@@ -90,6 +93,13 @@ public:
     void UpdateInCombatAI_Druid() final;
     void UpdateOutOfCombatAI_Druid() final;
 
+    // Commander (PlayerBots/Commander/). Directives are created on first use.
+    Commander::BotDirectives& Directives();
+    Commander::BotDirectives const& Directives() const;
+    bool IsMovementHeld() const;
+    // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
+    void BeginChasing(Unit* pVictim) const;
+
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;
     ShortTimeTracker m_updateTimer;
@@ -105,6 +115,8 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
+    // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
+    std::shared_ptr<Commander::BotDirectives> m_directives;
 };
 
 #endif

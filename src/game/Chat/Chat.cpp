@@ -120,6 +120,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "accounts",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotAccountsCommand,    "", nullptr },
         { "chars",      SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCharsCommand,       "", nullptr },
         { "remove",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRemoveCommand,      "", nullptr },
+        { "ai",         SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotAiCommand,          "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

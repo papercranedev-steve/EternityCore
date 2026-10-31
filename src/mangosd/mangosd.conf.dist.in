@@ -3209,6 +3209,25 @@ AHBot.itemcount = 50
 #        A lower number equals to gear being more close to the bot level.
 #        Default: 10 (bots will equip gear down to a minimum of 10 item level difference)
 #
+#    PartyBot.Commander.Enable
+#        Team AI layered on top of the party bot rotations (src/game/PlayerBots/Commander).
+#        Can be toggled in game with .partybot ai on|off
+#        Default: 1 - on
+#                 0 - off (original party bot behavior)
+#
+#    PartyBot.Commander.BotUpdateMs
+#        How often each party bot runs its AI (100 - 5000). Lower = faster reactions, more CPU.
+#        Can be changed in game with .partybot ai interval <ms>
+#        Default: 1000
+#
+#    PartyBot.Commander.PerceptionMs
+#        Minimum time between two refreshes of a party's combat facts (50 - 2000).
+#        Default: 200
+#
+#    PartyBot.Commander.DisabledModules
+#        Comma separated behavior module ids to disable. See .partybot ai modules
+#        Default: "" (all enabled)
+#
 #    BattleBot.AutoEquip
 #        What gear will new battlebots spawn with.
 #        Default: 1 (random items)
@@ -3236,6 +3255,10 @@ PartyBot.MaxBots = 0
 PartyBot.SkipChecks = 0
 PartyBot.AutoEquip = 1
 PartyBot.RandomGearLevelDifference = 10
+PartyBot.Commander.Enable = 1
+PartyBot.Commander.BotUpdateMs = 1000
+PartyBot.Commander.PerceptionMs = 200
+PartyBot.Commander.DisabledModules = ""
 
 BattleBot.AutoEquip = 1
 BattleBot.AutoJoin = 0

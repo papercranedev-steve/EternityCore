@@ -623,6 +623,7 @@ source_group("Anticheat"
 add_library(game STATIC
   ${game_SRCS}
 )
+include(PlayerBots/Commander/sources.cmake)
 mangos_target_flags(game)
 if(GAME_EXTRA_CXX_FLAGS)
   target_compile_options(game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${GAME_EXTRA_CXX_FLAGS}>)
