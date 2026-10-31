@@ -144,6 +144,7 @@ namespace Commander
         });
 
         bool executed = false;
+        bool rotationMayRun = false;
         if (!replace.empty())
         {
             ProposalTier const topTier = replace.front().tier;
@@ -165,6 +166,10 @@ namespace Commander
                 if (Execute(bot, p))
                 {
                     executed = true;
+                    // A target switch only changes the victim: the original rotation can act on
+                    // the new target in the same tick. Otherwise a tank switching between loose
+                    // adds every tick never casts Thunder Clap or Sunder (combat scenario 9).
+                    rotationMayRun = p.action.type == BotActionType::Attack;
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                 }
@@ -176,7 +181,7 @@ namespace Commander
         }
 
         directives.RecordDecision(std::move(record));
-        return executed;
+        return executed && !rotationMayRun;
     }
 
     bool Arbiter::Execute(PartyBotAI* bot, Proposal const& proposal)

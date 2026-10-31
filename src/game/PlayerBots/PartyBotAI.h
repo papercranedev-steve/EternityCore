@@ -108,6 +108,9 @@ public:
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
     // The class rotations' reflex interrupts ask this first.
     bool IsInterruptVetoed(Unit const* pVictim) const;
+    // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
+    // member mind controlled by a creature is not attacked (Commander::VetoChecks).
+    bool IsValidHostileTarget(Unit const* pTarget) const;
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;

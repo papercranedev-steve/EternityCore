@@ -191,6 +191,12 @@ bool PartyBotAI::IsInterruptVetoed(Unit const* pVictim) const
     return Commander::VetoChecks::IsInterruptVetoed(this, pVictim);
 }
 
+bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
+{
+    return CombatBotBaseAI::IsValidHostileTarget(pTarget) &&
+          !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget);
+}
+
 // Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above.
 Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
 {
@@ -201,7 +207,9 @@ Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
         {
             if (Player* pMember = itr->getSource())
             {
-                if (me->IsValidHelpfulTarget(pMember) &&
+                // A member mind controlled by a creature is hostile, so IsValidHelpfulTarget fails;
+                // CombatBotBaseAI::IsValidDispelTarget already handles the charm aura itself.
+                if ((me->IsValidHelpfulTarget(pMember) || Commander::VetoChecks::IsCharmedPartyMember(this, pMember)) &&
                    !pMember->IsGameMaster() &&
                     IsValidDispelTarget(pMember, pSpellEntry) &&
                     me->IsWithinLOSInMap(pMember) &&

@@ -1,6 +1,7 @@
 #include "Commander/Perception/CreatureProfile.h"
 #include "Creature.h"
 #include "CreatureEventAIMgr.h"
+#include "ScriptMgr.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
@@ -53,6 +54,13 @@ namespace CreatureProfiles
                 ref.repeatMinMs = e.delayRepeatMin;
                 ref.repeatMaxMs = e.delayRepeatMax;
                 ref.reapplies = e.delayRepeatMax > 0 && e.delayRepeatMax <= REAPPLY_REPEAT_MAX_MS;
+                ref.castFlags = e.castFlags;
+                ref.targetParam1 = e.targetParam1;
+                ref.targetParam2 = e.targetParam2;
+                ref.initialMinMs = e.delayInitialMin;
+                ref.initialMaxMs = e.delayInitialMax;
+                if ((e.castFlags & CF_MAIN_RANGED_SPELL) && !p.mainRangedSpellId)
+                    p.mainRangedSpellId = e.spellId;
                 Add(p, ref);
             }
         }
@@ -100,12 +108,17 @@ namespace CreatureProfiles
                         ScriptInfo const& info = step.second;
                         if (info.command == SCRIPT_COMMAND_FLEE && ev.event_type == EVENT_T_HP)
                             p.fleeAtHealthPct = std::max(p.fleeAtHealthPct, float(ev.percent_range.percentMax));
+                        // Drives an instance encounter (Mograine / Whitemane style EventAI bosses).
+                        if (info.command == SCRIPT_COMMAND_SET_INST_DATA)
+                            p.boss = true;
 
                         if (info.command != SCRIPT_COMMAND_CAST_SPELL)
                             continue;
                         CreatureSpellRef ref;
                         ref.spellId = info.castSpell.spellId;
                         ref.source = SpellSource::EventAI;
+                        if (ev.event_type == EVENT_T_HP)
+                            ref.healthPct = float(ev.percent_range.percentMax);
                         if (ev.event_type == EVENT_T_TIMER_IN_COMBAT)
                         {
                             ref.repeatMinMs = ev.timer.repeatMin;
@@ -143,10 +156,19 @@ namespace CreatureProfiles
         p.baseAttackTimeMs = info->base_attack_time ? info->base_attack_time : 2000;
         p.tauntImmune = (info->immunity_flags & CREATURE_IMMUNITY_TAUNT) != 0;
         p.mechanicImmuneMask = info->mechanic_immune_mask;
+        p.schoolImmuneMask = info->school_immune_mask;
+        p.noAggro = (info->flags_extra & CREATURE_FLAG_EXTRA_NO_AGGRO) != 0;
+
+        std::string const scriptName = info->script_id ? sScriptMgr.GetScriptName(info->script_id) : "";
+        p.scripted = !scriptName.empty();
+        p.boss = info->rank == CREATURE_ELITE_WORLDBOSS || scriptName.compare(0, 5, "boss_") == 0;
 
         AddSpellList(p, info->spell_list_id);
         AddOnHitProcs(p, info->auras);
-        AddEventAI(p);
+        // EventAI rows exist for many scripted creatures but only run with ai_name = EventAI
+        // (CreatureAISelector); reading them for a C++ boss shows timers that never happen.
+        if (!p.scripted && info->ai_name == "EventAI")
+            AddEventAI(p);
         return p;
     }
 

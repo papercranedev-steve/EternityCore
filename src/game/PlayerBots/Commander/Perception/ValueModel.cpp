@@ -75,7 +75,12 @@ namespace Value
 
     float HitDps(EnemyFacts const& enemy, PartyMemberFacts const& victim)
     {
-        return enemy.meleeDps * (1.0f - ArmorReduction(victim.armor, enemy.level));
+        if (!enemy.acting)
+            return 0.0f;    // feigning death, divine shield, evading: hits nobody
+        float const melee = enemy.meleePhysical
+            ? enemy.meleeDps * (1.0f - ArmorReduction(victim.armor, enemy.level))
+            : enemy.meleeDps;   // fire / frost melee ignores armor (resistances not modelled)
+        return melee + enemy.rangedDps;
     }
 
     float SurviveSec(EnemyFacts const& enemy, PartyMemberFacts const& victim)
@@ -110,7 +115,14 @@ namespace Value
 
     float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy)
     {
-        float const share = DealtDps(world) / float(std::max<size_t>(1, world.enemies.size()));
+        if (!enemy.acting)
+            return ThreatView::NO_LIMIT;    // cannot be damaged right now
+        // Damage is spread over the enemies that can be hit (not controlled ones we leave alone).
+        size_t targets = 0;
+        for (EnemyFacts const& e : world.enemies)
+            if (e.acting && !e.crowdControlled)
+                ++targets;
+        float const share = DealtDps(world) / float(std::max<size_t>(1, targets));
         return float(enemy.health) / std::max(1.0f, share);
     }
 }

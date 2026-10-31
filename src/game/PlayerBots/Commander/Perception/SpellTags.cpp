@@ -12,6 +12,50 @@ namespace SpellTags
             return effect == SPELL_EFFECT_APPLY_AURA || effect == SPELL_EFFECT_PERSISTENT_AREA_AURA ||
                    effect == SPELL_EFFECT_APPLY_AREA_AURA_PARTY;
         }
+
+        bool IsControlAura(uint32 aura)
+        {
+            switch (aura)
+            {
+                case SPELL_AURA_MOD_FEAR:
+                case SPELL_AURA_MOD_CONFUSE:
+                case SPELL_AURA_MOD_CHARM:
+                case SPELL_AURA_MOD_POSSESS:
+                case SPELL_AURA_MOD_STUN:
+                case SPELL_AURA_MOD_SILENCE:
+                case SPELL_AURA_MOD_PACIFY_SILENCE:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
+    bool IsControlEffect(SpellEntry const* spell, uint32 i)
+    {
+        return IsAuraEffect(spell->Effect[i]) && IsControlAura(spell->EffectApplyAuraName[i]) &&
+               spell->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER;
+    }
+
+    bool IsCreatureSummonEffect(uint32 effect)
+    {
+        switch (effect)
+        {
+            case SPELL_EFFECT_SUMMON:
+            case SPELL_EFFECT_SUMMON_WILD:
+            case SPELL_EFFECT_SUMMON_GUARDIAN:
+            case SPELL_EFFECT_SUMMON_PET:
+            case SPELL_EFFECT_SUMMON_POSSESSED:
+            case SPELL_EFFECT_SUMMON_TOTEM:
+            case SPELL_EFFECT_SUMMON_TOTEM_SLOT1:
+            case SPELL_EFFECT_SUMMON_TOTEM_SLOT2:
+            case SPELL_EFFECT_SUMMON_TOTEM_SLOT3:
+            case SPELL_EFFECT_SUMMON_TOTEM_SLOT4:
+            case SPELL_EFFECT_SUMMON_DEMON:
+                return true;
+            default:
+                return false;
+        }
     }
 
     CastCategory Categorize(SpellEntry const* spell)
@@ -25,6 +69,11 @@ namespace SpellTags
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
         {
             uint32 const effect = spell->Effect[i];
+            // Every creature summon effect (wild, guardian, totem, ...), not only SUMMON:
+            // summon spells like the Remote Control Golem were "other" and never interrupted.
+            if (IsCreatureSummonEffect(effect))
+                raise(CastCategory::Summon);
+
             switch (effect)
             {
                 case SPELL_EFFECT_HEAL:
@@ -39,13 +88,21 @@ namespace SpellTags
                 case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
                     raise(CastCategory::Damage);
                     break;
-                case SPELL_EFFECT_SUMMON:
-                    raise(CastCategory::Summon);
+                // Mana burn / drain: valued by the healing the lost mana would have done.
+                case SPELL_EFFECT_POWER_BURN:
+                case SPELL_EFFECT_POWER_DRAIN:
+                    if (spell->EffectMiscValue[i] == POWER_MANA)
+                        raise(CastCategory::ManaDrain);
                     break;
                 default:
                     break;
             }
 
+            if (IsControlEffect(spell, i))
+            {
+                raise(CastCategory::Control);
+                continue;
+            }
             if (!IsAuraEffect(effect))
                 continue;
 
@@ -54,18 +111,12 @@ namespace SpellTags
                 case SPELL_AURA_PERIODIC_HEAL:
                     raise(CastCategory::Heal);
                     break;
-                case SPELL_AURA_MOD_FEAR:
-                case SPELL_AURA_MOD_CONFUSE:
-                case SPELL_AURA_MOD_CHARM:
-                case SPELL_AURA_MOD_POSSESS:
-                case SPELL_AURA_MOD_STUN:
-                case SPELL_AURA_MOD_SILENCE:
-                case SPELL_AURA_MOD_PACIFY_SILENCE:
-                    raise(CastCategory::Control);
-                    break;
                 case SPELL_AURA_PERIODIC_DAMAGE:
                 case SPELL_AURA_PERIODIC_LEECH:
                     raise(CastCategory::Damage);
+                    break;
+                case SPELL_AURA_PERIODIC_MANA_LEECH:
+                    raise(CastCategory::ManaDrain);
                     break;
                 default:
                     break;
@@ -78,11 +129,12 @@ namespace SpellTags
     {
         switch (category)
         {
-            case CastCategory::Heal:    return "heal";
-            case CastCategory::Control: return "control";
-            case CastCategory::Summon:  return "summon";
-            case CastCategory::Damage:  return "damage";
-            case CastCategory::Other:   return "other";
+            case CastCategory::Heal:      return "heal";
+            case CastCategory::Control:   return "control";
+            case CastCategory::Summon:    return "summon";
+            case CastCategory::ManaDrain: return "mana drain";
+            case CastCategory::Damage:    return "damage";
+            case CastCategory::Other:     return "other";
         }
         return "?";
     }
@@ -109,6 +161,29 @@ namespace SpellTags
                 return true;
         }
         return false;
+    }
+
+    uint32 StopMechanicMask(SpellEntry const* spell)
+    {
+        if (!spell)
+            return 0;
+        uint32 mask = spell->Mechanic ? (1u << (spell->Mechanic - 1)) : 0;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (spell->EffectMechanic[i])
+                mask |= 1u << (spell->EffectMechanic[i] - 1);
+        return mask;
+    }
+
+    bool IsStopImmune(SpellEntry const* spell, uint32 mechanicImmuneMask, uint32 schoolImmuneMask)
+    {
+        if (!spell || spell->HasAttribute(SPELL_ATTR_NO_IMMUNITIES) || spell->IsIgnoringCasterAndTargetRestrictions())
+            return false;
+        // Creature::IsImmuneToSpell: an immune school blocks the whole harmful spell.
+        if ((schoolImmuneMask & (1u << spell->School)) && !spell->IsPositiveSpell())
+            return true;
+        // Bit convention of Creature::IsImmuneToSpell(Effect): 1 << (mechanic - 1).
+        uint32 const mask = StopMechanicMask(spell);
+        return mask && (mask & ~mechanicImmuneMask) == 0;
     }
 }
 }

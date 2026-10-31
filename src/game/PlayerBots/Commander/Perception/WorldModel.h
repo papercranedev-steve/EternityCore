@@ -27,6 +27,10 @@ namespace Commander
         uint32 spellId = 0;
         float maxRange = 0.0f;       // spell range; melee abilities are ~5
         uint32 cooldownMs = 0;       // full cooldown, cost of using it
+        uint32 lockoutMs = 0;        // school lockout of an interrupt effect (0 for stuns and silences)
+        // Mechanics that stop the cast (1 << MECHANIC_x): spell mechanic and effect mechanics.
+        // A target immune to all of them is not stopped (stun on a stun-immune boss).
+        uint32 mechanicMask = 0;
         bool ready = false;          // off cooldown and enough power (target checks happen at cast time)
     };
 
@@ -51,7 +55,14 @@ namespace Commander
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
         bool resting = false;       // eating, drinking or sitting
         bool inCombat = false;
+        // Cannot act: stunned, asleep, feared, confused, polymorphed, or charmed by an enemy.
+        // Assigners skip such members; rates do not count them as healers or damage dealers.
+        bool controlled = false;
+        bool charmed = false;       // mind controlled by an enemy: hostile to us, do not attack, dispel
+        bool silenced = false;      // can still melee, cannot cast
         std::vector<InterruptAbility> interrupts;   // bots only
+
+        bool CanAct() const { return alive && !controlled; }
     };
 
     // One row of an enemy's threat list, plus party members not on it yet (onList = false).
@@ -88,9 +99,23 @@ namespace Commander
         uint8 castCategory = 0;         // CastCategory (SpellTags.h)
         uint32 castRemainingMs = 0;
         uint32 castTotalMs = 0;
-        uint32 lastCastSpellId = 0;     // most recent cast seen this fight (kept after it ends)
+        uint32 lastCastSpellId = 0;     // most recent interruptible cast seen this fight (kept after it ends)
         bool crowdControlled = false;   // cannot act (stun, fear, polymorph, ...)
         bool ignoresAssistThreat = false; // heal/buff threat is zeroed (fear, confuse, breakable stun)
+        // False while it cannot be attacked and does nothing: feign death phases (not selectable),
+        // total immunity (divine shield), evading. Such enemies are left out of damage rates,
+        // time-to-die shares, taunts and heal-threat losses.
+        bool acting = true;
+        bool meleeEnabled = true;       // AI melee on (walking bombs, casters standing back turn it off)
+        bool meleePhysical = true;      // false: melee is fire/frost/... (armor does not reduce it)
+        // Main ranged spell damage per second (CreatureProfile::mainRangedSpellId), counted
+        // while it stands back casting (melee off). Before resistances.
+        float rangedDps = 0.0f;
+        bool silenced = false;          // UNIT_FLAG_SILENCED: no casts, no interrupter needed
+        bool summoned = false;          // temporary summon or guardian (adds)
+        ObjectGuid summoner;            // who summoned it, if known
+        uint32 firstSeenMs = 0;         // WorldTimer ms of the first snapshot it was in (ThreatHistory)
+        uint32 rank = 0;                // creature_template.rank (also correct for guardians)
 
         // Sorted by threat, highest first. Contains every party member and pet on
         // this map, also those with no threat on this enemy.
@@ -113,6 +138,11 @@ namespace Commander
         uint32 level = 0;
         bool elite = false;
         bool aggressive = false;    // hostile (red); false = neutral (yellow)
+        bool stealthed = false;     // the tank cannot target it now (still joins the fight)
+        bool patrol = false;        // walks a waypoint path; its pack membership changes as it moves
+        bool tappedByOther = false; // somebody outside the party has loot rights
+        bool boss = false;          // CreatureProfile::boss: pull and clear leave it to the player
+        bool noAggro = false;       // CREATURE_FLAG_EXTRA_NO_AGGRO: never starts a fight
         Position3 pos;
     };
 
@@ -132,12 +162,14 @@ namespace Commander
     struct RateFacts
     {
         float partyMaxHealth = 0.0f;    // sum over alive and dead members, pets excluded; 1 point = 1% of it
-        float incomingDps = 0.0f;       // melee of enemies hitting us, after armor (spell damage not included yet)
+        // Melee of enemies hitting us after armor, plus the main ranged spell of casters standing
+        // back (EnemyFacts::rangedDps). Other spells are not included yet.
+        float incomingDps = 0.0f;
         float dealtDps = 0.0f;          // measured drop of enemy health per second
         bool dealtMeasured = false;     // false = not enough samples yet, dealtDps is an estimate
         float enemyHealth = 0.0f;       // current health of all enemies
-        uint32 healers = 0;             // alive healer-role bots, plus the player if a healing class
-        uint32 damageDealers = 0;       // alive members that are not healers (tanks included)
+        uint32 healers = 0;             // healer-role bots that can act (alive, not controlled)
+        uint32 damageDealers = 0;       // members that can act and are not healers (tanks included)
     };
 
     struct WorldModel

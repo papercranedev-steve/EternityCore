@@ -5,7 +5,9 @@
  * alive, hitting the debuffed member, and its profile says the spell is reapplied
  * (on-hit proc aura, or a spell list entry repeating every few seconds).
  * The veto is only kept when the dispel costs more than the debuff would do
- * before it comes back. Control effects are never vetoed here.
+ * before it comes back. Control effects are not vetoed for that reason; the one exception
+ * is a control that breaks on damage (sleep) on a member who is being hit: the next hit
+ * ends it anyway (combat scenario 3).
  * Out of combat the vetoes expire and the original rotation dispels as before.
  */
 
@@ -21,6 +23,8 @@ namespace Commander
     public:
         // Seconds until an on-hit proc comes back when its chance is unknown.
         static constexpr float DEFAULT_REAPPLY_SEC = 4.0f;
+        // A sleep on someone being hit lasts about this long before the next hit breaks it.
+        static constexpr float WAKE_ON_DAMAGE_SEC = 2.0f;
 
         char const* GetId() const override { return "dispel"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

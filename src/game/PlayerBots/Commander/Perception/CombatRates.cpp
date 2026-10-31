@@ -16,8 +16,8 @@ namespace Commander
             if (m.isPet)
                 continue;
             r.partyMaxHealth += float(m.maxHealth);
-            if (!m.alive)
-                continue;
+            if (!m.CanAct())
+                continue;   // dead, asleep, stunned or mind controlled: contributes nothing now
             if (m.isBot && m.role == ROLE_HEALER)
                 ++r.healers;
             else
@@ -27,7 +27,7 @@ namespace Commander
         for (EnemyFacts const& e : world.enemies)
         {
             r.enemyHealth += float(e.health);
-            if (e.crowdControlled || e.victim.IsEmpty())
+            if (e.crowdControlled || !e.acting || e.victim.IsEmpty())
                 continue;
             if (PartyMemberFacts const* victim = world.FindMember(e.victim))
                 r.incomingDps += Value::HitDps(e, *victim);

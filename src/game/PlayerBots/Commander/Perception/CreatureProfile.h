@@ -31,6 +31,12 @@ namespace Commander
         uint32 repeatMaxMs = 0;
         uint32 viaAuraId = 0;           // OnHit: the passive aura that triggers it
         uint32 procChance = 0;          // OnHit: percent
+        uint16 castFlags = 0;           // creature_spells.castFlags (CF_MAIN_RANGED_SPELL, ...)
+        uint32 targetParam1 = 0;        // creature_spells.targetParam1/2 (heal: radius / health pct)
+        uint32 targetParam2 = 0;
+        uint32 initialMinMs = 0;        // first cast after the fight starts
+        uint32 initialMaxMs = 0;
+        float healthPct = 0.0f;         // EventAI HP event: cast when health drops to this (0 = not HP-bound)
         // Put back on the target soon after a dispel: on-hit procs, and spell list
         // entries that repeat every few seconds.
         bool reapplies = false;
@@ -57,6 +63,16 @@ namespace Commander
         bool tauntImmune = false;       // CREATURE_IMMUNITY_TAUNT
         uint32 mechanicImmuneMask = 0;
         float fleeAtHealthPct = 0.0f;   // EventAI HP event with a flee action, 0 = does not flee
+        uint32 schoolImmuneMask = 0;    // creature_template.school_immune_mask (1 << SPELL_SCHOOL_x)
+        // Stands back and casts its main ranged spell; only walks in when that cast fails
+        // (no line of sight, out of range, school locked, silenced). CreatureAI.cpp DoSpellsListCasts.
+        uint32 mainRangedSpellId = 0;
+        // Boss or scripted encounter: world boss rank, C++ boss_ script, EventAI that sets
+        // instance data, or the override table. Pull/clear do not pick it on their own.
+        bool boss = false;
+        // EventAI data is used only when ai_name is EventAI; a C++ script ignores those rows.
+        bool scripted = false;
+        bool noAggro = false;           // CREATURE_FLAG_EXTRA_NO_AGGRO
         std::vector<CreatureSpellRef> spells;
         bool hasOverride = false;
         CreatureOverride override;

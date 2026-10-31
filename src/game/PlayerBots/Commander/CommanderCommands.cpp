@@ -235,7 +235,11 @@ namespace
         if (!commander)
             return false;
         Map* map = player->GetMap();
-        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld());
+        // Same healer mana gate as the pull that is waiting (clear asks for full mana before hard packs).
+        Commander::PullPlan const& pull = commander->GetPlan().pull;
+        float const healerMana = pull.phase == Commander::PullPhase::WaitReady ? pull.healerManaPct
+                                                                               : Commander::PullPlanner::READY_MANA_PCT;
+        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana);
         if (issues.empty())
         {
             handler->SendSysMessage("Everyone is ready.");
@@ -327,7 +331,8 @@ namespace
 
         Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
         handler->PSendSysMessage("Clearing packs within %.0f yd of here, at most %u mobs per pull. "
-            "Stops when nothing is left, someone dies, or you move more than %.0f yd. '.partybot ai clear stop' to stop.",
+            "Pauses while you are more than %.0f yd away (goes on where you stop); stops when nothing is left, "
+            "the tank is gone or someone dies twice. '.partybot ai clear stop' to stop.",
             radius, maxMobs, Commander::ClearPlanner::MAX_LEADER_DRIFT);
         return true;
     }

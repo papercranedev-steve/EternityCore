@@ -16,6 +16,8 @@ namespace WorldModelBuilder
 {
     // Radius around the party leader scanned for out-of-combat packs.
     float const PACK_SCAN_RADIUS = 50.0f;
+    // Creature spell lists are checked this often (CreatureAI.cpp CREATURE_CASTING_DELAY).
+    float const CREATURE_SPELL_CHECK_SEC = 1.2f;
 
     // Party members, pets, enemies and their threat lists. Cheap (no grid search).
     void RefreshCombat(PartyBotAI* bot, WorldModel& world);

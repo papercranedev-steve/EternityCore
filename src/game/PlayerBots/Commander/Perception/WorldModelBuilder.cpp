@@ -7,7 +7,10 @@
 #include "CreatureGroups.h"
 #include "Group.h"
 #include "Pet.h"
+#include "TemporarySummon.h"
 #include "Player.h"
+#include "Commander/Perception/ProfileStore.h"
+#include "SpellMgr.h"
 #include "Spell.h"
 #include "ThreatManager.h"
 #include "HostileRefManager.h"
@@ -50,6 +53,38 @@ namespace WorldModelBuilder
             f.resting = unit->GetStandState() != UNIT_STAND_STATE_STAND ||
                         unit->HasAuraType(SPELL_AURA_MOD_REGEN) || unit->HasAuraType(SPELL_AURA_MOD_POWER_REGEN);
             f.inCombat = unit->IsInCombat();
+            // Charmed by a creature (mind control): hostile to the party, acts for the enemy.
+            f.charmed = unit->IsCharmed() && !unit->GetCharmerGuid().IsPlayer();
+            f.controlled = f.charmed || unit->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
+            f.silenced = unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
+        }
+
+        // Interrupt-cast effects lock the school for the spell's duration; stuns and silences don't.
+        uint32 LockoutMs(SpellEntry const* spell)
+        {
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (spell->Effect[i] == SPELL_EFFECT_INTERRUPT_CAST)
+                    return uint32(std::max(0, spell->GetDuration()));
+            return 0;
+        }
+
+
+        // Damage per second of the main ranged spell: one cast per (cast time + creature
+        // spell list check delay or the entry's repeat delay, whichever is longer).
+        float RangedSpellDps(CreatureProfile const& profile, uint32 level, float meleeHit)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(profile.mainRangedSpellId);
+            std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(profile.mainRangedSpellId);
+            CreatureSpellRef const* ref = profile.FindSpell(profile.mainRangedSpellId);
+            if (!spell || !sp || !ref)
+                return 0.0f;
+            float const damage = SpellProfiles::Estimate(spell, level, meleeHit).TotalDamage();
+            // The repeat delay runs from the start of the cast; the spell list is checked every
+            // 1.2 s (CreatureAI.cpp CREATURE_CASTING_DELAY), so half of that is lost on average.
+            float const castSec = sp->castMs / 1000.0f + CREATURE_SPELL_CHECK_SEC / 2.0f;
+            float const repeatSec = (ref->repeatMinMs + ref->repeatMaxMs) / 2000.0f;
+            float const cycle = std::max(castSec, repeatSec);
+            return cycle > 0.0f ? damage / cycle : 0.0f;
         }
 
         bool IgnoresAssistThreat(Unit const* enemy)
@@ -92,10 +127,15 @@ namespace WorldModelBuilder
             SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
             a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
             a.cooldownMs = spell->GetRecoveryTime();
+            a.lockoutMs = LockoutMs(spell);
+            a.mechanicMask = SpellTags::StopMechanicMask(spell);
             Powers const powerType = Powers(spell->powerType);
             a.ready = me->IsSpellReady(spell) &&
                       (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
                       spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
+            // Asleep / stunned, or silenced for a spell that silence blocks (Kick still works).
+            if (f.controlled || (f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE))
+                a.ready = false;
             f.interrupts.push_back(a);
         }
 
@@ -124,6 +164,9 @@ namespace WorldModelBuilder
                     break;
                 case CLASS_PALADIN:
                     AddInterrupt(ai, s.paladin.pHammerOfJustice, f);
+                    break;
+                case CLASS_PRIEST:
+                    AddInterrupt(ai, s.priest.pSilence, f);   // shadow talent; null for most healers
                     break;
                 default:
                     break;
@@ -202,7 +245,9 @@ namespace WorldModelBuilder
             e.guid = creature->GetObjectGuid();
             e.entry = creature->GetEntry();
             e.level = creature->GetLevel();
-            e.elite = creature->IsElite();
+            // IsElite() is false for every Pet, guardians included (summoned elite adds).
+            e.rank = creature->GetCreatureInfo()->rank;
+            e.elite = e.rank != CREATURE_ELITE_NORMAL;
             e.healthPct = creature->GetHealthPercent();
             e.health = creature->GetHealth();
             e.maxHealth = creature->GetMaxHealth();
@@ -213,6 +258,29 @@ namespace WorldModelBuilder
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
+            e.meleeEnabled = !creature->AI() || creature->AI()->IsMeleeAttackEnabled();
+            e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
+            if (!e.meleeEnabled)
+                e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count
+            if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(e.entry))
+            {
+                // Standing back with melee off: it hurts with its main ranged spell instead.
+                if (profile->mainRangedSpellId && !e.meleeEnabled)
+                    e.rangedDps = RangedSpellDps(*profile, e.level, e.meleeHit);
+            }
+            e.silenced = creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
+            e.acting = !creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) &&
+                       !creature->IsTotalImmune() && !creature->IsInEvadeMode();
+            if (creature->IsTemporarySummon())
+            {
+                e.summoned = true;
+                e.summoner = static_cast<TemporarySummon const*>(creature)->GetSummonerGuid();
+            }
+            else if (creature->IsPet() || !creature->GetCreatorGuid().IsEmpty())
+            {
+                e.summoned = true;
+                e.summoner = creature->GetOwnerGuid() ? creature->GetOwnerGuid() : creature->GetCreatorGuid();
+            }
 
             ThreatManager& tm = creature->GetThreatManager();
             if (HostileReference* victimRef = tm.getCurrentVictim())
@@ -284,8 +352,16 @@ namespace WorldModelBuilder
                 continue;
 
             Creature* creature = static_cast<Creature*>(unit);
-            if (creature->IsPet() || creature->IsTotem())
+            // Temporary summons are event waves, bombs, wards: not packs to pull.
+            if (creature->IsPet() || creature->IsTotem() || creature->IsTemporarySummon())
                 continue;
+            // Guards, civilians, faction NPCs and PvP-flagged creatures: attacking them flags
+            // the party for PvP or starts a town fight. Never offer them as pulls.
+            if (creature->IsGuard() || creature->IsCivilian() || creature->IsPvP() || creature->IsContestedGuard())
+                continue;
+            if (FactionTemplateEntry const* faction = creature->GetFactionTemplateEntry())
+                if (faction->ourMask & (FACTION_MASK_ALLIANCE | FACTION_MASK_HORDE))
+                    continue;
 
             PackCreature c;
             c.guid = creature->GetObjectGuid();
@@ -295,6 +371,12 @@ namespace WorldModelBuilder
             c.level = creature->GetLevel();
             c.elite = creature->IsElite();
             c.aggressive = me->IsHostileTo(creature);
+            c.stealthed = creature->HasAuraType(SPELL_AURA_MOD_STEALTH);
+            c.patrol = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
+            c.tappedByOther = creature->HasLootRecipient() && (!leader || !creature->IsTappedBy(leader));
+            c.noAggro = creature->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO);
+            if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(c.entry))
+                c.boss = profile->boss;
             c.pos = PositionOf(creature);
             creatures.push_back(c);
         }

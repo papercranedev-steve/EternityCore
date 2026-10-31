@@ -42,7 +42,9 @@ namespace Commander
         bool channeled = false;
         bool interruptible = false;     // same rule as Spell::EffectInterruptCast
         bool harmful = false;           // negative for the target
-        bool controls = false;          // fear, stun, charm, sleep, silence, ... on the target
+        bool controls = false;          // fear, stun, charm, sleep, silence, ... on the target (not on the caster)
+        bool breaksOnDamage = false;    // AURA_INTERRUPT_DAMAGE_CANCELS: sleep / sap style, the next hit ends it
+        uint8 school = 0;               // spell_template.School (SpellSchools), what an interrupt locks
         uint8 dispel = 0;               // DispelType: 1 magic, 2 curse, 3 disease, 4 poison
         bool hasOverride = false;
         SpellOverride override;
@@ -56,6 +58,10 @@ namespace Commander
         float heal = 0.0f;
         float periodicHeal = 0.0f;
         float controlSec = 0.0f;        // how long the target loses control
+        float mana = 0.0f;              // mana burned or drained (target's mana is not capped here)
+        bool healsToFull = false;       // SPELL_EFFECT_HEAL_MAX_HEALTH: heal = target's missing health
+        uint32 summonEntry = 0;         // first creature summon effect: creature entry (EffectMiscValue)
+        float summonCount = 0.0f;       // creatures of that entry per cast (effect value, at least 1)
 
         float TotalDamage() const { return damage + periodicDamage; }
         float TotalHeal() const { return heal + periodicHeal; }

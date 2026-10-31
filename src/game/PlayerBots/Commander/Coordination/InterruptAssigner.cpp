@@ -4,6 +4,7 @@
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/CastValue.h"
+#include "Commander/Perception/ProfileStore.h"
 #include "SharedDefines.h"
 #include <algorithm>
 #include <set>
@@ -17,30 +18,48 @@ namespace Commander
             ObjectGuid bot;
             uint32 spellId = 0;
             float score = -1e9f;
+            bool canBePrimary = true;   // false: cannot reach the live cast in time (backup only)
         };
 
-        // Best ability of one bot against one enemy. Abilities that cost more than the
-        // cast is worth (value-scoring doc 5.1) are skipped.
-        Candidate Evaluate(WorldModel const& world, PartyMemberFacts const& m, EnemyFacts const& e,
-                           InterruptDuty const* previous, bool needReadyNow, float benefit)
+        // An enemy worth an interrupter, with the cast its benefit is based on.
+        struct Caster
         {
-            Candidate best;
-            if (!m.isBot || m.isPet || !m.alive || m.interrupts.empty())
-                return best;
-            if (needReadyNow && m.casting)
-                return best;    // busy with its own cast, would react too late
+            EnemyFacts const* enemy = nullptr;
+            bool live = false;
+            CastValue cast;
+            uint8 category = 0;
+        };
+
+        // Every usable ability of one bot against one enemy. Abilities that cost more than the
+        // cast is worth (value-scoring doc 5.1) or that the enemy is immune to are skipped.
+        void Evaluate(WorldModel const& world, PartyMemberFacts const& m, Caster const& target,
+                      InterruptDuty const* previous, std::vector<Candidate>& out)
+        {
+            EnemyFacts const& e = *target.enemy;
+            // Asleep, stunned, feared or mind controlled: cannot interrupt anything.
+            if (!m.isBot || m.isPet || !m.CanAct() || m.interrupts.empty())
+                return;
+            if (target.live && m.casting)
+                return;     // busy with its own cast, would react too late
 
             float const distance = PackResolver::Distance(m.pos, e.pos);
             for (InterruptAbility const& a : m.interrupts)
             {
-                if (!a.ready && needReadyNow)
+                if (!a.ready && target.live)
                     continue;
-                if (benefit <= CastValues::InterruptCost(world, m, a, e, benefit))
+                // Stun on a stun-immune boss: goes on cooldown, the cast completes.
+                if (!CastValues::CanStop(a, e))
+                    continue;
+                float const benefit = target.cast.points + CastValues::LockoutBenefit(world, e, a, target.cast.spellId);
+                if (benefit <= CastValues::InterruptCost(world, m, a, e, target.cast))
                     continue;
 
+                Candidate c;
+                c.bot = m.guid;
+                c.spellId = a.spellId;
                 float score = 0.0f;
-                float const out = distance - (a.maxRange + InterruptAssigner::RANGE_SLACK);
-                score += out <= 0.0f ? InterruptAssigner::SCORE_IN_RANGE : -out * InterruptAssigner::SCORE_PER_YARD_OUT;
+                float const outOfRange = distance - (a.maxRange + InterruptAssigner::RANGE_SLACK);
+                score += outOfRange <= 0.0f ? InterruptAssigner::SCORE_IN_RANGE : -outOfRange * InterruptAssigner::SCORE_PER_YARD_OUT;
                 score -= (a.cooldownMs / 1000.0f) * InterruptAssigner::SCORE_PER_COOLDOWN_SEC;
                 if (!a.ready)
                     score += InterruptAssigner::SCORE_NOT_READY;
@@ -50,15 +69,16 @@ namespace Commander
                     score += InterruptAssigner::SCORE_TANK;
                 if (previous && previous->primary == m.guid)
                     score += InterruptAssigner::SCORE_STICKY;
+                c.score = score;
 
-                if (score > best.score)
+                // A 3 s cast and a melee 20 yards away: it arrives after the cast (scenario 2, 3.5 item 2).
+                if (target.live && outOfRange > 0.0f)
                 {
-                    best.bot = m.guid;
-                    best.spellId = a.spellId;
-                    best.score = score;
+                    float const reachSec = outOfRange / CastValues::RUN_YARDS_PER_SEC + InterruptAssigner::REACTION_SEC;
+                    c.canBePrimary = reachSec <= e.castRemainingMs / 1000.0f;
                 }
+                out.push_back(c);
             }
-            return best;
         }
     }
 
@@ -69,82 +89,83 @@ namespace Commander
 
     void InterruptAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
-        // Enemies worth an interrupter: casting an interruptible spell now, or seen casting this fight.
-        std::vector<EnemyFacts const*> casters;
+        // Enemies worth an interrupter: casting an interruptible spell now, or able to cast a
+        // valuable interruptible spell (creature profile), also before the first cast.
+        std::vector<Caster> casters;
         for (EnemyFacts const& e : world.enemies)
         {
-            if (e.crowdControlled)
+            // Silenced (Serpent Form, our Silence), feigning death, totally immune: nothing to
+            // stop now, do not hold an interrupter for it (scenario 3, 3.5).
+            if (e.crowdControlled || e.silenced || !e.acting)
                 continue;
-            if ((e.castingSpellId && e.castInterruptible) || e.lastCastSpellId)
-                casters.push_back(&e);
+            Caster c;
+            c.enemy = &e;
+            c.live = e.castingSpellId && e.castInterruptible;
+            c.cast = CastValues::InterruptBenefit(world, e);
+            if (!c.cast.spellId || c.cast.points <= 0.0f)
+                continue;
+            if (c.live)
+                c.category = e.castCategory;
+            else if (std::shared_ptr<SpellProfile const> p = sProfileStore.GetSpell(c.cast.spellId))
+                c.category = uint8(p->category);
+            casters.push_back(c);
         }
 
-        // Live casts first, most important category first, shortest remaining time first.
-        std::stable_sort(casters.begin(), casters.end(), [](EnemyFacts const* a, EnemyFacts const* b)
+        // Live casts first, most valuable first, shortest remaining time first. By value, not by
+        // category: one interrupter must kick the sleep on the healer before a small heal (scenario 3).
+        std::stable_sort(casters.begin(), casters.end(), [](Caster const& a, Caster const& b)
         {
-            bool const la = a->castingSpellId && a->castInterruptible;
-            bool const lb = b->castingSpellId && b->castInterruptible;
-            if (la != lb)
-                return la;
-            if (a->castCategory != b->castCategory)
-                return a->castCategory > b->castCategory;
-            return a->castRemainingMs < b->castRemainingMs;
+            if (a.live != b.live)
+                return a.live;
+            if (a.cast.points != b.cast.points)
+                return a.cast.points > b.cast.points;
+            return a.live && a.enemy->castRemainingMs < b.enemy->castRemainingMs;
         });
 
         std::vector<InterruptDuty> duties;
         std::set<ObjectGuid> busyPrimary;   // a bot is primary for at most one enemy
 
-        for (EnemyFacts const* e : casters)
+        for (Caster const& target : casters)
         {
-            bool const live = e->castingSpellId && e->castInterruptible;
+            EnemyFacts const* e = target.enemy;
             InterruptDuty const* previous = plan.FindInterruptDuty(e->guid);
-            float const benefit = CastValues::InterruptBenefit(world, *e).points;
 
             std::vector<Candidate> candidates;
             for (PartyMemberFacts const& m : world.party)
-            {
-                Candidate c = Evaluate(world, m, *e, previous, live, benefit);
-                if (c.spellId)
-                    candidates.push_back(c);
-            }
-            std::sort(candidates.begin(), candidates.end(), [](Candidate const& a, Candidate const& b)
+                Evaluate(world, m, target, previous, candidates);
+            std::stable_sort(candidates.begin(), candidates.end(), [](Candidate const& a, Candidate const& b)
             {
                 return a.score > b.score;
             });
 
             InterruptDuty duty;
             duty.enemy = e->guid;
-            duty.castingNow = live;
-            duty.category = e->castCategory;
+            duty.castingNow = target.live;
+            duty.category = target.category;
             for (Candidate const& c : candidates)
             {
-                if (duty.primary.IsEmpty())
+                if (c.canBePrimary && !busyPrimary.count(c.bot))
                 {
-                    if (busyPrimary.count(c.bot))
-                        continue;
                     duty.primary = c.bot;
                     duty.primarySpellId = c.spellId;
                     busyPrimary.insert(c.bot);
+                    break;
                 }
-                else if (c.bot != duty.primary)
+            }
+            // Backup: best other bot that is not primary elsewhere; if there is none, the best
+            // one already primary elsewhere doubles as backup here.
+            for (bool allowBusy : { false, true })
+            {
+                for (Candidate const& c : candidates)
                 {
+                    if (c.bot == duty.primary || (!allowBusy && busyPrimary.count(c.bot)))
+                        continue;
                     duty.backup = c.bot;
                     duty.backupSpellId = c.spellId;
                     break;
                 }
-            }
-            // Everyone already primary elsewhere: the best one doubles as backup here.
-            if (duty.backup.IsEmpty())
-            {
-                for (Candidate const& c : candidates)
-                {
-                    if (c.bot != duty.primary)
-                    {
-                        duty.backup = c.bot;
-                        duty.backupSpellId = c.spellId;
-                        break;
-                    }
-                }
+                if (!duty.backup.IsEmpty())
+                    break;
             }
 
             if (!duty.primary.IsEmpty() || !duty.backup.IsEmpty())

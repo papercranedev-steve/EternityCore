@@ -77,6 +77,26 @@ namespace Commander
                 if (holder->IsPositive() || !spell->Dispel || !holder->GetCasterGuid().IsCreature())
                     continue;
 
+                // Sleep that breaks on damage, on someone being hit: the next hit wakes them,
+                // a dispel only spends a global cooldown (combat scenario 3, sleep on the tank).
+                if (std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(spell->Id))
+                {
+                    if (sp->controls && sp->breaksOnDamage && !(sp->hasOverride && sp->override.dispel != DispelPolicy::Auto) &&
+                        Value::IncomingOn(world, m.guid) > 0.0f)
+                    {
+                        Proposal p;
+                        p.kind = ProposalKind::Veto;
+                        p.source = "dispel";
+                        p.reason = "breaks on the next hit";
+                        p.veto.type = VetoType::Dispel;
+                        p.veto.target = m.guid;
+                        p.veto.spellId = spell->Id;
+                        p.SetValue(dispelCost, Value::LostAction(world, m, WAKE_ON_DAMAGE_SEC));
+                        out.push_back(p);
+                        continue;
+                    }
+                }
+
                 Creature* caster = map->GetCreature(holder->GetCasterGuid());
                 if (!caster || !caster->IsAlive() || !IsHitting(caster, member))
                     continue;   // caster dead or away: dispelling it is worth it again

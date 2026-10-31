@@ -27,20 +27,46 @@ namespace Commander
     {
         None,
         Done,       // pull phases finished (the fight itself may still be going)
+        // Real failure: tank dead or gone, not ready in time, tank never reached the target.
         Cancelled,
+        // Another fight started before the pull did (player attacked, a patrol walked in).
+        // `.partybot ai clear` waits for that fight to end and goes on.
+        Interrupted,
     };
 
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
     struct ClearPlan
     {
         bool active = false;
-        Position3 anchor;               // leader position at start; moving away stops it
+        Position3 anchor;               // leader position at start, moved when the leader settles elsewhere
         float radius = 40.0f;
         uint32 maxMobs = 4;             // skip packs predicted to bring more
         uint32 cleared = 0;
         uint32 skippedPacks = 0;
         std::vector<ObjectGuid> skipped;    // members of packs judged too hard or unpullable
         uint32 idleSinceMs = 0;         // last time the party was in a fight
+
+        // Leader walked away from the anchor (looting): paused, resumes where the leader stops.
+        bool paused = false;
+        Position3 leaderPos;            // last leader position that counted as a move
+        uint32 leaderStillSinceMs = 0;  // when the leader stopped moving
+
+        // Pack of an interrupted pull: counted as cleared if it is dead once that fight ends.
+        std::vector<ObjectGuid> interruptedPack;
+
+        // Deaths: wait for a resurrection after the fight, stop on the second death.
+        uint32 deathEvents = 0;
+        uint32 reviveWaitSinceMs = 0;   // 0 = nobody dead
+
+        std::vector<ObjectGuid> tappedNoted;    // first member of tapped packs already reported
+    };
+
+    // Display name of a party member, captured when the pull is planned (the pure assigner
+    // has no live objects to read names from).
+    struct PullMemberName
+    {
+        ObjectGuid guid;
+        std::string name;
     };
 
     struct PullPlan
@@ -52,6 +78,19 @@ namespace Commander
         Position3 spot;                     // where the party fights (leader position at command time)
         bool returnToSpot = false;
         uint32 phaseSinceMs = 0;
+
+        // WaitReady bookkeeping.
+        float healerManaPct = 80.0f;        // healer mana needed (PullPlanner::READY_MANA_PCT by default)
+        uint32 botWaitMs = 0;               // time bots were not ready; only this counts toward the timeout
+        uint32 lastReadyCheckMs = 0;
+        bool readyNoteSent = false;         // "still waiting for ..." is sent once
+        bool readyAnnounced = false;        // "everyone ready" is sent once
+        std::vector<PullMemberName> names;
+
+        // `.partybot ai clear` predicts again when the tank is about to go (ClearPlanner::Step).
+        bool recheckOnApproach = false;
+        bool rechecked = false;
+        uint32 recheckWaitSinceMs = 0;      // prediction over the limit since then, 0 = not waiting
     };
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).
     struct InterruptDuty

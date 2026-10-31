@@ -21,6 +21,9 @@ namespace Commander
         static constexpr float SCORE_STICKY = 1.5f;         // keep last assignment
         static constexpr float SCORE_TANK = -0.5f;          // tanks prefer holding threat
         static constexpr float SCORE_NOT_READY = -3.0f;     // only for enemies not casting right now
+        // Live cast: an ability that needs walking is primary only if walking in plus this
+        // reaction time ends before the cast does (it can still be backup).
+        static constexpr float REACTION_SEC = 0.5f;
 
         char const* GetId() const override { return "interrupt"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;

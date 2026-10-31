@@ -7,6 +7,8 @@
  *                      maps are idle. Picks the pack member that brings the fewest extra
  *                      creatures and fills TeamPlan::pull.
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
+ *                      A fight with other enemies before the pull starts ends it as
+ *                      Interrupted; real failures end it as Cancelled.
  */
 
 #ifndef MANGOS_COMMANDER_PULL_PLANNER_H
@@ -33,22 +35,29 @@ namespace Commander
 
         float const READY_HEALTH_PCT = 90.0f;
         float const READY_MANA_PCT = 80.0f;
+        // "Full" for healers before a hard pack. Drinking stops at 100%; 99 leaves room for rounding.
+        float const READY_FULL_MANA_PCT = 99.0f;
         float const READY_MAX_DISTANCE = 40.0f;   // from the leader
+        // Next to the leader, a pack further than this is brought back to the fight spot.
+        float const RETURN_MIN_DISTANCE = 15.0f;
 
         // Pure: who is not ready. Players count too (the leader's own health matters).
+        // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.
         struct Issue
         {
             ObjectGuid who;
             char const* what;   // "dead", "hp", "mana", "far", "combat"
             float value;
         };
-        std::vector<Issue> CheckReady(WorldModel const& world);
+        std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT);
     }
 
     class PullAssigner : public IAssigner
     {
     public:
+        // Only time a bot is not ready counts; the player's own state is reported, never times out.
         static constexpr uint32 WAIT_READY_TIMEOUT_MS = 90 * 1000;
+        static constexpr uint32 WAIT_READY_NOTE_MS = 15 * 1000;     // then say once who is not ready
         static constexpr uint32 APPROACH_TIMEOUT_MS = 20 * 1000;
         static constexpr uint32 RETURN_TIMEOUT_MS = 8 * 1000;
         static constexpr uint32 SETTLE_MS = 2500;

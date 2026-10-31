@@ -4,8 +4,8 @@
  *
  *  Tank     Approach: attack the chosen target (original chase / charge brings it there).
  *           Return:   run back to the fight spot; the enemies follow.
- *  Damage   Approach / Return / Settle: stay where they are, do not attack.
- *  Healer   Approach / Return: stay put while out of combat; heal normally once in combat.
+ *  Others   Approach / Return / Settle: stay where they are while out of combat.
+ *           Once in combat (healers and damage dealers alike) the original AI acts normally.
  */
 
 #ifndef MANGOS_COMMANDER_PULL_BEHAVIOR_H

@@ -36,9 +36,15 @@ namespace Commander
 
         // An out-of-combat plan (pull) needs the Commander hook to run before the original AI.
         // WaitReady is excluded: bots keep eating and drinking while the party gets ready.
+        // While a pull or clear is running and the party is already fighting (player attacked
+        // first, a patrol walked in), a bot not yet on any threat list must stand up and help
+        // instead of sitting there drinking. Outside pull / clear the original AI is unchanged.
         bool WantsOutOfCombatControl() const
         {
-            return m_plan.pull.phase != PullPhase::None && m_plan.pull.phase != PullPhase::WaitReady;
+            PullPhase const phase = m_plan.pull.phase;
+            bool const pulling = phase != PullPhase::None && phase != PullPhase::WaitReady;
+            bool const planRunning = phase != PullPhase::None || m_plan.clear.active;
+            return pulling || (planRunning && !m_world.enemies.empty());
         }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }

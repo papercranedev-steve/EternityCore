@@ -5,8 +5,10 @@
  *
  *  Primary - interrupt as soon as the cast is seen. Melee primaries out of range switch
  *            to the caster so the original chase logic brings them in.
- *  Backup  - interrupt when the primary cannot (no ready ability, busy casting, gone)
- *            or the cast is past BACKUP_AFTER_PROGRESS.
+ *  Backup  - interrupt when the primary cannot (controlled, no ready ability that the enemy
+ *            is not immune to, busy casting, gone) or the cast is past BACKUP_AFTER_PROGRESS.
+ *  Abilities the enemy is immune to (CastValues::CanStop) are never proposed; each ability's
+ *            benefit includes its school lockout (CastValues::LockoutBenefit).
  *  Own target - if the cast of the bot's own target is not worth an interrupt, veto the
  *            original rotation's reflex interrupt (VetoType::Interrupt).
  *  Urgent tier only when the cast would kill someone; otherwise team-task tier.

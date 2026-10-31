@@ -31,6 +31,11 @@ namespace Commander
         static constexpr float DPS_STOP_HEADROOM = 0.10f;     // x holder's threat
         static constexpr float DPS_SWITCH_HEADROOM = 0.25f;   // alternative target needs this much
         static constexpr float DPS_SWITCH_RANGE = 30.0f;
+        static constexpr float DPS_SWITCH_MIN_SEC = 3.0f;     // switch target needs room for this much of my threat
+        // An enemy seen for the first time less than this long ago (a summoned add, a patrol
+        // that walked in) must leave room for NEW_ENEMY_LEAD_SEC of my threat before I hit it.
+        static constexpr float NEW_ENEMY_SETTLE_SEC = 3.0f;
+        static constexpr float NEW_ENEMY_LEAD_SEC = 2.0f;
         static constexpr float HEAL_IGNORE_THREAT_PCT = 30.0f;
         static constexpr float TANK_LEAD_SWITCH = 0.15f;      // lead / holder threat
         static constexpr float TANK_LEAD_KEEP = 0.30f;        // current target must be at least this safe to leave it
@@ -41,6 +46,18 @@ namespace Commander
         static constexpr float TAUNT_RESERVE_SEC = 1.0f;      // taunt cooldown cost: this many seconds of enemy melee
         static constexpr float TANK_RECLAIM_SEC = 2.0f;       // how long an enemy hits a dps/healer who pulled it
         static constexpr float SWITCH_TARGET_SEC = 0.5f;      // lost time when a dps switches target
+
+        // Tank reach: loose enemies further than this or out of sight are another fight
+        // (a teleported member's room), not something to run after.
+        static constexpr float TANK_REACH_RANGE = 40.0f;
+        static constexpr float MELEE_REACH = 5.0f;
+        static constexpr float RUN_YARDS_PER_SEC = 7.0f;
+        // Area threat (Thunder Clap, Consecration, Swipe, Challenging Roar) when at least this
+        // many loose or thinly held enemies are within GROUP_THREAT_RADIUS of the tank.
+        static constexpr size_t GROUP_THREAT_MIN_ENEMIES = 2;
+        static constexpr float GROUP_THREAT_RADIUS = 8.0f;
+        static constexpr float FRAGILE_WEIGHT = 0.5f;          // chance-like weight of a thin lead breaking
+        static constexpr float GROUP_TAUNT_RESERVE_MULT = 3.0f; // area taunt cooldown (10 min) is worth more
 
         char const* GetId() const override { return "threat"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

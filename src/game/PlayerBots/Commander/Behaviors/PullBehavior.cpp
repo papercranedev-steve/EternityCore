@@ -60,7 +60,9 @@ namespace Commander
         }
 
         // Everyone else waits for the tank. Higher-scored proposals (interrupts, threat) still win.
-        if (bot->GetRole() == ROLE_HEALER && me->IsInCombat())
+        // Only out of combat: a bot already in a fight (the player attacked first, a patrol joined)
+        // must not stand idle for up to 20 seconds. Waiting for first threat is the threat module's job.
+        if (me->IsInCombat())
             return;
         out.push_back(Make(ProposalTier::Assigned, 1.0f, BotActionType::Hold));
     }

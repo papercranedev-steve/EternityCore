@@ -19,6 +19,7 @@ namespace Commander
             ObjectGuid target;
             float progress = 0.0f;
             uint32 remainingMs = 0;
+            uint32 totalMs = 0;
         };
 
         // Live check on the map thread: the plan can be up to one perception interval old.
@@ -39,28 +40,33 @@ namespace Commander
             int32 const total = channeled ? spell->m_spellInfo->GetDuration() : spell->GetCastTime();
             out.progress = total > 0 ? 1.0f - float(spell->GetCastedTime()) / float(total) : 0.0f;
             out.remainingMs = uint32(spell->GetCastedTime());     // m_timer counts down to 0
+            out.totalMs = uint32(std::max(0, total));
             out.spell = spell->m_spellInfo;
             out.target = spell->m_targets.getUnitTargetGuid();
             return true;
         }
 
-        // Benefit of stopping the live cast, using the perceived facts of the enemy.
-        CastValue LiveBenefit(WorldModel const& world, EnemyFacts const& facts, LiveCast const& cast)
+        // The perceived facts of the enemy with its live cast filled in, so benefit, lockout
+        // and cooldown cost all see the cast that is running now.
+        EnemyFacts LiveFacts(EnemyFacts const& facts, LiveCast const& cast)
         {
             EnemyFacts e = facts;
             e.castingSpellId = cast.spell->Id;
             e.castTarget = cast.target;
             e.castInterruptible = true;
             e.castRemainingMs = cast.remainingMs;
-            return CastValues::InterruptBenefit(world, e);
+            e.castTotalMs = cast.totalMs;
+            return e;
         }
 
-        bool HasReadyInterrupt(PartyMemberFacts const* m)
+        // Can act (not asleep / stunned / charmed), not busy, and has a ready ability that
+        // stops this enemy (not immune).
+        bool HasReadyInterrupt(PartyMemberFacts const* m, EnemyFacts const& enemy)
         {
-            if (!m || !m->alive || m->casting)
+            if (!m || !m->CanAct() || m->casting)
                 return false;
             return std::any_of(m->interrupts.begin(), m->interrupts.end(),
-                [](InterruptAbility const& a) { return a.ready; });
+                [&enemy](InterruptAbility const& a) { return a.ready && CastValues::CanStop(a, enemy); });
         }
     }
 
@@ -74,6 +80,7 @@ namespace Commander
             case CLASS_SHAMAN:
             case CLASS_DRUID:
             case CLASS_PALADIN:
+            case CLASS_PRIEST:      // Silence (shadow talent) is an interrupt ability too
                 return true;
             default:
                 return false;
@@ -86,7 +93,7 @@ namespace Commander
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
         PartyMemberFacts const* myFacts = world.FindMember(self);
-        if (!myFacts)
+        if (!myFacts || !myFacts->CanAct())
             return;
 
         std::vector<Proposal> made;
@@ -105,15 +112,17 @@ namespace Commander
             LiveCast cast;
             if (!IsCastingInterruptible(enemy, cast))
                 continue;
+            EnemyFacts const live = LiveFacts(*facts, cast);
 
             if (!isPrimary)
             {
-                bool const primaryUnable = duty.primary.IsEmpty() || !HasReadyInterrupt(world.FindMember(duty.primary));
+                // Primary asleep, stunned, gone or without a usable ability: act at once.
+                bool const primaryUnable = duty.primary.IsEmpty() || !HasReadyInterrupt(world.FindMember(duty.primary), live);
                 if (!primaryUnable && cast.progress < BACKUP_AFTER_PROGRESS)
                     continue;
             }
 
-            CastValue const value = LiveBenefit(world, *facts, cast);
+            CastValue const value = CastValues::InterruptBenefit(world, live);
             ProposalTier const tier = value.lethal ? ProposalTier::Urgent : ProposalTier::Assigned;
 
             // Every ready ability, assigned one first, then cheaper cooldowns: the arbiter tries
@@ -131,7 +140,7 @@ namespace Commander
             bool anyMelee = false;
             for (InterruptAbility const& a : abilities)
             {
-                if (!a.ready)
+                if (!a.ready || !CastValues::CanStop(a, live))
                     continue;
                 SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
                 if (!spell)
@@ -145,7 +154,9 @@ namespace Commander
                 p.action.type = BotActionType::Cast;
                 p.action.target = duty.enemy;
                 p.action.spell = spell;
-                p.SetValue(value.points, CastValues::InterruptCost(world, *myFacts, a, *facts, value.points) + preference);
+                // The school lockout is part of what this ability buys (Counterspell 10 s > Kick 5 s).
+                p.SetValue(value.points + CastValues::LockoutBenefit(world, live, a, value.spellId),
+                           CastValues::InterruptCost(world, *myFacts, a, live, value) + preference);
                 made.push_back(p);
                 preference += 0.01f;
             }
@@ -156,7 +167,8 @@ namespace Commander
             {
                 InterruptAbility const* melee = nullptr;
                 for (InterruptAbility const& a : abilities)
-                    if (a.ready && a.maxRange <= MELEE_ABILITY_RANGE && (!melee || a.cooldownMs < melee->cooldownMs))
+                    if (a.ready && a.maxRange <= MELEE_ABILITY_RANGE && CastValues::CanStop(a, live) &&
+                        (!melee || a.cooldownMs < melee->cooldownMs))
                         melee = &a;
                 Proposal p;
                 p.tier = tier;
@@ -165,7 +177,8 @@ namespace Commander
                 p.action.type = BotActionType::Attack;
                 p.action.target = duty.enemy;
                 // Walking in is part of InterruptCost; a little extra so a ranged option wins ties.
-                p.SetValue(value.points, (melee ? CastValues::InterruptCost(world, *myFacts, *melee, *facts, value.points) : value.points) + 0.05f);
+                float const benefit = value.points + (melee ? CastValues::LockoutBenefit(world, live, *melee, value.spellId) : 0.0f);
+                p.SetValue(benefit, (melee ? CastValues::InterruptCost(world, *myFacts, *melee, live, value) : benefit) + 0.05f);
                 made.push_back(p);
             }
         }
@@ -192,14 +205,25 @@ namespace Commander
             if (p.action.target == victim->GetObjectGuid() && p.benefit > p.cost)
                 return;
 
-        CastValue const value = LiveBenefit(world, *facts, cast);
-        float cheapest = -1.0f;
+        EnemyFacts const live = LiveFacts(*facts, cast);
+        CastValue const value = CastValues::InterruptBenefit(world, live);
+        // Interrupting with `a` is worth value + lockout(a) - cost(a); veto when no ability is
+        // worth it, i.e. the smallest cost - lockout is at least the cast value. Immune
+        // abilities are not an option (VetoChecks vetoes those directly).
+        bool any = false;
+        float cheapest = 0.0f;
         for (InterruptAbility const& a : myFacts->interrupts)
         {
-            float const c = CastValues::InterruptCost(world, *myFacts, a, *facts, value.points);
-            if (cheapest < 0.0f || c < cheapest)
+            if (!CastValues::CanStop(a, live))
+                continue;
+            float const c = CastValues::InterruptCost(world, *myFacts, a, live, value) -
+                            CastValues::LockoutBenefit(world, live, a, value.spellId);
+            if (!any || c < cheapest)
                 cheapest = c;
+            any = true;
         }
+        if (!any)
+            return;
 
         Proposal p;
         p.kind = ProposalKind::Veto;
