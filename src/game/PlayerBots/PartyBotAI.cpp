@@ -200,6 +200,15 @@ bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 // Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above.
 Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
 {
+    // Fix: only dispels that may target a hostile unit (Dispel Magic) can remove a creature's
+    // mind control. Cleanse, Purify, Remove Curse, Cure Poison / Disease are friendly-only
+    // (TARGET_UNIT_FRIEND): the cast fails with bad targets, and because the charmed member
+    // was returned first, every other member's debuffs went undispelled while it lasted.
+    bool canTargetHostile = true;
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (pSpellEntry->Effect[i] == SPELL_EFFECT_DISPEL && pSpellEntry->EffectImplicitTargetA[i] == TARGET_UNIT_FRIEND)
+            canTargetHostile = false;
+
     Group* pGroup = me->GetGroup();
     if (pGroup)
     {
@@ -209,7 +218,8 @@ Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
             {
                 // A member mind controlled by a creature is hostile, so IsValidHelpfulTarget fails;
                 // CombatBotBaseAI::IsValidDispelTarget already handles the charm aura itself.
-                if ((me->IsValidHelpfulTarget(pMember) || Commander::VetoChecks::IsCharmedPartyMember(this, pMember)) &&
+                if ((me->IsValidHelpfulTarget(pMember) ||
+                     (canTargetHostile && Commander::VetoChecks::IsCharmedPartyMember(this, pMember))) &&
                    !pMember->IsGameMaster() &&
                     IsValidDispelTarget(pMember, pSpellEntry) &&
                     me->IsWithinLOSInMap(pMember) &&
@@ -940,7 +950,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (me->GetSheath() == SHEATH_STATE_UNARMED && !me->IsMounted())
         me->SetSheath(SHEATH_STATE_MELEE);
 
-    if (!me->IsInCombat() && !me->IsMounted())
+    // (not while retreating: a 10 s resurrection or a buff next to the enemies stops the run)
+    if (!me->IsInCombat() && !me->IsMounted() && !(commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
     {
         UpdateOutOfCombatAI();
 
@@ -1091,7 +1102,10 @@ void PartyBotAI::UpdateInCombatAI()
             Unit* pVictim = me->GetVictim();
 
             // Defend party members.
-            if (!pVictim || pVictim->GetVictim() == me)
+            // (skipped while a Commander module decides taunts: its loose-enemy valuation already
+            // chose whether to go after enemies hitting others; running this right after its
+            // target switch undid it in the same tick and chased adds 50 yd away)
+            if ((!pVictim || pVictim->GetVictim() == me) && !IsTauntControlled())
             {
                 if (pVictim = SelectPartyAttackTarget())
                 {

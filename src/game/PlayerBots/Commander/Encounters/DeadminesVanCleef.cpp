@@ -31,8 +31,10 @@
 #include "Commander/Encounters/DeadminesVanCleef.h"
 #include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
+#include "Commander/Behaviors/FocusBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Map.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
@@ -221,13 +223,13 @@ namespace Commander
     }
 
     void DeadminesVanCleef::Propose(PartyBotAI const* bot, WorldModel const& world,
-                                    TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
+                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         switch (bot->GetRole())
         {
             case ROLE_MELEE_DPS:
             case ROLE_RANGE_DPS:
-                ProposeDamage(bot, world, out);
+                ProposeDamage(bot, world, plan, out);
                 break;
             case ROLE_TANK:
                 ProposeTank(bot, world, out);
@@ -240,7 +242,8 @@ namespace Commander
         }
     }
 
-    void DeadminesVanCleef::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void DeadminesVanCleef::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                          std::vector<Proposal>& out) const
     {
         if (!m_holdDamage)
             return;
@@ -252,9 +255,35 @@ namespace Commander
             return;
 
         float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        float const holdBenefit = m_holdRisk * m_pushLoss;
+
+        // Fix: AdjustPlan points the focus at an original guard while the boss is held, but this
+        // HoldFire (same tier, benefit = the whole push loss) outscored FocusBehavior's switch,
+        // so damage dealers stood idle on the boss for up to MAX_HOLD_MS instead of killing the
+        // guards. Switching avoids the push as well and keeps the damage HoldFire throws away;
+        // if the switch cannot execute (target invalid), the arbiter falls back to HoldFire.
+        if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != m_boss &&
+            std::find(m_originals.begin(), m_originals.end(), plan.focus.enemy) != m_originals.end())
+        {
+            Unit* guard = bot->me->GetMap()->GetUnit(plan.focus.enemy);
+            if (guard && guard->IsAlive() && bot->me->IsWithinDistInMap(guard, FocusBehavior::FOCUS_RANGE))
+            {
+                float walkSec = 0.0f;
+                if (bot->GetRole() == ROLE_MELEE_DPS && !bot->me->CanReachWithMeleeAutoAttack(guard))
+                    walkSec = std::max(0.0f, bot->me->GetDistance(guard) - FocusBehavior::MELEE_REACH) /
+                              FocusBehavior::RUN_YARDS_PER_SEC;
+                Proposal attack = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack,
+                                                                plan.focus.enemy);
+                attack.reason = "boss near 50% summon, kill the guards first";
+                attack.SetValue(holdBenefit + Value::LostAction(world, *myFacts, tickSec),
+                                Value::LostAction(world, *myFacts, ThreatBehavior::SWITCH_TARGET_SEC + walkSec));
+                out.push_back(attack);
+            }
+        }
+
         Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::HoldFire);
         p.reason = "boss near 50% summon, not ready";
-        p.SetValue(m_holdRisk * m_pushLoss, Value::LostAction(world, *myFacts, tickSec));
+        p.SetValue(holdBenefit, Value::LostAction(world, *myFacts, tickSec));
         out.push_back(p);
     }
 

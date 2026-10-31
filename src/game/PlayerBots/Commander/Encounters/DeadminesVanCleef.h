@@ -94,7 +94,9 @@ namespace Commander
         Phase GetPhase() const { return m_phase; }
 
     private:
-        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // `plan`: the focus AdjustPlan set on an original guard (switch instead of holding fire).
+        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                           std::vector<Proposal>& out) const;
         void ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Points lost when `guards` Blackguards hit the healer for LOOSE_SEC.

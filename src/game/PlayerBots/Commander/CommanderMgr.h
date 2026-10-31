@@ -59,6 +59,9 @@ namespace Commander
         // True while an out-of-combat plan (pull in progress) needs the hook above to run
         // out of combat too, and the bot must not sit down to eat or drink.
         bool WantsOutOfCombatControl(PartyBotAI* bot);
+        // `.partybot ai retreat` is running for the bot's party: out of combat it must not stop
+        // to resurrect, dispel or buff on the way to the rally point (RetreatBehavior).
+        bool IsRetreating(PartyBotAI* bot);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

@@ -5,6 +5,7 @@
 #include "Map.h"
 #include "MotionMaster.h"
 #include "Pet.h"
+#include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
 #include <algorithm>
@@ -216,7 +217,16 @@ namespace Commander
                     return false;
                 if (me->IsMounted())    // Unit::Attack refuses while mounted
                     me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
-                return bot->AttackStart(pTarget);
+                if (!bot->AttackStart(pTarget))
+                    return false;
+                // Fix: Unit::Attack does not retarget a running Auto Shot / wand, and the rotations
+                // only start one when none is active, so a hunter or wand user kept shooting the old
+                // target (also the one it is about to pull aggro from). Stop it; the rotation starts
+                // it again on the new victim (this tick for hunters, next tick for wands).
+                if (Spell* autoRepeat = me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                    if (autoRepeat->m_targets.getUnitTargetGuid() != pTarget->GetObjectGuid())
+                        me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+                return true;
             }
             case BotActionType::MoveTo:
             {

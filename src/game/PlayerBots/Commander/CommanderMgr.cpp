@@ -157,6 +157,14 @@ namespace Commander
         return commander && commander->WantsOutOfCombatControl();
     }
 
+    bool CommanderMgr::IsRetreating(PartyBotAI* bot)
+    {
+        if (!IsEnabled() || bot->IsInDuel())
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
+        return commander && commander->GetPlan().retreat.active;
+    }
+
     bool CommanderMgr::IsModuleEnabled(std::string const& id) const
     {
         for (auto const& slot : m_assigners)

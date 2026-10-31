@@ -3,11 +3,14 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Behaviors/ThreatBehavior.h"
+#include "Commander/Behaviors/ManaBudgetBehavior.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "SpellAuras.h"
 #include "SpellEntry.h"
 #include "Timer.h"
+#include <algorithm>
 
 namespace Commander
 {
@@ -104,6 +107,15 @@ namespace VetoChecks
 
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target)
     {
+        // Fix: a heal veto lasts Arbiter::VETO_TICKS ticks (3 s by default), but every module
+        // proposing one (ThreatBehavior, ManaBudgetBehavior, boss modules) only does so above
+        // its emergency threshold. A target that drops below it while the veto still runs was
+        // left unhealed for up to 3 s, and SelectHealTarget keeps picking it, so nobody else
+        // was healed either. Below the lowest emergency threshold the veto no longer applies.
+        float const threatFloor = ThreatBehavior::HEAL_IGNORE_THREAT_PCT;
+        float const manaFloor = ManaBudgetBehavior::EMERGENCY_PCT;
+        if (target->GetHealthPercent() < std::min(threatFloor, manaFloor))
+            return false;
         return sCommanderMgr.IsEnabled() &&
                bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
     }
