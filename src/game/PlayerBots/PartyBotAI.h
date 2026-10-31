@@ -104,6 +104,10 @@ public:
     // debuffs the Commander vetoed (Commander/VetoChecks.h).
     bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
+    // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
+    bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
+    // The class rotations' reflex interrupts ask this first.
+    bool IsInterruptVetoed(Unit const* pVictim) const;
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;

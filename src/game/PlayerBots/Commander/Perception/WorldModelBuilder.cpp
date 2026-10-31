@@ -73,6 +73,7 @@ namespace WorldModelBuilder
 
             SpellEntry const* info = spell->m_spellInfo;
             e.castingSpellId = info->Id;
+            e.castTarget = spell->m_targets.getUnitTargetGuid();
             e.castChanneled = channeled;
             e.castCategory = uint8(SpellTags::Categorize(info));
             e.castInterruptible = SpellTags::IsInterruptible(info, channeled, spell->GetCastTime());

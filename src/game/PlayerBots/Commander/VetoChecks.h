@@ -22,6 +22,12 @@ namespace VetoChecks
 
     // One aura: vetoed for this bot?
     bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
+
+    // The cast of `enemy` is not worth an interrupt (InterruptBehavior).
+    bool IsInterruptVetoed(PartyBotAI const* bot, Unit const* enemy);
+
+    // Healing `target` now would pull aggro and is not needed yet (ThreatBehavior).
+    bool IsHealVetoed(PartyBotAI const* bot, Unit const* target);
 }
 }
 

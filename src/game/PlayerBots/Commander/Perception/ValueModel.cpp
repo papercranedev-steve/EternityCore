@@ -85,5 +85,33 @@ namespace Value
             return ThreatView::NO_LIMIT;
         return float(victim.health) / dps;
     }
+
+    float IncomingOn(WorldModel const& world, ObjectGuid member)
+    {
+        PartyMemberFacts const* m = world.FindMember(member);
+        if (!m)
+            return 0.0f;
+        float total = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+            if (!e.crowdControlled && e.victim == member)
+                total += HitDps(e, *m);
+        return total;
+    }
+
+    float HitLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds)
+    {
+        seconds = std::max(0.0f, seconds);
+        float const survive = SurviveSec(enemy, victim);
+        float loss = Points(world, HitDps(enemy, victim) * std::min(seconds, survive));
+        if (seconds >= survive)
+            loss += DeathPenalty(victim);
+        return loss;
+    }
+
+    float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy)
+    {
+        float const share = DealtDps(world) / float(std::max<size_t>(1, world.enemies.size()));
+        return float(enemy.health) / std::max(1.0f, share);
+    }
 }
 }

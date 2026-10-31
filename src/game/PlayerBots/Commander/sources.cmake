@@ -53,6 +53,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/CombatRates.cpp
   ${COMMANDER_DIR}/Perception/ValueModel.h
   ${COMMANDER_DIR}/Perception/ValueModel.cpp
+  ${COMMANDER_DIR}/Perception/CastValue.h
+  ${COMMANDER_DIR}/Perception/CastValue.cpp
   ${COMMANDER_DIR}/VetoChecks.h
   ${COMMANDER_DIR}/VetoChecks.cpp
   ${COMMANDER_DIR}/Behaviors/DispelBehavior.h

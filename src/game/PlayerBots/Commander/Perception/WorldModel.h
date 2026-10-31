@@ -82,6 +82,7 @@ namespace Commander
         float victimThreat = 0.0f;
         uint32 victimSinceMs = 0;       // WorldTimer ms when it started hitting `victim`
         uint32 castingSpellId = 0;
+        ObjectGuid castTarget;          // unit target of the current cast, empty = none / area
         bool castChanneled = false;
         bool castInterruptible = false;
         uint8 castCategory = 0;         // CastCategory (SpellTags.h)

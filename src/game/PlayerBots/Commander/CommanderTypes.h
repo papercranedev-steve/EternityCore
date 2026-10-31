@@ -55,6 +55,8 @@ namespace Commander
     {
         None,
         Dispel,     // do not dispel aura `spellId` from `target` (PartyBotAI::IsValidDispelTarget)
+        Interrupt,  // do not interrupt / stun `target`'s cast (PartyBotAI::IsInterruptVetoed, 6 class rotations)
+        Heal,       // do not heal `target` this tick (PartyBotAI::FindAndHealInjuredAlly)
     };
 
     struct Veto

@@ -2,6 +2,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/CastValue.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "Spell.h"
@@ -12,8 +13,16 @@ namespace Commander
 {
     namespace
     {
+        struct LiveCast
+        {
+            SpellEntry const* spell = nullptr;
+            ObjectGuid target;
+            float progress = 0.0f;
+            uint32 remainingMs = 0;
+        };
+
         // Live check on the map thread: the plan can be up to one perception interval old.
-        bool IsCastingInterruptible(Unit const* enemy, float* progressOut, SpellEntry const** spellOut)
+        bool IsCastingInterruptible(Unit const* enemy, LiveCast& out)
         {
             Spell const* spell = enemy->GetCurrentSpell(CURRENT_GENERIC_SPELL);
             bool channeled = false;
@@ -28,9 +37,22 @@ namespace Commander
                 return false;
 
             int32 const total = channeled ? spell->m_spellInfo->GetDuration() : spell->GetCastTime();
-            *progressOut = total > 0 ? 1.0f - float(spell->GetCastedTime()) / float(total) : 0.0f;
-            *spellOut = spell->m_spellInfo;
+            out.progress = total > 0 ? 1.0f - float(spell->GetCastedTime()) / float(total) : 0.0f;
+            out.remainingMs = uint32(spell->GetCastedTime());     // m_timer counts down to 0
+            out.spell = spell->m_spellInfo;
+            out.target = spell->m_targets.getUnitTargetGuid();
             return true;
+        }
+
+        // Benefit of stopping the live cast, using the perceived facts of the enemy.
+        CastValue LiveBenefit(WorldModel const& world, EnemyFacts const& facts, LiveCast const& cast)
+        {
+            EnemyFacts e = facts;
+            e.castingSpellId = cast.spell->Id;
+            e.castTarget = cast.target;
+            e.castInterruptible = true;
+            e.castRemainingMs = cast.remainingMs;
+            return CastValues::InterruptBenefit(world, e);
         }
 
         bool HasReadyInterrupt(PartyMemberFacts const* m)
@@ -67,6 +89,7 @@ namespace Commander
         if (!myFacts)
             return;
 
+        std::vector<Proposal> made;
         for (InterruptDuty const& duty : plan.interrupts)
         {
             bool const isPrimary = duty.primary == self;
@@ -75,29 +98,26 @@ namespace Commander
                 continue;
 
             Unit* enemy = me->GetMap()->GetUnit(duty.enemy);
-            if (!enemy || !enemy->IsAlive())
+            EnemyFacts const* facts = world.FindEnemy(duty.enemy);
+            if (!enemy || !enemy->IsAlive() || !facts)
                 continue;
 
-            float progress = 0.0f;
-            SpellEntry const* cast = nullptr;
-            if (!IsCastingInterruptible(enemy, &progress, &cast))
+            LiveCast cast;
+            if (!IsCastingInterruptible(enemy, cast))
                 continue;
 
             if (!isPrimary)
             {
                 bool const primaryUnable = duty.primary.IsEmpty() || !HasReadyInterrupt(world.FindMember(duty.primary));
-                if (!primaryUnable && progress < BACKUP_AFTER_PROGRESS)
+                if (!primaryUnable && cast.progress < BACKUP_AFTER_PROGRESS)
                     continue;
             }
 
-            // Heals and crowd control on us are as urgent as a taunt; damage casts are a team task.
-            CastCategory const category = SpellTags::Categorize(cast);
-            ProposalTier const tier = (category == CastCategory::Heal || category == CastCategory::Control)
-                ? ProposalTier::Urgent : ProposalTier::Assigned;
-            float const base = 5.0f + float(uint8(category)) + (isPrimary ? 0.5f : 0.0f);
+            CastValue const value = LiveBenefit(world, *facts, cast);
+            ProposalTier const tier = value.lethal ? ProposalTier::Urgent : ProposalTier::Assigned;
 
             // Every ready ability, assigned one first, then cheaper cooldowns: the arbiter tries
-            // them in order if one fails (out of range, immune, wrong form).
+            // them in order of benefit - cost if one fails (out of range, immune, wrong form).
             std::vector<InterruptAbility> abilities = myFacts->interrupts;
             uint32 const assigned = isPrimary ? duty.primarySpellId : duty.backupSpellId;
             std::stable_sort(abilities.begin(), abilities.end(), [assigned](InterruptAbility const& a, InterruptAbility const& b)
@@ -107,7 +127,7 @@ namespace Commander
                 return a.cooldownMs < b.cooldownMs;
             });
 
-            float step = 0.0f;
+            float preference = 0.0f;    // tie-break inside equal values: assigned first
             bool anyMelee = false;
             for (InterruptAbility const& a : abilities)
             {
@@ -120,27 +140,75 @@ namespace Commander
 
                 Proposal p;
                 p.tier = tier;
-                p.score = base - step;
                 p.source = "interrupt";
+                p.reason = isPrimary ? "primary" : "backup";
                 p.action.type = BotActionType::Cast;
                 p.action.target = duty.enemy;
                 p.action.spell = spell;
-                out.push_back(p);
-                step += 0.01f;
+                p.SetValue(value.points, CastValues::InterruptCost(world, *myFacts, a, *facts, value.points) + preference);
+                made.push_back(p);
+                preference += 0.01f;
             }
 
             // Melee primary not in reach: go to the caster (original chase logic moves us).
             if (isPrimary && anyMelee && bot->GetRole() != ROLE_TANK && me->GetVictim() != enemy &&
                 !me->CanReachWithMeleeAutoAttack(enemy))
             {
+                InterruptAbility const* melee = nullptr;
+                for (InterruptAbility const& a : abilities)
+                    if (a.ready && a.maxRange <= MELEE_ABILITY_RANGE && (!melee || a.cooldownMs < melee->cooldownMs))
+                        melee = &a;
                 Proposal p;
                 p.tier = tier;
-                p.score = base - 1.0f;
                 p.source = "interrupt";
+                p.reason = "go to caster";
                 p.action.type = BotActionType::Attack;
                 p.action.target = duty.enemy;
-                out.push_back(p);
+                // Walking in is part of InterruptCost; a little extra so a ranged option wins ties.
+                p.SetValue(value.points, (melee ? CastValues::InterruptCost(world, *myFacts, *melee, *facts, value.points) : value.points) + 0.05f);
+                made.push_back(p);
             }
         }
+
+        ProposeOwnTargetVeto(bot, world, made, out);
+        out.insert(out.end(), made.begin(), made.end());
+    }
+
+    void InterruptBehavior::ProposeOwnTargetVeto(PartyBotAI const* bot, WorldModel const& world,
+                                                 std::vector<Proposal> const& made, std::vector<Proposal>& out) const
+    {
+        Player* me = bot->me;
+        Unit* victim = me->GetVictim();
+        PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
+        if (!victim || !myFacts || myFacts->interrupts.empty())
+            return;
+        EnemyFacts const* facts = world.FindEnemy(victim->GetObjectGuid());
+        LiveCast cast;
+        if (!facts || !IsCastingInterruptible(victim, cast))
+            return;
+
+        // A worthwhile duty interrupt on the same enemy: let that one run.
+        for (Proposal const& p : made)
+            if (p.action.target == victim->GetObjectGuid() && p.benefit > p.cost)
+                return;
+
+        CastValue const value = LiveBenefit(world, *facts, cast);
+        float cheapest = -1.0f;
+        for (InterruptAbility const& a : myFacts->interrupts)
+        {
+            float const c = CastValues::InterruptCost(world, *myFacts, a, *facts, value.points);
+            if (cheapest < 0.0f || c < cheapest)
+                cheapest = c;
+        }
+
+        Proposal p;
+        p.kind = ProposalKind::Veto;
+        p.source = "interrupt";
+        p.reason = "cast not worth an interrupt";
+        p.veto.type = VetoType::Interrupt;
+        p.veto.target = victim->GetObjectGuid();
+        // Benefit of the veto = the interrupt we keep; cost = what the cast does.
+        p.SetValue(std::max(0.0f, cheapest), value.points);
+        out.push_back(p);
     }
 }

@@ -46,6 +46,18 @@ namespace VetoChecks
         return bot->Directives().IsVetoed(VetoType::Dispel, target->GetObjectGuid(), spellId, WorldTimer::getMSTime());
     }
 
+    bool IsInterruptVetoed(PartyBotAI const* bot, Unit const* enemy)
+    {
+        return sCommanderMgr.IsEnabled() &&
+               bot->Directives().IsVetoed(VetoType::Interrupt, enemy->GetObjectGuid(), 0, WorldTimer::getMSTime());
+    }
+
+    bool IsHealVetoed(PartyBotAI const* bot, Unit const* target)
+    {
+        return sCommanderMgr.IsEnabled() &&
+               bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
+    }
+
     bool HasAllowedDebuff(PartyBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell)
     {
         uint32 const mask = DispelMaskOf(dispelSpell);

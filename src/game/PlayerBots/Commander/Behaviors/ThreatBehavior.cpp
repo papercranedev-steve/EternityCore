@@ -1,6 +1,9 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/ProfileStore.h"
+#include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "SpellEntry.h"
 #include "Timer.h"
@@ -11,22 +14,16 @@ namespace Commander
 {
     namespace
     {
-        Proposal MakeProposal(ProposalTier tier, float score, BotActionType type, ObjectGuid target = ObjectGuid(),
+        Proposal MakeProposal(ProposalTier tier, BotActionType type, ObjectGuid target = ObjectGuid(),
                               SpellEntry const* spell = nullptr)
         {
             Proposal p;
             p.tier = tier;
-            p.score = score;
             p.source = "threat";
             p.action.type = type;
             p.action.target = target;
             p.action.spell = spell;
             return p;
-        }
-
-        bool IsClothClass(uint8 classId)
-        {
-            return classId == CLASS_MAGE || classId == CLASS_PRIEST || classId == CLASS_WARLOCK;
         }
 
         // Somebody whose job is holding enemies: a tank bot, or the player (may be tanking).
@@ -62,6 +59,13 @@ namespace Commander
                 if (spell->Effect[i] == SPELL_EFFECT_HEAL)
                     points += spell->EffectBasePoints[i];
             return points;
+        }
+
+        float TauntMult(EnemyFacts const& e, bool* immune)
+        {
+            std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
+            *immune = p && p->tauntImmune;
+            return (p && p->hasOverride) ? p->override.tauntMult : 1.0f;
         }
     }
 
@@ -107,30 +111,29 @@ namespace Commander
         }
     }
 
-    float ThreatBehavior::Tolerance(PartyMemberFacts const& victim, EnemyFacts const& enemy)
-    {
-        bool const fragile = (victim.isBot && victim.role == ROLE_HEALER) || IsClothClass(victim.classId);
-        float tolerance = fragile ? TOLERANCE_FRAGILE_SEC : TOLERANCE_STURDY_SEC;
-        tolerance *= std::max(TOLERANCE_MIN_HEALTH_FACTOR, victim.healthPct / 100.0f);
-        if (enemy.elite)
-            tolerance *= TOLERANCE_ELITE_FACTOR;
-        return tolerance;
-    }
-
-    // Tank: threat-behavior doc section 3.
+    // Tank: threat-behavior doc section 3, value-scoring doc 5.3.
     void ThreatBehavior::ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
         Unit const* pVictim = me->GetVictim();
         ObjectGuid const myTarget = pVictim ? pVictim->GetObjectGuid() : ObjectGuid();
-        uint32 const now = WorldTimer::getMSTime();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts)
+            return;
 
         // What we can generate: best observed threat rate on any enemy.
         float tankRate = 0.0f;
         for (EnemyFacts const& e : world.enemies)
             if (ThreatEntry const* t = ThreatView::FindEntry(e, self))
                 tankRate = std::max(tankRate, t->threatPerSec);
+
+        // A taunt used now is not there for the next enemy that breaks loose.
+        float enemyMelee = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+            if (!e.crowdControlled)
+                enemyMelee += e.meleeDps;
+        float const switchCost = Value::LostAction(world, *myFacts, Value::GCD_SEC);
 
         // 1. Loose enemies hitting someone who is not a tank.
         for (EnemyFacts const& e : world.enemies)
@@ -143,25 +146,44 @@ namespace Commander
             if (victim->isBot && victim->role == ROLE_TANK)
                 continue;   // another tank holds it
 
+            bool tauntImmune = false;
+            float const mult = TauntMult(e, &tauntImmune);
+
             float const gap = std::max(0.0f, ThreatView::Headroom(e, self));
             float const recovery = tankRate > 1.0f ? gap / tankRate : ThreatView::NO_LIMIT;
-            float const tolerance = Tolerance(*victim, e);
-            float const looseFor = WorldTimer::getMSTimeDiff(e.victimSinceMs, now) / 1000.0f;
-            float const danger = 1.0f / std::max(0.1f, tolerance);
+            float const horizon = std::min(LOOSE_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
 
-            if (looseFor >= tolerance || recovery > tolerance - looseFor)
+            float const lossNothing = Value::HitLoss(world, e, *victim, horizon);
+            float const lossThreat = Value::HitLoss(world, e, *victim, std::min(recovery, horizon));
+            float const lossTaunt = Value::HitLoss(world, e, *victim, std::min(TAUNT_REACTION_SEC, horizon));
+            bool const deadly = Value::SurviveSec(e, *victim) < horizon;
+            ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
+
+            if (!tauntImmune)
             {
                 for (SpellEntry const* pTaunt : bot->m_spellListTaunt)
-                    out.push_back(MakeProposal(ProposalTier::Urgent, 10.0f + danger, BotActionType::Cast, e.guid, pTaunt));
+                {
+                    float const share = std::min(1.0f, (pTaunt->RecoveryTime / 1000.0f) / LOOSE_HORIZON_SEC);
+                    float const reserve = share * Value::Points(world, enemyMelee * TAUNT_RESERVE_SEC);
+                    Proposal p = MakeProposal(tier, BotActionType::Cast, e.guid, pTaunt);
+                    p.reason = "taunt loose enemy";
+                    p.SetValue((lossNothing - lossTaunt) * mult, switchCost + reserve);
+                    out.push_back(p);
+                }
             }
 
             // Win it back with threat (also the fallback when the taunt is on cooldown).
             // If it already is our target, the rotation builds threat on it.
             if (e.guid != myTarget)
-                out.push_back(MakeProposal(ProposalTier::Urgent, danger, BotActionType::Attack, e.guid));
+            {
+                Proposal p = MakeProposal(tier, BotActionType::Attack, e.guid);
+                p.reason = "win back with threat";
+                p.SetValue((lossNothing - lossThreat) * mult, switchCost);
+                out.push_back(p);
+            }
         }
 
-        // 2. Top up the enemy we hold with the smallest lead.
+        // 2. Top up the enemy we hold with the smallest lead (not valued yet).
         EnemyFacts const* weakest = nullptr;
         float weakestRatio = ThreatView::NO_LIMIT;
         float currentRatio = ThreatView::NO_LIMIT;
@@ -179,10 +201,15 @@ namespace Commander
             }
         }
         if (weakest && weakestRatio < TANK_LEAD_SWITCH && currentRatio > TANK_LEAD_KEEP)
-            out.push_back(MakeProposal(ProposalTier::Assigned, 1.0f - weakestRatio, BotActionType::Attack, weakest->guid));
+        {
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Attack, weakest->guid);
+            p.score = 1.0f - weakestRatio;
+            p.reason = "top up smallest lead";
+            out.push_back(p);
+        }
     }
 
-    // Damage dealers: stop before pulling aggro off a holder.
+    // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
     void ThreatBehavior::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -191,8 +218,9 @@ namespace Commander
             return;
 
         ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
         EnemyFacts const* e = world.FindEnemy(pVictim->GetObjectGuid());
-        if (!e || e->victim.IsEmpty() || e->victim == self)
+        if (!myFacts || !e || e->victim.IsEmpty() || e->victim == self)
             return;
 
         // Only protect a holder. If it is on a healer or another dps, taking it is not worse.
@@ -202,6 +230,12 @@ namespace Commander
 
         if (ThreatView::Headroom(*e, self) >= DPS_STOP_HEADROOM * e->victimThreat)
             return;
+
+        // What pulling it costs: its hits on me until the tank has it back. Weak enemies on
+        // plate, or enemies about to die, cost little.
+        float const ttd = Value::EnemyTimeToDie(world, *e);
+        float const avoided = Value::HitLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
 
         Position3 myPos;
         myPos.x = me->GetPositionX();
@@ -225,11 +259,19 @@ namespace Commander
         }
 
         if (best)
-            out.push_back(MakeProposal(ProposalTier::Assigned, 0.5f, BotActionType::Attack, best->guid));
-        out.push_back(MakeProposal(ProposalTier::Assigned, 0.4f, BotActionType::HoldFire));
+        {
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Attack, best->guid);
+            p.reason = "near aggro, switch";
+            p.SetValue(avoided, Value::LostAction(world, *myFacts, SWITCH_TARGET_SEC));
+            out.push_back(p);
+        }
+        Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::HoldFire);
+        p.reason = "near aggro, stop";
+        p.SetValue(avoided, Value::LostAction(world, *myFacts, tickSec));
+        out.push_back(p);
     }
 
-    // Healers: do not pull aggro with a heal unless the target is in danger.
+    // Healers: do not pull aggro with a heal unless the target needs it now.
     void ThreatBehavior::ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -244,15 +286,32 @@ namespace Commander
             !bot->m_spellListPeriodicHeal.empty())
             return;
 
-        float const missing = float(pTarget->GetMaxHealth() - pTarget->GetHealth());
         ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        PartyMemberFacts const* targetFacts = world.FindMember(pTarget->GetObjectGuid());
+        if (!myFacts || !targetFacts)
+            return;
 
-        auto isSafe = [&](SpellEntry const* spell)
+        float const missing = float(pTarget->GetMaxHealth() - pTarget->GetHealth());
+
+        // Points lost to enemies that turn on me after this heal (0 = safe).
+        auto aggroLoss = [&](SpellEntry const* spell, float* effectiveOut)
         {
             float const effective = std::min(missing, EstimateDirectHeal(me, pTarget, spell));
+            if (effectiveOut)
+                *effectiveOut = effective;
             std::vector<ThreatView::EnemyThreatDelta> deltas;
             ThreatView::PredictHealThreat(me, pTarget, effective, spell, deltas);
-            return ThreatView::WorstHeadroomAfter(world, self, deltas) >= 0.0f;
+            float loss = 0.0f;
+            for (ThreatView::EnemyThreatDelta const& d : deltas)
+            {
+                EnemyFacts const* e = world.FindEnemy(d.enemy);
+                if (!e || ThreatView::Headroom(*e, self) - d.added >= 0.0f)
+                    continue;
+                float const ttd = Value::EnemyTimeToDie(world, *e);
+                loss += Value::HitLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+            }
+            return loss;
         };
 
         // Mirror SelectMostEfficientHealingSpell: list is strongest first; pick the closest
@@ -280,19 +339,41 @@ namespace Commander
                 stopped = true;
         }
 
-        if (!predicted || isSafe(predicted))
+        if (!predicted)
+            return;
+        float predictedHeal = 0.0f;
+        float const loss = aggroLoss(predicted, &predictedHeal);
+        if (loss <= 0.0f)
             return;
 
+        // Option 1: a smaller heal that does not pull. Costs the healing it lacks.
         for (size_t i = predictedIndex + 1; i < castable.size(); ++i)
         {
-            if (isSafe(castable[i]))
-            {
-                out.push_back(MakeProposal(ProposalTier::Assigned, 0.6f, BotActionType::Cast, pTarget->GetObjectGuid(), castable[i]));
-                return;
-            }
+            float smallerHeal = 0.0f;
+            if (aggroLoss(castable[i], &smallerHeal) > 0.0f)
+                continue;
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Cast, pTarget->GetObjectGuid(), castable[i]);
+            p.reason = "smaller heal, no aggro";
+            p.SetValue(loss, Value::Points(world, std::max(0.0f, predictedHeal - smallerHeal)));
+            out.push_back(p);
+            break;
         }
 
-        // Nothing safe: wait for the tank to build threat.
-        out.push_back(MakeProposal(ProposalTier::Assigned, 0.3f, BotActionType::Hold));
+        // Option 2: do not heal this target this tick; the rest of the rotation runs.
+        // Costs the damage it takes until the next tick, and its death if it would not last.
+        float const delaySec = 2.0f * sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        float const incoming = Value::IncomingOn(world, targetFacts->guid);
+        float delayCost = Value::Points(world, std::min(missing, incoming * delaySec));
+        if (incoming * delaySec >= float(targetFacts->health))
+            delayCost += Value::DeathPenalty(*targetFacts);
+
+        Proposal veto;
+        veto.kind = ProposalKind::Veto;
+        veto.source = "threat";
+        veto.reason = "heal would pull aggro";
+        veto.veto.type = VetoType::Heal;
+        veto.veto.target = pTarget->GetObjectGuid();
+        veto.SetValue(loss, delayCost);
+        out.push_back(veto);
     }
 }

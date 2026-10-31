@@ -32,6 +32,8 @@ namespace Commander
             {
                 case VetoType::None:   return "none";
                 case VetoType::Dispel: return "no-dispel";
+                case VetoType::Interrupt: return "no-interrupt";
+                case VetoType::Heal:   return "no-heal";
             }
             return "?";
         }

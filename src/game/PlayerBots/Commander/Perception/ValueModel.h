@@ -54,6 +54,16 @@ namespace Commander
         float HitDps(EnemyFacts const& enemy, PartyMemberFacts const& victim);
         // Seconds `victim` survives being hit by `enemy` alone, no heals.
         float SurviveSec(EnemyFacts const& enemy, PartyMemberFacts const& victim);
+
+        // Melee damage per second all enemies currently deal to `member`, after armor.
+        float IncomingOn(WorldModel const& world, ObjectGuid member);
+
+        // Points lost while `enemy` hits `victim` for `seconds`: the damage, plus the death
+        // penalty if the victim does not survive that long.
+        float HitLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds);
+
+        // Seconds until `enemy` dies at its share of the party's damage.
+        float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy);
     }
 }
 

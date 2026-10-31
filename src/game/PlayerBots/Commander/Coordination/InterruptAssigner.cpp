@@ -3,6 +3,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/CastValue.h"
 #include "SharedDefines.h"
 #include <algorithm>
 #include <set>
@@ -18,8 +19,10 @@ namespace Commander
             float score = -1e9f;
         };
 
-        // Best ability of one bot against one enemy.
-        Candidate Evaluate(PartyMemberFacts const& m, EnemyFacts const& e, InterruptDuty const* previous, bool needReadyNow)
+        // Best ability of one bot against one enemy. Abilities that cost more than the
+        // cast is worth (value-scoring doc 5.1) are skipped.
+        Candidate Evaluate(WorldModel const& world, PartyMemberFacts const& m, EnemyFacts const& e,
+                           InterruptDuty const* previous, bool needReadyNow, float benefit)
         {
             Candidate best;
             if (!m.isBot || m.isPet || !m.alive || m.interrupts.empty())
@@ -31,6 +34,8 @@ namespace Commander
             for (InterruptAbility const& a : m.interrupts)
             {
                 if (!a.ready && needReadyNow)
+                    continue;
+                if (benefit <= CastValues::InterruptCost(world, m, a, e, benefit))
                     continue;
 
                 float score = 0.0f;
@@ -93,11 +98,12 @@ namespace Commander
         {
             bool const live = e->castingSpellId && e->castInterruptible;
             InterruptDuty const* previous = plan.FindInterruptDuty(e->guid);
+            float const benefit = CastValues::InterruptBenefit(world, *e).points;
 
             std::vector<Candidate> candidates;
             for (PartyMemberFacts const& m : world.party)
             {
-                Candidate c = Evaluate(m, *e, previous, live);
+                Candidate c = Evaluate(world, m, *e, previous, live, benefit);
                 if (c.spellId)
                     candidates.push_back(c);
             }
