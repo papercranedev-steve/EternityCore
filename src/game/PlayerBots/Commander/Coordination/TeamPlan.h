@@ -104,10 +104,32 @@ namespace Commander
         uint8 category = 0;          // CastCategory of the current or last cast
     };
 
+    // Enemy the damage dealers kill first (FocusAssigner). Empty enemy = no focus.
+    struct FocusTarget
+    {
+        ObjectGuid enemy;
+        float score = 0.0f;          // harmRate / killSec (FocusAssigner.h)
+        float harmRate = 0.0f;       // points per second
+        float killSec = 0.0f;
+        std::string reason;
+        uint32 sinceMs = 0;          // world refresh time it became the focus
+    };
+
+    // Must-kill enemy handled by one bot without moving the party focus (FocusAssigner).
+    struct InterceptDuty
+    {
+        ObjectGuid enemy;
+        ObjectGuid bot;
+        float points = 0.0f;         // what it does if left alone (benefit of the switch)
+        char const* reason = "";     // static string
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
         std::vector<InterruptDuty> interrupts;
+        FocusTarget focus;
+        std::vector<InterceptDuty> intercepts;
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
@@ -117,6 +139,14 @@ namespace Commander
         {
             for (InterruptDuty const& d : interrupts)
                 if (d.enemy == enemy)
+                    return &d;
+            return nullptr;
+        }
+
+        InterceptDuty const* FindInterceptFor(ObjectGuid bot) const
+        {
+            for (InterceptDuty const& d : intercepts)
+                if (d.bot == bot)
                     return &d;
             return nullptr;
         }

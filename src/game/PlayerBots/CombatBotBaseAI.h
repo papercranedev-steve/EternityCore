@@ -316,6 +316,7 @@ public:
             SpellEntry const* pHolyWrath;
             SpellEntry const* pTurnEvil;
             SpellEntry const* pHolyShield;
+            SpellEntry const* pPurify; // fallback dispel when Cleanse is not learned
         } paladin;
         struct
         {
@@ -411,6 +412,7 @@ public:
             SpellEntry const* pFade;
             SpellEntry const* pShackleUndead;
             SpellEntry const* pSmite;
+            SpellEntry const* pCureDisease; // fallback dispel when Abolish Disease is not learned
         } priest;
         struct
         {

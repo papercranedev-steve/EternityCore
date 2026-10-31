@@ -354,6 +354,12 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.paladin.pCleanse))
                         m_spells.paladin.pCleanse = pSpellEntry;
                 }
+                // Fix: also learn Purify (lvl 8) as a fallback before Cleanse (lvl 42).
+                else if (pSpellEntry->SpellName[0].find("Purify") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.paladin.pPurify))
+                        m_spells.paladin.pPurify = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Divine Shield") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.paladin.pDivineShield))
@@ -452,6 +458,17 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.shaman.pGhostWolf))
                         m_spells.shaman.pGhostWolf = pSpellEntry;
+                }
+                // Fix: shaman dispel fields were declared and used but never assigned.
+                else if (pSpellEntry->SpellName[0].find("Cure Disease") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pCureDisease))
+                        m_spells.shaman.pCureDisease = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Cure Poison") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pCurePoison))
+                        m_spells.shaman.pCurePoison = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Frostbrand Weapon") != std::string::npos)
                 {
@@ -879,6 +896,12 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.priest.pAbolishDisease))
                         m_spells.priest.pAbolishDisease = pSpellEntry;
+                }
+                // Fix: also learn Cure Disease (lvl 14) as a fallback before Abolish Disease (lvl 32).
+                else if (pSpellEntry->SpellName[0].find("Cure Disease") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.priest.pCureDisease))
+                        m_spells.priest.pCureDisease = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Dispel Magic") != std::string::npos)
                 {
@@ -3218,7 +3241,24 @@ void CombatBotBaseAI::BreakCrowdControlEffects()
         }
         case CLASS_MAGE:
         {
-            if (me->HasUnitState(UNIT_STATE_STUNNED) && m_spells.mage.pBlink &&
+            // Fix: no Blink (uncontrolled direction) when every stun on us is a
+            // sleep-style one that the next hit breaks anyway.
+            bool onlyBreakableStuns = false;
+            auto const& stunAuras = me->GetAurasByType(SPELL_AURA_MOD_STUN);
+            if (!stunAuras.empty())
+            {
+                onlyBreakableStuns = true;
+                for (auto const& pAura : stunAuras)
+                {
+                    if (!pAura->GetSpellProto()->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS))
+                    {
+                        onlyBreakableStuns = false;
+                        break;
+                    }
+                }
+            }
+
+            if (me->HasUnitState(UNIT_STATE_STUNNED) && !onlyBreakableStuns && m_spells.mage.pBlink &&
                 CanTryToCastSpell(me, m_spells.mage.pBlink))
             {
                 if (DoCastSpell(me, m_spells.mage.pBlink) == SPELL_CAST_OK)

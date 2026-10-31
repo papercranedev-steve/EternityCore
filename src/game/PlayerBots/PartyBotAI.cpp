@@ -897,8 +897,17 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!me->IsInCombat())
     {
+        // Fix: resurrecting a dead member comes before eating/drinking. Skip
+        // DrinkAndEat this tick so UpdateOutOfCombatAI() can cast it. Targets with
+        // a pending request are ignored so the bot does not stand up again and again.
+        bool resurrectFirst = false;
+        if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
+            if (Player* pDead = SelectResurrectionTarget())
+                resurrectFirst = !pDead->IsRessurectRequested() &&
+                    me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me);
+
         // (no eating or drinking while a Commander pull is under way)
-        if (!commanderOutOfCombat && DrinkAndEat())
+        if (!commanderOutOfCombat && !resurrectFirst && DrinkAndEat())
         {
             if (!me->IsWithinDistInMap(pLeader, 100.0f))
             {
@@ -1156,13 +1165,18 @@ bool PartyBotAI::CheckForDispelTargets()
     {
         case CLASS_PALADIN:
         {
-            if (m_spells.paladin.pCleanse)
+            // Fix: fall back to Purify when Cleanse is not learned yet.
+            SpellEntry const* pDispelSpell = m_spells.paladin.pCleanse ?
+                m_spells.paladin.pCleanse :
+                m_spells.paladin.pPurify;
+
+            if (pDispelSpell)
             {
-                if (Unit* pFriend = SelectDispelTarget(m_spells.paladin.pCleanse))
+                if (Unit* pFriend = SelectDispelTarget(pDispelSpell))
                 {
-                    if (CanTryToCastSpell(pFriend, m_spells.paladin.pCleanse))
+                    if (CanTryToCastSpell(pFriend, pDispelSpell))
                     {
-                        if (DoCastSpell(pFriend, m_spells.paladin.pCleanse) == SPELL_CAST_OK)
+                        if (DoCastSpell(pFriend, pDispelSpell) == SPELL_CAST_OK)
                             return true;
                     }
                 }
@@ -1224,13 +1238,18 @@ bool PartyBotAI::CheckForDispelTargets()
                     }
                 }
             }
-            if (m_spells.priest.pAbolishDisease)
+            // Fix: fall back to Cure Disease when Abolish Disease is not learned yet.
+            SpellEntry const* pDiseaseSpell = m_spells.priest.pAbolishDisease ?
+                m_spells.priest.pAbolishDisease :
+                m_spells.priest.pCureDisease;
+
+            if (pDiseaseSpell)
             {
-                if (Unit* pFriend = SelectDispelTarget(m_spells.priest.pAbolishDisease))
+                if (Unit* pFriend = SelectDispelTarget(pDiseaseSpell))
                 {
-                    if (CanTryToCastSpell(pFriend, m_spells.priest.pAbolishDisease))
+                    if (CanTryToCastSpell(pFriend, pDiseaseSpell))
                     {
-                        if (DoCastSpell(pFriend, m_spells.priest.pAbolishDisease) == SPELL_CAST_OK)
+                        if (DoCastSpell(pFriend, pDiseaseSpell) == SPELL_CAST_OK)
                             return true;
                     }
                 }

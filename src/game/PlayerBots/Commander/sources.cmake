@@ -28,10 +28,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/IAssigner.h
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.h
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/FocusAssigner.h
+  ${COMMANDER_DIR}/Coordination/FocusAssigner.cpp
   ${COMMANDER_DIR}/Perception/SpellTags.h
   ${COMMANDER_DIR}/Perception/SpellTags.cpp
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.h
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/FocusBehavior.h
+  ${COMMANDER_DIR}/Behaviors/FocusBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/PullBehavior.h
   ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
   ${COMMANDER_DIR}/Coordination/PullPlanner.h

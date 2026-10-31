@@ -16,7 +16,7 @@
  *   .partybot ai rates               fight-wide rates and value units of your party
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai packs               out-of-combat packs within 50 yards
- *   .partybot ai plan                team plan: pull state, interrupt abilities and duties
+ *   .partybot ai plan                team plan: pull state, focus and intercepts, interrupt abilities and duties
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
  *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
  *                                    hostile pack) once everyone is ready; "now" skips the wait
@@ -204,6 +204,21 @@ namespace
         if (plan.clear.active)
             handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
                 plan.clear.radius, plan.clear.maxMobs, plan.clear.cleared, plan.clear.skippedPacks);
+
+        // Focus and intercepts (FocusAssigner). Score = harm rate / kill time.
+        if (plan.focus.enemy.IsEmpty())
+            handler->SendSysMessage("Focus: none");
+        else
+            handler->PSendSysMessage("Focus: |cffffcc00%s|r score %.3f (%.2f pt/s, kill %.1fs) for %.1fs: %s",
+                NameOf(map, plan.focus.enemy).c_str(), plan.focus.score, plan.focus.harmRate, plan.focus.killSec,
+                WorldTimer::getMSTimeDiffToNow(plan.focus.sinceMs) / 1000.0f, plan.focus.reason.c_str());
+        if (!plan.intercepts.empty())
+        {
+            handler->SendSysMessage("Intercepts:");
+            for (Commander::InterceptDuty const& d : plan.intercepts)
+                handler->PSendSysMessage("    |cffffcc00%s|r: %s (%s, %.1f pt)",
+                    NameOf(map, d.enemy).c_str(), NameOf(map, d.bot).c_str(), d.reason, d.points);
+        }
 
         if (plan.interrupts.empty())
         {
