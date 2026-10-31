@@ -14,6 +14,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/PartyCommander.cpp
   ${COMMANDER_DIR}/CommanderCommands.cpp
   ${COMMANDER_DIR}/Perception/WorldModel.h
+  ${COMMANDER_DIR}/Perception/WorldModelBuilder.h
+  ${COMMANDER_DIR}/Perception/WorldModelBuilder.cpp
+  ${COMMANDER_DIR}/Perception/ThreatView.h
+  ${COMMANDER_DIR}/Perception/ThreatView.cpp
+  ${COMMANDER_DIR}/Perception/PackResolver.h
+  ${COMMANDER_DIR}/Perception/PackResolver.cpp
   ${COMMANDER_DIR}/Coordination/TeamPlan.h
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h

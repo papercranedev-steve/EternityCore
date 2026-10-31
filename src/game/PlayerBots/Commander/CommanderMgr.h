@@ -21,6 +21,7 @@
 #include <tuple>
 
 class PartyBotAI;
+class Player;
 
 namespace Commander
 {
@@ -59,6 +60,8 @@ namespace Commander
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         IBehavior const* FindBehavior(std::string const& id, BehaviorSlot** slotOut = nullptr);
         size_t GetCommanderCount();
+        // Debug commands: the commander of this player's party on the player's map, if any.
+        std::shared_ptr<PartyCommander> FindCommander(Player const* member);
 
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);

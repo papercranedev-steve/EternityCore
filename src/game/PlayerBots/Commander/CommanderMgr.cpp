@@ -110,6 +110,18 @@ namespace Commander
         return entry.commander;
     }
 
+    std::shared_ptr<PartyCommander> CommanderMgr::FindCommander(Player const* member)
+    {
+        Group const* pGroup = member ? member->GetGroup() : nullptr;
+        if (!pGroup)
+            return nullptr;
+
+        Key const key(pGroup->GetId(), member->GetMapId(), member->GetInstanceId());
+        std::lock_guard<std::mutex> guard(m_commandersLock);
+        auto itr = m_commanders.find(key);
+        return itr != m_commanders.end() ? itr->second.commander : nullptr;
+    }
+
     size_t CommanderMgr::GetCommanderCount()
     {
         std::lock_guard<std::mutex> guard(m_commandersLock);

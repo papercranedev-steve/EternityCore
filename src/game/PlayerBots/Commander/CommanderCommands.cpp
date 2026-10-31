@@ -10,6 +10,12 @@
  *   .partybot ai reload              re-read PartyBot.Commander.* (run .reload config first
  *                                    if mangosd.conf was edited)
  *   .partybot ai bot                 state of the selected bot
+ *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
+ *   .partybot ai packs               out-of-combat packs within 50 yards
+ *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
+ *
+ * GM commands run on the world thread while map threads are idle (MapManager::Update
+ * waits for all maps), so reading world models and units here is safe.
  */
 
 #include "Chat.h"
@@ -17,11 +23,211 @@
 #include "PartyBotAI.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/ThreatView.h"
+#include "Group.h"
+#include "Map.h"
+#include "ObjectMgr.h"
 #include "Timer.h"
+#include <cmath>
 #include <cstring>
 
 namespace
 {
+    std::string NameOf(Map* map, ObjectGuid guid)
+    {
+        if (guid.IsEmpty())
+            return "-";
+        if (Unit* unit = map->GetUnit(guid))
+            return unit->GetName();
+        return guid.GetString();
+    }
+
+    std::string Num(float value)
+    {
+        if (std::isinf(value))
+            return value > 0 ? "inf" : "-inf";
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0f", value);
+        return buf;
+    }
+
+    char const* PackSourceName(Commander::PackSource source)
+    {
+        switch (source)
+        {
+            case Commander::PackSource::Database: return "db";
+            case Commander::PackSource::Distance: return "dist";
+            case Commander::PackSource::Mixed:    return "db+dist";
+        }
+        return "?";
+    }
+
+    std::shared_ptr<Commander::PartyCommander> CommanderFor(ChatHandler* handler, Player* player)
+    {
+        std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(player);
+        if (!commander)
+            handler->SendSysMessage("No commander for your party on this map (no party bot here, or Commander is off).");
+        return commander;
+    }
+
+    void ShowAge(ChatHandler* handler, Commander::WorldModel const& world)
+    {
+        handler->PSendSysMessage("World model v%u, refreshed %u ms ago, packs %u ms ago",
+            world.version,
+            WorldTimer::getMSTimeDiffToNow(world.refreshedAtMs),
+            WorldTimer::getMSTimeDiffToNow(world.packsRefreshedAtMs));
+    }
+
+    // .partybot ai threat
+    bool ShowThreat(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        Commander::WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        ShowAge(handler, world);
+        if (world.enemies.empty())
+        {
+            handler->SendSysMessage("No enemies.");
+            return true;
+        }
+
+        uint32 shown = 0;
+        for (Commander::EnemyFacts const& e : world.enemies)
+        {
+            if (++shown > 8)
+            {
+                handler->PSendSysMessage("... %u more", uint32(world.enemies.size() - 8));
+                break;
+            }
+
+            ObjectGuid closest;
+            float const lead = Commander::ThreatView::VictimLead(e, &closest);
+            handler->PSendSysMessage("|cffffcc00%s|r %.0f%%%s%s -> %s (%s), lead %s (%s)",
+                NameOf(map, e.guid).c_str(), e.healthPct,
+                e.crowdControlled ? " [CC]" : "",
+                e.castingSpellId ? " [casting]" : "",
+                NameOf(map, e.victim).c_str(), Num(e.victimThreat).c_str(),
+                Num(lead).c_str(), NameOf(map, closest).c_str());
+
+            for (Commander::ThreatEntry const& t : e.threat)
+            {
+                if (!t.partySide)
+                    continue;
+                handler->PSendSysMessage("    %s: %s%s, %s, headroom %s",
+                    NameOf(map, t.guid).c_str(), Num(t.threat).c_str(), t.onList ? "" : " (not on list)",
+                    t.inMeleeReach ? "melee 110%" : "ranged 130%",
+                    Num(Commander::ThreatView::Headroom(e, t.guid)).c_str());
+            }
+        }
+        return true;
+    }
+
+    // .partybot ai packs
+    bool ShowPacks(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        Commander::WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        ShowAge(handler, world);
+        if (world.packs.empty())
+        {
+            handler->PSendSysMessage("No out-of-combat packs within %.0f yards.", 50.0f);
+            return true;
+        }
+
+        uint32 index = 0;
+        for (Commander::PackFacts const& pack : world.packs)
+        {
+            if (++index > 10)
+            {
+                handler->PSendSysMessage("... %u more", uint32(world.packs.size() - 10));
+                break;
+            }
+
+            std::string names;
+            for (Commander::PackCreature const& c : pack.members)
+            {
+                if (!names.empty())
+                    names += ", ";
+                names += NameOf(map, c.guid);
+                if (!c.aggressive)
+                    names += "(neutral)";
+            }
+            handler->PSendSysMessage("#%u %.0fyd [%s] %u mobs, %u elite, max lvl %u: %s",
+                index, pack.distanceToLeader, PackSourceName(pack.source),
+                uint32(pack.members.size()), pack.eliteCount, pack.maxLevel, names.c_str());
+        }
+        return true;
+    }
+
+    // .partybot ai healsim <amount> [healer]   heal target = your selection, or yourself
+    bool HealSim(ChatHandler* handler, Player* player, uint32 amount, char const* healerName, Unit* target)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        Group* group = player->GetGroup();
+        Player* healer = nullptr;
+        if (healerName)
+        {
+            healer = sObjectMgr.GetPlayer(healerName);
+        }
+        else
+        {
+            for (GroupReference* itr = group->GetFirstMember(); itr && !healer; itr = itr->next())
+            {
+                Player* member = itr->getSource();
+                if (member && member->IsInWorld() && member->GetMap() == player->GetMap() && member->AI())
+                    if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
+                        if (ai->m_role == ROLE_HEALER)
+                            healer = member;
+            }
+        }
+        if (!healer || healer->GetMap() != player->GetMap() || !group->IsMember(healer->GetObjectGuid()))
+        {
+            handler->SendSysMessage("Healer not found in your party on this map. Give a name or set a bot to healer.");
+            return false;
+        }
+
+        if (!target)
+            target = player;
+
+        float const missing = float(target->GetMaxHealth() - target->GetHealth());
+        float const effective = std::min(float(amount), missing);
+
+        // No spell: base 0.5 / 0.25 heal threat with the healer's general threat modifiers.
+        std::vector<Commander::ThreatView::EnemyThreatDelta> deltas;
+        Commander::ThreatView::PredictHealThreat(healer, target, effective, nullptr, deltas);
+
+        Commander::WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        handler->PSendSysMessage("%s heals %s for %u (effective %.0f, missing %.0f), split over %u enemies:",
+            healer->GetName(), target->GetName(), amount, effective, missing, uint32(deltas.size()));
+
+        for (auto const& d : deltas)
+        {
+            Commander::EnemyFacts const* e = world.FindEnemy(d.enemy);
+            float const before = e ? Commander::ThreatView::Headroom(*e, healer->GetObjectGuid()) : Commander::ThreatView::NO_LIMIT;
+            float const after = before - d.added;
+            handler->PSendSysMessage("    %s: +%s threat, headroom %s -> %s%s",
+                NameOf(map, d.enemy).c_str(), Num(d.added).c_str(), Num(before).c_str(), Num(after).c_str(),
+                after < 0.0f ? "  |cffff4040PULLS AGGRO|r" : "");
+        }
+
+        ObjectGuid worst;
+        float const worstAfter = Commander::ThreatView::WorstHeadroomAfter(world, healer->GetObjectGuid(), deltas, &worst);
+        handler->PSendSysMessage("Worst: %s on %s", Num(worstAfter).c_str(), NameOf(map, worst).c_str());
+        return true;
+    }
+
     void ShowStats(ChatHandler* handler)
     {
         Commander::TickStats const s = sCommanderMgr.GetStats();
@@ -156,7 +362,32 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot]");
+    if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim"))
+    {
+        Player* player = m_session->GetPlayer();
+        bool ok = false;
+        if (!strcmp(sub, "threat"))
+            ok = ShowThreat(this, player);
+        else if (!strcmp(sub, "packs"))
+            ok = ShowPacks(this, player);
+        else
+        {
+            uint32 amount = 0;
+            if (!ExtractUInt32(&args, amount) || !amount)
+            {
+                SendSysMessage("Usage: .partybot ai healsim <heal amount> [healer name]   (target = your selection)");
+                SetSentErrorMessage(true);
+                return false;
+            }
+            char const* healerName = ExtractLiteralArg(&args);
+            ok = HealSim(this, player, amount, healerName, GetSelectedUnit());
+        }
+        if (!ok)
+            SetSentErrorMessage(true);
+        return ok;
+    }
+
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload|bot|threat|packs|healsim <amount> [healer]]");
     SetSentErrorMessage(true);
     return false;
 }
