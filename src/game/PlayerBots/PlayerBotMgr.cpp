@@ -23,6 +23,8 @@
 
 #include <sstream>
 #include <cstring>
+#include <algorithm>
+#include <map>
 
 INSTANTIATE_SINGLETON_1(PlayerBotMgr);
 
@@ -1010,6 +1012,39 @@ bool ChatHandler::HandlePartyBotCloneCommand(char* args)
     return true;
 }
 
+// Role keywords used by .partybot load / setrole and the PBCHR reply.
+// "auto" -> ROLE_INVALID with isAuto = true (AutoAssignRole picks one from class and talents).
+static bool ParsePartyBotRole(std::string const& str, uint8 classId, CombatBotRoles& role)
+{
+    role = ROLE_INVALID;
+    if (str == "auto")
+        return true;
+    if (str == "tank")
+        role = ROLE_TANK;
+    else if (str == "healer")
+        role = ROLE_HEALER;
+    else if (str == "meleedps")
+        role = ROLE_MELEE_DPS;
+    else if (str == "rangedps")
+        role = ROLE_RANGE_DPS;
+    else if (str == "dps")
+        role = CombatBotBaseAI::IsMeleeDamageClass(classId) ? ROLE_MELEE_DPS : ROLE_RANGE_DPS;
+    return role != ROLE_INVALID;
+}
+
+static char const* PartyBotRoleName(CombatBotRoles role)
+{
+    switch (role)
+    {
+        case ROLE_TANK:      return "tank";
+        case ROLE_HEALER:    return "healer";
+        case ROLE_MELEE_DPS: return "meleedps";
+        case ROLE_RANGE_DPS: return "rangedps";
+        default:             return "auto";
+    }
+}
+
+// .partybot load <name> [auto|tank|healer|dps|meleedps|rangedps]
 bool ChatHandler::HandlePartyBotLoadCommand(char* args)
 {
     Player* pPlayer = m_session->GetPlayer();
@@ -1032,6 +1067,17 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
         return false;
     }
 
+    CombatBotRoles role = ROLE_INVALID;
+    if (char* roleArg = ExtractArg(&args))
+    {
+        if (!ParsePartyBotRole(roleArg, sObjectMgr.GetPlayerClassByGUID(guid), role))
+        {
+            SendSysMessage("Unknown role. Expected auto, tank, healer, dps, meleedps or rangedps.");
+            SetSentErrorMessage(true);
+            return false;
+        }
+    }
+
     if (sObjectAccessor.FindPlayerNotInWorld(guid))
     {
         SendSysMessage("Player is already online!");
@@ -1043,6 +1089,7 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
     pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
 
     PartyBotAI* pAI = new PartyBotAI(pPlayer, pPlayer->GetMapId(), pPlayer->GetMap()->GetInstanceId(), x, y, z, pPlayer->GetOrientation());
+    pAI->m_role = role; // ROLE_INVALID -> OnPlayerLogin auto assigns
 
     if (!sPlayerBotMgr.AddBot(guid, false, pAI, true))
     {
@@ -1056,44 +1103,60 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
     return true;
 }
 
+// .partybot setrole <auto|tank|healer|dps|meleedps|rangedps> [name]
+// Without a name: uses the selected bot and replies in plain text.
+// With a name (addon): replies PBOK;<name>;role;<role> or PBERR.
 bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
 {
-    if (!args)
+    char* roleArg = ExtractArg(&args);
+    if (!roleArg)
         return false;
+    std::string roleStr = roleArg;
 
-    Player* pTarget = GetSelectedPlayer();
-    if (!pTarget)
+    bool const byName = args && *args;
+    Player* pTarget = nullptr;
+    std::string name;
+    if (byName)
     {
-        SendSysMessage(LANG_NO_CHAR_SELECTED);
-        SetSentErrorMessage(true);
-        return false;
+        pTarget = ExtractPartyBotTarget(&args, name);
+        if (!pTarget)
+            return false;
+    }
+    else
+    {
+        pTarget = GetSelectedPlayer();
+        if (!pTarget)
+        {
+            SendSysMessage(LANG_NO_CHAR_SELECTED);
+            SetSentErrorMessage(true);
+            return false;
+        }
     }
 
     CombatBotRoles role = ROLE_INVALID;
-    std::string roleStr = args;
-
-    if (roleStr == "tank")
-        role = ROLE_TANK;
-    else if (roleStr == "dps")
-        role = CombatBotBaseAI::IsMeleeDamageClass(pTarget->GetClass()) ? ROLE_MELEE_DPS : ROLE_RANGE_DPS;
-    else if (roleStr == "meleedps")
-        role = ROLE_MELEE_DPS;
-    else if (roleStr == "rangedps")
-        role = ROLE_RANGE_DPS;
-    else if (roleStr == "healer")
-        role = ROLE_HEALER;
-
-    if (role == ROLE_INVALID)
+    if (!ParsePartyBotRole(roleStr, pTarget->GetClass(), role))
+    {
+        if (byName)
+        {
+            PSendSysMessage("PBERR;%s;usage", name.c_str());
+            SetSentErrorMessage(true);
+        }
         return false;
+    }
 
     if (pTarget->AI())
     {
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
             pAI->m_role = role;
+            if (role == ROLE_INVALID)
+                pAI->AutoAssignRole();
             pAI->ResetSpellData();
             pAI->PopulateSpellData();
-            PSendSysMessage("%s is now a %s.", pTarget->GetName(), roleStr.c_str());
+            if (byName)
+                PSendSysMessage("PBOK;%s;role;%s;%s", name.c_str(), roleStr.c_str(), PartyBotRoleName(pAI->m_role));
+            else
+                PSendSysMessage("%s is now a %s.", pTarget->GetName(), PartyBotRoleName(pAI->m_role));
             return true;
         }
     }
@@ -2435,8 +2498,139 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
     return true;
 }
 
+// Accounts that own at least one character, for the addon's character picker.
+// .partybot accounts [page]   (page from 1)
+//   PBACC;BEGIN;<page>;<pages>;<total>
+//   PBACC;A;<accountId>;<characters>;<is mine 0/1>;<username>
+//   PBACC;END
+bool ChatHandler::HandlePartyBotAccountsCommand(char* args)
+{
+    uint32 const perPage = 12;
+    uint32 page = 1;
+    ExtractOptUInt32(&args, page, 1);
+    if (!page)
+        page = 1;
+
+    uint32 total = 0;
+    if (std::unique_ptr<QueryResult> countResult = CharacterDatabase.Query("SELECT COUNT(DISTINCT `account`) FROM `characters`"))
+        total = countResult->Fetch()[0].GetUInt32();
+
+    uint32 const pages = std::max<uint32>(1, (total + perPage - 1) / perPage);
+    if (page > pages)
+        page = pages;
+
+    std::vector<std::pair<uint32, uint32>> accounts; // account id, character count
+    if (std::unique_ptr<QueryResult> result = CharacterDatabase.PQuery(
+            "SELECT `account`, COUNT(*) FROM `characters` GROUP BY `account` ORDER BY `account` LIMIT %u, %u",
+            (page - 1) * perPage, perPage))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            accounts.emplace_back(fields[0].GetUInt32(), fields[1].GetUInt32());
+        } while (result->NextRow());
+    }
+
+    std::map<uint32, std::string> usernames;
+    if (!accounts.empty())
+    {
+        std::ostringstream ids;
+        for (size_t i = 0; i < accounts.size(); ++i)
+            ids << (i ? "," : "") << accounts[i].first;
+        if (std::unique_ptr<QueryResult> result = LoginDatabase.PQuery(
+                "SELECT `id`, `username` FROM `account` WHERE `id` IN (%s)", ids.str().c_str()))
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                usernames[fields[0].GetUInt32()] = fields[1].GetCppString();
+            } while (result->NextRow());
+        }
+    }
+
+    uint32 const myAccount = GetSession() ? GetSession()->GetAccountId() : 0;
+    PSendSysMessage("PBACC;BEGIN;%u;%u;%u", page, pages, total);
+    for (auto const& acc : accounts)
+    {
+        auto itr = usernames.find(acc.first);
+        std::string const username = itr != usernames.end() ? itr->second : "?";
+        PSendSysMessage("PBACC;A;%u;%u;%u;%s", acc.first, acc.second, acc.first == myAccount ? 1 : 0, username.c_str());
+    }
+    SendSysMessage("PBACC;END");
+    return true;
+}
+
+// Characters of one account, with their current bot state.
+// .partybot chars <accountId>
+//   PBCHR;<accountId>;BEGIN;<count>
+//   PBCHR;<accountId>;C;<race>;<class>;<level>;<state>;<role>;<name>
+//   PBCHR;<accountId>;END
+// state: off (offline) | loading | me (the command user) | mine (bot in the user's party)
+//        | bot (someone else's party bot) | on (online, played by a person or another bot type)
+// role: current role for mine/bot, else "auto"
+bool ChatHandler::HandlePartyBotCharsCommand(char* args)
+{
+    uint32 accountId = 0;
+    if (!ExtractUInt32(&args, accountId) || !accountId)
+    {
+        SendSysMessage("PBERR;;usage");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::vector<PlayerCacheData const*> chars;
+    sObjectMgr.GetPlayerDataForAccount(accountId, chars);
+    std::sort(chars.begin(), chars.end(), [](PlayerCacheData const* a, PlayerCacheData const* b)
+    {
+        return a->sName < b->sName;
+    });
+
+    Player* pUser = GetSession() ? GetSession()->GetPlayer() : nullptr;
+
+    PSendSysMessage("PBCHR;%u;BEGIN;%u", accountId, uint32(chars.size()));
+    for (PlayerCacheData const* data : chars)
+    {
+        char const* state = "off";
+        char const* role = "auto";
+        uint32 level = data->uiLevel;
+
+        if (Player* pChar = ObjectAccessor::FindPlayerNotInWorld(ObjectGuid(HIGHGUID_PLAYER, data->uiGuid)))
+        {
+            level = pChar->GetLevel();
+            PartyBotAI* pAI = pChar->AI() ? dynamic_cast<PartyBotAI*>(pChar->AI()) : nullptr;
+            if (!pChar->IsInWorld())
+                state = "loading";
+            else if (pChar == pUser)
+                state = "me";
+            else if (pAI)
+                state = (pUser && pAI->m_leaderGuid == pUser->GetObjectGuid()) ? "mine" : "bot";
+            else
+                state = "on";
+
+            if (pAI && pChar->IsInWorld())
+                role = PartyBotRoleName(pAI->m_role);
+        }
+
+        PSendSysMessage("PBCHR;%u;C;%u;%u;%u;%s;%s;%s", accountId, data->uiRace, data->uiClass, level, state, role, data->sName.c_str());
+    }
+    PSendSysMessage("PBCHR;%u;END", accountId);
+    return true;
+}
+
+// .partybot remove [name]   (without a name: the selected bot)
 bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
 {
+    if (args && *args)
+    {
+        std::string name;
+        Player* pBot = ExtractPartyBotTarget(&args, name);
+        if (!pBot)
+            return false;
+        static_cast<PartyBotAI*>(pBot->AI())->botEntry->requestRemoval = true;
+        PSendSysMessage("PBOK;%s;remove", name.c_str());
+        return true;
+    }
+
     Player* pTarget = GetSelectedPlayer();
     if (!pTarget)
     {
