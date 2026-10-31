@@ -322,8 +322,8 @@ namespace
     {
         Population::CityDirector& city = sPopulationMgr.GetCityDirector();
         Population::CityTargets const t = city.TargetsNow();
-        handler->PSendSysMessage("Cities: %s. Hour factor %.2f -> target %u bots (%u movers, %u veterans) per city with a player.",
-            city.IsEnabled() ? "on" : "off", city.HourFactor(), t.total, t.mover, t.showcase);
+        handler->PSendSysMessage("Cities: %s. Hour factor %.2f -> target %u bots (%u movers, %u crafters, %u veterans) per city with a player.",
+            city.IsEnabled() ? "on" : "off", city.HourFactor(), t.total, t.mover, t.crafter, t.showcase);
 
         for (Population::CityState const& s : city.States())
         {
@@ -336,9 +336,9 @@ namespace
                 else ++other;
             }
             Population::CityCounts const c = sPopulationMgr.CountCity(s.def->zone, s.anchors.size());
-            handler->PSendSysMessage("%s (zone %u): %s%s, anchors ah %u bank %u mail %u other %u, bots %u (stand %u, movers %u, veterans %u)",
+            handler->PSendSysMessage("%s (zone %u): %s%s, anchors ah %u bank %u mail %u other %u, bots %u (stand %u, movers %u, crafters %u, veterans %u)",
                 s.def->title, s.def->zone, s.enabled ? "enabled" : "disabled", s.playerPresent ? ", player here" : "",
-                ah, bank, mail, other, c.total, c.stand, c.mover, c.showcase);
+                ah, bank, mail, other, c.total, c.stand, c.mover, c.crafter, c.showcase);
         }
     }
 

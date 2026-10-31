@@ -12,6 +12,10 @@
 #include "Utilities/Random.h"
 #include "MotionMaster.h"
 #include "GridMap.h"
+#include "SpellMgr.h"
+#include "Log.h"
+#include <algorithm>
+#include <vector>
 #include <cmath>
 
 namespace Population
@@ -32,6 +36,45 @@ namespace Population
             EMOTE_ONESHOT_LAUGH, EMOTE_ONESHOT_POINT, EMOTE_ONESHOT_QUESTION,
             EMOTE_ONESHOT_EXCLAMATION, EMOTE_ONESHOT_BOW, EMOTE_ONESHOT_CHEER, EMOTE_ONESHOT_WAVE,
         };
+
+        // Crafting recipes without tools or a spell focus (checked in the mangos DB, 2026-11-01).
+        struct Recipe
+        {
+            uint32 skill;       // skill line
+            uint32 spell;
+            uint32 reqSkill;    // skill value the recipe is learned at
+        };
+
+        uint32 const SKILL_LINE_FIRST_AID = 129;
+        uint32 const SKILL_LINE_TAILORING = 197;
+        uint32 const SKILL_LINE_LEATHERWORKING = 165;
+        uint32 const SKILL_LINE_ALCHEMY = 171;
+
+        Recipe const g_recipes[] = {
+            // First Aid: bandages
+            { SKILL_LINE_FIRST_AID, 3275, 1 },   { SKILL_LINE_FIRST_AID, 3276, 40 },  { SKILL_LINE_FIRST_AID, 3277, 80 },
+            { SKILL_LINE_FIRST_AID, 3278, 115 }, { SKILL_LINE_FIRST_AID, 7928, 150 }, { SKILL_LINE_FIRST_AID, 7929, 180 },
+            { SKILL_LINE_FIRST_AID, 10840, 210 }, { SKILL_LINE_FIRST_AID, 10841, 240 }, { SKILL_LINE_FIRST_AID, 18629, 260 },
+            { SKILL_LINE_FIRST_AID, 18630, 290 },
+            // Tailoring: bolts of cloth
+            { SKILL_LINE_TAILORING, 2963, 1 }, { SKILL_LINE_TAILORING, 2964, 75 }, { SKILL_LINE_TAILORING, 3839, 125 },
+            { SKILL_LINE_TAILORING, 3865, 175 }, { SKILL_LINE_TAILORING, 18401, 250 },
+            // Leatherworking: leather and armor kits
+            { SKILL_LINE_LEATHERWORKING, 2881, 1 }, { SKILL_LINE_LEATHERWORKING, 2152, 1 }, { SKILL_LINE_LEATHERWORKING, 20648, 100 },
+            { SKILL_LINE_LEATHERWORKING, 2165, 100 }, { SKILL_LINE_LEATHERWORKING, 20649, 150 }, { SKILL_LINE_LEATHERWORKING, 3780, 150 },
+            { SKILL_LINE_LEATHERWORKING, 20650, 200 }, { SKILL_LINE_LEATHERWORKING, 10487, 200 }, { SKILL_LINE_LEATHERWORKING, 19058, 250 },
+            // Alchemy: healing / mana potions, elixirs
+            { SKILL_LINE_ALCHEMY, 2330, 1 }, { SKILL_LINE_ALCHEMY, 2331, 25 }, { SKILL_LINE_ALCHEMY, 2337, 55 },
+            { SKILL_LINE_ALCHEMY, 3447, 110 }, { SKILL_LINE_ALCHEMY, 3173, 120 }, { SKILL_LINE_ALCHEMY, 7181, 155 },
+            { SKILL_LINE_ALCHEMY, 11448, 205 }, { SKILL_LINE_ALCHEMY, 11457, 215 }, { SKILL_LINE_ALCHEMY, 17553, 260 },
+            { SKILL_LINE_ALCHEMY, 17556, 275 }, { SKILL_LINE_ALCHEMY, 17571, 280 }, { SKILL_LINE_ALCHEMY, 17580, 295 },
+        };
+
+        // Skill a player of this level would typically have.
+        uint32 CraftSkillForLevel(uint32 level)
+        {
+            return std::max<uint32>(1, std::min<uint32>(300, level * 5));
+        }
 
         // A premade gear template for the class at level 60 whose name contains `tag`
         // ("phase6", "preraid"), preferring the bot's role.
@@ -104,7 +147,124 @@ namespace Population
         {
             case CityRole::Mover: UpdateMover(); break;
             case CityRole::Stand: UpdateStand(); break;
+            case CityRole::Crafter: UpdateCrafter(); break;
             default:              UpdateIdle(); break;
+        }
+    }
+
+    void PopulationBotAI::SetupProfession()
+    {
+        // First Aid and Tailoring are the most common sights, then Leatherworking and Alchemy.
+        uint32 const roll = urand(0, 99);
+        m_professionSkill = roll < 30 ? SKILL_LINE_FIRST_AID
+                          : roll < 60 ? SKILL_LINE_TAILORING
+                          : roll < 80 ? SKILL_LINE_LEATHERWORKING
+                          : SKILL_LINE_ALCHEMY;
+
+        uint32 const value = CraftSkillForLevel(me->GetLevel());
+        me->SetSkill(uint16(m_professionSkill), uint16(value), 300);
+        for (Recipe const& r : g_recipes)
+            if (r.skill == m_professionSkill && r.reqSkill <= value && !me->HasSpell(r.spell) && sSpellMgr.GetSpellEntry(r.spell))
+                me->LearnSpell(r.spell, false);
+
+        PickRecipe();
+        m_batchLeft = urand(3, 10);
+        m_craftRestUntilMs = WorldTimer::getMSTime() + urand(2, 8) * IN_MILLISECONDS;
+    }
+
+    // One of the three best recipes for the skill, like a player levelling the profession.
+    void PopulationBotAI::PickRecipe()
+    {
+        uint32 const value = CraftSkillForLevel(me->GetLevel());
+        std::vector<uint32> known;
+        for (Recipe const& r : g_recipes)
+            if (r.skill == m_professionSkill && r.reqSkill <= value && me->HasSpell(r.spell))
+                known.push_back(r.spell);   // table is ordered by skill
+        if (known.empty())
+        {
+            m_recipeSpell = 0;
+            return;
+        }
+        size_t const first = known.size() > 3 ? known.size() - 3 : 0;
+        m_recipeSpell = known[first + urand(0, uint32(known.size() - first) - 1)];
+    }
+
+    void PopulationBotAI::ClearCraftedItems()
+    {
+        for (Recipe const& r : g_recipes)
+        {
+            if (r.skill != m_professionSkill)
+                continue;
+            SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(r.spell);
+            if (!pSpell)
+                continue;
+            uint32 const item = uint32(pSpell->EffectItemType[EFFECT_INDEX_0]);
+            if (item)
+                if (uint32 const count = me->GetItemCount(item))
+                    me->DestroyItemCount(item, count, true);
+        }
+    }
+
+    void PopulationBotAI::UpdateCrafter()
+    {
+        if (me->IsNonMeleeSpellCasted(false))
+            return;
+
+        uint32 const now = WorldTimer::getMSTime();
+        if (!m_recipeSpell || now < m_craftRestUntilMs)
+        {
+            UpdateIdle();
+            return;
+        }
+
+        if (!m_batchLeft)
+        {
+            // Batch done: put things away, rest, maybe switch to another recipe.
+            ClearCraftedItems();
+            m_craftRestUntilMs = now + urand(20, 60) * IN_MILLISECONDS;
+            m_nextIdleAtMs = now + urand(3, 10) * IN_MILLISECONDS;
+            m_batchLeft = urand(3, 10);
+            if (urand(0, 2) == 0)
+                PickRecipe();
+            return;
+        }
+
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(m_recipeSpell);
+        if (!pSpell)
+        {
+            m_recipeSpell = 0;
+            return;
+        }
+
+        for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+        {
+            if (pSpell->Reagent[i] <= 0 || !pSpell->ReagentCount[i])
+                continue;
+            uint32 const item = uint32(pSpell->Reagent[i]);
+            if (!me->HasItemCount(item, pSpell->ReagentCount[i]))
+                AddItemToInventory(item, pSpell->ReagentCount[i] * 2);
+        }
+
+        if (me->IsSittingDown())
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+        if (me->IsMoving())
+            return;
+
+        SpellCastResult const result = me->CastSpell(me, pSpell, false);
+        if (result == SPELL_CAST_OK)
+        {
+            --m_batchLeft;
+            m_craftFailures = 0;
+            return;
+        }
+
+        // Bags full, missing reagent, ...: tidy up and try again after a rest; give up after 3 failures.
+        ClearCraftedItems();
+        m_batchLeft = 0;
+        if (++m_craftFailures >= 3)
+        {
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PopBot] %s gives up crafting spell %u (cast result %u).", m_name.c_str(), m_recipeSpell, uint32(result));
+            m_recipeSpell = 0;
         }
     }
 
@@ -275,6 +435,9 @@ namespace Population
         uint32 const startMs = WorldTimer::getMSTime();
         m_nextShuffleAtMs = startMs + urand(60, 240) * IN_MILLISECONDS;
         m_waitUntilMs = startMs + urand(5, 20) * IN_MILLISECONDS;
+
+        if (m_request.role == CityRole::Crafter)
+            SetupProfession();
 
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         RefreshAppearanceForNearbyPlayers();

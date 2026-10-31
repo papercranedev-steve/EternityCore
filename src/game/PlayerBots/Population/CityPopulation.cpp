@@ -136,6 +136,7 @@ namespace Population
         m_maxBots = Clamp(sConfig.GetIntDefault("PopBot.City.MaxBots", 40), 0, 200);
         m_maxMoving = Clamp(sConfig.GetIntDefault("PopBot.City.MaxMoving", 12), 0, 100);
         m_showcase = Clamp(sConfig.GetIntDefault("PopBot.City.Showcase", 4), 0, 20);
+        m_crafters = Clamp(sConfig.GetIntDefault("PopBot.City.Crafters", 6), 0, 50);
         m_emptyGraceMs = Clamp(sConfig.GetIntDefault("PopBot.City.EmptyGraceSec", 120), 0, 3600) * IN_MILLISECONDS;
 
         m_zones.clear();
@@ -188,13 +189,14 @@ namespace Population
             return nullptr;
         };
 
-        auto addAnchor = [](CityState& s, CityAnchor anchor)
+        auto addAnchor = [](CityState& s, CityAnchor anchor) -> bool
         {
             // Same NPC spawned for several patches / duplicates: keep one.
             for (CityAnchor const& a : s.anchors)
                 if (a.type == anchor.type && !a.exactSpot && std::fabs(a.x - anchor.x) < 1.0f && std::fabs(a.y - anchor.y) < 1.0f)
-                    return;
+                    return false;
             s.anchors.push_back(std::move(anchor));
+            return true;
         };
 
         uint32 const patch = sWorld.GetWowPatch();
@@ -229,8 +231,8 @@ namespace Population
                     a.z = f[4].GetFloat();
                     a.o = f[5].GetFloat();
                     a.capacity = AnchorCapacity(a.type);
-                    addAnchor(*s, std::move(a));
-                    ++dbCount;
+                    if (addAnchor(*s, std::move(a)))
+                        ++dbCount;
                 } while (result->NextRow());
             }
         }
@@ -263,8 +265,8 @@ namespace Population
                     a.z = f[4].GetFloat();
                     a.o = f[5].GetFloat();
                     a.capacity = AnchorCapacity(a.type);
-                    addAnchor(*s, std::move(a));
-                    ++dbCount;
+                    if (addAnchor(*s, std::move(a)))
+                        ++dbCount;
                 } while (result->NextRow());
             }
         }
@@ -316,6 +318,7 @@ namespace Population
         t.total = uint32(std::lround(float(m_maxBots) * f));
         t.showcase = std::min(m_showcase, t.total);
         t.mover = std::min(uint32(std::lround(float(m_maxMoving) * f)), t.total - t.showcase);
+        t.crafter = std::min(uint32(std::lround(float(m_crafters) * f)), t.total - t.showcase - t.mover);
         return t;
     }
 
@@ -426,6 +429,32 @@ namespace Population
             return true;
         }
 
+        if (role == CityRole::Crafter)
+        {
+            // Near the auction house / bank / mailbox, a little back from the stand spots,
+            // facing the anchor. Does not take anchor capacity.
+            std::vector<CityAnchor const*> spots;
+            for (CityAnchor const& a : city.anchors)
+                for (uint32 w = 0; w < StandWeight(a.type); ++w)
+                    spots.push_back(&a);
+            Shuffle(spots);
+            for (CityAnchor const* a : spots)
+            {
+                Waypoint w;
+                if (!PickStandSpot(map, *a, 6.0f, 11.0f, a->type == "mail" ? float(M_PI) : 1.1f, w))
+                    continue;
+                out.x = w.x;
+                out.y = w.y;
+                out.z = w.z;
+                out.hasFacePoint = true;
+                out.faceX = w.faceX;
+                out.faceY = w.faceY;
+                out.o = FacingTo(w.x, w.y, w.faceX, w.faceY);
+                return true;
+            }
+            return false;
+        }
+
         // Stand / showcase: an anchor with room left.
         std::vector<int32> candidates;
         for (size_t i = 0; i < city.anchors.size(); ++i)
@@ -501,6 +530,8 @@ namespace Population
                 role = CityRole::Showcase;
             else if (counts.mover < targets.mover)
                 role = CityRole::Mover;
+            else if (counts.crafter < targets.crafter)
+                role = CityRole::Crafter;
 
             SpawnRequest request;
             if (!BuildRequest(city, role, counts, request))
@@ -519,6 +550,8 @@ namespace Population
                 ++counts.showcase;
             else if (role == CityRole::Mover)
                 ++counts.mover;
+            else if (role == CityRole::Crafter)
+                ++counts.crafter;
             else
                 ++counts.stand;
             if (request.anchorIndex >= 0 && size_t(request.anchorIndex) < counts.anchorUse.size())

@@ -3266,6 +3266,11 @@ AHBot.itemcount = 50
 #        level 60 veterans (veterans are not scaled by the hour).
 #        Default: 40 / 12 / 4
 #
+#    PopBot.City.Crafters
+#        Bots per city at hour factor 1.0 crafting in batches near the auction house, bank and
+#        mailboxes (First Aid, Tailoring, Leatherworking, Alchemy). Scaled by the hour.
+#        Default: 6
+#
 #    PopBot.City.EmptyGraceSec
 #        The city empties this long after the last player left it.
 #        Default: 120
@@ -3316,6 +3321,7 @@ PopBot.City.Zones = "1537 1519 1637"
 PopBot.City.MaxBots = 40
 PopBot.City.MaxMoving = 12
 PopBot.City.Showcase = 4
+PopBot.City.Crafters = 6
 PopBot.City.EmptyGraceSec = 120
 PopBot.HourCurve = "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
 

@@ -69,6 +69,7 @@ namespace Population
             case CityRole::Stand:    return "stand";
             case CityRole::Mover:    return "mover";
             case CityRole::Showcase: return "showcase";
+            case CityRole::Crafter:  return "crafter";
         }
         return "?";
     }
@@ -271,6 +272,7 @@ namespace Population
             {
                 case CityRole::Showcase: ++counts.showcase; break;
                 case CityRole::Mover:    ++counts.mover; break;
+                case CityRole::Crafter:  ++counts.crafter; break;
                 default:                 ++counts.stand; break;
             }
             if (r.anchorIndex >= 0 && size_t(r.anchorIndex) < counts.anchorUse.size())
@@ -308,7 +310,7 @@ namespace Population
             }
         }
 
-        for (CityRole role : { CityRole::Stand, CityRole::Mover, CityRole::Showcase })
+        for (CityRole role : { CityRole::Stand, CityRole::Crafter, CityRole::Mover, CityRole::Showcase })
         {
             Record* oldest = nullptr;
             for (Record& r : m_bots)

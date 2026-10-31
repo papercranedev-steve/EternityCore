@@ -35,6 +35,7 @@ namespace Population
         Stand,      // stands at an auctioneer / banker / mailbox, sometimes steps away and back
         Mover,      // runs between the city's stand spots, waits at each
         Showcase,   // geared veteran standing in view near the auction house / bank
+        Crafter,    // stands near the auction house / bank / mailbox crafting in batches
     };
 
     char const* BotKindName(BotKind kind);

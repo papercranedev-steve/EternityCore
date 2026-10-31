@@ -55,13 +55,13 @@ namespace Population
     // Bots of one city, including queued requests.
     struct CityCounts
     {
-        uint32 total = 0, stand = 0, mover = 0, showcase = 0;
+        uint32 total = 0, stand = 0, mover = 0, showcase = 0, crafter = 0;
         std::vector<uint32> anchorUse;      // stand + showcase bots per anchor
     };
 
     struct CityTargets
     {
-        uint32 total = 0, mover = 0, showcase = 0;
+        uint32 total = 0, mover = 0, showcase = 0, crafter = 0;
     };
 
     class CityDirector
@@ -94,6 +94,7 @@ namespace Population
         uint32 m_maxBots = 40;
         uint32 m_maxMoving = 12;
         uint32 m_showcase = 4;
+        uint32 m_crafters = 6;
         uint32 m_emptyGraceMs = 120 * IN_MILLISECONDS;
         std::vector<uint32> m_zones;
         float m_hourCurve[24] = {};
