@@ -184,12 +184,29 @@ namespace Commander
     // Fight-time patrol response (PatrolAssigner): an idle patrol walks into the fight before
     // it ends and moving the fight is worth it. The tank walks to the first candidate that
     // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies and
-    // the party follow the tank.
+    // the melee follow the tank, the followers below walk the same shift.
+    //
+    // A bot that does not chase the tank's enemies in melee (healer, ranged): it keeps its
+    // place in range (HealerStanceBehavior, the 25 yd caster chase) and would stay in the
+    // patrol's path. It walks start + (tank's chosen spot - tankStart), the position the
+    // assigner already checked against the patrol's walk.
+    struct PatrolFollower
+    {
+        ObjectGuid guid;
+        Position3 start;
+        // Written by the follower's PatrolBehavior: 0 = not checked yet, 1 = target passed
+        // the live checks, -1 = it did not (the follower stays, its stance module moves it).
+        mutable int8 state = 0;
+        mutable Position3 target;
+    };
+
     struct PatrolMovePlan
     {
         bool active = false;
         ObjectGuid patrol;
         ObjectGuid tank;
+        Position3 tankStart;                // the tank's position at decision time
+        std::vector<PatrolFollower> followers;
         std::vector<Position3> spots;       // best first, fixed while active
         float arriveSec = 0.0f;             // patrol reaches the current fight, at decision time
         float benefit = 0.0f;               // points not lost to the patrol

@@ -91,9 +91,44 @@ namespace Commander
             return spots;
         }
 
+        // Bots that do not follow the tank's enemies in melee (TeamPlan.h, PatrolFollower).
+        std::vector<PatrolFollower> Followers(WorldModel const& world, ObjectGuid tank)
+        {
+            std::vector<PatrolFollower> out;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || !m.alive || m.guid == tank)
+                    continue;
+                if (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS)
+                    continue;
+                PatrolFollower f;
+                f.guid = m.guid;
+                f.start = m.pos;
+                out.push_back(f);
+            }
+            return out;
+        }
+
+        // Every follower that can still walk its shift is there (the tank's spot is chosen).
+        bool FollowersArrived(WorldModel const& world, PatrolMovePlan const& m)
+        {
+            for (PatrolFollower const& f : m.followers)
+            {
+                if (f.state < 0)
+                    continue;
+                PartyMemberFacts const* member = world.FindMember(f.guid);
+                if (!member || !member->CanAct())
+                    continue;
+                if (f.state == 0 || PackResolver::Distance(member->pos, f.target) > PatrolAssigner::ARRIVED_DISTANCE)
+                    return false;
+            }
+            return true;
+        }
+
         void End(PatrolMovePlan& m)
         {
             m.active = false;
+            m.followers.clear();
             m.spots.clear();
             m.chosen = -1;
         }
@@ -137,7 +172,8 @@ namespace Commander
                 plan.notes.push_back("No reachable spot away from the patrol's path, fighting here.");
                 End(m);
             }
-            else if (m.chosen >= 0 && PackResolver::Distance(tank->pos, m.chosenSpot) <= ARRIVED_DISTANCE)
+            else if (m.chosen >= 0 && PackResolver::Distance(tank->pos, m.chosenSpot) <= ARRIVED_DISTANCE &&
+                     FollowersArrived(world, m))
                 End(m);
             // Joined the fight (now an enemy), died, or walked out of the scan.
             else if (patrol == world.patrols.end())
@@ -192,6 +228,8 @@ namespace Commander
             m.active = true;
             m.patrol = p.guid;
             m.tank = tank->guid;
+            m.tankStart = tank->pos;
+            m.followers = Followers(world, tank->guid);
             m.spots = std::move(spots);
             m.arriveSec = arrive;
             m.benefit = benefit;

@@ -18,7 +18,10 @@
  * benefit > cost and a spot: TeamPlan::patrolMove (PatrolBehavior walks the tank there).
  * Otherwise the party stays and the leader is told why. Each patrol is judged once per fight.
  *
- * Ends when the tank arrived, no spot passed the live checks, the patrol joined the fight or
+ * Healer and ranged bots are listed as followers (TeamPlan.h, PatrolFollower): they do not
+ * chase the enemies and walk the tank's shift themselves (PatrolBehavior).
+ *
+ * Ends when the tank and the followers arrived, no spot passed the live checks, the patrol joined the fight or
  * left the scan, the retreat or a pull took over, or MOVE_TIMEOUT_MS passed.
  *
  * Known limits: enemies that stand back and cast do not follow the tank (they may lose sight
