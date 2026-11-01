@@ -98,6 +98,10 @@ namespace Commander
             // stop now, do not hold an interrupter for it (scenario 3, 3.5).
             if (e.crowdControlled || e.silenced || !e.acting)
                 continue;
+            // Only fighting an ally: its casts land on the ally, not worth our interrupt
+            // cooldowns (planned values would wrongly assume one of us is hit).
+            if (e.onAllyOnly)
+                continue;
             Caster c;
             c.enemy = &e;
             c.live = e.castingSpellId && e.castInterruptible;

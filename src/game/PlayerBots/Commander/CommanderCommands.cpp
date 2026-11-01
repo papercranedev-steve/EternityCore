@@ -262,6 +262,12 @@ namespace
         Commander::PullPlan const& pull = commander->GetPlan().pull;
         float const healerMana = pull.phase == Commander::PullPhase::WaitReady ? pull.healerManaPct
                                                                                : Commander::PullPlanner::READY_MANA_PCT;
+        // The waiting pull may also be held for a patrol (PullPlanner::RecheckBeforeApproach).
+        if (pull.phase == Commander::PullPhase::WaitReady && pull.patrolWaitSinceMs)
+            handler->PSendSysMessage("Pull held for patrol %s for %.0fs (at most %u s).",
+                NameOf(map, pull.patrolWaitingFor).c_str(),
+                WorldTimer::getMSTimeDiffToNow(pull.patrolWaitSinceMs) / 1000.0f,
+                Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
         auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana);
         if (issues.empty())
         {
@@ -364,10 +370,13 @@ namespace
         }
 
         Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
-        handler->PSendSysMessage("Clearing packs within %.0f yd of here, at most %u mobs per pull. "
+        handler->PSendSysMessage("Clearing packs within %.0f yd of here, at most %u mobs per pull "
+            "(assistance and aggro range counted; waits up to %u s for patrols to pass). ",
+            radius, maxMobs, Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
+        handler->PSendSysMessage(
             "Pauses while you are more than %.0f yd away (goes on where you stop); stops when nothing is left, "
             "the tank is gone or someone dies twice. '.partybot ai clear stop' to stop.",
-            radius, maxMobs, Commander::ClearPlanner::MAX_LEADER_DRIFT);
+            Commander::ClearPlanner::MAX_LEADER_DRIFT);
         return true;
     }
 

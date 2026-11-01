@@ -72,7 +72,8 @@ namespace Commander
         // Kill priority of `enemy`; also used by FocusBehavior for the bot's current target.
         static FocusScore Evaluate(WorldModel const& world, EnemyFacts const& enemy);
         // Can be the party focus: acting, not controlled, not a fresh enemy the tank has not settled.
-        static bool IsEligible(WorldModel const& world, EnemyFacts const& enemy);
+        // Enemies only fighting an ally (onAllyOnly) are excluded unless `allowAllyOnly`.
+        static bool IsEligible(WorldModel const& world, EnemyFacts const& enemy, bool allowAllyOnly = false);
     };
 }
 

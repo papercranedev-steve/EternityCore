@@ -39,6 +39,10 @@ namespace Commander
         // While a pull or clear is running and the party is already fighting (player attacked
         // first, a patrol walked in), a bot not yet on any threat list must stand up and help
         // instead of sitting there drinking. Outside pull / clear the original AI is unchanged.
+        // "Fighting" = an enemy with one of us on its threat list: an ally's fight nearby (a
+        // guard, an escort) does not stop the party from drinking.
+        // The active boss module may ask for the same (IEncounter::WantsOutOfCombatControl):
+        // Zul'Farrak pyramid waves, where the next group arrives while bots are out of combat.
         bool WantsOutOfCombatControl() const
         {
             PullPhase const phase = m_plan.pull.phase;
@@ -46,7 +50,8 @@ namespace Commander
             bool const planRunning = phase != PullPhase::None || m_plan.clear.active;
             // A retreating bot that already dropped combat must keep running to the rally point,
             // not sit down to drink or follow the leader back into the enemies.
-            return pulling || m_plan.retreat.active || (planRunning && !m_world.enemies.empty());
+            return pulling || m_plan.retreat.active || (planRunning && m_world.HasPartyEnemy()) ||
+                   (m_activeEncounter && m_activeEncounter->WantsOutOfCombatControl());
         }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }

@@ -3,6 +3,7 @@
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
 #include "Commander/Encounters/GnomereganThermaplugg.h"
 #include "Commander/Encounters/ScholomanceGandling.h"
+#include "Commander/Encounters/ZulFarrakPyramid.h"
 
 namespace Commander
 {
@@ -27,6 +28,7 @@ namespace Commander
             { ScarletMograineWhitemane::MAP_ID, &Make<ScarletMograineWhitemane> },
             { GnomereganThermaplugg::MAP_ID,    &Make<GnomereganThermaplugg> },
             { ScholomanceGandling::MAP_ID,      &Make<ScholomanceGandling> },
+            { ZulFarrakPyramid::MAP_ID,         &Make<ZulFarrakPyramid> },
         };
     }
 

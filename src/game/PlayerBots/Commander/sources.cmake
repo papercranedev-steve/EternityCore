@@ -80,6 +80,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.cpp
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.h
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
+  ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.h
+  ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.cpp
+  ${COMMANDER_DIR}/Perception/HazardZones.h
+  ${COMMANDER_DIR}/Perception/HazardZones.cpp
+  ${COMMANDER_DIR}/Behaviors/PositioningBehavior.h
+  ${COMMANDER_DIR}/Behaviors/PositioningBehavior.cpp
+  ${COMMANDER_DIR}/Perception/PatrolTracker.h
+  ${COMMANDER_DIR}/Perception/PatrolTracker.cpp
   ${COMMANDER_DIR}/Coordination/RetreatPlanner.h
   ${COMMANDER_DIR}/Coordination/RetreatPlanner.cpp
   ${COMMANDER_DIR}/Behaviors/RetreatBehavior.h

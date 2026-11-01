@@ -7,7 +7,9 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include <algorithm>
+#include <cmath>
 #include <deque>
+#include <list>
 #include <set>
 
 namespace Commander
@@ -16,9 +18,18 @@ namespace AssistPredictor
 {
     namespace
     {
+        void Add(Creature* c, JoinReason reason, std::set<ObjectGuid>& seen, std::vector<Joiner>& out)
+        {
+            seen.insert(c->GetObjectGuid());
+            Joiner j;
+            j.guid = c->GetObjectGuid();
+            j.reason = reason;
+            out.push_back(j);
+        }
+
         // Members of an aggro-together group join without the assist flag, so they call too.
         void AddGroupMembers(Creature* c, std::set<ObjectGuid>& seen, std::deque<Creature*>& callers,
-                             std::vector<ObjectGuid>& out)
+                             std::vector<Joiner>& out)
         {
             CreatureGroup* group = c->GetCreatureGroup();
             if (!group || !group->HasGroupFlag(OPTION_AGGRO_TOGETHER))
@@ -28,8 +39,7 @@ namespace AssistPredictor
                 Creature* m = c->GetMap()->GetCreature(itr.first);
                 if (!m || !m->IsAlive() || m->IsInCombat() || seen.count(m->GetObjectGuid()))
                     continue;
-                seen.insert(m->GetObjectGuid());
-                out.push_back(m->GetObjectGuid());
+                Add(m, JoinReason::AggroTogether, seen, out);
                 callers.push_back(m);
             }
             // the leader is not always in its own member list
@@ -37,17 +47,46 @@ namespace AssistPredictor
             {
                 if (leader->IsAlive() && !leader->IsInCombat() && !seen.count(leader->GetObjectGuid()))
                 {
-                    seen.insert(leader->GetObjectGuid());
-                    out.push_back(leader->GetObjectGuid());
+                    Add(leader, JoinReason::AggroTogether, seen, out);
                     callers.push_back(leader);
                 }
             }
         }
+
+        // Idle creature that would attack `puller` standing at `at` on its own
+        // (BasicAI::MoveInLineOfSight conditions, evaluated at the stand point).
+        class AggroRangeCheck
+        {
+        public:
+            AggroRangeCheck(Unit const* puller, Position3 const& at) : m_puller(puller), m_at(at) {}
+            bool operator()(Creature* c)
+            {
+                if (!c->IsAlive() || c->IsInCombat() || !c->CanInitiateAttack())
+                    return false;
+                if (c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
+                    return false;
+                if (!c->IsHostileTo(m_puller) || !m_puller->IsTargetableBy(c))
+                    return false;
+                if (!c->CanFly() && std::fabs(c->GetPositionZ() - m_at.z) > CREATURE_Z_ATTACK_RANGE)
+                    return false;
+                float const dx = c->GetPositionX() - m_at.x;
+                float const dy = c->GetPositionY() - m_at.y;
+                float const dz = c->GetPositionZ() - m_at.z;
+                float const reach = c->GetAttackDistance(m_puller) + AGGRO_RANGE_MARGIN;
+                if (reach <= AGGRO_RANGE_MARGIN || dx * dx + dy * dy + dz * dz > reach * reach)
+                    return false;
+                return c->IsWithinLOS(m_at.x, m_at.y, m_at.z);
+            }
+
+        private:
+            Unit const* m_puller;
+            Position3 m_at;
+        };
     }
 
-    std::vector<ObjectGuid> Predict(Creature* target, Unit* puller)
+    std::vector<Joiner> PredictDetailed(Creature* target, Unit* puller, Position3 const* standAt)
     {
-        std::vector<ObjectGuid> out;
+        std::vector<Joiner> out;
         if (!target || !puller)
             return out;
 
@@ -55,10 +94,30 @@ namespace AssistPredictor
         std::set<ObjectGuid> seen;
         std::deque<Creature*> callers;
 
-        seen.insert(target->GetObjectGuid());
-        out.push_back(target->GetObjectGuid());
+        Add(target, JoinReason::Target, seen, out);
         callers.push_back(target);
         AddGroupMembers(target, seen, callers, out);
+
+        // Aggro-range joiners start attacking by themselves, so they call assistance too.
+        if (standAt)
+        {
+            std::list<Creature*> nearby;
+            AggroRangeCheck check(puller, *standAt);
+            MaNGOS::CreatureListSearcher<AggroRangeCheck> searcher(nearby, check);
+            // Grid search is centered on an object: the target, widened by its distance to the stand point.
+            float const dx = target->GetPositionX() - standAt->x;
+            float const dy = target->GetPositionY() - standAt->y;
+            float const searchRadius = AGGRO_SEARCH_RADIUS + std::sqrt(dx * dx + dy * dy);
+            Cell::VisitGridObjects(target, searcher, searchRadius);
+            for (Creature* c : nearby)
+            {
+                if (seen.count(c->GetObjectGuid()))
+                    continue;
+                Add(c, JoinReason::AggroRange, seen, out);
+                callers.push_back(c);
+                AddGroupMembers(c, seen, callers, out);
+            }
+        }
 
         // Bounded: every creature is added once.
         while (!callers.empty())
@@ -77,13 +136,38 @@ namespace AssistPredictor
             {
                 if (seen.count(h->GetObjectGuid()))
                     continue;
-                seen.insert(h->GetObjectGuid());
-                out.push_back(h->GetObjectGuid());
+                Add(h, JoinReason::Assist, seen, out);
                 // helper itself does not call again, but its aggro-together group joins and calls
                 AddGroupMembers(h, seen, callers, out);
             }
         }
         return out;
+    }
+
+    std::vector<ObjectGuid> Predict(Creature* target, Unit* puller)
+    {
+        return Guids(PredictDetailed(target, puller, nullptr));
+    }
+
+    std::vector<ObjectGuid> Guids(std::vector<Joiner> const& joiners)
+    {
+        std::vector<ObjectGuid> out;
+        out.reserve(joiners.size());
+        for (Joiner const& j : joiners)
+            out.push_back(j.guid);
+        return out;
+    }
+
+    char const* ReasonName(JoinReason reason)
+    {
+        switch (reason)
+        {
+            case JoinReason::Target:        return "target";
+            case JoinReason::Assist:        return "assist";
+            case JoinReason::AggroTogether: return "group";
+            case JoinReason::AggroRange:    return "aggro range";
+        }
+        return "?";
     }
 }
 }

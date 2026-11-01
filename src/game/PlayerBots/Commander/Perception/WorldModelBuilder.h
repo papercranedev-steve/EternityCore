@@ -19,10 +19,21 @@ namespace WorldModelBuilder
     // Creature spell lists are checked this often (CreatureAI.cpp CREATURE_CASTING_DELAY).
     float const CREATURE_SPELL_CHECK_SEC = 1.2f;
 
-    // Party members, pets, enemies and their threat lists. Cheap (no grid search).
+    // Allies (WorldModel::allies): friendly non-party creatures in combat within this range of
+    // the leader, at most MAX_ALLIES (nearest first). Enemies fighting them only are added up
+    // to MAX_ALLY_ENEMIES (a town guard fight must not flood the enemy list).
+    float const ALLY_RANGE = 40.0f;
+    size_t const MAX_ALLIES = 10;
+    size_t const MAX_ALLY_ENEMIES = 20;
+    // AllyFacts::tankLike: elite and max health >= this x the party tank's max health.
+    float const ALLY_TANK_HEALTH_MULT = 2.0f;
+
+    // Party members, pets, allies, enemies and their threat lists. No grid search: allies come
+    // from the last scan (allyCandidates), the previous allies, and the threat lists of enemies.
     void RefreshCombat(PartyBotAI* bot, WorldModel& world);
 
-    // Out-of-combat creatures near the leader, grouped into packs. Grid search, run less often.
+    // Out-of-combat creatures near the leader, grouped into packs, and the ally candidate scan.
+    // Grid searches, run less often.
     void RefreshPacks(PartyBotAI* bot, WorldModel& world);
 }
 }

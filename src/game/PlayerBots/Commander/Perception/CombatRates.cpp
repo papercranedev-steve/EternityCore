@@ -26,6 +26,10 @@ namespace Commander
 
         for (EnemyFacts const& e : world.enemies)
         {
+            // Enemies only fighting an ally (prisoners, guards) are not our fight: their health
+            // would stretch our remaining fight time and their loss would count as our damage.
+            if (e.onAllyOnly)
+                continue;
             r.enemyHealth += float(e.health);
             if (e.crowdControlled || !e.acting || e.victim.IsEmpty())
                 continue;
@@ -34,7 +38,7 @@ namespace Commander
         }
 
         // No enemies: the fight is over, start a new measurement next time.
-        if (world.enemies.empty())
+        if (!world.HasPartyEnemy())
         {
             m_samples.clear();
             return;
@@ -70,7 +74,8 @@ namespace Commander
         Sample sample;
         sample.timeMs = nowMs;
         for (EnemyFacts const& e : world.enemies)
-            sample.rows.push_back({ e.guid, float(e.health) });
+            if (!e.onAllyOnly)      // an ally's kills are not our damage
+                sample.rows.push_back({ e.guid, float(e.health) });
         m_samples.push_back(std::move(sample));
     }
 }

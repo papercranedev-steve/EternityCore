@@ -4,15 +4,18 @@
  *
  * Loop: fight over -> pause (at least 3 s, longer while the player still has corpses to loot)
  * -> wait for dead members to be resurrected -> pick the nearest hostile pack in range that is
- * not too hard -> PullPlanner::Plan (waits until everyone is ready) -> predict again when the
- * tank is about to go -> pull -> repeat.
+ * not too hard -> PullPlanner::Plan (waits until everyone is ready) -> predict again and wait
+ * for patrols when the tank is about to go (PullPlanner::RecheckBeforeApproach) -> pull -> repeat.
  *
  * Pauses while the leader is away from the start (resumes where the leader stops).
  * A pull interrupted by another fight (player attacked, patrol) does not stop it.
  * Stops when nothing is left, there is no living tank, a pull fails, somebody is not
- * resurrected in time, or somebody dies a second time.
+ * resurrected in time, or somebody dies a second time (members already dead at the start
+ * are waited for but do not count as a death).
+ * Packs whose hostile members are all stealthed are passed over each round, not skipped.
  *
  * Runs on the map thread from PartyCommander::Update (needs live objects for planning).
+ * Step also runs RecheckBeforeApproach for a single `.partybot ai pull` (no clear running).
  */
 
 #ifndef MANGOS_COMMANDER_CLEAR_PLANNER_H
@@ -43,6 +46,7 @@ namespace Commander
         uint32 const MAX_DEATH_EVENTS = 2;          // fights with a death before the clear stops
 
         // Prediction again when the tank is about to go; over the limit this long: skip the pack.
+        // (Patrol waiting has its own limit, PullPlanner::PATROL_WAIT_MAX_MS.)
         uint32 const REPREDICT_WAIT_MS = 30 * 1000;
 
         // Packs with an elite or this many mobs make healers drink to full first (cheap at low level).

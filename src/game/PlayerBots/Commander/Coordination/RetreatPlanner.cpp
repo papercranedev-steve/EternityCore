@@ -186,7 +186,7 @@ namespace Commander
                 report.push_back("No retreat in instances: creatures there never give up by distance.");
                 return false;
             }
-            if (world.enemies.empty())
+            if (!world.HasPartyEnemy())
             {
                 report.push_back("Your party is not fighting anything.");
                 return false;
@@ -384,7 +384,7 @@ namespace Commander
     {
         RetreatPlan& r = plan.retreat;
         // A new fight may get its own hint.
-        if (world.enemies.empty())
+        if (!world.HasPartyEnemy())
         {
             r.adviceSent = false;
             r.dangerSinceMs = 0;
@@ -442,7 +442,7 @@ namespace Commander
         }
 
         // Enemies leave world.enemies when they drop us from their threat list (evade clears it).
-        if (world.enemies.empty() && !missingCount)
+        if (!world.HasPartyEnemy() && !missingCount)
         {
             finish(RetreatOutcome::Done, "Retreat done: the enemies gave up and everyone is at the retreat point.");
             return;
@@ -450,7 +450,7 @@ namespace Commander
         if (WorldTimer::getMSTimeDiff(r.startedMs, now) > TIMEOUT_MS)
         {
             std::string text = Format("Retreat ended after %u s:", TIMEOUT_MS / 1000);
-            if (!world.enemies.empty())
+            if (world.HasPartyEnemy())
                 text += Format(" %u enemies still fighting us.", uint32(world.enemies.size()));
             if (missingCount)
                 text += Format(" Not at the point: %s%s.", missing.c_str(), missingCount > 3 ? " and others" : "");

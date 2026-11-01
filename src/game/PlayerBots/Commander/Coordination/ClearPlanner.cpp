@@ -1,7 +1,6 @@
 #include "Commander/Coordination/ClearPlanner.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Perception/AssistPredictor.h"
 #include "Commander/Perception/PackResolver.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
@@ -80,15 +79,6 @@ namespace ClearPlanner
                 names += u ? u->GetName() : "a party member";
             }
             return names;
-        }
-
-        bool IsStealthedPackCreature(WorldModel const& world, ObjectGuid guid)
-        {
-            for (PackFacts const& pack : world.packs)
-                for (PackCreature const& c : pack.members)
-                    if (c.guid == guid)
-                        return c.stealthed;
-            return false;
         }
 
         // Corpse with loot left on it (the client shows it as lootable).
@@ -179,7 +169,7 @@ namespace ClearPlanner
                 Note(plan, Format("Clear paused: you are more than %.0f yd from the start. "
                     "It goes on from where you stand still for %u seconds.", MAX_LEADER_DRIFT, LEADER_STILL_MS / 1000));
             }
-            if (world.enemies.empty() && WorldTimer::getMSTimeDiff(clear.leaderStillSinceMs, nowMs) >= LEADER_STILL_MS)
+            if (!world.HasPartyEnemy() && WorldTimer::getMSTimeDiff(clear.leaderStillSinceMs, nowMs) >= LEADER_STILL_MS)
             {
                 clear.anchor = here;
                 clear.paused = false;
@@ -196,9 +186,22 @@ namespace ClearPlanner
         {
             ClearPlan& clear = plan.clear;
             std::vector<ObjectGuid> dead;
+            bool newDeath = false;      // someone who was alive when the clear started
             for (PartyMemberFacts const& m : world.party)
-                if (!m.isPet && !m.alive)
-                    dead.push_back(m.guid);
+            {
+                if (m.isPet)
+                    continue;
+                if (m.alive)
+                {
+                    // Up again: a later death of this member counts.
+                    clear.deadAtStart.erase(std::remove(clear.deadAtStart.begin(), clear.deadAtStart.end(), m.guid),
+                        clear.deadAtStart.end());
+                    continue;
+                }
+                dead.push_back(m.guid);
+                if (!Contains(clear.deadAtStart, m.guid))
+                    newDeath = true;
+            }
 
             if (dead.empty())
             {
@@ -213,14 +216,17 @@ namespace ClearPlanner
             std::string const names = NamesOf(map, dead);
             if (!clear.reviveWaitSinceMs)
             {
-                ++clear.deathEvents;
+                // Members already dead at the start are waited for, but are not a death of this clear.
+                if (newDeath)
+                    ++clear.deathEvents;
                 if (clear.deathEvents >= MAX_DEATH_EVENTS)
                 {
                     Stop(commander, names + " died (second fight with a death).");
                     return false;
                 }
                 clear.reviveWaitSinceMs = nowMs;
-                Note(plan, Format("%s died. Waiting up to %u seconds for a resurrection.", names.c_str(), REVIVE_WAIT_MS / 1000));
+                Note(plan, Format("%s %s. Waiting up to %u seconds for a resurrection.", names.c_str(),
+                    newDeath ? "died" : "is dead", REVIVE_WAIT_MS / 1000));
                 return false;
             }
             if (WorldTimer::getMSTimeDiff(clear.reviveWaitSinceMs, nowMs) > REVIVE_WAIT_MS)
@@ -228,61 +234,24 @@ namespace ClearPlanner
             return false;
         }
 
-        // The tank is about to go (WaitReady -> Approach this refresh). Patrols may have walked
-        // next to the target while the party got ready: predict again. Over the limit: back to
-        // WaitReady; still over after REPREDICT_WAIT_MS: skip the pack.
+        // The tank is about to go (WaitReady -> Approach this refresh): predict again and look
+        // at patrols (PullPlanner::RecheckBeforeApproach). Given up (still over the limit, or a
+        // patrol still near after waiting): skip the pack.
         void RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
         {
-            PullPlan& pull = plan.pull;
+            std::string why;
+            if (PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why) != PullPlanner::RecheckResult::GiveUp)
+                return;
+
             ClearPlan& clear = plan.clear;
-            if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked)
-                return;
-
-            Creature* target = map->GetCreature(pull.target);
-            Unit* tank = map->GetUnit(pull.tank);
-            if (!target || !tank || !target->IsAlive() || target->IsInCombat())
-            {
-                pull.rechecked = true;      // the assigner deals with it (fight started / timeout)
-                return;
-            }
-
-            std::vector<ObjectGuid> expected = AssistPredictor::Predict(target, tank);
-            // Stealthed pack members were added by the planner, keep counting them.
-            for (ObjectGuid g : pull.expected)
-                if (!Contains(expected, g) && IsStealthedPackCreature(world, g))
-                    expected.push_back(g);
-
-            if (expected.size() > clear.maxMobs)
-            {
-                if (!pull.recheckWaitSinceMs)
-                {
-                    pull.recheckWaitSinceMs = nowMs;
-                    Note(plan, Format("Holding the pull: %s would now bring %u (limit %u). Waiting for that to change.",
-                        target->GetName(), uint32(expected.size()), clear.maxMobs));
-                }
-                else if (WorldTimer::getMSTimeDiff(pull.recheckWaitSinceMs, nowMs) > REPREDICT_WAIT_MS)
-                {
-                    for (ObjectGuid g : pull.expected)
-                        clear.skipped.push_back(g);
-                    for (ObjectGuid g : expected)
-                        clear.skipped.push_back(g);
-                    ++clear.skippedPacks;
-                    Note(plan, Format("Skipping %s's pack: still %u after %u seconds.",
-                        target->GetName(), uint32(expected.size()), REPREDICT_WAIT_MS / 1000));
-                    plan.pull = PullPlan();
-                    return;
-                }
-                pull.phase = PullPhase::WaitReady;
-                pull.phaseSinceMs = nowMs;
-                return;
-            }
-
-            if (pull.recheckWaitSinceMs)
-                Note(plan, Format("%s would bring %u now, pulling.", target->GetName(), uint32(expected.size())));
-            pull.expected = std::move(expected);
-            pull.rechecked = true;
+            for (ObjectGuid g : plan.pull.expected)
+                clear.skipped.push_back(g);
+            ++clear.skippedPacks;
+            Creature* target = map->GetCreature(plan.pull.target);
+            std::string const whose = target ? std::string(target->GetName()) + "'s" : "the";
+            Note(plan, "Skipping " + whose + " pack: " + why + ".");
+            plan.pull = PullPlan();
         }
-
         uint32 CountElites(Map* map, std::vector<ObjectGuid> const& guids)
         {
             uint32 elites = 0;
@@ -323,6 +292,10 @@ namespace ClearPlanner
         plan.clear.maxMobs = maxMobs;
         plan.clear.idleSinceMs = 0;     // first pull right away
         plan.lastPullOutcome = PullOutcome::None;
+        // Already dead now: waited for like any death, but not counted as a death of this clear.
+        for (PartyMemberFacts const& m : commander.GetWorld().party)
+            if (!m.isPet && !m.alive)
+                plan.clear.deadAtStart.push_back(m.guid);
     }
 
     void Stop(PartyCommander& commander, std::string const& why)
@@ -340,11 +313,22 @@ namespace ClearPlanner
     {
         TeamPlan& plan = commander.GetPlanMutable();
         ClearPlan& clear = plan.clear;
-        if (!clear.active)
-            return;
-
         WorldModel const& world = commander.GetWorld();
         Map* map = bot->me->GetMap();
+
+        // A single `.partybot ai pull` gets the same second prediction and patrol wait as the
+        // clear; it has no mob limit and never gives up (a patrol that stays near is reported,
+        // then the pull goes on).
+        if (!clear.active)
+        {
+            if (plan.pull.phase != PullPhase::None)
+            {
+                std::string why;
+                PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why);
+            }
+            return;
+        }
+
         Player* leader = bot->GetPartyLeader();
         if (!leader || !leader->IsInWorld() || leader->GetMap() != map)
         {
@@ -353,7 +337,7 @@ namespace ClearPlanner
         }
 
         // Any fight (also one the player started, also while paused) restarts the pause after it.
-        if (!world.enemies.empty())
+        if (world.HasPartyEnemy())
             clear.idleSinceMs = nowMs;
 
         if (!FollowLeader(plan, commander, world, leader, nowMs))
@@ -387,7 +371,7 @@ namespace ClearPlanner
         }
 
         // Fight still going (also fights the player started): wait.
-        if (!world.enemies.empty())
+        if (world.HasPartyEnemy())
             return;
 
         // The interrupting fight killed the planned pack: it counts as cleared.
@@ -423,6 +407,7 @@ namespace ClearPlanner
         // Next pack: packs are sorted nearest to the leader first. Packs with a patrol go last:
         // their membership changes as the patrol walks, they are looked at again every round.
         bool passedOver = false;    // a pack is left for later (someone else is fighting it)
+        uint32 stealthOnly = 0;     // packs whose hostile members are all stealthed now
         for (int pass = 0; pass < 2; ++pass)
         {
             bool const patrolPass = pass == 1;
@@ -461,6 +446,25 @@ namespace ClearPlanner
                     continue;
                 }
 
+                // Only stealthed creatures could start the fight: the tank cannot target them now.
+                // Not skipped for good (they may unstealth or walk into a visible pack): looked at
+                // again every round. They do not keep the clear running on their own.
+                bool const visibleHostile = AnyMember(pack, [](PackCreature const& c)
+                {
+                    return c.aggressive && !c.noAggro && !c.stealthed;
+                });
+                if (!visibleHostile)
+                {
+                    ++stealthOnly;
+                    if (!Contains(clear.stealthNoted, first->GetObjectGuid()))
+                    {
+                        clear.stealthNoted.push_back(first->GetObjectGuid());
+                        Note(plan, std::string("Passing over ") + first->GetName() +
+                            "'s pack for now: only stealthed creatures, the tank cannot target them.");
+                    }
+                    continue;
+                }
+
                 if (pack.maxLevel > leader->GetLevel() + MAX_LEVEL_ABOVE_LEADER)
                 {
                     Skip(clear, pack);
@@ -491,14 +495,16 @@ namespace ClearPlanner
                 // takes seconds (combat scenario 13, 1.8). No cost model yet.
                 bool const hard = CountElites(map, plan.pull.expected) > 0 || plan.pull.expected.size() >= HARD_PACK_MOBS;
                 plan.pull.healerManaPct = hard ? PullPlanner::READY_FULL_MANA_PCT : PullPlanner::READY_MANA_PCT;
-                plan.pull.recheckOnApproach = true;
+                // PullPlanner::Plan sets recheckOnApproach (not a "pull now"): the second
+                // prediction, the limit and the patrol wait run in RecheckBeforeApproach.
 
-                // Only the summary line, plus why the party fights at the pack if so;
-                // the full report is available through .partybot ai pull.
+                // Only the summary line, plus why the party fights at the pack, a ranged pull and
+                // a patrol if so; the full report is available through .partybot ai pull.
                 if (!report.empty())
                     Note(plan, report.front());
                 for (std::string const& line : report)
-                    if (line.find("casts from range") != std::string::npos)
+                    if (line.find("casts from range") != std::string::npos ||
+                        line.rfind("Ranged pull:", 0) == 0 || line.rfind("Patrol ", 0) == 0)
                         Note(plan, line);
                 if (hard)
                     Note(plan, "Healers drink to full mana first.");
@@ -510,8 +516,10 @@ namespace ClearPlanner
         if (passedOver)
             return;
 
+        std::string const stealthText = stealthOnly
+            ? Format(" %u pack(s) with only stealthed creatures left; pull them yourself.", stealthOnly) : "";
         Stop(commander, Format("nothing left to pull within %.0f yd (%u packs skipped in total).",
-            clear.radius, clear.skippedPacks));
+            clear.radius, clear.skippedPacks) + stealthText);
     }
 }
 }

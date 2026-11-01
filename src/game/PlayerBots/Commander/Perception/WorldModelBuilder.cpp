@@ -18,6 +18,7 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include <algorithm>
+#include <limits>
 
 namespace Commander
 {
@@ -139,109 +140,39 @@ namespace WorldModelBuilder
             f.interrupts.push_back(a);
         }
 
-        void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
+        // A friendly creature that may be an ally of the party: alive, fighting, near `center`,
+        // friendly to `reference` (the leader), and nobody's pet, guardian, totem or charm
+        // (party pets are party members; other players' pets are not ours to protect).
+        bool IsAllyCandidate(Creature const* c, Unit const* reference, WorldObject const* center)
         {
-            auto const& s = ai->m_spells;
-            switch (ai->me->GetClass())
-            {
-                case CLASS_WARRIOR:
-                    AddInterrupt(ai, s.warrior.pPummel, f);
-                    if (ai->IsWearingShield(ai->me))
-                        AddInterrupt(ai, s.warrior.pShieldBash, f);
-                    break;
-                case CLASS_ROGUE:
-                    AddInterrupt(ai, s.rogue.pKick, f);
-                    break;
-                case CLASS_MAGE:
-                    AddInterrupt(ai, s.mage.pCounterspell, f);
-                    break;
-                case CLASS_SHAMAN:
-                    AddInterrupt(ai, s.shaman.pEarthShock, f);
-                    break;
-                case CLASS_DRUID:
-                    AddInterrupt(ai, s.druid.pBash, f);
-                    AddInterrupt(ai, s.druid.pFeralCharge, f);
-                    break;
-                case CLASS_PALADIN:
-                    AddInterrupt(ai, s.paladin.pHammerOfJustice, f);
-                    break;
-                case CLASS_PRIEST:
-                    AddInterrupt(ai, s.priest.pSilence, f);   // shadow talent; null for most healers
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
-
-    void RefreshCombat(PartyBotAI* bot, WorldModel& world)
-    {
-        Player* me = bot->me;
-        Map* map = me->GetMap();
-        Group* group = me->GetGroup();
-
-        world.party.clear();
-        world.enemies.clear();
-        world.leader = group ? group->GetLeaderGuid() : ObjectGuid();
-        if (!group)
-            return;
-
-        // Party members and pets on this map.
-        std::vector<Unit*> partyUnits;
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
-        {
-            Player* member = itr->getSource();
-            if (!member || !member->IsInWorld() || member->GetMap() != map)
-                continue;
-
-            PartyMemberFacts f;
-            FillUnitFacts(member, f);
-            if (member->AI())
-            {
-                if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
-                {
-                    f.isBot = true;
-                    f.role = uint8(ai->m_role);
-                    if (member->IsAlive())
-                        FillInterrupts(ai, f);
-                }
-            }
-            world.party.push_back(f);
-            partyUnits.push_back(member);
-
-            if (Pet* pet = member->GetPet())
-            {
-                if (pet->IsInWorld() && pet->GetMap() == map)
-                {
-                    PartyMemberFacts pf;
-                    FillUnitFacts(pet, pf);
-                    pf.isPet = true;
-                    pf.ownerGuid = member->GetObjectGuid();
-                    world.party.push_back(pf);
-                    partyUnits.push_back(pet);
-                }
-            }
+            if (!c->IsAlive() || !c->IsInWorld() || c->GetMap() != center->GetMap() || !c->IsInCombat())
+                return false;
+            if (c->IsPet() || c->IsTotem() || !c->GetOwnerGuid().IsEmpty() || !c->GetCharmerGuid().IsEmpty() ||
+                c->GetCreatureType() == CREATURE_TYPE_CRITTER)
+                return false;
+            if (!center->IsWithinDistInMap(c, ALLY_RANGE))
+                return false;
+            return c->IsFriendlyTo(reference);
         }
 
-        // Every creature that has one of us on its threat list.
-        std::vector<Creature*> enemies;
-        for (Unit* unit : partyUnits)
+        void FillAlly(Creature const* c, AllyFacts& a)
         {
-            for (HostileReference* ref = unit->GetHostileRefManager().getFirst(); ref; ref = ref->next())
-            {
-                Unit* owner = ref->getSource()->getOwner();
-                if (!owner || !owner->IsCreature() || !owner->IsAlive() || !owner->IsInWorld() || owner->GetMap() != map)
-                    continue;
-                Creature* creature = static_cast<Creature*>(owner);
-                if (std::find(enemies.begin(), enemies.end(), creature) == enemies.end())
-                    enemies.push_back(creature);
-            }
+            a.guid = c->GetObjectGuid();
+            a.entry = c->GetEntry();
+            a.level = c->GetLevel();
+            a.rank = c->GetCreatureInfo()->rank;
+            a.elite = a.rank != CREATURE_ELITE_NORMAL;
+            a.healthPct = c->GetHealthPercent();
+            a.health = c->GetHealth();
+            a.maxHealth = c->GetMaxHealth();
+            a.armor = uint32(std::max(0, c->GetArmor()));
+            a.pos = PositionOf(c);
+            if (Unit const* victim = c->GetVictim())
+                a.victim = victim->GetObjectGuid();
         }
 
-        world.enemies.reserve(enemies.size());
-        for (Creature* creature : enemies)
+        void FillEnemy(Creature* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
         {
-            EnemyFacts e;
             e.guid = creature->GetObjectGuid();
             e.entry = creature->GetEntry();
             e.level = creature->GetLevel();
@@ -289,6 +220,9 @@ namespace WorldModelBuilder
                 e.victimThreat = victimRef->getThreat();
             }
 
+            // Every row of the live list. Rows of allies (and anyone else) stay with
+            // partySide = false: ThreatView::Headroom needs the victim's threat when an ally
+            // tank is the one being hit, VictimLead skips them.
             for (HostileReference* ref : tm.getThreatList())
             {
                 ThreatEntry t;
@@ -327,7 +261,188 @@ namespace WorldModelBuilder
             {
                 return a.threat > b.threat;
             });
+        }
 
+        // Creatures whose threat list holds `unit` (reverse lookup through its HostileRefManager),
+        // alive and on `map`, appended to `out` unless already there. Stops at `limit` entries.
+        void CollectAttackers(Unit* unit, Map const* map, std::vector<Creature*>& out, size_t limit,
+                              Player const* validator)
+        {
+            for (HostileReference* ref = unit->GetHostileRefManager().getFirst(); ref; ref = ref->next())
+            {
+                if (out.size() >= limit)
+                    return;
+                Unit* owner = ref->getSource()->getOwner();
+                if (!owner || !owner->IsCreature() || !owner->IsAlive() || !owner->IsInWorld() || owner->GetMap() != map)
+                    continue;
+                // Allies' attackers only: must be something we may attack (not a neutral
+                // creature an escort picked a fight with in a town, not a duel).
+                if (validator && !validator->IsValidAttackTarget(owner))
+                    continue;
+                Creature* creature = static_cast<Creature*>(owner);
+                if (std::find(out.begin(), out.end(), creature) == out.end())
+                    out.push_back(creature);
+            }
+        }
+
+        void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            auto const& s = ai->m_spells;
+            switch (ai->me->GetClass())
+            {
+                case CLASS_WARRIOR:
+                    AddInterrupt(ai, s.warrior.pPummel, f);
+                    if (ai->IsWearingShield(ai->me))
+                        AddInterrupt(ai, s.warrior.pShieldBash, f);
+                    break;
+                case CLASS_ROGUE:
+                    AddInterrupt(ai, s.rogue.pKick, f);
+                    break;
+                case CLASS_MAGE:
+                    AddInterrupt(ai, s.mage.pCounterspell, f);
+                    break;
+                case CLASS_SHAMAN:
+                    AddInterrupt(ai, s.shaman.pEarthShock, f);
+                    break;
+                case CLASS_DRUID:
+                    AddInterrupt(ai, s.druid.pBash, f);
+                    AddInterrupt(ai, s.druid.pFeralCharge, f);
+                    break;
+                case CLASS_PALADIN:
+                    AddInterrupt(ai, s.paladin.pHammerOfJustice, f);
+                    break;
+                case CLASS_PRIEST:
+                    AddInterrupt(ai, s.priest.pSilence, f);   // shadow talent; null for most healers
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    void RefreshCombat(PartyBotAI* bot, WorldModel& world)
+    {
+        Player* me = bot->me;
+        Map* map = me->GetMap();
+        Group* group = me->GetGroup();
+
+        world.party.clear();
+        world.enemies.clear();
+        world.leader = group ? group->GetLeaderGuid() : ObjectGuid();
+        if (!group)
+        {
+            world.allies.clear();
+            return;
+        }
+
+        // Party members and pets on this map.
+        std::vector<Unit*> partyUnits;
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (!member || !member->IsInWorld() || member->GetMap() != map)
+                continue;
+
+            PartyMemberFacts f;
+            FillUnitFacts(member, f);
+            if (member->AI())
+            {
+                if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
+                {
+                    f.isBot = true;
+                    f.role = uint8(ai->m_role);
+                    if (member->IsAlive())
+                        FillInterrupts(ai, f);
+                }
+            }
+            world.party.push_back(f);
+            partyUnits.push_back(member);
+
+            if (Pet* pet = member->GetPet())
+            {
+                if (pet->IsInWorld() && pet->GetMap() == map)
+                {
+                    PartyMemberFacts pf;
+                    FillUnitFacts(pet, pf);
+                    pf.isPet = true;
+                    pf.ownerGuid = member->GetObjectGuid();
+                    world.party.push_back(pf);
+                    partyUnits.push_back(pet);
+                }
+            }
+        }
+
+        // Every creature that has one of us on its threat list.
+        std::vector<Creature*> enemies;
+        for (Unit* unit : partyUnits)
+            CollectAttackers(unit, map, enemies, std::numeric_limits<size_t>::max(), nullptr);
+        size_t const partyEnemyCount = enemies.size();
+
+        // Allies. Candidates: the last grid scan (RefreshPacks, 1 s), the allies of the previous
+        // refresh, and non-party creatures on our enemies' threat lists (an ally that just joined
+        // our fight is seen at once). All re-checked here, so the 1 s scan only delays allies
+        // that fight something we are not fighting yet.
+        Player* leader = bot->GetPartyLeader();
+        Unit* reference = (leader && leader->IsInWorld() && leader->GetMap() == map) ? static_cast<Unit*>(leader) : me;
+        std::vector<ObjectGuid> allyGuids = world.allyCandidates;
+        for (AllyFacts const& a : world.allies)
+            allyGuids.push_back(a.guid);
+        for (Creature* enemy : enemies)
+            for (HostileReference* ref : enemy->GetThreatManager().getThreatList())
+                if (Unit* target = ref->getTarget())
+                    if (target->IsCreature())
+                        allyGuids.push_back(target->GetObjectGuid());
+        world.allies.clear();
+
+        std::vector<Creature*> allies;
+        for (ObjectGuid const& guid : allyGuids)
+        {
+            Creature* c = map->GetCreature(guid);
+            if (!c || std::find(allies.begin(), allies.end(), c) != allies.end())
+                continue;
+            if (IsAllyCandidate(c, reference, reference))
+                allies.push_back(c);
+        }
+        std::sort(allies.begin(), allies.end(), [reference](Creature* a, Creature* b)
+        {
+            return reference->GetDistance(a) < reference->GetDistance(b);
+        });
+        if (allies.size() > MAX_ALLIES)
+            allies.resize(MAX_ALLIES);
+
+        // tankLike: compared with the party tank (tank-role bot), else the sturdiest member.
+        uint32 tankMaxHealth = 0;
+        uint32 sturdiest = 0;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet)
+                continue;
+            sturdiest = std::max(sturdiest, m.maxHealth);
+            if (m.isBot && m.role == ROLE_TANK)
+                tankMaxHealth = std::max(tankMaxHealth, m.maxHealth);
+        }
+        if (!tankMaxHealth)
+            tankMaxHealth = sturdiest;
+
+        world.allies.reserve(allies.size());
+        for (Creature* c : allies)
+        {
+            AllyFacts a;
+            FillAlly(c, a);
+            a.tankLike = a.elite && tankMaxHealth && float(a.maxHealth) >= ALLY_TANK_HEALTH_MULT * float(tankMaxHealth);
+            world.allies.push_back(a);
+        }
+
+        // Creatures fighting an ally and none of us: same reverse lookup as above, on the allies.
+        for (Creature* ally : allies)
+            CollectAttackers(ally, map, enemies, partyEnemyCount + MAX_ALLY_ENEMIES, me);
+
+        world.enemies.reserve(enemies.size());
+        for (size_t i = 0; i < enemies.size(); ++i)
+        {
+            EnemyFacts e;
+            FillEnemy(enemies[i], partyUnits, e);
+            e.onAllyOnly = i >= partyEnemyCount;
             world.enemies.push_back(std::move(e));
         }
     }
@@ -382,6 +497,20 @@ namespace WorldModelBuilder
         }
 
         world.packs = PackResolver::Resolve(creatures, PositionOf(center));
+
+        // Ally candidates for the next RefreshCombat: friendly creatures in combat around the
+        // leader. Grid objects only (players are party members or strangers, never allies).
+        Unit* reference = (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap())
+            ? static_cast<Unit*>(leader) : static_cast<Unit*>(me);
+        std::list<Unit*> friends;
+        MaNGOS::AnyFriendlyUnitInObjectRangeCheck friendCheck(reference, ALLY_RANGE);
+        MaNGOS::UnitListSearcher<MaNGOS::AnyFriendlyUnitInObjectRangeCheck> friendSearcher(friends, friendCheck);
+        Cell::VisitGridObjects(reference, friendSearcher, ALLY_RANGE);
+
+        world.allyCandidates.clear();
+        for (Unit* unit : friends)
+            if (unit->IsCreature() && IsAllyCandidate(static_cast<Creature const*>(unit), reference, reference))
+                world.allyCandidates.push_back(unit->GetObjectGuid());
     }
 }
 }

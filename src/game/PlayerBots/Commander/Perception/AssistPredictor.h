@@ -3,12 +3,19 @@
  * Uses the server's own checks, so it reads live objects (map thread or world thread
  * while maps are idle).
  *
- * Rules (Creature.cpp CallAssistance / AssistDelayEvent, CreatureGroups.cpp):
+ * Rules (Creature.cpp CallAssistance / AssistDelayEvent, CreatureGroups.cpp, BasicAI.cpp):
  *  - A creature that starts attacking calls assistance: creatures within
  *    CreatureFamilyAssistanceRadius that pass CanAssistTo and are in line of sight join
  *    after CreatureFamilyAssistanceDelay. Those helpers are flagged and do not call again.
  *  - creature_groups with OPTION_AGGRO_TOGETHER: all members join, and they do call
  *    assistance themselves.
+ *  - Aggro range (only when `standAt` is given): the puller stands at `standAt` when it hits
+ *    the target. Every other idle hostile creature that can start a fight (same conditions as
+ *    BasicAI::MoveInLineOfSight: CanInitiateAttack, not NO_AGGRO, hostile, z difference within
+ *    CREATURE_Z_ATTACK_RANGE) and is closer to `standAt` than its GetAttackDistance(puller) +
+ *    AGGRO_RANGE_MARGIN, with line of sight to it, attacks on its own. It starts attacking, so
+ *    it calls assistance too (combat scenarios 11 "Lord 522" and 13, table rows 10-11).
+ *    Only the stand point is checked, not the way there.
  */
 
 #ifndef MANGOS_COMMANDER_ASSIST_PREDICTOR_H
@@ -16,6 +23,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Commander/Perception/WorldModel.h"
 #include <vector>
 
 class Creature;
@@ -25,8 +33,36 @@ namespace Commander
 {
 namespace AssistPredictor
 {
-    // Every creature expected in the fight, `target` included.
+    // Server aggro checks run on every movement update; the margin covers the last step
+    // of the puller and small differences of the stand point.
+    float const AGGRO_RANGE_MARGIN = 2.0f;
+    // Search radius around the stand point for aggro-range joiners. GetAttackDistance is
+    // detection_range +- level difference (capped at 25 levels), 45 covers it in practice.
+    float const AGGRO_SEARCH_RADIUS = 45.0f;
+
+    enum class JoinReason : uint8
+    {
+        Target,
+        Assist,         // called for help by a creature that started attacking
+        AggroTogether,  // creature_groups member of a joiner
+        AggroRange,     // the puller stands within its aggro range
+    };
+
+    struct Joiner
+    {
+        ObjectGuid guid;
+        JoinReason reason = JoinReason::Assist;
+    };
+
+    // Every creature expected in the fight, `target` included, with why it joins.
+    // `standAt` = where the puller stands when it hits the target; null skips aggro range.
+    std::vector<Joiner> PredictDetailed(Creature* target, Unit* puller, Position3 const* standAt);
+
+    // Assistance and aggro-together only (no aggro range), guids only.
     std::vector<ObjectGuid> Predict(Creature* target, Unit* puller);
+
+    std::vector<ObjectGuid> Guids(std::vector<Joiner> const& joiners);
+    char const* ReasonName(JoinReason reason);
 }
 }
 

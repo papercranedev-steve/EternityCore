@@ -120,7 +120,7 @@ namespace Value
         // Damage is spread over the enemies that can be hit (not controlled ones we leave alone).
         size_t targets = 0;
         for (EnemyFacts const& e : world.enemies)
-            if (e.acting && !e.crowdControlled)
+            if (e.acting && !e.crowdControlled && !e.onAllyOnly)
                 ++targets;
         float const share = DealtDps(world) / float(std::max<size_t>(1, targets));
         return float(enemy.health) / std::max(1.0f, share);

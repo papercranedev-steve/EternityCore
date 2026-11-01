@@ -57,8 +57,14 @@ namespace Commander
         // Deaths: wait for a resurrection after the fight, stop on the second death.
         uint32 deathEvents = 0;
         uint32 reviveWaitSinceMs = 0;   // 0 = nobody dead
+        // Dead when the clear started: their death is not a death event of this clear.
+        // Removed once alive again, so a later death counts.
+        std::vector<ObjectGuid> deadAtStart;
 
         std::vector<ObjectGuid> tappedNoted;    // first member of tapped packs already reported
+        // First member of packs with only stealthed hostile members, already reported. Such
+        // packs are not skipped: they are looked at again every round (they may unstealth).
+        std::vector<ObjectGuid> stealthNoted;
     };
 
     // Display name of a party member, captured when the pull is planned (the pure assigner
@@ -87,10 +93,26 @@ namespace Commander
         bool readyAnnounced = false;        // "everyone ready" is sent once
         std::vector<PullMemberName> names;
 
-        // `.partybot ai clear` predicts again when the tank is about to go (ClearPlanner::Step).
+        // Predict again and look at patrols when the tank is about to go
+        // (PullPlanner::RecheckBeforeApproach, run from ClearPlanner::Step on the map thread).
+        // Set for every pull except `.partybot ai pull now`.
         bool recheckOnApproach = false;
         bool rechecked = false;
-        uint32 recheckWaitSinceMs = 0;      // prediction over the limit since then, 0 = not waiting
+        uint32 recheckWaitSinceMs = 0;      // clear: prediction over the limit since then, 0 = not waiting
+
+        // Patrol expected near the target or the fight spot soon: held in WaitReady.
+        uint32 patrolWaitSinceMs = 0;       // 0 = not waiting for a patrol
+        ObjectGuid patrolWaitingFor;        // the patrol last announced (a new one is announced again)
+
+        // Members of `expected` that join because the tank stands in their aggro range
+        // (AssistPredictor::JoinReason::AggroRange), for the report.
+        std::vector<ObjectGuid> aggroRangeAdds;
+
+        // Ranged pull: the tank opens with this spell from up to rangedPullRange yards instead of
+        // walking to the target. 0 = walk in and attack. Cleared by PullAssigner when the
+        // ranged pull did not start the fight in time (tank walks in instead).
+        uint32 rangedPullSpell = 0;
+        float rangedPullRange = 0.0f;
     };
     enum class RetreatOutcome : uint8
     {

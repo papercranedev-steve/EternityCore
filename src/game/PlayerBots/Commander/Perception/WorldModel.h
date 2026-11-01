@@ -116,10 +116,37 @@ namespace Commander
         ObjectGuid summoner;            // who summoned it, if known
         uint32 firstSeenMs = 0;         // WorldTimer ms of the first snapshot it was in (ThreatHistory)
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
+        // No party member or pet is on its threat list: it is here because it fights one of
+        // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
+        // list then only has ally rows (partySide = false) plus our not-listed rows.
+        bool onAllyOnly = false;
 
-        // Sorted by threat, highest first. Contains every party member and pet on
-        // this map, also those with no threat on this enemy.
+        // Sorted by threat, highest first. Every row of the live threat list (party members,
+        // pets, allies and anyone else on it, partySide tells them apart), plus every party
+        // member and pet on this map that is not on it yet (onList = false).
         std::vector<ThreatEntry> threat;
+    };
+
+    // A friendly creature near the party that is not in the party and is fighting: escorted
+    // NPCs, freed prisoners (Zul'Farrak pyramid), guards. Filled by WorldModelBuilder.
+    struct AllyFacts
+    {
+        ObjectGuid guid;
+        uint32 entry = 0;
+        uint32 level = 0;
+        uint32 rank = 0;                // creature_template.rank
+        bool elite = false;
+        float healthPct = 0.0f;
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+        uint32 armor = 0;
+        Position3 pos;
+        ObjectGuid victim;              // who it is attacking
+        // Holds enemies like a tank: damage dealers leave room under its threat and the tank does
+        // not take its enemies (ThreatBehavior). Builder rule: elite and max health at least
+        // ALLY_TANK_HEALTH_MULT x the party tank's (Sergeant Bly 18500 vs a level 45 tank ~4000).
+        // Boss modules may overwrite it in AddFacts (the Zul'Farrak module keeps it on Bly only).
+        bool tankLike = false;
     };
 
     enum class PackSource : uint8
@@ -180,12 +207,35 @@ namespace Commander
 
         ObjectGuid leader;           // party leader (the player)
         std::vector<PartyMemberFacts> party;
-        std::vector<EnemyFacts> enemies;    // creatures with a party member or pet on their threat list
+        // Creatures with a party member or pet on their threat list, then (onAllyOnly = true)
+        // creatures fighting one of `allies` only.
+        std::vector<EnemyFacts> enemies;
+        // Friendly non-party creatures in combat near the leader (at most MAX_ALLIES, nearest first).
+        std::vector<AllyFacts> allies;
+        // Builder bookkeeping: friendly creatures in combat found by the last grid scan
+        // (RefreshPacks, once a second), re-read by every RefreshCombat. Not a fact to act on.
+        std::vector<ObjectGuid> allyCandidates;
         std::vector<PackFacts> packs;       // nearby creatures not in combat
         RateFacts rates;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
         EnemyFacts const* FindEnemy(ObjectGuid guid) const;
+        AllyFacts const* FindAlly(ObjectGuid guid) const
+        {
+            for (AllyFacts const& a : allies)
+                if (a.guid == guid)
+                    return &a;
+            return nullptr;
+        }
+        // At least one enemy has a party member or pet on its threat list (a fight of ours,
+        // not only an ally's).
+        bool HasPartyEnemy() const
+        {
+            for (EnemyFacts const& e : enemies)
+                if (!e.onAllyOnly)
+                    return true;
+            return false;
+        }
     };
 }
 

@@ -36,6 +36,19 @@ namespace Commander
             return !m.isBot || m.role == ROLE_TANK;
         }
 
+        // `victim` holds the enemy it is being hit by: a holder member (above), or a tank-like
+        // ally (AllyFacts::tankLike, e.g. Sergeant Bly in Zul'Farrak, combat scenario 9).
+        // Damage dealers leave room under its threat the same way. Threat rows of allies are
+        // on EnemyFacts::threat (partySide = false), so ThreatView::Headroom works unchanged:
+        // it compares my threat with victimThreat, whoever the victim is.
+        bool IsHeldByHolder(WorldModel const& world, ObjectGuid victim)
+        {
+            if (PartyMemberFacts const* m = world.FindMember(victim))
+                return IsHolder(*m);
+            AllyFacts const* ally = world.FindAlly(victim);
+            return ally && ally->tankLike;
+        }
+
         // Direct heal effects of the spell with the healer's and target's healing bonuses.
         float EstimateDirectHeal(Player* healer, Unit* target, SpellEntry const* spell)
         {
@@ -231,6 +244,10 @@ namespace Commander
         {
             if (e.crowdControlled || !e.acting || e.victim.IsEmpty() || e.victim == self)
                 continue;
+            // On an ally (tank-like or not): not loose. The ally is fighting it on purpose and
+            // taking it off the ally only moves the damage onto us (combat scenario 9).
+            if (world.FindAlly(e.victim))
+                continue;
             PartyMemberFacts const* victim = world.FindMember(e.victim);
             if (!victim || victim->isPet || victim->charmed)
                 continue;   // not one of us, a pet (pets can take a few hits), or mind controlled
@@ -377,9 +394,9 @@ namespace Commander
         if (!myFacts || !e || e->victim.IsEmpty() || e->victim == self)
             return;
 
-        // Only protect a holder. If it is on a healer or another dps, taking it is not worse.
-        PartyMemberFacts const* holder = world.FindMember(e->victim);
-        if (!holder || !IsHolder(*holder))
+        // Only protect a holder (also a tank-like ally). If it is on a healer, another dps or an
+        // ally that is not tank-like, taking it is not worse.
+        if (!IsHeldByHolder(world, e->victim))
             return;
 
         // Room left must cover the threat of my next tick, not only 10% of the holder's threat:
@@ -413,8 +430,7 @@ namespace Commander
             if (a.guid == e->guid || a.crowdControlled || !a.acting || a.victim.IsEmpty() || a.victim == self ||
                 a.victimThreat <= 0.0f)
                 continue;
-            PartyMemberFacts const* aHolder = world.FindMember(a.victim);
-            if (!aHolder || !IsHolder(*aHolder))
+            if (!IsHeldByHolder(world, a.victim))
                 continue;   // switching onto an enemy that is already on a healer does not help
             if (PackResolver::Distance(myPos, a.pos) > DPS_SWITCH_RANGE)
                 continue;

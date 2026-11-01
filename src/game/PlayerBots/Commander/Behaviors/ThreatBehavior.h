@@ -8,7 +8,10 @@
  *            is back (death penalty if they would not survive). A taunt also costs its
  *            cooldown. Otherwise top up the smallest lead (not valued).
  *  Damage  - near the holder's threat: stop hitting, or switch to a safe target, when the
- *            hits taken after pulling aggro outweigh the damage lost.
+ *            hits taken after pulling aggro outweigh the damage lost. Holder = tank bot, the
+ *            player, or a tank-like ally (WorldModel::allies, AllyFacts::tankLike).
+ *  Allies  - an enemy hitting an ally (tank-like or not) is never "loose" for the tank: it
+ *            is not taunted or won back (combat scenario 9, Sergeant Bly).
  *  Healer  - if the heal the rotation would cast pulls aggro: cast a smaller safe heal; and
  *            either heal another member below OTHER_HEAL_PCT with a safe heal, or (nobody
  *            else needs it / no safe heal) veto healing that target this tick. The veto makes

@@ -60,6 +60,12 @@ namespace Commander
         virtual void Propose(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                              TeamPlan const& /*plan*/, std::vector<Proposal>& /*out*/) const {}
 
+        // True while the active module needs the Commander hook out of combat too, and bots must
+        // not sit down to eat or drink (an event with waves: the next group is already on its
+        // way). Read by PartyCommander::WantsOutOfCombatControl on every bot tick, so it must
+        // be cheap: return a value computed in Refresh.
+        virtual bool WantsOutOfCombatControl() const { return false; }
+
         // Fight over or module switched off: forget everything about this attempt.
         virtual void OnReset() = 0;
     };

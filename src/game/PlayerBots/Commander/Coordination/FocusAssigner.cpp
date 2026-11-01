@@ -190,9 +190,13 @@ namespace Commander
         }
     }
 
-    bool FocusAssigner::IsEligible(WorldModel const& world, EnemyFacts const& e)
+    bool FocusAssigner::IsEligible(WorldModel const& world, EnemyFacts const& e, bool allowAllyOnly)
     {
         if (!e.acting || e.crowdControlled || !e.health)
+            return false;
+        // Only fighting an ally (a guard, an escort): not our fight unless a boss module says so
+        // (Zul'Farrak: adds on Weegli are a focus tier).
+        if (e.onAllyOnly && !allowAllyOnly)
             return false;
         // A fresh enemy (summoned add, patrol walking in) is the tank's first: hitting it now
         // pulls it (ThreatBehavior settle window, scenario 6).
