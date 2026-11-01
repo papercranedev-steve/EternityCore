@@ -60,6 +60,11 @@ namespace Commander
         // the uncached computation would. Calls with a target are never cached.
         CastValue Evaluate(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, ObjectGuid target);
 
+        // Points lost to `count` creatures of `entry` at `level` joining the fight: their melee
+        // while they exist (lifeMs, 0 = SUMMON_DEFAULT_SEC, capped at SUMMON_MAX_SEC) plus the
+        // fight lasting as long as it takes us to kill them. < 0 when the creature is unknown.
+        float SummonCreaturePoints(WorldModel const& world, uint32 level, uint32 entry, float count, uint32 lifeMs);
+
         // Drops every thread's planning cache at its next use. Call after the profile store
         // changes without a world refresh (`.partybot ai reload overrides`).
         void InvalidateCache();

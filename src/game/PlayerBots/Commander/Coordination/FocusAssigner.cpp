@@ -79,6 +79,47 @@ namespace Commander
             return info && info->type == CREATURE_TYPE_TOTEM;
         }
 
+        // The next summon of an EventAI combat timer the party can still prevent by killing `e`
+        // within killSec (earliest side of the timer). Points of the summoned creatures and
+        // seconds left until it fires; points 0 when nothing can be prevented.
+        struct PreventableSummon
+        {
+            float points = 0.0f;
+            float leftSec = 0.0f;
+        };
+
+        PreventableSummon NextPreventableSummon(WorldModel const& world, EnemyFacts const& e,
+                                                CreatureProfile const* profile, float killSec)
+        {
+            PreventableSummon best;
+            if (!profile || profile->summonTimers.empty() || !e.firstSeenMs)
+                return best;
+            // EventAI combat timers start when it enters combat, about when it joins our lists.
+            uint32 const sinceMs = WorldTimer::getMSTimeDiff(e.firstSeenMs, world.refreshedAtMs);
+            for (SummonTimer const& t : profile->summonTimers)
+            {
+                uint32 nextMs = t.initialMinMs;
+                if (sinceMs >= nextMs)
+                {
+                    if (!t.repeatMinMs)
+                        continue;
+                    nextMs += ((sinceMs - nextMs) / t.repeatMinMs + 1) * t.repeatMinMs;
+                }
+                float const leftSec = (nextMs - sinceMs) / 1000.0f;
+                if (leftSec <= killSec)
+                    continue;       // fires before we can kill it: nothing to win
+                float const points = CastValues::SummonCreaturePoints(world, e.level, t.creatureEntry,
+                                                                     float(t.count), t.lifeMs);
+                float const value = points >= 0.0f ? points : CastValues::SUMMON_POINTS * t.count;
+                if (!best.points || leftSec < best.leftSec)
+                {
+                    best.points = value;
+                    best.leftSec = leftSec;
+                }
+            }
+            return best;
+        }
+
         void AddReason(std::string& reason, char const* fmt, float value)
         {
             char buf[48];
@@ -202,9 +243,16 @@ namespace Commander
             return false;
         // A fresh enemy (summoned add, patrol walking in) is the tank's first: hitting it now
         // pulls it (ThreatBehavior settle window, scenario 6).
+        // Except one that summons on a combat timer we can still beat: the settle window would
+        // eat most of Mobile Alert System's 6.8 s.
         if (e.firstSeenMs &&
             WorldTimer::getMSTimeDiff(e.firstSeenMs, world.refreshedAtMs) < uint32(NEW_ENEMY_SETTLE_SEC * 1000.0f))
-            return false;
+        {
+            std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(e.entry);
+            float const killSec = std::max(MIN_KILL_SEC, float(e.health) / Value::DealtDps(world));
+            if (NextPreventableSummon(world, e, profile.get(), killSec).points <= 0.0f)
+                return false;
+        }
         return true;
     }
 
@@ -284,6 +332,15 @@ namespace Commander
             AddReason(s.reason, "dies in %.1fs", float(e.health) / dealt);
         }
         harm += oneOff / ONE_OFF_HORIZON_SEC;
+
+        // Summons on a combat timer (Mobile Alert System, Wandering Eye of Kilrogg): lost when
+        // the timer fires, so spread over the seconds left instead of ONE_OFF_HORIZON_SEC.
+        PreventableSummon const summon = NextPreventableSummon(world, e, profile.get(), s.killSec);
+        if (summon.points > 0.0f)
+        {
+            harm += summon.points / std::max(1.0f, summon.leftSec);
+            AddReason(s.reason, "summons in %.1fs", summon.leftSec);
+        }
 
         s.harmRate = harm;
         s.score = harm / s.killSec;

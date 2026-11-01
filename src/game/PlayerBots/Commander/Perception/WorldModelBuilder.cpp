@@ -576,12 +576,15 @@ namespace WorldModelBuilder
         WorldObject* center = (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap())
             ? static_cast<WorldObject*>(leader) : static_cast<WorldObject*>(me);
 
+        // One scan for both: packs within PACK_SCAN_RADIUS, patrols within PATROL_SCAN_RADIUS.
+        float const scanRadius = std::max(PACK_SCAN_RADIUS, PATROL_SCAN_RADIUS);
         std::list<Unit*> units;
-        MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck check(center, me, PACK_SCAN_RADIUS);
+        MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck check(center, me, scanRadius);
         MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(units, check);
-        Cell::VisitAllObjects(center, searcher, PACK_SCAN_RADIUS);
+        Cell::VisitAllObjects(center, searcher, scanRadius);
 
         std::vector<PackCreature> creatures;
+        world.patrols.clear();
         for (Unit* unit : units)
         {
             if (!unit->IsCreature() || unit->IsInCombat() || unit->GetOwnerGuid() ||
@@ -615,7 +618,10 @@ namespace WorldModelBuilder
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(c.entry))
                 c.boss = profile->boss;
             c.pos = PositionOf(creature);
-            creatures.push_back(c);
+            if (c.patrol)
+                world.patrols.push_back(c);
+            if (center->IsWithinDistInMap(creature, PACK_SCAN_RADIUS))
+                creatures.push_back(c);
         }
 
         world.packs = PackResolver::Resolve(creatures, PositionOf(center));

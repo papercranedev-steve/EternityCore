@@ -73,6 +73,17 @@ namespace PatrolTracker
     };
     Approach ClosestApproach(Track const& track, Position3 const& point, float radius);
 
+    struct Zone
+    {
+        Position3 center;
+        float radius = 0.0f;
+    };
+    // Earliest time from now (seconds) after which the track stays outside every zone for
+    // `windowSec`: a fight starting then is not joined by this creature. 0 = clear now,
+    // -1 = no such window within the track (predict at least windowSec beyond the wait you
+    // are willing to make). Uses the track's own sample step.
+    float FirstClearWindow(Track const& track, std::vector<Zone> const& zones, float windowSec);
+
     char const* SourceName(TrackSource source);
 }
 }

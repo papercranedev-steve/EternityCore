@@ -269,6 +269,33 @@ namespace PatrolTracker
         return a;
     }
 
+    float FirstClearWindow(Track const& track, std::vector<Zone> const& zones, float windowSec)
+    {
+        if (track.points.empty())
+            return -1.0f;
+        // Latest sample inside any zone so far; a window starting after it is clear up to the
+        // current sample.
+        float const step = track.points.size() > 1 ? track.points[1].atSec - track.points[0].atSec : SAMPLE_STEP_SEC;
+        float lastInside = -1.0f;
+        bool any = false;
+        for (TrackPoint const& p : track.points)
+        {
+            for (Zone const& z : zones)
+            {
+                if (PackResolver::Distance(p.pos, z.center) <= z.radius)
+                {
+                    lastInside = p.atSec;
+                    any = true;
+                    break;
+                }
+            }
+            float const start = any ? lastInside + step : 0.0f;
+            if (p.atSec - start >= windowSec)
+                return start;
+        }
+        return -1.0f;
+    }
+
     char const* SourceName(TrackSource source)
     {
         switch (source)

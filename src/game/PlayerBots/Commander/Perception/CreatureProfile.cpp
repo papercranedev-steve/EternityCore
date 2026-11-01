@@ -89,6 +89,69 @@ namespace CreatureProfiles
             }
         }
 
+        // Creatures one cast of the spell summons (summon effects only), and the first entry.
+        uint32 SpellSummonCount(uint32 spellId, uint32& entry, uint32& lifeMs)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            if (!spell)
+                return 0;
+            if (!lifeMs && spell->GetDuration() > 0)
+                lifeMs = uint32(spell->GetDuration());
+            uint32 count = 0;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                switch (spell->Effect[i])
+                {
+                    case SPELL_EFFECT_SUMMON:
+                    case SPELL_EFFECT_SUMMON_WILD:
+                    case SPELL_EFFECT_SUMMON_GUARDIAN:
+                    case SPELL_EFFECT_SUMMON_DEMON:
+                        if (!entry)
+                            entry = uint32(spell->EffectMiscValue[i]);
+                        count += uint32(std::max(1, spell->CalculateSimpleValue(SpellEffectIndex(i))));
+                        break;
+                    default:
+                        break;
+                }
+            }
+            return count;
+        }
+
+        void AddSummonTimer(CreatureProfile& p, CreatureEventAI_Event const& ev)
+        {
+            SummonTimer t;
+            for (uint32 a = 0; a < MAX_ACTIONS; ++a)
+            {
+                ScriptMap const* actions = ev.action[a];
+                if (!actions)
+                    continue;
+                for (auto const& step : *actions)
+                {
+                    ScriptInfo const& info = step.second;
+                    if (info.command == SCRIPT_COMMAND_TEMP_SUMMON_CREATURE)
+                    {
+                        if (!t.creatureEntry)
+                            t.creatureEntry = info.summonCreature.creatureEntry;
+                        if (!t.lifeMs)
+                            t.lifeMs = info.summonCreature.despawnDelay;
+                        ++t.count;
+                    }
+                    else if (info.command == SCRIPT_COMMAND_CAST_SPELL)
+                        t.count += SpellSummonCount(info.castSpell.spellId, t.creatureEntry, t.lifeMs);
+                }
+            }
+            if (!t.count)
+                return;
+            t.initialMinMs = ev.timer.initialMin;
+            t.initialMaxMs = std::max(ev.timer.initialMin, ev.timer.initialMax);
+            if (ev.event_flags & EFLAG_REPEATABLE)
+            {
+                t.repeatMinMs = ev.timer.repeatMin;
+                t.repeatMaxMs = std::max(ev.timer.repeatMin, ev.timer.repeatMax);
+            }
+            p.summonTimers.push_back(t);
+        }
+
         void AddEventAI(CreatureProfile& p)
         {
             auto const& events = sEventAIMgr.GetCreatureEventAIMap();
@@ -98,6 +161,9 @@ namespace CreatureProfiles
 
             for (CreatureEventAI_Event const& ev : itr->second)
             {
+                if (ev.event_type == EVENT_T_TIMER_IN_COMBAT)
+                    AddSummonTimer(p, ev);
+
                 for (uint32 a = 0; a < MAX_ACTIONS; ++a)
                 {
                     ScriptMap const* actions = ev.action[a];

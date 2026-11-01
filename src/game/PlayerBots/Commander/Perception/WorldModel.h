@@ -287,6 +287,10 @@ namespace Commander
         };
         std::vector<CastStartRecord> castStartLog;
         std::vector<PackFacts> packs;       // nearby creatures not in combat
+        // Out-of-combat creatures walking a waypoint path within PATROL_SCAN_RADIUS of the
+        // leader (WorldModelBuilder.h), also those already in `packs`. Long loops reach the
+        // party from beyond the pack scan (Patchwork Horror, strat-20261101-225111).
+        std::vector<PackCreature> patrols;
         RateFacts rates;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;

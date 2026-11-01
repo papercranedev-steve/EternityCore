@@ -67,8 +67,13 @@ public:
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
     // PartyBotAI's checks on top of CombatBotBaseAI's (no AoE next to crowd control marks, no
-    // AoE that pulls aggro for non-tanks).
+    // AoE that hits an idle creature, no AoE that pulls aggro for non-tanks).
     bool PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // An area spell hitting `pUnit` would start a new fight: a creature we may attack that is
+    // not fighting (hostile or neutral), not a critter, not immune to area spells.
+    bool WouldAreaSpellPullIdle(Unit const* pUnit) const;
+    // Extra yards around an area spell's radius for WouldAreaSpellPullIdle.
+    static constexpr float AOE_IDLE_MARGIN = 2.0f;
 
     // Warrior stance swaps (doc 2026-11-01-warrior-tank.md). A spell the current stance does not
     // allow (Thunder Clap or Mocking Blow in Defensive Stance, Taunt in Battle Stance) is cast

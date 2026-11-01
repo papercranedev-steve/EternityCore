@@ -6,6 +6,7 @@
 #include "Commander/Perception/PatrolTracker.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ProfileStore.h"
+#include "Commander/Perception/ValueModel.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
@@ -298,68 +299,101 @@ namespace Commander
             return o;
         }
 
-        // A patrol that will walk next to the target or the fight spot soon.
+        // How long the fight with the target and `expected` should last: their health over the
+        // party's damage (Value::DealtDps, measured or estimated), see PullPlanner.h.
+        float ExpectedFightSec(WorldModel const& world, Map* map, Creature* target, std::vector<ObjectGuid> const& expected)
+        {
+            float health = float(target->GetHealth());
+            for (ObjectGuid g : expected)
+                if (g != target->GetObjectGuid())
+                    if (Creature const* c = map->GetCreature(g))
+                        if (c->IsAlive())
+                            health += float(c->GetHealth());
+            float const sec = health / std::max(1.0f, Value::DealtDps(world)) * PullPlanner::FIGHT_TIME_MARGIN +
+                              PullPlanner::PULL_LEAD_SEC;
+            return std::min(PullPlanner::PATROL_HORIZON_MAX_SEC, std::max(PullPlanner::PATROL_HORIZON_SEC, sec));
+        }
+
+        // A patrol that will walk next to the target or the fight spot while the fight lasts.
         struct PatrolThreat
         {
             Creature* patrol = nullptr;
             bool atTarget = false;      // else at the fight spot
             float enterSec = 0.0f;      // first time within its clearance (0 = there now)
-            float clearSec = 0.0f;      // gone for good from then on (= horizon: later or never)
+            // Start the pull this many seconds from now and it stays away for the whole fight;
+            // < 0: no such start within PATROL_WAIT_MAX_MS (its loop is shorter than the fight).
+            float waitSec = 0.0f;
+            float fightSec = 0.0f;      // expected fight length the check used
             float clearance = 0.0f;
             PatrolTracker::TrackSource source = PatrolTracker::TrackSource::Standing;
+
+            bool WaitHelps() const { return waitSec >= 0.0f; }
         };
 
-        // Patrols are taken from the pack list (out-of-combat creatures within 50 yd of the
-        // leader). The target's own walking group is not a threat to itself.
+        // Patrols: WorldModel::patrols (out-of-combat path walkers within 100 yd of the leader).
+        // The target's own walking group is not a threat to itself.
         bool FindPatrolThreat(WorldModel const& world, Map* map, Creature* target, Unit* tank, Unit* leader,
-                              Position3 const& spot, PatrolThreat& out)
+                              Position3 const& spot, std::vector<ObjectGuid> const& expected, PatrolThreat& out)
         {
             Position3 const targetPos = PositionOf(target);
             PackCreature const* targetFacts = FindPackCreature(world, target->GetObjectGuid());
             bool const targetPatrols = targetFacts && targetFacts->patrol;
             CreatureGroup const* targetGroup = target->GetCreatureGroup();
+            float const fightSec = ExpectedFightSec(world, map, target, expected);
+            float const waitMaxSec = PullPlanner::PATROL_WAIT_MAX_MS / 1000.0f;
 
             bool found = false;
-            for (PackFacts const& p : world.packs)
+            for (PackCreature const& c : world.patrols)
             {
-                for (PackCreature const& c : p.members)
-                {
-                    if (!c.patrol || !c.aggressive || c.noAggro || c.tappedByOther || c.guid == target->GetObjectGuid())
-                        continue;
-                    Creature* patrol = map->GetCreature(c.guid);
-                    if (!patrol || !patrol->IsAlive() || patrol->IsInCombat())
-                        continue;
-                    if (targetGroup && patrol->GetCreatureGroup() == targetGroup)
-                        continue;
-                    // A patrolling target walks with its neighbours (distance-linked, no group record).
-                    if (targetPatrols && patrol->GetDistance(target) <= PackResolver::LINK_DISTANCE)
-                        continue;
+                if (!c.aggressive || c.noAggro || c.tappedByOther || c.guid == target->GetObjectGuid())
+                    continue;
+                // Already counted as a joiner by the prediction.
+                if (Contains(expected, c.guid))
+                    continue;
+                Creature* patrol = map->GetCreature(c.guid);
+                if (!patrol || !patrol->IsAlive() || patrol->IsInCombat())
+                    continue;
+                if (targetGroup && patrol->GetCreatureGroup() == targetGroup)
+                    continue;
+                // A patrolling target walks with its neighbours (distance-linked, no group record).
+                if (targetPatrols && patrol->GetDistance(target) <= PackResolver::LINK_DISTANCE)
+                    continue;
 
-                    PatrolTracker::Track const track = PatrolTracker::Predict(patrol, PullPlanner::PATROL_HORIZON_SEC);
-                    float const toTank = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(tank));
-                    float const toParty = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(leader ? leader : tank));
-                    PatrolTracker::Approach const a = PatrolTracker::ClosestApproach(track, targetPos, toTank);
-                    PatrolTracker::Approach const b = PatrolTracker::ClosestApproach(track, spot, toParty);
-                    if (!a.comesWithin && !b.comesWithin)
-                        continue;
-                    // Inside for the whole horizon (a short loop around the pack, or waiting at a
-                    // node): waiting does not help. If it is close enough to join, the prediction
-                    // counts it like any pack member.
-                    if (a.alwaysWithin || b.alwaysWithin)
-                        continue;
+                // Far enough ahead to find a start within the wait limit that is clear for the
+                // whole fight.
+                PatrolTracker::Track const track = PatrolTracker::Predict(patrol, fightSec + waitMaxSec);
+                float const toTank = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(tank));
+                float const toParty = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(leader ? leader : tank));
+                PatrolTracker::Approach const a = PatrolTracker::ClosestApproach(track, targetPos, toTank);
+                PatrolTracker::Approach const b = PatrolTracker::ClosestApproach(track, spot, toParty);
+                if (!a.comesWithin && !b.comesWithin)
+                    continue;
+                // Inside the whole time (a short loop around the pack, or waiting at a node):
+                // waiting does not help. If it is close enough to join, the prediction counts it
+                // like any pack member.
+                if (a.alwaysWithin || b.alwaysWithin)
+                    continue;
+                float start = PatrolTracker::FirstClearWindow(track, { { targetPos, toTank }, { spot, toParty } }, fightSec);
+                if (start == 0.0f)
+                    continue;       // comes by only after the fight
+                if (start > waitMaxSec)
+                    start = -1.0f;
 
-                    PatrolThreat t;
-                    t.patrol = patrol;
-                    t.source = track.source;
-                    t.atTarget = a.comesWithin && (!b.comesWithin || a.enterSec <= b.enterSec);
-                    t.enterSec = t.atTarget ? a.enterSec : b.enterSec;
-                    t.clearSec = std::max(a.comesWithin ? a.clearSec : 0.0f, b.comesWithin ? b.clearSec : 0.0f);
-                    t.clearance = t.atTarget ? toTank : toParty;
-                    // Report the one that keeps the pull waiting longest.
-                    if (!found || t.clearSec > out.clearSec)
-                        out = t;
-                    found = true;
-                }
+                PatrolThreat t;
+                t.patrol = patrol;
+                t.source = track.source;
+                t.atTarget = a.comesWithin && (!b.comesWithin || a.enterSec <= b.enterSec);
+                t.enterSec = t.atTarget ? a.enterSec : b.enterSec;
+                t.waitSec = start;
+                t.fightSec = fightSec;
+                t.clearance = t.atTarget ? toTank : toParty;
+                // Report the worst: one waiting cannot avoid, else the one that waits longest.
+                bool const worse = !found ||
+                    (!t.WaitHelps() && out.WaitHelps()) ||
+                    (t.WaitHelps() == out.WaitHelps() && (t.WaitHelps() ? t.waitSec > out.waitSec : t.enterSec < out.enterSec));
+                if (worse)
+                    out = t;
+                found = true;
             }
             return found;
         }
@@ -371,14 +405,12 @@ namespace Commander
             std::string text = t.enterSec <= 0.0f
                 ? Format("is within %.0f yd of %s", t.clearance, where)
                 : Format("comes within %.0f yd of %s in about %.0f s", t.clearance, where, t.enterSec);
-            return text + Format(" (%s)", PatrolTracker::SourceName(t.source));
+            return text + Format(" (%s; fight about %.0f s)", PatrolTracker::SourceName(t.source), t.fightSec);
         }
 
         std::string ClearTime(PatrolThreat const& t)
         {
-            if (t.clearSec >= PullPlanner::PATROL_HORIZON_SEC)
-                return Format("more than %.0f s", PullPlanner::PATROL_HORIZON_SEC);
-            return Format("about %.0f s", std::ceil(t.clearSec));
+            return Format("about %.0f s", std::ceil(t.waitSec));
         }
 
         bool IsStealthedPackCreature(WorldModel const& world, ObjectGuid guid)
@@ -776,13 +808,15 @@ namespace Commander
 
         // Patrols: reported now, waited for when the tank is about to go (RecheckBeforeApproach).
         PatrolThreat patrol;
-        if (FindPatrolThreat(world, map, best.pullTarget, tank, leader, pull.spot, patrol))
+        if (FindPatrolThreat(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected, patrol))
         {
             std::string const line = std::string("Patrol ") + patrol.patrol->GetName() + " " + DescribePatrol(patrol);
             if (skipReady)
                 report.push_back(line + ". 'pull now' does not wait for it.");
+            else if (!patrol.WaitHelps())
+                report.push_back(line + ". Its loop is shorter than the fight, waiting does not help.");
             else
-                report.push_back(line + Format(". The pull waits until it has moved away (%s, at most %u s).",
+                report.push_back(line + Format(". The pull waits until it has passed (%s, at most %u s).",
                     ClearTime(patrol).c_str(), PATROL_WAIT_MAX_MS / 1000));
         }
 
@@ -992,7 +1026,17 @@ namespace Commander
         // 2. Patrols about to walk next to the target or the fight spot (scenarios 4, 11, 13).
         Unit* leader = map->GetUnit(world.leader);
         PatrolThreat patrol;
-        if (FindPatrolThreat(world, map, target, tank, leader, pull.spot, patrol))
+        bool const patrolNear = FindPatrolThreat(world, map, target, tank, leader, pull.spot, expected, patrol);
+        // Its loop is shorter than the fight: waiting only loses time. Go now, the fight-time
+        // patrol response deals with it when it comes.
+        if (patrolNear && !patrol.WaitHelps())
+        {
+            if (pull.patrolWaitingFor != patrol.patrol->GetObjectGuid())
+                plan.notes.push_back(std::string("Patrol ") + patrol.patrol->GetName() + " " + DescribePatrol(patrol) +
+                    ". Its loop is shorter than the fight, pulling without waiting.");
+            pull.patrolWaitingFor = patrol.patrol->GetObjectGuid();
+        }
+        else if (patrolNear)
         {
             if (!pull.patrolWaitSinceMs)
                 pull.patrolWaitSinceMs = nowMs;

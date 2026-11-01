@@ -143,29 +143,34 @@ namespace CastValues
         float SummonPoints(WorldModel const& world, EnemyFacts const& enemy, SpellEntry const* spell,
                            SpellAmounts const& amounts)
         {
-            if (!amounts.summonEntry)
-                return -1.0f;
-            std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(amounts.summonEntry);
-            CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(amounts.summonEntry);
-            if (!profile || !info)
-                return -1.0f;
-
-            // Spell::EffectSummonWild and friends use the caster's level.
-            uint32 const level = std::max(1u, enemy.level);
-            CreatureClassLevelStats const* cls = sObjectMgr.GetCreatureClassLevelStats(profile->unitClass ? profile->unitClass : 1, level);
-            if (!cls)
-                return -1.0f;
-            float const count = std::max(1.0f, amounts.summonCount);
-            float const health = Creature::_GetHealthMod(int32(info->rank)) * cls->health * info->health_multiplier * count;
-
-            int32 const durationMs = spell->GetDuration();
-            float const lifeSec = durationMs > 0 ? std::min(durationMs / 1000.0f, SUMMON_MAX_SEC) : SUMMON_DEFAULT_SEC;
-            // Totems do not melee (their effect is a spell we do not model here).
-            float const dps = info->type == CREATURE_TYPE_TOTEM ? 0.0f : CreatureProfiles::EstimateMeleeDps(*profile, level);
-
-            return Value::Points(world, dps * lifeSec * count) +
-                   Value::FightExtension(world, health / Value::DealtDps(world));
+            return CastValues::SummonCreaturePoints(world, enemy.level, amounts.summonEntry,
+                std::max(1.0f, amounts.summonCount), spell->GetDuration() > 0 ? uint32(spell->GetDuration()) : 0);
         }
+    }
+
+    float SummonCreaturePoints(WorldModel const& world, uint32 level, uint32 entry, float count, uint32 lifeMs)
+    {
+        if (!entry)
+            return -1.0f;
+        std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(entry);
+        CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
+        if (!profile || !info)
+            return -1.0f;
+
+        // Spell::EffectSummonWild and friends use the caster's level.
+        level = std::max(1u, level);
+        CreatureClassLevelStats const* cls = sObjectMgr.GetCreatureClassLevelStats(profile->unitClass ? profile->unitClass : 1, level);
+        if (!cls)
+            return -1.0f;
+        count = std::max(1.0f, count);
+        float const health = Creature::_GetHealthMod(int32(info->rank)) * cls->health * info->health_multiplier * count;
+
+        float const lifeSec = lifeMs > 0 ? std::min(lifeMs / 1000.0f, SUMMON_MAX_SEC) : SUMMON_DEFAULT_SEC;
+        // Totems do not melee (their effect is a spell we do not model here).
+        float const dps = info->type == CREATURE_TYPE_TOTEM ? 0.0f : CreatureProfiles::EstimateMeleeDps(*profile, level);
+
+        return Value::Points(world, dps * lifeSec * count) +
+               Value::FightExtension(world, health / Value::DealtDps(world));
     }
 
     bool CanStop(InterruptAbility const& ability, EnemyFacts const& enemy)

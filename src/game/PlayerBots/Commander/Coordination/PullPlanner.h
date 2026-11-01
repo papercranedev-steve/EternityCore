@@ -94,11 +94,19 @@ namespace Commander
         // Next to the leader, a pack further than this is brought back to the fight spot.
         float const RETURN_MIN_DISTANCE = 15.0f;
 
-        // Patrols (PatrolTracker): look this far ahead. A patrol that comes within
-        // max(PATROL_MIN_CLEARANCE, its aggro range) of the target or the fight spot in that
-        // time holds the pull in WaitReady, at most PATROL_WAIT_MAX_MS (then a single pull goes
-        // anyway, the clear skips the pack).
+        // Patrols (PatrolTracker, WorldModel::patrols): a patrol that comes within
+        // max(PATROL_MIN_CLEARANCE, its aggro range) of the target or the fight spot while the
+        // fight is expected to last holds the pull in WaitReady until the start that keeps it
+        // away for the whole fight, at most PATROL_WAIT_MAX_MS (then a single pull goes anyway,
+        // the clear skips the pack). No such start (a loop shorter than the fight, Patchwork
+        // Horror in strat-20261101-225111): waiting does not help, the pull goes and says so.
+        // Fight length = health of the expected creatures / party damage x FIGHT_TIME_MARGIN
+        // + PULL_LEAD_SEC (the tank walking out and back), within PATROL_HORIZON_SEC ..
+        // PATROL_HORIZON_MAX_SEC.
         float const PATROL_HORIZON_SEC = 20.0f;
+        float const PATROL_HORIZON_MAX_SEC = 120.0f;
+        float const FIGHT_TIME_MARGIN = 1.25f;
+        float const PULL_LEAD_SEC = 5.0f;
         float const PATROL_MIN_CLEARANCE = 15.0f;
         uint32 const PATROL_WAIT_MAX_MS = 30 * 1000;
         // While a held pull comes back to Approach on every refresh, RecheckBeforeApproach

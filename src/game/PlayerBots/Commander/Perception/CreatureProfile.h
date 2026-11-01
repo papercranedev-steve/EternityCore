@@ -42,6 +42,17 @@ namespace Commander
         bool reapplies = false;
     };
 
+    struct SummonTimer
+    {
+        uint32 initialMinMs = 0;        // first time after the fight starts
+        uint32 initialMaxMs = 0;
+        uint32 repeatMinMs = 0;         // 0 = once
+        uint32 repeatMaxMs = 0;
+        uint32 creatureEntry = 0;       // what comes (0 = unknown)
+        uint32 count = 0;               // creatures per firing
+        uint32 lifeMs = 0;              // despawn delay / spell duration, 0 = unknown
+    };
+
     // custom_partybot_creature_override row. Defaults = no change.
     struct CreatureOverride
     {
@@ -74,6 +85,11 @@ namespace Commander
         bool scripted = false;
         bool noAggro = false;           // CREATURE_FLAG_EXTRA_NO_AGGRO
         std::vector<CreatureSpellRef> spells;
+        // EventAI combat timers that bring helpers (summon command or summon spell): Mobile
+        // Alert System summons two Mechanized Sentries 6.8 s into the fight, Wandering Eye of
+        // Kilrogg a Netherwalker after 12 s and every 20 s. Killing it before the timer fires
+        // prevents them. Summons on aggro are not listed (nothing can stop them).
+        std::vector<SummonTimer> summonTimers;
         bool hasOverride = false;
         CreatureOverride override;
 
