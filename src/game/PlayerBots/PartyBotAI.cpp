@@ -2984,10 +2984,11 @@ void PartyBotAI::UpdateInCombatAI_WarriorTank(Unit* pVictim)
             return;
     }
 
-    // Shield Block: fewer hits taken, and every block allows Revenge. Only under some pressure:
-    // the rage is threat otherwise.
+    // Shield Block: fewer hits taken, and every block allows Revenge. Only when hurt: the rage
+    // is threat otherwise. With "or 2+ attackers" it went off every 5 s in every pack and took
+    // the rage Shield Slam and Sunder needed (strat-20261101-210522: 5 blocks, 0 Sunder).
     if (shield && attacked && w.pShieldBlock &&
-       (me->GetHealthPercent() < PB_SHIELD_BLOCK_HEALTH_PCT || GetAttackersInRangeCount(ATTACK_DISTANCE) > 1) &&
+        me->GetHealthPercent() < PB_SHIELD_BLOCK_HEALTH_PCT &&
         CanTryToCastSpell(me, w.pShieldBlock))
     {
         if (DoCastSpell(me, w.pShieldBlock) == SPELL_CAST_OK)

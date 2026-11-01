@@ -90,7 +90,7 @@ public:
     static constexpr uint32 PB_STANCE_SWAP_MAX_RAGE_LOSS = 100;   // 10 rage
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
     // Tank warrior rotation (UpdateInCombatAI_WarriorTank).
-    static constexpr float PB_SHIELD_BLOCK_HEALTH_PCT = 80.0f;    // Shield Block below this, or 2+ melee attackers
+    static constexpr float PB_SHIELD_BLOCK_HEALTH_PCT = 60.0f;    // Shield Block only below this health
     static constexpr uint32 PB_TANK_RAGE_DUMP = 300;               // Heroic Strike / Cleave above 30 rage
 
     Player* GetPartyLeader() const;

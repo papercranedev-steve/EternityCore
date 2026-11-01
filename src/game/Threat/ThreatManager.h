@@ -74,7 +74,10 @@ class HostileReference : public Reference<Unit, ThreatManager>
         // used for temporary setting a threat and reducting it later again.
         // the threat modification is stored
         void setTempThreat(float pThreat) { iTempThreatModifyer = pThreat - getThreat(); if (iTempThreatModifyer != 0.0f) addThreat(iTempThreatModifyer);  }
-        void setTempThreatModifier(float thread) { iTempThreatModifyer = thread; addThreat(iTempThreatModifyer); }
+        // Custom fix (2026-11-01): remember the change actually applied. addThreat clamps at 0, so
+        // Fade (-820) on a healer with 29 threat removed 29 but gave back 820 when it faded: every
+        // enemy turned on the priest at once (strat-20261101-210522, 14.7 s).
+        void setTempThreatModifier(float thread) { float const before = iThreat; addThreat(thread); iTempThreatModifyer = iThreat - before; }
 
         void resetTempThreat()
         {

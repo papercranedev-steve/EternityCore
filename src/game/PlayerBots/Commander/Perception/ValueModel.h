@@ -62,6 +62,19 @@ namespace Commander
         // penalty if the victim does not survive that long.
         float HitLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds);
 
+        // Seconds `victim` survives everything hitting it now (IncomingOn), plus `enemy` if that
+        // one is not on it yet; no heals.
+        float SurviveAllSec(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim);
+
+        // Points lost while `enemy` hits `victim` for `seconds` instead of `holder` (the tank, or
+        // whoever holds it now): the hits are taken either way, so only what `victim` takes on
+        // top counts (armor: a caster's spells cost the same on both, zero), plus the death
+        // penalty when `victim` dies within `seconds` of everything hitting it
+        // (SurviveAllSec), weighted by this enemy's share of that damage.
+        // (combat scenario: Stratholme Skeletal Guardians casting at the player, 2026-11-01)
+        float MoveLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+                       PartyMemberFacts const& holder, float seconds);
+
         // Seconds until `enemy` dies at its share of the party's damage.
         float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy);
     }

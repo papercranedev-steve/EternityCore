@@ -249,19 +249,18 @@ namespace Commander
             return aura ? std::max(0, spell->GetDuration()) / 1000.0f : 0.0f;
         }
 
-        // Loss when taunting `e` off `victim`: the hits until the taunt lands; for a temporary
-        // taunt also the hits after it fades, until the threat built meanwhile closes the gap.
-        float TauntLoss(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
-                        float gap, float tankRate, float holdSec, float horizon)
+        // Seconds the enemy still hits its victim after a taunt: until the taunt lands; for a
+        // temporary taunt also after it fades, until the threat built meanwhile closes the gap.
+        float TauntSecOnVictim(float gap, float tankRate, float holdSec, float horizon)
         {
-            float loss = Value::HitLoss(world, e, victim, std::min(ThreatBehavior::TAUNT_REACTION_SEC, horizon));
+            float sec = std::min(ThreatBehavior::TAUNT_REACTION_SEC, horizon);
             if (holdSec > 0.0f && holdSec < horizon)
             {
                 float const rest = std::max(0.0f, gap - tankRate * holdSec);
                 float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
-                loss += Value::HitLoss(world, e, victim, std::min(recovery, horizon - holdSec));
+                sec += std::min(recovery, horizon - holdSec);
             }
-            return loss;
+            return sec;
         }
 
         // Threat one cast puts on each enemy it hits: flat spell_threat + direct damage x its
@@ -364,6 +363,15 @@ namespace Commander
             }
         }
 
+        // Loss when `who` pulls `e` off its current victim for `seconds`: what `who` takes on top
+        // of the victim (Value::MoveLoss). An ally holder has no member facts: all its hits count.
+        float PullLoss(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& who, float seconds)
+        {
+            if (PartyMemberFacts const* holder = world.FindMember(e.victim))
+                return Value::MoveLoss(world, e, who, *holder, seconds);
+            return Value::HitLoss(world, e, who, seconds);
+        }
+
         float TauntMult(EnemyFacts const& e, bool* immune)
         {
             std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
@@ -453,6 +461,7 @@ namespace Commander
             float horizon;
             float lossNothing;
             float mult;
+            bool deadly;
         };
         std::vector<LooseEnemy> loose;
 
@@ -503,9 +512,13 @@ namespace Commander
             float const recovery = tankRate > 1.0f ? gap / tankRate : ThreatView::NO_LIMIT;
             float const horizon = std::min(LOOSE_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
 
-            float const lossNothing = Value::HitLoss(world, e, *victim, horizon);
-            float const lossThreat = Value::HitLoss(world, e, *victim, std::min(recovery, horizon));
-            bool const deadly = Value::SurviveSec(e, *victim) < horizon;
+            // Losses compare with the tank taking the hits (Value::MoveLoss): a caster's spells
+            // hurt the tank as much as anyone, so taking it over gains nothing unless the victim
+            // would die. The victim's survival counts every enemy on it, not this one alone
+            // (five zombies on the priest, strat-20261101-210522).
+            float const lossNothing = Value::MoveLoss(world, e, *victim, *myFacts, horizon);
+            float const lossThreat = Value::MoveLoss(world, e, *victim, *myFacts, std::min(recovery, horizon));
+            bool const deadly = Value::SurviveAllSec(world, e, *victim) < horizon;
             ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
 
             if (!tauntImmune)
@@ -517,7 +530,8 @@ namespace Commander
                     uint32 const cooldownMs = pTaunt->GetRecoveryTime();
                     float const share = std::min(1.0f, (cooldownMs / 1000.0f) / LOOSE_HORIZON_SEC);
                     float const reserve = share * Value::Points(world, enemyMelee * TAUNT_RESERVE_SEC);
-                    float const lossTaunt = TauntLoss(world, e, *victim, gap, tankRate, TemporaryTauntSec(pTaunt), horizon);
+                    float const lossTaunt = Value::MoveLoss(world, e, *victim, *myFacts,
+                        TauntSecOnVictim(gap, tankRate, TemporaryTauntSec(pTaunt), horizon));
                     float cost = switchCost + reserve;
                     if (bot->StanceSwapFor(pTaunt))
                         cost += stanceCost;
@@ -539,7 +553,7 @@ namespace Commander
             }
 
             if (distance <= GROUP_THREAT_RADIUS)
-                loose.push_back({ &e, victim, gap, horizon, lossNothing, mult });
+                loose.push_back({ &e, victim, gap, horizon, lossNothing, mult, deadly });
         }
 
         // Enemies on the tank with a lead thinner than one global cooldown of tank threat:
@@ -575,23 +589,30 @@ namespace Commander
                     float benefit = 0.0f;
                     bool deadly = false;
                     // A fragile enemy would turn on the runner-up for a moment; the area ability
-                    // makes that less likely (counted at FRAGILE_WEIGHT of that loss).
-                    if (threatAdded > 0.0f || holdSec > 0.0f)
+                    // makes that less likely (counted at FRAGILE_WEIGHT of that loss), in
+                    // proportion to how much of the missing lead it adds: one Demoralizing Shout
+                    // (56) does not make a lead of one global cooldown, and counting it in full
+                    // spent the tank's rage on shouts (strat-20261101-210522).
+                    float const fragileShare = holdSec > 0.0f ? 1.0f :
+                        (thinLead > 0.0f ? std::min(1.0f, threatAdded / thinLead) : 0.0f);
+                    if (fragileShare > 0.0f)
                         for (FragileEnemy const& f : fragile)
-                            benefit += Value::HitLoss(world, *f.enemy, *f.runnerUp, TANK_RECLAIM_SEC) * FRAGILE_WEIGHT;
+                            benefit += Value::MoveLoss(world, *f.enemy, *f.runnerUp, *myFacts, TANK_RECLAIM_SEC) *
+                                       FRAGILE_WEIGHT * fragileShare;
                     for (LooseEnemy const& l : loose)
                     {
-                        float loss;
+                        float sec;
                         if (holdSec > 0.0f)     // area taunt: back on the victim when it fades
-                            loss = TauntLoss(world, *l.enemy, *l.victim, l.gap, tankRate, holdSec, l.horizon);
+                            sec = TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon);
                         else
                         {
                             float const rest = std::max(0.0f, l.gap - threatAdded);
                             float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
-                            loss = Value::HitLoss(world, *l.enemy, *l.victim, std::min(recovery, l.horizon));
+                            sec = std::min(recovery, l.horizon);
                         }
+                        float const loss = Value::MoveLoss(world, *l.enemy, *l.victim, *myFacts, sec);
                         benefit += (l.lossNothing - loss) * l.mult;
-                        deadly = deadly || Value::SurviveSec(*l.enemy, *l.victim) < l.horizon;
+                        deadly = deadly || l.deadly;
                     }
                     return { benefit, deadly };
                 }, out);
@@ -647,8 +668,10 @@ namespace Commander
 
         // What pulling it costs: its hits on me until the tank has it back. Weak enemies on
         // plate, or enemies about to die, cost little.
+        // Only what I would take on top of the holder (Value::MoveLoss): pulling a caster costs
+        // nothing but the death risk, its spells hit the holder just as hard.
         float const ttd = Value::EnemyTimeToDie(world, *e);
-        float const avoided = Value::HitLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+        float const avoided = PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
 
         Position3 myPos;
         myPos.x = me->GetPositionX();
@@ -788,7 +811,8 @@ namespace Commander
         // Benefit: the hits the pet takes until the tank has the enemy (back).
         float const reclaimSec = TANK_RECLAIM_SEC;
         float const ttd = Value::EnemyTimeToDie(world, *e);
-        float const avoided = Value::HitLoss(world, *e, *petFacts, std::min(reclaimSec, ttd));
+        float const avoided = holding ? Value::HitLoss(world, *e, *petFacts, std::min(reclaimSec, ttd)) :
+                                        PullLoss(world, *e, *petFacts, std::min(reclaimSec, ttd));
 
         // A safe enemy, the tank's target first: the pet then fights next to the tank, and an
         // enemy hitting the pet follows it there.
@@ -881,7 +905,7 @@ namespace Commander
                 if (ThreatView::Headroom(*e, self) - d.added >= 0.0f)
                     continue;
                 float const ttd = Value::EnemyTimeToDie(world, *e);
-                loss += Value::HitLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+                loss += PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
             }
             return loss;
         };

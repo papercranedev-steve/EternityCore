@@ -11,6 +11,9 @@
 --               aura+ (amount = duration, extra = stacks),
 --               aura- (extra = remove mode), death
 --   aggro   {type, t, enemy, from, to, toRole}   an enemy switched to a non-tank party member
+--   dec     {type, t, bot, cands=[{src, what, tier, score, b, c, reason, res}]}   one Commander
+--           arbiter decision of a bot (u:decisions); res = exec / failed / nottried /
+--           lowertier / dropped (benefit <= cost) / veto
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name}, dropped}
 --
 -- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
@@ -88,6 +91,7 @@ local function beginFight(w, members)
     w.stats = {}
     w.names = {}
     w.lastVictim = {}
+    w.lastDec = {}
     w.aggroLost = 0
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
@@ -178,6 +182,17 @@ local function tick(w)
         end
     end
     write(w, { type = "snap", t = now(), party = party, enemies = enemyRows })
+
+    -- Commander decisions of the bots since the last tick (u:decisions keeps the last 20)
+    for _, m in ipairs(members) do
+        local log = m:decisions(w.lastDec[m:guid()] or 0)
+        if log then
+            for _, d in ipairs(log) do
+                write(w, { type = "dec", t = d.t, bot = m:guid(), cands = d.cands })
+                w.lastDec[m:guid()] = d.t
+            end
+        end
+    end
 
     for _, e in ipairs(combatlog.drain()) do
         e.type = "ev"

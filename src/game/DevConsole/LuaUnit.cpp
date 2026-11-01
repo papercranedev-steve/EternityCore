@@ -607,6 +607,68 @@ namespace DevConsole
         return 1;
     }
 
+    static char const* DecisionResultName(Commander::CandidateRecord::Result r)
+    {
+        using R = Commander::CandidateRecord::Result;
+        switch (r)
+        {
+            case R::NotTried:  return "nottried";
+            case R::Executed:  return "exec";
+            case R::Failed:    return "failed";
+            case R::LowerTier: return "lowertier";
+            case R::Dropped:   return "dropped";
+            case R::VetoSet:   return "veto";
+        }
+        return "?";
+    }
+
+    // u:decisions([sinceMs]): the Commander arbiter's decision log of a party bot (last
+    // BotDirectives::LOG_SIZE ticks with proposals), newer than sinceMs (server ms, now()).
+    // [{t, cands=[{src, what, tier, score, b, c, valued, reason, res}]}]; nil if not a bot.
+    static int U_decisions(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        PartyBotAI* ai = GetPartyBotAI(u);
+        if (!ai)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        uint32 const since = uint32(luaL_optinteger(L, 2, 0));
+        auto const& log = ai->Directives().GetDecisionLog();
+        lua_createtable(L, int(log.size()), 0);
+        int i = 0;
+        for (Commander::DecisionRecord const& d : log)
+        {
+            if (since && uint32(since - d.timeMs) < 0x80000000u)
+                continue;   // not newer than since (getMSTime wraps after 49 days)
+            lua_createtable(L, 0, 2);
+            SetField(L, "t", d.timeMs);
+            lua_createtable(L, int(d.candidates.size()), 0);
+            int j = 0;
+            for (Commander::CandidateRecord const& c : d.candidates)
+            {
+                lua_createtable(L, 0, 9);
+                SetFieldS(L, "src", c.source.c_str());
+                SetFieldS(L, "what", c.what.c_str());
+                SetField(L, "tier", c.tier);
+                SetFieldN(L, "score", Round2(c.score));
+                if (c.valued)
+                {
+                    SetFieldN(L, "b", Round2(c.benefit));
+                    SetFieldN(L, "c", Round2(c.cost));
+                }
+                if (!c.reason.empty())
+                    SetFieldS(L, "reason", c.reason.c_str());
+                SetFieldS(L, "res", DecisionResultName(c.result));
+                lua_rawseti(L, -2, ++j);
+            }
+            lua_setfield(L, -2, "cands");
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
+
     // Compact snapshot used by the recorder and for quick looks.
     static int U_info(lua_State* L)
     {
@@ -1146,7 +1208,7 @@ namespace DevConsole
             { "hostile", U_hostile }, { "friendly", U_friendly }, { "nearby", U_nearby },
             { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint }, { "aggroat", U_aggroat },
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
-            { "group", U_group }, { "ai", U_ai }, { "info", U_info },
+            { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },
             { "setpowerpct", U_setpowerpct }, { "refill", U_refill }, { "kill", U_kill },
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },
