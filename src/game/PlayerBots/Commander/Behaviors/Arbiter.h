@@ -6,6 +6,8 @@
  * ProposalTier::Override (retreat) hides every other module's replace proposal.
  * If execution fails (spell not ready, target gone) the next one in the same tier
  * is tried. Every candidate is written to the bot's decision log.
+ * UseObject (gameobject target) returns true both while walking and on use, so the original
+ * rotation and movement stay off until the module stops proposing it.
  */
 
 #ifndef MANGOS_COMMANDER_ARBITER_H
@@ -32,8 +34,14 @@ namespace Commander
         // Vetoes last this many bot ticks, so they expire soon after the module stops proposing them.
         static uint32 const VETO_TICKS = 3;
 
+        // UseObject walks to this many yards in front of the object (inside INTERACTION_DISTANCE).
+        static constexpr float USE_APPROACH_YARDS = 2.5f;
+
     private:
         static bool Execute(PartyBotAI* bot, Proposal const& proposal);
+        // UseObject: walk into INTERACTION_DISTANCE (movement held), then GameObject::Use(me).
+        // True while walking or after the use; false if the object is gone or the bot is rooted.
+        static bool ExecuteUseObject(PartyBotAI* bot, BotAction const& action);
         static std::string Describe(PartyBotAI const* bot, Proposal const& proposal);
     };
 }

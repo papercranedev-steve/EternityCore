@@ -9,8 +9,10 @@
  *            cooldown. Otherwise top up the smallest lead (not valued).
  *  Damage  - near the holder's threat: stop hitting, or switch to a safe target, when the
  *            hits taken after pulling aggro outweigh the damage lost.
- *  Healer  - if the heal the rotation would cast pulls aggro: cast a smaller safe heal, or
- *            veto healing that target this tick (the rest of the rotation still runs).
+ *  Healer  - if the heal the rotation would cast pulls aggro: cast a smaller safe heal; and
+ *            either heal another member below OTHER_HEAL_PCT with a safe heal, or (nobody
+ *            else needs it / no safe heal) veto healing that target this tick. The veto makes
+ *            the rotation heal nobody this tick, hence the other-member option first.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
  */
 
@@ -37,6 +39,8 @@ namespace Commander
         static constexpr float NEW_ENEMY_SETTLE_SEC = 3.0f;
         static constexpr float NEW_ENEMY_LEAD_SEC = 2.0f;
         static constexpr float HEAL_IGNORE_THREAT_PCT = 30.0f;
+        // Instead of vetoing a heal that pulls aggro, heal another member below this directly.
+        static constexpr float OTHER_HEAL_PCT = 70.0f;
         static constexpr float TANK_LEAD_SWITCH = 0.15f;      // lead / holder threat
         static constexpr float TANK_LEAD_KEEP = 0.30f;        // current target must be at least this safe to leave it
 

@@ -63,6 +63,9 @@ namespace Commander
         // Refresh and AddFacts. Before the assigners.
         void UpdateEncounter(PartyBotAI* bot);
         void FlushNotes(PartyBotAI* bot);
+        // After the assigners: when the retreat ended since the last refresh, releases the
+        // movement hold of every bot of the party on this map.
+        void ReleaseMovementAfterRetreat(PartyBotAI* bot);
 
         uint32 m_groupId;
         uint32 m_mapId;
@@ -71,6 +74,7 @@ namespace Commander
         TeamPlan m_plan;
         ThreatHistory m_threatHistory;
         CombatRates m_combatRates;
+        bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh
 
         // Own instances (per-party state), only the modules listed for this map.
         EncounterList m_encounters;

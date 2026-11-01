@@ -9,6 +9,9 @@
 #include "SpellMgr.h"
 #include "SharedDefines.h"
 #include <algorithm>
+#include <atomic>
+#include <functional>
+#include <unordered_map>
 
 namespace Commander
 {
@@ -157,7 +160,10 @@ namespace CastValues
         return !SpellTags::IsStopImmune(spell, creature->mechanicImmuneMask, creature->schoolImmuneMask);
     }
 
-    CastValue Evaluate(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, ObjectGuid target)
+    // Evaluate without the planning cache. With an empty target it reads from `enemy` only
+    // entry, level, meleeHit, victim and maxHealth (guid and pos only matter for a cast at
+    // the caster itself). Keep SamePlanInputs below in step when this changes.
+    static CastValue EvaluateUncached(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, ObjectGuid target)
     {
         CastValue v;
         v.spellId = spellId;
@@ -267,6 +273,117 @@ namespace CastValues
         if (mult <= 0.0f)
             v.lethal = false;
         return v;
+    }
+
+    // ---- Planning cache -------------------------------------------------------------------
+    // Empty-target Evaluate is a pure function of (world model, the enemy's facts listed at
+    // EvaluateUncached, spellId, static profiles). InterruptAssigner asks for the same values
+    // for every bot x ability (LockoutBenefit, InterruptCost over all enemies, PlannedCast),
+    // FocusAssigner and FocusBehavior again: ~1000 calls per refresh with 5 bots and 6
+    // casters, for ~20 distinct (enemy, spell) pairs.
+    //
+    // Why thread_local is safe here:
+    //  - A WorldModel belongs to one PartyCommander and is only written by
+    //    PartyCommander::Refresh, which ends with ++version (and a new refreshedAtMs). Every
+    //    Evaluate caller (assigners, behaviors, encounter modules, GM commands) runs after
+    //    that, on whatever thread currently owns the map, while nothing writes the model.
+    //  - Each thread has its own table, so no locks and no sharing between map threads. A map
+    //    may move to another thread between ticks; that thread's table is keyed by the model's
+    //    address + version + refresh time, so it can never return values of an older refresh.
+    //  - The key holds one world model at a time; any other key clears the table. A new model
+    //    at a freed address would also need the same version and refresh time to collide.
+    //  - version 0 = not refreshed yet, or a temporary (PartyCommander::Refresh's `previous`):
+    //    never cached.
+    //  - Profiles can change without a refresh (`.partybot ai reload overrides`): that bumps
+    //    s_profileGeneration (InvalidateCache), which is part of the key.
+    // Not covered: an IEncounter::AddFacts that changes the model after ++version would make
+    // values cached between the bump and AddFacts stale. No module overrides AddFacts today,
+    // and nothing evaluates before it in PartyCommander::Update.
+    namespace
+    {
+        std::atomic<uint32> s_profileGeneration{ 0 };
+
+        struct PlanKey
+        {
+            uint64 enemy;
+            uint32 spellId;
+            bool operator==(PlanKey const& o) const { return enemy == o.enemy && spellId == o.spellId; }
+        };
+
+        struct PlanKeyHash
+        {
+            size_t operator()(PlanKey const& k) const
+            {
+                return std::hash<uint64>()(k.enemy ^ (uint64(k.spellId) << 40) ^ uint64(k.spellId));
+            }
+        };
+
+        struct PlanCache
+        {
+            WorldModel const* world = nullptr;
+            uint32 version = 0;
+            uint32 refreshedAtMs = 0;
+            uint32 generation = 0;
+            std::unordered_map<PlanKey, CastValue, PlanKeyHash> values;
+        };
+
+        thread_local PlanCache t_planCache;
+
+        // Every enemy field EvaluateUncached reads with an empty target. Callers may pass a
+        // modified copy of the world's facts (InterruptBehavior::LiveFacts fills in the live
+        // cast); such a copy shares the cache entry only while these fields are equal.
+        bool SamePlanInputs(EnemyFacts const& a, EnemyFacts const& b)
+        {
+            return a.entry == b.entry && a.level == b.level && a.meleeHit == b.meleeHit &&
+                   a.victim == b.victim && a.maxHealth == b.maxHealth;
+        }
+
+        // This thread's table for `world`, emptied if it held another model, refresh or
+        // profile generation. nullptr = do not cache this call.
+        PlanCache* PlanCacheFor(WorldModel const& world, EnemyFacts const& enemy)
+        {
+            if (!world.version)
+                return nullptr;
+            EnemyFacts const* own = world.FindEnemy(enemy.guid);
+            if (!own || (own != &enemy && !SamePlanInputs(*own, enemy)))
+                return nullptr;     // not an enemy of this model, or a copy with other inputs
+
+            PlanCache& cache = t_planCache;
+            uint32 const generation = s_profileGeneration.load(std::memory_order_acquire);
+            if (cache.world != &world || cache.version != world.version ||
+                cache.refreshedAtMs != world.refreshedAtMs || cache.generation != generation)
+            {
+                cache.values.clear();
+                cache.world = &world;
+                cache.version = world.version;
+                cache.refreshedAtMs = world.refreshedAtMs;
+                cache.generation = generation;
+            }
+            return &cache;
+        }
+    }
+
+    CastValue Evaluate(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, ObjectGuid target)
+    {
+        // Live casts at a unit target depend on that target: computed every time.
+        if (!target.IsEmpty())
+            return EvaluateUncached(world, enemy, spellId, target);
+        PlanCache* cache = PlanCacheFor(world, enemy);
+        if (!cache)
+            return EvaluateUncached(world, enemy, spellId, target);
+
+        PlanKey const key{ enemy.guid.GetRawValue(), spellId };
+        auto const itr = cache->values.find(key);
+        if (itr != cache->values.end())
+            return itr->second;
+        CastValue const v = EvaluateUncached(world, enemy, spellId, target);
+        cache->values.emplace(key, v);
+        return v;
+    }
+
+    void InvalidateCache()
+    {
+        s_profileGeneration.fetch_add(1, std::memory_order_acq_rel);
     }
 
     CastValue PlannedCast(WorldModel const& world, EnemyFacts const& enemy)

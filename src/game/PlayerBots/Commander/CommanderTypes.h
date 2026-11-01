@@ -36,12 +36,16 @@ namespace Commander
         // move to x/y/z like MoveTo. Always succeeds (also when rooted), so the original
         // rotation never runs and never picks a new target while the party retreats.
         Retreat,
+        // Use the gameobject `target` (a gameobject guid, not a unit): walk to it with movement
+        // held for holdMs while out of INTERACTION_DISTANCE, then GameObject::Use(me) (button,
+        // lever). Same use path as `.partybot usegobject` (PlayerBotMgr.cpp).
+        UseObject,
     };
 
     struct BotAction
     {
         BotActionType type = BotActionType::Hold;
-        ObjectGuid target;
+        ObjectGuid target;          // unit; gameobject for UseObject
         SpellEntry const* spell = nullptr;
         float x = 0.0f;
         float y = 0.0f;

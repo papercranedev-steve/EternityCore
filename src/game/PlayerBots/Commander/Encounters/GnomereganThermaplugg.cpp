@@ -1,0 +1,420 @@
+/*
+ * Thermaplugg boss module (header comment: match, phases, plan, proposals).
+ *
+ * Value estimates (points, ValueModel.h: 1 point = 1% of party max health):
+ *   Explosion      = Value::Points(BOMB_VICTIMS x BOMB_DAMAGE).
+ *   Press a button = BOMBS_PER_FACE_WINDOW x Explosion, against Value::LostAction for
+ *                    (presser -> button + button -> boss) / RUN_YARDS_PER_SEC + USE_SEC.
+ *                    Value::LostAction already turns time away from the boss into points.
+ *   Melee off bomb = Explosion, against a target switch (ThreatBehavior::SWITCH_TARGET_SEC)
+ *                    plus the walk back to the boss, or one tick for HoldFire.
+ *   Bomb intercept = Explosion (InterceptDuty::points, FocusBehavior's switch benefit).
+ *
+ * Known limits:
+ *   - Bombs that are not in combat yet (falling, following the boss) are not in
+ *     world.enemies (WorldModelBuilder takes creatures with us on their threat list), so
+ *     nobody intercepts them until they pick a target (scenario 8, 3.4 item 2). They usually
+ *     do that 14 yd from someone, about 2 s before they explode.
+ *   - Melee on a bomb with no boss left only holds fire: HoldFire keeps the victim and does
+ *     not stop a chase already running, so a melee walking up to a bomb keeps walking.
+ *   - No kiting, no dodging the blast, no crowd control of bombs, no pre-positioning of the
+ *     tank before Knock Away, no top-up before the threat wipe (scenario 8, 3.2).
+ *   - One presser, picked once (sticky while alive and still a damage dealer). Below
+ *     PRESSER_MIN_HEALTH_PCT he simply stops; nobody else is sent instead.
+ *   - The door lock at pull (people left outside) is not checked.
+ *   - An intercept from FocusAssigner on the presser (Urgent) beats the button run (Assigned).
+ *   - Faces / buttons are found by a grid search around the boss and cached; if the boss
+ *     is not loaded (bot far away) the search waits for the next retry.
+ */
+
+#include "Commander/Encounters/GnomereganThermaplugg.h"
+#include "Commander/Encounters/EncounterHelpers.h"
+#include "Commander/Behaviors/ThreatBehavior.h"
+#include "Commander/Coordination/FocusAssigner.h"
+#include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/ValueModel.h"
+#include "Commander/CommanderMgr.h"
+#include "PartyBotAI.h"
+#include "Creature.h"
+#include "GameObject.h"
+#include "GridSearchers.h"
+#include "Map.h"
+#include "Player.h"
+#include "Timer.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <list>
+#include <set>
+
+namespace Commander
+{
+    namespace
+    {
+        char const* const SOURCE = "thermaplugg";
+
+        // Scenario 8, 1.4 (gnomeregan.h GO_GNOME_FACE_x / GO_BUTTON_x). Index = script face index.
+        uint32 const FACE_ENTRIES[GnomereganThermaplugg::FACE_COUNT] =
+            { 142211, 142210, 142209, 142208, 142213, 142212 };
+        uint32 const BUTTON_ENTRIES[GnomereganThermaplugg::FACE_COUNT] =
+            { 142214, 142215, 142216, 142217, 142218, 142219 };
+
+        // Which face is spawning bombs.
+        // instance_gnomeregan::DoActivateBombFace / DoDeactivateBombFace toggle the face through
+        // ScriptedInstance::DoUseDoorOrButton -> GameObject::UseDoorOrButton / ResetDoorOrButton
+        // -> SwitchDoorOrButton, which flips GO_STATE_READY <-> GO_STATE_ACTIVE. The faces are
+        // GAMEOBJECT_TYPE_BUTTON (type 1) spawned with state 1 = GO_STATE_READY (world DB
+        // `gameobject` rows 6388, 11994, 9265, 9593, 28327, 6755) and autoCloseTime 0
+        // (gameobject_template data2 = 0), so they never flip back by themselves: GO_STATE_ACTIVE
+        // = lit (m_bActivated true in the script), GO_STATE_READY = dark. Scenario 8, 3.6 still
+        // lists checking this in game.
+        bool FaceIsLit(GameObject const* face)
+        {
+            return face && face->GetGoState() == GO_STATE_ACTIVE;
+        }
+
+        float Distance2d(Position3 const& a, Position3 const& b)
+        {
+            float const dx = a.x - b.x;
+            float const dy = a.y - b.y;
+            return std::sqrt(dx * dx + dy * dy);
+        }
+
+        Position3 PositionOf(WorldObject const* o)
+        {
+            Position3 p;
+            p.x = o->GetPositionX();
+            p.y = o->GetPositionY();
+            p.z = o->GetPositionZ();
+            return p;
+        }
+
+        bool IsDamageDealerBot(PartyMemberFacts const& m, uint8 role)
+        {
+            return m.isBot && !m.isPet && m.CanAct() && m.role == role;
+        }
+    }
+
+    bool GnomereganThermaplugg::Matches(WorldModel const& world, uint32 mapId) const
+    {
+        if (mapId != MAP_ID)
+            return false;
+        for (EnemyFacts const& e : world.enemies)
+            if (e.entry == NPC_THERMAPLUGG || e.entry == NPC_WALKING_BOMB)
+                return true;
+        return false;
+    }
+
+    void GnomereganThermaplugg::OnReset()
+    {
+        *this = GnomereganThermaplugg();
+    }
+
+    float GnomereganThermaplugg::ExplosionLoss(WorldModel const& world) const
+    {
+        return Value::Points(world, BOMB_VICTIMS * BOMB_DAMAGE);
+    }
+
+    void GnomereganThermaplugg::FindObjects(PartyBotAI* bot, uint32 nowMs)
+    {
+        if (m_objectsFound || !bot || !bot->me->IsInWorld())
+            return;
+        if (m_lastSearchMs && WorldTimer::getMSTimeDiff(m_lastSearchMs, nowMs) < OBJECT_SEARCH_RETRY_MS)
+            return;
+        m_lastSearchMs = nowMs;
+
+        // Search around the boss (faces and buttons form a circle around his spawn point).
+        Creature* boss = m_bossAlive ? bot->me->GetMap()->GetCreature(m_boss) : nullptr;
+        if (!boss)
+            return;
+
+        std::vector<uint32> entries(FACE_ENTRIES, FACE_ENTRIES + FACE_COUNT);
+        entries.insert(entries.end(), BUTTON_ENTRIES, BUTTON_ENTRIES + FACE_COUNT);
+        std::list<GameObject*> found;
+        GetGameObjectListWithEntryInGrid(found, boss, entries, OBJECT_SEARCH_RADIUS);
+
+        for (GameObject* go : found)
+        {
+            for (uint32 i = 0; i < FACE_COUNT; ++i)
+            {
+                if (go->GetEntry() == FACE_ENTRIES[i])
+                    m_faces[i].face = go->GetObjectGuid();
+                else if (go->GetEntry() == BUTTON_ENTRIES[i])
+                {
+                    m_faces[i].button = go->GetObjectGuid();
+                    m_faces[i].buttonPos = PositionOf(go);
+                }
+            }
+        }
+
+        m_objectsFound = true;
+        for (Face const& f : m_faces)
+            if (f.face.IsEmpty() || f.button.IsEmpty())
+                m_objectsFound = false;
+    }
+
+    void GnomereganThermaplugg::ReadFaces(PartyBotAI* bot)
+    {
+        m_litCount = 0;
+        for (Face& f : m_faces)
+        {
+            GameObject const* go = (bot && !f.face.IsEmpty()) ? bot->me->GetMap()->GetGameObject(f.face) : nullptr;
+            f.lit = m_bossAlive && FaceIsLit(go);   // all faces switch off when the boss dies
+            if (f.lit)
+                ++m_litCount;
+        }
+    }
+
+    void GnomereganThermaplugg::PickPresser(WorldModel const& world)
+    {
+        // Sticky: keep the presser while he is alive and still a damage dealer bot.
+        if (PartyMemberFacts const* current = world.FindMember(m_presser))
+            if (current->isBot && current->alive &&
+                (current->role == ROLE_MELEE_DPS || current->role == ROLE_RANGE_DPS))
+                return;
+        m_presser = ObjectGuid();
+        m_presserNoted = false;
+
+        // Melee first: he stands in the blast anyway and cannot shoot far bombs. Closest to
+        // the boss, healthy enough to leave the healer's side.
+        for (uint8 role : { uint8(ROLE_MELEE_DPS), uint8(ROLE_RANGE_DPS) })
+        {
+            PartyMemberFacts const* best = nullptr;
+            float bestDistance = 0.0f;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!IsDamageDealerBot(m, role) || m.healthPct < PRESSER_MIN_HEALTH_PCT)
+                    continue;
+                float const d = PackResolver::Distance(m.pos, m_bossPos);
+                if (!best || d < bestDistance)
+                {
+                    best = &m;
+                    bestDistance = d;
+                }
+            }
+            if (best)
+            {
+                m_presser = best->guid;
+                return;
+            }
+        }
+    }
+
+    void GnomereganThermaplugg::Refresh(PartyBotAI* bot, WorldModel const& world)
+    {
+        uint32 const now = world.refreshedAtMs;
+
+        EnemyFacts const* boss = EncounterHelpers::FindEnemyByEntry(world, NPC_THERMAPLUGG);
+        bool const wasAlive = m_bossAlive;
+        m_bossAlive = boss != nullptr;
+        if (boss)
+        {
+            m_boss = boss->guid;
+            m_bossPct = boss->healthPct;
+            m_bossPos = boss->pos;
+        }
+
+        m_bombCount = 0;
+        for (EnemyFacts const& e : world.enemies)
+            if (e.entry == NPC_WALKING_BOMB)
+                ++m_bombCount;
+
+        Phase const previous = m_phase;
+        if (!m_bossAlive)
+            m_phase = Phase::BossDead;
+        else if (m_bossPct < PHASE_TWO_PCT)
+            m_phase = Phase::PhaseTwo;
+        else
+            m_phase = Phase::PhaseOne;
+
+        if (m_phase == Phase::PhaseTwo && previous != Phase::PhaseTwo)
+            m_pendingNotes.push_back("Thermaplugg below 50%: area Knock Away every 12 s, faces light up faster.");
+        if (m_phase == Phase::BossDead && wasAlive && m_bombCount)
+        {
+            char buf[160];
+            snprintf(buf, sizeof(buf), "Thermaplugg dead, %u walking bomb(s) left: ranged kill them, melee stay off.", m_bombCount);
+            m_pendingNotes.push_back(buf);
+        }
+
+        FindObjects(bot, now);
+        ReadFaces(bot);
+
+        if (m_bossAlive)
+        {
+            PickPresser(world);
+            if (!m_presser.IsEmpty() && !m_presserNoted && bot)
+            {
+                m_presserNoted = true;
+                char buf[160];
+                Player* presser = bot->me->GetMap()->GetPlayer(m_presser);
+                snprintf(buf, sizeof(buf), "Thermaplugg: %s presses the buttons of lit gnome faces.",
+                    presser ? presser->GetName() : "a damage dealer");
+                m_pendingNotes.push_back(buf);
+            }
+        }
+        else
+            m_presser = ObjectGuid();
+    }
+
+    void GnomereganThermaplugg::AddBombIntercepts(WorldModel const& world, TeamPlan& plan) const
+    {
+        std::vector<EnemyFacts const*> bombs;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            // Crowd-controlled bombs count too: whether a stunned bomb still explodes is not
+            // known (scenario 8, 1.3), it has to die either way.
+            if (e.entry != NPC_WALKING_BOMB || !e.acting || !e.health)
+                continue;
+            bool const covered = std::any_of(plan.intercepts.begin(), plan.intercepts.end(),
+                [&e](InterceptDuty const& d) { return d.enemy == e.guid; });
+            if (!covered)
+                bombs.push_back(&e);
+        }
+        if (bombs.empty())
+            return;
+
+        // Closest to its victim first (same order as FocusAssigner).
+        auto toVictim = [&world](EnemyFacts const* e)
+        {
+            PartyMemberFacts const* v = world.FindMember(e->victim);
+            return v ? PackResolver::Distance(e->pos, v->pos) : 0.0f;
+        };
+        std::stable_sort(bombs.begin(), bombs.end(), [&toVictim](EnemyFacts const* a, EnemyFacts const* b)
+        {
+            return toVictim(a) < toVictim(b);
+        });
+
+        std::set<ObjectGuid> busy;
+        for (InterceptDuty const& d : plan.intercepts)
+            busy.insert(d.bot);
+        busy.insert(m_presser);
+
+        for (EnemyFacts const* bomb : bombs)
+        {
+            PartyMemberFacts const* chosen = nullptr;
+            for (uint8 role : { uint8(ROLE_RANGE_DPS), uint8(ROLE_MELEE_DPS) })
+            {
+                float const range = role == ROLE_RANGE_DPS ? FocusAssigner::INTERCEPT_RANGE
+                                                           : FocusAssigner::MELEE_INTERCEPT_RANGE;
+                float bestDistance = 0.0f;
+                for (PartyMemberFacts const& m : world.party)
+                {
+                    if (!IsDamageDealerBot(m, role) || busy.count(m.guid))
+                        continue;
+                    float const d = PackResolver::Distance(m.pos, bomb->pos);
+                    if (d > range)
+                        continue;
+                    if (!chosen || d < bestDistance)
+                    {
+                        chosen = &m;
+                        bestDistance = d;
+                    }
+                }
+                if (chosen)
+                    break;
+            }
+            if (!chosen)
+                continue;
+
+            InterceptDuty d;
+            d.enemy = bomb->guid;
+            d.bot = chosen->guid;
+            d.points = ExplosionLoss(world);
+            d.reason = "thermaplugg: walking bomb";
+            busy.insert(chosen->guid);
+            plan.intercepts.push_back(d);
+        }
+    }
+
+    void GnomereganThermaplugg::AdjustPlan(WorldModel const& world, TeamPlan& plan)
+    {
+        for (std::string& note : m_pendingNotes)
+            plan.notes.push_back(std::move(note));
+        m_pendingNotes.clear();
+
+        AddBombIntercepts(world, plan);
+    }
+
+    void GnomereganThermaplugg::Propose(PartyBotAI const* bot, WorldModel const& world,
+                                        TeamPlan const& plan, std::vector<Proposal>& out) const
+    {
+        if (!m_presser.IsEmpty() && bot->me->GetObjectGuid() == m_presser)
+            ProposePresser(bot, world, out);
+        if (bot->GetRole() == ROLE_MELEE_DPS)
+            ProposeMelee(bot, world, plan, out);
+    }
+
+    void GnomereganThermaplugg::ProposePresser(PartyBotAI const* bot, WorldModel const& world,
+                                               std::vector<Proposal>& out) const
+    {
+        if (!m_bossAlive || !m_litCount)
+            return;
+        Player* me = bot->me;
+        PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
+        if (!myFacts || !myFacts->CanAct() || myFacts->healthPct < PRESSER_MIN_HEALTH_PCT)
+            return;
+
+        Position3 const myPos = PositionOf(me);
+        Face const* target = nullptr;
+        float targetDistance = 0.0f;
+        for (Face const& f : m_faces)
+        {
+            if (!f.lit || f.button.IsEmpty())
+                continue;
+            float const d = Distance2d(myPos, f.buttonPos);
+            if (!target || d < targetDistance)
+            {
+                target = &f;
+                targetDistance = d;
+            }
+        }
+        if (!target)
+            return;
+
+        float const awaySec = (targetDistance + Distance2d(target->buttonPos, m_bossPos)) / RUN_YARDS_PER_SEC + USE_SEC;
+        Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::UseObject, target->button);
+        p.action.holdMs = 2 * sCommanderMgr.GetBotUpdateInterval();
+        p.reason = "gnome face lit, press its button";
+        p.SetValue(BOMBS_PER_FACE_WINDOW * ExplosionLoss(world), Value::LostAction(world, *myFacts, awaySec));
+        out.push_back(p);
+    }
+
+    void GnomereganThermaplugg::ProposeMelee(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                             std::vector<Proposal>& out) const
+    {
+        Player* me = bot->me;
+        Unit const* victim = me->GetVictim();
+        if (!victim || victim->GetEntry() != NPC_WALKING_BOMB)
+            return;
+        ObjectGuid const self = me->GetObjectGuid();
+        if (InterceptDuty const* duty = plan.FindInterceptFor(self))
+            if (duty->enemy == victim->GetObjectGuid())
+                return;     // assigned to it (it is already close): kill it
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts || !myFacts->CanAct())
+            return;
+
+        float const loss = ExplosionLoss(world);
+        if (m_bossAlive)
+        {
+            Unit* boss = me->GetMap()->GetUnit(m_boss);
+            if (boss && boss->IsAlive() && bot->IsValidHostileTarget(boss))
+            {
+                float const walkSec = me->CanReachWithMeleeAutoAttack(boss) ? 0.0f :
+                    me->GetDistance(boss) / RUN_YARDS_PER_SEC;
+                Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack, m_boss);
+                p.reason = "melee off the walking bomb, back on the boss";
+                p.SetValue(loss, Value::LostAction(world, *myFacts, ThreatBehavior::SWITCH_TARGET_SEC + walkSec));
+                out.push_back(p);
+                return;
+            }
+        }
+
+        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::HoldFire);
+        p.reason = "melee does not hit walking bombs, ranged kill them";
+        p.SetValue(loss, Value::LostAction(world, *myFacts, tickSec));
+        out.push_back(p);
+    }
+}

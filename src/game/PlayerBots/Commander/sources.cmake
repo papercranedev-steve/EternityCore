@@ -76,6 +76,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.h
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.cpp
+  ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.h
+  ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.cpp
+  ${COMMANDER_DIR}/Encounters/ScholomanceGandling.h
+  ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
   ${COMMANDER_DIR}/Coordination/RetreatPlanner.h
   ${COMMANDER_DIR}/Coordination/RetreatPlanner.cpp
   ${COMMANDER_DIR}/Behaviors/RetreatBehavior.h

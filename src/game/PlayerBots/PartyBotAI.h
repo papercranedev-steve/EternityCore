@@ -127,6 +127,12 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
+    // Resurrection before eating/drinking (UpdateAI): the corpse being tried and since when.
+    // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.
+    static constexpr uint32 PB_RESURRECT_TRY_MS = 15 * IN_MILLISECONDS;
+    static constexpr uint32 PB_RESURRECT_BACKOFF_MS = 60 * IN_MILLISECONDS;
+    ObjectGuid m_resurrectTryGuid;
+    uint32 m_resurrectTryMs = 0;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
 };

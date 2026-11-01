@@ -5,7 +5,9 @@
 #include "Commander/Encounters/EncounterRegistry.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/BotDirectives.h"
 #include "PartyBotAI.h"
+#include "Group.h"
 #include "Chat.h"
 #include "Timer.h"
 
@@ -33,8 +35,35 @@ namespace Commander
         RunAssigners(assigners);
         if (m_activeEncounter)
             m_activeEncounter->AdjustPlan(m_world, m_plan);
+        ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
+    }
+
+    void PartyCommander::ReleaseMovementAfterRetreat(PartyBotAI* bot)
+    {
+        bool const retreating = m_plan.retreat.active;
+        bool const ended = m_wasRetreating && !retreating;
+        m_wasRetreating = retreating;
+        if (!ended)
+            return;
+
+        // RetreatAssigner is pure and cannot reach the bots when it ends the retreat (done,
+        // timeout, module off). Without this the last Retreat MoveTo hold (path length + 1 s)
+        // keeps every bot walking to the point after the fight is over. RetreatPlanner::Stop
+        // already released them; doing it again is harmless. Same map only: other maps belong
+        // to other threads.
+        Group* group = bot->me->GetGroup();
+        if (!group)
+            return;
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
+                continue;
+            if (PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI()))
+                ai->Directives().ReleaseMovement();
+        }
     }
 
     void PartyCommander::UpdateEncounter(PartyBotAI* bot)

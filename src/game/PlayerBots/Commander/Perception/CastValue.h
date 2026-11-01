@@ -53,7 +53,16 @@ namespace Commander
         // (planning, or no unit target): the enemy's victim, or the party average for control
         // and mana drain. A unit target outside the party (friendly NPC, an enemy) takes no
         // harmful value. Hand-written interrupt multipliers (spell and creature) included.
+        //
+        // Empty-target results are cached per (world model, world.version, enemy, spell) in a
+        // thread_local table (CastValue.cpp, "Planning cache"): the interrupt assigner alone
+        // asks for the same values hundreds of times per refresh. A hit returns exactly what
+        // the uncached computation would. Calls with a target are never cached.
         CastValue Evaluate(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, ObjectGuid target);
+
+        // Drops every thread's planning cache at its next use. Call after the profile store
+        // changes without a world refresh (`.partybot ai reload overrides`).
+        void InvalidateCache();
 
         // Most valuable interruptible spell the enemy can cast next: its creature profile
         // (EventAI health events only near their threshold) and its last cast this fight.

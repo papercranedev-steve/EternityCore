@@ -2,6 +2,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
+#include "GameObject.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "Pet.h"
@@ -9,6 +10,7 @@
 #include "SpellEntry.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace Commander
@@ -25,6 +27,7 @@ namespace Commander
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::Retreat: return "retreat";
+                case BotActionType::UseObject: return "use";
             }
             return "?";
         }
@@ -45,6 +48,12 @@ namespace Commander
         {
             if (guid.IsEmpty())
                 return "self";
+            if (guid.IsGameObject())
+            {
+                if (GameObject* go = bot->me->GetMap()->GetGameObject(guid))
+                    return go->GetName();
+                return guid.GetString();
+            }
             if (Unit* unit = bot->me->GetMap()->GetUnit(guid))
                 return unit->GetName();
             return guid.GetString();
@@ -192,6 +201,10 @@ namespace Commander
         Player* me = bot->me;
         BotAction const& action = proposal.action;
 
+        // The target is a gameobject, not a unit: handled before the unit lookup below.
+        if (action.type == BotActionType::UseObject)
+            return ExecuteUseObject(bot, action);
+
         Unit* pTarget = nullptr;
         if (!action.target.IsEmpty())
         {
@@ -285,8 +298,51 @@ namespace Commander
                 // run, it would pick the nearest attacker and hit it again.
                 return true;
             }
+            case BotActionType::UseObject:
+                break;      // handled above
         }
 
         return false;
+    }
+
+    bool Arbiter::ExecuteUseObject(PartyBotAI* bot, BotAction const& action)
+    {
+        Player* me = bot->me;
+        if (action.target.IsEmpty() || !action.target.IsGameObject())
+            return false;
+        GameObject* go = me->GetMap()->GetGameObject(action.target);
+        if (!go || !go->IsInWorld() || !go->isSpawned())
+            return false;
+
+        // In reach: same check and call as HandlePartyBotUseGObjectHelper (`.partybot usegobject`).
+        // GameObject::Use runs the script hook (OnGameObjectUse) first, then the type handler.
+        if (me->IsWithinDist(go, INTERACTION_DISTANCE))
+        {
+            if (me->IsNonMeleeSpellCasted(false, false, true))
+                return false;   // let the cast finish; the next tick uses it
+            go->Use(me);
+            return true;
+        }
+
+        if (me->HasUnitState(UNIT_STATE_ROOT))
+            return false;
+
+        // Walk to a point USE_APPROACH_YARDS in front of the object (on the side the bot comes
+        // from): the object's own position can be inside the wall it is mounted on.
+        uint32 const now = WorldTimer::getMSTime();
+        bool const onTheWay = me->IsMoving() && bot->Directives().IsMovementHeld(now);
+        if (!onTheWay)
+        {
+            float const angle = go->GetAngle(me);
+            float const x = go->GetPositionX() + USE_APPROACH_YARDS * std::cos(angle);
+            float const y = go->GetPositionY() + USE_APPROACH_YARDS * std::sin(angle);
+            float const z = go->GetPositionZ();
+            me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING);
+        }
+        // Keep the original follow / chase off while walking. Renewed every tick the module
+        // proposes it, so it runs out about holdMs after the module stops.
+        uint32 const holdMs = action.holdMs ? action.holdMs : 2 * sCommanderMgr.GetBotUpdateInterval();
+        bot->Directives().HoldMovement(now, holdMs);
+        return true;
     }
 }

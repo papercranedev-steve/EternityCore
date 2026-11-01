@@ -476,14 +476,14 @@ namespace Commander
             unknownEnemyLoss = count ? unknownEnemyLoss / float(count) : 0.0f;
         }
 
-        // Points lost to enemies that turn on me after this heal (0 = safe).
-        auto aggroLoss = [&](SpellEntry const* spell, float* effectiveOut)
+        // Points lost to enemies that turn on me after this heal on `target` (0 = safe).
+        auto aggroLoss = [&](Unit* target, float targetMissing, SpellEntry const* spell, float* effectiveOut)
         {
-            float const effective = std::min(missing, EstimateDirectHeal(me, pTarget, spell));
+            float const effective = std::min(targetMissing, EstimateDirectHeal(me, target, spell));
             if (effectiveOut)
                 *effectiveOut = effective;
             std::vector<ThreatView::EnemyThreatDelta> deltas;
-            ThreatView::PredictHealThreat(me, pTarget, effective, spell, deltas);
+            ThreatView::PredictHealThreat(me, target, effective, spell, deltas);
             float loss = 0.0f;
             for (ThreatView::EnemyThreatDelta const& d : deltas)
             {
@@ -507,33 +507,40 @@ namespace Commander
 
         // Mirror SelectMostEfficientHealingSpell: list is strongest first; pick the closest
         // base value to the missing health, stop at the first one below it.
-        std::vector<SpellEntry const*> castable;
-        SpellEntry const* predicted = nullptr;
-        size_t predictedIndex = 0;
-        int32 bestDiff = INT32_MAX;
-        bool stopped = false;
-        for (SpellEntry const* spell : bot->m_spellListDirectHeal)
+        // `castable` = every direct heal usable on `target`, strongest first.
+        auto predictHeal = [&](Unit* target, float targetMissing, std::vector<SpellEntry const*>& castable,
+                               size_t& predictedIndex) -> SpellEntry const*
         {
-            if (!bot->CanTryToCastSpell(pTarget, spell))
-                continue;
-            castable.push_back(spell);
-            if (stopped)
-                continue;
-            int32 const diff = BasePoints(spell) - int32(missing);
-            if (std::abs(diff) < bestDiff)
+            SpellEntry const* predicted = nullptr;
+            int32 bestDiff = INT32_MAX;
+            bool stopped = false;
+            for (SpellEntry const* spell : bot->m_spellListDirectHeal)
             {
-                bestDiff = diff;
-                predicted = spell;
-                predictedIndex = castable.size() - 1;
+                if (!bot->CanTryToCastSpell(target, spell))
+                    continue;
+                castable.push_back(spell);
+                if (stopped)
+                    continue;
+                int32 const diff = BasePoints(spell) - int32(targetMissing);
+                if (std::abs(diff) < bestDiff)
+                {
+                    bestDiff = diff;
+                    predicted = spell;
+                    predictedIndex = castable.size() - 1;
+                }
+                if (diff < 0)
+                    stopped = true;
             }
-            if (diff < 0)
-                stopped = true;
-        }
+            return predicted;
+        };
 
+        std::vector<SpellEntry const*> castable;
+        size_t predictedIndex = 0;
+        SpellEntry const* predicted = predictHeal(pTarget, missing, castable, predictedIndex);
         if (!predicted)
             return;
         float predictedHeal = 0.0f;
-        float const loss = aggroLoss(predicted, &predictedHeal);
+        float const loss = aggroLoss(pTarget, missing, predicted, &predictedHeal);
         if (loss <= 0.0f)
             return;
 
@@ -541,7 +548,7 @@ namespace Commander
         for (size_t i = predictedIndex + 1; i < castable.size(); ++i)
         {
             float smallerHeal = 0.0f;
-            if (aggroLoss(castable[i], &smallerHeal) > 0.0f)
+            if (aggroLoss(pTarget, missing, castable[i], &smallerHeal) > 0.0f)
                 continue;
             Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Cast, pTarget->GetObjectGuid(), castable[i]);
             p.reason = "smaller heal, no aggro";
@@ -550,9 +557,70 @@ namespace Commander
             break;
         }
 
-        // Option 2: do not heal this target this tick; the rest of the rotation runs.
-        // Costs the damage it takes until the next tick, and its death if it would not last.
         float const delaySec = 2.0f * sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+
+        // Option 2: somebody else needs healing too. A veto on this target stops
+        // FindAndHealInjuredAlly for the whole tick (SelectHealTarget keeps choosing this target),
+        // so nobody would be healed; ManaBudgetBehavior's othersNeedIt check avoids the same trap.
+        // Instead heal the most injured other member directly, with a heal that does not pull.
+        // Trade-off: no veto is set then. If this cast fails at execution, the rotation runs
+        // unvetoed and may cast the pulling heal on this target (unless an earlier veto is still
+        // active). Accepted: CanTryToCastSpell already passed, failures are rare, and the
+        // alternative (veto + cast) brings back "nobody healed" whenever the cast fails.
+        // Same eligibility as SelectHealTarget (IsValidHealTarget: helpful, line of sight, 30 yd).
+        // Pets are left out (the rotation only heals them when no player is hurt).
+        Unit* other = nullptr;
+        PartyMemberFacts const* otherFacts = nullptr;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.guid == targetFacts->guid || m.isPet || !m.alive || m.charmed || m.healthPct >= OTHER_HEAL_PCT)
+                continue;
+            if (otherFacts && m.healthPct >= otherFacts->healthPct)
+                continue;
+            Unit* unit = me->GetMap()->GetUnit(m.guid);
+            if (!unit || !bot->IsValidHealTarget(unit, OTHER_HEAL_PCT))
+                continue;
+            other = unit;
+            otherFacts = &m;
+        }
+        if (other)
+        {
+            float const otherMissing = float(other->GetMaxHealth() - other->GetHealth());
+            float const otherIncoming = Value::IncomingOn(world, otherFacts->guid);
+            std::vector<SpellEntry const*> otherCastable;
+            size_t otherIndex = 0;
+            if (predictHeal(other, otherMissing, otherCastable, otherIndex))
+            {
+                // The rotation's choice for that member first, then smaller ones, until one is safe.
+                for (size_t i = otherIndex; i < otherCastable.size(); ++i)
+                {
+                    SpellEntry const* spell = otherCastable[i];
+                    float healed = 0.0f;
+                    if (aggroLoss(other, otherMissing, spell, &healed) > 0.0f)
+                        continue;
+                    // Benefit: the health it restores, plus the death it prevents when the
+                    // member would not last until the next chance to heal it.
+                    float benefit = Value::Points(world, healed);
+                    if (otherIncoming * delaySec >= float(otherFacts->health))
+                        benefit += Value::DeathPenalty(*otherFacts);
+                    // Cost: the time spent casting (a global cooldown for instant heals).
+                    float const castSec = std::max(Value::GCD_SEC, float(spell->GetCastTime(me)) / 1000.0f);
+                    float const cost = Value::LostAction(world, *myFacts, castSec);
+                    if (benefit <= cost)
+                        continue;   // the arbiter would drop it; a smaller, faster heal may still pay
+                    Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Cast, other->GetObjectGuid(), spell);
+                    p.reason = "heal another member, no aggro";
+                    p.SetValue(benefit, cost);
+                    out.push_back(p);
+                    return;     // no veto, see the trade-off above
+                }
+            }
+        }
+        // No other member to heal, or no safe heal worth it on them: veto as before.
+
+        // Option 3: do not heal this target this tick. The rotation still runs (dispels, damage),
+        // but its heal goes to this target, so nobody is healed this tick (see option 2).
+        // Costs the damage it takes until the next tick, and its death if it would not last.
         float const incoming = Value::IncomingOn(world, targetFacts->guid);
         float delayCost = Value::Points(world, std::min(missing, incoming * delaySec));
         if (incoming * delaySec >= float(targetFacts->health))

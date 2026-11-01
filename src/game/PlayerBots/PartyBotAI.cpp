@@ -913,8 +913,25 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         bool resurrectFirst = false;
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
             if (Player* pDead = SelectResurrectionTarget())
-                resurrectFirst = !pDead->IsRessurectRequested() &&
-                    me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me);
+            {
+                if (pDead->IsRessurectRequested())
+                    m_resurrectTryGuid.Clear();     // the cast landed: a later retry starts a fresh window
+                else if (me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me))
+                {
+                    // A resurrection that keeps failing (Rebirth without its reagent, a cast
+                    // that never lands) must not keep the bot from drinking forever: after
+                    // PB_RESURRECT_TRY_MS of trying on the same corpse, let DrinkAndEat run for
+                    // PB_RESURRECT_BACKOFF_MS, then try again.
+                    uint32 const now = WorldTimer::getMSTime();
+                    if (m_resurrectTryGuid != pDead->GetObjectGuid() ||
+                        WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) >= PB_RESURRECT_TRY_MS + PB_RESURRECT_BACKOFF_MS)
+                    {
+                        m_resurrectTryGuid = pDead->GetObjectGuid();
+                        m_resurrectTryMs = now;
+                    }
+                    resurrectFirst = WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) < PB_RESURRECT_TRY_MS;
+                }
+            }
 
         // (no eating or drinking while a Commander pull is under way)
         if (!commanderOutOfCombat && !resurrectFirst && DrinkAndEat())

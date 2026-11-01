@@ -4,12 +4,18 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/CastValue.h"
 #include "Chat.h"
 #include "Creature.h"
 #include "Map.h"
+#include "ObjectMgr.h"
 #include "Player.h"
+#include "ScriptMgr.h"
+#include "SharedDefines.h"
 #include "SpellMgr.h"
 #include "Timer.h"
+#include <algorithm>
+#include <string>
 
 namespace Commander
 {
@@ -54,7 +60,97 @@ namespace ProfileCommands
             return "?";
         }
 
-        void ShowSpellLine(ChatHandler* handler, uint32 spellId, uint32 casterLevel, float meleeHit, char const* prefix)
+        char const* SchoolName(uint8 school)
+        {
+            switch (school)
+            {
+                case SPELL_SCHOOL_NORMAL: return "physical";
+                case SPELL_SCHOOL_HOLY:   return "holy";
+                case SPELL_SCHOOL_FIRE:   return "fire";
+                case SPELL_SCHOOL_NATURE: return "nature";
+                case SPELL_SCHOOL_FROST:  return "frost";
+                case SPELL_SCHOOL_SHADOW: return "shadow";
+                case SPELL_SCHOOL_ARCANE: return "arcane";
+                default:                  return "?";
+            }
+        }
+
+        // creature_spells.castFlags (ScriptCommands.h CastFlags) as short names, "" for none.
+        std::string CastFlagNames(uint16 flags)
+        {
+            static struct { uint16 flag; char const* name; } const names[] =
+            {
+                { CF_INTERRUPT_PREVIOUS, "interrupt-previous" },
+                { CF_TRIGGERED,          "triggered" },
+                { CF_FORCE_CAST,         "force" },
+                { CF_MAIN_RANGED_SPELL,  "MAIN-RANGED" },
+                { CF_TARGET_UNREACHABLE, "if-unreachable" },
+                { CF_AURA_NOT_PRESENT,   "aura-not-present" },
+                { CF_ONLY_IN_MELEE,      "only-in-melee" },
+                { CF_NOT_IN_MELEE,       "not-in-melee" },
+                { CF_TARGET_CASTING,     "target-casting" },
+            };
+            std::string out;
+            for (auto const& n : names)
+            {
+                if (!(flags & n.flag))
+                    continue;
+                if (!out.empty())
+                    out += " ";
+                out += n.name;
+            }
+            return out;
+        }
+
+        // "[source, ...] " in front of one creature spell: where it comes from and when it is cast.
+        std::string SpellRefHead(CreatureSpellRef const& s)
+        {
+            char buf[96];
+            std::string head = "  [";
+            head += CreatureProfiles::SourceName(s.source);
+            if (s.source == SpellSource::OnHit)
+            {
+                snprintf(buf, sizeof(buf), " via %u, %u%%", s.viaAuraId, s.procChance);
+                head += buf;
+            }
+            else
+            {
+                if (s.castTarget != 0xFF)
+                {
+                    head += ", target ";
+                    head += TargetTypeName(s.castTarget);
+                }
+                if (s.healthPct > 0.0f)
+                {
+                    snprintf(buf, sizeof(buf), ", at %.0f%% hp", s.healthPct);
+                    head += buf;
+                }
+                if (s.initialMaxMs)
+                {
+                    snprintf(buf, sizeof(buf), ", first %u-%u ms", s.initialMinMs, s.initialMaxMs);
+                    head += buf;
+                }
+                if (s.repeatMaxMs || s.source == SpellSource::SpellList)
+                {
+                    snprintf(buf, sizeof(buf), ", repeat %u-%u ms", s.repeatMinMs, s.repeatMaxMs);
+                    head += buf;
+                }
+                if (s.castFlags)
+                {
+                    snprintf(buf, sizeof(buf), ", flags 0x%X %s", s.castFlags, CastFlagNames(s.castFlags).c_str());
+                    head += buf;
+                }
+            }
+            if (s.reapplies)
+                head += ", reapplies";
+            head += "] ";
+            return head;
+        }
+
+        // `prefix` starts the first line, `indent` the following ones (the creature view puts
+        // the spell's source in front; repeating it on every line made them too long).
+        void ShowSpellLine(ChatHandler* handler, uint32 spellId, uint32 casterLevel, float meleeHit,
+                           char const* prefix, char const* indent)
         {
             std::shared_ptr<SpellProfile const> p = sProfileStore.GetSpell(spellId);
             if (!p)
@@ -63,16 +159,23 @@ namespace ProfileCommands
                 return;
             }
             SpellAmounts const a = SpellProfiles::Estimate(sSpellMgr.GetSpellEntry(spellId), casterLevel, meleeHit);
-            handler->PSendSysMessage("%s%u %s: %s, cast %u ms, dur %u ms, radius %.0f, %s%s, dispel %s%s",
+            handler->PSendSysMessage("%s%u %s: %s (%s), cast %u ms, dur %u ms, radius %.0f, %s%s%s, dispel %s%s",
                 prefix, spellId, SpellName(spellId).c_str(), SpellTags::CategoryName(p->category),
-                p->castMs, p->durationMs, p->radius,
+                SchoolName(p->school), p->castMs, p->durationMs, p->radius,
                 p->interruptible ? "interruptible" : "not interruptible",
-                p->controls ? ", control" : "",
+                p->controls ? ", control" : "", p->breaksOnDamage ? " (breaks on damage)" : "",
                 SpellProfiles::DispelName(p->dispel), p->harmful ? "" : " (positive)");
-            handler->PSendSysMessage("%s    at level %u: damage %.0f + %.0f over time, heal %.0f + %.0f, control %.1f s",
-                prefix, casterLevel, a.damage, a.periodicDamage, a.heal, a.periodicHeal, a.controlSec);
+            handler->PSendSysMessage("%s    at level %u: damage %.0f + %.0f over time, heal %.0f + %.0f%s, control %.1f s, mana %.0f",
+                indent, casterLevel, a.damage, a.periodicDamage, a.heal, a.periodicHeal,
+                a.healsToFull ? " (to full)" : "", a.controlSec, a.mana);
+            if (a.summonEntry)
+            {
+                CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(a.summonEntry);
+                handler->PSendSysMessage("%s    summons %.0f x %u %s", indent, std::max(1.0f, a.summonCount),
+                    a.summonEntry, info ? info->name.c_str() : "?");
+            }
             if (p->hasOverride)
-                handler->PSendSysMessage("%s    override: interrupt x%.2f, dispel %s  %s", prefix,
+                handler->PSendSysMessage("%s    override: interrupt x%.2f, dispel %s  %s", indent,
                     p->override.interruptMult, SpellProfiles::PolicyName(p->override.dispel), p->override.comment.c_str());
         }
     }
@@ -100,8 +203,15 @@ namespace ProfileCommands
         handler->PSendSysMessage("  melee: profile %.0f per hit, %.1f dps at level %u | live %.0f per hit, %u ms, %.1f dps",
             CreatureProfiles::EstimateMeleeHit(*p, level), CreatureProfiles::EstimateMeleeDps(*p, level), level,
             liveHit, liveAttackMs, liveAttackMs ? liveHit / (liveAttackMs / 1000.0f) : 0.0f);
-        handler->PSendSysMessage("  taunt immune: %s, mechanic immune mask 0x%X, flees at %.0f%% health",
-            p->tauntImmune ? "yes" : "no", p->mechanicImmuneMask, p->fleeAtHealthPct);
+        handler->PSendSysMessage("  taunt immune: %s, immune masks: mechanic 0x%X, school 0x%X, flees at %.0f%% health",
+            p->tauntImmune ? "yes" : "no", p->mechanicImmuneMask, p->schoolImmuneMask, p->fleeAtHealthPct);
+        // Step 8 fields: what pull / clear and the cast values read from the profile.
+        std::string ranged = "none";
+        if (p->mainRangedSpellId)
+            ranged = std::to_string(p->mainRangedSpellId) + " " + SpellName(p->mainRangedSpellId);
+        handler->PSendSysMessage("  boss: %s, C++ script: %s, no aggro: %s, main ranged spell: %s",
+            p->boss ? "yes" : "no", p->scripted ? "yes (EventAI rows ignored)" : "no",
+            p->noAggro ? "yes" : "no", ranged.c_str());
         if (p->hasOverride)
             handler->PSendSysMessage("  override: interrupt x%.2f, taunt x%.2f  %s",
                 p->override.interruptMult, p->override.tauntMult, p->override.comment.c_str());
@@ -109,16 +219,7 @@ namespace ProfileCommands
         if (p->spells.empty())
             handler->SendSysMessage("  spells: none known (C++ script creatures are not covered)");
         for (CreatureSpellRef const& s : p->spells)
-        {
-            char head[160];
-            if (s.source == SpellSource::OnHit)
-                snprintf(head, sizeof(head), "  [%s via %u, %u%%%s] ", CreatureProfiles::SourceName(s.source),
-                    s.viaAuraId, s.procChance, s.reapplies ? ", reapplies" : "");
-            else
-                snprintf(head, sizeof(head), "  [%s, target %s, repeat %u-%u ms%s] ", CreatureProfiles::SourceName(s.source),
-                    TargetTypeName(s.castTarget), s.repeatMinMs, s.repeatMaxMs, s.reapplies ? ", reapplies" : "");
-            ShowSpellLine(handler, s.spellId, level, liveHit, head);
-        }
+            ShowSpellLine(handler, s.spellId, level, liveHit, SpellRefHead(s).c_str(), "    ");
         return true;
     }
 
@@ -129,7 +230,7 @@ namespace ProfileCommands
             handler->PSendSysMessage("Unknown spell %u.", spellId);
             return false;
         }
-        ShowSpellLine(handler, spellId, casterLevel, 0.0f, "");
+        ShowSpellLine(handler, spellId, casterLevel, 0.0f, "", "");
         return true;
     }
 
@@ -178,6 +279,8 @@ namespace ProfileCommands
     void ReloadOverrides(ChatHandler* handler)
     {
         handler->SendSysMessage(sProfileStore.ReloadOverrides().c_str());
+        // Cached cast values were computed from the old profiles (CastValue.cpp planning cache).
+        CastValues::InvalidateCache();
     }
 
     void ShowDecisions(ChatHandler* handler, BotDirectives const& directives, uint32 count)

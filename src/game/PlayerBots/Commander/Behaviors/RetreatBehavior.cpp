@@ -3,8 +3,12 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "SpellEntry.h"
 #include <algorithm>
 #include <cmath>
+#include <list>
+#include <utility>
+#include <vector>
 
 namespace Commander
 {
@@ -90,5 +94,102 @@ namespace Commander
         }
         // holdMs = 0: stand at the point, still not attacking.
         out.push_back(p);
+
+        if (!move)
+            ProposeHeal(bot, world, out);
+    }
+
+    // Only called at the point with no chaser close (the caller did not step aside). Picks the
+    // most injured member below RETREAT_HEAL_PCT that is safe to heal and an instant heal for it.
+    void RetreatBehavior::ProposeHeal(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    {
+        if (bot->GetRole() != ROLE_HEALER)
+            return;
+        Player* me = bot->me;
+        ObjectGuid const self = me->GetObjectGuid();
+
+        // Nothing may be chasing me at all, also from farther than CHASER_DISTANCE: a heal does
+        // not stop the run, but a chaser that catches a target standing still extends its leash.
+        for (EnemyFacts const& e : world.enemies)
+            if (e.victim == self)
+                return;
+
+        // Most injured first. Pets are left out (a pet is not worth a new threat entry).
+        std::vector<std::pair<float, ObjectGuid>> candidates;
+        for (PartyMemberFacts const& m : world.party)
+            if (!m.isPet && m.alive && !m.charmed && m.healthPct < RETREAT_HEAL_PCT)
+                candidates.emplace_back(m.healthPct, m.guid);
+        std::sort(candidates.begin(), candidates.end(),
+            [](std::pair<float, ObjectGuid> const& a, std::pair<float, ObjectGuid> const& b) { return a.first < b.first; });
+
+        for (auto const& c : candidates)
+        {
+            Unit* pTarget = me->GetMap()->GetUnit(c.second);
+            if (!pTarget || !bot->IsValidHealTarget(pTarget, RETREAT_HEAL_PCT))
+                continue;   // dead since the refresh, out of 30 yd or line of sight
+
+            // Heal threat goes to every creature that has the target on its threat list, and puts
+            // the healer on it. A creature in combat near the target would turn on the healer or
+            // keep chasing (its leash is what the retreat is waiting for), so: no hostile unit in
+            // combat within RETREAT_HEAL_ENEMY_CLEARANCE of the target. Creatures farther away
+            // that still have the target on their list get the threat too; they are not chasing
+            // anyone at the point (none is close), so a new entry there is accepted.
+            bool enemyClose = false;
+            std::list<Unit*> enemies;
+            me->GetEnemyListInRadiusAround(pTarget, RETREAT_HEAL_ENEMY_CLEARANCE, enemies);
+            for (Unit const* pEnemy : enemies)
+            {
+                if (pEnemy->IsAlive() && pEnemy->IsInCombat())
+                {
+                    enemyClose = true;
+                    break;
+                }
+            }
+            if (enemyClose)
+                continue;
+
+            SpellEntry const* spell = SelectInstantHeal(bot, pTarget);
+            if (!spell)
+                continue;
+
+            // Same tier as the Retreat action, scored higher: tried first, and when the cast
+            // fails at execution the arbiter falls back to the Retreat action in the same tick.
+            // Not value-scored: the retreat itself is not valued either.
+            Proposal p;
+            p.tier = ProposalTier::Override;
+            p.score = HEAL_SCORE;
+            p.source = "retreat";
+            p.reason = "heal at the retreat point";
+            p.action.type = BotActionType::Cast;
+            p.action.target = pTarget->GetObjectGuid();
+            p.action.spell = spell;
+            out.push_back(p);
+            return;
+        }
+    }
+
+    // Instant heals only: a cast time would stop the bot (DoCastSpell stops movement) and a
+    // chaser could catch it standing still. Order: instant direct heals, HoTs (Renew,
+    // Rejuvenation; Regrowth has a cast time and is skipped), then Power Word: Shield.
+    // Strongest castable first within each list (the lists are sorted strongest first).
+    SpellEntry const* RetreatBehavior::SelectInstantHeal(PartyBotAI const* bot, Unit const* pTarget)
+    {
+        Player* me = bot->me;
+        for (SpellEntry const* spell : bot->m_spellListDirectHeal)
+            if (spell->GetCastTime(me) == 0 && bot->CanTryToCastSpell(pTarget, spell))
+                return spell;
+        // One HoT is enough; another one on top mostly fails ("a more powerful spell is active").
+        if (!pTarget->HasAuraType(SPELL_AURA_PERIODIC_HEAL))
+            for (SpellEntry const* spell : bot->m_spellListPeriodicHeal)
+                if (spell->GetCastTime(me) == 0 && bot->CanTryToCastSpell(pTarget, spell))
+                    return spell;
+        // Weakened Soul is not checked by CanTryToCastSpell: the cast then fails and the
+        // arbiter falls back to the Retreat action.
+        // (m_spells is per class: read the priest entry only for priests)
+        if (me->GetClass() == CLASS_PRIEST)
+            if (SpellEntry const* shield = bot->m_spells.priest.pPowerWordShield)
+                if (bot->CanTryToCastSpell(pTarget, shield))
+                    return shield;
+        return nullptr;
     }
 }

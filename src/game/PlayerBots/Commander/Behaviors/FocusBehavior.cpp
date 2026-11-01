@@ -52,6 +52,15 @@ namespace Commander
             return best > 0.0f ? best : Value::FALLBACK_DPS_PER_LEVEL * float(me.level);
         }
 
+        // Pull phases in which PullBehavior holds bots that are not in combat yet.
+        bool IsPullHolding(PullPhase phase)
+        {
+            return phase == PullPhase::Approach || phase == PullPhase::Return || phase == PullPhase::Settle;
+        }
+
+        static_assert(FocusBehavior::ENTER_HEADROOM > ThreatBehavior::DPS_STOP_HEADROOM,
+                      "focus entry must need more threat headroom than ThreatBehavior's stop rule");
+
         Proposal MakeAttack(ProposalTier tier, ObjectGuid target, char const* reason)
         {
             Proposal p;
@@ -112,6 +121,12 @@ namespace Commander
             return;
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
+
+        // Pull in progress and not in combat yet: PullBehavior's Hold keeps us still until the
+        // tank has the pack. That Hold is not valued, so a valued focus proposal would win over
+        // it and send us in early. Same condition PullBehavior uses for its Hold.
+        if (IsPullHolding(plan.pull.phase) && !me->IsInCombat())
+            return;
         Unit* victim = me->GetVictim();
         if (victim && victim->GetObjectGuid() == plan.focus.enemy)
             return;
@@ -135,8 +150,9 @@ namespace Commander
             walkSec = std::max(0.0f, me->GetDistance(unit) - MELEE_REACH) / RUN_YARDS_PER_SEC;
         }
 
-        // Threat: do not switch onto an enemy where ThreatBehavior would make us stop at once
-        // (same rule as ThreatBehavior::ProposeDamage, fresh enemies are never the focus).
+        // Threat: do not switch onto an enemy where ThreatBehavior would make us stop soon.
+        // Entry needs more headroom than ThreatBehavior::ProposeDamage's stop rule (hysteresis,
+        // FocusBehavior.h); fresh enemies are never the focus, so no settle window here.
         if (focus->victim != self)
         {
             float const headroom = ThreatView::Headroom(*focus, self);
@@ -146,8 +162,8 @@ namespace Commander
             if (holder && IsHolder(*holder))
             {
                 float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
-                float const needed = std::max(ThreatBehavior::DPS_STOP_HEADROOM * focus->victimThreat,
-                                              OwnThreatRate(world, *myFacts) * tickSec);
+                float const needed = std::max(ENTER_HEADROOM * focus->victimThreat,
+                                              OwnThreatRate(world, *myFacts) * tickSec * ENTER_THREAT_TICKS);
                 if (headroom < needed)
                     return;
             }
