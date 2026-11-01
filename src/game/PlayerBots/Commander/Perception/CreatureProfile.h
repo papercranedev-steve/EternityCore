@@ -82,8 +82,16 @@ namespace Commander
         bool Reapplies(uint32 spellId) const;
     };
 
-    // Spell list entries that repeat at most this often count as "reapplied" (value-scoring 4.2).
+    // Spell list entries that repeat this often on average count as "reapplied" (value-scoring 4.2).
+    // Average, not maximum: Defias Captive's Infected Wound repeats every 1-9 s (5 s on average),
+    // with the maximum rule the healer dispelled it 14 times in 35 s and healed nobody
+    // (Stockade test run, 2026-11-01).
     static uint32 const REAPPLY_REPEAT_MAX_MS = 6000;
+
+    inline bool RepeatsSoon(uint32 repeatMinMs, uint32 repeatMaxMs)
+    {
+        return repeatMaxMs > 0 && (repeatMinMs + repeatMaxMs) / 2 <= REAPPLY_REPEAT_MAX_MS;
+    }
 
     namespace CreatureProfiles
     {

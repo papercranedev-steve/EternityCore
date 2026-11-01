@@ -53,7 +53,7 @@ namespace CreatureProfiles
                 ref.castTarget = e.castTarget;
                 ref.repeatMinMs = e.delayRepeatMin;
                 ref.repeatMaxMs = e.delayRepeatMax;
-                ref.reapplies = e.delayRepeatMax > 0 && e.delayRepeatMax <= REAPPLY_REPEAT_MAX_MS;
+                ref.reapplies = RepeatsSoon(e.delayRepeatMin, e.delayRepeatMax);
                 ref.castFlags = e.castFlags;
                 ref.targetParam1 = e.targetParam1;
                 ref.targetParam2 = e.targetParam2;
@@ -123,8 +123,8 @@ namespace CreatureProfiles
                         {
                             ref.repeatMinMs = ev.timer.repeatMin;
                             ref.repeatMaxMs = ev.timer.repeatMax;
-                            ref.reapplies = (ev.event_flags & EFLAG_REPEATABLE) && ev.timer.repeatMax > 0 &&
-                                            ev.timer.repeatMax <= REAPPLY_REPEAT_MAX_MS;
+                            ref.reapplies = (ev.event_flags & EFLAG_REPEATABLE) &&
+                                            RepeatsSoon(ev.timer.repeatMin, ev.timer.repeatMax);
                         }
                         Add(p, ref);
                     }

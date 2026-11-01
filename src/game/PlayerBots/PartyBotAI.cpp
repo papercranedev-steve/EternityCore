@@ -33,6 +33,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Behaviors/PositioningBehavior.h"
+#include "Commander/Behaviors/FleePoint.h"
 
 #include <random>
 
@@ -307,6 +308,18 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
 {
     if (IsMovementHeld())
         return false;
+
+    // Commander position module: run where no idle pack is (FleePoint.h). Nowhere safe:
+    // stay and fight, running blind pulled the next hall in the first Stockade test.
+    if (sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("position") && !IsInDuel() &&
+        !me->GetTransport())
+    {
+        float x, y, z;
+        if (!Commander::FleePoint::Find(me, pEnemy, x, y, z))
+            return false;
+        me->GetMotionMaster()->MoveDistancingTo(x, y, z);
+        return true;
+    }
 
     if (Unit* pTarget = GetDistancingTarget(pEnemy))
     {

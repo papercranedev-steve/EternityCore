@@ -916,6 +916,14 @@ bool MotionMaster::MoveDistance(Unit const* pTarget, float distance)
     return true;
 }
 
+void MotionMaster::MoveDistancingTo(float x, float y, float z)
+{
+    if (m_owner->IsPlayer())
+        Mutate(new DistancingMovementGenerator<Player>(x, y, z));
+    else
+        Mutate(new DistancingMovementGenerator<Creature>(x, y, z));
+}
+
 void MotionMaster::ClearType(MovementGeneratorType moveType)
 {
     for (iterator it = begin(); it != end();)

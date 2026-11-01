@@ -144,6 +144,8 @@ class MotionMaster : std::stack<MovementGenerator *>
         void MoveJump(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id = 0);
         void MoveCharge(Unit* target, uint32 delay = 0, bool triggerAutoAttack = false, bool useCombatReach = true);
         bool MoveDistance(Unit const* target, float distance);
+        // PartyBot Commander: same distancing move (pathfinding, run) to a point chosen by the caller.
+        void MoveDistancingTo(float x, float y, float z);
         void ReInitializePatrolMovement();
 
         MovementGeneratorType GetCurrentMovementGeneratorType() const;

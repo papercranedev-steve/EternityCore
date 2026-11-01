@@ -113,7 +113,10 @@ local function pickPremade(kind, class, level, role)
     return best
 end
 
-local function applyPremades(u, level, role)
+-- 'gm' runs .maxskill on u (a GM player; bots have no GM rights). Premade gear teaches missing
+-- weapon proficiencies at skill 1, so without this the warriors missed every swing with the
+-- level 19 template's two-handed mace (first Stockade run, 2026-11-01).
+local function applyPremades(u, level, role, gm)
     local spec = pickPremade("spec", u:class(), level, role)
     if spec then u:premade("spec", spec.entry) end
     local gear = pickPremade("gear", u:class(), level, role)
@@ -121,6 +124,9 @@ local function applyPremades(u, level, role)
         u:premade("gear", gear.entry)
         u:clearbags()
     end
+    gm = gm or u
+    gm:select(u)
+    gm:cmd(".maxskill")
     return spec, gear
 end
 
@@ -200,7 +206,7 @@ local function finish(leader, s)
     for i, b in ipairs(bots) do
         local want = s.bots[i]
         local role = (b:ai() and b:ai().role) or (want and want.role) or "auto"
-        applyPremades(b, s.level, role)
+        applyPremades(b, s.level, role, leader)
         b:revive()
         b:refill()
         b:resetcd()
