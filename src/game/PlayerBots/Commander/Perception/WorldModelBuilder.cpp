@@ -17,6 +17,7 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
+#include "Timer.h"
 #include <algorithm>
 #include <limits>
 
@@ -47,6 +48,8 @@ namespace WorldModelBuilder
             f.armor = uint32(std::max(0, unit->GetArmor()));
             f.manaPct = unit->GetPowerType() == POWER_MANA && unit->GetMaxPower(POWER_MANA)
                 ? unit->GetPowerPercent(POWER_MANA) : -1.0f;
+            f.mana = unit->GetPower(POWER_MANA);
+            f.maxMana = unit->GetMaxPower(POWER_MANA);
             f.pos = PositionOf(unit);
             if (Unit const* victim = unit->GetVictim())
                 f.victim = victim->GetObjectGuid();
@@ -285,6 +288,51 @@ namespace WorldModelBuilder
             }
         }
 
+        // The start of each enemy's current cast goes into world.castStartLog (kept across
+        // refreshes); entries of enemies no longer on the lists are dropped. Then every enemy
+        // gets its own entries in castStarts.
+        void UpdateCastStarts(WorldModel& world, uint32 nowMs)
+        {
+            std::vector<WorldModel::CastStartRecord>& log = world.castStartLog;
+            log.erase(std::remove_if(log.begin(), log.end(), [&world](WorldModel::CastStartRecord const& r)
+            {
+                return !world.FindEnemy(r.enemy);
+            }), log.end());
+
+            for (EnemyFacts& e : world.enemies)
+            {
+                if (e.castingSpellId)
+                {
+                    uint32 const elapsed = e.castTotalMs > e.castRemainingMs ? e.castTotalMs - e.castRemainingMs : 0;
+                    uint32 const start = nowMs - elapsed;
+                    auto itr = std::find_if(log.begin(), log.end(), [&e](WorldModel::CastStartRecord const& r)
+                    {
+                        return r.enemy == e.guid && r.cast.spellId == e.castingSpellId;
+                    });
+                    if (itr == log.end())
+                    {
+                        WorldModel::CastStartRecord r;
+                        r.enemy = e.guid;
+                        r.cast.spellId = e.castingSpellId;
+                        itr = log.insert(log.end(), r);
+                    }
+                    // Same cast seen again: same start (up to timer steps). A new cast: later start.
+                    itr->cast.lastStartMs = start;
+                }
+                for (WorldModel::CastStartRecord const& r : log)
+                    if (r.enemy == e.guid)
+                        e.castStarts.push_back(r.cast);
+            }
+        }
+
+        // Has an interrupt that works from range (Counterspell, Earth Shock, Silence, Hammer of
+        // Justice, Feral Charge): those need line of sight; melee ones need reach instead.
+        bool HasRangedInterrupt(PartyMemberFacts const& f)
+        {
+            return std::any_of(f.interrupts.begin(), f.interrupts.end(),
+                [](InterruptAbility const& a) { return a.maxRange > MELEE_INTERRUPT_RANGE; });
+        }
+
         void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             auto const& s = ai->m_spells;
@@ -297,6 +345,9 @@ namespace WorldModelBuilder
                     break;
                 case CLASS_ROGUE:
                     AddInterrupt(ai, s.rogue.pKick, f);
+                    // Stun with spell mechanic KNOCKOUT (incapacitate): CastValues::CanStop
+                    // skips it on knockout-immune creatures (mechanicMask = 1 << 13).
+                    AddInterrupt(ai, s.rogue.pGouge, f);
                     break;
                 case CLASS_MAGE:
                     AddInterrupt(ai, s.mage.pCounterspell, f);
@@ -332,11 +383,13 @@ namespace WorldModelBuilder
         if (!group)
         {
             world.allies.clear();
+            world.castStartLog.clear();
             return;
         }
 
         // Party members and pets on this map.
         std::vector<Unit*> partyUnits;
+        std::vector<Player*> sightCheckers;     // bots with a ranged interrupt that can act
         for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
         {
             Player* member = itr->getSource();
@@ -353,6 +406,8 @@ namespace WorldModelBuilder
                     f.role = uint8(ai->m_role);
                     if (member->IsAlive())
                         FillInterrupts(ai, f);
+                    if (f.CanAct() && HasRangedInterrupt(f))
+                        sightCheckers.push_back(member);
                 }
             }
             world.party.push_back(f);
@@ -443,8 +498,16 @@ namespace WorldModelBuilder
             EnemyFacts e;
             FillEnemy(enemies[i], partyUnits, e);
             e.onAllyOnly = i >= partyEnemyCount;
+            // Line of sight for InterruptAssigner: only casts it may assign (interruptible, on
+            // our lists), one check per (bot, caster) per refresh.
+            if (e.castingSpellId && e.castInterruptible && !e.onAllyOnly)
+                for (Player* checker : sightCheckers)
+                    if (!checker->IsWithinLOSInMap(enemies[i]))
+                        e.outOfSight.push_back(checker->GetObjectGuid());
             world.enemies.push_back(std::move(e));
         }
+
+        UpdateCastStarts(world, WorldTimer::getMSTime());
     }
 
     void RefreshPacks(PartyBotAI* bot, WorldModel& world)

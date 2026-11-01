@@ -1203,7 +1203,10 @@ bool ChatHandler::HandlePartyBotAttackStartCommand(char* args)
                 if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
                 {
                     if (pMember->IsValidAttackTarget(pTarget))
+                    {
+                        pAI->ClearMovementHold();   // a leftover Commander hold would block the chase
                         pAI->AttackStart(pTarget);
+                    }
                 }
             }
         }
@@ -1215,6 +1218,7 @@ bool ChatHandler::HandlePartyBotAttackStartCommand(char* args)
 
 void StopPartyBotAttackHelper(PartyBotAI* pAI, Player* pBot)
 {
+    pAI->ClearMovementHold();
     pBot->AttackStop(true);
     pBot->InterruptNonMeleeSpells(false);
     if (!pBot->IsStopped())
@@ -1605,6 +1609,8 @@ bool HandlePartyBotComeToMeHelper(Player* pBot, Player* pPlayer)
             if (pBot->GetStandState() != UNIT_STAND_STATE_STAND)
                 pBot->SetStandState(UNIT_STAND_STATE_STAND);
 
+            // Otherwise the hold keeps the bot from following once it has arrived.
+            pAI->ClearMovementHold();
             pBot->InterruptSpellsWithInterruptFlags(SPELL_INTERRUPT_FLAG_MOVEMENT);
             pBot->MonsterMove(pPlayer->GetPositionX(), pPlayer->GetPositionY(), pPlayer->GetPositionZ());
             return true;
@@ -1720,6 +1726,8 @@ bool HandlePartyBotPauseApplyHelper(Player* pTarget, uint32 duration)
     {
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
+            // Pause: the bot stays. Unpause: it follows again right away.
+            pAI->ClearMovementHold();
             pAI->m_updateTimer.Reset(duration);
 
             if (duration)
@@ -1867,7 +1875,10 @@ bool ChatHandler::HandlePartyBotPullCommand(char* args)
                     else if (pAI->m_role == ROLE_TANK)
                     {
                         if (pMember->IsValidAttackTarget(pTarget))
+                        {
+                            pAI->ClearMovementHold();
                             pAI->AttackStart(pTarget);
+                        }
                     }
                 }
             }

@@ -28,8 +28,40 @@ namespace Commander
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::Retreat: return "retreat";
                 case BotActionType::UseObject: return "use";
+                case BotActionType::PetAttack: return "pet-attack";
+                case BotActionType::PetFollow: return "pet-follow";
+                case BotActionType::PetAutocastOn: return "pet-autocast-on";
+                case BotActionType::PetAutocastOff: return "pet-autocast-off";
             }
             return "?";
+        }
+
+        bool IsPetAction(BotActionType type)
+        {
+            switch (type)
+            {
+                case BotActionType::PetAttack:
+                case BotActionType::PetFollow:
+                case BotActionType::PetAutocastOn:
+                case BotActionType::PetAutocastOff:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        // Moves the pet: at most one per tick. Autocast toggles do not conflict with each other.
+        bool IsPetCommand(BotActionType type)
+        {
+            return type == BotActionType::PetAttack || type == BotActionType::PetFollow;
+        }
+
+        // Highest tier first, then the highest score inside the tier.
+        bool IsBetter(Proposal const& a, Proposal const& b)
+        {
+            if (a.tier != b.tier)
+                return a.tier < b.tier;
+            return a.score > b.score;
         }
 
         char const* VetoName(VetoType type)
@@ -129,6 +161,7 @@ namespace Commander
 
         // Value-scored proposals that are not worth it, and vetoes.
         std::vector<Proposal> replace;
+        std::vector<Proposal> petActions;
         uint32 const vetoMs = VETO_TICKS * sCommanderMgr.GetBotUpdateInterval();
         for (Proposal const& p : proposals)
         {
@@ -145,15 +178,16 @@ namespace Commander
                 record.candidates.back().result = CandidateRecord::Result::VetoSet;
                 continue;
             }
+            if (IsPetAction(p.action.type))
+            {
+                petActions.push_back(p);
+                continue;
+            }
             replace.push_back(p);
         }
 
-        std::stable_sort(replace.begin(), replace.end(), [](Proposal const& a, Proposal const& b)
-        {
-            if (a.tier != b.tier)
-                return a.tier < b.tier;
-            return a.score > b.score;
-        });
+        std::stable_sort(replace.begin(), replace.end(), IsBetter);
+        std::stable_sort(petActions.begin(), petActions.end(), IsBetter);
 
         bool executed = false;
         bool rotationMayRun = false;
@@ -190,6 +224,31 @@ namespace Commander
             }
             if (!executed)
                 directives.SetLastDecision(now, "failed: " + std::string(replace.front().source) + " " + Describe(bot, replace.front()));
+        }
+
+        // Pet actions, besides the bot's own action: every autocast toggle, and the best pet
+        // command that executes. During a retreat RetreatBehavior calls the pet back itself.
+        bool const retreating = !replace.empty() && replace.front().tier == ProposalTier::Override;
+        bool petCommanded = false;
+        for (Proposal const& p : petActions)
+        {
+            record.candidates.push_back(MakeRecord(Describe(bot, p), p));
+            CandidateRecord& r = record.candidates.back();
+            bool const command = IsPetCommand(p.action.type);
+            if (command && retreating)
+            {
+                r.result = CandidateRecord::Result::LowerTier;
+                continue;
+            }
+            if (command && petCommanded)
+                continue;   // NotTried
+            if (Execute(bot, p))
+            {
+                r.result = CandidateRecord::Result::Executed;
+                petCommanded = petCommanded || command;
+            }
+            else
+                r.result = CandidateRecord::Result::Failed;
         }
 
         directives.RecordDecision(std::move(record));
@@ -312,9 +371,59 @@ namespace Commander
             }
             case BotActionType::UseObject:
                 break;      // handled above
+            case BotActionType::PetAttack:
+            case BotActionType::PetFollow:
+            case BotActionType::PetAutocastOn:
+            case BotActionType::PetAutocastOff:
+                return ExecutePetAction(bot, action, pTarget);
         }
 
         return false;
+    }
+
+    bool Arbiter::ExecutePetAction(PartyBotAI* bot, BotAction const& action, Unit* pTarget)
+    {
+        Pet* pet = bot->me->GetPet();
+        // A pet mind controlled by an enemy is not ours to command.
+        if (!pet || !pet->IsAlive() || pet->IsCharmed() || !pet->GetCharmInfo())
+            return false;
+        CharmInfo* charmInfo = pet->GetCharmInfo();
+
+        switch (action.type)
+        {
+            case BotActionType::PetAttack:
+            {
+                if (!pTarget || pet->GetVictim() == pTarget || !bot->IsValidHostileTarget(pTarget))
+                    return false;
+                // Same server path as the pet bar's Attack button (sets "commanded attack", so a
+                // passive pet or one returning after Follow attacks too).
+                pet->HandlePetCommand(COMMAND_ATTACK, pTarget);
+                return pet->GetVictim() == pTarget;
+            }
+            case BotActionType::PetFollow:
+            {
+                // Same path as the Follow button (as in Retreat). Only re-sent when the pet attacks
+                // or the rotation could send it in again: while it runs back after Follow,
+                // PetAI::CanAttack refuses the rotation's AttackStart. Once it reached the bot the
+                // flags are cleared and Follow is sent once more.
+                if (pet->GetVictim() || !(charmInfo->IsReturning() && charmInfo->IsCommandFollow()))
+                    pet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
+                return true;
+            }
+            case BotActionType::PetAutocastOn:
+            case BotActionType::PetAutocastOff:
+            {
+                if (!action.spell || !pet->HasSpell(action.spell->Id) || !action.spell->IsAutocastable())
+                    return false;
+                // Same calls as the client's autocast toggle (WorldSession::HandlePetSpellAutocastOpcode).
+                bool const on = action.type == BotActionType::PetAutocastOn;
+                pet->ToggleAutocast(action.spell->Id, on);
+                charmInfo->SetSpellAutocast(action.spell->Id, on);
+                return true;
+            }
+            default:
+                return false;
+        }
     }
 
     bool Arbiter::ExecuteUseObject(PartyBotAI* bot, BotAction const& action)

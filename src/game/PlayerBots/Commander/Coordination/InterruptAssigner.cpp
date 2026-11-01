@@ -1,6 +1,7 @@
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/CastValue.h"
@@ -69,10 +70,18 @@ namespace Commander
                     score += InterruptAssigner::SCORE_TANK;
                 if (previous && previous->primary == m.guid)
                     score += InterruptAssigner::SCORE_STICKY;
+                // Ranged interrupt behind a pillar: the cast fails with "not in line of sight".
+                // Backup at most (it may step out by then). Checked by the builder for live casts.
+                bool const noSight = a.maxRange > WorldModelBuilder::MELEE_INTERRUPT_RANGE && !e.InSightOf(m.guid);
+                if (noSight)
+                {
+                    score += InterruptAssigner::SCORE_NO_SIGHT;
+                    c.canBePrimary = false;
+                }
                 c.score = score;
 
                 // A 3 s cast and a melee 20 yards away: it arrives after the cast (scenario 2, 3.5 item 2).
-                if (target.live && outOfRange > 0.0f)
+                if (target.live && outOfRange > 0.0f && !noSight)
                 {
                     float const reachSec = outOfRange / CastValues::RUN_YARDS_PER_SEC + InterruptAssigner::REACTION_SEC;
                     c.canBePrimary = reachSec <= e.castRemainingMs / 1000.0f;

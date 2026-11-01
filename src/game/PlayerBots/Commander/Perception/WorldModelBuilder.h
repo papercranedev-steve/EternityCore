@@ -27,6 +27,9 @@ namespace WorldModelBuilder
     size_t const MAX_ALLY_ENEMIES = 20;
     // AllyFacts::tankLike: elite and max health >= this x the party tank's max health.
     float const ALLY_TANK_HEALTH_MULT = 2.0f;
+    // Interrupts with a longer range (InterruptAbility::maxRange, at least 5) count as ranged:
+    // EnemyFacts::outOfSight is checked for bots that have one.
+    float const MELEE_INTERRUPT_RANGE = 5.0f;
 
     // Party members, pets, allies, enemies and their threat lists. No grid search: allies come
     // from the last scan (allyCandidates), the previous allies, and the threat lists of enemies.

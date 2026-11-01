@@ -4,7 +4,10 @@
 #include "Commander/Perception/PackResolver.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
+#include "Group.h"
+#include "LootMgr.h"
 #include "Map.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "Timer.h"
 #include "GridNotifiers.h"
@@ -97,9 +100,89 @@ namespace ClearPlanner
             float m_range;
         };
 
-        // A player of the party (bots never loot) may still loot a corpse near the leader.
-        // Player::IsAllowedToLoot is the server's own rule: loot left, present at the kill,
-        // group has loot rights, loot method (round robin, ...).
+        // Gray (poor quality) items are vendor trash: the player often leaves them on the corpse.
+        bool IsWorthLooting(LootItem const& item)
+        {
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item.itemid);
+            return proto && proto->Quality > ITEM_QUALITY_POOR;
+        }
+
+        // The player's own copy of item `index` (FFA, quest or conditional list) is still on the corpse.
+        bool HasUntakenEntry(QuestItemMap const& lists, uint32 playerLow, size_t index)
+        {
+            QuestItemMap::const_iterator const itr = lists.find(playerLow);
+            if (itr == lists.end())
+                return false;
+            for (QuestItem const& qi : *itr->second)
+                if (qi.index == index && !qi.is_looted)
+                    return true;
+            return false;
+        }
+
+        // A shared item (not FFA, not conditional) the player may take from the window.
+        // Same rule as Player::IsAllowedToLoot: when another member (often a bot) is the round
+        // robin looter, the player only gets items over the group loot threshold (they are rolled).
+        bool MayTakeSharedItem(Player const* player, Loot const& loot, LootItem const& item)
+        {
+            if (!loot.roundRobinPlayer || loot.roundRobinPlayer == player->GetGUID())
+                return true;
+            Group const* group = player->GetGroup();
+            if (!group)
+                return true;
+            switch (group->GetLootMethod())
+            {
+                case ROUND_ROBIN:
+                    return false;
+                case GROUP_LOOT:
+                case NEED_BEFORE_GREED:
+                    return !item.is_underthreshold;
+                default:
+                    return true;
+            }
+        }
+
+        // Something on the corpse the player would take: money, one of their quest items, or an
+        // item above gray quality they may take. Loot is rolled at the kill (Unit.cpp,
+        // Creature::GenerateLootForBody), so the contents are known before anyone opens the corpse.
+        // Items being rolled for (is_blocked) do not need the corpse any more.
+        bool HasLootWorthTaking(Player const* player, Creature const* corpse)
+        {
+            Loot const& loot = corpse->loot;
+            if (loot.gold)
+                return true;
+
+            uint32 const playerLow = player->GetGUIDLow();
+            QuestItemMap::const_iterator const quest = loot.GetPlayerQuestItems().find(playerLow);
+            if (quest != loot.GetPlayerQuestItems().end())
+                for (QuestItem const& qi : *quest->second)
+                    if (!qi.is_looted && qi.index < loot.m_questItems.size() && !loot.m_questItems[qi.index].is_looted)
+                        return true;
+
+            for (size_t i = 0; i < loot.items.size(); ++i)
+            {
+                LootItem const& item = loot.items[i];
+                if (item.is_looted || item.is_blocked || !IsWorthLooting(item))
+                    continue;
+                if (item.freeforall)
+                {
+                    if (HasUntakenEntry(loot.GetPlayerFFAItems(), playerLow, i))
+                        return true;
+                }
+                else if (item.conditionId)
+                {
+                    if (HasUntakenEntry(loot.GetPlayerNonQuestNonFFAConditionalItems(), playerLow, i))
+                        return true;
+                }
+                else if (item.AllowedForPlayer(player, corpse) && MayTakeSharedItem(player, loot, item))
+                    return true;
+            }
+            return false;
+        }
+
+        // A player of the party (bots never loot) may still loot a corpse near the leader and
+        // would want to. Player::IsAllowedToLoot is the server's own rule: loot left, present at
+        // the kill, group has loot rights, loot method (round robin, ...). HasLootWorthTaking
+        // drops corpses with only gray items left, which the player leaves behind.
         bool HasLootLeft(Player* leader, WorldModel const& world, Map* map)
         {
             std::list<Creature*> corpses;
@@ -117,7 +200,7 @@ namespace ClearPlanner
                 if (!player || !player->IsInWorld())
                     continue;
                 for (Creature* corpse : corpses)
-                    if (player->IsAllowedToLoot(corpse))
+                    if (player->IsAllowedToLoot(corpse) && HasLootWorthTaking(player, corpse))
                         return true;
             }
             return false;

@@ -154,6 +154,13 @@ bool PartyBotAI::IsMovementHeld() const
     return m_directives && m_directives->IsMovementHeld(WorldTimer::getMSTime());
 }
 
+void PartyBotAI::ClearMovementHold()
+{
+    // No directives yet: nothing is held, do not create them here.
+    if (m_directives)
+        m_directives->ReleaseMovement();
+}
+
 bool PartyBotAI::IsTauntControlled() const
 {
     return m_directives && m_directives->IsTauntControlled(WorldTimer::getMSTime());

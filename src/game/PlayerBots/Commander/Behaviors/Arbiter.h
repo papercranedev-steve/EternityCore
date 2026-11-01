@@ -8,6 +8,9 @@
  * is tried. Every candidate is written to the bot's decision log.
  * UseObject (gameobject target) returns true both while walking and on use, so the original
  * rotation and movement stay off until the module stops proposing it.
+ * Pet actions (PetAttack, PetFollow, PetAutocastOn/Off) are executed besides the bot's own
+ * action and never skip the rotation: every autocast toggle, plus the best pet command
+ * (none during a retreat, which calls the pet back itself).
  */
 
 #ifndef MANGOS_COMMANDER_ARBITER_H
@@ -17,6 +20,7 @@
 #include <string>
 
 class PartyBotAI;
+class Unit;
 
 namespace Commander
 {
@@ -42,6 +46,9 @@ namespace Commander
         // UseObject: walk into INTERACTION_DISTANCE (movement held), then GameObject::Use(me).
         // True while walking or after the use; false if the object is gone or the bot is rooted.
         static bool ExecuteUseObject(PartyBotAI* bot, BotAction const& action);
+        // PetAttack / PetFollow / PetAutocastOn / PetAutocastOff on bot->me->GetPet().
+        // `pTarget` = the live unit of action.target (null if empty).
+        static bool ExecutePetAction(PartyBotAI* bot, BotAction const& action, Unit* pTarget);
         static std::string Describe(PartyBotAI const* bot, Proposal const& proposal);
     };
 }

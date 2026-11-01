@@ -40,6 +40,15 @@ namespace Commander
         // held for holdMs while out of INTERACTION_DISTANCE, then GameObject::Use(me) (button,
         // lever). Same use path as `.partybot usegobject` (PlayerBotMgr.cpp).
         UseObject,
+        // Pet actions command the bot's pet, not the bot. The arbiter executes them besides the
+        // bot's own action (the rotation still runs): every autocast toggle, and the best pet
+        // command (PetAttack / PetFollow). Pet commands are skipped during a retreat (Override).
+        PetAttack,      // pet attacks `target` (the pet bar's Attack button)
+        // Pet stops attacking and runs back to the bot (Follow button). While it runs back, the
+        // rotation's "send the pet in" is refused (PetAI::CanAttack: returning after Follow).
+        PetFollow,
+        PetAutocastOn,  // turn autocast of the pet's `spell` on
+        PetAutocastOff, // turn autocast of the pet's `spell` off
     };
 
     struct BotAction

@@ -97,6 +97,10 @@ public:
     Commander::BotDirectives& Directives();
     Commander::BotDirectives const& Directives() const;
     bool IsMovementHeld() const;
+    // Player commands (.partybot cometome, attackstart, attackstop, pull, pause, unpause in
+    // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
+    // from before. A Commander module may hold again on its next decision.
+    void ClearMovementHold();
     bool IsTauntControlled() const;
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.

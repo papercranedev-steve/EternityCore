@@ -10,6 +10,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include <algorithm>
 #include <vector>
 
 namespace Commander
@@ -49,7 +50,10 @@ namespace Commander
         uint32 maxHealth = 0;
         uint32 level = 0;
         uint32 armor = 0;
-        float manaPct = -1.0f;      // -1 = no mana
+        float manaPct = -1.0f;      // -1 = no mana, or mana is not the active power (druid in bear / cat form)
+        // Mana pool, also while shapeshifted into a form without mana. maxMana 0 = no mana pool.
+        uint32 mana = 0;
+        uint32 maxMana = 0;
         Position3 pos;
         ObjectGuid victim;          // who this member is attacking
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
@@ -63,6 +67,7 @@ namespace Commander
         std::vector<InterruptAbility> interrupts;   // bots only
 
         bool CanAct() const { return alive && !controlled; }
+        bool UsesMana() const { return maxMana > 0; }
     };
 
     // One row of an enemy's threat list, plus party members not on it yet (onList = false).
@@ -74,6 +79,13 @@ namespace Commander
         bool partySide = false;     // party member or pet of this party
         bool inMeleeReach = false;  // enemy can hit this unit in melee -> 110% rule instead of 130%
         float threatPerSec = 0.0f;  // over the last few seconds (ThreatHistory); includes taunt jumps
+    };
+
+    // When an enemy last started casting a spell (EnemyFacts::castStarts).
+    struct CastStart
+    {
+        uint32 spellId = 0;
+        uint32 lastStartMs = 0;         // WorldTimer ms the cast began (seen elapsed time subtracted)
     };
 
     struct EnemyFacts
@@ -120,6 +132,27 @@ namespace Commander
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.
         bool onAllyOnly = false;
+
+        // Every spell (interruptible or not) seen cast by it since it joined our lists, with the
+        // start of its latest cast. Creature repeat delays run from the cast start, so
+        // refreshedAtMs - lastStartMs vs the repeat delay tells how soon it can come again.
+        std::vector<CastStart> castStarts;
+        // Bots with a ranged interrupt that have no line of sight to it. Filled only while it
+        // casts an interruptible spell (empty otherwise: line of sight not checked).
+        std::vector<ObjectGuid> outOfSight;
+
+        // 0 = not seen casting `spellId`.
+        uint32 LastCastStartMs(uint32 spellId) const
+        {
+            for (CastStart const& c : castStarts)
+                if (c.spellId == spellId)
+                    return c.lastStartMs;
+            return 0;
+        }
+        bool InSightOf(ObjectGuid member) const
+        {
+            return std::find(outOfSight.begin(), outOfSight.end(), member) == outOfSight.end();
+        }
 
         // Sorted by threat, highest first. Every row of the live threat list (party members,
         // pets, allies and anyone else on it, partySide tells them apart), plus every party
@@ -215,6 +248,15 @@ namespace Commander
         // Builder bookkeeping: friendly creatures in combat found by the last grid scan
         // (RefreshPacks, once a second), re-read by every RefreshCombat. Not a fact to act on.
         std::vector<ObjectGuid> allyCandidates;
+        // Builder bookkeeping: cast starts per (enemy, spell), kept across refreshes (enemies
+        // are rebuilt each time) and copied into EnemyFacts::castStarts. Entries of enemies
+        // that left the lists are dropped. Read EnemyFacts::castStarts instead.
+        struct CastStartRecord
+        {
+            ObjectGuid enemy;
+            CastStart cast;
+        };
+        std::vector<CastStartRecord> castStartLog;
         std::vector<PackFacts> packs;       // nearby creatures not in combat
         RateFacts rates;
 

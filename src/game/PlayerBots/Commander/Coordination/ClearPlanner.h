@@ -34,7 +34,8 @@ namespace Commander
     namespace ClearPlanner
     {
         uint32 const PAUSE_AFTER_FIGHT_MS = 3000;   // minimum pause between fights
-        // Then wait while a player of the party still has loot on a corpse nearby.
+        // Then wait while a player of the party still has loot on a corpse nearby that is worth
+        // taking (money, own quest items, items above gray quality); gray-only corpses are ignored.
         uint32 const LOOT_WAIT_MAX_MS = 15000;      // counted from the end of the fight
         float const LOOT_RADIUS = 30.0f;            // corpses this close to the leader
 

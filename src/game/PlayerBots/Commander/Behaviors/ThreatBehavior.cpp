@@ -8,8 +8,10 @@
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "Pet.h"
 #include "Spell.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
 #include <cmath>
@@ -32,6 +34,7 @@ namespace Commander
         }
 
         // Somebody whose job is holding enemies: a tank bot, or the player (may be tanking).
+        // Pets: see IsHeldByHolder.
         bool IsHolder(PartyMemberFacts const& m)
         {
             if (m.isPet)
@@ -39,15 +42,82 @@ namespace Commander
             return !m.isBot || m.role == ROLE_TANK;
         }
 
-        // `victim` holds the enemy it is being hit by: a holder member (above), or a tank-like
-        // ally (AllyFacts::tankLike, e.g. Sergeant Bly in Zul'Farrak, combat scenario 9).
+        PartyMemberFacts const* FindTankBot(WorldModel const& world)
+        {
+            for (PartyMemberFacts const& m : world.party)
+                if (m.isBot && !m.isPet && m.alive && m.role == ROLE_TANK)
+                    return &m;
+            return nullptr;
+        }
+
+        // Somebody holds the enemies for the party: an alive tank bot or a tank-like ally.
+        // (The player's role is unknown, so a tanking player does not count here.)
+        bool HasTank(WorldModel const& world)
+        {
+            if (FindTankBot(world))
+                return true;
+            for (AllyFacts const& a : world.allies)
+                if (a.tankLike)
+                    return true;
+            return false;
+        }
+
+        // A pet spell that makes enemies attack the pet: positive threat (Growl, Torment,
+        // Suffering) or a taunt. Cower and Soothing Kiss lower threat (negative value): not taunts.
+        bool IsPetTauntSpell(SpellEntry const* spell)
+        {
+            if (!spell->IsAutocastable())
+                return false;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
+                    return true;
+                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
+                    return true;
+                if (spell->Effect[i] == SPELL_EFFECT_THREAT && spell->CalculateSimpleValue(SpellEffectIndex(i)) > 0)
+                    return true;
+            }
+            return false;
+        }
+
+        // Taunt spells the pet has learned (pets keep only the highest rank).
+        void PetTauntSpells(Pet const* pet, std::vector<SpellEntry const*>& out)
+        {
+            for (auto const& learned : pet->m_petSpells)
+            {
+                if (learned.second.state == PETSPELL_REMOVED)
+                    continue;
+                if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(learned.first))
+                    if (IsPetTauntSpell(spell))
+                        out.push_back(spell);
+            }
+        }
+
+        // A controlled pet (hunter, warlock) of this party that holds enemies itself: there is
+        // no tank and it has a taunt (voidwalker, hunter pet with Growl).
+        bool IsHolderPet(PartyBotAI const* bot, WorldModel const& world, ObjectGuid guid)
+        {
+            if (HasTank(world))
+                return false;
+            Unit* unit = bot->me->GetMap()->GetUnit(guid);
+            Pet const* pet = unit ? unit->ToPet() : nullptr;
+            if (!pet || !pet->IsControlled())
+                return false;
+            std::vector<SpellEntry const*> taunts;
+            PetTauntSpells(pet, taunts);
+            return !taunts.empty();
+        }
+
+        // `victim` holds the enemy it is being hit by: a holder member (above), a holder pet
+        // (IsHolderPet), or a tank-like ally (AllyFacts::tankLike, e.g. Sergeant Bly in
+        // Zul'Farrak, combat scenario 9).
         // Damage dealers leave room under its threat the same way. Threat rows of allies are
         // on EnemyFacts::threat (partySide = false), so ThreatView::Headroom works unchanged:
         // it compares my threat with victimThreat, whoever the victim is.
-        bool IsHeldByHolder(WorldModel const& world, ObjectGuid victim)
+        bool IsHeldByHolder(PartyBotAI const* bot, WorldModel const& world, ObjectGuid victim)
         {
             if (PartyMemberFacts const* m = world.FindMember(victim))
-                return IsHolder(*m);
+                return m->isPet ? IsHolderPet(bot, world, victim) : IsHolder(*m);
             AllyFacts const* ally = world.FindAlly(victim);
             return ally && ally->tankLike;
         }
@@ -114,6 +184,39 @@ namespace Commander
                 return best;
             PartyMemberFacts const* me = world.FindMember(self);
             return me ? Value::FALLBACK_DPS_PER_LEVEL * float(me->level) : 0.0f;
+        }
+
+        // An enemy `who` (damage dealer or pet at `from`) can hit instead of `current`: held by a
+        // holder, enough room in relative terms AND for a few seconds of its threat. The ratio
+        // alone picks adds the tank touched once (ratio 1.1, room for one hit) and the damage
+        // ends up spread over several half-dead enemies (combat scenario 9). `preferred` first
+        // if it is safe, else the safe one closest to dying. Null = none.
+        EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, ObjectGuid who,
+                                         Position3 const& from, ObjectGuid current, ObjectGuid preferred)
+        {
+            float const range = ThreatBehavior::DPS_SWITCH_RANGE;
+            float const minRatio = ThreatBehavior::DPS_SWITCH_HEADROOM;
+            float const minSec = ThreatBehavior::DPS_SWITCH_MIN_SEC;
+            EnemyFacts const* best = nullptr;
+            for (EnemyFacts const& a : world.enemies)
+            {
+                if (a.guid == current || a.crowdControlled || !a.acting || a.victim.IsEmpty() || a.victim == who ||
+                    a.victimThreat <= 0.0f)
+                    continue;
+                if (!IsHeldByHolder(bot, world, a.victim))
+                    continue;   // switching onto an enemy that is already on a healer does not help
+                if (PackResolver::Distance(from, a.pos) > range)
+                    continue;
+                float const room = ThreatView::Headroom(a, who);
+                float const ownRate = OwnThreatRate(world, who, a);
+                if (room / a.victimThreat < minRatio || room < ownRate * minSec)
+                    continue;
+                if (!preferred.IsEmpty() && a.guid == preferred)
+                    return &a;
+                if (!best || a.health < best->health)
+                    best = &a;
+            }
+            return best;
         }
 
         // Area threat abilities of a tank. `share` = threat put on each enemy, as a fraction of
@@ -205,6 +308,9 @@ namespace Commander
     void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
+        // Pet actions run besides the bot's own action (Arbiter), so both are proposed.
+        ProposePet(bot, world, out);
+
         if (world.enemies.empty())
             return;
 
@@ -272,8 +378,11 @@ namespace Commander
             if (world.FindAlly(e.victim))
                 continue;
             PartyMemberFacts const* victim = world.FindMember(e.victim);
-            if (!victim || victim->isPet || victim->charmed)
-                continue;   // not one of us, a pet (pets can take a few hits), or mind controlled
+            if (!victim || victim->charmed)
+                continue;   // not one of us, or mind controlled
+            // Enemies on pets are loose too: with a tank around, the pet's taunt autocast is off
+            // and it moves to a safe enemy (ProposePet), so nobody else takes it back. A few hits
+            // on a pet cost little: the value scoring below decides.
             if (victim->isBot && victim->role == ROLE_TANK)
                 continue;   // another tank holds it
 
@@ -419,19 +528,12 @@ namespace Commander
 
         // Only protect a holder (also a tank-like ally). If it is on a healer, another dps or an
         // ally that is not tank-like, taking it is not worse.
-        if (!IsHeldByHolder(world, e->victim))
+        if (!IsHeldByHolder(bot, world, e->victim))
             return;
 
-        // Room left must cover the threat of my next tick, not only 10% of the holder's threat:
-        // a fresh add the tank has 0 (or 20) threat on is pulled by the first hit
-        // (combat scenario 6, VanCleef's summoned guards). New enemies get a settle window.
-        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
-        bool const settling = e->firstSeenMs &&
-            WorldTimer::getMSTimeDiff(e->firstSeenMs, world.refreshedAtMs) < uint32(NEW_ENEMY_SETTLE_SEC * 1000.0f);
-        float const coverSec = settling ? std::max(tickSec, NEW_ENEMY_LEAD_SEC) : tickSec;
-        float const needed = std::max(DPS_STOP_HEADROOM * e->victimThreat, OwnThreatRate(world, self, *e) * coverSec);
-        if (ThreatView::Headroom(*e, self) >= needed)
+        if (ThreatView::Headroom(*e, self) >= NeededHeadroom(world, self, *e))
             return;
+        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
 
         // What pulling it costs: its hits on me until the tank has it back. Weak enemies on
         // plate, or enemies about to die, cost little.
@@ -443,28 +545,8 @@ namespace Commander
         myPos.y = me->GetPositionY();
         myPos.z = me->GetPositionZ();
 
-        // A safe alternative: enough room in relative terms AND for a few seconds of my damage.
-        // The ratio alone picks adds the tank touched once (ratio 1.1, room for one hit) and the
-        // damage ends up spread over several half-dead enemies (combat scenario 9). Among the
-        // safe ones, the one closest to dying.
-        EnemyFacts const* best = nullptr;
-        for (EnemyFacts const& a : world.enemies)
-        {
-            if (a.guid == e->guid || a.crowdControlled || !a.acting || a.victim.IsEmpty() || a.victim == self ||
-                a.victimThreat <= 0.0f)
-                continue;
-            if (!IsHeldByHolder(world, a.victim))
-                continue;   // switching onto an enemy that is already on a healer does not help
-            if (PackResolver::Distance(myPos, a.pos) > DPS_SWITCH_RANGE)
-                continue;
-            float const room = ThreatView::Headroom(a, self);
-            float const ownRate = OwnThreatRate(world, self, a);
-            if (room / a.victimThreat < DPS_SWITCH_HEADROOM || room < ownRate * DPS_SWITCH_MIN_SEC)
-                continue;
-            if (!best || a.health < best->health)
-                best = &a;
-        }
-
+        // A safe alternative, the one closest to dying.
+        EnemyFacts const* best = FindSafeTarget(bot, world, self, myPos, e->guid, ObjectGuid());
         if (best)
         {
             Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Attack, best->guid);
@@ -475,6 +557,106 @@ namespace Commander
         Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::HoldFire);
         p.reason = "near aggro, stop";
         p.SetValue(avoided, Value::LostAction(world, *myFacts, tickSec));
+        out.push_back(p);
+    }
+
+    float ThreatBehavior::NeededHeadroom(WorldModel const& world, ObjectGuid who, EnemyFacts const& enemy) const
+    {
+        // Room left must cover the threat of the next tick, not only 10% of the holder's threat:
+        // a fresh add the tank has 0 (or 20) threat on is pulled by the first hit
+        // (combat scenario 6, VanCleef's summoned guards). New enemies get a settle window.
+        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        float const settleSec = NEW_ENEMY_SETTLE_SEC;
+        float const leadSec = NEW_ENEMY_LEAD_SEC;
+        bool const settling = enemy.firstSeenMs &&
+            WorldTimer::getMSTimeDiff(enemy.firstSeenMs, world.refreshedAtMs) < uint32(settleSec * 1000.0f);
+        float const coverSec = settling ? std::max(tickSec, leadSec) : tickSec;
+        float const share = DPS_STOP_HEADROOM * enemy.victimThreat;
+        float const ownThreat = OwnThreatRate(world, who, enemy) * coverSec;
+        return std::max(share, ownThreat);
+    }
+
+    // Pet of this bot (hunter, warlock): threat-behavior doc 4.7.
+    void ThreatBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    {
+        Player* me = bot->me;
+        Pet* pet = me->GetPet();
+        if (!pet || !pet->IsAlive() || !pet->IsControlled() || pet->IsCharmed() || !pet->GetCharmInfo())
+            return;
+        ObjectGuid const petGuid = pet->GetObjectGuid();
+        PartyMemberFacts const* petFacts = world.FindMember(petGuid);
+        if (!petFacts)
+            return;
+
+        // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
+        // again without one. Proposed only while it differs, so once per change.
+        bool const tank = HasTank(world);
+        std::vector<SpellEntry const*> taunts;
+        PetTauntSpells(pet, taunts);
+        for (SpellEntry const* spell : taunts)
+        {
+            bool const autocast = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) !=
+                                  pet->m_autospells.end();
+            if (autocast != tank)
+                continue;   // already off with a tank, or on without one
+            Proposal p = MakeProposal(ProposalTier::Assigned,
+                tank ? BotActionType::PetAutocastOff : BotActionType::PetAutocastOn, ObjectGuid(), spell);
+            p.reason = tank ? "tank holds, pet taunt off" : "no tank, pet taunt on";
+            out.push_back(p);
+        }
+
+        if (world.enemies.empty())
+            return;
+        // No tank: a pet with a taunt holds enemies itself (IsHolderPet), leave it.
+        if (!tank && !taunts.empty())
+            return;
+
+        // The enemy the pet hits, else the one the rotation sends it to next (hunter and warlock
+        // rotations send an idle pet at the owner's victim).
+        Unit const* aim = pet->GetVictim() ? pet->GetVictim() : me->GetVictim();
+        if (!aim)
+            return;
+        EnemyFacts const* e = world.FindEnemy(aim->GetObjectGuid());
+        if (!e || e->crowdControlled || !e->acting || e->victim.IsEmpty())
+            return;
+
+        PartyMemberFacts const* tankBot = FindTankBot(world);
+        bool const holding = e->victim == petGuid;
+        if (holding)
+        {
+            // The pet has it: only a tank bot takes it over (ProposeTank counts enemies on pets
+            // as loose). Without one, the pet keeps it.
+            if (!tankBot)
+                return;
+        }
+        else if (!IsHeldByHolder(bot, world, e->victim) ||
+                 ThreatView::Headroom(*e, petGuid) >= NeededHeadroom(world, petGuid, *e))
+            return;
+
+        // Benefit: the hits the pet takes until the tank has the enemy (back).
+        float const reclaimSec = TANK_RECLAIM_SEC;
+        float const ttd = Value::EnemyTimeToDie(world, *e);
+        float const avoided = Value::HitLoss(world, *e, *petFacts, std::min(reclaimSec, ttd));
+
+        // A safe enemy, the tank's target first: the pet then fights next to the tank, and an
+        // enemy hitting the pet follows it there.
+        EnemyFacts const* best = FindSafeTarget(bot, world, petGuid, petFacts->pos, e->guid,
+                                                tankBot ? tankBot->victim : ObjectGuid());
+        if (best)
+        {
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetAttack, best->guid);
+            p.reason = holding ? "pet holds tank's enemy, switch" : "pet near aggro, switch";
+            p.SetValue(avoided, Value::LostAction(world, *petFacts, SWITCH_TARGET_SEC));
+            out.push_back(p);
+        }
+
+        // Calling back a pet that is being hit brings the enemy to the owner: switch only.
+        if (holding)
+            return;
+        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetFollow);
+        p.reason = "pet near aggro, come back";
+        p.SetValue(avoided, Value::LostAction(world, *petFacts, tickSec));
         out.push_back(p);
     }
 

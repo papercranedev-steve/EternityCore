@@ -20,6 +20,14 @@
  *            under tension > 1, only members below ManaBudget::HealCeilingPct, and no rank
  *            ManaBudgetBehavior would swap for a cheaper, more efficient one.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
+ *  Pets    - of hunter / warlock bots (threat-behavior doc 4.7). Tank in the party (alive tank
+ *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.
+ *            No tank and the pet has a taunt: it is a holder (damage dealers leave room under
+ *            it) and is left alone. Otherwise, near the holder's threat (same rule as damage
+ *            dealers): attack a safe enemy (the tank's target first) or come back (PetFollow).
+ *            Holding an enemy itself while a tank bot is there: switch to a safe enemy only
+ *            (running back would bring the enemy to the owner). The tank treats enemies on
+ *            pets as loose (taunt / win back, valued like any member).
  */
 
 #ifndef MANGOS_COMMANDER_THREAT_BEHAVIOR_H
@@ -79,6 +87,11 @@ namespace Commander
         void ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
+        void ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // Headroom `who` must keep on `enemy` (damage dealers and pets): DPS_STOP_HEADROOM of the
+        // holder's threat, and its own threat for one bot tick (NEW_ENEMY_LEAD_SEC on new enemies).
+        float NeededHeadroom(WorldModel const& world, ObjectGuid who, EnemyFacts const& enemy) const;
     };
 }
 
