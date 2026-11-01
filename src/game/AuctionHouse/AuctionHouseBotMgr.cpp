@@ -5,6 +5,7 @@
 #include "AuctionHouseMgr.h"
 #include "ObjectMgr.h"
 #include "AuctionHouseBotMgr.h"
+#include "AuctionHouseBuyerBot.h"
 #include "Config/Config.h"
 #include "Chat.h"
 #include "Utilities/Random.h"
@@ -27,6 +28,7 @@ void AuctionHouseBotMgr::Load()
     /* 1 - DELETE */
     m_items.clear();
     m_cumulativeWeights.clear();
+    m_unitPrices.clear();
     m_loaded = false;
 
     if (m_config)
@@ -61,6 +63,10 @@ void AuctionHouseBotMgr::Load()
         e.bid      = fields[3].GetUInt32();
         e.buyout   = fields[4].GetUInt32();
         e.weight   = fields[5].GetUInt32();
+
+        // every priced row is a market reference, even if it is never listed
+        if (uint32 stackPrice = e.buyout ? e.buyout : e.bid)
+            m_unitPrices[e.item] = double(stackPrice) / double(std::max(1u, e.stack));
 
         if (e.weight == 0)
             continue;
@@ -130,6 +136,15 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
         AddItem(PickEntry(), auctionHouse);
         auctions++;
     }
+}
+
+bool AuctionHouseBotMgr::GetReferenceUnitPrice(uint32 itemId, double& unitPrice) const
+{
+    auto it = m_unitPrices.find(itemId);
+    if (it == m_unitPrices.end())
+        return false;
+    unitPrice = it->second;
+    return true;
 }
 
 AuctionHouseBotEntry const& AuctionHouseBotMgr::PickEntry() const
@@ -230,6 +245,7 @@ bool ChatHandler::HandleAHBotUpdateCommand(char *args)
 bool ChatHandler::HandleAHBotReloadCommand(char *args)
 {
     sAuctionHouseBotMgr.Load();
+    sAuctionHouseBuyerBot.Load();
     SendSysMessage("[AHBot] Reload finished.");
     return true;
 }

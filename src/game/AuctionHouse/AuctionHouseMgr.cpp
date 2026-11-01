@@ -397,7 +397,7 @@ void AuctionHouseMgr::LoadAuctionItems()
 
 void AuctionHouseMgr::LoadAuctions()
 {
-    std::unique_ptr<QueryResult> result = CharacterDatabase.Query("SELECT `id`, `house_id`, `item_guid`, `item_id`, `seller_guid`, `buyout_price`, `expire_time`, `buyer_guid`, `last_bid`, `start_bid`, `deposit` FROM `auction`");
+    std::unique_ptr<QueryResult> result = CharacterDatabase.Query("SELECT `id`, `house_id`, `item_guid`, `item_id`, `seller_guid`, `buyout_price`, `expire_time`, `buyer_guid`, `last_bid`, `start_bid`, `deposit`, `deposit_time` FROM `auction`");
     if (!result)
     {
         BarGoLink bar(1);
@@ -423,12 +423,15 @@ void AuctionHouseMgr::LoadAuctions()
         auction->itemTemplate = fields[3].GetUInt32();
         auction->owner = fields[4].GetUInt32();
         auction->buyout = fields[5].GetUInt32();
-        auction->depositTime = 0;
         auction->expireTime = fields[6].GetUInt32();
         auction->bidder = fields[7].GetUInt32();
         auction->bid = fields[8].GetUInt32();
         auction->startbid = fields[9].GetUInt32();
         auction->deposit = fields[10].GetUInt32();
+        // posting time is persisted for the AH buyer bot; 0 = row saved before that column existed
+        auction->depositTime = time_t(fields[11].GetUInt64());
+        if (!auction->depositTime)
+            auction->depositTime = time(nullptr);
         auction->auctionHouseEntry = nullptr;                  // init later
 
         auction->ownerAccount = sObjectMgr.GetPlayerAccountIdByGUID(auction->owner);
@@ -865,9 +868,9 @@ void AuctionEntry::DeleteFromDB() const
 void AuctionEntry::SaveToDB() const
 {
     //No SQL injection (no strings)
-    CharacterDatabase.PExecute("INSERT INTO `auction` (`id`, `house_id`, `item_guid`, `item_id`, `seller_guid`, `buyout_price`, `expire_time`, `buyer_guid`, `last_bid`, `start_bid`, `deposit`) "
-                               "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '" UI64FMTD "', '%u', '%u', '%u', '%u')",
-                               Id, auctionHouseEntry->houseId, itemGuidLow, itemTemplate, owner, buyout, (uint64)expireTime, bidder, bid, startbid, deposit);
+    CharacterDatabase.PExecute("INSERT INTO `auction` (`id`, `house_id`, `item_guid`, `item_id`, `seller_guid`, `buyout_price`, `expire_time`, `buyer_guid`, `last_bid`, `start_bid`, `deposit`, `deposit_time`) "
+                               "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '" UI64FMTD "', '%u', '%u', '%u', '%u', '" UI64FMTD "')",
+                               Id, auctionHouseEntry->houseId, itemGuidLow, itemTemplate, owner, buyout, (uint64)expireTime, bidder, bid, startbid, deposit, (uint64)depositTime);
 }
 
 bool AuctionEntry::IsAvailableFor(Player* player)

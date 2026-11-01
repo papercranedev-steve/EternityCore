@@ -67,6 +67,7 @@ set (game_SRCS
     AI/TotemAI.cpp
     Anticheat/Anticheat.cpp
     AuctionHouse/AuctionHouseBotMgr.cpp
+    AuctionHouse/AuctionHouseBuyerBot.cpp
     AuctionHouse/AuctionHouseMgr.cpp
     Battlegrounds/BattleGround.cpp
     Battlegrounds/BattleGroundAB.cpp
@@ -330,6 +331,7 @@ set (game_SRCS
     Anticheat/WardenAnticheat/WardenWin.cpp
     Anticheat/WardenAnticheat/WardenWin.hpp
     AuctionHouse/AuctionHouseBotMgr.h
+    AuctionHouse/AuctionHouseBuyerBot.h
     AuctionHouse/AuctionHouseMgr.h
     Battlegrounds/BattleGround.h
     Battlegrounds/BattleGroundAB.h

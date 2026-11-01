@@ -3156,6 +3156,30 @@ AHBot.itemcount = 50
 AHBot.PriceVariance = 0
 
 ###################################################################################################################
+# AUCTION HOUSE BUYER BOT
+#
+#    AHBuyer.Enable
+#        Buy players' auctions. Only items in the 'auctionhousebot' table are bought; its price is the reference.
+#        Each auction is decided once: it sells for sure at or below the reference unit price, never at
+#        reference * (1 + MaxMarkup%) or above, with a linearly falling chance in between.
+#        Default: 0 - off
+#                 1 - on
+#
+#    AHBuyer.SellDelay
+#        Seconds after posting until a selling auction is bought (at most half the auction duration).
+#        Default: 3600
+#
+#    AHBuyer.MaxMarkup
+#        Percent above the reference price at which the chance to sell reaches 0.
+#        Default: 50
+#
+###################################################################################################################
+
+AHBuyer.Enable = 0
+AHBuyer.SellDelay = 3600
+AHBuyer.MaxMarkup = 50
+
+###################################################################################################################
 # PLAYER BOTS
 #
 #    RandomBot.Enable
