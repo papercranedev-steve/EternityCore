@@ -34,6 +34,29 @@ namespace Commander
         {
             return caster->GetVictim() == member || caster->CanReachWithMeleeAutoAttack(member);
         }
+
+        // Every aura effect of the spell only slows movement (Frostbolt's chill, Hamstring);
+        // direct damage effects already landed and do not count.
+        bool OnlySlows(SpellEntry const* spell)
+        {
+            bool any = false;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
+                    continue;
+                if (spell->EffectApplyAuraName[i] != SPELL_AURA_MOD_DECREASE_SPEED)
+                    return false;
+                any = true;
+            }
+            return any;
+        }
+
+        // A healer or ranged member with a melee enemy on it has to walk away (escape module):
+        // a slow on it matters. Tanks and melee stand at the enemy anyway.
+        bool NeedsToMove(WorldModel const& world, PartyMemberFacts const& m)
+        {
+            return (m.role == ROLE_HEALER || m.role == ROLE_RANGE_DPS) && Value::IncomingOn(world, m.guid) > 0.0f;
+        }
     }
 
     bool DispelBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -83,6 +106,24 @@ namespace Commander
                         p.veto.target = m.guid;
                         p.veto.spellId = spell->Id;
                         p.SetValue(dispelCost, Value::LostAction(world, m, WAKE_ON_DAMAGE_SEC));
+                        out.push_back(p);
+                        continue;
+                    }
+
+                    // A slow on someone who does not have to walk: the dispel saves nothing
+                    // (strat-20261102-012937: Dispel Magic twice on a chilled rogue at full health).
+                    if (!sp->controls && !(sp->hasOverride && sp->override.dispel != DispelPolicy::Auto) &&
+                        OnlySlows(spell) && !NeedsToMove(world, m))
+                    {
+                        Proposal p;
+                        p.kind = ProposalKind::Veto;
+                        p.source = "dispel";
+                        p.reason = "only slows, no need to move";
+                        p.veto.type = VetoType::Dispel;
+                        p.veto.target = m.guid;
+                        p.veto.spellId = spell->Id;
+                        // Saves the global cooldown (kept above 0: the arbiter drops benefit <= cost).
+                        p.SetValue(std::max(dispelCost, 0.01f), 0.0f);
                         out.push_back(p);
                         continue;
                     }

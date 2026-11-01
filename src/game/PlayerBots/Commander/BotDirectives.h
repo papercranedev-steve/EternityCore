@@ -105,9 +105,11 @@ namespace Commander
         {
             return m_healControlDurationMs && WorldTimer::getMSTimeDiff(m_healControlStartMs, nowMs) < m_healControlDurationMs;
         }
-        void SetHealOrder(BotAction const& action, uint32 nowMs, uint32 durationMs)
+        // urgent: the order saves someone about to die (tier Urgent or above).
+        void SetHealOrder(BotAction const& action, bool urgent, uint32 nowMs, uint32 durationMs)
         {
             m_healOrder = action;
+            m_healOrderUrgent = urgent;
             m_healOrderStartMs = nowMs;
             m_healOrderDurationMs = durationMs;
         }
@@ -118,6 +120,12 @@ namespace Commander
             if (!m_healOrderDurationMs || WorldTimer::getMSTimeDiff(m_healOrderStartMs, nowMs) >= m_healOrderDurationMs)
                 return nullptr;
             return &m_healOrder;
+        }
+        // An urgent heal order waits for the heal step this tick: the rotation's dispels before
+        // it stand down, except for control effects (VetoChecks::IsDispelVetoed).
+        bool HasUrgentHealOrder(uint32 nowMs) const
+        {
+            return m_healOrderUrgent && GetHealOrder(nowMs);
         }
         // The last heal the rotation cast from an order: a chain of heals on one target goes on
         // while the next one starts within `gapMs` after the previous one ended.
@@ -215,6 +223,7 @@ namespace Commander
         uint32 m_healControlStartMs = 0;
         uint32 m_healControlDurationMs = 0;
         BotAction m_healOrder;
+        bool m_healOrderUrgent = false;
         uint32 m_healOrderStartMs = 0;
         uint32 m_healOrderDurationMs = 0;
         ObjectGuid m_lastHealTarget;

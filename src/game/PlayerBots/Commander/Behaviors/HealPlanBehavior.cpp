@@ -27,28 +27,25 @@ namespace Commander
             std::vector<SpellEntry const*> spells;      // same index as options
         };
 
-        int OrderGroup(HealPlan::Need need)
-        {
-            switch (need)
-            {
-                case HealPlan::Need::Emergency: return 0;
-                case HealPlan::Need::Chain:     return 1;
-                default:                        return 2;
-            }
-        }
-
         bool IsMoreUrgent(Candidate const& a, Candidate const& b)
         {
-            int const ga = OrderGroup(a.assessment.need);
-            int const gb = OrderGroup(b.assessment.need);
-            if (ga != gb)
-                return ga < gb;
-            if (ga == 0)
+            bool const ea = a.assessment.need == HealPlan::Need::Emergency;
+            bool const eb = b.assessment.need == HealPlan::Need::Emergency;
+            if (ea != eb)
+                return ea;
+            if (ea)
                 return a.assessment.timeToDie < b.assessment.timeToDie;
             if (a.facts->isPet != b.facts->isPet)
                 return !a.facts->isPet;
+            // A chain and a lift by who reaches the reserve first: until 2026-11-02 a chain came
+            // before every lift, and the priest topped up a rogue at 65% while the tank sank from
+            // 53% into an emergency (strat-20261102-012937). The chain only breaks ties.
             if (a.assessment.timeToReserve != b.assessment.timeToReserve)
                 return a.assessment.timeToReserve < b.assessment.timeToReserve;
+            bool const ca = a.assessment.need == HealPlan::Need::Chain;
+            bool const cb = b.assessment.need == HealPlan::Need::Chain;
+            if (ca != cb)
+                return ca;
             return a.facts->healthPct < b.facts->healthPct;
         }
 

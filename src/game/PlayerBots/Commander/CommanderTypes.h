@@ -68,9 +68,11 @@ namespace Commander
 
     // Replace: do this action this tick instead of the original rotation.
     // Veto: the original rotation still runs, but must not do one thing (value-scoring doc 6.1).
-    // HealOrder: the original rotation still runs (shields, Fade, dispels in their usual order);
+    // HealOrder: the original rotation still runs (shields, Fade, dispels in their usual order;
+    // non-control dispels stand down while the order is Urgent, VetoChecks::IsDispelVetoed);
     // at its heal step it casts `action` (a Cast) instead of choosing a heal itself
-    // (PartyBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick.
+    // (PartyBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick and
+    // outranks Replace proposals of a lower tier / score (Arbiter.h).
     enum class ProposalKind : uint8
     {
         Replace,

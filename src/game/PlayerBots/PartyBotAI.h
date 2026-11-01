@@ -258,6 +258,9 @@ public:
     Commander::CastWatchState m_castWatch;
     // Commander walk backwards (Commander/Behaviors/Backpedal.h), every frame in UpdateAI.
     Commander::BackpedalState m_backpedal;
+    // Casting or on the global cooldown in the last frame: the next bot update runs in the
+    // frame this ends instead of up to a bot interval later (UpdateAI).
+    bool m_wasBusy = false;
     // The spell DoCastWithStance swapped stance for (nullptr = none).
     struct StanceSwap
     {

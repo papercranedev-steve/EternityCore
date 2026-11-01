@@ -8,6 +8,11 @@
  * before it comes back. Control effects are not vetoed for that reason; the one exception
  * is a control that breaks on damage (sleep) on a member who is being hit: the next hit
  * ends it anyway (combat scenario 3).
+ * A debuff whose auras only slow movement is vetoed too, unless the member is a healer or
+ * ranged damage dealer with a melee enemy on it (it has to walk away to the tank); from
+ * strat-20261102-012937 (Dispel Magic on a chilled rogue at full health, twice).
+ * While the bot holds an urgent heal order, every non-control dispel stands down without a
+ * veto (VetoChecks::IsDispelVetoed).
  * Out of combat the vetoes expire and the original rotation dispels as before.
  */
 

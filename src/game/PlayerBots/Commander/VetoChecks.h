@@ -17,10 +17,11 @@ namespace Commander
 namespace VetoChecks
 {
     // A harmful aura on `target` that `dispelSpell` removes and that is not vetoed
-    // (arbiter veto, or hand-written dispel policy never / after combat).
+    // (arbiter veto, urgent heal order, or hand-written dispel policy never / after combat).
     bool HasAllowedDebuff(PartyBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell);
 
-    // One aura: vetoed for this bot?
+    // One aura: vetoed for this bot? Also every non-control aura while the bot holds an urgent
+    // heal order (BotDirectives::HasUrgentHealOrder).
     bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
 
     // The cast of `enemy` is not worth an interrupt (InterruptBehavior), or `enemy` is immune

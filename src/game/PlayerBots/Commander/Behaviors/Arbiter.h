@@ -6,6 +6,10 @@
  * ProposalTier::Override (retreat) hides every other module's replace proposal.
  * If execution fails (spell not ready, target gone) the next one in the same tier
  * is tried. Every candidate is written to the bot's decision log.
+ * The best HealOrder is handed to the rotation's heal step. It competes with the replace
+ * proposals (a Replace skips the rotation, heal step included): a Replace in a lower tier, or
+ * lower in score in the same tier, stands down so the rotation runs and casts the heal
+ * (Attack / Backpedal let the rotation run anyway and stay). From strat-20261102-012937.
  * UseObject (gameobject target) returns true both while walking and on use, so the original
  * rotation and movement stay off until the module stops proposing it.
  * Pet actions (PetAttack, PetFollow, PetAutocastOn/Off) are executed besides the bot's own

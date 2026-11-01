@@ -1032,6 +1032,15 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         ContinueStanceSwap())
         return;
 
+    // The bot update skips while casting and every cast fails on the global cooldown: without
+    // this the next action came up to a bot interval after a cast or GCD ended (an instant
+    // cast every ~2 s: strat-20261102-012937). Wake the update in the frame it ends.
+    bool const busy = m_initialized && me->IsInWorld() &&
+                      (me->IsNonMeleeSpellCasted(false, false, true) || me->HasGCD(nullptr));
+    if (m_wasBusy && !busy)
+        m_updateTimer.Reset(0);
+    m_wasBusy = busy;
+
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
         m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval()); // was PB_UPDATE_INTERVAL

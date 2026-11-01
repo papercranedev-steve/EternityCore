@@ -57,6 +57,12 @@ namespace Commander
             return type == BotActionType::PetAttack || type == BotActionType::PetFollow;
         }
 
+        // The original rotation still runs in the tick the action executed (Arbiter::Run).
+        bool LetsRotationRun(BotActionType type)
+        {
+            return type == BotActionType::Attack || type == BotActionType::Backpedal;
+        }
+
         // Highest tier first, then the highest score inside the tier.
         bool IsBetter(Proposal const& a, Proposal const& b)
         {
@@ -225,10 +231,15 @@ namespace Commander
             record.candidates.push_back(MakeRecord(Describe(bot, healOrders[i]), healOrders[i]));
             if (i == 0)
             {
-                directives.SetHealOrder(healOrders[i].action, now, sCommanderMgr.GetBotUpdateInterval());
+                directives.SetHealOrder(healOrders[i].action, healOrders[i].tier <= ProposalTier::Urgent,
+                                        now, sCommanderMgr.GetBotUpdateInterval());
                 record.candidates.back().result = CandidateRecord::Result::OrderSet;
             }
         }
+        // A heal order and a Replace compete for the same tick (a Replace skips the rotation and
+        // with it the heal step): one in a lower tier, or lower in score in the same tier, than
+        // the heal order stands down. Attack / Backpedal let the rotation run, they are kept.
+        Proposal const* bestHeal = healOrders.empty() ? nullptr : &healOrders.front();
 
         bool executed = false;
         bool rotationMayRun = false;
@@ -249,6 +260,12 @@ namespace Commander
                 }
                 if (executed)
                     continue;   // NotTried
+                if (bestHeal && !LetsRotationRun(p.action.type) && IsBetter(*bestHeal, p))
+                {
+                    r.result = bestHeal->tier != p.tier ? CandidateRecord::Result::LowerTier
+                                                        : CandidateRecord::Result::NotTried;
+                    continue;
+                }
 
                 if (Execute(bot, p))
                 {
@@ -257,15 +274,14 @@ namespace Commander
                     // the new target in the same tick. Otherwise a tank switching between loose
                     // adds every tick never casts Thunder Clap or Sunder (combat scenario 9).
                     // Walking backwards is the same: the tank keeps hitting and building threat.
-                    rotationMayRun = p.action.type == BotActionType::Attack ||
-                                     p.action.type == BotActionType::Backpedal;
+                    rotationMayRun = LetsRotationRun(p.action.type);
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                 }
                 else
                     r.result = CandidateRecord::Result::Failed;
             }
-            if (!executed)
+            if (!executed && !(bestHeal && IsBetter(*bestHeal, replace.front())))
                 directives.SetLastDecision(now, "failed: " + std::string(replace.front().source) + " " + Describe(bot, replace.front()));
         }
 

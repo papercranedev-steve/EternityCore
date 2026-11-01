@@ -65,21 +65,26 @@ namespace VetoChecks
             return false;
 
         uint32 const spellId = holder->GetId();
-        if (std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(spellId))
+        std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(spellId);
+        if (profile && profile->hasOverride)
         {
-            if (profile->hasOverride)
+            switch (profile->override.dispel)
             {
-                switch (profile->override.dispel)
-                {
-                    case DispelPolicy::Never:       return true;
-                    case DispelPolicy::AfterCombat: return target->IsInCombat();
-                    case DispelPolicy::Now:         return false;
-                    case DispelPolicy::Auto:        break;
-                }
+                case DispelPolicy::Never:       return true;
+                case DispelPolicy::AfterCombat: return target->IsInCombat();
+                case DispelPolicy::Now:         return false;
+                case DispelPolicy::Auto:        break;
             }
         }
 
-        return bot->Directives().IsVetoed(VetoType::Dispel, target->GetObjectGuid(), spellId, WorldTimer::getMSTime());
+        uint32 const now = WorldTimer::getMSTime();
+        // Someone is about to die and this bot's heal order waits for the heal step after the
+        // dispels: only a control effect (the member cannot act) is worth the global cooldown
+        // (strat-20261102-012937: three dispels of a slow on a full-health rogue while the tank died).
+        if (bot->Directives().HasUrgentHealOrder(now) && !(profile && profile->controls))
+            return true;
+
+        return bot->Directives().IsVetoed(VetoType::Dispel, target->GetObjectGuid(), spellId, now);
     }
 
     bool IsInterruptVetoed(PartyBotAI const* bot, Unit const* enemy)

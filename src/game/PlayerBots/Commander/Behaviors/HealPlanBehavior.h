@@ -5,7 +5,8 @@
  * Healer bots in combat with a party enemy. While the module runs, the rotation's own heal
  * choice is off (PartyBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
  * the rotation casts this module's HealOrder of the tick, or nothing (rest). Shields, Fade,
- * dispels and the rest of the rotation keep their order. ThreatBehavior's healer branch and
+ * dispels and the rest of the rotation keep their order; while the order is an emergency
+ * (Urgent) only control effects are dispelled before it (VetoChecks::IsDispelVetoed). ThreatBehavior's healer branch and
  * ManaBudgetBehavior's heal veto stand down; aggro is checked here (ThreatBehavior::HealPullLoss)
  * and mana through HealPlan::ManaWeight.
  *
@@ -18,9 +19,10 @@
  * Targets (alive, healable from here: line of sight, 30 yd), in this order:
  *  1. emergencies (being hit and at the reserve or dying within HealPlan::EMERGENCY_TTD_SEC),
  *     soonest death first;
- *  2. the target of a running chain;
- *  3. lifts, by time until they reach their reserve (members nobody hits come last; the healer
- *     itself is one of them when nothing hits it), then health percent. Pets after players.
+ *  2. lifts and the target of a running chain, by time until they reach their reserve (members
+ *     nobody hits come last; the healer itself is one of them when nothing hits it), then the
+ *     chain, then health percent. Pets after players. (Until 2026-11-02 the chain came before
+ *     every lift: strat-20261102-012937.)
  * The first target with a usable heal gets the order. Emergencies are Urgent and take a heal
  * that pulls aggro only when no other lands in time. Below ThreatBehavior::HEAL_IGNORE_THREAT_PCT
  * aggro is not checked.
