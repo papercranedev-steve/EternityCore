@@ -116,6 +116,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/FollowSpot.cpp
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
+  ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/RoleAssigner.h

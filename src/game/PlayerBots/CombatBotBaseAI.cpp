@@ -2894,7 +2894,22 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         return SPELL_FAILED_DONT_REPORT;
 
     if (me != pTarget)
+    {
+        // Fix: Unit::SetFacingToObject does nothing while moving, and its facing spline turns the
+        // bot only on the next movement update. Spells that check facing at cast (combat range
+        // spells, SPELL_CUSTOM_FACE_TARGET: Spell::CheckRange) then failed with
+        // SPELL_FAILED_UNIT_NOT_INFRONT, e.g. a tank's Taunt while chasing
+        // (strat-20261101-224637). Stop and turn now, as a player turns while running.
+        bool const needsFacing = pSpellEntry->rangeIndex == SPELL_RANGE_IDX_COMBAT ||
+                                 (pSpellEntry->Custom & SPELL_CUSTOM_FACE_TARGET);
+        if (needsFacing && !me->IsFacingTarget(pTarget))
+        {
+            if (!me->IsStopped())
+                me->StopMoving();
+            me->SetInFront(pTarget);
+        }
         me->SetFacingToObject(pTarget);
+    }
 
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);

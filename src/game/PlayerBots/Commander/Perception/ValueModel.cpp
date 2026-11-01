@@ -147,6 +147,42 @@ namespace Value
         return loss;
     }
 
+    namespace
+    {
+        bool Chases(EnemyFacts const& e, ObjectGuid victim)
+        {
+            return e.acting && !e.crowdControlled && e.meleeEnabled && e.victim == victim;
+        }
+    }
+
+    float HarassShare(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim)
+    {
+        if (!victim.isBot || victim.isPet || !enemy.acting || enemy.crowdControlled || !enemy.meleeEnabled)
+            return 0.0f;
+        float share;
+        switch (victim.role)
+        {
+            case ROLE_HEALER:    share = HARASS_SHARE_HEALER; break;
+            case ROLE_RANGE_DPS: share = HARASS_SHARE_RANGED; break;
+            default:             return 0.0f;
+        }
+        // Enemies chasing the victim, counting `enemy` also when it is not on it yet.
+        uint32 chasers = enemy.victim == victim.guid ? 0 : 1;
+        for (EnemyFacts const& e : world.enemies)
+            if (Chases(e, victim.guid))
+                ++chasers;
+        return share / float(std::max(1u, chasers));
+    }
+
+    float HarassLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds)
+    {
+        float const share = HarassShare(world, enemy, victim);
+        if (share <= 0.0f)
+            return 0.0f;
+        seconds = std::min(std::max(0.0f, seconds), SurviveAllSec(world, enemy, victim));
+        return LostAction(world, victim, seconds) * share;
+    }
+
     float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy)
     {
         if (!enemy.acting)

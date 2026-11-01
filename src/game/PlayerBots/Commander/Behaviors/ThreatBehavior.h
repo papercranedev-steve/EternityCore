@@ -9,6 +9,11 @@
  *            cooldown. Taunts without SPELL_EFFECT_ATTACK_ME (Mocking Blow, Challenging
  *            Shout / Roar) only lend threat while their aura lasts: their loss also counts the
  *            hits after it fades. Otherwise top up the smallest lead (not valued).
+ *            Melee enemies on a healer or ranged bot also cost the victim's output while they
+ *            chase it (Value::HarassLoss; casters standing back do not). Winning back with
+ *            threat starts after the walk over (distance / RUN_YARDS_PER_SEC), so a victim
+ *            running to the tank (EscapeBehavior) makes it cheaper. Only taunts castable now
+ *            (range, cooldown, stance swap) are proposed.
  *            Area threat: threat per enemy from spell data (spell_threat + damage x multiplier,
  *            caster modifiers); a warrior spell in the wrong stance is cast after a stance swap
  *            (PartyBotAI::DoCastWithStance) and costs STANCE_SWAP_COST_SEC more. Damaging area

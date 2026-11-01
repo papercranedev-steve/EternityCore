@@ -147,6 +147,12 @@ namespace Commander
         // while it stands back casting (melee off). Before resistances.
         float rangedDps = 0.0f;
         bool silenced = false;          // UNIT_FLAG_SILENCED: no casts, no interrupter needed
+        // Mana now and the creature's base mana (GetCreateMana, for ManaCostPercentage).
+        // maxMana 0 = no mana pool. A caster out of mana casts nothing that costs mana
+        // (strat-20261101-224637: a Skeletal Guardian at 23 mana kept "casting" Arcane Explosion).
+        uint32 mana = 0;
+        uint32 maxMana = 0;
+        uint32 createMana = 0;
         bool summoned = false;          // temporary summon or guardian (adds)
         ObjectGuid summoner;            // who summoned it, if known
         uint32 firstSeenMs = 0;         // WorldTimer ms of the first snapshot it was in (ThreatHistory)

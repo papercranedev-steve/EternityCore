@@ -145,6 +145,15 @@ namespace Commander
                 break;
             }
         }
+        // Same for getting away from melee enemies (EscapeBehavior).
+        for (IBehavior const* b : active)
+        {
+            if (b->ControlsEscape(bot))
+            {
+                directives.ControlEscape(now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                break;
+            }
+        }
         // Same for heals. The order of the last tick is dropped: no order now = no heal (rest).
         for (IBehavior const* b : active)
         {

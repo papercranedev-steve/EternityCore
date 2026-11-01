@@ -502,9 +502,6 @@ namespace Commander
             // after the same one and leave the rest (the others pick up their own).
             if (CloserTankBot(world, self, e.pos, distance))
                 continue;
-            // Walking over: lost time, and the enemies we hold follow us away from the healer.
-            float const walkCost = Value::LostAction(world, *myFacts,
-                std::max(0.0f, distance - MELEE_REACH) / RUN_YARDS_PER_SEC);
 
             bool tauntImmune = false;
             float const mult = TauntMult(e, &tauntImmune);
@@ -517,22 +514,37 @@ namespace Commander
             // hurt the tank as much as anyone, so taking it over gains nothing unless the victim
             // would die. The victim's survival counts every enemy on it, not this one alone
             // (five zombies on the priest, strat-20261101-210522).
-            float const lossNothing = Value::MoveLoss(world, e, *victim, *myFacts, horizon);
-            float const lossThreat = Value::MoveLoss(world, e, *victim, *myFacts, std::min(recovery, horizon));
+            // Plus the victim's own output lost while a melee enemy chases it (Value::HarassLoss:
+            // a healer more than a ranged damage dealer; casters standing back add nothing).
+            auto const lossFor = [&](float seconds)
+            {
+                return Value::MoveLoss(world, e, *victim, *myFacts, seconds) +
+                       Value::HarassLoss(world, e, *victim, seconds);
+            };
+            // Winning it back with threat starts after the walk over (distance counts: a victim
+            // running to the tank makes it cheaper and sooner).
+            float const walkSec = std::max(0.0f, distance - MELEE_REACH) / RUN_YARDS_PER_SEC;
+            float const lossNothing = lossFor(horizon);
+            float const lossThreat = lossFor(std::min(walkSec + recovery, horizon));
             bool const deadly = Value::SurviveAllSec(world, e, *victim) < horizon;
             ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
 
             if (!tauntImmune)
             {
+                uint32 lastTauntId = 0;
                 for (SpellEntry const* pTaunt : bot->m_spellListTaunt)
                 {
+                    // Only taunts castable now (range, cooldown, rage, stance swap): an out of range
+                    // or cooling down taunt only failed at execution. Duplicates listed once.
+                    if (pTaunt->Id == lastTauntId || !bot->CanCastWithStance(unit, pTaunt))
+                        continue;
+                    lastTauntId = pTaunt->Id;
                     // Cooldown: Taunt and Mocking Blow use the category cooldown (Taunt 355 has
                     // RecoveryTime 0 and CategoryRecoveryTime 10 s).
                     uint32 const cooldownMs = pTaunt->GetRecoveryTime();
                     float const share = std::min(1.0f, (cooldownMs / 1000.0f) / LOOSE_HORIZON_SEC);
                     float const reserve = share * Value::Points(world, enemyMelee * TAUNT_RESERVE_SEC);
-                    float const lossTaunt = Value::MoveLoss(world, e, *victim, *myFacts,
-                        TauntSecOnVictim(gap, tankRate, TemporaryTauntSec(pTaunt), horizon));
+                    float const lossTaunt = lossFor(TauntSecOnVictim(gap, tankRate, TemporaryTauntSec(pTaunt), horizon));
                     float cost = switchCost + reserve;
                     if (bot->StanceSwapFor(pTaunt))
                         cost += stanceCost;
@@ -549,6 +561,8 @@ namespace Commander
             {
                 Proposal p = MakeProposal(tier, BotActionType::Attack, e.guid);
                 p.reason = "win back with threat";
+                // Walking over: lost time, and the enemies we hold follow us away from the healer.
+                float const walkCost = Value::LostAction(world, *myFacts, walkSec);
                 p.SetValue((lossNothing - lossThreat) * mult, switchCost + walkCost);
                 out.push_back(p);
             }
@@ -611,7 +625,9 @@ namespace Commander
                             float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
                             sec = std::min(recovery, l.horizon);
                         }
-                        float const loss = Value::MoveLoss(world, *l.enemy, *l.victim, *myFacts, sec);
+                        // Same loss as l.lossNothing (damage on top of the tank + harassment).
+                        float const loss = Value::MoveLoss(world, *l.enemy, *l.victim, *myFacts, sec) +
+                                           Value::HarassLoss(world, *l.enemy, *l.victim, sec);
                         benefit += (l.lossNothing - loss) * l.mult;
                         deadly = deadly || l.deadly;
                     }

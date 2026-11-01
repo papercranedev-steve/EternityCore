@@ -28,6 +28,10 @@
  *           outside the spell range takes the member out of the random pick. Only spell list
  *           entries: EventAI and C++ scripts (Whitemane's Dominate Mind) have no castTarget.
  *
+ * Burst and Range zones need a creature that can cast the spell now: not controlled, not
+ * silenced, and with the mana for it (EnemyFacts::mana; a caster that ran dry chases in melee
+ * and its Arcane Explosion area kept a mage walking away for 30 s, strat-20261101-224637).
+ *
  * Who is in danger (roles bit mask)
  *  - control (silence, fear, stun, ... SpellProfile::controls): healers and ranged damage.
  *    Melee ignore control areas (a warrior does not mind a silence, and leaving melee costs more).

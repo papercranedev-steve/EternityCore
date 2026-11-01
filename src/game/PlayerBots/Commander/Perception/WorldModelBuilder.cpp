@@ -252,6 +252,12 @@ namespace WorldModelBuilder
                     e.rangedDps = RangedSpellDps(*profile, e.level, e.meleeHit);
             }
             e.silenced = creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
+            e.maxMana = creature->GetMaxPower(POWER_MANA);
+            if (e.maxMana > 0)
+            {
+                e.mana = creature->GetPower(POWER_MANA);
+                e.createMana = creature->GetCreateMana();
+            }
             e.acting = !creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) &&
                        !creature->IsTotalImmune() && !creature->IsInEvadeMode();
             if (creature->IsTemporarySummon())

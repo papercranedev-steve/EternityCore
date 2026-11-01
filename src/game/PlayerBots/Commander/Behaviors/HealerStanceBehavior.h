@@ -17,7 +17,8 @@
  * When to move (checked every tick, nothing otherwise):
  *  - the anchor is farther than HEAL_RANGE or out of line of sight ("tank out of reach"), or
  *  - an enemy that is not hitting the healer stands within TRIGGER_ENEMY_GAP ("too close").
- *    Enemies hitting the healer are left to the rotation (Fade, run to the tank: FleePoint).
+ *    Enemies hitting the healer are left to the rotation (Fade) and the escape module (run
+ *    to the tank: EscapeBehavior.h).
  * Not while: the retreat runs, the pull is in Approach / Return, rooted, casting (the heal
  * finishes first), a member below URGENT_HEALTH_PCT is healable from here (heal first), or a
  * MoveTo is already under way (then Hold so the rotation's first cast does not stop the walk).

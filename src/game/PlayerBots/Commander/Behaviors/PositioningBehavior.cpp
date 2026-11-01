@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/PositioningBehavior.h"
+#include "Commander/Behaviors/SafeRoute.h"
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"
@@ -29,6 +30,7 @@ namespace Commander
             Unit* victim = nullptr;     // ranged / melee: current target
             Position3 victimPos;
             float speed = 7.0f;
+            SafeRoute::IdleCreatures const* idle = nullptr;    // creatures not fighting yet, around the bot
         };
 
         struct Loss
@@ -111,7 +113,7 @@ namespace Commander
         }
 
         // Distance-only checks (no map queries). `allowRange`: Range zones may contain the point.
-        bool CheapOk(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
+        bool CheapOk(Context const& ctx, WorldModel const& /*world*/, std::vector<HazardZone> const& zones,
                      Position3 const& p, bool allowRange)
         {
             for (HazardZone const& z : zones)
@@ -121,23 +123,28 @@ namespace Commander
                 if (Contains(z, p))
                     return false;
             }
-            // Do not walk closer to an idle aggressive creature that is already within its aggro range.
-            for (PackFacts const& pack : world.packs)
-            {
-                for (PackCreature const& c : pack.members)
-                {
-                    if (!c.aggressive || c.noAggro)
-                        continue;
-                    float const dNew = PackResolver::Distance(p, c.pos);
-                    if (dNew < PB::PACK_CLEARANCE && dNew < PackResolver::Distance(ctx.here, c.pos))
-                        return false;
-                }
-            }
+            // Not where an idle creature would attack the bot (SafeRoute: scanned around the
+            // bot itself). Fix: world.packs only covers PACK_SCAN_RADIUS around the leader; a
+            // mage 110 yd away stepped into the next pack (strat-20261101-224637).
+            if (ctx.idle && ctx.idle->Near(p))
+                return false;
             if (ctx.roleBit == HAZARD_HEALER && ctx.hasHolder && PackResolver::Distance(p, ctx.holder) > PB::HEAL_RANGE)
                 return false;
             if (ctx.roleBit == HAZARD_RANGED && ctx.victim && PackResolver::Distance(p, ctx.victimPos) > PB::RANGED_RANGE)
                 return false;
             return true;
+        }
+
+        // The zone's enemy is chasing the bot in melee and is free to follow (not rooted).
+        bool ChasesMe(Context const& ctx, WorldModel const& world, HazardZone const& z)
+        {
+            if (ctx.roleBit == HAZARD_MELEE)
+                return false;   // melee stands next to it on purpose
+            EnemyFacts const* e = world.FindEnemy(z.enemy);
+            if (!e || e->victim != ctx.self->guid || !e->meleeEnabled || e->crowdControlled)
+                return false;
+            Unit const* unit = ctx.map->GetUnit(z.enemy);
+            return unit && !unit->HasUnitState(UNIT_STATE_ROOT);
         }
 
         bool KeepsReach(Context const& ctx, Position3 const& p)
@@ -157,6 +164,9 @@ namespace Commander
             if (!CheapOk(ctx, world, zones, s.pos, allowRange))
                 return false;
             if (!Los(ctx.map, ctx.here, s.pos))
+                return false;
+            // The straight walk there (line of sight above) must not pass an idle creature either.
+            if (ctx.idle && !SafeRoute::SegmentIsSafe(*ctx.idle, ctx.here, s.pos))
                 return false;
             if (ctx.roleBit == HAZARD_HEALER && ctx.hasHolder && !Los(ctx.map, s.pos, ctx.holder))
                 return false;
@@ -405,6 +415,11 @@ namespace Commander
         {
             if (!z.DangerousTo(ctx.roleBit) || !Contains(z, ctx.here))
                 continue;
+            // The area of an enemy chasing this bot moves with it: a step out is undone by the
+            // chase, and stepping straight away again and again walked a mage 100 yd from the
+            // party (strat-20261101-224637). Running to the tank is EscapeBehavior's job.
+            if (ChasesMe(ctx, world, z))
+                continue;
             AddLoss(world, z, *ctx.self, Hits(world, z, -1.0f), stay);
             if (Contains(z, ctx.here, ENTER_MARGIN))
                 inside.push_back(&z);
@@ -417,6 +432,10 @@ namespace Commander
             return a->hitChance * HazardZones::HitPoints(world, *a, *ctx.self) / a->intervalSec >
                    b->hitChance * HazardZones::HitPoints(world, *b, *ctx.self) / b->intervalSec;
         });
+
+        // Scanned only once the bot is in a zone (a grid visit; a few ticks per area).
+        SafeRoute::IdleCreatures const idle(me);
+        ctx.idle = &idle;
 
         ctx.speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
         if (ctx.roleBit == HAZARD_HEALER)

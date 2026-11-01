@@ -148,6 +148,9 @@ public:
     // from before. A Commander module may hold again on its next decision.
     void ClearMovementHold();
     bool IsTauntControlled() const;
+    // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
+    // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
+    bool IsEscapeControlled() const;
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;

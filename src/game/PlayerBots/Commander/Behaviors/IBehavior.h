@@ -36,6 +36,10 @@ namespace Commander
         // "taunt whatever attacks someone else" is suppressed (BotDirectives::IsTauntControlled).
         virtual bool ControlsTaunt(PartyBotAI const* /*bot*/) const { return false; }
 
+        // True = this module decides how the bot gets away from melee enemies hitting it; the
+        // rotations' own Frost Nova / Blink / run away is suppressed (BotDirectives::IsEscapeControlled).
+        virtual bool ControlsEscape(PartyBotAI const* /*bot*/) const { return false; }
+
         // True = this module decides whom the bot heals and with what (HealOrder proposals);
         // the rotation's heal step casts only those orders (BotDirectives::IsHealingControlled).
         virtual bool ControlsHealing(PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }

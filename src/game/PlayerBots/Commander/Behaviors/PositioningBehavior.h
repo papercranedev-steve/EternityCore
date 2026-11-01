@@ -14,8 +14,8 @@
  * radius + 1) + RING_EXTRA (melee also + MELEE_RING_EXTRA, to stay in reach of a large target).
  * A point is kept when:
  *  - it is outside every zone dangerous to this role (second pass: Range zones may stay);
- *  - it does not move closer to an out-of-combat aggressive creature that is nearer than
- *    PACK_CLEARANCE (a fixed stand-in for aggro radius);
+ *  - no creature that is not fighting yet would attack the bot there, nor along the straight
+ *    walk there (SafeRoute::IdleCreatures scanned around the bot: aggro range + margin, LOS);
  *  - healer: the holder (tank bot, or whoever most enemies are hitting) is within HEAL_RANGE
  *    and in line of sight; ranged: the current victim is within RANGED_RANGE and in sight;
  *  - ground found within MAX_STEP_Z of the bot (Map::GetHeight), and line of sight from the
@@ -55,7 +55,8 @@
  * (PartyBotAI::IsInHazardZone), so a healer is not walked straight back in after the hold.
  *
  * Known limits: stand-in reachability (line of sight, not a path: corridors, stairs and
- * ledges can still fail, MovePoint then walks around); fixed 20 yd pack clearance; zones are
+ * ledges can still fail, MovePoint then walks around, and the idle creature check covers the
+ * straight walk, not that detour); zones are
  * from the last refresh (moving casters); the chase (ranged at 25 yd, melee) may still walk
  * the bot back in after the hold, the next tick then moves it out again; spell immunities and
  * resistances are not checked; only one ring around one zone at a time (overlapping zones
@@ -82,7 +83,6 @@ namespace Commander
 
         static constexpr float HEAL_RANGE = 28.0f;          // healer to holder (heals are 40, 30 for some)
         static constexpr float RANGED_RANGE = 30.0f;        // conservative spell / shot range
-        static constexpr float PACK_CLEARANCE = 20.0f;      // detection_range of most dungeon creatures
         static constexpr float MAX_STEP_Z = 4.0f;           // ground height change accepted
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
 

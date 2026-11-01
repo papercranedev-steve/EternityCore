@@ -82,6 +82,18 @@ namespace Commander
             return m_tauntDurationMs && WorldTimer::getMSTimeDiff(m_tauntStartMs, nowMs) < m_tauntDurationMs;
         }
 
+        // While controlled, the rotations' own "a melee enemy is on me: Frost Nova / Blink and run
+        // away" (PartyBotAI::RunAwayFromTarget and the mage block) is off; EscapeBehavior decides.
+        void ControlEscape(uint32 nowMs, uint32 durationMs)
+        {
+            m_escapeStartMs = nowMs;
+            m_escapeDurationMs = durationMs;
+        }
+        bool IsEscapeControlled(uint32 nowMs) const
+        {
+            return m_escapeDurationMs && WorldTimer::getMSTimeDiff(m_escapeStartMs, nowMs) < m_escapeDurationMs;
+        }
+
         // While controlled, the rotation's heal step only casts the Commander's heal order
         // (none = rest, no heal); its own target and rank choice is off (HealPlanBehavior).
         void ControlHealing(uint32 nowMs, uint32 durationMs)
@@ -198,6 +210,8 @@ namespace Commander
         uint32 m_holdDurationMs = 0;
         uint32 m_tauntStartMs = 0;
         uint32 m_tauntDurationMs = 0;
+        uint32 m_escapeStartMs = 0;
+        uint32 m_escapeDurationMs = 0;
         uint32 m_healControlStartMs = 0;
         uint32 m_healControlDurationMs = 0;
         BotAction m_healOrder;

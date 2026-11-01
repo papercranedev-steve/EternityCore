@@ -172,6 +172,11 @@ bool PartyBotAI::IsTauntControlled() const
     return m_directives && m_directives->IsTauntControlled(WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsEscapeControlled() const
+{
+    return m_directives && m_directives->IsEscapeControlled(WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
 {
     uint8 const roleBit = Commander::HazardZones::RoleBit(GetRole());
@@ -457,7 +462,8 @@ Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
 
 bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
 {
-    if (IsMovementHeld())
+    // The Commander escape module runs to the tank instead (Commander/Behaviors/EscapeBehavior.h).
+    if (IsMovementHeld() || IsEscapeControlled())
         return false;
 
     // Commander position module: run where no idle pack is (FleePoint.h). Nowhere safe:
@@ -2220,7 +2226,9 @@ void PartyBotAI::UpdateInCombatAI_Mage()
                     return;
             }
 
-            if ((GetRole() != ROLE_MELEE_DPS) &&
+            // Commander escape module on: it decides Frost Nova (only when the hits are dangerous)
+            // and runs to the tank (Commander/Behaviors/EscapeBehavior.h).
+            if ((GetRole() != ROLE_MELEE_DPS) && !IsEscapeControlled() &&
                 (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE))
             {
                 if (m_spells.mage.pBlink &&

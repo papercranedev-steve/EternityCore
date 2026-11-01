@@ -81,6 +81,18 @@ namespace Commander
 
         // Seconds until `enemy` dies at its share of the party's damage.
         float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy);
+
+        // Share of a bot's output lost while melee enemies chase it (user, 2026-11-01): a healer's
+        // casts are pushed back and it has to step around, a ranged damage dealer kites or is
+        // pushed back. Melee damage dealers and tanks fight on (0), players are not modelled (0).
+        // Only enemies with melee on (EnemyFacts::meleeEnabled): a caster standing back costs its
+        // spell damage on anyone (MoveLoss) and nothing more. Several melee enemies on one bot
+        // share it (taking one of three away saves a third).
+        static constexpr float HARASS_SHARE_HEALER = 0.5f;
+        static constexpr float HARASS_SHARE_RANGED = 0.3f;
+        float HarassShare(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim);
+        // Points of `victim`'s output lost while `enemy` chases it for `seconds` (until it dies at most).
+        float HarassLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds);
     }
 }
 
