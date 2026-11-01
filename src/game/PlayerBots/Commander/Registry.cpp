@@ -7,6 +7,7 @@
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/RetreatBehavior.h"
 #include "Commander/Behaviors/PositioningBehavior.h"
+#include "Commander/Behaviors/HealerStanceBehavior.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
@@ -27,6 +28,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RetreatBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
     }
 
     // One line per team assignment module.

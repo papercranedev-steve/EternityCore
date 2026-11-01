@@ -186,6 +186,12 @@ bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
     return Commander::HazardZones::IsInside(Commander::HazardZones::Get(commander->GetWorld()), roleBit, pos);
 }
 
+bool PartyBotAI::HasCombatStance() const
+{
+    return GetRole() == ROLE_HEALER && me->IsInCombat() && !IsInDuel() && !me->GetTransport() &&
+           sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("stance");
+}
+
 void PartyBotAI::BeginChasing(Unit* pVictim) const
 {
     if (IsMovementHeld())
@@ -1120,8 +1126,16 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // out of an area followed the leader standing in it straight back in, and was moved
             // out again on the next tick. Stay put while the leader is in such an area and within
             // heal range; farther away, follow as before (the module moves the bot out again).
+            // A healer in combat with the Commander stance module stands where that module puts
+            // it: following the leader walked the priest into the next pack (Stockade,
+            // stockade-20261101-143825).
             float const healRange = Commander::PositioningBehavior::HEAL_RANGE;
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
+            if (HasCombatStance())
+            {
+                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+                    me->GetMotionMaster()->MoveIdle();
+            }
+            else if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
               !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && me->IsWithinLOSInMap(pLeader) &&
                 IsInHazardZone(pLeader)))
                 me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));

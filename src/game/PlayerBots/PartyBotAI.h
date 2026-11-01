@@ -106,6 +106,9 @@ public:
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;
+    // Healer in combat with the Commander "stance" module on: the module picks where it stands
+    // (Commander/Behaviors/HealerStanceBehavior.h), so it does not follow the leader.
+    bool HasCombatStance() const;
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips

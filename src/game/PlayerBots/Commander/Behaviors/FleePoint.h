@@ -8,7 +8,7 @@
  * side, so the mage ran deeper into the hall twice and pulled 8 more mobs.
  *
  * Find() uses what the server knows (positions and aggro ranges of every creature that is not
- * fighting yet; a player would know the room from looking at it):
+ * fighting yet, SafeRoute.h; a player would know the room from looking at it):
  *  - candidates: the tank and the other party members, and a ring of points around the bot;
  *  - rejected: no ground near the bot's height, not farther from the enemy, the end point or
  *    any point of the path inside an idle hostile creature's aggro range plus a margin;
@@ -36,13 +36,7 @@ namespace Commander
         uint32 const RING_ANGLES = 12;
         // Party members farther than this are not run to.
         float const MAX_ALLY_DISTANCE = 35.0f;
-        // Idle creatures this far from the bot are looked at.
-        float const SCAN_RADIUS = 70.0f;
-        // A point counts as safe outside max(MIN_IDLE_CLEARANCE, aggro range + IDLE_MARGIN)
-        // of every idle hostile creature. The margin covers the bot's bounding radius and
-        // creatures turning to face it a moment later.
-        float const IDLE_MARGIN = 5.0f;
-        float const MIN_IDLE_CLEARANCE = 10.0f;
+        // Idle creature scan, clearance and path sampling: SafeRoute.h.
         // Must end at least this much farther from the enemy than now (the tank: no rule, it
         // takes the enemy over), and never closer than MIN_ENEMY_GAP.
         float const MIN_GAIN = 4.0f;
@@ -53,8 +47,6 @@ namespace Commander
         float const MAX_PATH_DETOUR = 2.0f;
         // Pathfinding is the expensive check: only the best this many candidates are tried.
         uint32 const MAX_PATH_CHECKS = 6;
-        // The path is checked against idle creatures every this many yards.
-        float const PATH_SAMPLE_STEP = 3.0f;
         // Scoring (yards): enemy distance counts up to ENEMY_DISTANCE_CAP; running to the tank
         // is worth TANK_BONUS; every yard away from the party's centre costs CENTRE_WEIGHT.
         float const ENEMY_DISTANCE_CAP = 20.0f;
