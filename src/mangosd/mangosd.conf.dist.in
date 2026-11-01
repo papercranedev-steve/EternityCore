@@ -3144,11 +3144,16 @@ CharDelete.KeepDays = 30
 #        The AH bot will add items until this number of listings is reached in the auction house (this includes potential player listings).
 #        Default: 50
 #
+#    AHBot.PriceVariance
+#        Each listing's price is moved randomly by up to +/- this many percent of the table price (max 90).
+#        Default: 0 - exact table prices
+#
 ###################################################################################################################
 
 AHBot.Enable = 0
 AHBot.ah.fid = 120
 AHBot.itemcount = 50
+AHBot.PriceVariance = 0
 
 ###################################################################################################################
 # PLAYER BOTS

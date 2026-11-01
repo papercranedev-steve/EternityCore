@@ -9,6 +9,9 @@
 #include "Chat.h"
 #include "Utilities/Random.h"
 
+#include <algorithm>
+#include <limits>
+
 INSTANTIATE_SINGLETON_1(AuctionHouseBotMgr);
 
 AuctionHouseBotMgr::~AuctionHouseBotMgr()
@@ -23,13 +26,14 @@ void AuctionHouseBotMgr::Load()
 {
     /* 1 - DELETE */
     m_items.clear();
+    m_cumulativeWeights.clear();
     m_loaded = false;
 
     if (m_config)
         m_config.reset();
 
     /*2 - LOAD */
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `item`, `stack`, `bid`, `buyout` FROM `auctionhousebot`"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT `item`, `stack`, `stack_min`, `bid`, `buyout`, `weight` FROM `auctionhousebot`"));
 
     if (!result)
     {
@@ -42,6 +46,7 @@ void AuctionHouseBotMgr::Load()
     }
 
     uint32 count = 0;
+    uint32 totalWeight = 0;
     BarGoLink bar(result->GetRowCount());
 
     Field* fields;
@@ -49,13 +54,26 @@ void AuctionHouseBotMgr::Load()
     {
         bar.step();
         AuctionHouseBotEntry e;
-        fields    = result->Fetch();
-        e.item    = fields[0].GetUInt32();
-        e.stack   = fields[1].GetUInt32();
-        e.bid     = fields[2].GetUInt32();
-        e.buyout  = fields[3].GetUInt32();
+        fields     = result->Fetch();
+        e.item     = fields[0].GetUInt32();
+        e.stack    = fields[1].GetUInt32();
+        e.stackMin = fields[2].GetUInt32();
+        e.bid      = fields[3].GetUInt32();
+        e.buyout   = fields[4].GetUInt32();
+        e.weight   = fields[5].GetUInt32();
 
+        if (e.weight == 0)
+            continue;
+
+        if (e.weight > std::numeric_limits<uint32>::max() - totalWeight)
+        {
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "AHBot::Load() : Total weight overflows at item %u, remaining rows ignored.", e.item);
+            break;
+        }
+
+        totalWeight += e.weight;
         m_items.push_back(e);
+        m_cumulativeWeights.push_back(totalWeight);
 
         ++count;
     }
@@ -69,6 +87,7 @@ void AuctionHouseBotMgr::Load()
     m_config->enable         = sConfig.GetBoolDefault("AHBot.Enable", false);
     m_config->ahfid          = sConfig.GetIntDefault("AHBot.ah.fid", 120);
     m_config->itemcount      = sConfig.GetIntDefault("AHBot.itemcount", 2);
+    m_config->priceVariance  = std::max(0, std::min(sConfig.GetIntDefault("AHBot.PriceVariance", 0), 90));
 
     m_auctionHouseEntry = sAuctionMgr.GetAuctionHouseEntry(m_config->ahfid);
     if (!m_auctionHouseEntry)
@@ -103,19 +122,24 @@ void AuctionHouseBotMgr::Update(bool force /* = false */)
         return;
     }
 
-    uint32 auctions     = auctionHouse->GetCount();
-    uint32 items        = m_config->itemcount;
-    uint32 entriesCount = m_items.size();
+    uint32 auctions = auctionHouse->GetCount();
+    uint32 items    = m_config->itemcount;
 
     while (auctions < items)
     {
-        AuctionHouseBotEntry item = m_items[urand(0, entriesCount - 1)];
-        AddItem(item, auctionHouse);
+        AddItem(PickEntry(), auctionHouse);
         auctions++;
     }
 }
 
-void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry e, AuctionHouseObject *auctionHouse)
+AuctionHouseBotEntry const& AuctionHouseBotMgr::PickEntry() const
+{
+    uint32 roll = urand(0, m_cumulativeWeights.back() - 1);
+    auto it = std::upper_bound(m_cumulativeWeights.begin(), m_cumulativeWeights.end(), roll);
+    return m_items[it - m_cumulativeWeights.begin()];
+}
+
+void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry const& e, AuctionHouseObject *auctionHouse)
 {
     ASSERT(m_auctionHouseEntry);
 
@@ -133,7 +157,7 @@ void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry e, AuctionHouseObject *auc
         return;
     }
 
-    sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "AHBot::AddItem() : Adding item %u.", e.item);
+    sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "AHBot::AddItem() : Adding item %u.", e.item);
 
     uint32 randomPropertyId = Item::GenerateItemRandomPropertyId(e.item);
     if (randomPropertyId != 0)
@@ -155,7 +179,23 @@ void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry e, AuctionHouseObject *auc
             etime = 86400;
             break;
     }
-    item->SetCount(e.stack);
+    // Table prices are for `stack` items: scale them to the stack actually listed,
+    // then move them randomly so listings of the same item do not all cost the same.
+    uint32 maxStack = std::max(1u, std::min(e.stack, prototype->GetMaxStackSize()));
+    uint32 count = maxStack;
+    if (e.stackMin > 0 && e.stackMin < maxStack)
+        count = urand(e.stackMin, maxStack);
+
+    double factor = double(count) / double(maxStack);
+    if (m_config->priceVariance > 0)
+        factor *= urand(100 - m_config->priceVariance, 100 + m_config->priceVariance) / 100.0;
+
+    uint32 buyout = e.buyout ? std::max(1u, uint32(e.buyout * factor)) : 0;
+    uint32 bid = std::max(1u, uint32(e.bid * factor));
+    if (buyout && bid > buyout)
+        bid = buyout;
+
+    item->SetCount(count);
 
     uint32 dep = sAuctionMgr.GetAuctionDeposit(m_auctionHouseEntry, etime, item);
 
@@ -165,8 +205,8 @@ void AuctionHouseBotMgr::AddItem(AuctionHouseBotEntry e, AuctionHouseObject *auc
     auctionEntry->itemGuidLow        = item->GetGUIDLow();
     auctionEntry->itemTemplate       = item->GetEntry();
     auctionEntry->owner              = 0;
-    auctionEntry->startbid           = e.bid;
-    auctionEntry->buyout             = e.buyout;
+    auctionEntry->startbid           = bid;
+    auctionEntry->buyout             = buyout;
     auctionEntry->bidder             = 0;
     auctionEntry->bid                = 0;
     auctionEntry->deposit            = dep;
