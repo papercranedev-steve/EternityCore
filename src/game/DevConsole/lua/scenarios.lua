@@ -26,7 +26,11 @@ scenario.list = {
     {
         id = "stockade", title = "暴风城监狱 迪菲亚囚犯群（场景 1）", level = 25,
         entry = { map = 34, x = 48.98, y = 0.48, z = -16.39, o = 0.0 },
-        pack = { x = 189.4, y = 88.5, z = -33.86 },
+        -- First hall past the entrance (Inmate, Prisoner, Captives 27-36 yd from the door). The
+        -- scenario 1 doc pack at (189, 88) is deep in the corridor: every point on the path to it
+        -- is within 10 yd of another mob, so there is no safe spot to wait at.
+        spot = { x = 50.0, y = 0.5, z = -16.4, o = 0.0 },
+        pack = { x = 80.0, y = 1.0, z = -26.0 },
         approach = { min = 24, max = 34, clear = 22 },
         bots = {
             { class = "warrior", role = "tank" },
@@ -130,7 +134,8 @@ local function computeSpot(leader, s)
     local a = s.approach
     local path = leader:path(s.pack.x, s.pack.y, s.pack.z)
     if not path or #path.points < 2 then return nil, "no path from entrance to pack" end
-    local enemies = filter(leader:nearby(200, "enemy"), function(e) return not e:isplayer() end)
+    -- 'alive', not 'enemy': the leader is in GM mode here, and GM mode makes nothing hostile
+    local enemies = filter(leader:nearby(200, "alive"), function(e) return not e:isplayer() end)
     local function clearOf(x, y, z)
         for _, e in ipairs(enemies) do
             local p = e:pos()
@@ -159,7 +164,9 @@ local function computeSpot(leader, s)
             -- navmesh z can be below the real floor; teleporting under it drops you out of the world
             local ground = leader:height(p.x, p.y, p.z + 4)
             local z = (ground and ground > -100000 and math.abs(ground - p.z) < 6) and ground or p.z
-            return { x = p.x, y = p.y, z = z + 1.0, o = o }
+            -- navz: the height query can hit a ceiling above the path (Stockade), so the fall check
+            -- also accepts landing on the path height
+            return { x = p.x, y = p.y, z = z + 1.0, o = o, navz = p.z }
         end
     end
     return nil, "no clear spot on the path"
@@ -218,11 +225,14 @@ end
 -- Step 3: leader is at the spot -> spawn bots and wait for them.
 local function spawnBots(leader, s)
     local here = leader:pos()
-    if here.z < scenario.spot.z - 5 then
+    local floor = math.min(scenario.spot.z, scenario.spot.navz or scenario.spot.z)
+    if here.z < floor - 5 then
         local e = s.entry
         leader:tp(e.map, e.x, e.y, e.z, e.o)
         return fail(leader, string.format("站位不对（掉到了 z=%.0f），已传回入口", here.z))
     end
+    -- bots go where the leader actually stands
+    scenario.spot = { x = scenario.spot.x, y = scenario.spot.y, z = here.z + 0.5, o = scenario.spot.o }
     for _, b in ipairs(s.bots) do
         addbot(leader, b.class, b.role, s.level)
     end
