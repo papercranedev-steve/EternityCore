@@ -25,6 +25,7 @@
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
+class ClassRotation;
 
 class PartyBotAI : public CombatBotBaseAI
 {
@@ -150,6 +151,9 @@ public:
     // What this bot's class can do (Commander/Classes/ClassKit.h). Created when the bot enters
     // the world (spells known); before that, on first use. Map thread of the bot.
     Commander::ClassKit const& Kit() const;
+    // The class rotation moved out of this file (Rotations/ClassRotation.h); nullptr while the
+    // class still runs its UpdateInCombatAI_<Class> here. Created with the kit.
+    ClassRotation* Rotation();
     bool IsMovementHeld() const;
     // Player commands (.partybot cometome, attackstart, attackstop, pull, pause, unpause in
     // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
@@ -254,6 +258,9 @@ public:
     std::shared_ptr<Commander::BotDirectives> m_directives;
     // Class kit (Commander/Classes/ClassKit.h); mutable for the on-first-use fallback in Kit().
     mutable std::shared_ptr<Commander::ClassKit const> m_classKit;
+    // Class rotation (Rotations/ClassRotation.h); shared_ptr for the incomplete type.
+    std::shared_ptr<ClassRotation> m_rotation;
+    bool m_rotationCreated = false;
 };
 
 #endif
