@@ -4437,6 +4437,12 @@ void Spell::finish(bool ok)
 
 void Spell::SendCastResult(SpellCastResult result)
 {
+    // Dev console recorder: refused casts (bots have no client to show the error).
+    // Interrupts are recorded as CastCancel already.
+    if (result != SPELL_CAST_OK && result != SPELL_FAILED_INTERRUPTED && result != SPELL_FAILED_DONT_REPORT &&
+        !m_IsTriggeredSpell)
+        DEVCONSOLE_COMBAT_EVENT(OnCastFail(this, result));
+
     if (!m_caster->IsPlayer())
         return;
 

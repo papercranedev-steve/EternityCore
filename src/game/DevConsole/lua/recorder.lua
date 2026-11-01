@@ -6,7 +6,9 @@
 --   snap    {type, t, party=[info], enemies=[info + threat=[{g,v}]]}   every rec.interval ms
 --   ev      {type, t, ev, src, dst, spell, amount, extra, school, crit} from the server hooks
 --           ev: dmg (extra = damage type), heal (extra = effective heal), cast, go, cancel
---               (extra = cast time left), aura+ (amount = duration, extra = stacks),
+--               (extra = cast time left), fail (cast refused by the spell checks: extra =
+--               SpellCastResult code, reason = los / range / facing / ... for common codes),
+--               aura+ (amount = duration, extra = stacks),
 --               aura- (extra = remove mode), death
 --   aggro   {type, t, enemy, from, to, toRole}   an enemy switched to a non-tank party member
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name}, dropped}
@@ -38,7 +40,8 @@ end
 local function stat(w, guid)
     local s = w.stats[guid]
     if not s then
-        s = { dmgDone = 0, dmgTaken = 0, healDone = 0, healEff = 0, healTaken = 0, casts = 0, cancels = 0, deaths = 0 }
+        s = { dmgDone = 0, dmgTaken = 0, healDone = 0, healEff = 0, healTaken = 0, casts = 0, cancels = 0,
+              fails = 0, failsBy = {}, deaths = 0 }
         w.stats[guid] = s
     end
     return s
@@ -59,6 +62,11 @@ local function account(w, e)
         stat(w, e.src).casts = stat(w, e.src).casts + 1
     elseif e.ev == "cancel" and e.src then
         stat(w, e.src).cancels = stat(w, e.src).cancels + 1
+    elseif e.ev == "fail" and e.src then
+        local s = stat(w, e.src)
+        s.fails = s.fails + 1
+        local key = e.reason or tostring(e.extra or 0)
+        s.failsBy[key] = (s.failsBy[key] or 0) + 1
     elseif e.ev == "death" and e.dst then
         stat(w, e.dst).deaths = stat(w, e.dst).deaths + 1
     end

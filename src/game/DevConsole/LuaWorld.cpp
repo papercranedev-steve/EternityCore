@@ -316,6 +316,8 @@ namespace DevConsole
             if (e.extra) { lua_pushinteger(L, e.extra); lua_setfield(L, -2, "extra"); }
             if (e.school) { lua_pushinteger(L, e.school); lua_setfield(L, -2, "school"); }
             if (e.critical) { lua_pushboolean(L, 1); lua_setfield(L, -2, "crit"); }
+            if (e.type == CombatEventType::CastFail)
+                if (char const* reason = CastFailReasonName(e.extra)) { lua_pushstring(L, reason); lua_setfield(L, -2, "reason"); }
             lua_rawseti(L, -2, ++i);
         }
         return 1;

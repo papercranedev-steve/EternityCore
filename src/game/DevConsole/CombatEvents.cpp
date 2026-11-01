@@ -23,11 +23,32 @@ namespace DevConsole
             case CombatEventType::CastStart:  return "cast";
             case CombatEventType::CastGo:     return "go";
             case CombatEventType::CastCancel: return "cancel";
+            case CombatEventType::CastFail:   return "fail";
             case CombatEventType::AuraApply:  return "aura+";
             case CombatEventType::AuraRemove: return "aura-";
             case CombatEventType::Death:      return "death";
         }
         return "?";
+    }
+
+    char const* CastFailReasonName(int32 result)
+    {
+        switch (result)
+        {
+            case SPELL_FAILED_LINE_OF_SIGHT:    return "los";
+            case SPELL_FAILED_OUT_OF_RANGE:     return "range";
+            case SPELL_FAILED_TOO_CLOSE:        return "tooclose";
+            case SPELL_FAILED_UNIT_NOT_INFRONT: return "facing";
+            case SPELL_FAILED_MOVING:           return "moving";
+            case SPELL_FAILED_NOT_READY:        return "notready";
+            case SPELL_FAILED_NO_POWER:         return "nopower";
+            case SPELL_FAILED_BAD_TARGETS:      return "badtarget";
+            case SPELL_FAILED_TARGETS_DEAD:     return "targetdead";
+            case SPELL_FAILED_SILENCED:         return "silenced";
+            case SPELL_FAILED_STUNNED:          return "stunned";
+            case SPELL_FAILED_INTERRUPTED_COMBAT: return "interruptedcombat";
+        }
+        return nullptr;
     }
 
     void CombatEvents::SetActive(bool active)
@@ -142,6 +163,15 @@ namespace DevConsole
         FillSpell(e, spell);
         e.type = CombatEventType::CastCancel;
         e.extra = int32(spell->GetCastedTime()); // remaining cast time in ms
+        Push(e);
+    }
+
+    void CombatEvents::OnCastFail(Spell const* spell, uint32 result)
+    {
+        CombatEvent e;
+        FillSpell(e, spell);
+        e.type = CombatEventType::CastFail;
+        e.extra = int32(result);
         Push(e);
     }
 

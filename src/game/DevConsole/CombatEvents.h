@@ -33,12 +33,17 @@ namespace DevConsole
         CastStart,      // spell with a cast time started
         CastGo,         // spell went off
         CastCancel,     // cast interrupted / cancelled while preparing or channeling
+        CastFail,       // cast refused by the spell checks (Spell::SendCastResult with an error):
+                        // extra = SpellCastResult code, amount = cast time. Not for interrupts (see CastCancel).
         AuraApply,      // extra = stack amount / duration (ms) in amount
         AuraRemove,     // extra = remove mode
         Death,
     };
 
     char const* CombatEventTypeName(CombatEventType type);
+
+    // Short name of a CastFail code for the common cases ("los", "range"...), nullptr for others.
+    char const* CastFailReasonName(int32 result);
 
     struct CombatEvent
     {
@@ -70,6 +75,7 @@ namespace DevConsole
             static void OnCastStart(Spell const* spell);
             static void OnCastGo(Spell const* spell);
             static void OnCastCancel(Spell const* spell);
+            static void OnCastFail(Spell const* spell, uint32 result);
             static void OnAuraApply(Unit const* target, ObjectGuid caster, uint32 spellId, int32 durationMs, uint32 stacks);
             static void OnAuraRemove(Unit const* target, ObjectGuid caster, uint32 spellId, uint32 removeMode);
             static void OnDeath(Unit const* unit);
