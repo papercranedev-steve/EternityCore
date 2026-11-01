@@ -1402,6 +1402,19 @@ void Group::SendUpdate()
         }
         player->GetSession()->SendPacket(std::move(packet));
 
+        // HermesProxy (1.14 client) workaround: on SMSG_GROUP_LIST it caches each member's class
+        // as GetUnitClass(guid), which is Warrior for a player it has not seen a name query for
+        // (a party bot that just joined). Later power updates are mapped through that class, so
+        // mana updates of mage / priest bots were dropped and party frames showed full mana
+        // (2026-11-01). A name query response right after the list corrects the cached class.
+        if (!player->IsBot())
+        {
+            for (auto const& itr : m_memberSlots)
+                if (itr.guid != citr->guid)
+                    if (Player* member = sObjectMgr.GetPlayer(itr.guid))
+                        player->GetSession()->SendNameQueryOpcode(member);
+        }
+
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_10_2
         if (markedTargets)
         {
