@@ -583,24 +583,34 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
         if (!m_marksToCC.empty())
             return false;
 
+        float radius;
+        if (pSpellEntry->EffectRadiusIndex[0])
+            radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[0]));
+        else if (pSpellEntry->EffectRadiusIndex[1])
+            radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[1]));
+        else if (pSpellEntry->EffectRadiusIndex[2])
+            radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[2]));
+        else
+            radius = 10.0f;
+
+        std::list<Unit*> targets;
+        me->GetEnemyListInRadiusAround(pTarget, radius + AOE_IDLE_MARGIN, targets);
+
+        // Any role, the tank included: do not open a new fight with an area spell. An idle
+        // creature in the area (a neutral one too) joins the fight when it is hit: the tank's
+        // Demoralizing Shout pulled two neutral Ghostly Citizens next to the pack
+        // (strat-20261101-225111). The margin covers creatures that wander a little.
+        for (Unit const* pUnit : targets)
+            if (WouldAreaSpellPullIdle(pUnit))
+                return false;
+
         // do not cast aoe if it will pull aggro
         if (m_role != ROLE_TANK)
         {
-            float radius;
-            if (pSpellEntry->EffectRadiusIndex[0])
-                radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[0]));
-            else if (pSpellEntry->EffectRadiusIndex[1])
-                radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[1]));
-            else if (pSpellEntry->EffectRadiusIndex[2])
-                radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[2]));
-            else
-                radius = 10.0f;
-
-            std::list<Unit*> targets;
-            me->GetEnemyListInRadiusAround(pTarget, radius, targets);
-
             for (auto const& pEnemy : targets)
             {
+                if (!pTarget->IsWithinDistInMap(pEnemy, radius))
+                    continue;
                 if (((pEnemy->GetLevel() + 5) > me->GetLevel()) &&
                     ((pEnemy->GetHealth() * 4) > me->GetHealth()) &&
                     pEnemy->GetVictim() && pEnemy->GetVictim() != me &&
@@ -618,6 +628,16 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     }
 
     return true;
+}
+
+bool PartyBotAI::WouldAreaSpellPullIdle(Unit const* pUnit) const
+{
+    if (pUnit->GetTypeId() != TYPEID_UNIT || !pUnit->IsAlive() || pUnit->IsInCombat())
+        return false;
+    Creature const* pCreature = static_cast<Creature const*>(pUnit);
+    if (pCreature->IsImmuneToAoe() || pCreature->GetCreatureType() == CREATURE_TYPE_CRITTER)
+        return false;
+    return me->IsValidAttackTarget(pUnit);
 }
 
 bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const
@@ -2561,7 +2581,9 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        if (m_spells.priest.pPsychicScream &&
+        // Commander escape module on: no reflex fear, feared enemies run into the next pack
+        // (EscapeBehavior holds with roots / stuns and runs to the tank).
+        if (m_spells.priest.pPsychicScream && !IsEscapeControlled() &&
             GetAttackersInRangeCount(10.0f) &&
             CanTryToCastSpell(me, m_spells.priest.pPsychicScream))
         {
@@ -3980,8 +4002,9 @@ void PartyBotAI::UpdateInCombatAI_Druid()
             {
                 BeginChasing(pVictim);
             }
+            // Commander escape module on: it decides Entangling Roots and where to run.
             else if (pVictim->CanReachWithMeleeAutoAttack(me) &&
-                    (pVictim->GetVictim() == me) &&
+                    (pVictim->GetVictim() == me) && !IsEscapeControlled() &&
                     !me->HasUnitState(UNIT_STATE_ROOT) &&
                     (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE))
             {

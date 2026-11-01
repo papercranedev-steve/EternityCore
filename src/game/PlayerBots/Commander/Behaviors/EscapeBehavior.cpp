@@ -4,7 +4,9 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/ThreatView.h"
 #include "PartyBotAI.h"
+#include "SpellAuras.h"
 #include "DBCStores.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -25,13 +27,42 @@ namespace Commander
             bool rooted;
         };
 
-        // A spell that roots the enemies around the bot so it can walk away. Mage only for now;
-        // other classes add theirs here.
-        SpellEntry const* RootSpell(PartyBotAI const* bot)
+        // Spells that stop a chaser where it stands (header: "Hold spells"). The list only names
+        // them per class; what they do (root / stun, area or single target, duration, breaks on
+        // damage) is read from the spell data in HoldSec / ProposeHold.
+        std::vector<SpellEntry const*> HoldSpells(PartyBotAI const* bot)
         {
-            if (bot->me->GetClass() == CLASS_MAGE)
-                return bot->m_spells.mage.pFrostNova;
-            return nullptr;
+            auto const& s = bot->m_spells;
+            switch (bot->me->GetClass())
+            {
+                case CLASS_MAGE:    return { s.mage.pFrostNova };
+                case CLASS_DRUID:   return { s.druid.pEntanglingRoots };
+                case CLASS_PALADIN: return { s.paladin.pHammerOfJustice };
+                case CLASS_PRIEST:  return { s.priest.pShackleUndead };
+                default:            return {};
+            }
+        }
+
+        // Seconds `spell` keeps an enemy from reaching the bot: a stun for its duration, a root
+        // (or control that ends on the next hit) at most ROOT_HOLD_SEC: other members' damage and
+        // area spells break it. 0 = not a root / stun (fear, slow: not used, a feared enemy runs
+        // into the next pack).
+        float HoldSec(SpellEntry const* spell)
+        {
+            bool root = false, stun = false;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
+                    continue;
+                root = root || spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_ROOT;
+                stun = stun || spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_STUN;
+            }
+            float const sec = std::max(0, spell->GetDuration()) / 1000.0f;
+            if (stun && !spell->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS))
+                return sec;
+            if (root || stun)
+                return std::min(sec, EB::ROOT_HOLD_SEC);
+            return 0.0f;
         }
 
         float SpellRadius(SpellEntry const* spell)
@@ -41,6 +72,36 @@ namespace Commander
                 if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                     radius = std::max(radius, r->Radius);
             return radius;
+        }
+
+        // Health the bot's shields will still take: active absorbs (Power Word: Shield, Ice
+        // Barrier; Mana Shield as far as the mana lasts), else a mage shield the rotation casts
+        // when attackers are near (PartyBotAI mage block: Mana Shield above 20% mana).
+        float ShieldAbsorb(PartyBotAI const* bot)
+        {
+            Player* me = bot->me;
+            float absorb = 0.0f;
+            for (Aura const* aura : me->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
+                absorb += std::max(0.0f, aura->GetModifier()->m_amount);
+            for (Aura const* aura : me->GetAurasByType(SPELL_AURA_MANA_SHIELD))
+            {
+                float amount = std::max(0.0f, aura->GetModifier()->m_amount);
+                if (float const perPoint = aura->GetSpellProto()->EffectMultipleValue[aura->GetEffIndex()])
+                    amount = std::min(amount, float(me->GetPower(POWER_MANA)) / perPoint);
+                absorb += amount;
+            }
+            if (absorb > 0.0f || me->GetClass() != CLASS_MAGE)
+                return absorb;
+            for (SpellEntry const* shield : { bot->m_spells.mage.pIceBarrier, bot->m_spells.mage.pManaShield })
+            {
+                if (!shield || !bot->CanTryToCastSpell(me, shield))
+                    continue;
+                float amount = float(std::max(0, shield->CalculateSimpleValue(EFFECT_INDEX_0)));
+                if (float const perPoint = shield->EffectMultipleValue[EFFECT_INDEX_0])
+                    amount = std::min(amount, float(me->GetPower(POWER_MANA)) / perPoint);
+                absorb = std::max(absorb, amount);
+            }
+            return absorb;
         }
 
         Proposal MakeProposal(ProposalTier tier, char const* reason)
@@ -69,6 +130,60 @@ namespace Commander
             for (Chaser const& c : chasers)
                 saved += Value::HitLoss(world, *c.facts, self, seconds) + Value::HarassLoss(world, *c.facts, self, seconds);
             return saved;
+        }
+
+        // Cast `spell` (HoldSpells) on the chasers it can hold: an area around the bot (Frost
+        // Nova) takes every free chaser in its radius, a single target spell the one it saves
+        // most on. False = not castable / nobody to hold.
+        bool ProposeHold(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+                         std::vector<Chaser> const& chasers, SpellEntry const* spell, Proposal& p)
+        {
+            if (!spell)
+                return false;
+            float const hold = HoldSec(spell);
+            if (hold <= 0.0f)
+                return false;
+            Player* me = bot->me;
+            float const castSec = std::max(Value::GCD_SEC, spell->GetCastTime(me) / 1000.0f);
+            float const cost = Value::LostAction(world, self, castSec);
+
+            std::vector<Chaser> held;
+            ObjectGuid target;
+            if (spell->rangeIndex == SPELL_RANGE_IDX_SELF_ONLY)
+            {
+                if (!bot->CanTryToCastSpell(me, spell))
+                    return false;
+                float const radius = SpellRadius(spell);
+                for (Chaser const& c : chasers)
+                    if (!c.rooted && me->IsWithinDistInMap(c.unit, radius))
+                        held.push_back(c);
+            }
+            else
+            {
+                float best = 0.0f;
+                for (Chaser const& c : chasers)
+                {
+                    if (c.rooted || !bot->CanTryToCastSpell(c.unit, spell) ||
+                        (spell->TargetCreatureType && !(c.unit->GetCreatureTypeMask() & spell->TargetCreatureType)))
+                        continue;
+                    float const saved = SavedWhileAway(world, { c }, self, hold);
+                    if (held.empty() || saved > best)
+                    {
+                        held = { c };
+                        best = saved;
+                        target = c.facts->guid;
+                    }
+                }
+            }
+            if (held.empty())
+                return false;
+
+            p = MakeProposal(ProposalTier::Urgent, "dangerous hits: root / stun them");
+            p.action.type = BotActionType::Cast;
+            p.action.target = target;
+            p.action.spell = spell;
+            p.SetValue(SavedWhileAway(world, held, self, hold), cost);
+            return true;
         }
     }
 
@@ -131,34 +246,34 @@ namespace Commander
             return;
         }
 
+        // Danger: the bot dies (health + shields) before the chasers do, and within DANGER_SEC.
+        // Two weak bugs that die in a few seconds are not dangerous: stay, shield, fight.
         float const incoming = Value::IncomingOn(world, self->guid);
-        bool const dangerous = chasers.size() >= DANGER_CHASERS ||
-                               (incoming > 0.0f && float(self->health) / incoming < DANGER_SEC);
-        bool const allRooted = std::all_of(chasers.begin(), chasers.end(), [](Chaser const& c) { return c.rooted; });
+        float killSec = 0.0f;
+        for (Chaser const& c : chasers)
+            killSec = std::max(killSec, Value::EnemyTimeToDie(world, *c.facts));
+        float const surviveSec = incoming > 0.0f ? (float(self->health) + ShieldAbsorb(bot)) / incoming : ThreatView::NO_LIMIT;
+        bool const dangerous = surviveSec < DANGER_SEC && surviveSec < killSec;
+        bool const allHeld = std::all_of(chasers.begin(), chasers.end(), [](Chaser const& c) { return c.rooted; });
 
-        // 1. Root them first when the hits are dangerous.
-        if (dangerous && !allRooted)
+        // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns.
+        if (dangerous && !allHeld)
         {
-            if (SpellEntry const* root = RootSpell(bot))
+            Proposal best;
+            bool found = false;
+            for (SpellEntry const* spell : HoldSpells(bot))
             {
-                if (bot->CanTryToCastSpell(me, root))
+                Proposal p;
+                if (ProposeHold(bot, world, *self, chasers, spell, p) && (!found || p.score > best.score))
                 {
-                    float const radius = SpellRadius(root);
-                    std::vector<Chaser> inRadius;
-                    for (Chaser const& c : chasers)
-                        if (!c.rooted && me->IsWithinDistInMap(c.unit, radius))
-                            inRadius.push_back(c);
-                    if (!inRadius.empty())
-                    {
-                        Proposal p = MakeProposal(ProposalTier::Urgent, "dangerous hits: root them");
-                        p.action.type = BotActionType::Cast;
-                        p.action.spell = root;
-                        p.SetValue(SavedWhileAway(world, inRadius, *self, ROOT_HOLD_SEC),
-                                   Value::LostAction(world, *self, Value::GCD_SEC));
-                        out.push_back(p);
-                        return;
-                    }
+                    best = p;
+                    found = true;
                 }
+            }
+            if (found)
+            {
+                out.push_back(best);
+                return;
             }
         }
 
@@ -215,7 +330,7 @@ namespace Commander
         }
 
         // 3. Nobody to take it: only get away while it is rooted (the old Nova-and-run).
-        if (!allRooted)
+        if (!allHeld)
             return;
         Position3 to;
         if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
