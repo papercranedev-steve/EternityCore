@@ -237,6 +237,7 @@ namespace WorldModelBuilder
             if (uint32 const attackMs = creature->GetAttackTime(BASE_ATTACK))
                 e.meleeDps = e.meleeHit / (attackMs / 1000.0f);
             e.pos = PositionOf(creature);
+            e.boundingRadius = creature->GetObjectBoundingRadius();
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);

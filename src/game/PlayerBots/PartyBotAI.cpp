@@ -1285,6 +1285,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!pVictim && !IsMovementHeld() && !HasCombatStance())
         KeepFollowSpotSafe(pLeader);
 
+    // Fix: a healer that was following when the fight started kept following until it stood
+    // still (the check below runs only when not moving): the priest walked 15 yd behind the
+    // player into Magistrate Barthilas' Crowd Pummel (strat-20261101-214026). Stop at once;
+    // the stance module picks the spot.
+    if (!pVictim && HasCombatStance() && !IsMovementHeld() &&
+        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+        me->GetMotionMaster()->MoveIdle();
+
     if (!me->IsMoving() && !IsMovementHeld())
     {
         if (!pVictim)

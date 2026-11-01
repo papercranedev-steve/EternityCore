@@ -45,8 +45,9 @@
  *            below INJURED_PCT (walking costs little while nothing needs a heal).
  * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS. After that the healer stays where it is.
  *
- * Jitter: moves only past the trigger lines, the targets are well inside them (gap 8 -> 14,
- * reach 28 -> in range with line of sight).
+ * Jitter: moves only past the trigger lines, the targets are inside them (gap 12 -> 14, second
+ * pass 12; reach 28 -> in range with line of sight). Gaps are measured to the enemy's edge
+ * (EnemyFacts::boundingRadius).
  *
  * Known limits: anchor and enemy positions are from the last refresh; other heal targets only
  * add to the order (a member out of range or sight is not a reason to move yet); one healer
@@ -64,9 +65,12 @@ namespace Commander
     {
     public:
         static constexpr float HEAL_RANGE = 28.0f;          // same as PositioningBehavior::HEAL_RANGE
-        static constexpr float TRIGGER_ENEMY_GAP = 8.0f;    // closer than this: move
+        // Closer than this to an enemy's edge: move. Until step 24 (2026-11-01) 8 yd: the priest
+        // stood 8.9 yd from Magistrate Barthilas, inside Crowd Pummel (10 yd, interrupt = 5 s
+        // holy lockout; strat-20261101-214026). Most melee-range area spells are 8-10 yd.
+        static constexpr float TRIGGER_ENEMY_GAP = 12.0f;
         static constexpr float MIN_ENEMY_GAP = 14.0f;       // new spot, first pass
-        static constexpr float RELAXED_ENEMY_GAP = 8.0f;    // new spot, second pass
+        static constexpr float RELAXED_ENEMY_GAP = TRIGGER_ENEMY_GAP;  // new spot, second pass (not inside the trigger line)
         static constexpr uint32 RING_POINTS = 12;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // GetHeight + LOS + pathfinding each
         static constexpr float MAX_STEP_Z = 4.0f;

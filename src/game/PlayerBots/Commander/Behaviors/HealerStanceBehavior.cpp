@@ -17,7 +17,8 @@ namespace Commander
         using SafeRoute::Distance2d;
 
         float const STRICT_RADII[] = { 16.0f, 20.0f, 12.0f };
-        float const RELAXED_RADII[] = { 10.0f, 14.0f };
+        // Second pass: closer, or further out (still inside HEAL_RANGE), with the smaller gap.
+        float const RELAXED_RADII[] = { 14.0f, 24.0f, 10.0f };
 
         struct Context
         {
@@ -87,11 +88,12 @@ namespace Commander
             return (leader && leader->alive && leader->guid != self) ? leader : nullptr;
         }
 
+        // Distance to the edge of the nearest enemy (a big boss reaches further than its centre).
         float MinGap(Context const& ctx, Position3 const& p)
         {
             float gap = 1000.0f;
             for (EnemyFacts const* e : ctx.enemies)
-                gap = std::min(gap, Distance2d(p, e->pos));
+                gap = std::min(gap, std::max(0.0f, Distance2d(p, e->pos) - e->boundingRadius));
             return gap;
         }
 
@@ -177,11 +179,11 @@ namespace Commander
             float benefit = anchorOk ? 0.0f : Value::LostAction(world, self, horizon);
             for (EnemyFacts const* e : ctx.enemies)
             {
-                float const gapNow = Distance2d(ctx.here, e->pos);
+                float const gapNow = std::max(0.0f, Distance2d(ctx.here, e->pos) - e->boundingRadius);
                 if (gapNow >= HS::MIN_ENEMY_GAP)
                     continue;
-                float const gain = std::min(HS::MAX_GAIN_SEC,
-                    std::max(0.0f, Distance2d(to, e->pos) - gapNow) / HS::ENEMY_RUN_SPEED);
+                float const gapThere = std::max(0.0f, Distance2d(to, e->pos) - e->boundingRadius);
+                float const gain = std::min(HS::MAX_GAIN_SEC, std::max(0.0f, gapThere - gapNow) / HS::ENEMY_RUN_SPEED);
                 if (gain <= 0.0f)
                     continue;
                 benefit += HS::TURN_CHANCE * (Value::HitLoss(world, *e, self, gain) + Value::LostAction(world, self, gain));

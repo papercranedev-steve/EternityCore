@@ -121,6 +121,8 @@ namespace Commander
         float meleeHit = 0.0f;          // average main hand hit now (live unit fields, enrage included)
         float meleeDps = 0.0f;          // meleeHit / attack time, before the victim's armor
         Position3 pos;
+        // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
+        float boundingRadius = 0.0f;
 
         ObjectGuid victim;              // threat manager's current victim (who it is hitting)
         float victimThreat = 0.0f;
