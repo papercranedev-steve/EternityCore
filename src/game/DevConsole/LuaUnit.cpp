@@ -33,6 +33,7 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/Perception/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
 #include "Packets/Spell.h"
@@ -473,6 +474,37 @@ namespace DevConsole
         lua_pushboolean(L, u->GetMap()->isInLineOfSight(u->GetPositionX(), u->GetPositionY(), u->GetPositionZ() + 2.0f, x, y, z + 2.0f));
         return 1;
     }
+    // u:aggroat(x, y, z [, margin]) -> idle creatures that would attack u standing at the point
+    // (Commander AggroRange rule: proximity aggro range + margin, height, line of sight)
+    static int U_aggroat(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        Commander::Position3 at;
+        at.x = float(luaL_checknumber(L, 2));
+        at.y = float(luaL_checknumber(L, 3));
+        at.z = float(luaL_checknumber(L, 4));
+        float const margin = float(luaL_optnumber(L, 5, 0.0));
+        float const dx = at.x - u->GetPositionX(), dy = at.y - u->GetPositionY();
+        float const radius = std::min(200.0f, std::sqrt(dx * dx + dy * dy) + Commander::AggroRange::MAX_ATTACK_DISTANCE + margin);
+
+        std::list<Unit*> found;
+        AnyUnitInRangeCheck check(u, radius);
+        MaNGOS::UnitListSearcher<AnyUnitInRangeCheck> searcher(found, check);
+        Cell::VisitAllObjects(u, searcher, radius);
+
+        lua_newtable(L);
+        lua_Integer i = 0;
+        for (Unit* t : found)
+        {
+            Creature const* c = t->ToCreature();
+            if (!c || !Commander::AggroRange::IsIdleAggressor(c, u) ||
+                !Commander::AggroRange::Covers(c, Commander::AggroRange::Reach(c, u, margin), at))
+                continue;
+            LuaUnit_Push(L, t);
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
     static int U_casting(lua_State* L) { PushCasting(L, LuaUnit_Check(L, 1)); return 1; }
     static int U_auras(lua_State* L)
     {
@@ -560,6 +592,13 @@ namespace DevConsole
         lua_setfield(L, -2, "focusMarks");
         Commander::BotDirectives const& d = ai->Directives();
         SetField(L, "movementHoldMs", d.GetMovementHoldRemaining(now));
+        // follow offset given to MoveFollow (FollowSpot) and whether its safety check is current
+        lua_createtable(L, 0, 4);
+        SetFieldN(L, "dist", Round2(ai->m_followOffset.dist));
+        SetFieldN(L, "angle", Round2(ai->m_followOffset.angle));
+        SetFieldB(L, "checked", ai->m_followChecked);
+        SetField(L, "motion", u->GetMotionMaster()->GetCurrentMovementGeneratorType());
+        lua_setfield(L, -2, "follow");
         if (!d.GetLastDecision().empty())
         {
             SetFieldS(L, "lastDecision", d.GetLastDecision().c_str());
@@ -1105,7 +1144,7 @@ namespace DevConsole
             { "states", U_states }, { "gm", U_gm }, { "target", U_target }, { "victim", U_victim },
             { "attackers", U_attackers }, { "threat", U_threat }, { "dist", U_dist }, { "los", U_los },
             { "hostile", U_hostile }, { "friendly", U_friendly }, { "nearby", U_nearby },
-            { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint },
+            { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint }, { "aggroat", U_aggroat },
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
             { "group", U_group }, { "ai", U_ai }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },

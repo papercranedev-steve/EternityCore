@@ -21,6 +21,7 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Commander/Behaviors/CastWatch.h"
+#include "Commander/Behaviors/FollowSpot.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; }
@@ -120,6 +121,13 @@ public:
     // Healer in combat with the Commander "stance" module on: the module picks where it stands
     // (Commander/Behaviors/HealerStanceBehavior.h), so it does not follow the leader.
     bool HasCombatStance() const;
+    // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
+    // idle creatures' aggro range (Commander/Behaviors/FollowSpot.h).
+    void StartFollowing(Unit* pLeader);
+    // While following: re-check the follow point after the leader moved or turned enough.
+    void KeepFollowSpotSafe(Unit* pLeader);
+    bool UsesSafeFollow() const;
+    Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader);
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
@@ -175,6 +183,12 @@ public:
         bool returned = false;      // seen inside again after the hold: no more out-of-reach steps
     };
     mutable HazardGiveUp m_hazardGiveUp;
+    // Follow offset given to MoveFollow, and the leader position / facing of its last safety check.
+    Commander::FollowSpot::Offset m_followOffset;
+    float m_followCheckX = 0.0f;
+    float m_followCheckY = 0.0f;
+    float m_followCheckO = 0.0f;
+    bool m_followChecked = false;
     // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.

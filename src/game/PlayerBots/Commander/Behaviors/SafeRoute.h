@@ -2,12 +2,14 @@
  * PartyBot Commander: "can a bot stand here / walk there without pulling another pack".
  *
  * Uses what the server knows: positions and aggro ranges of every hostile creature that is not
- * fighting yet (a player would know the room from looking at it). A point is unsafe inside
- * max(MIN_IDLE_CLEARANCE, aggro range + IDLE_MARGIN) of such a creature; a route is unsafe when
+ * fighting yet (a player would know the room from looking at it). A point is unsafe when an idle
+ * creature would attack the bot standing there (AggroRange.h: the server's proximity aggro rule,
+ * line of sight included) with its range widened by the caller's margin; a route is unsafe when
  * the end point or any point sampled along the path every PATH_SAMPLE_STEP is.
  *
- * Shared by FleePoint (where to run from a melee enemy) and HealerStanceBehavior (where a healer
- * stands in combat). Map thread of the bot: reads creatures and pathfinds.
+ * Shared by FleePoint (where to run from a melee enemy), HealerStanceBehavior (where a healer
+ * stands in combat) and FollowSpot (where a bot follows the leader). Map thread of the bot:
+ * reads creatures and pathfinds.
  */
 
 #ifndef MANGOS_COMMANDER_SAFE_ROUTE_H
@@ -16,35 +18,38 @@
 #include "Commander/Perception/WorldModel.h"
 #include <vector>
 
+class Creature;
 class Player;
+class WorldObject;
 
 namespace Commander
 {
     namespace SafeRoute
     {
-        // Idle creatures this far from the bot are looked at.
+        // Idle creatures this far from the scan centre are looked at.
         float const SCAN_RADIUS = 70.0f;
-        // The margin covers the bot's bounding radius and creatures turning to face it a moment later.
+        // Default margin: covers the bot's bounding radius and creatures turning to face it a moment later.
         float const IDLE_MARGIN = 5.0f;
-        float const MIN_IDLE_CLEARANCE = 10.0f;
-        // Only creatures within this height difference count (floors above / below do not aggro).
-        float const IDLE_MAX_HEIGHT_DIFF = 10.0f;
         // The path is checked against idle creatures every this many yards.
         float const PATH_SAMPLE_STEP = 3.0f;
 
-        // Out-of-combat hostile creatures around a bot, with their clearance. Scanned once.
+        // Out-of-combat creatures that would attack `me`, with their reach (aggro range + margin).
+        // Scanned once around `center` (default: `me`). Holds creature pointers: use it within the
+        // same update, on the map thread.
         class IdleCreatures
         {
         public:
-            explicit IdleCreatures(Player* me, float scanRadius = SCAN_RADIUS);
+            explicit IdleCreatures(Player* me, WorldObject const* center = nullptr,
+                                   float margin = IDLE_MARGIN, float scanRadius = SCAN_RADIUS);
+            // A creature would attack the bot standing at `p`.
             bool Near(Position3 const& p) const;
             bool Empty() const { return m_idle.empty(); }
 
         private:
             struct Idle
             {
-                Position3 pos;
-                float clearance = 0.0f;
+                Creature const* creature = nullptr;
+                float reach = 0.0f;
             };
             std::vector<Idle> m_idle;
         };
@@ -53,6 +58,14 @@ namespace Commander
         // straight line (+2 yd), and every sampled point outside `idle`. Without a navmesh path
         // (PATHFIND_NOT_USING_PATH): straight line of sight instead.
         bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour);
+
+        // The walk from `me` to `to` along the navmesh path (the straight line when there is no
+        // complete path) is outside `idle`. No reachability or detour rule: for a walk that
+        // happens anyway (following the leader), only which way is safe.
+        bool WalkIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to);
+
+        // Every PATH_SAMPLE_STEP from `a` (excluded) to `b` (included) is outside `idle`.
+        bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b);
 
         float Distance2d(Position3 const& a, Position3 const& b);
     }

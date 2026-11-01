@@ -102,6 +102,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
   ${COMMANDER_DIR}/Behaviors/SafeRoute.h
   ${COMMANDER_DIR}/Behaviors/SafeRoute.cpp
+  ${COMMANDER_DIR}/Perception/AggroRange.h
+  ${COMMANDER_DIR}/Perception/AggroRange.cpp
+  ${COMMANDER_DIR}/Behaviors/FollowSpot.h
+  ${COMMANDER_DIR}/Behaviors/FollowSpot.cpp
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h

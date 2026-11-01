@@ -10,10 +10,9 @@
  *  - creature_groups with OPTION_AGGRO_TOGETHER: all members join, and they do call
  *    assistance themselves.
  *  - Aggro range (only when `standAt` is given): the puller stands at `standAt` when it hits
- *    the target. Every other idle hostile creature that can start a fight (same conditions as
- *    BasicAI::MoveInLineOfSight: CanInitiateAttack, not NO_AGGRO, hostile, z difference within
- *    CREATURE_Z_ATTACK_RANGE) and is closer to `standAt` than its GetAttackDistance(puller) +
- *    AGGRO_RANGE_MARGIN, with line of sight to it, attacks on its own. It starts attacking, so
+ *    the target. Every other idle creature that would attack the puller at `standAt` on its
+ *    own (AggroRange.h, the shared BasicAI::MoveInLineOfSight rule, range + AGGRO_RANGE_MARGIN)
+ *    attacks too. It starts attacking, so
  *    it calls assistance too (combat scenarios 11 "Lord 522" and 13, table rows 10-11).
  *    Only the stand point is checked, not the way there.
  */
@@ -24,6 +23,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/AggroRange.h"
 #include <vector>
 
 class Creature;
@@ -36,9 +36,8 @@ namespace AssistPredictor
     // Server aggro checks run on every movement update; the margin covers the last step
     // of the puller and small differences of the stand point.
     float const AGGRO_RANGE_MARGIN = 2.0f;
-    // Search radius around the stand point for aggro-range joiners. GetAttackDistance is
-    // detection_range +- level difference (capped at 25 levels), 45 covers it in practice.
-    float const AGGRO_SEARCH_RADIUS = 45.0f;
+    // Search radius around the stand point for aggro-range joiners.
+    float const AGGRO_SEARCH_RADIUS = AggroRange::MAX_ATTACK_DISTANCE;
 
     enum class JoinReason : uint8
     {

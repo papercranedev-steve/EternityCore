@@ -219,6 +219,68 @@ bool PartyBotAI::HasCombatStance() const
            sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("stance");
 }
 
+bool PartyBotAI::UsesSafeFollow() const
+{
+    // (on a transport the follow point is relative to the transport, FollowSpot does not handle it)
+    return sCommanderMgr.IsEnabled() && !IsInDuel() && !me->GetTransport();
+}
+
+Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader)
+{
+    // The next check is one bot update away, and the follow generator runs ahead of the leader.
+    float const lookaheadSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f + Commander::FollowSpot::FOLLOW_EXTRAPOLATION_SEC;
+    return Commander::FollowSpot::Choose(me, pLeader, m_followOffset, lookaheadSec);
+}
+
+void PartyBotAI::StartFollowing(Unit* pLeader)
+{
+    m_followOffset.dist = urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
+    m_followOffset.angle = frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE);
+    m_followChecked = false;
+    if (UsesSafeFollow())
+    {
+        m_followOffset = ChooseFollowOffset(pLeader);
+        m_followCheckX = pLeader->GetPositionX();
+        m_followCheckY = pLeader->GetPositionY();
+        m_followCheckO = pLeader->GetOrientation();
+        m_followChecked = true;
+    }
+    me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle);
+}
+
+void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
+{
+    // Fix: following kept a random offset around the leader without looking at idle creatures;
+    // the tank walked 4 yd to the leader's right front into the aggro range of the next cell's
+    // prisoner (Stockade, stockade-20261101-174235). See Commander/Behaviors/FollowSpot.h.
+    if (!UsesSafeFollow() || me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+    {
+        m_followChecked = false;
+        return;
+    }
+
+    if (m_followChecked)
+    {
+        float const dx = pLeader->GetPositionX() - m_followCheckX;
+        float const dy = pLeader->GetPositionY() - m_followCheckY;
+        float const recheck = Commander::FollowSpot::FOLLOW_RECHECK_DIST;
+        if (dx * dx + dy * dy < recheck * recheck &&
+            Commander::FollowSpot::AngleGap(pLeader->GetOrientation(), m_followCheckO) < Commander::FollowSpot::FOLLOW_RECHECK_TURN)
+            return;
+    }
+
+    m_followCheckX = pLeader->GetPositionX();
+    m_followCheckY = pLeader->GetPositionY();
+    m_followCheckO = pLeader->GetOrientation();
+    m_followChecked = true;
+
+    Commander::FollowSpot::Offset const o = ChooseFollowOffset(pLeader);
+    if (o.dist == m_followOffset.dist && o.angle == m_followOffset.angle)
+        return;
+    m_followOffset = o;
+    me->GetMotionMaster()->MoveFollow(pLeader, o.dist, o.angle);
+}
+
 void PartyBotAI::BeginChasing(Unit* pVictim) const
 {
     if (IsMovementHeld())
@@ -1173,6 +1235,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     }
 
+    // (also while walking: the follow point moves with the leader)
+    if (!pVictim && !IsMovementHeld() && !HasCombatStance())
+        KeepFollowSpotSafe(pLeader);
+
     if (!me->IsMoving() && !IsMovementHeld())
     {
         if (!pVictim)
@@ -1193,7 +1259,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             else if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
               !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && me->IsWithinLOSInMap(pLeader) &&
                 IsInHazardZone(pLeader)))
-                me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
+                StartFollowing(pLeader);
         }
         else
         {

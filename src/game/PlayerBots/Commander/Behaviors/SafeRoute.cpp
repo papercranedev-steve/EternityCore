@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/AggroRange.h"
 #include "Creature.h"
 #include "Map.h"
 #include "PathFinder.h"
@@ -16,21 +17,20 @@ namespace SafeRoute
 {
     namespace
     {
-        // Same filter as RetreatPlanner's idle hostiles: alive, not fighting, would attack us.
-        class IdleHostileCheck
+        // Idle creatures within `range` of `center` that would attack `me` (AggroRange.h).
+        class IdleAggressorCheck
         {
         public:
-            IdleHostileCheck(Player const* me, float range) : m_me(me), m_range(range) {}
+            IdleAggressorCheck(Player const* me, WorldObject const* center, float range)
+                : m_me(me), m_center(center), m_range(range) {}
             bool operator()(Creature* c)
             {
-                return c->IsAlive() && !c->IsInCombat() && !c->GetOwnerGuid() &&
-                    c->GetCreatureType() != CREATURE_TYPE_CRITTER &&
-                    !c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO) &&
-                    c->IsHostileTo(m_me) && m_me->IsWithinDist(c, m_range, false);
+                return AggroRange::IsIdleAggressor(c, m_me) && m_center->IsWithinDist(c, m_range, false);
             }
 
         private:
             Player const* m_me;
+            WorldObject const* m_center;
             float m_range;
         };
 
@@ -50,27 +50,64 @@ namespace SafeRoute
         return std::sqrt(dx * dx + dy * dy);
     }
 
-    IdleCreatures::IdleCreatures(Player* me, float scanRadius)
+    IdleCreatures::IdleCreatures(Player* me, WorldObject const* center, float margin, float scanRadius)
     {
+        if (!center)
+            center = me;
         std::list<Creature*> found;
-        IdleHostileCheck check(me, scanRadius);
-        MaNGOS::CreatureListSearcher<IdleHostileCheck> searcher(found, check);
-        Cell::VisitGridObjects(me, searcher, scanRadius);
+        IdleAggressorCheck check(me, center, scanRadius);
+        MaNGOS::CreatureListSearcher<IdleAggressorCheck> searcher(found, check);
+        Cell::VisitGridObjects(center, searcher, scanRadius);
         for (Creature* c : found)
         {
             Idle i;
-            i.pos = PositionOf(c);
-            i.clearance = std::max(MIN_IDLE_CLEARANCE, c->GetAttackDistance(me) + IDLE_MARGIN);
-            m_idle.push_back(i);
+            i.creature = c;
+            i.reach = AggroRange::Reach(c, me, margin);
+            if (i.reach > 0.0f)
+                m_idle.push_back(i);
         }
     }
 
     bool IdleCreatures::Near(Position3 const& p) const
     {
         for (Idle const& c : m_idle)
-            if (Distance2d(p, c.pos) <= c.clearance && std::fabs(p.z - c.pos.z) < IDLE_MAX_HEIGHT_DIFF)
+            if (AggroRange::Covers(c.creature, c.reach, p))
                 return true;
         return false;
+    }
+
+    bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b)
+    {
+        // Path corners are far apart in open rooms, so walk each segment in PATH_SAMPLE_STEP steps.
+        uint32 const steps = std::max(1u, uint32(Distance2d(a, b) / PATH_SAMPLE_STEP));
+        for (uint32 s = 1; s <= steps; ++s)
+        {
+            float const f = float(s) / steps;
+            Position3 p;
+            p.x = a.x + (b.x - a.x) * f;
+            p.y = a.y + (b.y - a.y) * f;
+            p.z = a.z + (b.z - a.z) * f;
+            if (idle.Near(p))
+                return false;
+        }
+        return true;
+    }
+
+    namespace
+    {
+        bool PathPointsAreSafe(IdleCreatures const& idle, PathInfo const& path)
+        {
+            auto const& pts = path.getPath();
+            for (size_t i = 1; i < pts.size(); ++i)
+            {
+                Position3 a, b;
+                a.x = pts[i - 1].x; a.y = pts[i - 1].y; a.z = pts[i - 1].z;
+                b.x = pts[i].x;     b.y = pts[i].y;     b.z = pts[i].z;
+                if (!SegmentIsSafe(idle, a, b))
+                    return false;
+            }
+            return true;
+        }
     }
 
     bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour)
@@ -86,26 +123,16 @@ namespace SafeRoute
 
         if (path.Length() > Distance2d(here, to) * maxDetour + 2.0f)
             return false;
-        // Path corners are far apart in open rooms, so walk each segment in PATH_SAMPLE_STEP steps.
-        auto const& pts = path.getPath();
-        for (size_t i = 1; i < pts.size(); ++i)
-        {
-            Position3 a, b;
-            a.x = pts[i - 1].x; a.y = pts[i - 1].y; a.z = pts[i - 1].z;
-            b.x = pts[i].x;     b.y = pts[i].y;     b.z = pts[i].z;
-            uint32 const steps = std::max(1u, uint32(Distance2d(a, b) / PATH_SAMPLE_STEP));
-            for (uint32 s = 1; s <= steps; ++s)
-            {
-                float const f = float(s) / steps;
-                Position3 p;
-                p.x = a.x + (b.x - a.x) * f;
-                p.y = a.y + (b.y - a.y) * f;
-                p.z = a.z + (b.z - a.z) * f;
-                if (idle.Near(p))
-                    return false;
-            }
-        }
-        return true;
+        return PathPointsAreSafe(idle, path);
+    }
+
+    bool WalkIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to)
+    {
+        PathInfo path(me);
+        path.calculate(to.x, to.y, to.z);
+        if (path.getPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_NOT_USING_PATH))
+            return SegmentIsSafe(idle, PositionOf(me), to);
+        return PathPointsAreSafe(idle, path);
     }
 }
 }

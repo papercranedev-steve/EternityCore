@@ -114,7 +114,7 @@ namespace Commander
             return std::atan2(ctx.here.y - a.y, ctx.here.x - a.x);
         }
 
-        // Ring candidates passing the distance-only checks, best first.
+        // Ring candidates passing the cheap checks (no ground or path yet), best first.
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
                                      SafeRoute::IdleCreatures const& idle, float const* radii, size_t radiusCount,
                                      float minGap)

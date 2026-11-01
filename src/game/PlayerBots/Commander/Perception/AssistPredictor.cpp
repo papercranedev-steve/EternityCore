@@ -1,4 +1,5 @@
 #include "Commander/Perception/AssistPredictor.h"
+#include "Commander/Perception/AggroRange.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
 #include "Map.h"
@@ -53,29 +54,15 @@ namespace AssistPredictor
             }
         }
 
-        // Idle creature that would attack `puller` standing at `at` on its own
-        // (BasicAI::MoveInLineOfSight conditions, evaluated at the stand point).
+        // Idle creature that would attack `puller` standing at `at` on its own (AggroRange.h).
         class AggroRangeCheck
         {
         public:
             AggroRangeCheck(Unit const* puller, Position3 const& at) : m_puller(puller), m_at(at) {}
             bool operator()(Creature* c)
             {
-                if (!c->IsAlive() || c->IsInCombat() || !c->CanInitiateAttack())
-                    return false;
-                if (c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
-                    return false;
-                if (!c->IsHostileTo(m_puller) || !m_puller->IsTargetableBy(c))
-                    return false;
-                if (!c->CanFly() && std::fabs(c->GetPositionZ() - m_at.z) > CREATURE_Z_ATTACK_RANGE)
-                    return false;
-                float const dx = c->GetPositionX() - m_at.x;
-                float const dy = c->GetPositionY() - m_at.y;
-                float const dz = c->GetPositionZ() - m_at.z;
-                float const reach = c->GetAttackDistance(m_puller) + AGGRO_RANGE_MARGIN;
-                if (reach <= AGGRO_RANGE_MARGIN || dx * dx + dy * dy + dz * dz > reach * reach)
-                    return false;
-                return c->IsWithinLOS(m_at.x, m_at.y, m_at.z);
+                return AggroRange::IsIdleAggressor(c, m_puller) &&
+                    AggroRange::Covers(c, AggroRange::Reach(c, m_puller, AGGRO_RANGE_MARGIN), m_at);
             }
 
         private:
