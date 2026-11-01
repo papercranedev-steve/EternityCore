@@ -57,6 +57,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ProfileStore.cpp
   ${COMMANDER_DIR}/Perception/CombatRates.h
   ${COMMANDER_DIR}/Perception/CombatRates.cpp
+  ${COMMANDER_DIR}/Perception/DamageIntake.h
+  ${COMMANDER_DIR}/Perception/DamageIntake.cpp
   ${COMMANDER_DIR}/Perception/ValueModel.h
   ${COMMANDER_DIR}/Perception/ValueModel.cpp
   ${COMMANDER_DIR}/Perception/CastValue.h
@@ -98,6 +100,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ManaBudget.cpp
   ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.h
   ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/HealPlan.h
+  ${COMMANDER_DIR}/Behaviors/HealPlan.cpp
+  ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.h
+  ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/CastWatch.h
   ${COMMANDER_DIR}/Behaviors/CastWatch.cpp
   ${COMMANDER_DIR}/Behaviors/FleePoint.h

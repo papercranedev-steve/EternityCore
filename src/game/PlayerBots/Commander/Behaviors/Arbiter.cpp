@@ -116,7 +116,7 @@ namespace Commander
                 TargetName(bot, p.veto.target).c_str(), p.veto.spellId);
             return buf;
         }
-        snprintf(buf, sizeof(buf), "%s %s spell%u", ActionName(p.action.type),
+        snprintf(buf, sizeof(buf), "%s %s spell%u", p.kind == ProposalKind::HealOrder ? "heal" : ActionName(p.action.type),
             TargetName(bot, p.action.target).c_str(), p.action.spell ? p.action.spell->Id : 0);
         return buf;
     }
@@ -145,6 +145,16 @@ namespace Commander
                 break;
             }
         }
+        // Same for heals. The order of the last tick is dropped: no order now = no heal (rest).
+        for (IBehavior const* b : active)
+        {
+            if (b->ControlsHealing(bot, world))
+            {
+                directives.ControlHealing(now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                break;
+            }
+        }
+        directives.ClearHealOrder();
 
         std::vector<Proposal> proposals;
         for (IBehavior const* b : active)
@@ -162,6 +172,7 @@ namespace Commander
         // Value-scored proposals that are not worth it, and vetoes.
         std::vector<Proposal> replace;
         std::vector<Proposal> petActions;
+        std::vector<Proposal> healOrders;
         uint32 const vetoMs = VETO_TICKS * sCommanderMgr.GetBotUpdateInterval();
         for (Proposal const& p : proposals)
         {
@@ -178,6 +189,11 @@ namespace Commander
                 record.candidates.back().result = CandidateRecord::Result::VetoSet;
                 continue;
             }
+            if (p.kind == ProposalKind::HealOrder)
+            {
+                healOrders.push_back(p);
+                continue;
+            }
             if (IsPetAction(p.action.type))
             {
                 petActions.push_back(p);
@@ -188,6 +204,19 @@ namespace Commander
 
         std::stable_sort(replace.begin(), replace.end(), IsBetter);
         std::stable_sort(petActions.begin(), petActions.end(), IsBetter);
+        std::stable_sort(healOrders.begin(), healOrders.end(), IsBetter);
+
+        // The best heal order waits for the rotation's heal step (this tick, unless a Replace
+        // below executes; the order is proposed again next tick then).
+        for (size_t i = 0; i < healOrders.size(); ++i)
+        {
+            record.candidates.push_back(MakeRecord(Describe(bot, healOrders[i]), healOrders[i]));
+            if (i == 0)
+            {
+                directives.SetHealOrder(healOrders[i].action, now, sCommanderMgr.GetBotUpdateInterval());
+                record.candidates.back().result = CandidateRecord::Result::OrderSet;
+            }
+        }
 
         bool executed = false;
         bool rotationMayRun = false;

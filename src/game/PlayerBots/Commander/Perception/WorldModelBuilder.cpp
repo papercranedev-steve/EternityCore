@@ -2,8 +2,10 @@
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/DamageIntake.h"
 #include "Commander/CommanderMgr.h"
 #include "RoleCapability.h"
+#include "World.h"
 #include "PartyBotAI.h"
 #include "DBCStores.h"
 #include "Creature.h"
@@ -69,6 +71,17 @@ namespace WorldModelBuilder
             ShapeshiftForm const form = unit->GetShapeshiftForm();
             f.tankStance = form == FORM_DEFENSIVESTANCE || form == FORM_BEAR || form == FORM_DIREBEAR ||
                            (f.classId == CLASS_PALADIN && unit->HasAura(SPELL_RIGHTEOUS_FURY));
+
+            DamageIntake::Stats const taken = DamageIntake::Query(f.guid, WorldTimer::getMSTime());
+            f.takenDps = taken.dps;
+            f.takenBurst = taken.burst;
+            if (Player const* player = unit->ToPlayer())
+            {
+                float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
+                f.manaRegen = player->GetManaRegenPerSec(false) * rate;
+                f.manaRegenCasting = player->GetManaRegenPerSec(true) * rate;
+                f.fiveSecondRuleMs = player->GetLastManaUseTimer();
+            }
         }
 
         // Players: the role they chose, else from talents and gear. Tank only while no bot is a

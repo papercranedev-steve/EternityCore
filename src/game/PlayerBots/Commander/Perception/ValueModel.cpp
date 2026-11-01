@@ -104,6 +104,14 @@ namespace Value
         return total;
     }
 
+    float TakenDps(WorldModel const& world, ObjectGuid member)
+    {
+        PartyMemberFacts const* m = world.FindMember(member);
+        if (!m)
+            return 0.0f;
+        return std::max(IncomingOn(world, member), m->takenDps);
+    }
+
     float HitLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim, float seconds)
     {
         seconds = std::max(0.0f, seconds);

@@ -1428,6 +1428,10 @@ class Player final: public Unit
         /***                    STAT SYSTEM                    ***/
         /*********************************************************/
 
+    public:
+        // Mana per second before the world rate: outside / inside the five second rule
+        // (RegeneratePower). PartyBot Commander healer planning.
+        float GetManaRegenPerSec(bool casting) const { return casting ? m_modManaRegenInterrupt : m_modManaRegen; }
     private:
         float m_modManaRegen;
         float m_modManaRegenInterrupt;

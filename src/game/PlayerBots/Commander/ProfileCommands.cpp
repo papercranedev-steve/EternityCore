@@ -56,6 +56,7 @@ namespace ProfileCommands
                 case CandidateRecord::Result::LowerTier: return "lower tier";
                 case CandidateRecord::Result::Dropped:   return "dropped (benefit <= cost)";
                 case CandidateRecord::Result::VetoSet:   return "VETO";
+                case CandidateRecord::Result::OrderSet:  return "HEAL ORDER";
             }
             return "?";
         }

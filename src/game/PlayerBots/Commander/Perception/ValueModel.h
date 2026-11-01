@@ -57,6 +57,10 @@ namespace Commander
 
         // Melee damage per second all enemies currently deal to `member`, after armor.
         float IncomingOn(WorldModel const& world, ObjectGuid member);
+        // Damage per second `member` is expected to take: the larger of IncomingOn (predicted
+        // from the enemies on it) and the measured rate (PartyMemberFacts::takenDps), which
+        // also sees boss abilities and area spells, but lags behind a target switch.
+        float TakenDps(WorldModel const& world, ObjectGuid member);
 
         // Points lost while `enemy` hits `victim` for `seconds`: the damage, plus the death
         // penalty if the victim does not survive that long.

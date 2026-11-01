@@ -37,7 +37,9 @@
 #include "Commander/Behaviors/FleePoint.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "HealSpells.h"
 
+#include <algorithm>
 #include <random>
 
 enum PartyBotSpells
@@ -299,8 +301,44 @@ bool PartyBotAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpe
     return Commander::VetoChecks::HasAllowedDebuff(this, pTarget, pSpellEntry);
 }
 
+bool PartyBotAI::IsHealingControlled() const
+{
+    return m_directives && me->IsInCombat() && m_directives->IsHealingControlled(WorldTimer::getMSTime());
+}
+
+bool PartyBotAI::CastHealOrder()
+{
+    uint32 const now = WorldTimer::getMSTime();
+    Commander::BotAction const* order = m_directives ? m_directives->GetHealOrder(now) : nullptr;
+    if (!order || !order->spell)
+        return false;
+    Commander::BotAction const action = *order;
+    m_directives->ClearHealOrder();     // one cast per order
+
+    Unit* pTarget = action.target.IsEmpty() ? me : me->GetMap()->GetUnit(action.target);
+    if (!pTarget || !pTarget->IsInWorld() || !pTarget->IsAlive() || !CanTryToCastSpell(pTarget, action.spell))
+        return false;
+    if (DoCastSpell(pTarget, action.spell) != SPELL_CAST_OK)
+        return false;
+    uint32 const busyMs = std::max(uint32(HealSpells::GCD_SEC * 1000.0f), action.spell->GetCastTime(me));
+    m_directives->NoteOrderedHeal(pTarget->GetObjectGuid(), now, busyMs);
+    return true;
+}
+
+bool PartyBotAI::FindAndPreHealTarget()
+{
+    if (IsHealingControlled())
+        return false;   // the Commander's heal order already ran at the heal step
+    return CombatBotBaseAI::FindAndPreHealTarget();
+}
+
 bool PartyBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPercent)
 {
+    // The Commander heal module decides target and rank (Behaviors/HealPlanBehavior.h).
+    // No order = rest: nobody needs a heal yet.
+    if (IsHealingControlled())
+        return CastHealOrder();
+
     Unit* pTarget = SelectHealTarget(selfHealPercent, groupHealPercent);
     if (!pTarget)
         return false;

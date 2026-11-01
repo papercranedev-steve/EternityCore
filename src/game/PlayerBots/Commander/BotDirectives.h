@@ -27,6 +27,7 @@ namespace Commander
             LowerTier,  // a higher tier had proposals
             Dropped,    // valued and benefit <= cost
             VetoSet,    // veto registered
+            OrderSet,   // heal order handed to the rotation's heal step
         };
 
         std::string source;
@@ -79,6 +80,45 @@ namespace Commander
         bool IsTauntControlled(uint32 nowMs) const
         {
             return m_tauntDurationMs && WorldTimer::getMSTimeDiff(m_tauntStartMs, nowMs) < m_tauntDurationMs;
+        }
+
+        // While controlled, the rotation's heal step only casts the Commander's heal order
+        // (none = rest, no heal); its own target and rank choice is off (HealPlanBehavior).
+        void ControlHealing(uint32 nowMs, uint32 durationMs)
+        {
+            m_healControlStartMs = nowMs;
+            m_healControlDurationMs = durationMs;
+        }
+        bool IsHealingControlled(uint32 nowMs) const
+        {
+            return m_healControlDurationMs && WorldTimer::getMSTimeDiff(m_healControlStartMs, nowMs) < m_healControlDurationMs;
+        }
+        void SetHealOrder(BotAction const& action, uint32 nowMs, uint32 durationMs)
+        {
+            m_healOrder = action;
+            m_healOrderStartMs = nowMs;
+            m_healOrderDurationMs = durationMs;
+        }
+        void ClearHealOrder() { m_healOrderDurationMs = 0; }
+        // Null when there is no order for this tick.
+        BotAction const* GetHealOrder(uint32 nowMs) const
+        {
+            if (!m_healOrderDurationMs || WorldTimer::getMSTimeDiff(m_healOrderStartMs, nowMs) >= m_healOrderDurationMs)
+                return nullptr;
+            return &m_healOrder;
+        }
+        // The last heal the rotation cast from an order: a chain of heals on one target goes on
+        // while the next one starts within `gapMs` after the previous one ended.
+        void NoteOrderedHeal(ObjectGuid target, uint32 nowMs, uint32 busyMs)
+        {
+            m_lastHealTarget = target;
+            m_lastHealMs = nowMs;
+            m_lastHealBusyMs = busyMs;
+        }
+        bool IsHealChain(ObjectGuid target, uint32 nowMs, uint32 gapMs) const
+        {
+            return !m_lastHealTarget.IsEmpty() && m_lastHealTarget == target &&
+                   WorldTimer::getMSTimeDiff(m_lastHealMs, nowMs) <= m_lastHealBusyMs + gapMs;
         }
 
         // Vetoes expire by themselves, so a disabled module cannot leave the bot stuck.
@@ -158,6 +198,14 @@ namespace Commander
         uint32 m_holdDurationMs = 0;
         uint32 m_tauntStartMs = 0;
         uint32 m_tauntDurationMs = 0;
+        uint32 m_healControlStartMs = 0;
+        uint32 m_healControlDurationMs = 0;
+        BotAction m_healOrder;
+        uint32 m_healOrderStartMs = 0;
+        uint32 m_healOrderDurationMs = 0;
+        ObjectGuid m_lastHealTarget;
+        uint32 m_lastHealMs = 0;
+        uint32 m_lastHealBusyMs = 0;
         uint32 m_lastDecisionMs = 0;
         std::string m_lastDecision;
         std::vector<ActiveVeto> m_vetoes;

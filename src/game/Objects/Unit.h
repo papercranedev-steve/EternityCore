@@ -867,6 +867,8 @@ class Unit : public SpellCaster
 
         void SetLastManaUse(uint32 spellId) { m_lastManaUseTimer = 5000; m_lastManaUseSpellId = spellId; }
         bool IsUnderLastManaUseEffect() const { return m_lastManaUseTimer; }
+        // ms left in the five second rule (0 = spirit regeneration runs). PartyBot Commander.
+        uint32 GetLastManaUseTimer() const { return m_lastManaUseTimer; }
 
         void ApplySpellImmune(uint32 spellId, uint32 op, uint32 type, bool apply);
         void ApplySpellDispelImmunity(SpellEntry const* spellProto, DispelType type, bool apply);

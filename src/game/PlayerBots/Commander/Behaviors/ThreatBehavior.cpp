@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
+#include "Commander/Behaviors/HealPlanBehavior.h"
 #include "Commander/Perception/ManaBudget.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/PackResolver.h"
@@ -837,9 +838,72 @@ namespace Commander
     }
 
     // Healers: do not pull aggro with a heal unless the target needs it now.
+    float ThreatBehavior::HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
+                                       SpellEntry const* spell, float* effectiveOut)
+    {
+        Player* me = bot->me;
+        ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts)
+            return 0.0f;
+
+        // Health missing when the heal lands, the same estimate CastWatch checks mid-cast.
+        // With the missing health of now, the arbiter approved heals that CastWatch cancelled
+        // 0.3 s later and the rotation started again (9 of 24 Heals in the second Stockade
+        // test, 2026-11-01).
+        float const missing = float(target->GetMaxHealth() - target->GetHealth());
+        float const castSec = float(spell->GetCastTime(me)) / 1000.0f;
+        float const atLanding = std::min(float(target->GetMaxHealth()),
+                                         missing + Value::IncomingOn(world, target->GetObjectGuid()) * castSec);
+        float const effective = std::min(atLanding, HealSpells::Estimate(me, target, spell).direct);
+        if (effectiveOut)
+            *effectiveOut = effective;
+        std::vector<ThreatView::EnemyThreatDelta> deltas;
+        ThreatView::PredictHealThreat(me, target, effective, spell, deltas);
+
+        float loss = 0.0f;
+        float unknownEnemyLoss = -1.0f;     // computed on first use
+        for (ThreatView::EnemyThreatDelta const& d : deltas)
+        {
+            if (d.added <= 0.0f)
+                continue;
+            EnemyFacts const* e = world.FindEnemy(d.enemy);
+            if (!e)
+            {
+                // On the live threat refs but not in the snapshot yet: an add summoned since
+                // the last refresh, with 0 threat on everyone. Any heal pulls it (scenario 6).
+                // Assume it hits like the average acting enemy.
+                if (unknownEnemyLoss < 0.0f)
+                {
+                    unknownEnemyLoss = 0.0f;
+                    uint32 count = 0;
+                    for (EnemyFacts const& a : world.enemies)
+                    {
+                        if (!a.acting)
+                            continue;
+                        unknownEnemyLoss += Value::HitLoss(world, a, *myFacts, TANK_RECLAIM_SEC);
+                        ++count;
+                    }
+                    unknownEnemyLoss = count ? unknownEnemyLoss / float(count) : 0.0f;
+                }
+                loss += unknownEnemyLoss;
+                continue;
+            }
+            if (ThreatView::Headroom(*e, self) - d.added >= 0.0f)
+                continue;
+            float const ttd = Value::EnemyTimeToDie(world, *e);
+            loss += PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+        }
+        return loss;
+    }
+
     void ThreatBehavior::ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
+        // The heal module decides heals itself and checks aggro with HealPullLoss.
+        if (HealPlanBehavior::ControlsHealingOf(bot, world))
+            return;
+
         Unit* pTarget = bot->SelectHealTarget();     // same call as FindAndHealInjuredAlly()
         if (!pTarget)
             return;
@@ -860,54 +924,10 @@ namespace Commander
 
         float const missing = float(pTarget->GetMaxHealth() - pTarget->GetHealth());
 
-        // An enemy we have no facts on yet: assume it hits like the average acting enemy.
-        float unknownEnemyLoss = 0.0f;
-        {
-            uint32 count = 0;
-            for (EnemyFacts const& e : world.enemies)
-            {
-                if (!e.acting)
-                    continue;
-                unknownEnemyLoss += Value::HitLoss(world, e, *myFacts, TANK_RECLAIM_SEC);
-                ++count;
-            }
-            unknownEnemyLoss = count ? unknownEnemyLoss / float(count) : 0.0f;
-        }
-
         // Points lost to enemies that turn on me after this heal on `target` (0 = safe).
-        auto aggroLoss = [&](Unit* target, float targetMissing, SpellEntry const* spell, float* effectiveOut)
+        auto aggroLoss = [&](Unit* target, float /*targetMissing*/, SpellEntry const* spell, float* effectiveOut)
         {
-            // Health missing when the heal lands, the same estimate CastWatch checks mid-cast.
-            // With the missing health of now, the arbiter approved heals that CastWatch cancelled
-            // 0.3 s later and the rotation started again (9 of 24 Heals in the second Stockade
-            // test, 2026-11-01).
-            float const castSec = float(spell->GetCastTime(me)) / 1000.0f;
-            float const atLanding = std::min(float(target->GetMaxHealth()),
-                                             targetMissing + Value::IncomingOn(world, target->GetObjectGuid()) * castSec);
-            float const effective = std::min(atLanding, HealSpells::Estimate(me, target, spell).direct);
-            if (effectiveOut)
-                *effectiveOut = effective;
-            std::vector<ThreatView::EnemyThreatDelta> deltas;
-            ThreatView::PredictHealThreat(me, target, effective, spell, deltas);
-            float loss = 0.0f;
-            for (ThreatView::EnemyThreatDelta const& d : deltas)
-            {
-                if (d.added <= 0.0f)
-                    continue;
-                EnemyFacts const* e = world.FindEnemy(d.enemy);
-                if (!e)
-                {
-                    // On the live threat refs but not in the snapshot yet: an add summoned since
-                    // the last refresh, with 0 threat on everyone. Any heal pulls it (scenario 6).
-                    loss += unknownEnemyLoss;
-                    continue;
-                }
-                if (ThreatView::Headroom(*e, self) - d.added >= 0.0f)
-                    continue;
-                float const ttd = Value::EnemyTimeToDie(world, *e);
-                loss += PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
-            }
-            return loss;
+            return HealPullLoss(bot, world, target, spell, effectiveOut);
         };
 
         // The chosen heal first, then the direct heals smaller than it, biggest first

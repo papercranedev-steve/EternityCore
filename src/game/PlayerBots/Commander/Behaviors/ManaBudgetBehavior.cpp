@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
+#include "Commander/Behaviors/HealPlanBehavior.h"
 #include "Commander/Perception/ManaBudget.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -150,6 +151,9 @@ namespace Commander
             return;
         NoteLowMana(bot, budget);
         if (budget.tension <= 1.0f)
+            return;
+        // The heal module weighs mana itself (HealPlan::ManaWeight); nothing to veto then.
+        if (HealPlanBehavior::ControlsHealingOf(bot, world))
             return;
 
         Unit* pTarget = bot->SelectHealTarget();     // same call as FindAndHealInjuredAlly()

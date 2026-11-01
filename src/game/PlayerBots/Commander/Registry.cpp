@@ -5,6 +5,7 @@
 #include "Commander/Behaviors/DispelBehavior.h"
 #include "Commander/Behaviors/FocusBehavior.h"
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
+#include "Commander/Behaviors/HealPlanBehavior.h"
 #include "Commander/Behaviors/RetreatBehavior.h"
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/HealerStanceBehavior.h"
@@ -27,6 +28,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FocusBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealPlanBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RetreatBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));

@@ -76,6 +76,16 @@ namespace Commander
         // paladin with Righteous Fury. A state, not who the tanks are (that is `role`, Tanks.h).
         bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
+        // Damage actually taken (Perception/DamageIntake.h): per second over the last few
+        // seconds, and the biggest spike within a short window. Value::TakenDps combines the
+        // rate with the prediction from enemy melee.
+        float takenDps = 0.0f;
+        float takenBurst = 0.0f;
+        // Players: mana regenerated per second outside / inside the five second rule (world
+        // rate included), and ms left in the rule (0 = outside, spirit regeneration runs).
+        float manaRegen = 0.0f;
+        float manaRegenCasting = 0.0f;
+        uint32 fiveSecondRuleMs = 0;
 
         bool CanAct() const { return alive && !controlled; }
         bool UsesMana() const { return maxMana > 0; }

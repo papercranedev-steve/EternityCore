@@ -168,7 +168,14 @@ public:
     bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
+    // While the Commander heal module controls healing, casts its heal order instead (none: no heal).
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
+    // Hides CombatBotBaseAI::FindAndPreHealTarget: off while the heal module controls healing.
+    bool FindAndPreHealTarget();
+    // In combat with the Commander heal module deciding heals (BotDirectives::IsHealingControlled).
+    bool IsHealingControlled() const;
+    // Casts the Commander's heal order of this tick (BotDirectives::GetHealOrder), once.
+    bool CastHealOrder();
     // Heal choice (CombatBotBaseAI::ChooseHeal) and shields use the Commander's measured
     // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
     float GetIncomingDps(Unit const* pTarget) const override;

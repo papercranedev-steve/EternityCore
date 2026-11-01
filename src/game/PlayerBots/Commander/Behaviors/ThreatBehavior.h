@@ -41,6 +41,9 @@
 
 #include "Commander/Behaviors/IBehavior.h"
 
+class Unit;
+class SpellEntry;
+
 namespace Commander
 {
     struct EnemyFacts;
@@ -94,6 +97,12 @@ namespace Commander
         bool ControlsTaunt(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
+
+        // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
+        // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
+        // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
+        static float HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
+                                  SpellEntry const* spell, float* effectiveOut = nullptr);
 
     private:
         void ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;

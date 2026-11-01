@@ -36,6 +36,10 @@ namespace Commander
         // "taunt whatever attacks someone else" is suppressed (BotDirectives::IsTauntControlled).
         virtual bool ControlsTaunt(PartyBotAI const* /*bot*/) const { return false; }
 
+        // True = this module decides whom the bot heals and with what (HealOrder proposals);
+        // the rotation's heal step casts only those orders (BotDirectives::IsHealingControlled).
+        virtual bool ControlsHealing(PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }
+
         // Optional: rescore or drop proposals made by other modules.
         virtual void Adjust(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                             std::vector<Proposal>& /*proposals*/) const {}

@@ -64,10 +64,14 @@ namespace Commander
 
     // Replace: do this action this tick instead of the original rotation.
     // Veto: the original rotation still runs, but must not do one thing (value-scoring doc 6.1).
+    // HealOrder: the original rotation still runs (shields, Fade, dispels in their usual order);
+    // at its heal step it casts `action` (a Cast) instead of choosing a heal itself
+    // (PartyBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick.
     enum class ProposalKind : uint8
     {
         Replace,
         Veto,
+        HealOrder,
     };
 
     // What a veto forbids. Every type has a check in official PartyBot code, listed in
