@@ -2,6 +2,7 @@
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "Group.h"
@@ -206,12 +207,10 @@ namespace ClearPlanner
             return false;
         }
 
+        // A bot that can pull (Perception/Tanks.h).
         bool HasLivingTank(WorldModel const& world)
         {
-            return std::any_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& m)
-            {
-                return m.isBot && !m.isPet && m.alive && m.role == ROLE_TANK;
-            });
+            return Tanks::Main(world, true) != nullptr;
         }
 
         // Leader moved away from the anchor. Outside a pull this only pauses: the leader is

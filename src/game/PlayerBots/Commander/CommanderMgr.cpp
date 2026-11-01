@@ -198,6 +198,22 @@ namespace Commander
         return found;
     }
 
+    void CommanderMgr::SetPlayerRole(ObjectGuid player, uint8 role)
+    {
+        std::lock_guard<std::mutex> guard(m_playerRolesLock);
+        if (role == ROLE_INVALID)
+            m_playerRoles.erase(player.GetRawValue());
+        else
+            m_playerRoles[player.GetRawValue()] = role;
+    }
+
+    uint8 CommanderMgr::GetPlayerRole(ObjectGuid player) const
+    {
+        std::lock_guard<std::mutex> guard(m_playerRolesLock);
+        auto itr = m_playerRoles.find(player.GetRawValue());
+        return itr != m_playerRoles.end() ? itr->second : uint8(ROLE_INVALID);
+    }
+
     void CommanderMgr::RecordBotTick(uint64 micros)
     {
         m_statTicks.fetch_add(1, std::memory_order_relaxed);

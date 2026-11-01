@@ -27,6 +27,7 @@
 #include "SpellAuras.h"
 #include "Chat.h"
 #include "Utilities/Random.h"
+#include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/VetoChecks.h"
@@ -186,6 +187,30 @@ bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
     return Commander::HazardZones::IsInside(Commander::HazardZones::Get(commander->GetWorld()), roleBit, pos);
 }
 
+void PartyBotAI::AutoAssignRole()
+{
+    // Before: only the 31-point talents counted (Shield Slam, Holy Shield, Shadowform...), so
+    // below level 40 warriors were always melee and paladins, priests, shamans, druids healers.
+    m_role = RoleCapabilities::Assess(me).Best();
+}
+
+void PartyBotAI::SetRole(CombatBotRoles role)
+{
+    m_roleLocked = role != ROLE_INVALID;
+    m_role = role;
+    if (role == ROLE_INVALID)
+        AutoAssignRole();
+    m_resetSpellData = true;
+}
+
+void PartyBotAI::AssignRole(CombatBotRoles role)
+{
+    if (m_roleLocked || role == ROLE_INVALID || role == m_role)
+        return;
+    m_role = role;
+    m_resetSpellData = true;
+}
+
 bool PartyBotAI::HasCombatStance() const
 {
     return GetRole() == ROLE_HEALER && me->IsInCombat() && !IsInDuel() && !me->GetTransport() &&
@@ -321,7 +346,8 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
         !me->GetTransport())
     {
         float x, y, z;
-        if (!Commander::FleePoint::Find(me, pEnemy, x, y, z))
+        std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+        if (!Commander::FleePoint::Find(me, pEnemy, commander ? &commander->GetWorld() : nullptr, x, y, z))
             return false;
         me->GetMotionMaster()->MoveDistancingTo(x, y, z);
         return true;

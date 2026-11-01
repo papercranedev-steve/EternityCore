@@ -21,9 +21,9 @@ namespace Commander
         EnemyFacts const* FindEnemyByEntry(WorldModel const& world, uint32 entry);
         bool HasEnemyEntry(WorldModel const& world, uint32 entry);
 
-        // First alive tank-role bot.
-        PartyMemberFacts const* FindTankBot(WorldModel const& world);
-        // Who holds `enemy`: its victim if that is a party member (not a pet), else the tank bot.
+        // The main tank (bot or player, Perception/Tanks.h), or null.
+        PartyMemberFacts const* FindTank(WorldModel const& world);
+        // Who holds `enemy`: its victim if that is a party member (not a pet), else the main tank.
         PartyMemberFacts const* FindHolder(WorldModel const& world, EnemyFacts const* enemy);
         // Healer-role bot that can act with the least mana; null if none.
         PartyMemberFacts const* FindLowestManaHealer(WorldModel const& world);

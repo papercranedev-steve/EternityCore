@@ -68,6 +68,8 @@ namespace Commander
         // Tank reach: loose enemies further than this or out of sight are another fight
         // (a teleported member's room), not something to run after.
         static constexpr float TANK_REACH_RANGE = 40.0f;
+        // Several tank bots: a loose enemy is left to another tank bot that is at least this much nearer.
+        static constexpr float TANK_SHARE_MARGIN = 2.0f;
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
         // Area threat (Thunder Clap, Consecration, Swipe, Challenging Roar) when at least this

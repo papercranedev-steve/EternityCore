@@ -17,6 +17,18 @@ namespace Commander
     {
         // Pack scans use a grid search; packs move slowly, once a second is enough.
         uint32 const PACK_REFRESH_MS = 1000;
+
+        char const* RoleText(CombatBotRoles role)
+        {
+            switch (role)
+            {
+                case ROLE_TANK:      return "tank";
+                case ROLE_HEALER:    return "healer";
+                case ROLE_MELEE_DPS: return "melee damage";
+                case ROLE_RANGE_DPS: return "ranged damage";
+                default:             return "auto";
+            }
+        }
     }
 
     PartyCommander::PartyCommander(uint32 groupId, uint32 mapId, uint32 instanceId)
@@ -35,6 +47,7 @@ namespace Commander
         RunAssigners(assigners);
         if (m_activeEncounter)
             m_activeEncounter->AdjustPlan(m_world, m_plan);
+        ApplyRoles(bot);
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
@@ -63,6 +76,39 @@ namespace Commander
                 continue;
             if (PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI()))
                 ai->Directives().ReleaseMovement();
+        }
+    }
+
+    void PartyCommander::ApplyRoles(PartyBotAI* bot)
+    {
+        // RoleAssigner is pure and only fills TeamPlan::roles; the bots of this map are changed
+        // here (map thread). It keeps the old result during fights; a bot fighting on its own
+        // (the assigner cannot see that) keeps its role until it is out of combat too.
+        if (m_plan.roles.empty() || m_world.HasPartyEnemy())
+            return;
+        Group* group = bot->me->GetGroup();
+        if (!group)
+            return;
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI() ||
+                member->IsInCombat())
+                continue;
+            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            if (!ai || ai->IsRoleLocked())
+                continue;
+            for (RoleDuty const& d : m_plan.roles)
+            {
+                if (d.bot != member->GetObjectGuid() || d.role == uint8(ai->m_role))
+                    continue;
+                CombatBotRoles const before = ai->m_role;
+                ai->AssignRole(CombatBotRoles(d.role));
+                if (ai->m_role != before)
+                    m_plan.notes.push_back(std::string(member->GetName()) + ": " + RoleText(before) + " -> " +
+                                           RoleText(ai->m_role) + " (" + d.reason + ")");
+                break;
+            }
         }
     }
 

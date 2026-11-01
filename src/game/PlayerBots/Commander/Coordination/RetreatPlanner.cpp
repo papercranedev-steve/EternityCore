@@ -2,6 +2,7 @@
 #include "Commander/Coordination/ClearPlanner.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "Group.h"
@@ -390,15 +391,18 @@ namespace Commander
         PartyMemberFacts const* lowTank = nullptr;
         for (PartyMemberFacts const& m : world.party)
         {
-            if (m.isPet || !m.isBot)
+            if (m.isPet)
+                continue;
+            // Tanks: bots and players (Perception/Tanks.h). Healing: bots only (a player's heals are not known).
+            if (Tanks::IsTank(m) && m.alive && m.healthPct < TANK_LOW_HEALTH_PCT)
+                lowTank = &m;
+            if (!m.isBot)
                 continue;
             if (m.role == ROLE_HEALER && m.CanAct() && (m.manaPct < 0.0f || m.manaPct >= HEALER_MIN_MANA_PCT))
             {
                 healerCanAct = true;
                 healing += HEALER_HPS_PER_LEVEL * m.level;
             }
-            if (m.role == ROLE_TANK && m.alive && m.healthPct < TANK_LOW_HEALTH_PCT)
-                lowTank = &m;
         }
 
         if (lowTank && !healerCanAct)

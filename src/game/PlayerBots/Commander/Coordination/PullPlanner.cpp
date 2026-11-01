@@ -4,6 +4,7 @@
 #include "Commander/Perception/AssistPredictor.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/PatrolTracker.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
@@ -52,19 +53,12 @@ namespace Commander
             return buf;
         }
 
-        Player* FindTank(Player* leader)
+        // The puller: the main tank among the bots (Perception/Tanks.h; players cannot be ordered).
+        Player* FindTank(WorldModel const& world, Map* map)
         {
-            Group* group = leader->GetGroup();
-            for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
-            {
-                Player* m = itr->getSource();
-                if (!m || !m->IsInWorld() || m->GetMap() != leader->GetMap() || !m->IsAlive() || !m->AI())
-                    continue;
-                if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(m->AI()))
-                    if (ai->m_role == ROLE_TANK)
-                        return m;
-            }
-            return nullptr;
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            Player* player = tank ? map->GetPlayer(tank->guid) : nullptr;
+            return (player && player->IsAlive()) ? player : nullptr;
         }
 
         bool Contains(std::vector<ObjectGuid> const& list, ObjectGuid guid)
@@ -568,7 +562,7 @@ namespace Commander
         WorldModel const& world = commander.GetWorld();
         Map* map = leader->GetMap();
 
-        Player* tank = FindTank(leader);
+        Player* tank = FindTank(world, map);
         if (!tank)
         {
             report.push_back("No living tank bot in your party on this map (.partybot setrole <name> tank).");

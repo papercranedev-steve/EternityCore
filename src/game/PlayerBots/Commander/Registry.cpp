@@ -13,6 +13,7 @@
 #include "Commander/Coordination/FocusAssigner.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/RetreatPlanner.h"
+#include "Commander/Coordination/RoleAssigner.h"
 
 namespace Commander
 {
@@ -34,6 +35,7 @@ namespace Commander
     // One line per team assignment module.
     void RegisterAssigners(AssignerList& out)
     {
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RoleAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));

@@ -33,6 +33,7 @@ public:
         : CombatBotBaseAI(), m_race(race), m_class(class_), m_level(level), m_mapId(mapId), m_instanceId(instanceId), m_x(x), m_y(y), m_z(z), m_o(o)
     {
         m_role = role;
+        m_roleLocked = role != ROLE_INVALID;
         m_leaderGuid = pLeader->GetObjectGuid();
         m_cloneGuid = pClone ? pClone->GetObjectGuid() : ObjectGuid();
         m_updateTimer.Reset(2000);
@@ -52,6 +53,16 @@ public:
 
     void CloneFromPlayer(Player const* pPlayer);
     void AddToPlayerGroup();
+
+    // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
+    // change it later by party composition while the role is not locked.
+    void AutoAssignRole() override;
+    // Sets the role; ROLE_INVALID = auto (AutoAssignRole, unlocked), else locked (chosen by the
+    // user: the party assignment leaves it alone). Spell data is rebuilt on the next tick.
+    void SetRole(CombatBotRoles role);
+    // Role changed by the party assignment (stays unlocked). Spell data rebuilt on the next tick.
+    void AssignRole(CombatBotRoles role);
+    bool IsRoleLocked() const { return m_roleLocked; }
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
     Player* GetPartyLeader() const;
@@ -138,6 +149,9 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
+    // The role was chosen by the user (.partybot setrole / load / add with a role, addbot with a
+    // role); false = auto, the Commander party assignment may change it.
+    bool m_roleLocked = false;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
     // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.

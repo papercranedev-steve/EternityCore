@@ -210,9 +210,18 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
+    // Role the "roles" assigner gives a bot whose role is not locked (RoleAssigner.h).
+    struct RoleDuty
+    {
+        ObjectGuid bot;
+        uint8 role = 0;              // CombatBotRoles
+        char const* reason = "";     // static string
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
+        std::vector<RoleDuty> roles;
         std::vector<InterruptDuty> interrupts;
         FocusTarget focus;
         std::vector<InterceptDuty> intercepts;

@@ -29,6 +29,8 @@ class Unit;
 
 namespace Commander
 {
+    struct WorldModel;
+
     namespace FleePoint
     {
         // Ring of candidate points around the bot.
@@ -53,7 +55,8 @@ namespace Commander
         float const TANK_BONUS = 15.0f;
         float const CENTRE_WEIGHT = 0.5f;
 
-        bool Find(Player* me, Unit* enemy, float& x, float& y, float& z);
+        // `world`: the party's world model (who the tanks are, Perception/Tanks.h); may be null.
+        bool Find(Player* me, Unit* enemy, WorldModel const* world, float& x, float& y, float& z);
     }
 }
 

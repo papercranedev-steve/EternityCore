@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/SafeRoute.h"
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -41,34 +42,47 @@ namespace Commander
             return map->isInLineOfSight(a.x, a.y, a.z + HS::LOS_EYE_HEIGHT, b.x, b.y, b.z + HS::LOS_EYE_HEIGHT);
         }
 
-        // Tank bot, else a member in a tank stance, else the member most enemies hit, else the leader.
+        uint32 HitsOn(WorldModel const& world, ObjectGuid guid)
+        {
+            uint32 hits = 0;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && e.victim == guid)
+                    ++hits;
+            return hits;
+        }
+
+        // A tank (Perception/Tanks.h; with several, the one most enemies hit, main tank on a
+        // tie), else the member most enemies hit, else the leader.
         PartyMemberFacts const* FindAnchor(WorldModel const& world, ObjectGuid self)
         {
-            PartyMemberFacts const* stance = nullptr;
-            PartyMemberFacts const* hit = nullptr;
+            PartyMemberFacts const* best = nullptr;
             uint32 bestHits = 0;
+            for (PartyMemberFacts const* t : Tanks::Alive(world))
+            {
+                if (t->guid == self)
+                    continue;
+                uint32 const hits = HitsOn(world, t->guid);
+                if (!best || hits > bestHits)
+                {
+                    best = t;
+                    bestHits = hits;
+                }
+            }
+            if (best)
+                return best;
             for (PartyMemberFacts const& m : world.party)
             {
                 if (m.isPet || !m.alive || m.guid == self)
                     continue;
-                if (m.isBot && m.role == ROLE_TANK)
-                    return &m;
-                if (!stance && m.tankStance)
-                    stance = &m;
-                uint32 hits = 0;
-                for (EnemyFacts const& e : world.enemies)
-                    if (e.acting && e.victim == m.guid)
-                        ++hits;
+                uint32 const hits = HitsOn(world, m.guid);
                 if (hits > bestHits)
                 {
                     bestHits = hits;
-                    hit = &m;
+                    best = &m;
                 }
             }
-            if (stance)
-                return stance;
-            if (hit)
-                return hit;
+            if (best)
+                return best;
             PartyMemberFacts const* leader = world.FindMember(world.leader);
             return (leader && leader->alive && leader->guid != self) ? leader : nullptr;
         }
@@ -124,11 +138,12 @@ namespace Commander
                         continue;
                     if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos) || idle.Near(s.pos))
                         continue;
-                    uint32 covered = 0;
+                    // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
+                    float covered = 0.0f;
                     for (PartyMemberFacts const& m : world.party)
                         if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchor->guid &&
                             Distance2d(s.pos, m.pos) <= HS::HEAL_RANGE)
-                            ++covered;
+                            covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
                     s.walk = Distance2d(ctx.here, s.pos);
                     s.score = -s.walk + HS::COVER_WEIGHT * covered + HS::GAP_WEIGHT * std::min(gap, HS::GAP_CAP);
                     spots.push_back(s);

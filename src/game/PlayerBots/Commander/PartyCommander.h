@@ -71,6 +71,9 @@ namespace Commander
         // After the assigners: when the retreat ended since the last refresh, releases the
         // movement hold of every bot of the party on this map.
         void ReleaseMovementAfterRetreat(PartyBotAI* bot);
+        // After the assigners: gives the bots of this map the roles of TeamPlan::roles
+        // (RoleAssigner), out of combat only, and tells the leader.
+        void ApplyRoles(PartyBotAI* bot);
 
         uint32 m_groupId;
         uint32 m_mapId;

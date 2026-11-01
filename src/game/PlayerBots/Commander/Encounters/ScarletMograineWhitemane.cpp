@@ -22,6 +22,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "InstanceData.h"
 #include "Map.h"
@@ -115,7 +116,7 @@ namespace Commander
             m_mograine = mograine->guid;
         if (whitemane)
             m_whitemane = whitemane->guid;
-        PartyMemberFacts const* tank = EncounterHelpers::FindTankBot(world);
+        PartyMemberFacts const* tank = EncounterHelpers::FindTank(world);
         m_tank = tank ? tank->guid : ObjectGuid();
         for (PartyMemberFacts const& m : world.party)
         {
@@ -200,8 +201,13 @@ namespace Commander
         switch (bot->GetRole())
         {
             case ROLE_TANK:
-                ProposeTank(bot, world, out);
+            {
+                // Several tank bots: only the main tank takes the boss (two would taunt it off each other).
+                PartyMemberFacts const* main = Tanks::Main(world, true);
+                if (main && main->guid == bot->me->GetObjectGuid())
+                    ProposeTank(bot, world, out);
                 break;
+            }
             case ROLE_HEALER:
                 ProposeHealer(bot, world, out);
                 break;

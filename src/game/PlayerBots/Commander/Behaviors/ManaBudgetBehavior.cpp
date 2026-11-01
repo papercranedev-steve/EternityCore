@@ -4,6 +4,7 @@
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "Chat.h"
@@ -165,8 +166,10 @@ namespace Commander
         // (the player may be tanking): they keep the higher heal ceiling.
         bool IsTankLike(WorldModel const& world, PartyMemberFacts const& m)
         {
+            if (Tanks::IsTank(m))
+                return true;
             if (m.isBot && !m.isPet)
-                return m.role == ROLE_TANK;
+                return false;
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && e.victim == m.guid)
                     return true;

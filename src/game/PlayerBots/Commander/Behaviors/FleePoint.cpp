@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/FleePoint.h"
 #include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Group.h"
 #include "Map.h"
@@ -29,18 +30,20 @@ namespace Commander
             float score = 0.0f;
         };
 
-        bool IsTank(Player* member)
+        // Perception/Tanks.h when the party's world model is there; else a tank-role bot.
+        bool IsTank(WorldModel const* world, Player* member)
         {
-            if (PartyBotAI* ai = member->AI() ? dynamic_cast<PartyBotAI*>(member->AI()) : nullptr)
-                return ai->GetRole() == ROLE_TANK;
-            return IsTankingForm(member->GetShapeshiftForm()) ||
-                   (member->GetClass() == CLASS_WARRIOR && member->GetShapeshiftForm() == FORM_DEFENSIVESTANCE);
+            if (world)
+                if (PartyMemberFacts const* m = world->FindMember(member->GetObjectGuid()))
+                    return Tanks::IsTank(*m);
+            PartyBotAI* ai = member->AI() ? dynamic_cast<PartyBotAI*>(member->AI()) : nullptr;
+            return ai && ai->GetRole() == ROLE_TANK;
         }
     }
 
 namespace FleePoint
 {
-    bool Find(Player* me, Unit* enemy, float& outX, float& outY, float& outZ)
+    bool Find(Player* me, Unit* enemy, WorldModel const* world, float& outX, float& outY, float& outZ)
     {
         Map* map = me->GetMap();
         Position3 const here = PointOf(me);
@@ -66,7 +69,7 @@ namespace FleePoint
                 centre.x += p.x;
                 centre.y += p.y;
                 ++counted;
-                allies.emplace_back(p, IsTank(m));
+                allies.emplace_back(p, IsTank(world, m));
             }
         }
         if (counted)

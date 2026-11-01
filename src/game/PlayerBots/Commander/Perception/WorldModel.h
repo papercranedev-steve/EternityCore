@@ -10,6 +10,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "RoleCapability.h"
 #include <algorithm>
 #include <vector>
 
@@ -46,7 +47,11 @@ namespace Commander
         bool isBot = false;         // controlled by PartyBotAI
         bool isPet = false;
         bool alive = false;
-        uint8 role = 0;             // CombatBotRoles for bots, ROLE_INVALID (0) for players and pets
+        // CombatBotRoles. Bots: PartyBotAI::m_role. Players: the role they chose, else from
+        // RoleCapability (tank only while no bot tanks), see Perception/Tanks.h. Pets: 0.
+        uint8 role = 0;
+        bool roleLocked = false;    // chosen by the user (bot or player); the "roles" assigner leaves it
+        RoleCapability cap;         // what this member can do (players and bots, not pets)
         uint8 classId = 0;
         float healthPct = 0.0f;
         uint32 health = 0;
@@ -67,8 +72,8 @@ namespace Commander
         bool controlled = false;
         bool charmed = false;       // mind controlled by an enemy: hostile to us, do not attack, dispel
         bool silenced = false;      // can still melee, cannot cast
-        // Set up to tank: warrior in Defensive Stance, druid in (Dire) Bear Form, paladin with
-        // Righteous Fury. Tells a tanking player apart from a healer the enemies ran to.
+        // Set up to tank right now: warrior in Defensive Stance, druid in (Dire) Bear Form,
+        // paladin with Righteous Fury. A state, not who the tanks are (that is `role`, Tanks.h).
         bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
 

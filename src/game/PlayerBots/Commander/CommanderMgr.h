@@ -11,6 +11,7 @@
 #define MANGOS_COMMANDER_MGR_H
 
 #include "Common.h"
+#include "ObjectGuid.h"
 #include "Commander/Registry.h"
 #include <atomic>
 #include <chrono>
@@ -72,6 +73,12 @@ namespace Commander
         // Debug commands: the commander of this player's party on the player's map, if any.
         std::shared_ptr<PartyCommander> FindCommander(Player const* member);
 
+        // Role a player chose for himself (`.partybot setrole <role> <own name>`, the addon's role
+        // button on your own character). ROLE_INVALID (0) = none: talents and gear decide
+        // (RoleCapability). Runtime only, any thread.
+        void SetPlayerRole(ObjectGuid player, uint8 role);
+        uint8 GetPlayerRole(ObjectGuid player) const;
+
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);
         TickStats GetStats() const;
@@ -97,6 +104,9 @@ namespace Commander
         std::mutex m_commandersLock;
         std::map<Key, Entry> m_commanders;
         uint32 m_lastSweepMs = 0;
+
+        mutable std::mutex m_playerRolesLock;
+        std::map<uint64, uint8> m_playerRoles;      // player guid -> CombatBotRoles
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

@@ -5,6 +5,7 @@
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/ProfileStore.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -33,54 +34,29 @@ namespace Commander
             return p;
         }
 
-        // Somebody whose job is holding enemies: a tank bot, or the player (may be tanking).
-        // Pets: see IsHeldByHolder.
+        // Somebody whose job is holding enemies: a tank (Tanks.h), or the player (whatever his
+        // role, damage dealers do not pull an enemy off him onto themselves). Pets: see IsHeldByHolder.
         bool IsHolder(PartyMemberFacts const& m)
         {
             if (m.isPet)
                 return false;
-            return !m.isBot || m.role == ROLE_TANK;
+            return !m.isBot || Tanks::IsTank(m);
         }
 
-        PartyMemberFacts const* FindTankBot(WorldModel const& world)
-        {
-            for (PartyMemberFacts const& m : world.party)
-                if (m.isBot && !m.isPet && m.alive && m.role == ROLE_TANK)
-                    return &m;
-            return nullptr;
-        }
-
-        // A player (not a bot) who is tanking: set up to tank (PartyMemberFacts::tankStance) and
-        // the victim of more than half of the acting enemies fighting us. The player's role is
-        // not known; the stance keeps a healer the enemies ran to from counting.
-        bool IsTankingPlayer(WorldModel const& world, PartyMemberFacts const& m)
-        {
-            if (m.isBot || m.isPet || !m.alive || !m.tankStance)
-                return false;
-            uint32 acting = 0;
-            uint32 onHim = 0;
-            for (EnemyFacts const& e : world.enemies)
-            {
-                if (e.onAllyOnly || !e.acting || e.crowdControlled)
-                    continue;
-                ++acting;
-                if (e.victim == m.guid)
-                    ++onHim;
-            }
-            return onHim > 0 && 2 * onHim > acting;
-        }
-
-        // Somebody holds the enemies for the party: an alive tank bot, a tank-like ally, or a
-        // player who is tanking (IsTankingPlayer).
+        // Somebody holds the enemies for the party: an alive tank (bot or player) or a tank-like
+        // ally. Before 2026-11-01 a player counted only in a tank stance while holding more than
+        // half of the enemies; the role (Tanks.h) replaces that guess.
         bool HasTank(WorldModel const& world)
         {
-            if (FindTankBot(world))
-                return true;
-            for (AllyFacts const& a : world.allies)
-                if (a.tankLike)
-                    return true;
-            for (PartyMemberFacts const& m : world.party)
-                if (IsTankingPlayer(world, m))
+            return Tanks::Any(world);
+        }
+
+        // Another alive tank bot that can act is nearer to `pos` than `distance` - TANK_SHARE_MARGIN.
+        bool CloserTankBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance)
+        {
+            for (PartyMemberFacts const* t : Tanks::Alive(world, true))
+                if (t->guid != self && t->CanAct() &&
+                    PackResolver::Distance(t->pos, pos) < distance - ThreatBehavior::TANK_SHARE_MARGIN)
                     return true;
             return false;
         }
@@ -193,8 +169,10 @@ namespace Commander
         // ManaBudgetBehavior's IsTankLike): tank bots, players or pets being hit right now.
         bool BudgetTankLike(WorldModel const& world, PartyMemberFacts const& m)
         {
+            if (Tanks::IsTank(m))
+                return true;
             if (m.isBot && !m.isPet)
-                return m.role == ROLE_TANK;
+                return false;
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && e.victim == m.guid)
                     return true;
@@ -442,8 +420,8 @@ namespace Commander
             // Enemies on pets are loose too: with a tank around, the pet's taunt autocast is off
             // and it moves to a safe enemy (ProposePet), so nobody else takes it back. A few hits
             // on a pet cost little: the value scoring below decides.
-            if (victim->isBot && victim->role == ROLE_TANK)
-                continue;   // another tank holds it
+            if (Tanks::IsTank(*victim))
+                continue;   // another tank (bot or player) holds it
             // Except a pet that taunts by itself (the player's pet, or a bot pet before its
             // autocast was switched off): it growls the enemy back, and taunting or switching
             // against it is a war the tank loses its main target in.
@@ -459,6 +437,10 @@ namespace Commander
             if (!unit || !me->IsWithinDistInMap(unit, TANK_REACH_RANGE) || !me->IsWithinLOSInMap(unit))
                 continue;
             float const distance = me->GetDistance(unit);
+            // Several tank bots: the nearest one takes a loose enemy, so two tanks do not run
+            // after the same one and leave the rest (the others pick up their own).
+            if (CloserTankBot(world, self, e.pos, distance))
+                continue;
             // Walking over: lost time, and the enemies we hold follow us away from the healer.
             float const walkCost = Value::LostAction(world, *myFacts,
                 std::max(0.0f, distance - MELEE_REACH) / RUN_YARDS_PER_SEC);
@@ -657,14 +639,8 @@ namespace Commander
 
         // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
         // again without one. Proposed only while it differs, so once per change.
+        // The tank roles do not flip mid-fight (Tanks.h), so no stance-based hysteresis is needed.
         bool const tank = HasTank(world);
-        // On again only when nobody is set up to tank: a tanking player is seen only while most
-        // enemies hit him, and switching on whenever that dips mid-fight would flip it back and
-        // forth. The stance rarely changes in a fight; a damage dealing warrior lets it come back.
-        bool maybeTankPlayer = false;
-        for (PartyMemberFacts const& m : world.party)
-            if (!m.isBot && !m.isPet && m.alive && m.tankStance)
-                maybeTankPlayer = true;
         std::vector<SpellEntry const*> taunts;
         PetTauntSpells(pet, taunts);
         for (SpellEntry const* spell : taunts)
@@ -672,7 +648,7 @@ namespace Commander
             bool const autocast = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) !=
                                   pet->m_autospells.end();
             bool const turnOff = autocast && tank;
-            bool const turnOn = !autocast && !tank && !maybeTankPlayer;
+            bool const turnOn = !autocast && !tank;
             if (!turnOff && !turnOn)
                 continue;
             Proposal p = MakeProposal(ProposalTier::Assigned,
@@ -696,7 +672,7 @@ namespace Commander
         if (!e || e->crowdControlled || !e->acting || e->victim.IsEmpty())
             return;
 
-        PartyMemberFacts const* tankBot = FindTankBot(world);
+        PartyMemberFacts const* tankBot = Tanks::Main(world, true);
 
         // Idle pet in combat (after a PetFollow below, or never sent): nothing in the rotations
         // sends it in again during a fight (only their out of combat parts do, and PetAI only

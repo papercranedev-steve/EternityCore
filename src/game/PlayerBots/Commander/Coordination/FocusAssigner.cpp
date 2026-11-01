@@ -8,6 +8,7 @@
 #include "Commander/Perception/CreatureProfile.h"
 #include "Commander/Perception/SpellProfile.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/Tanks.h"
 #include "Creature.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -98,8 +99,9 @@ namespace Commander
 
         // Judged on facts only (simple version, see design doc "limits"):
         //  - melee off and a self-destruct spell in its profile: walks up and explodes (scenario 8).
-        //  - a summon whose victim is a bot that is not a tank: an add running at the healer or
-        //    a damage dealer. Players' roles are unknown and pets take a few hits: not counted.
+        //  - a summon whose victim is a member that is not a tank (Perception/Tanks.h; players
+        //    too since their role is known): an add running at the healer or a damage dealer.
+        //    Pets take a few hits: not counted.
         bool NeedsIntercept(WorldModel const& world, EnemyFacts const& e, InterceptNeed& out)
         {
             if (!e.acting || e.crowdControlled || !e.health)
@@ -118,7 +120,7 @@ namespace Commander
                     return true;
                 }
             }
-            if (e.summoned && victim && victim->isBot && !victim->isPet && victim->role != ROLE_TANK)
+            if (e.summoned && victim && !victim->isPet && !Tanks::IsTank(*victim))
             {
                 out.reason = "summon on non-tank";
                 float const horizon = std::min(FocusAssigner::ONE_OFF_HORIZON_SEC, Value::EnemyTimeToDie(world, e));

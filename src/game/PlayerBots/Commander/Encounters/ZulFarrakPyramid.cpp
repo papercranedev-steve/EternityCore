@@ -247,7 +247,7 @@ namespace Commander
         if (!HoldsTheStairs())
             return;     // wave 3: FocusAssigner (the Shadowpriest's heals are scored there)
 
-        PartyMemberFacts const* tank = EncounterHelpers::FindTankBot(world);
+        PartyMemberFacts const* tank = EncounterHelpers::FindTank(world);
         auto intercepted = [&plan](ObjectGuid guid)
         {
             return std::any_of(plan.intercepts.begin(), plan.intercepts.end(),

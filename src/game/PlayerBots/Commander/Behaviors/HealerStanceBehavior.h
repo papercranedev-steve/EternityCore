@@ -10,8 +10,9 @@
  * Now, while this module is on, PartyBotAI does not follow the leader with a healer in combat
  * (PartyBotAI::HasCombatStance); this module moves it instead.
  *
- * Anchor (who to stay with): the tank bot; else a member in a tank stance; else the member most
- * enemies are hitting; else the party leader.
+ * Anchor (who to stay with): a tank (Perception/Tanks.h, bot or player; with several, the one
+ * most enemies hit); else the member most enemies are hitting; else the party leader. Other
+ * tanks within heal range of a spot count TANK_COVER_MULT members in its order.
  *
  * When to move (checked every tick, nothing otherwise):
  *  - the anchor is farther than HEAL_RANGE or out of line of sight ("tank out of reach"), or
@@ -74,6 +75,7 @@ namespace Commander
         static constexpr float ENEMY_SCAN = 30.0f;          // enemies this close to the anchor set "behind"
 
         static constexpr float COVER_WEIGHT = 4.0f;
+        static constexpr float TANK_COVER_MULT = 3.0f;      // another tank in range counts this many members
         static constexpr float GAP_WEIGHT = 0.5f;
         static constexpr float GAP_CAP = 20.0f;
 

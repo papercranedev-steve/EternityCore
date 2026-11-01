@@ -1,6 +1,7 @@
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ThreatView.h"
+#include "Commander/Perception/Tanks.h"
 #include "SharedDefines.h"
 #include <algorithm>
 
@@ -27,7 +28,7 @@ namespace Value
     {
         if (member.isBot && member.role == ROLE_HEALER)
             return DEATH_PENALTY_HEALER;
-        if (member.isBot && member.role == ROLE_TANK)
+        if (Tanks::IsTank(member))      // bots and players (Tanks.h)
             return DEATH_PENALTY_TANK;
         return DEATH_PENALTY_OTHER;
     }

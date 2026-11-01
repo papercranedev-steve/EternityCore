@@ -87,7 +87,8 @@ public:
     void SendAreaTriggerPacket(uint32 areaTriggerId);
     void ActivateNearbyAreaTrigger();
 
-    void AutoAssignRole();
+    // Virtual: PartyBotAI picks from RoleCapability (talents, gear); battle and population bots keep this.
+    virtual void AutoAssignRole();
     void PopulateSpellData();
     void ResetSpellData();
     void AddAllSpellReagents();

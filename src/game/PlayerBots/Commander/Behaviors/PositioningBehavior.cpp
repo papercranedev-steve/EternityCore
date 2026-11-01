@@ -2,6 +2,7 @@
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -91,7 +92,7 @@ namespace Commander
             {
                 if (m.isPet || !m.alive || m.guid == self)
                     continue;
-                float score = (m.isBot && m.role == ROLE_TANK) ? 5.0f : 0.0f;
+                float score = Tanks::IsTank(m) ? 5.0f : 0.0f;
                 for (EnemyFacts const& e : world.enemies)
                     if (e.acting && e.victim == m.guid)
                         score += 10.0f;

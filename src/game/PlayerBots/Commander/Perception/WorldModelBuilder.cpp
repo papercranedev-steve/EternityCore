@@ -1,6 +1,9 @@
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/Tanks.h"
+#include "Commander/CommanderMgr.h"
+#include "RoleCapability.h"
 #include "PartyBotAI.h"
 #include "DBCStores.h"
 #include "Creature.h"
@@ -66,6 +69,32 @@ namespace WorldModelBuilder
             ShapeshiftForm const form = unit->GetShapeshiftForm();
             f.tankStance = form == FORM_DEFENSIVESTANCE || form == FORM_BEAR || form == FORM_DIREBEAR ||
                            (f.classId == CLASS_PALADIN && unit->HasAura(SPELL_RIGHTEOUS_FURY));
+        }
+
+        // Players: the role they chose, else from talents and gear. Tank only while no bot is a
+        // tank: a warrior leveling with a shield scores as tank-capable, but with a tank bot in
+        // the party he is not tanking, and counting him as a tank would stop the bot from taking
+        // enemies off him (Tanks.h).
+        void FillPlayerRoles(WorldModel& world)
+        {
+            bool botTank = false;
+            for (PartyMemberFacts const& m : world.party)
+                if (m.isBot && !m.isPet && m.role == ROLE_TANK)
+                    botTank = true;
+            for (PartyMemberFacts& m : world.party)
+            {
+                if (m.isBot || m.isPet)
+                    continue;
+                uint8 const chosen = sCommanderMgr.GetPlayerRole(m.guid);
+                m.roleLocked = chosen != ROLE_INVALID;
+                if (m.roleLocked)
+                    m.role = chosen;
+                else
+                {
+                    CombatBotRoles const best = m.cap.Best();
+                    m.role = uint8((best == ROLE_TANK && botTank) ? m.cap.BestNonTank() : best);
+                }
+            }
         }
 
         // Interrupt-cast effects lock the school for the spell's duration; stuns and silences don't.
@@ -404,12 +433,14 @@ namespace WorldModelBuilder
 
             PartyMemberFacts f;
             FillUnitFacts(member, f);
+            f.cap = RoleCapabilities::Assess(member);
             if (member->AI())
             {
                 if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
                 {
                     f.isBot = true;
                     f.role = uint8(ai->m_role);
+                    f.roleLocked = ai->IsRoleLocked();
                     if (member->IsAlive())
                         FillInterrupts(ai, f);
                     if (f.CanAct() && HasRangedInterrupt(f))
@@ -432,6 +463,8 @@ namespace WorldModelBuilder
                 }
             }
         }
+
+        FillPlayerRoles(world);
 
         // Every creature that has one of us on its threat list.
         std::vector<Creature*> enemies;
@@ -479,7 +512,7 @@ namespace WorldModelBuilder
             if (m.isPet)
                 continue;
             sturdiest = std::max(sturdiest, m.maxHealth);
-            if (m.isBot && m.role == ROLE_TANK)
+            if (Tanks::IsTank(m))
                 tankMaxHealth = std::max(tankMaxHealth, m.maxHealth);
         }
         if (!tankMaxHealth)

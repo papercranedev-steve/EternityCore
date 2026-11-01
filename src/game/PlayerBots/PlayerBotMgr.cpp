@@ -21,6 +21,8 @@
 #include "Bag.h"
 #include "QuestDef.h"
 #include "Population/PopulationMgr.h"
+#include "RoleCapability.h"
+#include "Commander/CommanderMgr.h"
 
 #include <sstream>
 #include <cstring>
@@ -1095,7 +1097,8 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
     pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
 
     PartyBotAI* pAI = new PartyBotAI(pPlayer, pPlayer->GetMapId(), pPlayer->GetMap()->GetInstanceId(), x, y, z, pPlayer->GetOrientation());
-    pAI->m_role = role; // ROLE_INVALID -> OnPlayerLogin auto assigns
+    pAI->m_role = role; // ROLE_INVALID -> auto assigned in the first UpdateAI
+    pAI->m_roleLocked = role != ROLE_INVALID;
 
     if (!sPlayerBotMgr.AddBot(guid, false, pAI, true))
     {
@@ -1122,6 +1125,31 @@ bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
     bool const byName = args && *args;
     Player* pTarget = nullptr;
     std::string name;
+
+    // Your own character (the addon's role button on "me"): the Commander's party assignment
+    // and tank checks use it instead of guessing from talents. "auto" removes the choice.
+    Player* pUser = m_session ? m_session->GetPlayer() : nullptr;
+    if (pUser && byName)
+    {
+        std::string self = args;
+        while (!self.empty() && self.back() == ' ')
+            self.pop_back();
+        if (normalizePlayerName(self) && self == pUser->GetName())
+        {
+            CombatBotRoles role = ROLE_INVALID;
+            if (!ParsePartyBotRole(roleStr, pUser->GetClass(), role))
+            {
+                PSendSysMessage("PBERR;%s;usage", self.c_str());
+                SetSentErrorMessage(true);
+                return false;
+            }
+            sCommanderMgr.SetPlayerRole(pUser->GetObjectGuid(), role);
+            CombatBotRoles const actual = role != ROLE_INVALID ? role : RoleCapabilities::Assess(pUser).Best();
+            PSendSysMessage("PBOK;%s;role;%s;%s", self.c_str(), roleStr.c_str(), PartyBotRoleName(actual));
+            return true;
+        }
+    }
+
     if (byName)
     {
         pTarget = ExtractPartyBotTarget(&args, name);
@@ -1154,11 +1182,10 @@ bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
     {
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
-            pAI->m_role = role;
-            if (role == ROLE_INVALID)
-                pAI->AutoAssignRole();
+            pAI->SetRole(role);     // auto: unlocked, the Commander party assignment may change it
             pAI->ResetSpellData();
             pAI->PopulateSpellData();
+            pAI->m_resetSpellData = false;
             if (byName)
                 PSendSysMessage("PBOK;%s;role;%s;%s", name.c_str(), roleStr.c_str(), PartyBotRoleName(pAI->m_role));
             else
@@ -2626,6 +2653,14 @@ bool ChatHandler::HandlePartyBotCharsCommand(char* args)
 
             if (pAI && pChar->IsInWorld())
                 role = PartyBotRoleName(pAI->m_role);
+            else if (pChar == pUser && pChar->IsInWorld())
+            {
+                // Your own role: the one you chose, else what the talents and gear say.
+                CombatBotRoles own = CombatBotRoles(sCommanderMgr.GetPlayerRole(pChar->GetObjectGuid()));
+                if (own == ROLE_INVALID)
+                    own = RoleCapabilities::Assess(pChar).Best();
+                role = PartyBotRoleName(own);
+            }
         }
 
         PSendSysMessage("PBCHR;%u;C;%u;%u;%u;%s;%s;%s", accountId, data->uiRace, data->uiClass, level, state, role, data->sName.c_str());

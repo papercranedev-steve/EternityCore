@@ -790,10 +790,7 @@ namespace DevConsole
         CombatBotRoles role;
         if (!ParseRole(luaL_checkstring(L, 2), role))
             return luaL_error(L, "role must be tank, healer, meleedps, rangedps or auto");
-        ai->m_role = role;
-        if (role == ROLE_INVALID)
-            ai->AutoAssignRole();
-        ai->m_resetSpellData = true;
+        ai->SetRole(role);      // auto: unlocked, the Commander party assignment may change it
         return 0;
     }
     static int U_removebot(lua_State* L)

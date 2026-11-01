@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/FocusBehavior.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Coordination/FocusAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -20,7 +21,7 @@ namespace Commander
         {
             if (m.isPet)
                 return false;
-            return !m.isBot || m.role == ROLE_TANK;
+            return !m.isBot || Tanks::IsTank(m);
         }
 
         // A player focus mark the bot is configured to follow (`.partybot focusmark`) is on a

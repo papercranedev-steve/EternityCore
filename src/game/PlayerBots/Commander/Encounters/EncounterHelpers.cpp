@@ -3,6 +3,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include <algorithm>
@@ -24,12 +25,9 @@ namespace EncounterHelpers
         return FindEnemyByEntry(world, entry) != nullptr;
     }
 
-    PartyMemberFacts const* FindTankBot(WorldModel const& world)
+    PartyMemberFacts const* FindTank(WorldModel const& world)
     {
-        for (PartyMemberFacts const& m : world.party)
-            if (m.isBot && !m.isPet && m.alive && m.role == ROLE_TANK)
-                return &m;
-        return nullptr;
+        return Tanks::Main(world);
     }
 
     PartyMemberFacts const* FindHolder(WorldModel const& world, EnemyFacts const* enemy)
@@ -38,7 +36,7 @@ namespace EncounterHelpers
             if (PartyMemberFacts const* v = world.FindMember(enemy->victim))
                 if (!v->isPet && v->alive)
                     return v;
-        return FindTankBot(world);
+        return FindTank(world);
     }
 
     PartyMemberFacts const* FindLowestManaHealer(WorldModel const& world)

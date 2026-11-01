@@ -183,6 +183,18 @@ namespace
         Map* map = player->GetMap();
         handler->PSendSysMessage("Team plan v%u", plan.version);
 
+        // Roles (Perception/Tanks.h, RoleAssigner): what each member plays and can do.
+        handler->SendSysMessage("Roles (tank / heal / melee / ranged):");
+        for (Commander::PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet)
+                continue;
+            static char const* const names[] = { "auto", "melee", "ranged", "tank", "healer" };
+            char const* role = m.role < sizeof(names) / sizeof(names[0]) ? names[m.role] : "?";
+            handler->PSendSysMessage("    %s: %s%s%s  %.2f / %.2f / %.2f / %.2f", NameOf(map, m.guid).c_str(), role,
+                m.roleLocked ? " (locked)" : "", m.isBot ? "" : " (player)", m.cap.tank, m.cap.heal, m.cap.melee, m.cap.ranged);
+        }
+
         handler->SendSysMessage("Interrupters:");
         for (Commander::PartyMemberFacts const& m : world.party)
         {
