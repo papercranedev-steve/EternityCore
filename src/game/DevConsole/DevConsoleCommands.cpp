@@ -72,20 +72,10 @@ bool ChatHandler::HandleScenarioCommand(char* args)
         return false;
     }
 
-    std::string account = m_session->GetUsername();
-    std::string allowed = sDevConsole.GetScenarioAccount();
-    auto equalsNoCase = [](std::string const& a, std::string const& b)
+    if (!sDevConsole.IsScenarioAccount(m_session->GetUsername()))
     {
-        if (a.size() != b.size())
-            return false;
-        for (size_t i = 0; i < a.size(); ++i)
-            if (tolower((unsigned char)a[i]) != tolower((unsigned char)b[i]))
-                return false;
-        return true;
-    };
-    if (allowed.empty() || !equalsNoCase(account, allowed))
-    {
-        PSendSysMessage("PBERR;;scenario;Scenarios change level and gear, only account %s may use them.", allowed.c_str());
+        PSendSysMessage("PBERR;;scenario;Scenarios change level and gear, only account %s may use them.",
+            sDevConsole.GetScenarioAccount().c_str());
         SetSentErrorMessage(true);
         return false;
     }

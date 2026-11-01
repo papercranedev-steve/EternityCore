@@ -92,11 +92,34 @@ function filter(list, fn)
     return out
 end
 
--- The first online non-bot player, handy when only one person plays.
+-- The first online player with a client (not a party bot, not headless), handy when only one person plays.
 function me()
     for _, p in ipairs(players()) do
-        if not p:isbot() then return p end
+        if not p:isbot() and not p:headless() then return p end
     end
+end
+
+-- The first character logged in with login(name), without a client.
+function puppet()
+    for _, p in ipairs(players()) do
+        if p:headless() then return p end
+    end
+end
+
+-- Ranged pull spells a player may know, tried in this order.
+PULL_SPELLS = { "Auto Shot", "Shoot Bow", "Shoot Gun", "Shoot Crossbow", "Throw", "Shoot" }
+
+-- pull(u, target): open on a mob like a player would. Uses the first ranged pull spell that
+-- starts (needs a ranged weapon / wand), otherwise runs in and auto attacks.
+-- Returns the spell name used, or "melee".
+function pull(u, target)
+    local known = {}
+    for _, s in ipairs(u:spells()) do known[s.name] = true end
+    for _, name in ipairs(PULL_SPELLS) do
+        if known[name] and u:use(name, target) then return name end
+    end
+    if not u:attack(target) then error("cannot attack " .. target:name()) end
+    return "melee"
 end
 
 -- Enemies in combat with anyone of the player's group (within radius, default 60).

@@ -33,6 +33,11 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Commander/BotDirectives.h"
+#include "DevConsole/HeadlessPlayerAI.h"
+#include "DevConsole/CombatEvents.h"
+#include "Packets/Spell.h"
+#include "MotionMaster.h"
+#include "MoveSpline.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -240,6 +245,7 @@ namespace DevConsole
     static int U_race(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetRace()); return 1; }
     static int U_isplayer(lua_State* L) { lua_pushboolean(L, LuaUnit_Check(L, 1)->IsPlayer()); return 1; }
     static int U_isbot(lua_State* L) { lua_pushboolean(L, GetPartyBotAI(LuaUnit_Check(L, 1)) != nullptr); return 1; }
+    static int U_headless(lua_State* L) { lua_pushboolean(L, GetHeadlessAI(LuaUnit_Check(L, 1)->ToPlayer()) != nullptr); return 1; }
     static int U_alive(lua_State* L) { lua_pushboolean(L, LuaUnit_Check(L, 1)->IsAlive()); return 1; }
     static int U_incombat(lua_State* L) { lua_pushboolean(L, LuaUnit_Check(L, 1)->IsInCombat()); return 1; }
     static int U_hp(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetHealth()); return 1; }
@@ -267,7 +273,13 @@ namespace DevConsole
         lua_pushboolean(L, u->IsPlayer() && static_cast<Player*>(u)->IsBeingTeleported());
         return 1;
     }
-    static int U_moving(lua_State* L) { lua_pushboolean(L, LuaUnit_Check(L, 1)->IsMoving()); return 1; }
+    // movement flags (client or AI) or a server spline still running (moveto, chase)
+    static int U_moving(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        lua_pushboolean(L, u->IsMoving() || !u->movespline->Finalized());
+        return 1;
+    }
     static int U_pos(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -781,6 +793,203 @@ namespace DevConsole
         p->SetSelectionGuid(t ? t->GetObjectGuid() : ObjectGuid());
         return 0;
     }
+    // Movement and melee for headless characters (login()). Clients and bot AIs move their own
+    // characters, so these refuse other units.
+    static Player* CheckHeadless(lua_State* L, int idx)
+    {
+        Player* p = CheckPlayer(L, idx);
+        if (!GetHeadlessAI(p))
+            luaL_error(L, "%s is not logged in headless", p->GetName());
+        return p;
+    }
+    // u:moveto(x, y, z [, walk]) runs there along a path. Poll u:moving() / u:pos().
+    static int U_moveto(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        float x = float(luaL_checknumber(L, 2));
+        float y = float(luaL_checknumber(L, 3));
+        float z = float(luaL_checknumber(L, 4));
+        uint32 options = MOVE_PATHFINDING | (lua_toboolean(L, 5) ? MOVE_WALK_MODE : MOVE_RUN_MODE);
+        p->GetMotionMaster()->Clear(false, true);
+        p->GetMotionMaster()->MovePoint(0, x, y, z, options);
+        return 0;
+    }
+    // u:attack(target) -> bool: select, start auto attack and chase into melee range
+    static int U_attack(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        Unit* t = LuaUnit_Check(L, 2);
+        p->SetSelectionGuid(t->GetObjectGuid());
+        if (!p->Attack(t, true))
+        {
+            lua_pushboolean(L, 0);
+            return 1;
+        }
+        p->GetMotionMaster()->Clear(false, true);
+        p->GetMotionMaster()->MoveChase(t);
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    // u:stop() stops attacking and moving
+    static int U_stop(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        p->AttackStop();
+        p->GetMotionMaster()->Clear(false, true);
+        p->GetMotionMaster()->MoveIdle();
+        p->StopMoving();
+        return 0;
+    }
+    // Spell id from an id or a spellbook name ("Heroic Strike" -> highest known rank), 0 if not known.
+    static uint32 FindActiveSpell(Player* p, lua_State* L, int idx)
+    {
+        if (lua_type(L, idx) == LUA_TNUMBER)
+        {
+            uint32 id = uint32(lua_tointeger(L, idx));
+            return p->HasActiveSpell(id) ? id : 0;
+        }
+        std::string name = luaL_checkstring(L, idx);
+        std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+        uint32 best = 0;
+        uint8 bestRank = 0;
+        for (auto const& itr : p->GetSpellMap())
+        {
+            if (itr.second.state == PLAYERSPELL_REMOVED || itr.second.disabled || !itr.second.active)
+                continue;
+            SpellEntry const* e = sSpellMgr.GetSpellEntry(itr.first);
+            if (!e || e->IsPassiveSpell())
+                continue;
+            std::string n = e->SpellName[0];
+            std::transform(n.begin(), n.end(), n.begin(), ::tolower);
+            if (n != name)
+                continue;
+            uint8 rank = sSpellMgr.GetSpellRank(itr.first);
+            if (!best || rank > bestRank)
+            {
+                best = itr.first;
+                bestRank = rank;
+            }
+        }
+        return best;
+    }
+    // u:use(spell [, target]) -> ok, reason. spell: id or spellbook name (highest rank).
+    // Casts like the client does (CMSG_CAST_SPELL handler): spellbook, cost, cooldown, GCD,
+    // range, LOS and facing are checked. The caster turns to the target first.
+    // Returns true when the cast started; false plus the SpellCastResult name (or code) when refused.
+    static int U_use(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        HeadlessPlayerAI* ai = GetHeadlessAI(p);
+        uint32 spellId = FindActiveSpell(p, L, 2);
+        if (!spellId)
+            return luaL_error(L, "%s does not know spell %s", p->GetName(), luaL_tolstring(L, 2, nullptr));
+        Unit* target = LuaUnit_Opt(L, 3);
+
+        WorldPackets::Spell::CastSpell packet;
+        packet.spellId = spellId;
+        if (target)
+        {
+            packet.targets.setUnitTarget(target);
+            p->SetSelectionGuid(target->GetObjectGuid());
+            if (target != p)
+                p->SetFacingToObject(target);
+        }
+        else
+            packet.targets.setUnitTarget(p);
+
+        ai->ClearLastCast();
+        p->GetSession()->HandleCastSpellOpcode(packet);
+        HeadlessCastResult const& r = ai->GetLastCast();
+        if (r.timeMs && r.spellId == spellId && !r.ok)
+        {
+            lua_pushboolean(L, 0);
+            if (char const* name = CastFailReasonName(r.reason))
+                lua_pushstring(L, name);
+            else
+                lua_pushinteger(L, r.reason);
+            return 2;
+        }
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    // u:lastcast() -> {spell, ok, reason, age} last SMSG_CAST_RESULT the server sent, or nil
+    static int U_lastcast(lua_State* L)
+    {
+        HeadlessPlayerAI* ai = GetHeadlessAI(CheckHeadless(L, 1));
+        HeadlessCastResult const& r = ai->GetLastCast();
+        if (!r.timeMs)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        lua_createtable(L, 0, 4);
+        lua_pushinteger(L, r.spellId); lua_setfield(L, -2, "spell");
+        lua_pushboolean(L, r.ok); lua_setfield(L, -2, "ok");
+        if (!r.ok)
+        {
+            if (char const* name = CastFailReasonName(r.reason))
+                lua_pushstring(L, name);
+            else
+                lua_pushinteger(L, r.reason);
+            lua_setfield(L, -2, "reason");
+        }
+        lua_pushinteger(L, WorldTimer::getMSTimeDiffToNow(r.timeMs)); lua_setfield(L, -2, "age");
+        return 1;
+    }
+    // u:cancelcast() interrupts the current cast or channel, like pressing Escape
+    static int U_cancelcast(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        p->InterruptNonMeleeSpells(false);
+        return 0;
+    }
+    // u:face(target | orientation)
+    static int U_face(lua_State* L)
+    {
+        Player* p = CheckHeadless(L, 1);
+        if (lua_type(L, 2) == LUA_TNUMBER)
+            p->SetFacingTo(float(lua_tonumber(L, 2)));
+        else
+            p->SetFacingToObject(LuaUnit_Check(L, 2));
+        return 0;
+    }
+    // u:spells([namePart]) -> {{id, name, rank}, ...} castable spellbook spells, highest rank first
+    static int U_spells(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        std::string part = luaL_optstring(L, 2, "");
+        std::transform(part.begin(), part.end(), part.begin(), ::tolower);
+        struct Row { uint32 id; std::string name; uint8 rank; };
+        std::vector<Row> rows;
+        for (auto const& itr : p->GetSpellMap())
+        {
+            if (itr.second.state == PLAYERSPELL_REMOVED || itr.second.disabled || !itr.second.active)
+                continue;
+            SpellEntry const* e = sSpellMgr.GetSpellEntry(itr.first);
+            if (!e || e->IsPassiveSpell())
+                continue;
+            std::string lower = e->SpellName[0];
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            if (!part.empty() && lower.find(part) == std::string::npos)
+                continue;
+            rows.push_back({ itr.first, e->SpellName[0], sSpellMgr.GetSpellRank(itr.first) });
+        }
+        std::sort(rows.begin(), rows.end(), [](Row const& a, Row const& b)
+        {
+            return a.name != b.name ? a.name < b.name : a.rank > b.rank;
+        });
+        lua_createtable(L, int(rows.size()), 0);
+        lua_Integer i = 0;
+        for (Row const& r : rows)
+        {
+            lua_createtable(L, 0, 3);
+            lua_pushinteger(L, r.id); lua_setfield(L, -2, "id");
+            lua_pushstring(L, r.name.c_str()); lua_setfield(L, -2, "name");
+            lua_pushinteger(L, r.rank); lua_setfield(L, -2, "rank");
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
     static int U_setrole(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -889,7 +1098,7 @@ namespace DevConsole
         static luaL_Reg const methods[] = {
             { "exists", U_exists }, { "guid", U_guid }, { "name", U_name }, { "entry", U_entry },
             { "level", U_level }, { "class", U_class }, { "race", U_race }, { "isplayer", U_isplayer },
-            { "isbot", U_isbot }, { "alive", U_alive }, { "incombat", U_incombat }, { "hp", U_hp },
+            { "isbot", U_isbot }, { "headless", U_headless }, { "alive", U_alive }, { "incombat", U_incombat }, { "hp", U_hp },
             { "maxhp", U_maxhp }, { "hppct", U_hppct }, { "power", U_power }, { "maxpower", U_maxpower },
             { "powertype", U_powertype }, { "faction", U_faction }, { "moving", U_moving }, { "pos", U_pos },
             { "teleporting", U_teleporting },
@@ -906,6 +1115,9 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
+            { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
+            { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
+            { "face", U_face }, { "spells", U_spells },
             { nullptr, nullptr }
         };
 

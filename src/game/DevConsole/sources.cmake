@@ -14,6 +14,8 @@ set(DEVCONSOLE_SRCS
   ${DEVCONSOLE_DIR}/CombatEvents.h
   ${DEVCONSOLE_DIR}/CombatEvents.cpp
   ${DEVCONSOLE_DIR}/DevConsoleCommands.cpp
+  ${DEVCONSOLE_DIR}/HeadlessPlayerAI.h
+  ${DEVCONSOLE_DIR}/HeadlessPlayerAI.cpp
 )
 
 target_sources(game PRIVATE ${DEVCONSOLE_SRCS})

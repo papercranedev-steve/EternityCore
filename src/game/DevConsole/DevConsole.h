@@ -16,7 +16,7 @@
  *   DevConsole.InstructionLimit  max Lua instructions per call, default 20000000
  *   DevConsole.TimeLimitMs       max wall time per call, default 2000
  *   DevConsole.MemoryLimitMB     default 256
- *   DevConsole.ScenarioAccount   only this account may use .scenario, default "TEST"
+ *   DevConsole.ScenarioAccount   only this account may use .scenario and login(), default "TEST"
  */
 
 #ifndef MANGOS_DEVCONSOLE_H
@@ -57,6 +57,9 @@ namespace DevConsole
 
             std::string const& GetScriptDir() const { return m_scriptDir; }
             std::string const& GetScenarioAccount() const { return m_scenarioAccount; }
+            // Case-insensitive; false when ScenarioAccount is empty. Scenarios and headless logins
+            // change the character, so they are limited to this account.
+            bool IsScenarioAccount(std::string const& accountName) const;
 
             // used by Lua bindings
             void AppendPrint(std::string const& s);

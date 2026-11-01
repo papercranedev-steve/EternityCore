@@ -263,8 +263,11 @@ void PlayerBotMgr::Update(uint32 diff)
 
                 DeleteBot(iter);
 
+                // A client that logged into the same account has already replaced (and deleted)
+                // the bot session: FindSession returns the client's session then, leave it alone.
                 if (WorldSession* sess = sWorld.FindSession(iter->second->accountId))
-                    sess->LogoutPlayer(m_confAllowSaving);
+                    if (sess->GetBot() == iter->second.get())
+                        sess->LogoutPlayer(m_confAllowSaving);
 
                 iter->second->requestRemoval = false;
 
@@ -289,6 +292,19 @@ void PlayerBotMgr::Update(uint32 diff)
         {
             // This may happen : just wait for the World to add the session.
             ++iter;
+            continue;
+        }
+
+        if (sess->GetBot() != iter->second.get())
+        {
+            // A client logged into the same account before the bot was loaded and replaced its session.
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[PlayerBotMgr] Session of account %u was taken over by a client, bot %u not loaded.",
+                iter->second->accountId, uint32(iter->first));
+            DeleteBot(iter);
+            if (iter->second->customBot)
+                iter = m_bots.erase(iter);
+            else
+                ++iter;
             continue;
         }
 

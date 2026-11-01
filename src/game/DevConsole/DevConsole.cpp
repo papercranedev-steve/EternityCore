@@ -11,6 +11,7 @@
 #include "Player.h"
 #include "Policies/SingletonImp.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 
@@ -37,6 +38,16 @@ namespace DevConsole
         m_memoryLimit = size_t(sConfig.GetIntDefault("DevConsole.MemoryLimitMB", 256)) * 1024u * 1024u;
         while (!m_scriptDir.empty() && (m_scriptDir.back() == '/' || m_scriptDir.back() == '\\'))
             m_scriptDir.pop_back();
+    }
+
+    bool DevConsoleMgr::IsScenarioAccount(std::string const& accountName) const
+    {
+        if (m_scenarioAccount.empty() || accountName.size() != m_scenarioAccount.size())
+            return false;
+        for (size_t i = 0; i < accountName.size(); ++i)
+            if (tolower((unsigned char)accountName[i]) != tolower((unsigned char)m_scenarioAccount[i]))
+                return false;
+        return true;
     }
 
     void* DevConsoleMgr::Alloc(void* ud, void* ptr, size_t osize, size_t nsize)

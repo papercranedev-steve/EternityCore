@@ -12,6 +12,8 @@
  *   premades([classId])            premade gear/spec templates
  *   addbot(leader, class, role, level)  temporary party bot next to the leader
  *   account(player)                account name of a player
+ *   login(name)                    log a character of the scenario account in without a client (async)
+ *   logout(unit)                   log a headless character out (async)
  *   combatlog.enable(bool) / track({units}) / drain() / dropped()
  */
 
@@ -19,6 +21,7 @@
 #include "DevConsole/LuaUnit.h"
 #include "DevConsole/LuaJson.h"
 #include "DevConsole/CombatEvents.h"
+#include "DevConsole/HeadlessPlayerAI.h"
 #include "lua.h"
 #include "lauxlib.h"
 
@@ -262,6 +265,52 @@ namespace DevConsole
         return 1;
     }
 
+    // login(name) -> true; logs a character of the scenario account in without a client.
+    // Asynchronous: poll player(name) until it returns the unit (about one PlayerBot.UpdateMs).
+    static int W_login(lua_State* L)
+    {
+        std::string name = luaL_checkstring(L, 1);
+        if (!normalizePlayerName(name))
+            return luaL_error(L, "bad character name");
+        ObjectGuid guid = sObjectMgr.GetPlayerGuidByName(name);
+        if (guid.IsEmpty())
+            return luaL_error(L, "no character %s", name.c_str());
+
+        uint32 accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+        std::string accountName;
+        if (!accountId || !sAccountMgr.GetName(accountId, accountName) || !sDevConsole.IsScenarioAccount(accountName))
+            return luaL_error(L, "only characters of account %s can log in headless", sDevConsole.GetScenarioAccount().c_str());
+
+        if (sObjectAccessor.FindPlayerNotInWorld(guid))
+            return luaL_error(L, "%s is already online", name.c_str());
+        // the entry of an earlier headless login is removed on the next PlayerBotMgr update
+        if (sPlayerBotMgr.IsPermanentBot(guid.GetCounter()))
+            return luaL_error(L, "%s is still logging out, try again in a few seconds", name.c_str());
+        if (sWorld.FindSession(accountId))
+            return luaL_error(L, "account %s is in use (a client is logged in)", accountName.c_str());
+
+        HeadlessPlayerAI* ai = new HeadlessPlayerAI();
+        if (!sPlayerBotMgr.AddBot(guid.GetCounter(), false, ai, false))
+        {
+            delete ai;
+            return luaL_error(L, "AddBot failed");
+        }
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+
+    // logout(unit) -> true; only for headless characters. Done on the next PlayerBotMgr update.
+    static int W_logout(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        HeadlessPlayerAI* ai = GetHeadlessAI(u->ToPlayer());
+        if (!ai || !ai->botEntry)
+            return luaL_error(L, "%s is not logged in headless", u->GetName());
+        ai->botEntry->requestRemoval = true;
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+
     static int W_account(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -335,6 +384,7 @@ namespace DevConsole
             { "players", W_players }, { "player", W_player }, { "unit", W_unit }, { "cmd", W_cmd },
             { "spell", W_spell }, { "now", W_now }, { "log", W_log }, { "json", W_json },
             { "premades", W_premades }, { "addbot", W_addbot }, { "account", W_account },
+        { "login", W_login }, { "logout", W_logout },
             { nullptr, nullptr }
         };
         lua_pushglobaltable(L);
