@@ -240,7 +240,7 @@ namespace Commander
                 float const cost = Value::LostAction(world, *myFacts, Value::GCD_SEC);
                 for (SpellEntry const* taunt : bot->m_spellListTaunt)
                 {
-                    if (!bot->CanTryToCastSpell(unit, taunt))
+                    if (!bot->CanCastWithStance(unit, taunt))   // Taunt from Battle Stance: after a swap
                         continue;
                     Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Urgent, BotActionType::Cast,
                                                                m_mograine, taunt);
