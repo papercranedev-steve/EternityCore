@@ -66,6 +66,33 @@ public:
     bool IsRoleLocked() const { return m_roleLocked; }
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
+    // PartyBotAI's checks on top of CombatBotBaseAI's (no AoE next to crowd control marks, no
+    // AoE that pulls aggro for non-tanks).
+    bool PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+
+    // Warrior stance swaps (doc 2026-11-01-warrior-tank.md). A spell the current stance does not
+    // allow (Thunder Clap or Mocking Blow in Defensive Stance, Taunt in Battle Stance) is cast
+    // after one swap: the swap this tick, the spell as soon as the stance is up (UpdateAI checks
+    // every frame, ContinueStanceSwap). The rotation swaps back to the home stance afterwards.
+    // The stance spell that allows `pSpellEntry` when the current one does not; nullptr when no
+    // swap is needed or none helps (not a warrior, stance unknown or on cooldown).
+    SpellEntry const* StanceSwapFor(SpellEntry const* pSpellEntry) const;
+    // CanTryToCastSpell now, or right after StanceSwapFor: with the rage Tactical Mastery keeps,
+    // losing at most PB_STANCE_SWAP_MAX_RAGE_LOSS.
+    bool CanCastWithStance(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // Casts now, or starts the swap (SPELL_CAST_OK = swap started, the spell follows).
+    SpellCastResult DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry);
+    // Threat of `pSpellEntry` cast after StanceSwapFor relative to now (Defensive 1.3, others 0.8);
+    // 1 without a swap.
+    float StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const;
+    // Rage kept through a stance swap (Tactical Mastery, as in SpellAuras.cpp HandleAuraModShapeshift).
+    uint32 RageKeptOnStanceSwap() const;
+    static constexpr uint32 PB_STANCE_SWAP_MAX_RAGE_LOSS = 100;   // 10 rage
+    static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
+    // Tank warrior rotation (UpdateInCombatAI_WarriorTank).
+    static constexpr float PB_SHIELD_BLOCK_HEALTH_PCT = 80.0f;    // Shield Block below this, or 2+ melee attackers
+    static constexpr uint32 PB_TANK_RAGE_DUMP = 300;               // Heroic Strike / Cleave above 30 rage
+
     Player* GetPartyLeader() const;
     bool AttackStart(Unit* pVictim);
     Unit* SelectAttackTarget(Player* pLeader) const;
@@ -101,6 +128,12 @@ public:
     void UpdateOutOfCombatAI_Warlock() final;
     void UpdateInCombatAI_Warrior() final;
     void UpdateOutOfCombatAI_Warrior() final;
+    // Tank role warrior in combat: Defensive Stance, threat rotation (UpdateInCombatAI_Warrior).
+    void UpdateInCombatAI_WarriorTank(Unit* pVictim);
+    // The cast waiting for a stance swap (DoCastWithStance). True: it was cast or is still waiting.
+    bool ContinueStanceSwap();
+    // Enemies within `radius` yards fighting the bot or its party, without aura `spellId`.
+    uint32 CountEnemiesWithoutAura(float radius, uint32 spellId) const;
     void UpdateInCombatAI_Rogue() final;
     void UpdateOutOfCombatAI_Rogue() final;
     void UpdateInCombatAI_Druid() final;
@@ -191,6 +224,14 @@ public:
     bool m_followChecked = false;
     // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
+    // The spell DoCastWithStance swapped stance for (nullptr = none).
+    struct StanceSwap
+    {
+        SpellEntry const* spell = nullptr;
+        ObjectGuid target;          // empty = self
+        uint32 startMs = 0;
+    };
+    StanceSwap m_stanceSwap;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
 };

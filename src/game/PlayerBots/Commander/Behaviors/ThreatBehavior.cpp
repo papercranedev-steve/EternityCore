@@ -227,19 +227,86 @@ namespace Commander
         struct GroupThreatOption
         {
             SpellEntry const* spell;
-            float share;
-            bool taunt;         // forces every enemy around onto the tank (Challenging Roar)
+            float share;        // fallback when the spell has no threat data (ThreatPerEnemy)
+            bool taunt;         // forces every enemy around onto the tank (Challenging Roar / Shout)
             bool onTarget;      // cast at the current victim (Thunder Clap, Swipe) instead of self
         };
+
+        // Seconds a taunt holds an enemy only through its aura (Mocking Blow, Challenging Shout,
+        // Challenging Roar): without SPELL_EFFECT_ATTACK_ME the threat it lends is taken back
+        // when the aura fades (ThreatManager::tauntFadeOut; strat-20261101-200215: Challenging
+        // Shout +748, -714 six seconds later). 0 = the threat stays (Taunt, Growl).
+        float TemporaryTauntSec(SpellEntry const* spell)
+        {
+            bool aura = false;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
+                    return 0.0f;
+                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
+                    aura = true;
+            }
+            return aura ? std::max(0, spell->GetDuration()) / 1000.0f : 0.0f;
+        }
+
+        // Loss when taunting `e` off `victim`: the hits until the taunt lands; for a temporary
+        // taunt also the hits after it fades, until the threat built meanwhile closes the gap.
+        float TauntLoss(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+                        float gap, float tankRate, float holdSec, float horizon)
+        {
+            float loss = Value::HitLoss(world, e, victim, std::min(ThreatBehavior::TAUNT_REACTION_SEC, horizon));
+            if (holdSec > 0.0f && holdSec < horizon)
+            {
+                float const rest = std::max(0.0f, gap - tankRate * holdSec);
+                float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
+                loss += Value::HitLoss(world, e, victim, std::min(recovery, horizon - holdSec));
+            }
+            return loss;
+        }
+
+        // Threat one cast puts on each enemy it hits: flat spell_threat + direct damage x its
+        // multiplier (Spell::HandleThreatSpells, Unit::DealDamage), with the caster's threat
+        // modifiers and a warrior's stance swap (PartyBotAI::StanceSwapThreatFactor).
+        // Demoralizing Shout 43 flat; Thunder Clap 103 damage x 2.5. Spells without data
+        // (Consecration ticks) fall back to `share` of a global cooldown of the tank's rate.
+        float ThreatPerEnemy(PartyBotAI const* bot, GroupThreatOption const& o, float tankRate)
+        {
+            SpellEntry const* spell = o.spell;
+            SpellThreatEntry const* entry = sSpellMgr.GetSpellThreatEntry(spell->Id);
+            float damage = 0.0f;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE)
+                    damage += float(std::max(0, spell->CalculateSimpleValue(SpellEffectIndex(i))));
+            if (!entry && damage <= 0.0f)
+                return tankRate * Value::GCD_SEC * o.share;
+            float threat = (entry ? float(entry->threat) : 0.0f) + damage * sSpellMgr.GetSpellThreatMultiplier(spell);
+            threat = bot->me->ApplyTotalThreatModifier(threat, spell->GetSpellSchoolMask());
+            return threat * bot->StanceSwapThreatFactor(spell);
+        }
+
+        bool DealsDamage(SpellEntry const* spell)
+        {
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE || spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE ||
+                    spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL || spell->Effect[i] == SPELL_EFFECT_NORMALIZED_WEAPON_DMG ||
+                    spell->Effect[i] == SPELL_EFFECT_WEAPON_PERCENT_DAMAGE ||
+                    (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE) ||
+                    spell->Effect[i] == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+                    return true;
+            return false;
+        }
 
         std::vector<GroupThreatOption> GroupThreatOptions(PartyBotAI const* bot)
         {
             auto const& s = bot->m_spells;
             switch (bot->me->GetClass())
             {
+                // Thunder Clap needs Battle Stance: from Defensive Stance it is cast after a swap
+                // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
                 case CLASS_WARRIOR:
                     return { { s.warrior.pThunderClap, 1.0f, false, true },
-                             { s.warrior.pDemoralizingShout, 0.3f, false, false } };
+                             { s.warrior.pDemoralizingShout, 0.3f, false, false },
+                             { s.warrior.pChallengingShout, 0.0f, true, false } };
                 case CLASS_PALADIN:
                     return { { s.paladin.pConsecration, 0.5f, false, false } };
                 case CLASS_DRUID:
@@ -251,31 +318,47 @@ namespace Commander
             }
         }
 
-        // One proposal per usable area threat ability. `valueOf(threatAdded, tauntSec)` returns
-        // the benefit over every loose enemy around the tank and whether someone would die.
+        // One proposal per usable area threat ability. `valueOf(threatAdded, holdSec)` returns
+        // the benefit over every loose enemy around the tank and whether someone would die
+        // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec).
         template <typename ValueFn>
         void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, float tankRate,
-                                float switchCost, float enemyMelee, ValueFn valueOf, std::vector<Proposal>& out)
+                                float switchCost, float stanceCost, float enemyMelee, ValueFn valueOf,
+                                std::vector<Proposal>& out)
         {
             Unit* victim = bot->me->GetVictim();
+            // Damage breaks crowd control (Polymorph, Sap, Shackle) on enemies around the tank.
+            bool crowdControlNear = false;
+            Position3 myPos;
+            myPos.x = bot->me->GetPositionX();
+            myPos.y = bot->me->GetPositionY();
+            myPos.z = bot->me->GetPositionZ();
+            for (EnemyFacts const& e : world.enemies)
+                crowdControlNear = crowdControlNear ||
+                    (e.crowdControlled && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
             for (GroupThreatOption const& o : GroupThreatOptions(bot))
             {
                 if (!o.spell)
                     continue;
+                if (crowdControlNear && DealsDamage(o.spell))
+                    continue;
                 Unit* castTarget = o.onTarget ? victim : bot->me;
-                if (!castTarget || !bot->CanTryToCastSpell(castTarget, o.spell))
+                if (!castTarget || !bot->CanCastWithStance(castTarget, o.spell))
                     continue;
 
-                float const threat = tankRate * Value::GCD_SEC * o.share;
-                std::pair<float, bool> const value = valueOf(threat, o.taunt ? 1.0f : 0.0f);
+                float const threat = o.taunt ? 0.0f : ThreatPerEnemy(bot, o, tankRate);
+                std::pair<float, bool> const value = valueOf(threat, o.taunt ? TemporaryTauntSec(o.spell) : 0.0f);
                 float cost = switchCost;
+                if (bot->StanceSwapFor(o.spell) && !bot->CanTryToCastSpell(castTarget, o.spell))
+                    cost += stanceCost;
                 if (o.taunt)    // long cooldown: kept for a real emergency
                     cost += Value::Points(world, enemyMelee * ThreatBehavior::TAUNT_RESERVE_SEC) *
                             ThreatBehavior::GROUP_TAUNT_RESERVE_MULT;
 
                 Proposal p = MakeProposal(value.second ? ProposalTier::Urgent : ProposalTier::Assigned,
                                           BotActionType::Cast, o.onTarget ? victim->GetObjectGuid() : ObjectGuid(), o.spell);
-                p.reason = o.taunt ? "group taunt loose enemies" : "area threat on loose enemies";
+                p.reason = o.taunt ? "group taunt loose enemies" :
+                           cost > switchCost ? "area threat on loose enemies (stance swap)" : "area threat on loose enemies";
                 p.SetValue(value.first, cost);
                 out.push_back(p);
             }
@@ -357,6 +440,8 @@ namespace Commander
             if (!e.crowdControlled && e.acting)
                 enemyMelee += e.meleeDps + e.rangedDps;
         float const switchCost = Value::LostAction(world, *myFacts, Value::GCD_SEC);
+        // A warrior out of its stance for a moment (Thunder Clap, Taunt from Battle Stance).
+        float const stanceCost = Value::LostAction(world, *myFacts, STANCE_SWAP_COST_SEC);
 
         // Enemies hitting someone else that the tank should consider for the group threat
         // proposal below: (enemy, gap, loss doing nothing, victim).
@@ -420,7 +505,6 @@ namespace Commander
 
             float const lossNothing = Value::HitLoss(world, e, *victim, horizon);
             float const lossThreat = Value::HitLoss(world, e, *victim, std::min(recovery, horizon));
-            float const lossTaunt = Value::HitLoss(world, e, *victim, std::min(TAUNT_REACTION_SEC, horizon));
             bool const deadly = Value::SurviveSec(e, *victim) < horizon;
             ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
 
@@ -428,11 +512,18 @@ namespace Commander
             {
                 for (SpellEntry const* pTaunt : bot->m_spellListTaunt)
                 {
-                    float const share = std::min(1.0f, (pTaunt->RecoveryTime / 1000.0f) / LOOSE_HORIZON_SEC);
+                    // Cooldown: Taunt and Mocking Blow use the category cooldown (Taunt 355 has
+                    // RecoveryTime 0 and CategoryRecoveryTime 10 s).
+                    uint32 const cooldownMs = pTaunt->GetRecoveryTime();
+                    float const share = std::min(1.0f, (cooldownMs / 1000.0f) / LOOSE_HORIZON_SEC);
                     float const reserve = share * Value::Points(world, enemyMelee * TAUNT_RESERVE_SEC);
+                    float const lossTaunt = TauntLoss(world, e, *victim, gap, tankRate, TemporaryTauntSec(pTaunt), horizon);
+                    float cost = switchCost + reserve;
+                    if (bot->StanceSwapFor(pTaunt))
+                        cost += stanceCost;
                     Proposal p = MakeProposal(tier, BotActionType::Cast, e.guid, pTaunt);
                     p.reason = "taunt loose enemy";
-                    p.SetValue((lossNothing - lossTaunt) * mult, switchCost + reserve);
+                    p.SetValue((lossNothing - lossTaunt) * mult, cost);
                     out.push_back(p);
                 }
             }
@@ -478,23 +569,27 @@ namespace Commander
         // one area threat ability (Thunder Clap, Consecration, Challenging Roar) instead of one
         // switch per enemy per tick (combat scenarios 6 and 9).
         if (loose.size() + fragile.size() >= GROUP_THREAT_MIN_ENEMIES)
-            ProposeGroupThreat(bot, world, tankRate, switchCost, enemyMelee,
-                [&](float threatAdded, float tauntSec) -> std::pair<float, bool>
+            ProposeGroupThreat(bot, world, tankRate, switchCost, stanceCost, enemyMelee,
+                [&](float threatAdded, float holdSec) -> std::pair<float, bool>
                 {
                     float benefit = 0.0f;
                     bool deadly = false;
                     // A fragile enemy would turn on the runner-up for a moment; the area ability
                     // makes that less likely (counted at FRAGILE_WEIGHT of that loss).
-                    if (threatAdded > 0.0f || tauntSec > 0.0f)
+                    if (threatAdded > 0.0f || holdSec > 0.0f)
                         for (FragileEnemy const& f : fragile)
                             benefit += Value::HitLoss(world, *f.enemy, *f.runnerUp, TANK_RECLAIM_SEC) * FRAGILE_WEIGHT;
                     for (LooseEnemy const& l : loose)
                     {
-                        float const rest = std::max(0.0f, l.gap - threatAdded);
-                        float recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
-                        if (tauntSec > 0.0f)
-                            recovery = std::min(recovery, TAUNT_REACTION_SEC);
-                        float const loss = Value::HitLoss(world, *l.enemy, *l.victim, std::min(recovery, l.horizon));
+                        float loss;
+                        if (holdSec > 0.0f)     // area taunt: back on the victim when it fades
+                            loss = TauntLoss(world, *l.enemy, *l.victim, l.gap, tankRate, holdSec, l.horizon);
+                        else
+                        {
+                            float const rest = std::max(0.0f, l.gap - threatAdded);
+                            float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
+                            loss = Value::HitLoss(world, *l.enemy, *l.victim, std::min(recovery, l.horizon));
+                        }
                         benefit += (l.lossNothing - loss) * l.mult;
                         deadly = deadly || Value::SurviveSec(*l.enemy, *l.victim) < l.horizon;
                     }

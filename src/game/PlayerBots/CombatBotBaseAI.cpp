@@ -1246,6 +1246,16 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.warrior.pPiercingHowl))
                         m_spells.warrior.pPiercingHowl = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0] == "Revenge")
+                {
+                    if (IsHigherRankSpell(m_spells.warrior.pRevenge))
+                        m_spells.warrior.pRevenge = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0] == "Challenging Shout")
+                {
+                    if (IsHigherRankSpell(m_spells.warrior.pChallengingShout))
+                        m_spells.warrior.pChallengingShout = pSpellEntry;
+                }
                 break;
             }
             case CLASS_ROGUE:
@@ -2818,6 +2828,13 @@ void CombatBotBaseAI::AutoEquipGear(uint32 option)
 
 bool CombatBotBaseAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
+    uint32 const power = pSpellEntry->powerType == POWER_HEALTH ? 0 : me->GetPower(Powers(pSpellEntry->powerType));
+    return CanTryToCastSpellAs(pTarget, pSpellEntry, me->GetShapeshiftForm(), power);
+}
+
+bool CombatBotBaseAI::CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const* pSpellEntry, ShapeshiftForm form,
+                                          uint32 power) const
+{
     if (m_preventCasting)
         return false;
 
@@ -2845,13 +2862,13 @@ bool CombatBotBaseAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* p
         return true;
     }
 
-    if (me->GetPower(powerType) < powerCost)
+    if (power < powerCost)
         return false;
 
     if (pTarget->IsImmuneToSpell(pSpellEntry, false))
         return false;
 
-    if (pSpellEntry->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) != SPELL_CAST_OK)
+    if (pSpellEntry->GetErrorAtShapeshiftedCast(form) != SPELL_CAST_OK)
         return false;
 
     if (pSpellEntry->IsSpellAppliesAura() && pTarget->HasAura(pSpellEntry->Id))

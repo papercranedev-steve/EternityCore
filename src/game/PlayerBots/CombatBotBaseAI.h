@@ -141,6 +141,9 @@ public:
 
     SpellCastResult DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry);
     virtual bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // The checks of CanTryToCastSpell as if the bot were in shapeshift form `form` with `power`
+    // of the spell's power type (warrior: right after a stance swap, PartyBotAI::CanCastWithStance).
+    bool CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const* pSpellEntry, ShapeshiftForm form, uint32 power) const;
     bool IsWearingShield(Player* pPlayer) const;
     bool IsInDuel() const;
     CombatBotRoles GetRole() const;
@@ -495,6 +498,8 @@ public:
             SpellEntry const* pSunderArmor;
             SpellEntry const* pConcussionBlow;
             SpellEntry const* pPiercingHowl;
+            SpellEntry const* pRevenge;
+            SpellEntry const* pChallengingShout;
         } warrior;
         struct
         {

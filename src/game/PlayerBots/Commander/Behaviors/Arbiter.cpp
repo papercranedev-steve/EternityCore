@@ -279,7 +279,9 @@ namespace Commander
                 if (!action.spell)
                     return false;
                 Unit* pCastTarget = pTarget ? pTarget : me;
-                if (!bot->CanTryToCastSpell(pCastTarget, action.spell))
+                // A warrior swaps stance first when needed (Thunder Clap or Mocking Blow from
+                // Defensive Stance): PartyBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.
+                if (!bot->CanCastWithStance(pCastTarget, action.spell))
                     return false;
                 // Fix: an auto-repeat shot (Auto Shot, ranged pull) cast on a unit that is not the
                 // bot's victim is cancelled by PartyBotAI::UpdateAI on the next tick ("stop auto
@@ -293,7 +295,7 @@ namespace Commander
                         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
                     me->Attack(pTarget, false);
                 }
-                return bot->DoCastSpell(pCastTarget, action.spell) == SPELL_CAST_OK;
+                return bot->DoCastWithStance(pCastTarget, action.spell) == SPELL_CAST_OK;
             }
             case BotActionType::Attack:
             {

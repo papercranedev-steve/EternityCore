@@ -337,12 +337,15 @@ namespace Commander
             if (!o.spell)
                 continue;
             Unit* castTarget = o.onTarget ? victim : me;
-            if (!castTarget || !bot->CanTryToCastSpell(castTarget, o.spell))
+            // Thunder Clap from Defensive Stance: after a stance swap (PartyBotAI::DoCastWithStance).
+            if (!castTarget || !bot->CanCastWithStance(castTarget, o.spell))
                 continue;
+            float const swapCost = bot->CanTryToCastSpell(castTarget, o.spell) ? 0.0f :
+                Value::LostAction(world, *myFacts, ThreatBehavior::STANCE_SWAP_COST_SEC);
             Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Cast,
                 o.onTarget ? victim->GetObjectGuid() : ObjectGuid(), o.spell);
             p.reason = "area threat on fresh summons";
-            p.SetValue(o.share * m_summonLoss, cost);
+            p.SetValue(o.share * m_summonLoss, cost + swapCost);
             out.push_back(p);
         }
     }

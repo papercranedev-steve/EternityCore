@@ -6,7 +6,13 @@
  *  Tank    - loose enemy: compare doing nothing, winning it back with threat, and taunting.
  *            The loss of each option is the damage the person being hit takes until the enemy
  *            is back (death penalty if they would not survive). A taunt also costs its
- *            cooldown. Otherwise top up the smallest lead (not valued).
+ *            cooldown. Taunts without SPELL_EFFECT_ATTACK_ME (Mocking Blow, Challenging
+ *            Shout / Roar) only lend threat while their aura lasts: their loss also counts the
+ *            hits after it fades. Otherwise top up the smallest lead (not valued).
+ *            Area threat: threat per enemy from spell data (spell_threat + damage x multiplier,
+ *            caster modifiers); a warrior spell in the wrong stance is cast after a stance swap
+ *            (PartyBotAI::DoCastWithStance) and costs STANCE_SWAP_COST_SEC more. Damaging area
+ *            spells are not proposed next to crowd controlled enemies.
  *  Damage  - near the holder's threat: stop hitting, or switch to a safe target, when the
  *            hits taken after pulling aggro outweigh the damage lost. Holder = tank bot, the
  *            player, or a tank-like ally (WorldModel::allies, AllyFacts::tankLike).
@@ -78,6 +84,10 @@ namespace Commander
         static constexpr float GROUP_THREAT_RADIUS = 8.0f;
         static constexpr float FRAGILE_WEIGHT = 0.5f;          // chance-like weight of a thin lead breaking
         static constexpr float GROUP_TAUNT_RESERVE_MULT = 3.0f; // area taunt cooldown (10 min) is worth more
+        // A warrior cast that needs another stance (Thunder Clap from Defensive Stance, Taunt from
+        // Battle Stance; PartyBotAI::DoCastWithStance) also costs this long of the tank's action:
+        // weaker threat and armor in the other stance until the rotation swaps back.
+        static constexpr float STANCE_SWAP_COST_SEC = 1.0f;
 
         char const* GetId() const override { return "threat"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
