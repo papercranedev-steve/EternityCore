@@ -2,7 +2,8 @@
  * PartyBot Commander layer 3: executes TeamPlan::pull (step 5).
  * Design: .kiro/docs/2026-11-01-pull-planning.md
  *
- *  Tank     Approach: walk-in pull: attack the chosen target (original chase / charge brings it there).
+ *  Tank     Approach: walk-in pull: attack the chosen target (original chase / charge brings it there;
+ *                     no charging when the pack is brought back: VetoType::GapCloser).
  *                     Ranged pull (PullPlan::rangedPullSpell): walk to a point inside
  *                     rangedPullRange on the line to the target, step closer while there is no
  *                     line of sight, then cast the spell (Shoot / Throw / Faerie Fire (Feral) /
@@ -10,8 +11,10 @@
  *                     No fight RANGED_NO_COMBAT_MS after the shot: one retry a few yards
  *                     closer, then walk-in pull.
  *                     The shot steps are kept in PullPlan::rangedShot (TeamPlan.h).
- *           Return:   run back to the fight spot; the enemies follow.
- *           Settle:   line of sight pull (PullPlan::losBreak Active): walk to PullPlan::losPoint,
+ *           Return:   walk backwards to the fight spot facing the pack (Backpedal.h: parry, block,
+ *                     swings and the rotation keep working); the enemies follow. Forward walk
+ *                     only when no backwards path is found.
+ *           Settle:   line of sight pull (PullPlan::losBreak Active): walk backwards to PullPlan::losPoint,
  *                     out of sight of the casters standing back, and stay there (movement held,
  *                     still fighting) until PullAssigner ends it.
  *  Others   Approach / Return, and the first PullAssigner::SETTLE_MS of Settle: stay where they
@@ -38,8 +41,9 @@ namespace Commander
         // (before PullAssigner::RANGED_PULL_FALLBACK_MS).
         static constexpr uint32 RANGED_NO_COMBAT_MS = 3000;
         static constexpr float RANGED_RETRY_STEP_YD = 5.0f;
-        // Line of sight pull: the movement hold lasts the walk plus this; renewed while it lasts.
-        static constexpr uint32 LOS_HOLD_EXTRA_MS = 1500;
+        // Walking backwards (Return, line of sight point): each order lasts this long and is
+        // proposed again every tick; ends this long after the phase ends.
+        static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
 
         char const* GetId() const override { return "pull"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

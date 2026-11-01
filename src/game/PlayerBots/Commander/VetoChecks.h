@@ -34,6 +34,10 @@ namespace VetoChecks
     // safe now (AreaDamageBehavior: area spells that pull aggro or do less than the filler).
     bool IsCastVetoed(PartyBotAI const* bot, SpellEntry const* spell);
 
+    // `spell` charges at `target` (SPELL_EFFECT_CHARGE: Charge, Intercept, Feral Charge) and a
+    // module asked for no charging (PullBehavior: the tank brings the pack back).
+    bool IsGapCloserVetoed(PartyBotAI const* bot, Unit const* target, SpellEntry const* spell);
+
     // `target` is a member of the bot's group mind controlled by a creature (Whitemane's
     // Dominate Mind). It turns hostile, so the original target selection would attack it and
     // the dispel selection would skip it as "not helpful" (combat scenario 7, problem 2).

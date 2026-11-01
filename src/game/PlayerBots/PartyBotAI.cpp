@@ -185,6 +185,12 @@ void PartyBotAI::ClearMovementHold()
     // No directives yet: nothing is held, do not create them here.
     if (m_directives)
         m_directives->ReleaseMovement();
+    Commander::Backpedal::Stop(me, m_backpedal);
+}
+
+bool PartyBotAI::OrderBackpedal(Commander::Position3 const& to, ObjectGuid face, uint32 durationMs)
+{
+    return Commander::Backpedal::Order(this, m_backpedal, to, face, durationMs);
 }
 
 bool PartyBotAI::IsTauntControlled() const
@@ -603,6 +609,10 @@ bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpell
 
 bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
+    // The pull brings the pack back: charging in would put the tank in the middle of it.
+    if (Commander::VetoChecks::IsGapCloserVetoed(this, pTarget, pSpellEntry))
+        return false;
+
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())
     {
         if (!m_marksToCC.empty())
@@ -997,6 +1007,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         m_castWatch.spell = nullptr;
     else if (Commander::CastWatch::Update(this, m_castWatch))
         m_updateTimer.Reset(0);
+
+    // Commander walk backwards: one step every frame, so the position and the packets follow
+    // the run-back speed smoothly (the bot update below runs every bot interval only).
+    Commander::Backpedal::Update(this, m_backpedal, diff);
 
     // Warrior stance swap (DoCastWithStance): cast the spell as soon as the stance is up, every
     // frame, so the bot stays in the other stance for one spell update instead of a bot interval.

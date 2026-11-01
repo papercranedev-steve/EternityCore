@@ -21,6 +21,7 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Commander/Behaviors/CastWatch.h"
+#include "Commander/Behaviors/Backpedal.h"
 #include "Commander/Behaviors/FollowSpot.h"
 #include <memory>
 
@@ -161,6 +162,10 @@ public:
     // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
     // from before. A Commander module may hold again on its next decision.
     void ClearMovementHold();
+    // Walk backwards to `to` facing the enemies (Commander/Behaviors/Backpedal.h), order valid
+    // for `durationMs`. False when it cannot walk there.
+    bool OrderBackpedal(Commander::Position3 const& to, ObjectGuid face, uint32 durationMs);
+    bool IsBackpedaling() const { return m_backpedal.active; }
     bool IsTauntControlled() const;
     // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
     // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
@@ -251,6 +256,8 @@ public:
     bool m_followChecked = false;
     // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
+    // Commander walk backwards (Commander/Behaviors/Backpedal.h), every frame in UpdateAI.
+    Commander::BackpedalState m_backpedal;
     // The spell DoCastWithStance swapped stance for (nullptr = none).
     struct StanceSwap
     {

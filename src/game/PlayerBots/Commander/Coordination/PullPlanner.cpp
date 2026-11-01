@@ -4,6 +4,7 @@
 #include "Commander/Perception/AssistPredictor.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/PatrolTracker.h"
+#include "Commander/Perception/PullOdds.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/ValueModel.h"
@@ -723,15 +724,36 @@ namespace Commander
             }
         }
 
-        // Casters that stand back and cast do not follow the tank: bringing them back is useless.
-        Creature const* rangedCaster = nullptr;
-        for (ObjectGuid g : best.expected)
+        // Fight where they stand, or bring them back (PullOdds.h): is the party strong enough
+        // for a creature or two nearby joining? Bringing them back only helps when the spot has
+        // less add risk than the pack. Casters that stand back come along too once the tank
+        // is out of their sight (SearchLosBreak); otherwise the party deals with them.
+        Position3 const spot = PositionOf(leader);
+        bool const distant = leader->GetDistance(best.pullTarget) > RETURN_MIN_DISTANCE;   // `far` is a Windows macro
+        PullOdds::Edge const edge = PullOdds::PartyEdge(world, map, best.expected);
+        PullOdds::AddRisk const packRisk = PullOdds::NearbyAdds(world, PositionOf(best.pullTarget), best.expected);
+        PullOdds::AddRisk const spotRisk = PullOdds::NearbyAdds(world, spot, best.expected);
+        bool const fightThere = PullOdds::FightThere(edge, packRisk);
+        bool const returnToSpot = distant && !fightThere && spotRisk.total < packRisk.total;
+
+        // Bringing them back: open from range when the tank can (and that brings no more).
+        if (returnToSpot && rangedSpell && !best.ranged)
         {
-            Creature* e = map->GetCreature(g);
-            if (e && IsRangedCaster(e))
+            Position3 const rangedAt = PullStandPoint(best.pullTarget, tank, rangedSpell, rangedRange);
+            std::vector<AssistPredictor::Joiner> const joiners = AssistPredictor::PredictDetailed(best.pullTarget, tank, &rangedAt);
+            std::vector<ObjectGuid> const expected = AssistPredictor::Guids(joiners);
+            if (expected.size() <= best.expected.size())
             {
-                rangedCaster = e;
-                break;
+                // Stealthed pack members counted above stay counted.
+                std::vector<ObjectGuid> merged = expected;
+                for (ObjectGuid g : best.expected)
+                    if (IsStealthedPackCreature(world, g) && !Contains(merged, g))
+                        merged.push_back(g);
+                best.ranged = true;
+                best.rangedWhy = "bringing them back";
+                best.expected = std::move(merged);
+                best.aggroAdds = AggroRangeGuids(joiners);
+                best.elites = CountElites(map, best.expected);
             }
         }
 
@@ -743,9 +765,8 @@ namespace Commander
         pull.tank = tank->GetObjectGuid();
         pull.expected = best.expected;
         pull.aggroRangeAdds = best.aggroAdds;
-        pull.spot = PositionOf(leader);
-        bool const distant = leader->GetDistance(best.pullTarget) > RETURN_MIN_DISTANCE;   // `far` is a Windows macro
-        pull.returnToSpot = distant && !rangedCaster;
+        pull.spot = spot;
+        pull.returnToSpot = returnToSpot;
         pull.phaseSinceMs = WorldTimer::getMSTime();
         pull.phase = skipReady ? PullPhase::Approach : PullPhase::WaitReady;
         pull.healerManaPct = READY_MANA_PCT;
@@ -780,13 +801,17 @@ namespace Commander
         else if (best.meleeAggroAddsNoRanged)
             report.push_back(Format("Walking in brings %u by aggro range; %s has no ranged pull (warrior: bow/gun/crossbow "
                 "with ammo or a thrown weapon; druid: Faerie Fire (Feral)).", best.meleeAggroAddsNoRanged, tank->GetName()));
+        std::string const odds = PullOdds::Describe(map, edge, packRisk);
         if (pull.returnToSpot)
-            report.push_back("Tank brings them back to where you stand.");
-        else if (distant && rangedCaster)
-            report.push_back(Format("Fight where they stand: %s casts from range and would not follow the tank.",
-                rangedCaster->GetName()));
+            report.push_back(Format("Tank brings them back to where you stand, walking backwards (%s; at your spot %.1f).",
+                odds.c_str(), spotRisk.total));
+        else if (!distant)
+            report.push_back("Fight where they stand (they are next to you).");
+        else if (fightThere)
+            report.push_back(Format("Fight where they stand: the party can take an add (%s).", odds.c_str()));
         else
-            report.push_back("Fight where they stand.");
+            report.push_back(Format("Fight where they stand: your spot is no safer (%s; at your spot %.1f).",
+                odds.c_str(), spotRisk.total));
         report.insert(report.end(), notes.begin(), notes.end());
 
         // Fight spot too close to a creature that is not part of the pull.
@@ -1163,7 +1188,17 @@ namespace Commander
             }
             case PullPhase::Approach:
                 if (fightStarted)
+                {
                     enter(pull.returnToSpot ? PullPhase::Return : PullPhase::Settle);
+                    if (pull.returnToSpot)
+                    {
+                        // (copies: std::min takes references, the constants have no definition)
+                        uint32 const maxMs = RETURN_TIMEOUT_MAX_MS;
+                        uint32 const extraMs = RETURN_TIMEOUT_MS;
+                        float const walkMs = PackResolver::Distance(tank->pos, pull.spot) / RETURN_BACK_SPEED * 1000.0f;
+                        pull.returnTimeoutMs = std::min(maxMs, uint32(walkMs * RETURN_TIME_FACTOR) + extraMs);
+                    }
+                }
                 // Someone else started another fight: the tank must not go on to pull a second pack.
                 else if (std::any_of(world.enemies.begin(), world.enemies.end(),
                          // (an ally's fight nearby, e.g. a guard, is not ours)
@@ -1179,7 +1214,8 @@ namespace Commander
                 }
                 return;
             case PullPhase::Return:
-                if (PackResolver::Distance(tank->pos, pull.spot) <= RETURN_ARRIVED || elapsed > RETURN_TIMEOUT_MS)
+                if (PackResolver::Distance(tank->pos, pull.spot) <= RETURN_ARRIVED ||
+                    elapsed > std::max<uint32>(pull.returnTimeoutMs, uint32(RETURN_TIMEOUT_MS)))
                     enter(PullPhase::Settle);
                 return;
             case PullPhase::Settle:

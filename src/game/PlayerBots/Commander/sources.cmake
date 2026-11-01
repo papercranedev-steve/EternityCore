@@ -106,6 +106,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/CastWatch.h
   ${COMMANDER_DIR}/Behaviors/CastWatch.cpp
+  ${COMMANDER_DIR}/Behaviors/Backpedal.h
+  ${COMMANDER_DIR}/Behaviors/Backpedal.cpp
+  ${COMMANDER_DIR}/Perception/PullOdds.h
+  ${COMMANDER_DIR}/Perception/PullOdds.cpp
   ${COMMANDER_DIR}/Behaviors/FleePoint.h
   ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
   ${COMMANDER_DIR}/Behaviors/SafeRoute.h

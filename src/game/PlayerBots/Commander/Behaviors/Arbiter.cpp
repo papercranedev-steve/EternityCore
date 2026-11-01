@@ -24,6 +24,7 @@ namespace Commander
                 case BotActionType::Cast:   return "cast";
                 case BotActionType::Attack: return "attack";
                 case BotActionType::MoveTo: return "move";
+                case BotActionType::Backpedal: return "backpedal";
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::Retreat: return "retreat";
@@ -72,6 +73,7 @@ namespace Commander
                 case VetoType::Dispel: return "no-dispel";
                 case VetoType::Interrupt: return "no-interrupt";
                 case VetoType::Heal:   return "no-heal";
+                case VetoType::GapCloser: return "no-charge";
                 case VetoType::Cast:   return "no-cast";
             }
             return "?";
@@ -254,7 +256,9 @@ namespace Commander
                     // A target switch only changes the victim: the original rotation can act on
                     // the new target in the same tick. Otherwise a tank switching between loose
                     // adds every tick never casts Thunder Clap or Sunder (combat scenario 9).
-                    rotationMayRun = p.action.type == BotActionType::Attack;
+                    // Walking backwards is the same: the tank keeps hitting and building threat.
+                    rotationMayRun = p.action.type == BotActionType::Attack ||
+                                     p.action.type == BotActionType::Backpedal;
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                 }
@@ -358,6 +362,18 @@ namespace Commander
                 if (me->HasUnitState(UNIT_STATE_ROOT))
                     return false;
                 me->GetMotionMaster()->MovePoint(0, action.x, action.y, action.z, MOVE_PATHFINDING);
+                bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs);
+                return true;
+            }
+            case BotActionType::Backpedal:
+            {
+                Position3 to;
+                to.x = action.x;
+                to.y = action.y;
+                to.z = action.z;
+                if (!bot->OrderBackpedal(to, action.target, action.holdMs))
+                    return false;
+                // Original follow / chase off while walking (the order is renewed every tick).
                 bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs);
                 return true;
             }

@@ -30,6 +30,10 @@ namespace Commander
         Cast,       // cast spell on target (empty target = self)
         Attack,     // switch melee/ranged attack to target
         MoveTo,     // move to x/y/z and keep original movement suppressed for holdMs
+        // Walk backwards to x/y/z facing the way it came (Behaviors/Backpedal.h), order valid
+        // for holdMs (propose it again every tick to keep it); `target` is faced at the end.
+        // The original rotation still runs in the same tick (instant abilities while walking).
+        Backpedal,
         Hold,       // do nothing this tick and skip the original rotation
         HoldFire,   // like Hold, and also stop melee swings / auto shot (keeps the target)
         // Drop the target (AttackStop), stop auto shot, call the pet back; then, if holdMs > 0,
@@ -82,6 +86,9 @@ namespace Commander
         Dispel,     // do not dispel aura `spellId` from `target` (PartyBotAI::IsValidDispelTarget)
         Interrupt,  // do not interrupt / stun `target`'s cast (PartyBotAI::IsInterruptVetoed, 6 class rotations)
         Heal,       // do not heal `target` this tick (PartyBotAI::FindAndHealInjuredAlly)
+        // Do not cast a spell that charges at `target` (empty = any): Charge, Intercept, Feral
+        // Charge (PartyBotAI::PassesPartyCastChecks). The pull brings the pack back.
+        GapCloser,
         Cast,       // do not cast `spellId` (any rank, empty target = anywhere) (PartyBotAI::IsCastVetoed, class rotations)
     };
 

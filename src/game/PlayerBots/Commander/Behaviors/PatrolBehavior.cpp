@@ -25,8 +25,10 @@ namespace Commander
         p.tier = ProposalTier::Assigned;
         p.source = "patrol";
 
-        // Walking there: keep walking (an instant ability is fine, a cast would stop the walk).
-        if (bot->IsMovementHeld() && me->IsMoving())
+        // Walking there forwards (no backwards path): keep walking (an instant ability is fine,
+        // a cast would stop the walk). Walking backwards: the order below is renewed instead,
+        // and the rotation keeps fighting.
+        if (bot->IsMovementHeld() && me->IsMoving() && !bot->IsBackpedaling())
         {
             p.reason = "moving the fight off a patrol's path, keep walking";
             p.action.type = BotActionType::Hold;
@@ -65,14 +67,26 @@ namespace Commander
         float const distance = SafeRoute::Distance2d(here, to);
         if (distance <= PatrolAssigner::ARRIVED_DISTANCE)
             return;
-        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
         p.reason = "move the fight off a patrol's path";
-        p.action.type = BotActionType::MoveTo;
         p.action.x = to.x;
         p.action.y = to.y;
         p.action.z = to.z;
-        p.action.holdMs = uint32(distance * PATH_FACTOR / speed * 1000.0f) + HOLD_EXTRA_MS;
         p.SetValue(m.benefit, m.cost);
+
+        // Backwards, facing what it fights (Backpedal.h): the pack follows without hitting the
+        // tank's back. The forward walk is the fallback when no backwards path is found.
+        if (Unit* victim = me->GetVictim())
+        {
+            Proposal back = p;
+            back.action.type = BotActionType::Backpedal;
+            back.action.target = victim->GetObjectGuid();
+            back.action.holdMs = BACKPEDAL_ORDER_MS;
+            back.score += 1.0f;
+            out.push_back(back);
+        }
+        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+        p.action.type = BotActionType::MoveTo;
+        p.action.holdMs = uint32(distance * PATH_FACTOR / speed * 1000.0f) + HOLD_EXTRA_MS;
         out.push_back(p);
     }
 }

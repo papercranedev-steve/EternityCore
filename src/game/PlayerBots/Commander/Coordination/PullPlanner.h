@@ -91,7 +91,11 @@ namespace Commander
         // "Full" for healers before a hard pack. Drinking stops at 100%; 99 leaves room for rounding.
         float const READY_FULL_MANA_PCT = 99.0f;
         float const READY_MAX_DISTANCE = 40.0f;   // from the leader
-        // Next to the leader, a pack further than this is brought back to the fight spot.
+        // Next to the leader, a pack further than this may be brought back to the fight spot:
+        // when PullOdds::FightThere says the party should not fight it where it stands, and
+        // the spot has less add risk than the pack. With a ranged pull spell the tank then
+        // opens from range (charging in and walking back gains nothing), and it walks back
+        // backwards facing the pack with charges vetoed (PullBehavior).
         float const RETURN_MIN_DISTANCE = 15.0f;
 
         // Patrols (PatrolTracker, WorldModel::patrols): a patrol that comes within
@@ -161,7 +165,12 @@ namespace Commander
         // A ranged pull that has not started the fight by then (no ammo, wrong form, no line of
         // sight anywhere on the way) becomes a normal walk-in pull.
         static constexpr uint32 RANGED_PULL_FALLBACK_MS = 10 * 1000;
+        // Return lasts at most the walk at run-back speed (Backpedal) x RETURN_TIME_FACTOR plus
+        // RETURN_TIMEOUT_MS, and no more than RETURN_TIMEOUT_MAX_MS.
         static constexpr uint32 RETURN_TIMEOUT_MS = 8 * 1000;
+        static constexpr uint32 RETURN_TIMEOUT_MAX_MS = 30 * 1000;
+        static constexpr float RETURN_BACK_SPEED = 4.5f;   // yd/s, base run-back speed
+        static constexpr float RETURN_TIME_FACTOR = 1.5f;  // path detours, pauses for casts
         static constexpr uint32 SETTLE_MS = 2500;
         static constexpr float RETURN_ARRIVED = 4.0f;
         // Line of sight pull: Settle lasts until every caster is within LOS_CASTER_ARRIVED of the

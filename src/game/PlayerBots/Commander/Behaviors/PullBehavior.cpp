@@ -90,6 +90,44 @@ namespace Commander
             return p;
         }
 
+        // Walk backwards to `to` facing the pack (Backpedal.h), then the forward walk as a
+        // fallback (the arbiter tries the next proposal when no path is found). Proposed every
+        // tick: the order lasts BACKPEDAL_ORDER_MS and is renewed.
+        void WalkBack(PartyBotAI const* bot, PullPlan const& pull, Position3 const& to, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            ObjectGuid face = pull.target;
+            Unit* target = me->GetMap()->GetUnit(face);
+            if (!target || !target->IsAlive())
+                face = me->GetVictim() ? me->GetVictim()->GetObjectGuid() : ObjectGuid();
+
+            Proposal back = Make(ProposalTier::Assigned, 5.0f, BotActionType::Backpedal, face);
+            back.action.x = to.x;
+            back.action.y = to.y;
+            back.action.z = to.z;
+            back.action.holdMs = PullBehavior::BACKPEDAL_ORDER_MS;
+            out.push_back(back);
+
+            if (!bot->IsMovementHeld())
+            {
+                Proposal forward = MoveTo(to, PackResolver::Distance(PositionOf(me), to));
+                forward.score = 4.0f;
+                out.push_back(forward);
+            }
+        }
+
+        // No Charge / Intercept while the tank goes out to bring the pack back.
+        Proposal NoCharge()
+        {
+            Proposal p;
+            p.kind = ProposalKind::Veto;
+            p.tier = ProposalTier::Assigned;
+            p.source = "pull";
+            p.reason = "bringing the pack back";
+            p.veto.type = VetoType::GapCloser;
+            return p;
+        }
+
         // Ranged pull (PullPlan::rangedPullSpell). Returns false when the tank should attack
         // normally instead (spell gone, already closer than the spell's minimum range).
         bool ProposeRangedPull(PartyBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
@@ -212,28 +250,29 @@ namespace Commander
                 Unit* target = me->GetMap()->GetUnit(pull.target);
                 if (!target || !target->IsAlive())
                     return;
+                if (pull.returnToSpot)
+                    out.push_back(NoCharge());
                 if (pull.rangedPullSpell && ProposeRangedPull(bot, pull, target, out))
                     return;
                 if (me->GetVictim() != target)
                     out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Attack, pull.target));
             }
-            else if (pull.phase == PullPhase::Return && !bot->IsMovementHeld())
+            else if (pull.phase == PullPhase::Return)
             {
-                float const distance = PackResolver::Distance(PositionOf(me), pull.spot);
-                out.push_back(MoveTo(pull.spot, distance));
+                // Backwards, facing the pack: parry, block and swings keep working, the rotation
+                // keeps building threat (instant abilities), nothing hits the tank's back.
+                out.push_back(NoCharge());
+                WalkBack(bot, pull, pull.spot, out);
             }
-            else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active && !bot->IsMovementHeld())
+            else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active)
             {
-                // Line of sight pull: walk to the point and stay there. The hold is renewed
-                // (a MoveTo to the point it stands on) whenever it runs out, so the original
-                // chase does not take the tank back into the caster's sight. Without a hold
-                // the original AI still fights from the point (melee, spells), it only does not
+                // Line of sight pull: walk (backwards) to the point and stay there. The order is
+                // renewed every tick, standing on the point too (Backpedal::Order holds it), so
+                // the original chase does not take the tank back into the caster's sight. The
+                // original AI still fights from the point (melee, spells), it only does not
                 // chase. Ends when PullAssigner ends the break (at most LOS_BREAK_TIMEOUT_MS),
-                // the last hold runs out LOS_HOLD_EXTRA_MS later.
-                float const distance = PackResolver::Distance(PositionOf(me), pull.losPoint);
-                Proposal p = MoveTo(pull.losPoint, distance);
-                p.action.holdMs += PullBehavior::LOS_HOLD_EXTRA_MS;
-                out.push_back(p);
+                // the last order runs out BACKPEDAL_ORDER_MS later.
+                WalkBack(bot, pull, pull.losPoint, out);
             }
             return;
         }

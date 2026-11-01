@@ -6,7 +6,9 @@
  * Tank of the plan only. Once per move: the plan's spots in order, the first whose ground is
  * found within MAX_STEP_Z of the tank, that no idle creature covers, and whose path is safe
  * (SafeRoute::PathIsSafe, MAX_PATH_DETOUR) is written to patrolMove.chosen (-2: none). Then
- * MoveTo there (tier Assigned, valued with the plan's benefit and cost), and Hold while the
+ * walk there (tier Assigned, valued with the plan's benefit and cost): backwards facing the
+ * tank's victim (Backpedal, order renewed every tick, the rotation keeps fighting), or
+ * MoveTo when no backwards path is found or the tank has no victim, with Hold while that
  * walk is under way.
  */
 
@@ -24,6 +26,7 @@ namespace Commander
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float PATH_FACTOR = 1.3f;
         static constexpr uint32 HOLD_EXTRA_MS = 1000;
+        static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
 
         char const* GetId() const override { return "patrol"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

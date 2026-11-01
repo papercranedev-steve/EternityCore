@@ -101,7 +101,10 @@ namespace Commander
         ObjectGuid tank;
         std::vector<ObjectGuid> expected;   // AssistPredictor result, target included
         Position3 spot;                     // where the party fights (leader position at command time)
+        // The tank walks the pack back to `spot` (backwards, facing it: Behaviors/Backpedal.h),
+        // decided by PullPlanner::Plan from the party's edge and the add risk (Perception/PullOdds.h).
         bool returnToSpot = false;
+        uint32 returnTimeoutMs = 0;         // Return ends by then; set when Return starts (walk length)
         uint32 phaseSinceMs = 0;
 
         // WaitReady bookkeeping.
