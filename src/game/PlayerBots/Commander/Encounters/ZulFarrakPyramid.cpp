@@ -96,7 +96,7 @@ namespace Commander
             return TIER_OTHER;
         }
 
-        // Same base-point measure CombatBotBaseAI::SelectMostEfficientHealingSpell uses.
+        // Base points of the direct heal effects (no +healing; the rotation uses HealSpells.h).
         int32 BasePoints(SpellEntry const* spell)
         {
             int32 points = 0;

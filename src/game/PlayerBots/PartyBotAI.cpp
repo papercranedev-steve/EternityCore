@@ -35,6 +35,8 @@
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/FleePoint.h"
+#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/WorldModel.h"
 
 #include <random>
 
@@ -245,6 +247,24 @@ bool PartyBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPe
         return false;
 
     return HealInjuredTarget(pTarget);
+}
+
+float PartyBotAI::GetIncomingDps(Unit const* pTarget) const
+{
+    // The Commander's facts: melee after armor plus ranged spells of every enemy on the target,
+    // refreshed every PerceptionMs. Same map as the bot, so the commander is this thread's.
+    if (sCommanderMgr.IsEnabled())
+    {
+        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
+        {
+            Commander::WorldModel const& world = commander->GetWorld();
+            // 0 also when the attackers are not in the snapshot yet (just pulled): melee then.
+            if (world.FindMember(pTarget->GetObjectGuid()))
+                if (float const dps = Commander::Value::IncomingOn(world, pTarget->GetObjectGuid()))
+                    return dps;
+        }
+    }
+    return CombatBotBaseAI::GetIncomingDps(pTarget);
 }
 
 bool PartyBotAI::IsInterruptVetoed(Unit const* pVictim) const
@@ -653,6 +673,13 @@ Player* PartyBotAI::SelectShieldTarget() const
         return nullptr;
 
     Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return nullptr;
+
+    // Until 2026-11-01: any attacked member below 90%. A shield costs more mana per point than
+    // a heal and the absorbed damage gives a warrior no rage, so it is kept for members who
+    // may die before a heal lands (HealSpells::IsInDanger). The lowest health first.
+    Player* pBest = nullptr;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -661,14 +688,16 @@ Player* PartyBotAI::SelectShieldTarget() const
             if (pMember == me)
                 continue;
 
-            if ((pMember->GetHealthPercent() < 90.0f) &&
-                !pMember->GetAttackers().empty() &&
-                !pMember->IsImmuneToMechanic(MECHANIC_SHIELD))
-                return pMember;
+            if (pMember->IsImmuneToMechanic(MECHANIC_SHIELD) || !IsValidHealTarget(pMember))
+                continue;
+            if (pBest && pBest->GetHealthPercent() <= pMember->GetHealthPercent())
+                continue;
+            if (IsInHealDanger(pMember))
+                pBest = pMember;
         }
     }
 
-    return nullptr;
+    return pBest;
 }
 
 bool PartyBotAI::CrowdControlMarkedTargets()
@@ -2294,7 +2323,11 @@ void PartyBotAI::UpdateOutOfCombatAI_Priest()
 
 void PartyBotAI::UpdateInCombatAI_Priest()
 {
+    // Until 2026-11-01 the priest shielded itself whenever the spell was ready, attacked or not
+    // (in the Stockade tests more mana went into shields than into heals). Now only when it is
+    // in danger itself, or being hit below half health (the shield also stops cast pushback).
     if (m_spells.priest.pPowerWordShield &&
+       (IsInHealDanger(me) || (me->GetHealthPercent() < 50.0f && GetIncomingDps(me) > 0.0f)) &&
         CanTryToCastSpell(me, m_spells.priest.pPowerWordShield))
     {
         if (DoCastSpell(me, m_spells.priest.pPowerWordShield) == SPELL_CAST_OK)
@@ -2333,7 +2366,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
 
     if (GetRole() == ROLE_HEALER || (!me->GetVictim() && me->GetShapeshiftForm() == FORM_NONE))
     {
-        // Shield allies being attacked.
+        // Shield allies who may die before a heal lands.
         if (m_spells.priest.pPowerWordShield)
         {
             if (Player* pTarget = SelectShieldTarget())
@@ -2346,15 +2379,11 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             }
         }
 
-        // Direct heal more seriously injured.
-        if (Unit* pTarget = SelectHealTarget(60.0f, 80.0f))
-            if (HealInjuredTargetDirect(pTarget))
-                return;
-
-        // Apply HoT aura for small injuries.
-        if (Unit* pTarget = SelectPeriodicHealTarget(80.0f, 90.0f))
-            if (HealInjuredTargetPeriodic(pTarget))
-                return;
+        // Heal or HoT, chosen by ChooseHeal (HealSpells.h). Until 2026-11-01 a direct heal at
+        // 60% (self) / 80% (group) and Renew at 80% / 90% by separate calls that skipped the
+        // Commander's heal veto (FindAndHealInjuredAlly).
+        if (FindAndHealInjuredAlly(80.0f, 90.0f))
+            return;
 
         if (GetRole() == ROLE_HEALER && FindAndPreHealTarget())
             return;
@@ -3355,15 +3384,10 @@ void PartyBotAI::UpdateInCombatAI_Druid()
             }
         }
 
-        // Prioritize applying HoTs.
-        if (Unit* pTarget = SelectPeriodicHealTarget(80.0f, 90.0f))
-            if (HealInjuredTargetPeriodic(pTarget))
-                return;
-
-        // Direct heal.
-        if (Unit* pTarget = SelectHealTarget(60.0f, 70.0f))
-            if (HealInjuredTargetDirect(pTarget))
-                return;
+        // HoT or direct heal, chosen by ChooseHeal (HealSpells.h). Until 2026-11-01 HoTs at
+        // 80% / 90% first, then direct heals at 60% / 70%, past the Commander's heal veto.
+        if (FindAndHealInjuredAlly(80.0f, 90.0f))
+            return;
 
         if (m_spells.druid.pInnervate &&
            (me->GetHealthPercent() > 40.0f) &&

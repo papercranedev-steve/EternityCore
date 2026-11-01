@@ -9,10 +9,9 @@
  *    unless the target would die within DELAY_TICKS bot ticks, or another member is below
  *    their ceiling (the veto would block FindAndHealInjuredAlly for them too this tick).
  *    Benefit: saved mana as the healing it buys later. Cost: damage taken while waiting.
- *  - When the rotation would cast a big direct heal and a smaller rank / spell with better
- *    healing per mana covers most of it: cast the smaller one (Replace).
- *    Benefit: saved mana as healing later. Cost: the healing it lacks.
- * Targets below EMERGENCY_PCT are never throttled.
+ * Targets below EMERGENCY_PCT are never throttled. Which rank the rotation casts is chosen by
+ * mana efficiency in CombatBotBaseAI::ChooseHeal (HealSpells.h); until 2026-11-01 this module
+ * also swapped big heals for smaller, more efficient ranks.
  *
  * ThreatBehavior proposes heal vetoes and smaller heals for aggro on the same target; both
  * are scored in points, the arbiter keeps whatever is worth it.
@@ -36,8 +35,6 @@ namespace Commander
     public:
         // Below this health percent the target is healed as the rotation wants.
         static constexpr float EMERGENCY_PCT = 30.0f;
-        // A smaller heal must heal at least this fraction of what the predicted heal would.
-        static constexpr float SWAP_MIN_COVER = 0.6f;
         // A delayed heal waits about this many bot ticks (same as ThreatBehavior's heal veto).
         static constexpr float DELAY_TICKS = 2.0f;
         // The low mana note (ManaBudget::WantsLowManaWarning) is sent at most this often per healer.

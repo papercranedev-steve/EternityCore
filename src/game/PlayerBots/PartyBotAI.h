@@ -128,6 +128,9 @@ public:
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
+    // Heal choice (CombatBotBaseAI::ChooseHeal) and shields use the Commander's measured
+    // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
+    float GetIncomingDps(Unit const* pTarget) const override;
     // The class rotations' reflex interrupts ask this first.
     bool IsInterruptVetoed(Unit const* pVictim) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party

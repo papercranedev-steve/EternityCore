@@ -17,8 +17,8 @@
  *            else needs it / no safe heal) veto healing that target this tick. The veto makes
  *            the rotation heal nobody this tick, hence the other-member option first.
  *            The other-member heal follows the mana budget (ManaBudgetBehavior::ComputeBudget):
- *            under tension > 1, only members below ManaBudget::HealCeilingPct, and no rank
- *            ManaBudgetBehavior would swap for a cheaper, more efficient one.
+ *            under tension > 1, only members below ManaBudget::HealCeilingPct. Heal ranks
+ *            come from CombatBotBaseAI::ChooseHeal (HealSpells.h), the rotation's own choice.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
  *  Pets    - of hunter / warlock bots (threat-behavior doc 4.7). Tank in the party (alive tank
  *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.

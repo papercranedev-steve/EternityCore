@@ -64,10 +64,6 @@ namespace Commander
         constexpr float OVERHEAL_DROP_FRACTION = 0.5f;      // x missing health at cast start
         constexpr uint32 AGGRO_CANCEL_COOLDOWN_MS = 5000;
 
-        // Direct heal effects of the spell with the healer's and the target's healing bonuses
-        // (same estimate as ThreatBehavior / ManaBudgetBehavior use internally).
-        float EstimateDirectHeal(Unit* healer, Unit* target, SpellEntry const* spell);
-
         // Every frame from PartyBotAI::UpdateAI. True = the cast was cancelled.
         bool Update(PartyBotAI* bot, CastWatchState& state);
     }

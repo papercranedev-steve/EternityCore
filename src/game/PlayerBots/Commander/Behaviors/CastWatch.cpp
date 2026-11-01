@@ -6,6 +6,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "PartyBotAI.h"
+#include "HealSpells.h"
 #include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
@@ -66,22 +67,6 @@ namespace Commander
 
 namespace CastWatch
 {
-    float EstimateDirectHeal(Unit* healer, Unit* target, SpellEntry const* spell)
-    {
-        float total = 0.0f;
-        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-        {
-            if (spell->Effect[i] != SPELL_EFFECT_HEAL)
-                continue;
-            SpellEffectIndex const idx = SpellEffectIndex(i);
-            float value = float(spell->CalculateSimpleValue(idx));
-            value = healer->SpellHealingBonusDone(target, spell, idx, value, SPELL_DIRECT_DAMAGE);
-            value = target->SpellHealingBonusTaken(healer, spell, idx, value, SPELL_DIRECT_DAMAGE);
-            total += value;
-        }
-        return std::max(0.0f, total);
-    }
-
     bool Update(PartyBotAI* bot, CastWatchState& state)
     {
         Player* me = bot->me;
@@ -124,7 +109,7 @@ namespace CastWatch
             return false;
 
         SpellEntry const* info = spell->m_spellInfo;
-        float const heal = EstimateDirectHeal(me, target, info);
+        float const heal = HealSpells::Estimate(me, target, info).direct;
         if (heal <= 0.0f)
             return false;
 

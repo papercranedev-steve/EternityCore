@@ -4,6 +4,18 @@
 #include "PlayerBotAI.h"
 #include "SpellEntry.h"
 #include "Player.h"
+#include "HealSpells.h"
+
+// CombatBotBaseAI::ChooseHeal result.
+struct HealChoice
+{
+    SpellEntry const* spell = nullptr;
+    int chosen = -1;                            // index in options
+    bool emergency = false;
+    HealSpells::Situation situation;
+    std::vector<HealSpells::Option> options;    // biggest direct heal first, then HoTs
+    HealSpells::Option const& Chosen() const { return options[chosen]; }
+};
 
 struct HealSpellCompare
 {
@@ -103,7 +115,6 @@ public:
     uint8 GetAttackersInRangeCount(float range) const;
     Unit* SelectAttackerDifferentFrom(Unit const* pExcept) const;
     Unit* SelectHealTarget(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f) const;
-    Unit* SelectPeriodicHealTarget(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f) const;
     Player* SelectBuffTarget(SpellEntry const* pSpellEntry) const;
     Player* SelectBuffTarget(SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry, SpellEntry const*& pSelectedSpellEntry) const;
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
@@ -113,13 +124,18 @@ public:
     bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     bool FindAndPreHealTarget();
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
+    // Casts the heal ChooseHeal picks on the target.
     bool HealInjuredTarget(Unit* pTarget);
-    bool HealInjuredTargetDirect(Unit* pTarget);
-    bool HealInjuredTargetPeriodic(Unit* pTarget);
-    template <class T>
-    SpellEntry const* SelectMostEfficientHealingSpell(Unit const* pTarget, std::set<SpellEntry const*, T>& spellList) const;
-    template <class T>
-    SpellEntry const* SelectMostEfficientHealingSpell(Unit const* pTarget, int32 missingHealth, std::set<SpellEntry const*, T>& spellList) const;
+    // Values every castable single-target heal on the target and picks one (HealSpells.h).
+    // `out.options` holds every candidate, biggest direct heal first; `out.spell` the choice.
+    // `directOnly`: leave out pure HoTs. `extraNeed`: damage expected on top of the missing
+    // health (pre-heal). False when nothing heals.
+    bool ChooseHeal(Unit* pTarget, HealChoice& out, bool directOnly = false, float extraNeed = 0.0f) const;
+    // Damage per second the target is taking now. Base: melee of its attackers in reach
+    // (average weapon damage / attack time, before armor). PartyBotAI uses the Commander's facts.
+    virtual float GetIncomingDps(Unit const* pTarget) const;
+    // The target may die before a heal lands (HealSpells::IsInDanger): absorb shields.
+    bool IsInHealDanger(Unit* pTarget) const;
     int32 GetIncomingdamage(Unit const* pTarget) const;
     bool AreOthersOnSameTarget(ObjectGuid guid, bool checkMelee = true, bool checkSpells = true) const;
 

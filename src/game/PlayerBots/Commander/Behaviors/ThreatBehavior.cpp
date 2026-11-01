@@ -8,6 +8,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
+#include "HealSpells.h"
 #include "Map.h"
 #include "Pet.h"
 #include "Spell.h"
@@ -128,41 +129,6 @@ namespace Commander
                 return m->isPet ? IsHolderPet(bot, world, victim) : IsHolder(*m);
             AllyFacts const* ally = world.FindAlly(victim);
             return ally && ally->tankLike;
-        }
-
-        // Direct heal effects of the spell with the healer's and target's healing bonuses.
-        float EstimateDirectHeal(Player* healer, Unit* target, SpellEntry const* spell)
-        {
-            float total = 0.0f;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-            {
-                if (spell->Effect[i] != SPELL_EFFECT_HEAL)
-                    continue;
-                SpellEffectIndex const idx = SpellEffectIndex(i);
-                float value = float(spell->CalculateSimpleValue(idx));
-                value = healer->SpellHealingBonusDone(target, spell, idx, value, SPELL_DIRECT_DAMAGE);
-                value = target->SpellHealingBonusTaken(healer, spell, idx, value, SPELL_DIRECT_DAMAGE);
-                total += value;
-            }
-            return total;
-        }
-
-        // Same base-point measure CombatBotBaseAI::SelectMostEfficientHealingSpell uses.
-        int32 BasePoints(SpellEntry const* spell)
-        {
-            int32 points = 0;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-                if (spell->Effect[i] == SPELL_EFFECT_HEAL)
-                    points += spell->EffectBasePoints[i];
-            return points;
-        }
-
-        // Mana the spell costs this caster now (same as ManaBudgetBehavior). 0 = no mana.
-        float ManaCost(Player* caster, SpellEntry const* spell)
-        {
-            if (spell->powerType != POWER_MANA)
-                return 0.0f;
-            return float(Spell::CalculatePowerCost(spell, caster));
         }
 
         // Members that keep the higher mana budget heal ceiling (same rule as
@@ -761,9 +727,10 @@ namespace Commander
         if (pTarget->GetHealthPercent() < HEAL_IGNORE_THREAT_PCT)
             return;
 
-        // The rotation would put a HoT on it first (CombatBotBaseAI::HealInjuredTarget); HoT threat comes in ticks.
-        if (pTarget->GetHealthPercent() >= 80.0f && !pTarget->HasAuraType(SPELL_AURA_PERIODIC_HEAL) &&
-            !bot->m_spellListPeriodicHeal.empty())
+        // The heal the rotation would cast (CombatBotBaseAI::HealInjuredTarget). A pure HoT:
+        // its threat comes in ticks, left alone.
+        HealChoice choice;
+        if (!bot->ChooseHeal(pTarget, choice) || choice.Chosen().amount.direct <= 0.0f)
             return;
 
         ObjectGuid const self = me->GetObjectGuid();
@@ -798,7 +765,7 @@ namespace Commander
             float const castSec = float(spell->GetCastTime(me)) / 1000.0f;
             float const atLanding = std::min(float(target->GetMaxHealth()),
                                              targetMissing + Value::IncomingOn(world, target->GetObjectGuid()) * castSec);
-            float const effective = std::min(atLanding, EstimateDirectHeal(me, target, spell));
+            float const effective = std::min(atLanding, HealSpells::Estimate(me, target, spell).direct);
             if (effectiveOut)
                 *effectiveOut = effective;
             std::vector<ThreatView::EnemyThreatDelta> deltas;
@@ -824,47 +791,27 @@ namespace Commander
             return loss;
         };
 
-        // Mirror SelectMostEfficientHealingSpell: list is strongest first; pick the closest
-        // base value to the missing health, stop at the first one below it.
-        // `castable` = every direct heal usable on `target`, strongest first.
-        auto predictHeal = [&](Unit* target, float targetMissing, std::vector<SpellEntry const*>& castable,
-                               size_t& predictedIndex) -> SpellEntry const*
+        // The chosen heal first, then the direct heals smaller than it, biggest first
+        // (HealChoice::options is sorted by direct heal).
+        auto chosenThenSmaller = [](HealChoice const& c, std::vector<SpellEntry const*>& out)
         {
-            SpellEntry const* predicted = nullptr;
-            int32 bestDiff = INT32_MAX;
-            bool stopped = false;
-            for (SpellEntry const* spell : bot->m_spellListDirectHeal)
-            {
-                if (!bot->CanTryToCastSpell(target, spell))
-                    continue;
-                castable.push_back(spell);
-                if (stopped)
-                    continue;
-                int32 const diff = BasePoints(spell) - int32(targetMissing);
-                if (std::abs(diff) < bestDiff)
-                {
-                    bestDiff = diff;
-                    predicted = spell;
-                    predictedIndex = castable.size() - 1;
-                }
-                if (diff < 0)
-                    stopped = true;
-            }
-            return predicted;
+            HealSpells::Option const& chosen = c.Chosen();
+            out.push_back(chosen.spell);
+            for (HealSpells::Option const& o : c.options)
+                if (o.spell != chosen.spell && o.amount.direct > 0.0f && o.amount.direct < chosen.amount.direct)
+                    out.push_back(o.spell);
         };
 
         std::vector<SpellEntry const*> castable;
-        size_t predictedIndex = 0;
-        SpellEntry const* predicted = predictHeal(pTarget, missing, castable, predictedIndex);
-        if (!predicted)
-            return;
+        chosenThenSmaller(choice, castable);
+        SpellEntry const* predicted = castable.front();
         float predictedHeal = 0.0f;
         float const loss = aggroLoss(pTarget, missing, predicted, &predictedHeal);
         if (loss <= 0.0f)
             return;
 
         // Option 1: a smaller heal that does not pull. Costs the healing it lacks.
-        for (size_t i = predictedIndex + 1; i < castable.size(); ++i)
+        for (size_t i = 1; i < castable.size(); ++i)
         {
             float smallerHeal = 0.0f;
             if (aggroLoss(pTarget, missing, castable[i], &smallerHeal) > 0.0f)
@@ -889,8 +836,8 @@ namespace Commander
         // Same eligibility as SelectHealTarget (IsValidHealTarget: helpful, line of sight, 30 yd).
         // Pets are left out (the rotation only heals them when no player is hurt).
         // Mana budget (ManaBudgetBehavior::ComputeBudget, same numbers that behavior uses): when
-        // mana is short (tension > 1), only members below their heal ceiling, and no heal that
-        // ManaBudgetBehavior would swap for a cheaper, more efficient rank.
+        // mana is short (tension > 1), only members below their heal ceiling. The rank is the
+        // one ChooseHeal picks (mana efficient), or a smaller one.
         ManaBudgetBehavior::Budget budget;
         // Only while the mana module runs: with it off, nobody else limits heals either.
         bool const budgeted = sCommanderMgr.IsModuleEnabled("mana") &&
@@ -916,40 +863,18 @@ namespace Commander
         {
             float const otherMissing = float(other->GetMaxHealth() - other->GetHealth());
             float const otherIncoming = Value::IncomingOn(world, otherFacts->guid);
-            std::vector<SpellEntry const*> otherCastable;
-            size_t otherIndex = 0;
-            // ManaBudgetBehavior's swap rule: a smaller rank that costs less, heals at least
-            // SWAP_MIN_COVER of it and heals more per mana makes this one too expensive.
-            float const swapCover = ManaBudgetBehavior::SWAP_MIN_COVER;
-            auto overBudget = [&](size_t index)
+            HealChoice otherChoice;
+            // A direct heal only: this replaces the rotation's cast, and a HoT's threat is not
+            // what aggroLoss measures.
+            if (bot->ChooseHeal(other, otherChoice, true))
             {
-                if (!budgeted)
-                    return false;
-                float const bigCost = ManaCost(me, otherCastable[index]);
-                float const bigHeal = std::min(otherMissing, EstimateDirectHeal(me, other, otherCastable[index]));
-                if (bigCost <= 0.0f || bigHeal <= 0.0f)
-                    return false;
-                for (size_t j = index + 1; j < otherCastable.size(); ++j)
+                // The rank ChooseHeal picks for that member (already the most efficient one that
+                // keeps up), then smaller ones, until one is safe. CanTryToCastSpell (ChooseHeal)
+                // already left out heals the bot cannot pay for.
+                std::vector<SpellEntry const*> otherCastable;
+                chosenThenSmaller(otherChoice, otherCastable);
+                for (SpellEntry const* spell : otherCastable)
                 {
-                    float const smallCost = ManaCost(me, otherCastable[j]);
-                    if (smallCost <= 0.0f || smallCost >= bigCost)
-                        continue;
-                    float const smallHeal = std::min(otherMissing, EstimateDirectHeal(me, other, otherCastable[j]));
-                    if (smallHeal >= swapCover * bigHeal && smallHeal / smallCost > bigHeal / bigCost)
-                        return true;
-                }
-                return false;
-            };
-            if (predictHeal(other, otherMissing, otherCastable, otherIndex))
-            {
-                // The rotation's choice for that member first, then smaller ones, until one is
-                // safe and within the mana budget. CanTryToCastSpell (predictHeal) already left
-                // out heals the bot cannot pay for.
-                for (size_t i = otherIndex; i < otherCastable.size(); ++i)
-                {
-                    SpellEntry const* spell = otherCastable[i];
-                    if (overBudget(i))
-                        continue;
                     float healed = 0.0f;
                     if (aggroLoss(other, otherMissing, spell, &healed) > 0.0f)
                         continue;
