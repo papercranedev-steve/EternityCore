@@ -10,7 +10,9 @@
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/HealerStanceBehavior.h"
 #include "Commander/Behaviors/EscapeBehavior.h"
+#include "Commander/Behaviors/PatrolBehavior.h"
 #include "Commander/Encounters/EncounterBehavior.h"
+#include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
 #include "Commander/Coordination/PullPlanner.h"
@@ -34,6 +36,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EscapeBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PatrolBehavior>()));
     }
 
     // One line per team assignment module.
@@ -44,5 +47,6 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
     }
 }

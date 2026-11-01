@@ -235,6 +235,20 @@ namespace Commander
         Position3 pos;
     };
 
+    // A creature walking a waypoint path, not in combat (WorldModel::patrols).
+    struct PatrolFacts : PackCreature
+    {
+        // Filled only while the party fights (HasPartyEnemy), for the fight-time patrol check
+        // (Coordination/PatrolAssigner.h): where it will be every trackStepSec from the refresh
+        // (PatrolTracker::Predict, PATROL_FIGHT_HORIZON_SEC ahead; track[0] = now).
+        float trackStepSec = 0.0f;
+        std::vector<Position3> track;
+        float reach = 0.0f;             // aggro range against the main tank (or this bot)
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+        float meleeDps = 0.0f;          // estimate before armor (CreatureProfiles::EstimateMeleeDps)
+    };
+
     struct PackFacts
     {
         PackSource source = PackSource::Distance;
@@ -290,7 +304,7 @@ namespace Commander
         // Out-of-combat creatures walking a waypoint path within PATROL_SCAN_RADIUS of the
         // leader (WorldModelBuilder.h), also those already in `packs`. Long loops reach the
         // party from beyond the pack scan (Patchwork Horror, strat-20261101-225111).
-        std::vector<PackCreature> patrols;
+        std::vector<PatrolFacts> patrols;
         RateFacts rates;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;

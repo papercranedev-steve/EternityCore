@@ -178,6 +178,29 @@ namespace Commander
         uint32 dangerSinceMs = 0;           // 0 = not in danger now
     };
 
+    // Fight-time patrol response (PatrolAssigner): an idle patrol walks into the fight before
+    // it ends and moving the fight is worth it. The tank walks to the first candidate that
+    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies and
+    // the party follow the tank.
+    struct PatrolMovePlan
+    {
+        bool active = false;
+        ObjectGuid patrol;
+        ObjectGuid tank;
+        std::vector<Position3> spots;       // best first, fixed while active
+        float arriveSec = 0.0f;             // patrol reaches the current fight, at decision time
+        float benefit = 0.0f;               // points not lost to the patrol
+        float cost = 0.0f;                  // points lost walking there
+        uint32 sinceMs = 0;
+        // Written by the tank's PatrolBehavior (same exception as PullPlan::rangedShot): index
+        // of the spot that passed the live checks, -1 = none yet, -2 = none of them passed.
+        mutable int32 chosen = -1;
+        mutable Position3 chosenSpot;       // spots[chosen] with its ground height
+
+        // Patrols already judged this fight (moved for, or staying put): one note each.
+        std::vector<ObjectGuid> judged;
+    };
+
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).
     struct InterruptDuty
     {
@@ -229,6 +252,7 @@ namespace Commander
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         RetreatPlan retreat;
+        PatrolMovePlan patrolMove;
         std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const

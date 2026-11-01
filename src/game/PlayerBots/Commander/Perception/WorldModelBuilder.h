@@ -18,6 +18,9 @@ namespace WorldModelBuilder
     float const PACK_SCAN_RADIUS = 50.0f;
     // Radius around the party leader scanned for patrols (WorldModel::patrols), same scan.
     float const PATROL_SCAN_RADIUS = 100.0f;
+    // During a fight each patrol's walk is predicted this far ahead, one point per step.
+    float const PATROL_FIGHT_HORIZON_SEC = 60.0f;
+    float const PATROL_FIGHT_STEP_SEC = 1.0f;
     // Creature spell lists are checked this often (CreatureAI.cpp CREATURE_CASTING_DELAY).
     float const CREATURE_SPELL_CHECK_SEC = 1.2f;
 

@@ -3,6 +3,8 @@
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/DamageIntake.h"
+#include "Commander/Perception/PatrolTracker.h"
+#include "Commander/Perception/CreatureProfile.h"
 #include "Commander/CommanderMgr.h"
 #include "RoleCapability.h"
 #include "World.h"
@@ -569,6 +571,23 @@ namespace WorldModelBuilder
         UpdateCastStarts(world, WorldTimer::getMSTime());
     }
 
+    namespace
+    {
+        void FillPatrolTrack(Creature* creature, Unit const* reachAgainst, PatrolFacts& pf)
+        {
+            PatrolTracker::Track const track = PatrolTracker::Predict(creature, PATROL_FIGHT_HORIZON_SEC, PATROL_FIGHT_STEP_SEC);
+            pf.trackStepSec = PATROL_FIGHT_STEP_SEC;
+            pf.track.reserve(track.points.size());
+            for (PatrolTracker::TrackPoint const& p : track.points)
+                pf.track.push_back(p.pos);
+            pf.reach = creature->GetAttackDistance(reachAgainst);
+            pf.health = creature->GetHealth();
+            pf.maxHealth = creature->GetMaxHealth();
+            if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(pf.entry))
+                pf.meleeDps = CreatureProfiles::EstimateMeleeDps(*profile, pf.level);
+        }
+    }
+
     void RefreshPacks(PartyBotAI* bot, WorldModel& world)
     {
         Player* me = bot->me;
@@ -585,6 +604,14 @@ namespace WorldModelBuilder
 
         std::vector<PackCreature> creatures;
         world.patrols.clear();
+        // Patrol tracks only matter while we fight (PatrolAssigner); the pull planner predicts
+        // its own. Aggro range against the main tank: the fight is where the tank stands.
+        bool const fighting = world.HasPartyEnemy();
+        Unit const* reachAgainst = me;
+        if (fighting)
+            if (PartyMemberFacts const* tank = Tanks::Main(world, true))
+                if (Unit const* u = me->GetMap()->GetUnit(tank->guid))
+                    reachAgainst = u;
         for (Unit* unit : units)
         {
             if (!unit->IsCreature() || unit->IsInCombat() || unit->GetOwnerGuid() ||
@@ -619,7 +646,13 @@ namespace WorldModelBuilder
                 c.boss = profile->boss;
             c.pos = PositionOf(creature);
             if (c.patrol)
-                world.patrols.push_back(c);
+            {
+                PatrolFacts pf;
+                static_cast<PackCreature&>(pf) = c;
+                if (fighting)
+                    FillPatrolTrack(creature, reachAgainst, pf);
+                world.patrols.push_back(std::move(pf));
+            }
             if (center->IsWithinDistInMap(creature, PACK_SCAN_RADIUS))
                 creatures.push_back(c);
         }

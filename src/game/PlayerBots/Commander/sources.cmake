@@ -122,6 +122,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/RoleAssigner.h
   ${COMMANDER_DIR}/Coordination/RoleAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/PatrolAssigner.h
+  ${COMMANDER_DIR}/Coordination/PatrolAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/PatrolBehavior.h
+  ${COMMANDER_DIR}/Behaviors/PatrolBehavior.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})
