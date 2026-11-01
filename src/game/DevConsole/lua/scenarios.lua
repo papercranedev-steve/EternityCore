@@ -24,7 +24,8 @@ local LEADER_ROLE = {
 
 scenario.list = {
     {
-        id = "stockade", title = "暴风城监狱 迪菲亚囚犯群（场景 1）", level = 25,
+        -- 23: the first hall's mobs are 23-25 (user, 2026-11-01: test at the same level)
+        id = "stockade", title = "暴风城监狱 迪菲亚囚犯群（场景 1）", level = 23,
         entry = { map = 34, x = 48.98, y = 0.48, z = -16.39, o = 0.0 },
         -- First hall past the entrance (Inmate, Prisoner, Captives 27-36 yd from the door). The
         -- scenario 1 doc pack at (189, 88) is deep in the corridor: every point on the path to it
