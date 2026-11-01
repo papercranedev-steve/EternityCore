@@ -19,9 +19,10 @@
  *     close to the bomb, never the button presser).
  *
  * Proposals:
- *   Button presser (one melee damage dealer, else one ranged; picked in Refresh, sticky),
- *     Assigned, UseObject on the button of the lit face closest to him, while the boss is alive
- *     and the presser is at >= PRESSER_MIN_HEALTH_PCT.
+ *   Button presser (one melee damage dealer, else one ranged; picked in Refresh, sticky while
+ *     alive, on this map and at >= PRESSER_MIN_HEALTH_PCT, else re-picked), Assigned, UseObject
+ *     on the button of the lit face closest to him, while the boss is alive. A button just used
+ *     is skipped until its face is dark or BUTTON_REUSE_MS passed.
  *     benefit = BOMBS_PER_FACE_WINDOW x explosion loss (BOMB_VICTIMS x BOMB_DAMAGE, in points),
  *     cost    = Value::LostAction for walking to the button, using it and walking back to the boss.
  *   Melee damage dealers whose target is a bomb they were not assigned to intercept, Assigned:
@@ -69,7 +70,10 @@ namespace Commander
 
         // Faces are ~50 yd and buttons ~40 yd from the boss.
         static constexpr float OBJECT_SEARCH_RADIUS = 80.0f;
-        static constexpr uint32 OBJECT_SEARCH_RETRY_MS = 5000;
+        // A grid search that missed some faces / buttons is repeated at most this often.
+        static constexpr uint32 OBJECT_SEARCH_RETRY_MS = 10000;
+        // A button just used is not proposed again until its face goes dark or this passes.
+        static constexpr uint32 BUTTON_REUSE_MS = 5000;
 
         enum class Phase : uint8
         {
@@ -96,6 +100,10 @@ namespace Commander
             ObjectGuid button;
             Position3 buttonPos;
             bool lit = false;
+            // Set by ProposePresser (const) on the tick the presser is in reach of the button,
+            // cleared by ReadFaces once the face is dark. Same map thread for the whole party.
+            mutable bool pressed = false;
+            mutable uint32 pressedAtMs = 0;
         };
 
         void FindObjects(PartyBotAI* bot, uint32 nowMs);
@@ -118,6 +126,7 @@ namespace Commander
 
         Face m_faces[FACE_COUNT];
         bool m_objectsFound = false;
+        bool m_searched = false;        // a grid search ran this attempt (m_lastSearchMs valid)
         uint32 m_lastSearchMs = 0;
         uint32 m_litCount = 0;
 

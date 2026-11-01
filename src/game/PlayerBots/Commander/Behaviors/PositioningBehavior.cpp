@@ -5,6 +5,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "Timer.h"
 #include <algorithm>
 #include <cmath>
 
@@ -208,6 +209,47 @@ namespace Commander
             return false;
         }
 
+        // Melee: updates the record of the last out-of-reach step (header "Melee out of reach")
+        // and returns true while the bot is back inside that area after the step and its hold.
+        bool MeleeGaveUp(PartyBotAI::HazardGiveUp& g, std::vector<HazardZone> const& zones,
+                         Position3 const& here, uint32 nowMs)
+        {
+            if (g.enemy.IsEmpty())
+                return false;
+            HazardZone const* zone = nullptr;
+            for (HazardZone const& z : zones)
+            {
+                if (z.enemy == g.enemy && z.spellId == g.spellId)
+                {
+                    zone = &z;
+                    break;
+                }
+            }
+            uint32 const sinceMs = WorldTimer::getMSTimeDiff(g.movedMs, nowMs);
+            bool const late = sinceMs >= g.holdMs + PB::MELEE_RETURN_MS;
+            bool clear = !zone;
+            if (zone && !Contains(*zone, here))
+            {
+                // Out: the step happened. Re-armed once the bot leaves again after coming back,
+                // or when it does not come back (the step was not undone by the chase).
+                g.left = true;
+                clear = g.returned || late;
+            }
+            else if (zone)
+            {
+                if (g.left && sinceMs >= g.holdMs)
+                    g.returned = true;
+                else if (!g.left && late)
+                    clear = true;       // the step was never executed (lost to another proposal)
+            }
+            if (clear)
+            {
+                g = PartyBotAI::HazardGiveUp();
+                return false;
+            }
+            return g.returned;
+        }
+
         char const* Reason(HazardZone const& primary, bool lethal, bool dodge)
         {
             if (lethal)
@@ -220,9 +262,12 @@ namespace Commander
         }
 
         // Value of moving to `spot` (header comment); false if nothing is gained.
+        // `outOfReach`: melee step that leaves the victim's reach for the horizon (not a dodge).
         bool MakeProposal(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                          HazardZone const& primary, Spot const& spot, Loss const& stay, Proposal& p)
+                          HazardZone const& primary, Spot const& spot, Loss const& stay, Proposal& p,
+                          bool& outOfReach)
         {
+            outOfReach = false;
             PartyMemberFacts const& self = *ctx.self;
             float const walkSec = spot.dist * PB::PATH_FACTOR / ctx.speed;
 
@@ -268,7 +313,13 @@ namespace Commander
                 // Out of melee until the dodged cast ends, or for the horizon.
                 float const away = allDodges ? dodgeUntil : awaySec;
                 cost = Value::LostAction(world, self, walkSec + away);
-                holdSec = std::max(holdSec, walkSec + away);
+                // Fix: away for the horizon held up to MAX_HORIZON_SEC and, re-proposed after
+                // each chase back in, kept the bot out of melee for most of the fight. Hold at
+                // most MELEE_AWAY_MAX_SEC; Propose then lets it fight inside (MeleeGaveUp).
+                // Benefit and cost both stay counted over the horizon.
+                float const maxAway = PB::MELEE_AWAY_MAX_SEC;
+                holdSec = std::max(holdSec, walkSec + (allDodges ? away : std::min(away, maxAway)));
+                outOfReach = !allDodges;
             }
             else
                 cost = Value::LostAction(world, self, walkSec);
@@ -334,14 +385,17 @@ namespace Commander
             return;
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        if (zones.empty())
-            return;
 
         ctx.me = me;
         ctx.map = me->GetMap();
         ctx.here.x = me->GetPositionX();
         ctx.here.y = me->GetPositionY();
         ctx.here.z = me->GetPositionZ();
+
+        uint32 const nowMs = WorldTimer::getMSTime();
+        bool const gaveUp = ctx.roleBit == HAZARD_MELEE && MeleeGaveUp(bot->m_hazardGiveUp, zones, ctx.here, nowMs);
+        if (zones.empty())
+            return;
 
         // Zones the bot is clearly inside (trigger) and the expected loss of staying.
         std::vector<HazardZone const*> inside;
@@ -396,8 +450,21 @@ namespace Commander
                 if (!FindSpot(ctx, world, zones, *zone, allowRange, checks, spot))
                     continue;
                 Proposal p;
-                if (MakeProposal(ctx, world, zones, *zone, spot, stay, p))
+                bool outOfReach = false;
+                if (MakeProposal(ctx, world, zones, *zone, spot, stay, p, outOfReach))
                 {
+                    if (outOfReach)
+                    {
+                        // Already stepped out once and came back: fight inside. Lethal steps still go.
+                        if (gaveUp && p.tier != ProposalTier::Urgent)
+                            continue;
+                        PartyBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
+                        g = PartyBotAI::HazardGiveUp();
+                        g.enemy = zone->enemy;
+                        g.spellId = zone->spellId;
+                        g.movedMs = nowMs;
+                        g.holdMs = p.action.holdMs;
+                    }
                     out.push_back(p);
                     return;
                 }

@@ -16,6 +16,9 @@
  *            either heal another member below OTHER_HEAL_PCT with a safe heal, or (nobody
  *            else needs it / no safe heal) veto healing that target this tick. The veto makes
  *            the rotation heal nobody this tick, hence the other-member option first.
+ *            The other-member heal follows the mana budget (ManaBudgetBehavior::ComputeBudget):
+ *            under tension > 1, only members below ManaBudget::HealCeilingPct, and no rank
+ *            ManaBudgetBehavior would swap for a cheaper, more efficient one.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
  */
 

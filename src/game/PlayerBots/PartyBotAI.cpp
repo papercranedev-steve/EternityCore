@@ -30,6 +30,9 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/VetoChecks.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/HazardZones.h"
+#include "Commander/Behaviors/PositioningBehavior.h"
 
 #include <random>
 
@@ -154,6 +157,25 @@ bool PartyBotAI::IsMovementHeld() const
 bool PartyBotAI::IsTauntControlled() const
 {
     return m_directives && m_directives->IsTauntControlled(WorldTimer::getMSTime());
+}
+
+bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
+{
+    uint8 const roleBit = Commander::HazardZones::RoleBit(GetRole());
+    if (!roleBit || !me->IsInCombat() || IsInDuel() ||
+        !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("position"))
+        return false;
+
+    // Same map as the bot, so the commander belongs to this map thread.
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (!commander)
+        return false;
+
+    Commander::Position3 pos;
+    pos.x = pUnit->GetPositionX();
+    pos.y = pUnit->GetPositionY();
+    pos.z = pUnit->GetPositionZ();
+    return Commander::HazardZones::IsInside(Commander::HazardZones::Get(commander->GetWorld()), roleBit, pos);
 }
 
 void PartyBotAI::BeginChasing(Unit* pVictim) const
@@ -912,6 +934,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // a pending request are ignored so the bot does not stand up again and again.
         bool resurrectFirst = false;
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
+        {
             if (Player* pDead = SelectResurrectionTarget())
             {
                 if (pDead->IsRessurectRequested())
@@ -920,18 +943,32 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 {
                     // A resurrection that keeps failing (Rebirth without its reagent, a cast
                     // that never lands) must not keep the bot from drinking forever: after
-                    // PB_RESURRECT_TRY_MS of trying on the same corpse, let DrinkAndEat run for
+                    // PB_RESURRECT_TRY_MS of trying without a success, let DrinkAndEat run for
                     // PB_RESURRECT_BACKOFF_MS, then try again.
+                    // The window is per bot: keyed per corpse, two failing corpses took turns
+                    // as the target and each switch restarted it, so the bot never drank.
+                    // Switching corpses restarts it only when the last one was resurrected.
                     uint32 const now = WorldTimer::getMSTime();
-                    if (m_resurrectTryGuid != pDead->GetObjectGuid() ||
-                        WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) >= PB_RESURRECT_TRY_MS + PB_RESURRECT_BACKOFF_MS)
+                    if (m_resurrectTryGuid != pDead->GetObjectGuid())
                     {
+                        bool restart = m_resurrectTryGuid.IsEmpty();
+                        if (!restart)
+                        {
+                            Player* pLast = me->GetMap()->GetPlayer(m_resurrectTryGuid);
+                            restart = pLast && (pLast->IsAlive() || pLast->IsRessurectRequested());
+                        }
+                        if (restart)
+                            m_resurrectTryMs = now;
                         m_resurrectTryGuid = pDead->GetObjectGuid();
-                        m_resurrectTryMs = now;
                     }
+                    if (WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) >= PB_RESURRECT_TRY_MS + PB_RESURRECT_BACKOFF_MS)
+                        m_resurrectTryMs = now;
                     resurrectFirst = WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) < PB_RESURRECT_TRY_MS;
                 }
             }
+            else
+                m_resurrectTryGuid.Clear();         // no corpse to try: the next one starts a fresh window
+        }
 
         // (no eating or drinking while a Commander pull is under way)
         if (!commanderOutOfCombat && !resurrectFirst && DrinkAndEat())
@@ -1035,7 +1072,13 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         if (!pVictim)
         {
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+            // Fix: in combat, a healer (no victim) that the Commander position module just walked
+            // out of an area followed the leader standing in it straight back in, and was moved
+            // out again on the next tick. Stay put while the leader is in such an area and within
+            // heal range; farther away, follow as before (the module moves the bot out again).
+            float const healRange = Commander::PositioningBehavior::HEAL_RANGE;
+            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
+              !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && IsInHazardZone(pLeader)))
                 me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
         }
         else

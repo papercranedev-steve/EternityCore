@@ -80,6 +80,12 @@ namespace Commander
         float const PATROL_HORIZON_SEC = 20.0f;
         float const PATROL_MIN_CLEARANCE = 15.0f;
         uint32 const PATROL_WAIT_MAX_MS = 30 * 1000;
+        // While a held pull comes back to Approach on every refresh, RecheckBeforeApproach
+        // predicts again (assist prediction, every patrol's track) at most this often; in
+        // between it holds the pull with the previous answer. Waiting for a patrol needs a
+        // quicker answer (it may leave any moment) than waiting for a pack over the limit.
+        uint32 const RECHECK_PATROL_WAIT_MS = 500;
+        uint32 const RECHECK_HOLD_MS = 1000;
 
         // Ranged pull: the tank opens from at most this far (combat scenario 13, rows 10-12).
         float const PULL_RANGE = 25.0f;

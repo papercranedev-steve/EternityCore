@@ -98,6 +98,9 @@ public:
     Commander::BotDirectives const& Directives() const;
     bool IsMovementHeld() const;
     bool IsTauntControlled() const;
+    // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
+    // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
+    bool IsInHazardZone(Unit const* pUnit) const;
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
@@ -127,12 +130,26 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
-    // Resurrection before eating/drinking (UpdateAI): the corpse being tried and since when.
+    // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
+    // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.
     static constexpr uint32 PB_RESURRECT_TRY_MS = 15 * IN_MILLISECONDS;
     static constexpr uint32 PB_RESURRECT_BACKOFF_MS = 60 * IN_MILLISECONDS;
     ObjectGuid m_resurrectTryGuid;
     uint32 m_resurrectTryMs = 0;
+    // Commander position module (Commander/Behaviors/PositioningBehavior.cpp): the area a melee
+    // bot last stepped out of without its victim in reach. After that one step it fights inside
+    // the area until it leaves it or the area is gone. Mutable: behaviors get a const bot.
+    struct HazardGiveUp
+    {
+        ObjectGuid enemy;           // empty = none
+        uint32 spellId = 0;
+        uint32 movedMs = 0;         // when the step was proposed
+        uint32 holdMs = 0;          // its movement hold
+        bool left = false;          // seen outside the area after the step
+        bool returned = false;      // seen inside again after the hold: no more out-of-reach steps
+    };
+    mutable HazardGiveUp m_hazardGiveUp;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
 };

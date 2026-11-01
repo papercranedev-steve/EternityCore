@@ -6,13 +6,90 @@
 #include "DBCStores.h"
 #include "Map.h"
 #include "SpellMgr.h"
+#include "Timer.h"
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 namespace Commander
 {
     namespace
     {
+        // Ranged pull shots per tank (PullPlan has no field for it and Propose is const).
+        // Bots of several maps update at once, hence the lock.
+        struct ShotState
+        {
+            ObjectGuid tank;
+            ObjectGuid target;
+            uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs: a new Approach starts over
+            uint32 shotAtMs = 0;            // first shot, or the end of the retry walk; 0 = none yet
+            bool retried = false;
+            bool walkIn = false;
+            uint32 touchedMs = 0;
+        };
+        uint32 const SHOT_STATE_KEEP_MS = 60 * 1000;
+        std::mutex g_shotsLock;
+        std::vector<ShotState> g_shots;
+
+        enum class ShotStep : uint8
+        {
+            Shoot,      // in position: shoot (again)
+            Wait,       // walking the retry step
+            Retry,      // no fight after the shot: step closer, once
+            WalkIn,     // no fight after the retry either: walk-in pull
+        };
+
+        // Called in range with line of sight. `walking` = the tank is still on a held walk.
+        ShotStep NextShotStep(PullPlan const& pull, bool targetInCombat, bool walking, uint32 nowMs)
+        {
+            uint32 const noCombatMs = PullBehavior::RANGED_NO_COMBAT_MS;
+            std::lock_guard<std::mutex> guard(g_shotsLock);
+            g_shots.erase(std::remove_if(g_shots.begin(), g_shots.end(), [&pull, nowMs](ShotState const& s)
+                {
+                    return s.tank != pull.tank && WorldTimer::getMSTimeDiff(s.touchedMs, nowMs) > SHOT_STATE_KEEP_MS;
+                }), g_shots.end());
+
+            auto itr = std::find_if(g_shots.begin(), g_shots.end(), [&pull](ShotState const& s) { return s.tank == pull.tank; });
+            if (itr == g_shots.end())
+            {
+                g_shots.push_back(ShotState());
+                itr = g_shots.end() - 1;
+                itr->tank = pull.tank;
+            }
+            ShotState& s = *itr;
+            if (s.target != pull.target || s.approachSinceMs != pull.phaseSinceMs)
+            {
+                s = ShotState();
+                s.tank = pull.tank;
+                s.target = pull.target;
+                s.approachSinceMs = pull.phaseSinceMs;
+            }
+            s.touchedMs = nowMs;
+
+            if (s.walkIn)
+                return ShotStep::WalkIn;
+            if (s.retried && walking)
+            {
+                s.shotAtMs = nowMs;     // the retry window starts once the tank stands
+                return ShotStep::Wait;
+            }
+            // Fight started: PullAssigner moves on with the next refresh.
+            if (!s.shotAtMs || targetInCombat || WorldTimer::getMSTimeDiff(s.shotAtMs, nowMs) < noCombatMs)
+            {
+                if (!s.shotAtMs)
+                    s.shotAtMs = nowMs;
+                return ShotStep::Shoot;
+            }
+            if (!s.retried)
+            {
+                s.retried = true;
+                s.shotAtMs = nowMs;
+                return ShotStep::Retry;
+            }
+            s.walkIn = true;
+            return ShotStep::WalkIn;
+        }
+
         Proposal Make(ProposalTier tier, float score, BotActionType type, ObjectGuid target = ObjectGuid())
         {
             Proposal p;
@@ -67,6 +144,37 @@ namespace Commander
             bool const inRange = distance <= pull.rangedPullRange;
             if (inRange && me->IsWithinLOSInMap(target))
             {
+                bool const walking = me->IsMoving() && bot->IsMovementHeld();
+                switch (NextShotStep(pull, target->IsInCombat(), walking, WorldTimer::getMSTime()))
+                {
+                    case ShotStep::WalkIn:
+                        return false;
+                    case ShotStep::Wait:
+                        out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                        return true;
+                    case ShotStep::Retry:
+                    {
+                        // A few yards closer (not inside the minimum range), then shoot again.
+                        float const retryStep = PullBehavior::RANGED_RETRY_STEP_YD;
+                        Position3 const here = PositionOf(me);
+                        Position3 const there = PositionOf(target);
+                        float const total = PackResolver::Distance(here, there);
+                        float const step = std::min(retryStep, distance - (minRange + 1.0f));
+                        if (step >= 1.0f)
+                        {
+                            float const f = step / std::max(total, 0.1f);
+                            Position3 to;
+                            to.x = here.x + (there.x - here.x) * f;
+                            to.y = here.y + (there.y - here.y) * f;
+                            to.z = here.z + (there.z - here.z) * f;
+                            out.push_back(MoveTo(to, step));
+                            return true;
+                        }
+                        break;      // no room to step closer: just shoot again
+                    }
+                    case ShotStep::Shoot:
+                        break;
+                }
                 Proposal cast = Make(ProposalTier::Assigned, 5.0f, BotActionType::Cast, pull.target);
                 cast.action.spell = spell;
                 out.push_back(cast);

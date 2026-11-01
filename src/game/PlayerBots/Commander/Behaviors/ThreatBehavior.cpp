@@ -1,4 +1,6 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
+#include "Commander/Behaviors/ManaBudgetBehavior.h"
+#include "Commander/Perception/ManaBudget.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"
@@ -6,6 +8,7 @@
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
 #include <algorithm>
@@ -74,6 +77,26 @@ namespace Commander
                 if (spell->Effect[i] == SPELL_EFFECT_HEAL)
                     points += spell->EffectBasePoints[i];
             return points;
+        }
+
+        // Mana the spell costs this caster now (same as ManaBudgetBehavior). 0 = no mana.
+        float ManaCost(Player* caster, SpellEntry const* spell)
+        {
+            if (spell->powerType != POWER_MANA)
+                return 0.0f;
+            return float(Spell::CalculatePowerCost(spell, caster));
+        }
+
+        // Members that keep the higher mana budget heal ceiling (same rule as
+        // ManaBudgetBehavior's IsTankLike): tank bots, players or pets being hit right now.
+        bool BudgetTankLike(WorldModel const& world, PartyMemberFacts const& m)
+        {
+            if (m.isBot && !m.isPet)
+                return m.role == ROLE_TANK;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && !e.crowdControlled && e.victim == m.guid)
+                    return true;
+            return false;
         }
 
         // Threat `self` adds per second to `enemy`: measured on it, else the best rate measured on
@@ -585,11 +608,19 @@ namespace Commander
         // alternative (veto + cast) brings back "nobody healed" whenever the cast fails.
         // Same eligibility as SelectHealTarget (IsValidHealTarget: helpful, line of sight, 30 yd).
         // Pets are left out (the rotation only heals them when no player is hurt).
+        // Mana budget (ManaBudgetBehavior::ComputeBudget, same numbers that behavior uses): when
+        // mana is short (tension > 1), only members below their heal ceiling, and no heal that
+        // ManaBudgetBehavior would swap for a cheaper, more efficient rank.
+        ManaBudgetBehavior::Budget budget;
+        bool const budgeted = ManaBudgetBehavior::ComputeBudget(bot, world, budget) && budget.tension > 1.0f;
+
         Unit* other = nullptr;
         PartyMemberFacts const* otherFacts = nullptr;
         for (PartyMemberFacts const& m : world.party)
         {
             if (m.guid == targetFacts->guid || m.isPet || !m.alive || m.charmed || m.healthPct >= OTHER_HEAL_PCT)
+                continue;
+            if (budgeted && m.healthPct >= ManaBudget::HealCeilingPct(budget.tension, BudgetTankLike(world, m)))
                 continue;
             if (otherFacts && m.healthPct >= otherFacts->healthPct)
                 continue;
@@ -605,12 +636,38 @@ namespace Commander
             float const otherIncoming = Value::IncomingOn(world, otherFacts->guid);
             std::vector<SpellEntry const*> otherCastable;
             size_t otherIndex = 0;
+            // ManaBudgetBehavior's swap rule: a smaller rank that costs less, heals at least
+            // SWAP_MIN_COVER of it and heals more per mana makes this one too expensive.
+            float const swapCover = ManaBudgetBehavior::SWAP_MIN_COVER;
+            auto overBudget = [&](size_t index)
+            {
+                if (!budgeted)
+                    return false;
+                float const bigCost = ManaCost(me, otherCastable[index]);
+                float const bigHeal = std::min(otherMissing, EstimateDirectHeal(me, other, otherCastable[index]));
+                if (bigCost <= 0.0f || bigHeal <= 0.0f)
+                    return false;
+                for (size_t j = index + 1; j < otherCastable.size(); ++j)
+                {
+                    float const smallCost = ManaCost(me, otherCastable[j]);
+                    if (smallCost <= 0.0f || smallCost >= bigCost)
+                        continue;
+                    float const smallHeal = std::min(otherMissing, EstimateDirectHeal(me, other, otherCastable[j]));
+                    if (smallHeal >= swapCover * bigHeal && smallHeal / smallCost > bigHeal / bigCost)
+                        return true;
+                }
+                return false;
+            };
             if (predictHeal(other, otherMissing, otherCastable, otherIndex))
             {
-                // The rotation's choice for that member first, then smaller ones, until one is safe.
+                // The rotation's choice for that member first, then smaller ones, until one is
+                // safe and within the mana budget. CanTryToCastSpell (predictHeal) already left
+                // out heals the bot cannot pay for.
                 for (size_t i = otherIndex; i < otherCastable.size(); ++i)
                 {
                     SpellEntry const* spell = otherCastable[i];
+                    if (overBudget(i))
+                        continue;
                     float healed = 0.0f;
                     if (aggroLoss(other, otherMissing, spell, &healed) > 0.0f)
                         continue;

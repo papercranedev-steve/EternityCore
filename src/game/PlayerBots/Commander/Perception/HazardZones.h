@@ -123,6 +123,10 @@ namespace Commander
         // 3D distance from the zone centre (same metric as Spell.cpp PUSH_SRC_CENTER).
         float DistanceTo(HazardZone const& zone, Position3 const& pos);
 
+        // True if `pos` is inside a zone of `zones` that is dangerous to `roleBit`.
+        // PartyBotAI asks this before following the leader in combat.
+        bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos);
+
         char const* KindName(HazardKind kind);
     }
 }

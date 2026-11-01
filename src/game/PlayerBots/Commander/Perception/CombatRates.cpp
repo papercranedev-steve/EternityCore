@@ -47,6 +47,18 @@ namespace Commander
         while (!m_samples.empty() && WorldTimer::getMSTimeDiff(m_samples.front().timeMs, nowMs) > MAX_WINDOW_MS)
             m_samples.pop_front();
 
+        // An enemy that now fights only an ally: drop its rows from the stored samples, so the
+        // health the ally takes off it is not counted as ours (now or after it turns back to
+        // us: its rows start again from the next sample).
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (!e.onAllyOnly)
+                continue;
+            for (Sample& s : m_samples)
+                s.rows.erase(std::remove_if(s.rows.begin(), s.rows.end(),
+                    [&e](Row const& row) { return row.enemy == e.guid; }), s.rows.end());
+        }
+
         Sample const* base = nullptr;
         for (auto itr = m_samples.rbegin(); itr != m_samples.rend(); ++itr)
         {

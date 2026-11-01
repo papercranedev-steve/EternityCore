@@ -64,7 +64,20 @@ namespace Commander
         for (EnemyFacts const& e : world.enemies)
             if (e.entry == NPC_MOGRAINE || e.entry == NPC_WHITEMANE)
                 return true;
-        return false;
+
+        // Neither boss on a threat list: Mograine feigning death before Whitemane is on one.
+        // Keep the stage (no reset) within the grace window while the party still fights.
+        if (!m_bossEngagedMs || m_stage == STAGE_DONE)
+            return false;
+        uint32 const now = world.refreshedAtMs;
+        uint32 const grace = BOSS_GONE_GRACE_MS;
+        if (WorldTimer::getMSTimeDiff(m_bossEngagedMs, now) >= grace)
+            return false;
+        for (PartyMemberFacts const& m : world.party)
+            if (m.alive && m.inCombat)
+                return true;
+        uint32 const outOfCombat = PARTY_OUT_OF_COMBAT_MS;
+        return m_partyCombatMs && WorldTimer::getMSTimeDiff(m_partyCombatMs, now) < outOfCombat;
     }
 
     void ScarletMograineWhitemane::OnReset()
@@ -98,11 +111,38 @@ namespace Commander
             m_whitemane = whitemane->guid;
         PartyMemberFacts const* tank = EncounterHelpers::FindTankBot(world);
         m_tank = tank ? tank->guid : ObjectGuid();
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.alive && m.inCombat)
+            {
+                m_partyCombatMs = now;
+                break;
+            }
+        }
+
+        // Live units (map thread): Mograine's feign death, Whitemane walking in.
+        bool const live = bot && bot->me->IsInWorld();
+        Unit* mograineUnit = (live && !m_mograine.IsEmpty()) ? bot->me->GetMap()->GetUnit(m_mograine) : nullptr;
+        Unit* whitemaneUnit = (live && !m_whitemane.IsEmpty()) ? bot->me->GetMap()->GetUnit(m_whitemane) : nullptr;
+        bool const mograineFeigning = mograineUnit && mograineUnit->IsAlive() &&
+            (mograineUnit->IsFeigningDeath() || mograineUnit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) ||
+             !mograineUnit->IsTargetableBy(bot->me));
+        bool const whitemaneEngaged = (whitemane && whitemane->acting) ||
+            (!whitemane && whitemaneUnit && whitemaneUnit->IsAlive() && whitemaneUnit->IsInCombat());
+
+        // Grace window for Matches: a boss on a threat list, or still in the fight off them.
+        if (mograine || whitemane || mograineFeigning || whitemaneEngaged)
+            m_bossEngagedMs = now;
+        if (mograineUnit && whitemaneUnit && !mograineUnit->IsAlive() && !whitemaneUnit->IsAlive())
+            m_bossEngagedMs = 0;        // both dead: the fight is over
+        else if (!mograine && !whitemane && mograineUnit && whitemaneUnit && !mograineFeigning &&
+                 !mograineUnit->IsInCombat() && !whitemaneUnit->IsInCombat())
+            m_bossEngagedMs = 0;        // both out of combat (evaded): the fight is over
 
         // Instance stage: live object, map thread (we are called from PartyCommander::Update).
         m_stageFromInstance = false;
         uint32 stage = m_stage;
-        if (bot && bot->me->IsInWorld())
+        if (live)
         {
             if (InstanceData* data = bot->me->GetMap()->GetInstanceData())
             {
@@ -112,15 +152,20 @@ namespace Commander
         }
         if (!m_stageFromInstance)
         {
+            // Feigned: not acting, alive but not attackable, or off the threat lists (seen
+            // earlier, not dead) while Whitemane is engaged.
+            bool const feigned = (mograine && !mograine->acting) || mograineFeigning ||
+                (!mograine && !m_mograine.IsEmpty() && whitemaneEngaged && (!mograineUnit || mograineUnit->IsAlive()));
             if (m_stage == STAGE_REVIVED)
                 stage = STAGE_REVIVED;          // feign death happens once; Divine Shield is not it
-            else if (mograine && !mograine->acting)
+            else if (feigned)
             {
                 m_sawFeignDeath = true;
                 stage = STAGE_DIED_ONCE;
             }
             else if (m_sawFeignDeath)
-                stage = STAGE_REVIVED;
+                // Back only when he is on a threat list and acting again; absent = still down.
+                stage = (mograine && mograine->acting) ? STAGE_REVIVED : STAGE_DIED_ONCE;
             else
                 stage = STAGE_IN_PROGRESS;
         }

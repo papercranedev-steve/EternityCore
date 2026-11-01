@@ -10,7 +10,13 @@
  *   0 NOT_STARTED, 1 IN_PROGRESS, 2 DIED_ONCE (Mograine feigning death, Whitemane coming),
  *   3 REVIVED (both up), 4 DONE.
  *   Without instance data (scripts not loaded) the stage is inferred from facts: Mograine
- *   not acting = DIED_ONCE; acting again after that = REVIVED.
+ *   feigned = DIED_ONCE (not acting; alive and feigning death / not selectable / not a valid
+ *   target; or off the threat lists while Whitemane is engaged); back on a threat list and
+ *   acting after that = REVIVED.
+ *
+ * Match also holds without either boss on a threat list (feign death gap before Whitemane
+ *   arrives) for BOSS_GONE_GRACE_MS after a boss was last in the fight, unless the party has
+ *   been out of combat for PARTY_OUT_OF_COMBAT_MS or both bosses are dead.
  *
  * Plan (AdjustPlan): focus Whitemane in DIED_ONCE and REVIVED (she heals, mind controls, and
  *   only her health moves phase 1 forward). In DIED_ONCE before she arrives the focus is
@@ -75,6 +81,13 @@ namespace Commander
         static constexpr float SLEEP_WEIGHT = 2.0f;
         static constexpr float HEAL_CAST_SEC = 2.5f;            // typical direct heal cast
 
+        // Feign death takes Mograine off the threat lists before Whitemane is on them: the module
+        // stays active this long after a boss was last seen in the fight (threat list, or live:
+        // Mograine feigning, Whitemane in combat) ...
+        static constexpr uint32 BOSS_GONE_GRACE_MS = 20000;
+        // ... unless the party has been out of combat this long.
+        static constexpr uint32 PARTY_OUT_OF_COMBAT_MS = 5000;
+
         char const* GetId() const override { return "mograine-whitemane"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(PartyBotAI* bot, WorldModel const& world) override;
@@ -95,6 +108,8 @@ namespace Commander
         bool m_sawFeignDeath = false;           // inference: Mograine was seen not acting
         uint32 m_stageSinceMs = 0;
         uint32 m_revivedAtMs = 0;               // 0 = not revived this fight
+        uint32 m_bossEngagedMs = 0;             // last refresh a boss was in the fight, 0 = over / never
+        uint32 m_partyCombatMs = 0;             // last refresh a party member was in combat
 
         ObjectGuid m_mograine;
         ObjectGuid m_whitemane;

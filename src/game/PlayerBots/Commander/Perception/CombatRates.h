@@ -3,6 +3,8 @@
  *  - incoming melee damage per second, after armor
  *  - damage the party deals per second, measured from enemy health over a few seconds
  * Pure data, one instance per PartyCommander. Runs after ThreatHistory::Annotate.
+ * Enemies fighting only an ally (EnemyFacts::onAllyOnly) are left out: their stored rows are
+ * dropped while they are, and measured again from scratch once they fight the party.
  */
 
 #ifndef MANGOS_COMMANDER_COMBAT_RATES_H

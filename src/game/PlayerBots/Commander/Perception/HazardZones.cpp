@@ -319,6 +319,14 @@ namespace HazardZones
         return PackResolver::Distance(zone.center, pos);
     }
 
+    bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos)
+    {
+        for (HazardZone const& z : zones)
+            if (z.DangerousTo(roleBit) && DistanceTo(z, pos) <= z.radius)
+                return true;
+        return false;
+    }
+
     char const* KindName(HazardKind kind)
     {
         switch (kind)

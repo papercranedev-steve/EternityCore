@@ -52,6 +52,9 @@ namespace Commander
         // Path may be at most this much longer than the straight line (long detours run through
         // places nobody looked at).
         float const MAX_PATH_DETOUR = 2.0f;
+        // Pathfinding is the expensive check (world thread): only the best this many candidates
+        // that passed the cheap checks (ground, threat areas, idle hostiles) are pathfound.
+        uint32 const MAX_PATH_CHECKS = 6;
 
         // Leader = the player who gave the command. False with the reason in `report`.
         bool Start(Player* leader, PartyCommander& commander, std::vector<std::string>& report);

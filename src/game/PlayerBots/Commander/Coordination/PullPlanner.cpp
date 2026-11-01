@@ -21,11 +21,44 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 
 namespace Commander
 {
     namespace
     {
+        // Last full RecheckBeforeApproach per tank (PullPlan has no field for it). Several maps
+        // update at once, hence the lock. Entries of finished pulls are dropped after a minute.
+        struct RecheckStamp
+        {
+            ObjectGuid tank;
+            ObjectGuid target;
+            uint32 atMs;
+        };
+        uint32 const RECHECK_STAMP_KEEP_MS = 60 * 1000;
+        std::mutex g_recheckStampsLock;
+        std::vector<RecheckStamp> g_recheckStamps;
+
+        bool RecheckedWithin(ObjectGuid tank, ObjectGuid target, uint32 nowMs, uint32 intervalMs)
+        {
+            std::lock_guard<std::mutex> guard(g_recheckStampsLock);
+            for (RecheckStamp const& s : g_recheckStamps)
+                if (s.tank == tank)
+                    return s.target == target && WorldTimer::getMSTimeDiff(s.atMs, nowMs) < intervalMs;
+            return false;
+        }
+
+        void StampRecheck(ObjectGuid tank, ObjectGuid target, uint32 nowMs)
+        {
+            std::lock_guard<std::mutex> guard(g_recheckStampsLock);
+            g_recheckStamps.erase(std::remove_if(g_recheckStamps.begin(), g_recheckStamps.end(),
+                [tank, nowMs](RecheckStamp const& s)
+                {
+                    return s.tank == tank || WorldTimer::getMSTimeDiff(s.atMs, nowMs) > RECHECK_STAMP_KEEP_MS;
+                }), g_recheckStamps.end());
+            g_recheckStamps.push_back({ tank, target, nowMs });
+        }
+
         // Warrior ranged weapon spells (learned with the weapon skill) and Auto Shot.
         uint32 const SPELL_SHOOT_BOW = 2480;
         uint32 const SPELL_SHOOT_GUN = 7918;
@@ -738,6 +771,20 @@ namespace Commander
             pull.phase = PullPhase::WaitReady;
             pull.phaseSinceMs = nowMs;
         };
+
+        // Held before (patrol or over the limit) and predicted a moment ago: still held. The
+        // first recheck of a pull (nothing held yet) always runs.
+        bool const patrolWait = pull.patrolWaitSinceMs != 0;
+        if (patrolWait || pull.recheckWaitSinceMs)
+        {
+            uint32 const interval = patrolWait ? RECHECK_PATROL_WAIT_MS : RECHECK_HOLD_MS;
+            if (RecheckedWithin(pull.tank, pull.target, nowMs, interval))
+            {
+                holdBack();
+                return RecheckResult::Hold;
+            }
+        }
+        StampRecheck(pull.tank, pull.target, nowMs);
 
         // 1. Predict again with the planned approach: creatures may have wandered or patrolled
         //    next to the target while the party got ready (combat scenario 13, 3:10).

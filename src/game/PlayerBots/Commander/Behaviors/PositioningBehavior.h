@@ -38,18 +38,29 @@
  *            Melee leaving reach of its victim: LostAction(walk + time away), time away = the
  *            remaining cast for a dodge, else H.
  * holdMs = walk / run speed x PATH_FACTOR + HOLD_EXTRA_MS; a dodge holds until the cast ends;
- * melee out of reach holds for the time away (else the chase walks it straight back in).
+ * melee out of reach holds for the time away, at most MELEE_AWAY_MAX_SEC unless dodging.
+ *
+ * Melee out of reach (not a dodge): one step per area. The step is recorded on the bot
+ * (PartyBotAI::m_hazardGiveUp: zone enemy + spell); after its hold the chase takes the bot
+ * back in, and while it stays inside that area no more out-of-reach steps are proposed
+ * (dodges, steps that keep reach and Urgent / lethal steps still are). Re-armed when the bot
+ * leaves the area again, when the area is gone, or when the bot is not back within
+ * MELEE_RETURN_MS after the hold. Before: a hold of up to MAX_HORIZON_SEC, repeated after
+ * every chase back in, kept the melee out of the fight.
  *
  * Jitter: proposes only ENTER_MARGIN inside; the target ring is RING_EXTRA outside, so a bot
- * needs to drift back ~3.5 yd before the next move. Behaviors are stateless, so there is no
- * "just moved" timer; the margins are the hysteresis.
+ * needs to drift back ~3.5 yd before the next move. Apart from the melee record above there is
+ * no "just moved" timer; the margins are the hysteresis. In combat PartyBotAI does not start
+ * following the leader while the leader stands in an area dangerous to the bot
+ * (PartyBotAI::IsInHazardZone), so a healer is not walked straight back in after the hold.
  *
  * Known limits: stand-in reachability (line of sight, not a path: corridors, stairs and
  * ledges can still fail, MovePoint then walks around); fixed 20 yd pack clearance; zones are
- * from the last refresh (moving casters); the original follow / chase logic may walk the bot
- * back in after the hold, the next tick then moves it out again; spell immunities and
+ * from the last refresh (moving casters); the chase (ranged at 25 yd, melee) may still walk
+ * the bot back in after the hold, the next tick then moves it out again; spell immunities and
  * resistances are not checked; only one ring around one zone at a time (overlapping zones
- * from different enemies can leave no candidate, then nothing is proposed).
+ * from different enemies can leave no candidate, then nothing is proposed); the melee record
+ * holds one area (two areas stepped out of in turn re-arm each other).
  */
 
 #ifndef MANGOS_COMMANDER_POSITIONING_BEHAVIOR_H
@@ -80,6 +91,8 @@ namespace Commander
         static constexpr float DODGE_SLACK_SEC = 0.3f;      // out this long before the cast ends
         static constexpr float PATH_FACTOR = 1.2f;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
+        static constexpr float MELEE_AWAY_MAX_SEC = 4.0f;   // melee out of reach (no dodge): longest hold
+        static constexpr uint32 MELEE_RETURN_MS = 3000;     // after that hold: time to come back in
 
         char const* GetId() const override { return "position"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

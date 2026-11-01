@@ -19,12 +19,16 @@
  *     not stop a chase already running, so a melee walking up to a bomb keeps walking.
  *   - No kiting, no dodging the blast, no crowd control of bombs, no pre-positioning of the
  *     tank before Knock Away, no top-up before the threat wipe (scenario 8, 3.2).
- *   - One presser, picked once (sticky while alive and still a damage dealer). Below
- *     PRESSER_MIN_HEALTH_PCT he simply stops; nobody else is sent instead.
+ *   - One presser at a time, sticky while alive, on this map, a damage dealer bot and at
+ *     >= PRESSER_MIN_HEALTH_PCT; otherwise another one is picked (in every phase). Two
+ *     candidates near the health threshold can swap back and forth (no hysteresis).
+ *   - A press is recorded when the presser is in reach of the button on his proposal tick; if
+ *     the Arbiter picks another proposal that tick, the button waits BUTTON_REUSE_MS.
  *   - The door lock at pull (people left outside) is not checked.
  *   - An intercept from FocusAssigner on the presser (Urgent) beats the button run (Assigned).
- *   - Faces / buttons are found by a grid search around the boss and cached; if the boss
- *     is not loaded (bot far away) the search waits for the next retry.
+ *   - Faces / buttons are found by a grid search around the boss and cached; a search that
+ *     missed some is repeated every OBJECT_SEARCH_RETRY_MS (reset with the encounter). If the
+ *     boss is not loaded (bot far away) no search runs and the next refresh tries again.
  */
 
 #include "Commander/Encounters/GnomereganThermaplugg.h"
@@ -94,6 +98,15 @@ namespace Commander
         {
             return m.isBot && !m.isPet && m.CanAct() && m.role == role;
         }
+
+        // The current presser keeps the job. Being controlled (stun, fear) is short, he keeps
+        // it then; ProposePresser waits until he can act again.
+        bool CanStayPresser(PartyMemberFacts const& m)
+        {
+            return m.isBot && !m.isPet && m.alive &&
+                (m.role == ROLE_MELEE_DPS || m.role == ROLE_RANGE_DPS) &&
+                m.healthPct >= GnomereganThermaplugg::PRESSER_MIN_HEALTH_PCT;
+        }
     }
 
     bool GnomereganThermaplugg::Matches(WorldModel const& world, uint32 mapId) const
@@ -120,14 +133,17 @@ namespace Commander
     {
         if (m_objectsFound || !bot || !bot->me->IsInWorld())
             return;
-        if (m_lastSearchMs && WorldTimer::getMSTimeDiff(m_lastSearchMs, nowMs) < OBJECT_SEARCH_RETRY_MS)
-            return;
-        m_lastSearchMs = nowMs;
+        uint32 const retryMs = OBJECT_SEARCH_RETRY_MS;
+        if (m_searched && WorldTimer::getMSTimeDiff(m_lastSearchMs, nowMs) < retryMs)
+            return;     // last search missed some objects: back off
 
         // Search around the boss (faces and buttons form a circle around his spawn point).
+        // Boss not loaded: only a map lookup, try again next refresh.
         Creature* boss = m_bossAlive ? bot->me->GetMap()->GetCreature(m_boss) : nullptr;
         if (!boss)
             return;
+        m_searched = true;
+        m_lastSearchMs = nowMs;
 
         std::vector<uint32> entries(FACE_ENTRIES, FACE_ENTRIES + FACE_COUNT);
         entries.insert(entries.end(), BUTTON_ENTRIES, BUTTON_ENTRIES + FACE_COUNT);
@@ -163,15 +179,17 @@ namespace Commander
             f.lit = m_bossAlive && FaceIsLit(go);   // all faces switch off when the boss dies
             if (f.lit)
                 ++m_litCount;
+            else
+                f.pressed = false;                  // dark again: its button may be used next time it lights
         }
     }
 
     void GnomereganThermaplugg::PickPresser(WorldModel const& world)
     {
-        // Sticky: keep the presser while he is alive and still a damage dealer bot.
+        // Sticky: keep the presser while he can still do the job. world.party only holds members
+        // on this map, so a presser who died, left or dropped too low is replaced here.
         if (PartyMemberFacts const* current = world.FindMember(m_presser))
-            if (current->isBot && current->alive &&
-                (current->role == ROLE_MELEE_DPS || current->role == ROLE_RANGE_DPS))
+            if (CanStayPresser(*current))
                 return;
         m_presser = ObjectGuid();
         m_presserNoted = false;
@@ -355,12 +373,21 @@ namespace Commander
         if (!myFacts || !myFacts->CanAct() || myFacts->healthPct < PRESSER_MIN_HEALTH_PCT)
             return;
 
+        Map* map = me->GetMap();
+        uint32 const nowMs = WorldTimer::getMSTime();
+        uint32 const reuseMs = BUTTON_REUSE_MS;
         Position3 const myPos = PositionOf(me);
         Face const* target = nullptr;
         float targetDistance = 0.0f;
         for (Face const& f : m_faces)
         {
             if (!f.lit || f.button.IsEmpty())
+                continue;
+            if (f.pressed && WorldTimer::getMSTimeDiff(f.pressedAtMs, nowMs) < reuseMs)
+                continue;   // just used and still lit: give the face time to switch off
+            // Live state: the button switches its face off at once, f.lit is only re-read on
+            // the next Refresh and the presser ticks in between.
+            if (!FaceIsLit(map->GetGameObject(f.face)))
                 continue;
             float const d = Distance2d(myPos, f.buttonPos);
             if (!target || d < targetDistance)
@@ -371,6 +398,15 @@ namespace Commander
         }
         if (!target)
             return;
+
+        // In reach and free (same checks as Arbiter::ExecuteUseObject): this tick's proposal
+        // uses the button, so record the press.
+        GameObject* button = map->GetGameObject(target->button);
+        if (button && me->IsWithinDist(button, INTERACTION_DISTANCE) && !me->IsNonMeleeSpellCasted(false, false, true))
+        {
+            target->pressed = true;
+            target->pressedAtMs = nowMs;
+        }
 
         float const awaySec = (targetDistance + Distance2d(target->buttonPos, m_bossPos)) / RUN_YARDS_PER_SEC + USE_SEC;
         Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::UseObject, target->button);

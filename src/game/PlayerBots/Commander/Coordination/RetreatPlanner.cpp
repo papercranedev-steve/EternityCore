@@ -126,9 +126,10 @@ namespace Commander
             return bots;
         }
 
-        // Point checks in order of cost. Returns the reason it failed, nullptr = usable.
-        char const* CheckPoint(Player* leader, Position3& point, std::vector<ThreatArea> const& areas,
-                               std::vector<IdleCreature> const& idle)
+        // Cheap point checks (no pathfinding). Sets point.z to the ground. Returns the reason it
+        // failed, nullptr = worth a path check.
+        char const* CheckPointCheap(Player* leader, Position3& point, std::vector<ThreatArea> const& areas,
+                                    std::vector<IdleCreature> const& idle)
         {
             Map* map = leader->GetMap();
 
@@ -149,6 +150,13 @@ namespace Commander
             for (IdleCreature const& c : idle)
                 if (Dist3(point, c.pos) <= c.clearance)
                     return "idle creatures";
+            return nullptr;
+        }
+
+        // Expensive check: reachable on foot. Returns the reason it failed, nullptr = usable.
+        char const* CheckPath(Player* leader, Position3 const& point)
+        {
+            Map* map = leader->GetMap();
 
             // Reachable on foot. Without mmaps (NOT_USING_PATH) fall back to line of sight.
             PathInfo path(leader);
@@ -250,36 +258,65 @@ namespace Commander
             else
                 baseAngle = leader->GetOrientation() + M_PI_F;  // standing on the start: away from where the player faces
 
+            // Pass 1, cheap checks only (ground height, threat areas, idle hostiles) on every candidate.
+            struct Candidate
+            {
+                Position3 pos;
+                float score = 0.0f;     // lower is better
+            };
             static float const offsetsDeg[] = { 0.0f, 25.0f, -25.0f, 50.0f, -50.0f };
-            Position3 best;
-            bool found = false;
+            std::vector<Candidate> candidates;
             uint32 tried = 0;
-            // Nearest usable point first: less running, less time being hit from behind.
-            for (float d = 0.0f; d <= SEARCH_MAX_DISTANCE && !found; d += SEARCH_STEP)
+            for (float d = 0.0f; d <= SEARCH_MAX_DISTANCE; d += SEARCH_STEP)
             {
                 for (float deg : offsetsDeg)
                 {
                     if (d == 0.0f && deg != 0.0f)
                         break;      // the leader's own position has no direction
                     float const angle = baseAngle + deg * M_PI_F / 180.0f;
-                    Position3 p;
-                    p.x = from.x + std::cos(angle) * d;
-                    p.y = from.y + std::sin(angle) * d;
-                    p.z = from.z;
+                    Candidate c;
+                    c.pos.x = from.x + std::cos(angle) * d;
+                    c.pos.y = from.y + std::sin(angle) * d;
+                    c.pos.z = from.z;
                     ++tried;
-                    if (!CheckPoint(leader, p, areas, idle))
-                    {
-                        best = p;
-                        found = true;
-                        break;
-                    }
+                    if (CheckPointCheap(leader, c.pos, areas, idle))
+                        continue;
+                    // Nearest usable point first: less running, less time being hit from behind.
+                    // Stable sort keeps the smaller turn first at equal distance.
+                    c.score = d;
+                    candidates.push_back(c);
+                }
+            }
+            std::stable_sort(candidates.begin(), candidates.end(),
+                [](Candidate const& a, Candidate const& b) { return a.score < b.score; });
+
+            // Pass 2, pathfinding (expensive, world thread): only the best MAX_PATH_CHECKS candidates.
+            Position3 best;
+            bool found = false;
+            uint32 pathChecks = 0;
+            uint32 const maxPathChecks = MAX_PATH_CHECKS;
+            for (Candidate const& c : candidates)
+            {
+                if (pathChecks >= maxPathChecks)
+                    break;
+                ++pathChecks;
+                if (!CheckPath(leader, c.pos))
+                {
+                    best = c.pos;
+                    found = true;
+                    break;
                 }
             }
             if (!found)
             {
-                report.push_back(Format("No safe retreat point within %.0f yd (%u points checked: each must be %.0f+ yd "
-                    "from every enemy's combat start, on reachable ground, away from idle hostiles). Not retreating.",
-                    SEARCH_MAX_DISTANCE, tried, THREAT_RADIUS + SAFETY_MARGIN));
+                if (candidates.empty())
+                    report.push_back(Format("No safe retreat point within %.0f yd (%u points checked: each must be %.0f+ yd "
+                        "from every enemy's combat start, on ground, away from idle hostiles). Not retreating.",
+                        SEARCH_MAX_DISTANCE, tried, THREAT_RADIUS + SAFETY_MARGIN));
+                else
+                    report.push_back(Format("No reachable retreat point within %.0f yd (%u of %u points are out of every "
+                        "threat area; the nearest %u have no walkable path without a long detour). Not retreating.",
+                        SEARCH_MAX_DISTANCE, uint32(candidates.size()), tried, pathChecks));
                 return false;
             }
 
