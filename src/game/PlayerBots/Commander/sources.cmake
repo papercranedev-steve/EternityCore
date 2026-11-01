@@ -118,6 +118,15 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
+  ${COMMANDER_DIR}/Classes/ClassKit.h
+  ${COMMANDER_DIR}/Classes/ClassKit.cpp
+  ${COMMANDER_DIR}/Classes/Warrior.cpp
+  ${COMMANDER_DIR}/Classes/Paladin.cpp
+  ${COMMANDER_DIR}/Classes/Rogue.cpp
+  ${COMMANDER_DIR}/Classes/Priest.cpp
+  ${COMMANDER_DIR}/Classes/Shaman.cpp
+  ${COMMANDER_DIR}/Classes/Mage.cpp
+  ${COMMANDER_DIR}/Classes/Druid.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/RoleAssigner.h

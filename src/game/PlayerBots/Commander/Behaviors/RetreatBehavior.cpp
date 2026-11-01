@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/RetreatBehavior.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/RetreatPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
@@ -185,11 +186,9 @@ namespace Commander
                     return spell;
         // Weakened Soul is not checked by CanTryToCastSpell: the cast then fails and the
         // arbiter falls back to the Retreat action.
-        // (m_spells is per class: read the priest entry only for priests)
-        if (me->GetClass() == CLASS_PRIEST)
-            if (SpellEntry const* shield = bot->m_spells.priest.pPowerWordShield)
-                if (bot->CanTryToCastSpell(pTarget, shield))
-                    return shield;
+        if (SpellEntry const* shield = bot->Kit().AllyShield())
+            if (bot->CanTryToCastSpell(pTarget, shield))
+                return shield;
         return nullptr;
     }
 }

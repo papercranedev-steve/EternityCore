@@ -6,6 +6,7 @@
 #include "Commander/Perception/PatrolTracker.h"
 #include "Commander/Perception/CreatureProfile.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Classes/ClassKit.h"
 #include "RoleCapability.h"
 #include "World.h"
 #include "PartyBotAI.h"
@@ -392,39 +393,8 @@ namespace WorldModelBuilder
 
         void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
-            auto const& s = ai->m_spells;
-            switch (ai->me->GetClass())
-            {
-                case CLASS_WARRIOR:
-                    AddInterrupt(ai, s.warrior.pPummel, f);
-                    if (ai->IsWearingShield(ai->me))
-                        AddInterrupt(ai, s.warrior.pShieldBash, f);
-                    break;
-                case CLASS_ROGUE:
-                    AddInterrupt(ai, s.rogue.pKick, f);
-                    // Stun with spell mechanic KNOCKOUT (incapacitate): CastValues::CanStop
-                    // skips it on knockout-immune creatures (mechanicMask = 1 << 13).
-                    AddInterrupt(ai, s.rogue.pGouge, f);
-                    break;
-                case CLASS_MAGE:
-                    AddInterrupt(ai, s.mage.pCounterspell, f);
-                    break;
-                case CLASS_SHAMAN:
-                    AddInterrupt(ai, s.shaman.pEarthShock, f);
-                    break;
-                case CLASS_DRUID:
-                    AddInterrupt(ai, s.druid.pBash, f);
-                    AddInterrupt(ai, s.druid.pFeralCharge, f);
-                    break;
-                case CLASS_PALADIN:
-                    AddInterrupt(ai, s.paladin.pHammerOfJustice, f);
-                    break;
-                case CLASS_PRIEST:
-                    AddInterrupt(ai, s.priest.pSilence, f);   // shadow talent; null for most healers
-                    break;
-                default:
-                    break;
-            }
+            for (SpellEntry const* spell : ai->Kit().Interrupts())
+                AddInterrupt(ai, spell, f);
         }
     }
 

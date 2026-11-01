@@ -24,7 +24,7 @@
 #include "Commander/Behaviors/FollowSpot.h"
 #include <memory>
 
-namespace Commander { class BotDirectives; }
+namespace Commander { class BotDirectives; class ClassKit; }
 
 class PartyBotAI : public CombatBotBaseAI
 {
@@ -147,6 +147,9 @@ public:
     // Commander (PlayerBots/Commander/). Directives are created on first use.
     Commander::BotDirectives& Directives();
     Commander::BotDirectives const& Directives() const;
+    // What this bot's class can do (Commander/Classes/ClassKit.h). Created when the bot enters
+    // the world (spells known); before that, on first use. Map thread of the bot.
+    Commander::ClassKit const& Kit() const;
     bool IsMovementHeld() const;
     // Player commands (.partybot cometome, attackstart, attackstop, pull, pause, unpause in
     // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
@@ -249,6 +252,8 @@ public:
     StanceSwap m_stanceSwap;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
+    // Class kit (Commander/Classes/ClassKit.h); mutable for the on-first-use fallback in Kit().
+    mutable std::shared_ptr<Commander::ClassKit const> m_classKit;
 };
 
 #endif

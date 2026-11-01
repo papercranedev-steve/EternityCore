@@ -30,6 +30,7 @@
 
 #include "Commander/Encounters/DeadminesVanCleef.h"
 #include "Commander/Encounters/EncounterHelpers.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Behaviors/FocusBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -304,38 +305,15 @@ namespace Commander
         if (!summonClose)
             return;
 
-        // Minimal copy of ThreatBehavior's area threat list (that one is private to its .cpp).
-        struct Option
-        {
-            SpellEntry const* spell;
-            bool onTarget;      // cast at the current victim (Thunder Clap, Swipe)
-            float share;
-        };
-        auto const& s = bot->m_spells;
-        std::vector<Option> options;
-        switch (me->GetClass())
-        {
-            case CLASS_WARRIOR:
-                options = { { s.warrior.pThunderClap, true, GROUP_THREAT_SHARE },
-                            { s.warrior.pDemoralizingShout, false, FALLBACK_THREAT_SHARE } };
-                break;
-            case CLASS_PALADIN:
-                options = { { s.paladin.pConsecration, false, GROUP_THREAT_SHARE } };
-                break;
-            case CLASS_DRUID:
-                options = { { s.druid.pSwipe, true, GROUP_THREAT_SHARE },
-                            { s.druid.pDemoralizingRoar, false, FALLBACK_THREAT_SHARE } };
-                break;
-            default:
-                return;
-        }
-
+        // The class's area threat abilities (ClassKit::AreaThreat), area taunts left out: the
+        // main one prevents GROUP_THREAT_SHARE of the summon loss, a shout FALLBACK_THREAT_SHARE.
         Unit* victim = me->GetVictim();
         float const cost = Value::LostAction(world, *myFacts, Value::GCD_SEC);
-        for (Option const& o : options)
+        for (AreaThreatSpell const& o : bot->Kit().AreaThreat())
         {
-            if (!o.spell)
+            if (!o.spell || o.taunt)
                 continue;
+            float const share = o.primary ? GROUP_THREAT_SHARE : FALLBACK_THREAT_SHARE;
             Unit* castTarget = o.onTarget ? victim : me;
             // Thunder Clap from Defensive Stance: after a stance swap (PartyBotAI::DoCastWithStance).
             if (!castTarget || !bot->CanCastWithStance(castTarget, o.spell))
@@ -345,7 +323,7 @@ namespace Commander
             Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Cast,
                 o.onTarget ? victim->GetObjectGuid() : ObjectGuid(), o.spell);
             p.reason = "area threat on fresh summons";
-            p.SetValue(o.share * m_summonLoss, cost + swapCost);
+            p.SetValue(share * m_summonLoss, cost + swapCost);
             out.push_back(p);
         }
     }

@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/DispelBehavior.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/ValueModel.h"
@@ -37,17 +38,7 @@ namespace Commander
 
     bool DispelBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        switch (bot->me->GetClass())
-        {
-            case CLASS_PRIEST:
-            case CLASS_PALADIN:
-            case CLASS_SHAMAN:
-            case CLASS_MAGE:
-            case CLASS_DRUID:
-                return true;
-            default:
-                return false;
-        }
+        return bot->Kit().CanDispel();
     }
 
     void DispelBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,

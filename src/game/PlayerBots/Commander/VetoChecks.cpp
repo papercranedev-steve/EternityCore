@@ -1,6 +1,7 @@
 #include "Commander/VetoChecks.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
@@ -27,23 +28,6 @@ namespace VetoChecks
             return mask;
         }
 
-        // The spells the class rotations use behind IsInterruptVetoed (PartyBotAI.cpp:
-        // paladin, shaman, mage, priest, warrior, rogue blocks).
-        std::vector<SpellEntry const*> ReflexInterruptSpells(PartyBotAI const* bot)
-        {
-            auto const& s = bot->m_spells;
-            switch (bot->me->GetClass())
-            {
-                case CLASS_PALADIN: return { s.paladin.pHammerOfJustice };
-                case CLASS_SHAMAN:  return { s.shaman.pEarthShock };
-                case CLASS_MAGE:    return { s.mage.pCounterspell };
-                case CLASS_PRIEST:  return { s.priest.pSilence };
-                case CLASS_WARRIOR: return { s.warrior.pPummel, s.warrior.pShieldBash };
-                case CLASS_ROGUE:   return { s.rogue.pGouge, s.rogue.pKick };
-                default:            return {};
-            }
-        }
-
         // Live immunity (auras such as Divine Shield included) plus the creature_template
         // mechanic / school immunities of every effect that stops the cast.
         bool CannotStop(Unit const* enemy, SpellEntry const* spell)
@@ -61,7 +45,8 @@ namespace VetoChecks
         bool ImmuneToAllReflexInterrupts(PartyBotAI const* bot, Unit const* enemy)
         {
             bool any = false;
-            for (SpellEntry const* spell : ReflexInterruptSpells(bot))
+            // The spells the class rotations use behind IsInterruptVetoed (ClassKit::ReflexInterrupts).
+            for (SpellEntry const* spell : bot->Kit().ReflexInterrupts())
             {
                 if (!spell)
                     continue;

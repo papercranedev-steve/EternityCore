@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/InterruptBehavior.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/SpellTags.h"
@@ -72,19 +73,9 @@ namespace Commander
 
     bool InterruptBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        switch (bot->me->GetClass())
-        {
-            case CLASS_WARRIOR:
-            case CLASS_ROGUE:
-            case CLASS_MAGE:
-            case CLASS_SHAMAN:
-            case CLASS_DRUID:
-            case CLASS_PALADIN:
-            case CLASS_PRIEST:      // Silence (shadow talent) is an interrupt ability too
-                return true;
-            default:
-                return false;
-        }
+        // A learned interrupt of the class kit (a priest without Silence has none).
+        std::vector<SpellEntry const*> const spells = bot->Kit().Interrupts();
+        return std::any_of(spells.begin(), spells.end(), [](SpellEntry const* s) { return s != nullptr; });
     }
 
     void InterruptBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,

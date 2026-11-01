@@ -8,6 +8,7 @@
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
 #include "HealSpells.h"
 #include "Map.h"
@@ -223,15 +224,8 @@ namespace Commander
             return best;
         }
 
-        // Area threat abilities of a tank. `share` = threat put on each enemy, as a fraction of
-        // what one global cooldown of single target threat gives (rough, per ability).
-        struct GroupThreatOption
-        {
-            SpellEntry const* spell;
-            float share;        // fallback when the spell has no threat data (ThreatPerEnemy)
-            bool taunt;         // forces every enemy around onto the tank (Challenging Roar / Shout)
-            bool onTarget;      // cast at the current victim (Thunder Clap, Swipe) instead of self
-        };
+        // Area threat abilities of a tank: ClassKit::AreaThreat (Classes/<Class>.cpp).
+        using GroupThreatOption = AreaThreatSpell;
 
         // Seconds a taunt holds an enemy only through its aura (Mocking Blow, Challenging Shout,
         // Challenging Roar): without SPELL_EFFECT_ATTACK_ME the threat it lends is taken back
@@ -296,28 +290,6 @@ namespace Commander
             return false;
         }
 
-        std::vector<GroupThreatOption> GroupThreatOptions(PartyBotAI const* bot)
-        {
-            auto const& s = bot->m_spells;
-            switch (bot->me->GetClass())
-            {
-                // Thunder Clap needs Battle Stance: from Defensive Stance it is cast after a swap
-                // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
-                case CLASS_WARRIOR:
-                    return { { s.warrior.pThunderClap, 1.0f, false, true },
-                             { s.warrior.pDemoralizingShout, 0.3f, false, false },
-                             { s.warrior.pChallengingShout, 0.0f, true, false } };
-                case CLASS_PALADIN:
-                    return { { s.paladin.pConsecration, 0.5f, false, false } };
-                case CLASS_DRUID:
-                    return { { s.druid.pSwipe, 0.8f, false, true },
-                             { s.druid.pDemoralizingRoar, 0.3f, false, false },
-                             { s.druid.pChallengingRoar, 0.0f, true, false } };
-                default:
-                    return {};
-            }
-        }
-
         // One proposal per usable area threat ability. `valueOf(threatAdded, holdSec)` returns
         // the benefit over every loose enemy around the tank and whether someone would die
         // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec).
@@ -336,7 +308,9 @@ namespace Commander
             for (EnemyFacts const& e : world.enemies)
                 crowdControlNear = crowdControlNear ||
                     (e.crowdControlled && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
-            for (GroupThreatOption const& o : GroupThreatOptions(bot))
+            // A warrior's Thunder Clap from Defensive Stance is cast after a stance swap
+            // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
+            for (GroupThreatOption const& o : bot->Kit().AreaThreat())
             {
                 if (!o.spell)
                     continue;

@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/EscapeBehavior.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/FleePoint.h"
 #include "Commander/Behaviors/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
@@ -27,21 +28,9 @@ namespace Commander
             bool rooted;
         };
 
-        // Spells that stop a chaser where it stands (header: "Hold spells"). The list only names
-        // them per class; what they do (root / stun, area or single target, duration, breaks on
-        // damage) is read from the spell data in HoldSec / ProposeHold.
-        std::vector<SpellEntry const*> HoldSpells(PartyBotAI const* bot)
-        {
-            auto const& s = bot->m_spells;
-            switch (bot->me->GetClass())
-            {
-                case CLASS_MAGE:    return { s.mage.pFrostNova };
-                case CLASS_DRUID:   return { s.druid.pEntanglingRoots };
-                case CLASS_PALADIN: return { s.paladin.pHammerOfJustice };
-                case CLASS_PRIEST:  return { s.priest.pShackleUndead };
-                default:            return {};
-            }
-        }
+        // Spells that stop a chaser where it stands come from the class kit
+        // (ClassKit::HoldSpells); what they do (root / stun, area or single target, duration,
+        // breaks on damage) is read from the spell data in HoldSec / ProposeHold.
 
         // Seconds `spell` keeps an enemy from reaching the bot: a stun for its duration, a root
         // (or control that ends on the next hit) at most ROOT_HOLD_SEC: other members' damage and
@@ -75,8 +64,8 @@ namespace Commander
         }
 
         // Health the bot's shields will still take: active absorbs (Power Word: Shield, Ice
-        // Barrier; Mana Shield as far as the mana lasts), else a mage shield the rotation casts
-        // when attackers are near (PartyBotAI mage block: Mana Shield above 20% mana).
+        // Barrier; Mana Shield as far as the mana lasts), else the best shield of the class kit
+        // the rotation casts when attackers are near (ClassKit::ReactiveShields).
         float ShieldAbsorb(PartyBotAI const* bot)
         {
             Player* me = bot->me;
@@ -90,9 +79,9 @@ namespace Commander
                     amount = std::min(amount, float(me->GetPower(POWER_MANA)) / perPoint);
                 absorb += amount;
             }
-            if (absorb > 0.0f || me->GetClass() != CLASS_MAGE)
+            if (absorb > 0.0f)
                 return absorb;
-            for (SpellEntry const* shield : { bot->m_spells.mage.pIceBarrier, bot->m_spells.mage.pManaShield })
+            for (SpellEntry const* shield : bot->Kit().ReactiveShields())
             {
                 if (!shield || !bot->CanTryToCastSpell(me, shield))
                     continue;
@@ -261,7 +250,7 @@ namespace Commander
         {
             Proposal best;
             bool found = false;
-            for (SpellEntry const* spell : HoldSpells(bot))
+            for (SpellEntry const* spell : bot->Kit().HoldSpells())
             {
                 Proposal p;
                 if (ProposeHold(bot, world, *self, chasers, spell, p) && (!found || p.score > best.score))

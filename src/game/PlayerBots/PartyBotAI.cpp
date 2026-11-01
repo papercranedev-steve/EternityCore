@@ -30,6 +30,7 @@
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/HazardZones.h"
@@ -153,6 +154,13 @@ Commander::BotDirectives const& PartyBotAI::Directives() const
 {
     static Commander::BotDirectives const empty;
     return m_directives ? *m_directives : empty;
+}
+
+Commander::ClassKit const& PartyBotAI::Kit() const
+{
+    if (!m_classKit)
+        m_classKit = Commander::ClassKits::Create(*this);
+    return *m_classKit;
 }
 
 bool PartyBotAI::IsMovementHeld() const
@@ -1020,6 +1028,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
         ResetSpellData();
         PopulateSpellData();
+        // The class is final now (a clone or a loaded character): give the bot its class kit.
+        m_classKit = Commander::ClassKits::Create(*this);
         AddAllSpellReagents();
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         SummonPetIfNeeded();
