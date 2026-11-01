@@ -297,8 +297,10 @@ namespace CastValues
     //  - Profiles can change without a refresh (`.partybot ai reload overrides`): that bumps
     //    s_profileGeneration (InvalidateCache), which is part of the key.
     // Not covered: an IEncounter::AddFacts that changes the model after ++version would make
-    // values cached between the bump and AddFacts stale. No module overrides AddFacts today,
-    // and nothing evaluates before it in PartyCommander::Update.
+    // values cached between the bump and AddFacts stale. Today only ZulFarrakPyramid::AddFacts
+    // writes the model, and only allies[].tankLike, which neither Evaluate nor HazardZones
+    // reads; nothing evaluates between the bump and AddFacts in PartyCommander::Update. A
+    // module that changes party or enemy facts there must bump the version again.
     namespace
     {
         std::atomic<uint32> s_profileGeneration{ 0 };

@@ -203,6 +203,10 @@ namespace Commander
                 uint32 const elapsed = WorldTimer::getMSTimeDiff(m_phaseSinceMs, now);
                 float const spawnSec = elapsed < PRE_WAVE_2_MS ? (PRE_WAVE_2_MS - elapsed) / 1000.0f : 0.0f;
                 m_noRest = fighting || spawnSec + WAVE_TRAVEL_SEC < NO_REST_BEFORE_CONTACT_SEC;
+                // The gap should last 10 s; if this script version keeps the phase longer and
+                // nothing comes, let the party drink again (same escape as during the waves).
+                if (!fighting && quietMs >= QUIET_STALE_MS)
+                    m_noRest = false;
                 break;
             }
             case Phase::PreWave3:
@@ -312,6 +316,31 @@ namespace Commander
             if (e && (e->healthPct < FLEE_PCT || pVictim->HasUnitState(UNIT_STATE_FLEEING)) &&
                 PackResolver::Distance(e->pos, HOLD_POINT) > HOLD_RADIUS)
             {
+                // Something to hit up here: switch to it (the rotation goes on this tick). A
+                // MoveTo every tick would keep the bot on the fleeing add as its victim and
+                // idle until the add dies (review of step 12).
+                EnemyFacts const* nearest = nullptr;
+                float nearestDistance = 0.0f;
+                for (EnemyFacts const& other : world.enemies)
+                {
+                    if (other.guid == e->guid || !other.acting || other.crowdControlled || !other.health ||
+                        other.healthPct < FLEE_PCT || PackResolver::Distance(other.pos, HOLD_POINT) > HOLD_RADIUS)
+                        continue;
+                    float const d = PackResolver::Distance(myFacts->pos, other.pos);
+                    if (!nearest || d < nearestDistance)
+                    {
+                        nearest = &other;
+                        nearestDistance = d;
+                    }
+                }
+                if (nearest)
+                {
+                    Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack, nearest->guid);
+                    p.reason = "fleeing add below the hold point: hit one up here";
+                    p.SetValue(HOLD_POINTS, Value::LostAction(world, *myFacts, tickSec));
+                    out.push_back(p);
+                    return;
+                }
                 Position3 const dest = PackResolver::Distance(myFacts->pos, HOLD_POINT) > HOLD_ARRIVE_YARDS
                     ? HOLD_POINT : myFacts->pos;
                 Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::MoveTo);

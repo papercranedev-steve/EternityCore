@@ -222,6 +222,18 @@ namespace Commander
                 Unit* pCastTarget = pTarget ? pTarget : me;
                 if (!bot->CanTryToCastSpell(pCastTarget, action.spell))
                     return false;
+                // Fix: an auto-repeat shot (Auto Shot, ranged pull) cast on a unit that is not the
+                // bot's victim is cancelled by PartyBotAI::UpdateAI on the next tick ("stop auto
+                // shot if no target") before its 0.5 s wind-up ends when the bot ticks faster than
+                // that. Set the victim without melee (Unit::Attack, meleeAttack = false: no chase,
+                // no combat by itself) so the shot is kept.
+                if (action.spell->IsAutoRepeatRangedSpell() && pTarget && me->GetVictim() != pTarget &&
+                    bot->IsValidHostileTarget(pTarget))
+                {
+                    if (me->IsMounted())
+                        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+                    me->Attack(pTarget, false);
+                }
                 return bot->DoCastSpell(pCastTarget, action.spell) == SPELL_CAST_OK;
             }
             case BotActionType::Attack:

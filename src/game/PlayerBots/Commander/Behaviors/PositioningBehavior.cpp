@@ -304,12 +304,31 @@ namespace Commander
         Player* me = bot->me;
         if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT))
             return;
-        // A MoveTo (this module's or another's) is under way: let it finish.
-        if (bot->IsMovementHeld() && me->IsMoving())
-            return;
-
         Context ctx;
         ctx.roleBit = HazardZones::RoleBit(bot->GetRole());
+
+        // A MoveTo (this module's or another's) is under way: let it finish.
+        if (bot->IsMovementHeld() && me->IsMoving())
+        {
+            // Fix: without a proposal the original rotation runs on the next tick and its first
+            // cast-time spell (a heal, a Frostbolt) stops the walk (DoCastSpell -> StopMoving):
+            // the bot stood in the zone casting and only got out one tick of walking per cast.
+            // Healers and ranged hold still-walking moves; score 0 loses to every valued
+            // proposal of the same tier (benefit > cost), and Urgent proposals still win.
+            // Other movers of healers / ranged (pull, retreat) run while this module is off;
+            // a UseObject walk is valued and wins over this Hold.
+            if (ctx.roleBit == HAZARD_HEALER || ctx.roleBit == HAZARD_RANGED)
+            {
+                Proposal hold;
+                hold.tier = ProposalTier::Assigned;
+                hold.score = 0.0f;
+                hold.source = "position";
+                hold.reason = "walking out of an area, keep walking";
+                hold.action.type = BotActionType::Hold;
+                out.push_back(hold);
+            }
+            return;
+        }
         ctx.self = world.FindMember(me->GetObjectGuid());
         if (!ctx.roleBit || !ctx.self || !ctx.self->CanAct())
             return;
