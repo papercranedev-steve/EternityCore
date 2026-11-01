@@ -612,7 +612,9 @@ namespace Commander
         // mana is short (tension > 1), only members below their heal ceiling, and no heal that
         // ManaBudgetBehavior would swap for a cheaper, more efficient rank.
         ManaBudgetBehavior::Budget budget;
-        bool const budgeted = ManaBudgetBehavior::ComputeBudget(bot, world, budget) && budget.tension > 1.0f;
+        // Only while the mana module runs: with it off, nobody else limits heals either.
+        bool const budgeted = sCommanderMgr.IsModuleEnabled("mana") &&
+            ManaBudgetBehavior::ComputeBudget(bot, world, budget) && budget.tension > 1.0f;
 
         Unit* other = nullptr;
         PartyMemberFacts const* otherFacts = nullptr;

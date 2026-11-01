@@ -54,7 +54,9 @@ namespace Commander
         float const MAX_PATH_DETOUR = 2.0f;
         // Pathfinding is the expensive check (world thread): only the best this many candidates
         // that passed the cheap checks (ground, threat areas, idle hostiles) are pathfound.
-        uint32 const MAX_PATH_CHECKS = 6;
+        // 16, not 6: sorted by distance, 6 were the 5 turns of one ring plus one point, and in
+        // a bending corridor all of them can be walls (Start runs once per command, not per tick).
+        uint32 const MAX_PATH_CHECKS = 16;
 
         // Leader = the player who gave the command. False with the reason in `report`.
         bool Start(Player* leader, PartyCommander& commander, std::vector<std::string>& report);

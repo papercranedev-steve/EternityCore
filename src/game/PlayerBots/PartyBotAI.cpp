@@ -579,6 +579,11 @@ Player* PartyBotAI::SelectResurrectionTarget() const
             if (pMember->GetDeathState() != CORPSE)
                 continue;
 
+            // Fix: a corpse with a pending request (waiting for the player to accept) is done;
+            // returning it again recast on it and hid every other corpse behind it.
+            if (pMember->IsRessurectRequested())
+                continue;
+
             if (!me->IsWithinLOSInMap(pMember))
                 continue;
 
@@ -937,9 +942,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         {
             if (Player* pDead = SelectResurrectionTarget())
             {
-                if (pDead->IsRessurectRequested())
-                    m_resurrectTryGuid.Clear();     // the cast landed: a later retry starts a fresh window
-                else if (me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me))
+                if (me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me))
                 {
                     // A resurrection that keeps failing (Rebirth without its reagent, a cast
                     // that never lands) must not keep the bot from drinking forever: after
@@ -967,7 +970,20 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 }
             }
             else
-                m_resurrectTryGuid.Clear();         // no corpse to try: the next one starts a fresh window
+            {
+                // No corpse left to resurrect (all alive or with a pending request): the next
+                // death starts a fresh window. A corpse only out of reach or sight keeps the
+                // window, or walking in and out of range would restart it every time.
+                bool corpseLeft = false;
+                for (GroupReference* itr = me->GetGroup()->GetFirstMember(); itr && !corpseLeft; itr = itr->next())
+                {
+                    Player* pMember = itr->getSource();
+                    corpseLeft = pMember && pMember != me && pMember->GetDeathState() == CORPSE &&
+                                 !pMember->IsRessurectRequested();
+                }
+                if (!corpseLeft)
+                    m_resurrectTryGuid.Clear();
+            }
         }
 
         // (no eating or drinking while a Commander pull is under way)
@@ -1078,7 +1094,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // heal range; farther away, follow as before (the module moves the bot out again).
             float const healRange = Commander::PositioningBehavior::HEAL_RANGE;
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
-              !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && IsInHazardZone(pLeader)))
+              !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && me->IsWithinLOSInMap(pLeader) &&
+                IsInHazardZone(pLeader)))
                 me->GetMotionMaster()->MoveFollow(pLeader, urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST), frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE));
         }
         else

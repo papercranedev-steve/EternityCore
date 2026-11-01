@@ -456,7 +456,10 @@ namespace Commander
                     if (outOfReach)
                     {
                         // Already stepped out once and came back: fight inside. Lethal steps still go.
-                        if (gaveUp && p.tier != ProposalTier::Urgent)
+                        // Only for that same area: a step out of another one still goes.
+                        PartyBotAI::HazardGiveUp const& last = bot->m_hazardGiveUp;
+                        if (gaveUp && p.tier != ProposalTier::Urgent &&
+                            last.enemy == zone->enemy && last.spellId == zone->spellId)
                             continue;
                         PartyBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
                         g = PartyBotAI::HazardGiveUp();

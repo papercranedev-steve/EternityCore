@@ -73,6 +73,12 @@ namespace Commander
         uint32 const grace = BOSS_GONE_GRACE_MS;
         if (WorldTimer::getMSTimeDiff(m_bossEngagedMs, now) >= grace)
             return false;
+        // Mograine down: the party usually drops combat while Whitemane walks over to him out
+        // of combat (the script only pulls everyone in again at REVIVED), longer than
+        // PARTY_OUT_OF_COMBAT_MS. The grace window alone decides; it ends once the live feign
+        // evidence is gone (Refresh stops renewing m_bossEngagedMs).
+        if (m_stage == STAGE_DIED_ONCE)
+            return true;
         for (PartyMemberFacts const& m : world.party)
             if (m.alive && m.inCombat)
                 return true;
