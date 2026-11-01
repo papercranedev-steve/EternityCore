@@ -406,6 +406,10 @@ namespace Commander
                 // or the rotation could send it in again: while it runs back after Follow,
                 // PetAI::CanAttack refuses the rotation's AttackStart. Once it reached the bot the
                 // flags are cleared and Follow is sent once more.
+                // An idle pet already on Follow is not sent it again: each resend runs AttackStop
+                // and InterruptNonMeleeSpells on it (cuts channels such as Consume Shadows).
+                if (!pet->GetVictim() && charmInfo->HasCommandState(COMMAND_FOLLOW))
+                    return true;
                 if (pet->GetVictim() || !(charmInfo->IsReturning() && charmInfo->IsCommandFollow()))
                     pet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
                 return true;

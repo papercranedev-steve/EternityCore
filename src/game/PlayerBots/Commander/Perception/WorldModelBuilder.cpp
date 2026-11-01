@@ -133,6 +133,7 @@ namespace WorldModelBuilder
             a.cooldownMs = spell->GetRecoveryTime();
             a.lockoutMs = LockoutMs(spell);
             a.mechanicMask = SpellTags::StopMechanicMask(spell);
+            a.needsFront = spell->Attributes == 0x150010;     // same test as Spell::CheckCast (Gouge)
             Powers const powerType = Powers(spell->powerType);
             a.ready = me->IsSpellReady(spell) &&
                       (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&

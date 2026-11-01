@@ -50,14 +50,38 @@ namespace Commander
             return nullptr;
         }
 
-        // Somebody holds the enemies for the party: an alive tank bot or a tank-like ally.
-        // (The player's role is unknown, so a tanking player does not count here.)
+        // A player (not a bot) who is tanking: a class that can tank (warrior, paladin, druid)
+        // and the victim of more than half of the acting enemies fighting us. The player's role
+        // is not known; this is what the fight shows.
+        bool IsTankingPlayer(WorldModel const& world, PartyMemberFacts const& m)
+        {
+            if (m.isBot || m.isPet || !m.alive ||
+                (m.classId != CLASS_WARRIOR && m.classId != CLASS_PALADIN && m.classId != CLASS_DRUID))
+                return false;
+            uint32 acting = 0;
+            uint32 onHim = 0;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.onAllyOnly || !e.acting || e.crowdControlled)
+                    continue;
+                ++acting;
+                if (e.victim == m.guid)
+                    ++onHim;
+            }
+            return onHim > 0 && 2 * onHim > acting;
+        }
+
+        // Somebody holds the enemies for the party: an alive tank bot, a tank-like ally, or a
+        // player who is tanking (IsTankingPlayer).
         bool HasTank(WorldModel const& world)
         {
             if (FindTankBot(world))
                 return true;
             for (AllyFacts const& a : world.allies)
                 if (a.tankLike)
+                    return true;
+            for (PartyMemberFacts const& m : world.party)
+                if (IsTankingPlayer(world, m))
                     return true;
             return false;
         }
@@ -93,8 +117,19 @@ namespace Commander
             }
         }
 
+        // The pet casts one of its taunts by itself (autocast on): it pulls enemies to it.
+        bool HasTauntAutocast(Pet const* pet)
+        {
+            std::vector<SpellEntry const*> taunts;
+            PetTauntSpells(pet, taunts);
+            for (SpellEntry const* spell : taunts)
+                if (std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) != pet->m_autospells.end())
+                    return true;
+            return false;
+        }
+
         // A controlled pet (hunter, warlock) of this party that holds enemies itself: there is
-        // no tank and it has a taunt (voidwalker, hunter pet with Growl).
+        // no tank and its taunt is on autocast (voidwalker, hunter pet with Growl).
         bool IsHolderPet(PartyBotAI const* bot, WorldModel const& world, ObjectGuid guid)
         {
             if (HasTank(world))
@@ -103,9 +138,7 @@ namespace Commander
             Pet const* pet = unit ? unit->ToPet() : nullptr;
             if (!pet || !pet->IsControlled())
                 return false;
-            std::vector<SpellEntry const*> taunts;
-            PetTauntSpells(pet, taunts);
-            return !taunts.empty();
+            return HasTauntAutocast(pet);
         }
 
         // `victim` holds the enemy it is being hit by: a holder member (above), a holder pet
@@ -385,6 +418,14 @@ namespace Commander
             // on a pet cost little: the value scoring below decides.
             if (victim->isBot && victim->role == ROLE_TANK)
                 continue;   // another tank holds it
+            // Except a pet that taunts by itself (the player's pet, or a bot pet before its
+            // autocast was switched off): it growls the enemy back, and taunting or switching
+            // against it is a war the tank loses its main target in.
+            if (victim->isPet)
+                if (Unit* petUnit = me->GetMap()->GetUnit(victim->guid))
+                    if (Pet const* pet = petUnit->ToPet())
+                        if (HasTauntAutocast(pet))
+                            continue;
 
             // Only this fight: an enemy in another room hitting a teleported member (Gandling's
             // Shadow Portal) or far away is not ours to run after (combat scenario 10).
@@ -591,24 +632,34 @@ namespace Commander
         // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
         // again without one. Proposed only while it differs, so once per change.
         bool const tank = HasTank(world);
+        // On again only when nobody could be tanking: a tanking player is seen only while most
+        // enemies hit him, and switching on whenever that dips mid-fight would flip it back and
+        // forth. A party with a player warrior, paladin or druid keeps it off once switched off.
+        bool maybeTankPlayer = false;
+        for (PartyMemberFacts const& m : world.party)
+            if (!m.isBot && !m.isPet && m.alive &&
+                (m.classId == CLASS_WARRIOR || m.classId == CLASS_PALADIN || m.classId == CLASS_DRUID))
+                maybeTankPlayer = true;
         std::vector<SpellEntry const*> taunts;
         PetTauntSpells(pet, taunts);
         for (SpellEntry const* spell : taunts)
         {
             bool const autocast = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) !=
                                   pet->m_autospells.end();
-            if (autocast != tank)
-                continue;   // already off with a tank, or on without one
+            bool const turnOff = autocast && tank;
+            bool const turnOn = !autocast && !tank && !maybeTankPlayer;
+            if (!turnOff && !turnOn)
+                continue;
             Proposal p = MakeProposal(ProposalTier::Assigned,
-                tank ? BotActionType::PetAutocastOff : BotActionType::PetAutocastOn, ObjectGuid(), spell);
-            p.reason = tank ? "tank holds, pet taunt off" : "no tank, pet taunt on";
+                turnOff ? BotActionType::PetAutocastOff : BotActionType::PetAutocastOn, ObjectGuid(), spell);
+            p.reason = turnOff ? "tank holds, pet taunt off" : "no tank, pet taunt on";
             out.push_back(p);
         }
 
         if (world.enemies.empty())
             return;
-        // No tank: a pet with a taunt holds enemies itself (IsHolderPet), leave it.
-        if (!tank && !taunts.empty())
+        // No tank and the pet taunts by itself: it holds enemies (IsHolderPet), leave it.
+        if (!tank && HasTauntAutocast(pet))
             return;
 
         // The enemy the pet hits, else the one the rotation sends it to next (hunter and warlock
@@ -621,6 +672,34 @@ namespace Commander
             return;
 
         PartyMemberFacts const* tankBot = FindTankBot(world);
+
+        // Idle pet in combat (after a PetFollow below, or never sent): nothing in the rotations
+        // sends it in again during a fight (only their out of combat parts do, and PetAI only
+        // reacts when the pet or the owner is hit). Send it at the owner's target once that has
+        // room, with the stricter switch thresholds as hysteresis against the stop rule above,
+        // else at another safe enemy. Never PetFollow an idle pet: it is already back.
+        if (!pet->GetVictim())
+        {
+            if (!me->IsInCombat() || e->victim == petGuid)
+                return;
+            float const minRatio = DPS_SWITCH_HEADROOM;
+            float const minSec = DPS_SWITCH_MIN_SEC;
+            float const room = ThreatView::Headroom(*e, petGuid);
+            bool const safe = !IsHeldByHolder(bot, world, e->victim) ||
+                (e->victimThreat > 0.0f && room / e->victimThreat >= minRatio &&
+                 room >= OwnThreatRate(world, petGuid, *e) * minSec);
+            EnemyFacts const* sendAt = safe ? e : FindSafeTarget(bot, world, petGuid, petFacts->pos, e->guid,
+                                                                 tankBot ? tankBot->victim : ObjectGuid());
+            if (!sendAt)
+                return;
+            float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetAttack, sendAt->guid);
+            p.reason = "idle pet, send in";
+            // Benefit: the pet's damage over the next ticks; nothing is lost by sending it.
+            p.SetValue(Value::LostAction(world, *petFacts, 2.0f * tickSec), 0.0f);
+            out.push_back(p);
+            return;
+        }
         bool const holding = e->victim == petGuid;
         if (holding)
         {

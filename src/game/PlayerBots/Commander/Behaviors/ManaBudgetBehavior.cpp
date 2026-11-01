@@ -6,11 +6,15 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
+#include "Chat.h"
+#include "Timer.h"
 #include "Spell.h"
 #include "SpellEntry.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <mutex>
+#include <unordered_map>
 
 namespace Commander
 {
@@ -195,8 +199,23 @@ namespace Commander
 
     bool ManaBudgetBehavior::ComputeBudget(PartyBotAI const* bot, WorldModel const& world, Budget& out)
     {
-        Player* me = bot->me;
-        if (me->GetMaxPower(POWER_MANA) == 0)
+        // Own mana from the world facts (the mana pool, also while shapeshifted), the live
+        // Player only when the bot is not in world.party.
+        uint32 mana = 0;
+        uint32 maxMana = 0;
+        if (PartyMemberFacts const* self = world.FindMember(bot->me->GetObjectGuid()))
+        {
+            if (!self->UsesMana())
+                return false;
+            mana = self->mana;
+            maxMana = self->maxMana;
+        }
+        else
+        {
+            mana = bot->me->GetPower(POWER_MANA);
+            maxMana = bot->me->GetMaxPower(POWER_MANA);
+        }
+        if (maxMana == 0)
             return false;
         // Before the party's damage is measured, T is a level-based guess: do not throttle on it.
         if (!world.rates.dealtMeasured)
@@ -205,7 +224,8 @@ namespace Commander
         // T: current enemies only. Waves that have not arrived yet (combat scenario 9) are
         // not counted, so the budget is too generous at the start of a wave.
         out.fightSec = Value::FightRemainingSec(world);
-        out.mana = float(me->GetPower(POWER_MANA));
+        out.mana = float(mana);
+        out.manaPct = float(mana) * 100.0f / float(maxMana);
 
         // Members being hit can take damage down to HEADROOM_FLOOR_PCT without a heal.
         // Only those being hit: we do not know where future damage lands, so health of
@@ -226,6 +246,34 @@ namespace Commander
         return true;
     }
 
+    void ManaBudgetBehavior::NoteLowMana(PartyBotAI const* bot, Budget const& budget) const
+    {
+        if (!ManaBudget::WantsLowManaWarning(budget.manaPct, budget.tension))
+            return;
+        Player* leader = bot->GetPartyLeader();
+        if (!leader || leader == bot->me || !leader->IsInWorld() || leader->GetMap() != bot->me->GetMap())
+            return;
+
+        uint32 const nowMs = WorldTimer::getMSTime();
+        uint32 const repeatMs = LOW_MANA_NOTE_REPEAT_MS;
+        {
+            // A few entries (healer bots), never pruned.
+            static std::mutex s_noteLock;
+            static std::unordered_map<uint64, uint32> s_lastNoteMs;
+            std::lock_guard<std::mutex> lock(s_noteLock);
+            uint64 const key = bot->me->GetObjectGuid().GetRawValue();
+            auto const itr = s_lastNoteMs.find(key);
+            if (itr != s_lastNoteMs.end() && WorldTimer::getMSTimeDiff(itr->second, nowMs) < repeatMs)
+                return;
+            s_lastNoteMs[key] = nowMs;
+        }
+
+        // tension = fight time / time the mana lasts.
+        ChatHandler(leader).PSendSysMessage("[PartyBot] %s is low on mana (%.0f%%): about %.0f s of fight left, "
+                                            "mana for about %.0f s of it.", bot->me->GetName(), budget.manaPct,
+                                            budget.fightSec, budget.fightSec / budget.tension);
+    }
+
     bool ManaBudgetBehavior::AppliesTo(PartyBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_HEALER;
@@ -238,7 +286,10 @@ namespace Commander
             return;
 
         Budget budget;
-        if (!ComputeBudget(bot, world, budget) || budget.tension <= 1.0f)
+        if (!ComputeBudget(bot, world, budget))
+            return;
+        NoteLowMana(bot, budget);
+        if (budget.tension <= 1.0f)
             return;
 
         Player* me = bot->me;

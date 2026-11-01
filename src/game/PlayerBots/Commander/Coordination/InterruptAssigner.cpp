@@ -78,10 +78,18 @@ namespace Commander
                     score += InterruptAssigner::SCORE_NO_SIGHT;
                     c.canBePrimary = false;
                 }
+                // Gouge needs the caster to face the rogue; it faces its victim (usually the
+                // tank), the rogue stands at its side or back. Backup at most unless it is on him.
+                bool const notInFront = a.needsFront && e.victim != m.guid;
+                if (notInFront)
+                {
+                    score += InterruptAssigner::SCORE_NO_SIGHT;
+                    c.canBePrimary = false;
+                }
                 c.score = score;
 
                 // A 3 s cast and a melee 20 yards away: it arrives after the cast (scenario 2, 3.5 item 2).
-                if (target.live && outOfRange > 0.0f && !noSight)
+                if (target.live && outOfRange > 0.0f && !noSight && !notInFront)
                 {
                     float const reachSec = outOfRange / CastValues::RUN_YARDS_PER_SEC + InterruptAssigner::REACTION_SEC;
                     c.canBePrimary = reachSec <= e.castRemainingMs / 1000.0f;

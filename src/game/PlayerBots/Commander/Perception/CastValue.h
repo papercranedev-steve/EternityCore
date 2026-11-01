@@ -74,13 +74,15 @@ namespace Commander
 
         // Extra benefit of `ability` locking the school of `interruptedSpellId`: other casts of
         // that school the enemy would make during the lockout, plus the enemy walking into melee
-        // when its main ranged spell is locked. 0 for stuns and silences (no lockout).
+        // when its main ranged spell is locked. 0 for stuns and silences (no lockout). Repeat
+        // delays count from the latest cast start seen (EnemyFacts::castStarts, at refresh time).
         float LockoutBenefit(WorldModel const& world, EnemyFacts const& enemy,
                              InterruptAbility const& ability, uint32 interruptedSpellId);
 
         // Cost of `who` using `ability` on `enemy` to stop `cast`: its global cooldown, walking
         // into range, and the ability being on cooldown when this or another enemy casts
-        // something worse than `cast` (repeat delays from the creature profiles).
+        // something worse than `cast` (repeat delays from the creature profiles, counted from
+        // each spell's latest cast start seen; a cast running now is not delayed).
         float InterruptCost(WorldModel const& world, PartyMemberFacts const& who,
                             InterruptAbility const& ability, EnemyFacts const& enemy, CastValue const& cast);
     }

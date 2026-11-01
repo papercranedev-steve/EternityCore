@@ -33,6 +33,9 @@ namespace Commander
         // A target immune to all of them is not stopped (stun on a stun-immune boss).
         uint32 mechanicMask = 0;
         bool ready = false;          // off cooldown and enough power (target checks happen at cast time)
+        // The target must face the caster (Gouge: Spell::CheckCast, attributes 0x150010). An
+        // enemy faces its victim, so only its victim can count on it.
+        bool needsFront = false;
     };
 
     // A party member or a party member's pet on this map.

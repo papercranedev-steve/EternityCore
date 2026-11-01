@@ -8,6 +8,7 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "SharedDefines.h"
+#include "Timer.h"
 #include <algorithm>
 #include <atomic>
 #include <functional>
@@ -45,6 +46,21 @@ namespace CastValues
             if (enemy.castingSpellId != spellId || enemy.castTotalMs < enemy.castRemainingMs)
                 return 0.0f;
             return (enemy.castTotalMs - enemy.castRemainingMs) / 1000.0f;
+        }
+
+        // Seconds `spellId` still cannot be recast by `enemy` because of its repeat delay, which
+        // runs from the start of its latest cast (EnemyFacts::castStarts, at world refresh time).
+        // 0 when it was never seen cast or has no repeat delay. Not for the cast being
+        // interrupted: that one restarts its delay (callers use CastElapsedSec for it).
+        float RepeatWaitSec(WorldModel const& world, EnemyFacts const& enemy, uint32 spellId, CreatureSpellRef const* ref)
+        {
+            if (!ref || !ref->repeatMinMs)
+                return 0.0f;
+            uint32 const lastStartMs = enemy.LastCastStartMs(spellId);
+            if (!lastStartMs)
+                return 0.0f;
+            float const sinceSec = WorldTimer::getMSTimeDiff(lastStartMs, world.refreshedAtMs) / 1000.0f;
+            return std::max(0.0f, ref->repeatMinMs / 1000.0f - sinceSec);
         }
 
         // Interruptible spells `enemy` may cast: profile entries plus the last cast seen (C++
@@ -94,8 +110,11 @@ namespace CastValues
 
         float ManaLoss(WorldModel const& world, SpellAmounts const& amounts, PartyMemberFacts const& member)
         {
+            // Burn / drain does nothing to a target without mana as its active power: manaPct,
+            // not UsesMana(). A druid in bear / cat form is immune (Spell::EffectPowerBurn
+            // and EffectPowerDrain check GetPowerType()).
             if (member.manaPct < 0.0f)
-                return 0.0f;    // burn / drain does nothing to a target without mana
+                return 0.0f;
             float points = Value::Points(world, amounts.mana * HEAL_PER_MANA + amounts.TotalDamage());
             if (member.isBot && member.role == ROLE_HEALER)
                 points *= MANA_DRAIN_HEALER_MULT;
@@ -469,7 +488,10 @@ namespace CastValues
             // One try per spell list check at most; otherwise its average repeat delay.
             float const interval = std::max({ RepeatSec(&ref), CastSec(*sp), WorldModelBuilder::CREATURE_SPELL_CHECK_SEC });
             // The interrupted spell's own repeat delay already runs from the start of its cast.
-            float const wait = ref.spellId == interruptedSpellId ? std::max(0.0f, ref.repeatMinMs / 1000.0f - elapsed) : 0.0f;
+            // The others' run from their latest cast seen: a spell cast 2 s ago with a 10 s
+            // delay cannot come in the first 8 s of the lockout anyway.
+            float const wait = ref.spellId == interruptedSpellId ? std::max(0.0f, ref.repeatMinMs / 1000.0f - elapsed)
+                                                                 : RepeatWaitSec(world, enemy, ref.spellId, &ref);
             float const blocked = std::max(0.0f, window - wait) / interval;
             if (blocked > 0.0f)
                 points += blocked * Evaluate(world, enemy, ref.spellId, ObjectGuid()).points;
@@ -517,8 +539,14 @@ namespace CastValues
                 if (same && spellId == cast.spellId)
                     // Its repeat delay runs from the start of the interrupted cast: no recast before repeatMin.
                     window -= std::max(0.0f, (ref ? ref->repeatMinMs / 1000.0f : 0.0f) - elapsed);
-                else if (same && castProfile && lockoutSec > 0.0f && sp.school == castProfile->school)
-                    window -= lockoutSec;   // locked by this interrupt anyway
+                else
+                {
+                    // Not before its repeat delay from its latest cast seen has passed. A cast
+                    // running right now is one we would miss: no wait for it.
+                    float const wait = other.castingSpellId == spellId ? 0.0f : RepeatWaitSec(world, other, spellId, ref);
+                    bool const locked = same && castProfile && lockoutSec > 0.0f && sp.school == castProfile->school;
+                    window -= locked ? std::max(lockoutSec, wait) : wait;   // locked by this interrupt anyway
+                }
                 if (window <= 0.0f)
                     return;
                 float const repeat = RepeatSec(ref);

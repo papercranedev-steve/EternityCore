@@ -17,8 +17,11 @@
  * ThreatBehavior proposes heal vetoes and smaller heals for aggro on the same target; both
  * are scored in points, the arbiter keeps whatever is worth it.
  *
- * Not done: the low mana note to the leader (needs plan state, see ManaBudget::WantsLowManaWarning),
- * future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.
+ * Low mana note: when ManaBudget::WantsLowManaWarning holds, the leader gets a system message
+ * (same "[PartyBot]" form as plan notes), at most once per LOW_MANA_NOTE_REPEAT_MS per healer.
+ * Sent directly, not through TeamPlan::notes: behaviors only get the plan read-only.
+ *
+ * Not done: future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.
  */
 
 #ifndef MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
@@ -37,11 +40,14 @@ namespace Commander
         static constexpr float SWAP_MIN_COVER = 0.6f;
         // A delayed heal waits about this many bot ticks (same as ThreatBehavior's heal veto).
         static constexpr float DELAY_TICKS = 2.0f;
+        // The low mana note (ManaBudget::WantsLowManaWarning) is sent at most this often per healer.
+        static constexpr uint32 LOW_MANA_NOTE_REPEAT_MS = 60000;
 
         struct Budget
         {
             float fightSec = 0.0f;       // T
             float mana = 0.0f;           // M
+            float manaPct = 0.0f;        // M / mana pool, in percent (also while shapeshifted)
             float headroom = 0.0f;       // health the members being hit can lose without a heal
             float neededHealing = 0.0f;  // H (this healer's share)
             float healPerMana = 0.0f;    // E
@@ -56,6 +62,12 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
+
+    private:
+        // Tells the leader when this healer is low on mana for the rest of the fight.
+        // One behavior object serves every bot on every map thread: the last note time per
+        // healer is kept in a locked table in the .cpp.
+        void NoteLowMana(PartyBotAI const* bot, Budget const& budget) const;
     };
 }
 

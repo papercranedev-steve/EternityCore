@@ -503,8 +503,17 @@ namespace Commander
                 issues.push_back({ m.guid, "hp", m.healthPct });
             // Healers may need more than the others before a hard pack (ClearPlanner raises it).
             float const manaNeeded = (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
-            if (m.manaPct >= 0.0f && m.manaPct < manaNeeded)
-                issues.push_back({ m.guid, "mana", m.manaPct });
+            // Healers: the mana pool, not manaPct (a shapeshifted healer still heals with it).
+            // Others: only while mana is their active power. A feral druid bot stays in bear /
+            // cat form and PartyBotAI::DrinkAndEat only drinks with mana active, so counting its
+            // pool would hold every pull until the ready timeout.
+            bool const healer = m.isBot && m.role == ROLE_HEALER;
+            if (healer ? m.UsesMana() : m.manaPct >= 0.0f)
+            {
+                float const manaPct = float(m.mana) * 100.0f / float(std::max(1u, m.maxMana));
+                if (manaPct < manaNeeded)
+                    issues.push_back({ m.guid, "mana", manaPct });
+            }
             if (leader && m.guid != leader->guid)
             {
                 float const d = PackResolver::Distance(m.pos, leader->pos);

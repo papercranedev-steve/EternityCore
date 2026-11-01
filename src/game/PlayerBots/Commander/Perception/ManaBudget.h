@@ -47,7 +47,7 @@ namespace ManaBudget
     static constexpr float CEILING_OTHER_AT_2_0 = 55.0f;
     static constexpr float CEILING_TANK_AT_2_0 = 70.0f;
 
-    // Low mana warning (not sent yet, see ManaBudgetBehavior.h): mana below this and the fight
+    // Low mana warning (sent by ManaBudgetBehavior::NoteLowMana): mana below this and the fight
     // lasting longer than WARN_TENSION x the time the mana lasts (that is tension > WARN_TENSION).
     static constexpr float WARN_MANA_PCT = 20.0f;
     static constexpr float WARN_TENSION = 1.5f;
