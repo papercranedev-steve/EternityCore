@@ -51,6 +51,7 @@ namespace Commander
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
+        m_threatFeed.Push(bot, m_world, nowMs);
     }
 
     void PartyCommander::ReleaseMovementAfterRetreat(PartyBotAI* bot)

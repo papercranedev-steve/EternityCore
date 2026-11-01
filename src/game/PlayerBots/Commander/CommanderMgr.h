@@ -13,6 +13,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Registry.h"
+#include "Commander/ThreatFeed.h"
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -79,6 +80,11 @@ namespace Commander
         void SetPlayerRole(ObjectGuid player, uint8 role);
         uint8 GetPlayerRole(ObjectGuid player) const;
 
+        // Threat meter subscription of a player (`.partybot ai threat watch`, the addon's threat
+        // window). ThreatFeed reads it on map threads. Runtime only, any thread.
+        void SetThreatWatch(ObjectGuid player, ThreatWatch mode);
+        ThreatWatch GetThreatWatch(ObjectGuid player) const;
+
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);
         TickStats GetStats() const;
@@ -107,6 +113,9 @@ namespace Commander
 
         mutable std::mutex m_playerRolesLock;
         std::map<uint64, uint8> m_playerRoles;      // player guid -> CombatBotRoles
+
+        mutable std::mutex m_threatWatchLock;
+        std::map<uint64, ThreatWatch> m_threatWatch;    // player guid -> mode, Off not stored
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

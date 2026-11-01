@@ -13,6 +13,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/PartyCommander.h
   ${COMMANDER_DIR}/PartyCommander.cpp
   ${COMMANDER_DIR}/CommanderCommands.cpp
+  ${COMMANDER_DIR}/ThreatFeed.h
+  ${COMMANDER_DIR}/ThreatFeed.cpp
   ${COMMANDER_DIR}/Perception/WorldModel.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.cpp

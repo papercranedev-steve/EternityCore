@@ -11,6 +11,7 @@
 #include "Commander/Perception/ThreatHistory.h"
 #include "Commander/Perception/CombatRates.h"
 #include "Commander/Registry.h"
+#include "Commander/ThreatFeed.h"
 #include "Commander/Encounters/IEncounter.h"
 
 class PartyBotAI;
@@ -82,6 +83,7 @@ namespace Commander
         TeamPlan m_plan;
         ThreatHistory m_threatHistory;
         CombatRates m_combatRates;
+        ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh
 
         // Own instances (per-party state), only the modules listed for this map.

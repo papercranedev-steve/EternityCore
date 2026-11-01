@@ -214,6 +214,22 @@ namespace Commander
         return itr != m_playerRoles.end() ? itr->second : uint8(ROLE_INVALID);
     }
 
+    void CommanderMgr::SetThreatWatch(ObjectGuid player, ThreatWatch mode)
+    {
+        std::lock_guard<std::mutex> guard(m_threatWatchLock);
+        if (mode == ThreatWatch::Off)
+            m_threatWatch.erase(player.GetRawValue());
+        else
+            m_threatWatch[player.GetRawValue()] = mode;
+    }
+
+    ThreatWatch CommanderMgr::GetThreatWatch(ObjectGuid player) const
+    {
+        std::lock_guard<std::mutex> guard(m_threatWatchLock);
+        auto itr = m_threatWatch.find(player.GetRawValue());
+        return itr != m_threatWatch.end() ? itr->second : ThreatWatch::Off;
+    }
+
     void CommanderMgr::RecordBotTick(uint64 micros)
     {
         m_statTicks.fetch_add(1, std::memory_order_relaxed);

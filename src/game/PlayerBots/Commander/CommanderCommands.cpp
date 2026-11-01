@@ -15,6 +15,7 @@
  *   .partybot ai spell <id> [level]  one spell's profile and amounts at a caster level
  *   .partybot ai rates               fight-wide rates and value units of your party
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
+ *   .partybot ai threat watch [off|target|all]   addon threat meter feed (ThreatFeed.h)
  *   .partybot ai packs               out-of-combat packs within 50 yards
  *   .partybot ai plan                team plan: pull state, focus and intercepts, interrupt abilities and duties
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
@@ -146,6 +147,25 @@ namespace
                     Num(Commander::ThreatView::Headroom(e, t.guid)).c_str());
             }
         }
+        return true;
+    }
+
+    // .partybot ai threat watch [off|target|all]   (no argument = target)
+    // Replies PBOK;;threatwatch;<mode> for the addon's threat window.
+    bool SetThreatWatch(ChatHandler* handler, Player* player, char const* arg)
+    {
+        Commander::ThreatWatch mode = Commander::ThreatWatch::Target;
+        if (arg && !strcmp(arg, "off"))
+            mode = Commander::ThreatWatch::Off;
+        else if (arg && !strcmp(arg, "all"))
+            mode = Commander::ThreatWatch::All;
+        else if (arg && strcmp(arg, "target"))
+        {
+            handler->SendSysMessage("Usage: .partybot ai threat watch [off|target|all]");
+            return false;
+        }
+        sCommanderMgr.SetThreatWatch(player->GetObjectGuid(), mode);
+        handler->PSendSysMessage("PBOK;;threatwatch;%s", Commander::ThreatWatchName(mode));
         return true;
     }
 
@@ -723,7 +743,11 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "threat"))
-            ok = ShowThreat(this, player);
+        {
+            char const* arg = ExtractLiteralArg(&args);
+            ok = arg && !strcmp(arg, "watch") ? SetThreatWatch(this, player, ExtractLiteralArg(&args))
+                                               : ShowThreat(this, player);
+        }
         else if (!strcmp(sub, "retreat"))
             ok = StartRetreat(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "clear"))
@@ -757,7 +781,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }
