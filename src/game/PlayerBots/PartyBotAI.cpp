@@ -59,6 +59,9 @@ enum PartyBotSpells
 #define PB_MAX_FOLLOW_DIST 6.0f
 #define PB_MIN_FOLLOW_ANGLE 0.0f
 #define PB_MAX_FOLLOW_ANGLE 6.0f
+// No auto revive while an enemy this close is still fighting (a rogue's Vanish or a Feign Death
+// drops the last member out of combat, the fight goes on).
+#define PB_REVIVE_ENEMY_COMBAT_RADIUS 40.0f
 
 bool PartyBotAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess)
 {
@@ -599,7 +602,18 @@ bool PartyBotAI::ShouldAutoRevive() const
         }
     }
 
-    return alivePlayerNearby;
+    if (!alivePlayerNearby)
+        return false;
+
+    std::list<Unit*> enemies;
+    me->GetEnemyListInRadiusAround(me, PB_REVIVE_ENEMY_COMBAT_RADIUS, enemies);
+    for (Unit const* pEnemy : enemies)
+    {
+        if (pEnemy->IsInCombat())
+            return false;
+    }
+
+    return true;
 }
 
 bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
