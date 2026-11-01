@@ -507,8 +507,9 @@ namespace Commander
             // Others: only while mana is their active power. A feral druid bot stays in bear /
             // cat form and PartyBotAI::DrinkAndEat only drinks with mana active, so counting its
             // pool would hold every pull until the ready timeout.
-            bool const healer = m.isBot && m.role == ROLE_HEALER;
-            if (healer ? m.UsesMana() : m.manaPct >= 0.0f)
+            // Players can drink in any form themselves: their pool counts too.
+            bool const usePool = (m.isBot && m.role == ROLE_HEALER) || !m.isBot;
+            if (usePool ? m.UsesMana() : m.manaPct >= 0.0f)
             {
                 float const manaPct = float(m.mana) * 100.0f / float(std::max(1u, m.maxMana));
                 if (manaPct < manaNeeded)

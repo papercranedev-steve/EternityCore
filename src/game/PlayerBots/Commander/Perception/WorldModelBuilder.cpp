@@ -36,6 +36,8 @@ namespace WorldModelBuilder
             return p;
         }
 
+        uint32 const SPELL_RIGHTEOUS_FURY = 25780;     // the aura (spell_template: aura 42 / 10)
+
         void FillUnitFacts(Unit const* unit, PartyMemberFacts& f)
         {
             f.guid = unit->GetObjectGuid();
@@ -61,6 +63,9 @@ namespace WorldModelBuilder
             f.charmed = unit->IsCharmed() && !unit->GetCharmerGuid().IsPlayer();
             f.controlled = f.charmed || unit->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             f.silenced = unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
+            ShapeshiftForm const form = unit->GetShapeshiftForm();
+            f.tankStance = form == FORM_DEFENSIVESTANCE || form == FORM_BEAR || form == FORM_DIREBEAR ||
+                           (f.classId == CLASS_PALADIN && unit->HasAura(SPELL_RIGHTEOUS_FURY));
         }
 
         // Interrupt-cast effects lock the school for the spell's duration; stuns and silences don't.

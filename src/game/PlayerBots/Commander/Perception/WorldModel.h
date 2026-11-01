@@ -67,6 +67,9 @@ namespace Commander
         bool controlled = false;
         bool charmed = false;       // mind controlled by an enemy: hostile to us, do not attack, dispel
         bool silenced = false;      // can still melee, cannot cast
+        // Set up to tank: warrior in Defensive Stance, druid in (Dire) Bear Form, paladin with
+        // Righteous Fury. Tells a tanking player apart from a healer the enemies ran to.
+        bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
 
         bool CanAct() const { return alive && !controlled; }

@@ -50,13 +50,12 @@ namespace Commander
             return nullptr;
         }
 
-        // A player (not a bot) who is tanking: a class that can tank (warrior, paladin, druid)
-        // and the victim of more than half of the acting enemies fighting us. The player's role
-        // is not known; this is what the fight shows.
+        // A player (not a bot) who is tanking: set up to tank (PartyMemberFacts::tankStance) and
+        // the victim of more than half of the acting enemies fighting us. The player's role is
+        // not known; the stance keeps a healer the enemies ran to from counting.
         bool IsTankingPlayer(WorldModel const& world, PartyMemberFacts const& m)
         {
-            if (m.isBot || m.isPet || !m.alive ||
-                (m.classId != CLASS_WARRIOR && m.classId != CLASS_PALADIN && m.classId != CLASS_DRUID))
+            if (m.isBot || m.isPet || !m.alive || !m.tankStance)
                 return false;
             uint32 acting = 0;
             uint32 onHim = 0;
@@ -632,13 +631,12 @@ namespace Commander
         // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
         // again without one. Proposed only while it differs, so once per change.
         bool const tank = HasTank(world);
-        // On again only when nobody could be tanking: a tanking player is seen only while most
+        // On again only when nobody is set up to tank: a tanking player is seen only while most
         // enemies hit him, and switching on whenever that dips mid-fight would flip it back and
-        // forth. A party with a player warrior, paladin or druid keeps it off once switched off.
+        // forth. The stance rarely changes in a fight; a damage dealing warrior lets it come back.
         bool maybeTankPlayer = false;
         for (PartyMemberFacts const& m : world.party)
-            if (!m.isBot && !m.isPet && m.alive &&
-                (m.classId == CLASS_WARRIOR || m.classId == CLASS_PALADIN || m.classId == CLASS_DRUID))
+            if (!m.isBot && !m.isPet && m.alive && m.tankStance)
                 maybeTankPlayer = true;
         std::vector<SpellEntry const*> taunts;
         PetTauntSpells(pet, taunts);
@@ -682,9 +680,18 @@ namespace Commander
         {
             if (!me->IsInCombat() || e->victim == petGuid)
                 return;
+            // Busy with its own cast or channel (Consume Shadows when idle): the Attack command
+            // starts a chase and breaks it.
+            if (pet->IsNonMeleeSpellCasted(false))
+                return;
             float const minRatio = DPS_SWITCH_HEADROOM;
             float const minSec = DPS_SWITCH_MIN_SEC;
-            float const room = ThreatView::Headroom(*e, petGuid);
+            // Room as it will fight: a pet called back stands out of melee reach and gets the
+            // 130% rule, 0.2 x the holder's threat more than once it is back in (110%), which
+            // would send it straight into the stop band. The imp (416) has no melee.
+            ThreatEntry const* own = ThreatView::FindEntry(*e, petGuid);
+            float const factor = pet->GetEntry() == 416 ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
+            float const room = own ? e->victimThreat * factor - own->threat : ThreatView::NO_LIMIT;
             bool const safe = !IsHeldByHolder(bot, world, e->victim) ||
                 (e->victimThreat > 0.0f && room / e->victimThreat >= minRatio &&
                  room >= OwnThreatRate(world, petGuid, *e) * minSec);
@@ -695,8 +702,10 @@ namespace Commander
             float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
             Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetAttack, sendAt->guid);
             p.reason = "idle pet, send in";
-            // Benefit: the pet's damage over the next ticks; nothing is lost by sending it.
-            p.SetValue(Value::LostAction(world, *petFacts, 2.0f * tickSec), 0.0f);
+            // Benefit: the pet's damage over the next ticks; nothing is lost by sending it. At
+            // least 1 point: with no measured incoming damage (all enemies on a tank-like ally)
+            // LostAction is 0 and the arbiter would drop it.
+            p.SetValue(std::max(1.0f, Value::LostAction(world, *petFacts, 2.0f * tickSec)), 0.0f);
             out.push_back(p);
             return;
         }
