@@ -9,28 +9,11 @@
 #include "Timer.h"
 #include <algorithm>
 #include <cmath>
-#include <mutex>
 
 namespace Commander
 {
     namespace
     {
-        // Ranged pull shots per tank (PullPlan has no field for it and Propose is const).
-        // Bots of several maps update at once, hence the lock.
-        struct ShotState
-        {
-            ObjectGuid tank;
-            ObjectGuid target;
-            uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs: a new Approach starts over
-            uint32 shotAtMs = 0;            // first shot, or the end of the retry walk; 0 = none yet
-            bool retried = false;
-            bool walkIn = false;
-            uint32 touchedMs = 0;
-        };
-        uint32 const SHOT_STATE_KEEP_MS = 60 * 1000;
-        std::mutex g_shotsLock;
-        std::vector<ShotState> g_shots;
-
         enum class ShotStep : uint8
         {
             Shoot,      // in position: shoot (again)
@@ -40,31 +23,18 @@ namespace Commander
         };
 
         // Called in range with line of sight. `walking` = the tank is still on a held walk.
+        // Keeps its state in PullPlan::rangedShot (mutable, see TeamPlan.h): only the tank's
+        // tick calls this, on the commander's map thread. A new pull resets it with the plan
+        // (one target per plan), a new Approach (held back to WaitReady and out again) here.
         ShotStep NextShotStep(PullPlan const& pull, bool targetInCombat, bool walking, uint32 nowMs)
         {
             uint32 const noCombatMs = PullBehavior::RANGED_NO_COMBAT_MS;
-            std::lock_guard<std::mutex> guard(g_shotsLock);
-            g_shots.erase(std::remove_if(g_shots.begin(), g_shots.end(), [&pull, nowMs](ShotState const& s)
-                {
-                    return s.tank != pull.tank && WorldTimer::getMSTimeDiff(s.touchedMs, nowMs) > SHOT_STATE_KEEP_MS;
-                }), g_shots.end());
-
-            auto itr = std::find_if(g_shots.begin(), g_shots.end(), [&pull](ShotState const& s) { return s.tank == pull.tank; });
-            if (itr == g_shots.end())
+            PullShotState& s = pull.rangedShot;
+            if (s.approachSinceMs != pull.phaseSinceMs)
             {
-                g_shots.push_back(ShotState());
-                itr = g_shots.end() - 1;
-                itr->tank = pull.tank;
-            }
-            ShotState& s = *itr;
-            if (s.target != pull.target || s.approachSinceMs != pull.phaseSinceMs)
-            {
-                s = ShotState();
-                s.tank = pull.tank;
-                s.target = pull.target;
+                s = PullShotState();
                 s.approachSinceMs = pull.phaseSinceMs;
             }
-            s.touchedMs = nowMs;
 
             if (s.walkIn)
                 return ShotStep::WalkIn;
@@ -252,6 +222,19 @@ namespace Commander
                 float const distance = PackResolver::Distance(PositionOf(me), pull.spot);
                 out.push_back(MoveTo(pull.spot, distance));
             }
+            else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active && !bot->IsMovementHeld())
+            {
+                // Line of sight pull: walk to the point and stay there. The hold is renewed
+                // (a MoveTo to the point it stands on) whenever it runs out, so the original
+                // chase does not take the tank back into the caster's sight. Without a hold
+                // the original AI still fights from the point (melee, spells), it only does not
+                // chase. Ends when PullAssigner ends the break (at most LOS_BREAK_TIMEOUT_MS),
+                // the last hold runs out LOS_HOLD_EXTRA_MS later.
+                float const distance = PackResolver::Distance(PositionOf(me), pull.losPoint);
+                Proposal p = MoveTo(pull.losPoint, distance);
+                p.action.holdMs += PullBehavior::LOS_HOLD_EXTRA_MS;
+                out.push_back(p);
+            }
             return;
         }
 
@@ -259,6 +242,11 @@ namespace Commander
         // Only out of combat: a bot already in a fight (the player attacked first, a patrol joined)
         // must not stand idle for up to 20 seconds. Waiting for first threat is the threat module's job.
         if (me->IsInCombat())
+            return;
+        // Settle holds for SETTLE_MS only. A line of sight pull keeps Settle going for up to
+        // LOS_BREAK_TIMEOUT_MS more; a healer not in combat yet must be free to heal the tank then.
+        uint32 const settleMs = PullAssigner::SETTLE_MS;
+        if (pull.phase == PullPhase::Settle && WorldTimer::getMSTimeDiff(pull.phaseSinceMs, WorldTimer::getMSTime()) >= settleMs)
             return;
         out.push_back(Make(ProposalTier::Assigned, 1.0f, BotActionType::Hold));
     }

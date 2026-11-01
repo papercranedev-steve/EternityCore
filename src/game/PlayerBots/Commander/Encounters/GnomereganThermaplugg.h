@@ -19,10 +19,12 @@
  *     close to the bomb, never the button presser).
  *
  * Proposals:
- *   Button presser (one melee damage dealer, else one ranged; picked in Refresh, sticky while
- *     alive, on this map and at >= PRESSER_MIN_HEALTH_PCT, else re-picked), Assigned, UseObject
- *     on the button of the lit face closest to him, while the boss is alive. A button just used
- *     is skipped until its face is dark or BUTTON_REUSE_MS passed.
+ *   Button presser (one melee damage dealer, else one ranged; picked in Refresh at
+ *     >= PRESSER_MIN_HEALTH_PCT, sticky while alive, on this map and at >=
+ *     PRESSER_STAY_HEALTH_PCT, else re-picked), Assigned, UseObject on the button of the lit
+ *     face closest to him, while the boss is alive. A button just used is skipped until its
+ *     face is dark or BUTTON_REUSE_MS passed; after PRESS_VERIFY_MS a press whose face is still
+ *     lit while the presser is not at the button is dropped (the use did not happen).
  *     benefit = BOMBS_PER_FACE_WINDOW x explosion loss (BOMB_VICTIMS x BOMB_DAMAGE, in points),
  *     cost    = Value::LostAction for walking to the button, using it and walking back to the boss.
  *   Melee damage dealers whose target is a bomb they were not assigned to intercept, Assigned:
@@ -64,7 +66,11 @@ namespace Commander
         static constexpr float BOMB_VICTIMS = 2.0f;
         static constexpr float BOMB_DAMAGE = 250.0f;
 
+        // Hysteresis: a new presser needs PRESSER_MIN_HEALTH_PCT, the current one keeps the job
+        // down to PRESSER_STAY_HEALTH_PCT. With one threshold two candidates near 50% swapped
+        // the job back and forth on every refresh.
         static constexpr float PRESSER_MIN_HEALTH_PCT = 50.0f;
+        static constexpr float PRESSER_STAY_HEALTH_PCT = 40.0f;
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
         static constexpr float USE_SEC = 1.0f;          // stop, use, turn around
 
@@ -74,6 +80,10 @@ namespace Commander
         static constexpr uint32 OBJECT_SEARCH_RETRY_MS = 10000;
         // A button just used is not proposed again until its face goes dark or this passes.
         static constexpr uint32 BUTTON_REUSE_MS = 5000;
+        // A press is checked this long after it was recorded (ReadFaces): face still lit and
+        // the presser not at the button = the use never happened (the Arbiter picked another
+        // proposal that tick), the button may be chosen again before BUTTON_REUSE_MS.
+        static constexpr uint32 PRESS_VERIFY_MS = 1500;
 
         enum class Phase : uint8
         {
@@ -101,13 +111,16 @@ namespace Commander
             Position3 buttonPos;
             bool lit = false;
             // Set by ProposePresser (const) on the tick the presser is in reach of the button,
-            // cleared by ReadFaces once the face is dark. Same map thread for the whole party.
+            // cleared by ReadFaces once the face is dark, or after PRESS_VERIFY_MS while still
+            // lit with the presser away from the button. Same map thread for the whole party.
             mutable bool pressed = false;
             mutable uint32 pressedAtMs = 0;
         };
 
         void FindObjects(PartyBotAI* bot, uint32 nowMs);
         void ReadFaces(PartyBotAI* bot);
+        // The presser is within INTERACTION_DISTANCE of the face's button.
+        bool PresserAtButton(PartyBotAI* bot, Face const& f) const;
         void PickPresser(WorldModel const& world);
         void AddBombIntercepts(WorldModel const& world, TeamPlan& plan) const;
 

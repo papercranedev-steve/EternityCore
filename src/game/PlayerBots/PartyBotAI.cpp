@@ -743,6 +743,14 @@ void PartyBotAI::OnPlayerLogin()
 
 void PartyBotAI::UpdateAI(uint32 const diff)
 {
+    // Commander: second look at a heal being cast, every frame (own CHECK_INTERVAL_MS inside),
+    // before the throttle and the "casting -> return" below. A cancelled heal lets the rotation
+    // pick a new target in this frame instead of after the next bot interval.
+    if (!m_initialized || !me->IsInWorld() || me->IsBeingTeleported() || !me->IsAlive())
+        m_castWatch.spell = nullptr;
+    else if (Commander::CastWatch::Update(this, m_castWatch))
+        m_updateTimer.Reset(0);
+
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
         m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval()); // was PB_UPDATE_INTERVAL

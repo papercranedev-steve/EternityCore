@@ -477,7 +477,28 @@ namespace CastValues
         float const window = std::min(ability.lockoutMs / 1000.0f, Value::EnemyTimeToDie(world, enemy));
         uint8 const school = interrupted->school;
         float const elapsed = CastElapsedSec(enemy, interruptedSpellId);
+
+        // Main ranged spell locked while the enemy stands back: it walks into melee
+        // (CreatureAI.cpp DoSpellsListCasts), where melee can hit it and nobody has to run.
+        // Counted as its ranged damage meanwhile (walkIn).
+        // walkIn and the blocked casts of that same spell (loop below) are two views of one
+        // gain: the ranged damage it does not deal during the lockout (rangedDps is that
+        // spell's damage per second). Adding both counted it twice, so the main ranged spell
+        // counts only the larger of the two; other spells of the school are added as before.
+        bool walkInApplies = false;
+        float walkIn = 0.0f;
+        if (creature->mainRangedSpellId && !enemy.meleeEnabled)
+        {
+            std::shared_ptr<SpellProfile const> ranged = sProfileStore.GetSpell(creature->mainRangedSpellId);
+            if (ranged && ranged->school == school)
+            {
+                walkInApplies = true;
+                walkIn = Value::Points(world, enemy.rangedDps * window);
+            }
+        }
+
         float points = 0.0f;
+        float mainRangedBlocked = 0.0f;     // blocked casts of the main ranged spell (walkInApplies only)
         for (CreatureSpellRef const& ref : creature->spells)
         {
             if (!IsAvailable(ref, enemy))
@@ -493,18 +514,17 @@ namespace CastValues
             float const wait = ref.spellId == interruptedSpellId ? std::max(0.0f, ref.repeatMinMs / 1000.0f - elapsed)
                                                                  : RepeatWaitSec(world, enemy, ref.spellId, &ref);
             float const blocked = std::max(0.0f, window - wait) / interval;
-            if (blocked > 0.0f)
-                points += blocked * Evaluate(world, enemy, ref.spellId, ObjectGuid()).points;
+            if (blocked <= 0.0f)
+                continue;
+            float const gain = blocked * Evaluate(world, enemy, ref.spellId, ObjectGuid()).points;
+            if (walkInApplies && ref.spellId == creature->mainRangedSpellId)
+                mainRangedBlocked += gain;
+            else
+                points += gain;
         }
 
-        // Main ranged spell locked: the caster walks into melee (CreatureAI.cpp DoSpellsListCasts),
-        // where melee can hit it and nobody has to run. Counted as its ranged damage meanwhile.
-        if (creature->mainRangedSpellId && !enemy.meleeEnabled)
-        {
-            std::shared_ptr<SpellProfile const> ranged = sProfileStore.GetSpell(creature->mainRangedSpellId);
-            if (ranged && ranged->school == school)
-                points += Value::Points(world, enemy.rangedDps * window);
-        }
+        if (walkInApplies)
+            points += std::max(mainRangedBlocked, walkIn);
         return points;
     }
 

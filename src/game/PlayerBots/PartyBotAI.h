@@ -20,6 +20,7 @@
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
+#include "Commander/Behaviors/CastWatch.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; }
@@ -154,6 +155,8 @@ public:
         bool returned = false;      // seen inside again after the hold: no more out-of-reach steps
     };
     mutable HazardGiveUp m_hazardGiveUp;
+    // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
+    Commander::CastWatchState m_castWatch;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
 };

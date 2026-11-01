@@ -13,9 +13,11 @@
  *                      when the tank is about to go, predict again and hold the pull in
  *                      WaitReady while a patrol is about to walk next to the target or the
  *                      fight spot.
+ *                      In Settle it also looks for a line of sight pull point (SearchLosBreak).
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
  *                      A fight with other enemies before the pull starts ends it as
- *                      Interrupted; real failures end it as Cancelled.
+ *                      Interrupted; real failures end it as Cancelled. Settle waits for an
+ *                      active line of sight pull (casters walked in, or the timeout).
  */
 
 #ifndef MANGOS_COMMANDER_PULL_PLANNER_H
@@ -52,8 +54,27 @@ namespace Commander
             GiveUp,
         };
         // Runs when PullAssigner has just moved the pull to Approach. Map thread.
+        // ClearPlanner::Step calls it on every refresh while a pull is going, so it is also the
+        // pull's map-thread step: in Settle it runs SearchLosBreak (and returns NotDue).
         RecheckResult RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs,
                                             std::string& why);
+
+        // Line of sight pull, map thread, Settle only, once per pull (PullPlan::losBreak).
+        // A pulled caster standing back casting at the tank more than LOS_CASTER_MIN_DISTANCE
+        // away: look for a point on a ring (LOS_RING_INNER / LOS_RING_OUTER) around the fight
+        // spot (around the tank when the pack was not brought back) that the casters cannot
+        // see, the tank can see (short walk) and every healer bot can see (they do not move).
+        // At most LOS_MAX_CHECKS line of sight checks. Found: losBreak = Active, the tank goes
+        // there (PullBehavior) and PullAssigner keeps Settle going until the casters came.
+        // Not found: NoPoint, fight where we are (as before).
+        // Why it works: CreatureAI::DoSpellsListCasts tries the spell list every 1.2 s. A
+        // CF_MAIN_RANGED_SPELL cast that succeeds turns combat movement and melee off (it
+        // stands); any failure, SPELL_FAILED_LINE_OF_SIGHT from Spell::CheckCast included,
+        // turns both back on, so the chase brings it to its victim. It notices at its next
+        // try once the spell is off cooldown; a cast already under way is finished first.
+        // Casters kept back by a script (melee off without a main ranged spell) may not come:
+        // the timeout covers them.
+        void SearchLosBreak(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs);
 
         // Spell the tank can open a pull with from range, 0 = none. `range` = the distance
         // to use (spell range, at most PULL_RANGE). Per class:
@@ -97,6 +118,20 @@ namespace Commander
         // Melee stand point: target combat reach plus this.
         float const MELEE_STAND_EXTRA = 1.5f;
 
+        // Line of sight pull (SearchLosBreak). Casters closer than this to the tank are left alone.
+        float const LOS_CASTER_MIN_DISTANCE = 10.0f;
+        // Candidate ring around the fight spot: 6 directions x these two radii.
+        float const LOS_RING_INNER = 6.0f;
+        float const LOS_RING_OUTER = 11.0f;
+        // Ground of a candidate within this of the spot's height (no ledges, no other floor).
+        float const LOS_POINT_MAX_HEIGHT_DIFF = 3.0f;
+        // A candidate this close to an idle hostile creature not in the pull, and closer to it
+        // than the spot is, is skipped.
+        float const LOS_OTHER_CREATURE_CLEARANCE = 20.0f;
+        uint32 const LOS_MAX_CHECKS = 16;     // line of sight checks per pull
+        uint32 const LOS_MAX_CASTERS = 2;     // the point must hide from each of them
+        uint32 const LOS_MAX_HEALERS = 2;     // healer bots that must still see the point
+
         // Pure: who is not ready. Players count too (the leader's own health matters).
         // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.
         struct Issue
@@ -121,6 +156,11 @@ namespace Commander
         static constexpr uint32 RETURN_TIMEOUT_MS = 8 * 1000;
         static constexpr uint32 SETTLE_MS = 2500;
         static constexpr float RETURN_ARRIVED = 4.0f;
+        // Line of sight pull: Settle lasts until every caster is within LOS_CASTER_ARRIVED of the
+        // tank (or dead, crowd controlled, out of the fight), at most this long after the point
+        // was found. Long enough for one cast to finish plus a 1.2 s spell list try after it.
+        static constexpr uint32 LOS_BREAK_TIMEOUT_MS = 8 * 1000;
+        static constexpr float LOS_CASTER_ARRIVED = 8.0f;
 
         char const* GetId() const override { return "pull"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;

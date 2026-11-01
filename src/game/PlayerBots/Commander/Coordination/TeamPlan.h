@@ -1,6 +1,7 @@
 /*
  * PartyBot Commander layer 2 (team assignment): the party plan.
  * Plain data written by assigners, read by behaviors. Map thread only.
+ * Exception: PullPlan::rangedShot (mutable) is kept by the tank's PullBehavior.
  */
 
 #ifndef MANGOS_COMMANDER_TEAM_PLAN_H
@@ -75,6 +76,24 @@ namespace Commander
         std::string name;
     };
 
+    // Ranged pull shot steps of one Approach (PullBehavior::NextShotStep).
+    struct PullShotState
+    {
+        uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs of its Approach: a new Approach starts over
+        uint32 shotAtMs = 0;            // first time in position, or the end of the retry walk; 0 = none yet
+        bool retried = false;           // stepped RANGED_RETRY_STEP_YD closer once
+        bool walkIn = false;            // gave up on the shot: walk-in pull
+    };
+
+    // Line of sight pull (PullPlanner::SearchLosBreak, PullAssigner Settle).
+    enum class PullLosBreak : uint8
+    {
+        None,       // not searched yet (no caster standing back seen in Settle so far)
+        NoPoint,    // searched: no usable point, fight where we are
+        Active,     // the tank stands at losPoint until the casters come or the timeout
+        Ended,
+    };
+
     struct PullPlan
     {
         PullPhase phase = PullPhase::None;
@@ -99,6 +118,10 @@ namespace Commander
         bool recheckOnApproach = false;
         bool rechecked = false;
         uint32 recheckWaitSinceMs = 0;      // clear: prediction over the limit since then, 0 = not waiting
+        // Last full recheck. While held (patrol, over the limit) the pull comes back to
+        // Approach on every refresh; the next full recheck waits RECHECK_PATROL_WAIT_MS /
+        // RECHECK_HOLD_MS after this.
+        uint32 lastRecheckMs = 0;
 
         // Patrol expected near the target or the fight spot soon: held in WaitReady.
         uint32 patrolWaitSinceMs = 0;       // 0 = not waiting for a patrol
@@ -113,6 +136,22 @@ namespace Commander
         // ranged pull did not start the fight in time (tank walks in instead).
         uint32 rangedPullSpell = 0;
         float rangedPullRange = 0.0f;
+        // Written by the tank's PullBehavior::Propose, the one exception to "behaviors only
+        // read the plan": only the behavior sees when the tank stands in range with line of
+        // sight and whether it is still on a held walk (live checks, every bot tick, not in
+        // the facts). The plan belongs to one PartyCommander, which only its map thread
+        // touches, so no lock is needed. Reset with the plan (new pull) and by a new Approach.
+        mutable PullShotState rangedShot;
+
+        // Line of sight pull. A pulled caster standing back casting at the tank (melee off, or
+        // a main ranged spell and not moving) more than PullPlanner::LOS_CASTER_MIN_DISTANCE
+        // away: during Settle the tank moves to a nearby point the caster cannot see. Its main
+        // ranged spell then fails (line of sight) and the creature AI turns chase back on
+        // (CreatureAI::DoSpellsListCasts), so it walks to the tank. Searched once per pull.
+        PullLosBreak losBreak = PullLosBreak::None;
+        Position3 losPoint;
+        std::vector<ObjectGuid> losCasters;  // casters the point hides from
+        uint32 losSinceMs = 0;              // Active since then (PullAssigner::LOS_BREAK_TIMEOUT_MS)
     };
     enum class RetreatOutcome : uint8
     {

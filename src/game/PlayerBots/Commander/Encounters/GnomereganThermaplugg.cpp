@@ -20,10 +20,13 @@
  *   - No kiting, no dodging the blast, no crowd control of bombs, no pre-positioning of the
  *     tank before Knock Away, no top-up before the threat wipe (scenario 8, 3.2).
  *   - One presser at a time, sticky while alive, on this map, a damage dealer bot and at
- *     >= PRESSER_MIN_HEALTH_PCT; otherwise another one is picked (in every phase). Two
- *     candidates near the health threshold can swap back and forth (no hysteresis).
+ *     >= PRESSER_STAY_HEALTH_PCT; otherwise another one at >= PRESSER_MIN_HEALTH_PCT is picked
+ *     (in every phase). The 10% gap is the hysteresis against two candidates near one
+ *     threshold swapping the job back and forth.
  *   - A press is recorded when the presser is in reach of the button on his proposal tick; if
- *     the Arbiter picks another proposal that tick, the button waits BUTTON_REUSE_MS.
+ *     the Arbiter picks another proposal that tick, ReadFaces notices after PRESS_VERIFY_MS
+ *     (face still lit, presser not at the button) and frees the button again. BUTTON_REUSE_MS
+ *     stays the upper bound (presser at the button but the face does not go dark).
  *   - The door lock at pull (people left outside) is not checked.
  *   - An intercept from FocusAssigner on the presser (Urgent) beats the button run (Assigned).
  *   - Faces / buttons are found by a grid search around the boss and cached; a search that
@@ -100,12 +103,13 @@ namespace Commander
         }
 
         // The current presser keeps the job. Being controlled (stun, fear) is short, he keeps
-        // it then; ProposePresser waits until he can act again.
+        // it then; ProposePresser waits until he can act again. Lower health bar than a new
+        // pick (PRESSER_STAY_HEALTH_PCT < PRESSER_MIN_HEALTH_PCT, hysteresis).
         bool CanStayPresser(PartyMemberFacts const& m)
         {
             return m.isBot && !m.isPet && m.alive &&
                 (m.role == ROLE_MELEE_DPS || m.role == ROLE_RANGE_DPS) &&
-                m.healthPct >= GnomereganThermaplugg::PRESSER_MIN_HEALTH_PCT;
+                m.healthPct >= GnomereganThermaplugg::PRESSER_STAY_HEALTH_PCT;
         }
     }
 
@@ -170,17 +174,38 @@ namespace Commander
                 m_objectsFound = false;
     }
 
+    bool GnomereganThermaplugg::PresserAtButton(PartyBotAI* bot, Face const& f) const
+    {
+        if (!bot || m_presser.IsEmpty() || f.button.IsEmpty())
+            return false;
+        Map* map = bot->me->GetMap();
+        Player* presser = map->GetPlayer(m_presser);
+        GameObject* button = map->GetGameObject(f.button);
+        return presser && button && presser->IsWithinDist(button, INTERACTION_DISTANCE);
+    }
+
     void GnomereganThermaplugg::ReadFaces(PartyBotAI* bot)
     {
+        // Same clock as Face::pressedAtMs (ProposePresser).
+        uint32 const nowMs = WorldTimer::getMSTime();
+        uint32 const verifyMs = PRESS_VERIFY_MS;
         m_litCount = 0;
         for (Face& f : m_faces)
         {
             GameObject const* go = (bot && !f.face.IsEmpty()) ? bot->me->GetMap()->GetGameObject(f.face) : nullptr;
             f.lit = m_bossAlive && FaceIsLit(go);   // all faces switch off when the boss dies
-            if (f.lit)
-                ++m_litCount;
-            else
+            if (!f.lit)
+            {
                 f.pressed = false;                  // dark again: its button may be used next time it lights
+                continue;
+            }
+            ++m_litCount;
+            // Recorded press that did not happen: the face should have gone dark by now, and
+            // the presser is not standing at the button (the Arbiter ran another proposal on
+            // the press tick, or he walked off). Free the button. If he is still at it, keep
+            // the mark: the use may be under way, BUTTON_REUSE_MS bounds the wait.
+            if (f.pressed && WorldTimer::getMSTimeDiff(f.pressedAtMs, nowMs) >= verifyMs && !PresserAtButton(bot, f))
+                f.pressed = false;
         }
     }
 
@@ -370,7 +395,9 @@ namespace Commander
             return;
         Player* me = bot->me;
         PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
-        if (!myFacts || !myFacts->CanAct() || myFacts->healthPct < PRESSER_MIN_HEALTH_PCT)
+        // Same bar as keeping the job (CanStayPresser): a presser between the stay and the pick
+        // threshold keeps pressing.
+        if (!myFacts || !myFacts->CanAct() || myFacts->healthPct < PRESSER_STAY_HEALTH_PCT)
             return;
 
         Map* map = me->GetMap();

@@ -96,6 +96,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ManaBudget.cpp
   ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.h
   ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/CastWatch.h
+  ${COMMANDER_DIR}/Behaviors/CastWatch.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

@@ -218,17 +218,40 @@ namespace Commander
             return me ? Value::FALLBACK_DPS_PER_LEVEL * float(me->level) : 0.0f;
         }
 
+        // Warlock imp: casts from range, never melees.
+        uint32 const IMP_ENTRY = 416;
+
+        // `who` fights in melee: a pet other than the imp, or a melee damage dealer / tank bot.
+        // Players (role unknown) and ranged bots count as ranged.
+        bool FightsInMelee(PartyBotAI const* bot, WorldModel const& world, ObjectGuid who)
+        {
+            PartyMemberFacts const* m = world.FindMember(who);
+            if (!m)
+                return false;
+            if (m->isPet)
+            {
+                Unit const* unit = bot->me->GetMap()->GetUnit(who);
+                return unit && unit->GetEntry() != IMP_ENTRY;
+            }
+            return m->isBot && (m->role == ROLE_MELEE_DPS || m->role == ROLE_TANK);
+        }
+
         // An enemy `who` (damage dealer or pet at `from`) can hit instead of `current`: held by a
         // holder, enough room in relative terms AND for a few seconds of its threat. The ratio
         // alone picks adds the tank touched once (ratio 1.1, room for one hit) and the damage
         // ends up spread over several half-dead enemies (combat scenario 9). `preferred` first
         // if it is safe, else the safe one closest to dying. Null = none.
+        // Room is judged as `who` will fight after switching: a melee unit not in reach of the
+        // candidate yet gets the 110% rule (ThreatView::MELEE_AGGRO_FACTOR) instead of the 130%
+        // ThreatView::Headroom gives it now, else it switches into the stop band (threat-behavior
+        // doc 4.2 / 4.7). Ranged units keep Headroom.
         EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, ObjectGuid who,
                                          Position3 const& from, ObjectGuid current, ObjectGuid preferred)
         {
             float const range = ThreatBehavior::DPS_SWITCH_RANGE;
             float const minRatio = ThreatBehavior::DPS_SWITCH_HEADROOM;
             float const minSec = ThreatBehavior::DPS_SWITCH_MIN_SEC;
+            bool const melee = FightsInMelee(bot, world, who);
             EnemyFacts const* best = nullptr;
             for (EnemyFacts const& a : world.enemies)
             {
@@ -239,7 +262,11 @@ namespace Commander
                     continue;   // switching onto an enemy that is already on a healer does not help
                 if (PackResolver::Distance(from, a.pos) > range)
                     continue;
-                float const room = ThreatView::Headroom(a, who);
+                float room = ThreatView::Headroom(a, who);
+                if (melee)
+                    if (ThreatEntry const* own = ThreatView::FindEntry(a, who))
+                        if (!own->inMeleeReach)
+                            room = a.victimThreat * ThreatView::MELEE_AGGRO_FACTOR - own->threat;
                 float const ownRate = OwnThreatRate(world, who, a);
                 if (room / a.victimThreat < minRatio || room < ownRate * minSec)
                     continue;
@@ -690,7 +717,7 @@ namespace Commander
             // 130% rule, 0.2 x the holder's threat more than once it is back in (110%), which
             // would send it straight into the stop band. The imp (416) has no melee.
             ThreatEntry const* own = ThreatView::FindEntry(*e, petGuid);
-            float const factor = pet->GetEntry() == 416 ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
+            float const factor = pet->GetEntry() == IMP_ENTRY ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
             float const room = own ? e->victimThreat * factor - own->threat : ThreatView::NO_LIMIT;
             bool const safe = !IsHeldByHolder(bot, world, e->victim) ||
                 (e->victimThreat > 0.0f && room / e->victimThreat >= minRatio &&

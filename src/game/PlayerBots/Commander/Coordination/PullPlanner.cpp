@@ -21,44 +21,11 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
-#include <mutex>
 
 namespace Commander
 {
     namespace
     {
-        // Last full RecheckBeforeApproach per tank (PullPlan has no field for it). Several maps
-        // update at once, hence the lock. Entries of finished pulls are dropped after a minute.
-        struct RecheckStamp
-        {
-            ObjectGuid tank;
-            ObjectGuid target;
-            uint32 atMs;
-        };
-        uint32 const RECHECK_STAMP_KEEP_MS = 60 * 1000;
-        std::mutex g_recheckStampsLock;
-        std::vector<RecheckStamp> g_recheckStamps;
-
-        bool RecheckedWithin(ObjectGuid tank, ObjectGuid target, uint32 nowMs, uint32 intervalMs)
-        {
-            std::lock_guard<std::mutex> guard(g_recheckStampsLock);
-            for (RecheckStamp const& s : g_recheckStamps)
-                if (s.tank == tank)
-                    return s.target == target && WorldTimer::getMSTimeDiff(s.atMs, nowMs) < intervalMs;
-            return false;
-        }
-
-        void StampRecheck(ObjectGuid tank, ObjectGuid target, uint32 nowMs)
-        {
-            std::lock_guard<std::mutex> guard(g_recheckStampsLock);
-            g_recheckStamps.erase(std::remove_if(g_recheckStamps.begin(), g_recheckStamps.end(),
-                [tank, nowMs](RecheckStamp const& s)
-                {
-                    return s.tank == tank || WorldTimer::getMSTimeDiff(s.atMs, nowMs) > RECHECK_STAMP_KEEP_MS;
-                }), g_recheckStamps.end());
-            g_recheckStamps.push_back({ tank, target, nowMs });
-        }
-
         // Warrior ranged weapon spells (learned with the weapon skill) and Auto Shot.
         uint32 const SPELL_SHOOT_BOW = 2480;
         uint32 const SPELL_SHOOT_GUN = 7918;
@@ -425,6 +392,76 @@ namespace Commander
             PackCreature const* c = FindPackCreature(world, guid);
             return c && c->stealthed;
         }
+
+        // Line of sight pull: pulled enemies standing back casting at the tank (map thread).
+        // "Standing back": melee off (a CF_MAIN_RANGED_SPELL cast turns it off, scripts may too),
+        // or a main ranged spell in its profile and not moving (between two casts).
+        std::vector<Creature*> CastersStandingBack(WorldModel const& world, PullPlan const& pull, Map* map,
+                                                   Position3 const& tankAt)
+        {
+            std::vector<Creature*> casters;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.onAllyOnly || !e.acting || e.crowdControlled || e.victim != pull.tank || IsUnexpected(e, pull))
+                    continue;
+                if (PackResolver::Distance(e.pos, tankAt) <= PullPlanner::LOS_CASTER_MIN_DISTANCE)
+                    continue;
+                Creature* c = map->GetCreature(e.guid);
+                if (!c || !c->IsAlive())
+                    continue;
+                if (e.meleeEnabled && !(IsRangedCaster(c) && !c->IsMoving()))
+                    continue;
+                casters.push_back(c);
+                if (casters.size() >= PullPlanner::LOS_MAX_CASTERS)
+                    break;
+            }
+            return casters;
+        }
+
+        // Moving there takes the tank towards an idle hostile creature that is not in the pull.
+        bool TowardsOtherCreature(WorldModel const& world, PullPlan const& pull, Position3 const& point,
+                                  Position3 const& center)
+        {
+            for (PackFacts const& p : world.packs)
+            {
+                for (PackCreature const& c : p.members)
+                {
+                    if (!c.aggressive || c.noAggro || Contains(pull.expected, c.guid))
+                        continue;
+                    float const d = PackResolver::Distance(c.pos, point);
+                    if (d < PullPlanner::LOS_OTHER_CREATURE_CLEARANCE && d < PackResolver::Distance(c.pos, center))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        // Pure (PullAssigner). The break ends when every caster came within LOS_CASTER_ARRIVED of
+        // the tank or cannot come (dead, out of the fight, crowd controlled), the fight is over,
+        // or after LOS_BREAK_TIMEOUT_MS. `timedOut` says which.
+        // A caster turning melee back on is not the end yet: it has only started to walk, and
+        // the tank leaving the point would put it back in its sight (it stops again).
+        bool LosBreakOver(WorldModel const& world, PullPlan const& pull, Position3 const& tankAt, uint32 nowMs,
+                          bool& timedOut)
+        {
+            uint32 const timeoutMs = PullAssigner::LOS_BREAK_TIMEOUT_MS;
+            float const arrived = PullAssigner::LOS_CASTER_ARRIVED;
+            timedOut = false;
+            if (!world.HasPartyEnemy())
+                return true;
+            if (WorldTimer::getMSTimeDiff(pull.losSinceMs, nowMs) > timeoutMs)
+            {
+                timedOut = true;
+                return true;
+            }
+            for (ObjectGuid g : pull.losCasters)
+            {
+                EnemyFacts const* e = world.FindEnemy(g);
+                if (e && e->acting && !e->crowdControlled && PackResolver::Distance(e->pos, tankAt) > arrived)
+                    return false;
+            }
+            return true;
+        }
     }
 
     uint32 PullPlanner::FindRangedPullSpell(Player* tank, float& range)
@@ -760,11 +797,133 @@ namespace Commander
         return true;
     }
 
+    void PullPlanner::SearchLosBreak(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
+    {
+        PullPlan& pull = plan.pull;
+        if (pull.phase != PullPhase::Settle || pull.losBreak != PullLosBreak::None)
+            return;
+        Unit* tank = map->GetUnit(pull.tank);
+        if (!tank || !tank->IsAlive())
+            return;
+        Position3 const tankAt = PositionOf(tank);
+
+        // No caster standing back yet: looked at again next refresh while Settle lasts. Facts
+        // only, no line of sight checks until there is one.
+        std::vector<Creature*> const casters = CastersStandingBack(world, pull, map, tankAt);
+        if (casters.empty())
+            return;
+
+        // Around the fight spot when the pack was brought back, else where the tank fights.
+        Position3 const center = pull.returnToSpot ? pull.spot : tankAt;
+
+        // Healer bots must still see the tank at the point (they do not move with it).
+        std::vector<Unit*> healers;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet || !m.isBot || !m.alive || m.role != ROLE_HEALER || m.guid == pull.tank)
+                continue;
+            if (Unit* h = map->GetUnit(m.guid))
+                healers.push_back(h);
+            if (healers.size() >= LOS_MAX_HEALERS)
+                break;
+        }
+
+        // Candidates: a ring around the center, first straight away from the first caster
+        // (the far side of whatever is between), then turning towards it. Inner radius first:
+        // the healers stay in range.
+        static float const TURNS[] = { 0.0f, 1.0472f, -1.0472f, 2.0944f, -2.0944f, 3.1416f };   // 0, +-60, +-120, 180 deg
+        float const radii[] = { LOS_RING_INNER, LOS_RING_OUTER };
+        Creature const* first = casters.front();
+        float const away = std::atan2(center.y - first->GetPositionY(), center.x - first->GetPositionX());
+        float const tankHeight = 2.0f;      // WorldObject::IsWithinLOS default target height
+
+        uint32 checks = 0;
+        // True = usable point. Stops counting at LOS_MAX_CHECKS.
+        auto tryPoint = [&](Position3 const& p)
+        {
+            // Spell line of sight is checked from the caster's eyes to the target's position
+            // + 1 yd (WorldObject::IsWithinLOSInMap, GetLosCheckPosition): same here.
+            for (Creature const* c : casters)
+            {
+                if (checks >= LOS_MAX_CHECKS)
+                    return false;
+                ++checks;
+                if (c->IsWithinLOS(p.x, p.y, p.z, true, 1.0f))
+                    return false;
+            }
+            // Reachable: a straight look from the tank (MovePoint uses pathfinding; the point
+            // is at most LOS_RING_OUTER from the spot, so a clear line means a short walk).
+            if (checks >= LOS_MAX_CHECKS)
+                return false;
+            ++checks;
+            if (!tank->IsWithinLOS(p.x, p.y, p.z, true, tankHeight))
+                return false;
+            for (Unit const* h : healers)
+            {
+                if (checks >= LOS_MAX_CHECKS)
+                    return false;
+                ++checks;
+                if (!h->IsWithinLOS(p.x, p.y, p.z, true, tankHeight))
+                    return false;
+            }
+            return true;
+        };
+
+        bool found = false;
+        Position3 point;
+        for (float const turn : TURNS)
+        {
+            for (float const radius : radii)
+            {
+                if (found || checks >= LOS_MAX_CHECKS)
+                    break;
+                Position3 p;
+                p.x = center.x + std::cos(away + turn) * radius;
+                p.y = center.y + std::sin(away + turn) * radius;
+                // Ground near the spot's height: no ledges, no floors above or below.
+                float const ground = map->GetHeight(p.x, p.y, center.z + 2.0f);
+                if (ground <= INVALID_HEIGHT || std::fabs(ground - center.z) > LOS_POINT_MAX_HEIGHT_DIFF)
+                    continue;
+                p.z = ground;
+                if (TowardsOtherCreature(world, pull, p, center))
+                    continue;
+                if (tryPoint(p))
+                {
+                    found = true;
+                    point = p;
+                }
+            }
+        }
+
+        if (!found)
+        {
+            pull.losBreak = PullLosBreak::NoPoint;
+            plan.notes.push_back(Format("%s stands back and casts; no spot out of its sight nearby, fighting here.",
+                first->GetName()));
+            return;
+        }
+        pull.losBreak = PullLosBreak::Active;
+        pull.losPoint = point;
+        pull.losSinceMs = nowMs;
+        pull.losCasters.clear();
+        for (Creature const* c : casters)
+            pull.losCasters.push_back(c->GetObjectGuid());
+        plan.notes.push_back(Format("%s stands back and casts: %s steps out of its sight (%.0f yd) so it comes closer.",
+            first->GetName(), tank->GetName(), PackResolver::Distance(tankAt, point)));
+    }
+
     PullPlanner::RecheckResult PullPlanner::RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map,
                                                                   uint32 nowMs, std::string& why)
     {
         PullPlan& pull = plan.pull;
         ClearPlan const& clear = plan.clear;
+        // ClearPlanner::Step runs this on every refresh while a pull is going (single pull and
+        // clear alike): the map-thread step of the pull. Settle: line of sight pull search.
+        if (pull.phase == PullPhase::Settle)
+        {
+            SearchLosBreak(plan, world, map, nowMs);
+            return RecheckResult::NotDue;
+        }
         if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked)
             return RecheckResult::NotDue;
 
@@ -788,13 +947,14 @@ namespace Commander
         if (patrolWait || pull.recheckWaitSinceMs)
         {
             uint32 const interval = patrolWait ? RECHECK_PATROL_WAIT_MS : RECHECK_HOLD_MS;
-            if (RecheckedWithin(pull.tank, pull.target, nowMs, interval))
+            // Set by the recheck that started the wait (a new pull starts at 0 with the plan).
+            if (pull.lastRecheckMs && WorldTimer::getMSTimeDiff(pull.lastRecheckMs, nowMs) < interval)
             {
                 holdBack();
                 return RecheckResult::Hold;
             }
         }
-        StampRecheck(pull.tank, pull.target, nowMs);
+        pull.lastRecheckMs = nowMs;
 
         // 1. Predict again with the planned approach: creatures may have wandered or patrolled
         //    next to the target while the party got ready (combat scenario 13, 3:10).
@@ -985,6 +1145,18 @@ namespace Commander
                     enter(PullPhase::Settle);
                 return;
             case PullPhase::Settle:
+                // Line of sight pull (point found by PullPlanner::SearchLosBreak on the map
+                // thread): Settle lasts until the casters came or the timeout.
+                if (pull.losBreak == PullLosBreak::Active)
+                {
+                    bool timedOut = false;
+                    if (!LosBreakOver(world, pull, tank->pos, now, timedOut))
+                        return;
+                    pull.losBreak = PullLosBreak::Ended;
+                    if (timedOut)
+                        plan.notes.push_back(Format("The caster did not come out within %u seconds, fighting here.",
+                            LOS_BREAK_TIMEOUT_MS / 1000));
+                }
                 if (elapsed >= SETTLE_MS || !world.HasPartyEnemy())
                 {
                     pull.phase = PullPhase::None;

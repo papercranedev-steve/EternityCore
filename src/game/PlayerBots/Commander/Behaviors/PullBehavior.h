@@ -9,8 +9,13 @@
  *                     Auto Shot). Closer than the spell's minimum range: walk-in pull.
  *                     No fight RANGED_NO_COMBAT_MS after the shot: one retry a few yards
  *                     closer, then walk-in pull.
+ *                     The shot steps are kept in PullPlan::rangedShot (TeamPlan.h).
  *           Return:   run back to the fight spot; the enemies follow.
- *  Others   Approach / Return / Settle: stay where they are while out of combat.
+ *           Settle:   line of sight pull (PullPlan::losBreak Active): walk to PullPlan::losPoint,
+ *                     out of sight of the casters standing back, and stay there (movement held,
+ *                     still fighting) until PullAssigner ends it.
+ *  Others   Approach / Return, and the first PullAssigner::SETTLE_MS of Settle: stay where they
+ *           are while out of combat. Healers and ranged never follow the line of sight move.
  *           Once in combat (healers and damage dealers alike) the original AI acts normally.
  */
 
@@ -33,6 +38,8 @@ namespace Commander
         // (before PullAssigner::RANGED_PULL_FALLBACK_MS).
         static constexpr uint32 RANGED_NO_COMBAT_MS = 3000;
         static constexpr float RANGED_RETRY_STEP_YD = 5.0f;
+        // Line of sight pull: the movement hold lasts the walk plus this; renewed while it lasts.
+        static constexpr uint32 LOS_HOLD_EXTRA_MS = 1500;
 
         char const* GetId() const override { return "pull"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
