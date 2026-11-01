@@ -815,7 +815,14 @@ namespace Commander
         // Points lost to enemies that turn on me after this heal on `target` (0 = safe).
         auto aggroLoss = [&](Unit* target, float targetMissing, SpellEntry const* spell, float* effectiveOut)
         {
-            float const effective = std::min(targetMissing, EstimateDirectHeal(me, target, spell));
+            // Health missing when the heal lands, the same estimate CastWatch checks mid-cast.
+            // With the missing health of now, the arbiter approved heals that CastWatch cancelled
+            // 0.3 s later and the rotation started again (9 of 24 Heals in the second Stockade
+            // test, 2026-11-01).
+            float const castSec = float(spell->GetCastTime(me)) / 1000.0f;
+            float const atLanding = std::min(float(target->GetMaxHealth()),
+                                             targetMissing + Value::IncomingOn(world, target->GetObjectGuid()) * castSec);
+            float const effective = std::min(atLanding, EstimateDirectHeal(me, target, spell));
             if (effectiveOut)
                 *effectiveOut = effective;
             std::vector<ThreatView::EnemyThreatDelta> deltas;
