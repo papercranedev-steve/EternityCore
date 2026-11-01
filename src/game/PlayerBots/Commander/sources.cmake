@@ -118,6 +118,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.h
+  ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp

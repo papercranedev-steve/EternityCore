@@ -404,6 +404,8 @@ public:
             SpellEntry const* pBlizzard;
             SpellEntry const* pBlastWave;
             SpellEntry const* pCombustion;
+            SpellEntry const* pMageArmor;
+            SpellEntry const* pColdSnap;
         } mage;
         struct
         {

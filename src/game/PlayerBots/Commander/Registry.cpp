@@ -10,6 +10,7 @@
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/HealerStanceBehavior.h"
 #include "Commander/Behaviors/EscapeBehavior.h"
+#include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Behaviors/PatrolBehavior.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/PatrolAssigner.h"
@@ -36,6 +37,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EscapeBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaDamageBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PatrolBehavior>()));
     }
 

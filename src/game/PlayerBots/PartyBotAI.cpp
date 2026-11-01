@@ -37,6 +37,7 @@
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/FleePoint.h"
+#include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "HealSpells.h"
@@ -396,6 +397,11 @@ bool PartyBotAI::IsInterruptVetoed(Unit const* pVictim) const
     return Commander::VetoChecks::IsInterruptVetoed(this, pVictim);
 }
 
+bool PartyBotAI::IsCastVetoed(SpellEntry const* pSpellEntry) const
+{
+    return Commander::VetoChecks::IsCastVetoed(this, pSpellEntry);
+}
+
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 {
     return CombatBotBaseAI::IsValidHostileTarget(pTarget) &&
@@ -624,7 +630,9 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
                 return false;
 
         // do not cast aoe if it will pull aggro
-        if (m_role != ROLE_TANK)
+        // (rough rule: the victim must lead by the caster's max health. Skipped for area spells
+        // the Commander aoe module judges with the spell's own threat: AreaDamageBehavior.h)
+        if (m_role != ROLE_TANK && !Commander::AreaDamageBehavior::Judges(this, pSpellEntry))
         {
             for (auto const& pEnemy : targets)
             {
@@ -685,13 +693,31 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
-    if (me->Attack(pVictim, true))
+    // Cloth casters do not swing their weapon (Unit::Attack meleeAttack = false: victim only):
+    // a mage that ran to the tank kept stabbing with its dagger between casts
+    // (strat-20261101-235124). Their spells work at any distance.
+    // (A melee / tank role keeps melee: UpdateAI restarts the attack of those roles without it.)
+    bool const melee = !IsClothCaster() || GetRole() == ROLE_MELEE_DPS || GetRole() == ROLE_TANK;
+    if (me->Attack(pVictim, melee))
     {
         BeginChasing(pVictim);
         return true;
     }
 
     return false;
+}
+
+bool PartyBotAI::IsClothCaster() const
+{
+    switch (me->GetClass())
+    {
+        case CLASS_MAGE:
+        case CLASS_WARLOCK:
+        case CLASS_PRIEST:
+            return true;
+        default:
+            return false;
+    }
 }
 
 Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const

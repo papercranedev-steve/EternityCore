@@ -63,10 +63,9 @@ namespace Commander
             return radius;
         }
 
-        // Health the bot's shields will still take: active absorbs (Power Word: Shield, Ice
-        // Barrier; Mana Shield as far as the mana lasts), else the best shield of the class kit
-        // the rotation casts when attackers are near (ClassKit::ReactiveShields).
-        float ShieldAbsorb(PartyBotAI const* bot)
+        // Health the bot's active shields will still take: Power Word: Shield, Ice Barrier;
+        // Mana Shield as far as the mana lasts.
+        float ActiveAbsorb(PartyBotAI const* bot)
         {
             Player* me = bot->me;
             float absorb = 0.0f;
@@ -79,8 +78,16 @@ namespace Commander
                     amount = std::min(amount, float(me->GetPower(POWER_MANA)) / perPoint);
                 absorb += amount;
             }
-            if (absorb > 0.0f)
-                return absorb;
+            return absorb;
+        }
+
+        // The class kit shield (ClassKit::ReactiveShields) castable now that absorbs most,
+        // `amountOut` capped by the mana for a mana-paid one (Mana Shield). Null = none.
+        SpellEntry const* BestCastableShield(PartyBotAI const* bot, float& amountOut)
+        {
+            Player* me = bot->me;
+            SpellEntry const* best = nullptr;
+            amountOut = 0.0f;
             for (SpellEntry const* shield : bot->Kit().ReactiveShields())
             {
                 if (!shield || !bot->CanTryToCastSpell(me, shield))
@@ -88,9 +95,13 @@ namespace Commander
                 float amount = float(std::max(0, shield->CalculateSimpleValue(EFFECT_INDEX_0)));
                 if (float const perPoint = shield->EffectMultipleValue[EFFECT_INDEX_0])
                     amount = std::min(amount, float(me->GetPower(POWER_MANA)) / perPoint);
-                absorb = std::max(absorb, amount);
+                if (amount > amountOut)
+                {
+                    best = shield;
+                    amountOut = amount;
+                }
             }
-            return absorb;
+            return best;
         }
 
         Proposal MakeProposal(ProposalTier tier, char const* reason)
@@ -235,15 +246,35 @@ namespace Commander
             return;
         }
 
-        // Danger: the bot dies (health + shields) before the chasers do, and within DANGER_SEC.
-        // Two weak bugs that die in a few seconds are not dangerous: stay, shield, fight.
+        // Danger: the bot dies (health + active shields) before the chasers do, and within
+        // DANGER_SEC. Two weak bugs that die in a few seconds are not dangerous: stay, fight.
         float const incoming = Value::IncomingOn(world, self->guid);
         float killSec = 0.0f;
         for (Chaser const& c : chasers)
             killSec = std::max(killSec, Value::EnemyTimeToDie(world, *c.facts));
-        float const surviveSec = incoming > 0.0f ? (float(self->health) + ShieldAbsorb(bot)) / incoming : ThreatView::NO_LIMIT;
+        float const absorb = ActiveAbsorb(bot);
+        float const surviveSec = incoming > 0.0f ? (float(self->health) + absorb) / incoming : ThreatView::NO_LIMIT;
         bool const dangerous = surviveSec < DANGER_SEC && surviveSec < killSec;
         bool const allHeld = std::all_of(chasers.begin(), chasers.end(), [](Chaser const& c) { return c.rooted; });
+
+        // 0. Dangerous and nothing absorbs: the class's shield first (instant). Mana Shield
+        // costs 2 mana per point absorbed, so the rotation never casts it by itself
+        // (user, 2026-11-01: only when it is really dangerous); next tick the danger is judged
+        // again with the shield up. Benefit: the hits it takes within DANGER_SEC.
+        if (dangerous && absorb <= 0.0f)
+        {
+            float amount = 0.0f;
+            if (SpellEntry const* shield = BestCastableShield(bot, amount))
+            {
+                Proposal p = MakeProposal(ProposalTier::Urgent, "dangerous hits: shield up");
+                p.action.type = BotActionType::Cast;
+                p.action.spell = shield;
+                p.SetValue(Value::Points(world, std::min(amount, incoming * DANGER_SEC)),
+                           Value::LostAction(world, *self, Value::GCD_SEC));
+                out.push_back(p);
+                return;
+            }
+        }
 
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns.
         if (dangerous && !allHeld)

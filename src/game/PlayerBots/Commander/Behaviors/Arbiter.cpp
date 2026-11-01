@@ -72,6 +72,7 @@ namespace Commander
                 case VetoType::Dispel: return "no-dispel";
                 case VetoType::Interrupt: return "no-interrupt";
                 case VetoType::Heal:   return "no-heal";
+                case VetoType::Cast:   return "no-cast";
             }
             return "?";
         }

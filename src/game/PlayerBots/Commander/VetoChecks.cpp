@@ -10,6 +10,7 @@
 #include "Creature.h"
 #include "SpellAuras.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
 
@@ -103,6 +104,14 @@ namespace VetoChecks
             return false;
         return sCommanderMgr.IsEnabled() &&
                bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
+    }
+
+    bool IsCastVetoed(PartyBotAI const* bot, SpellEntry const* spell)
+    {
+        if (!spell || !sCommanderMgr.IsEnabled())
+            return false;
+        return bot->Directives().IsVetoed(VetoType::Cast, ObjectGuid(), sSpellMgr.GetFirstSpellInChain(spell->Id),
+                                          WorldTimer::getMSTime());
     }
 
     bool IsCharmedPartyMember(PartyBotAI const* bot, Unit const* target)

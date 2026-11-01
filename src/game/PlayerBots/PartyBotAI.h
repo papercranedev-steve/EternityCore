@@ -101,6 +101,8 @@ public:
 
     Player* GetPartyLeader() const;
     bool AttackStart(Unit* pVictim);
+    // Mage, warlock, priest: AttackStart does not turn melee swings on.
+    bool IsClothCaster() const;
     Unit* SelectAttackTarget(Player* pLeader) const;
     Unit* SelectPartyAttackTarget() const;
     Player* SelectResurrectionTarget() const;
@@ -196,6 +198,9 @@ public:
     float GetIncomingDps(Unit const* pTarget) const override;
     // The class rotations' reflex interrupts ask this first.
     bool IsInterruptVetoed(Unit const* pVictim) const;
+    // The class rotations ask this before spells a Commander module judges (area spells:
+    // Commander/Behaviors/AreaDamageBehavior.h).
+    bool IsCastVetoed(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
     // member mind controlled by a creature is not attacked (Commander::VetoChecks).
     bool IsValidHostileTarget(Unit const* pTarget) const;

@@ -28,12 +28,35 @@ namespace Commander
                 return { m_bot.m_spells.mage.pFrostNova };
             }
 
-            // The rotation casts Mana Shield when attackers are near (PartyBotAI mage block,
-            // above 20% mana); Ice Barrier is a frost talent.
+            // The rotation puts Ice Barrier (frost talent, no mana per absorbed point) up when
+            // attacked; Mana Shield (2 mana per point) only when EscapeBehavior finds the hits
+            // dangerous and nothing else absorbs (Rotations/MageRotation.cpp).
             std::vector<SpellEntry const*> ReactiveShields() const override
             {
                 auto const& s = m_bot.m_spells.mage;
                 return { s.pIceBarrier, s.pManaShield };
+            }
+
+            std::vector<AreaDamageSpell> AreaDamage() const override
+            {
+                auto const& s = m_bot.m_spells.mage;
+                return { { s.pBlizzard, true }, { s.pArcaneExplosion, false }, { s.pConeofCold, false },
+                         { s.pBlastWave, false } };
+            }
+
+            SpellEntry const* Filler() const override
+            {
+                // Fireball for a fire build (deep fire talents), else Frostbolt.
+                auto const& s = m_bot.m_spells.mage;
+                bool const fire = s.pCombustion || s.pPyroblast;
+                if (fire && s.pFireball)
+                    return s.pFireball;
+                return s.pFrostbolt ? s.pFrostbolt : s.pFireball;
+            }
+
+            SpellEntry const* SelfManaRestore() const override
+            {
+                return m_bot.m_spells.mage.pEvocation;
             }
         };
     }

@@ -42,6 +42,15 @@ namespace Commander
         bool primary = false;       // the class's main one (Thunder Clap, Consecration, Swipe), not a shout
     };
 
+    // An area damage spell of a damage dealer (AreaDamageBehavior).
+    struct AreaDamageSpell
+    {
+        SpellEntry const* spell = nullptr;
+        // Centred on the current victim (Blizzard) instead of around the caster (Arcane
+        // Explosion, Cone of Cold: a cone, counted as a circle).
+        bool onTarget = false;
+    };
+
     class ClassKit
     {
     public:
@@ -65,6 +74,15 @@ namespace Commander
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
         // Instant absorb on an ally, last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }
+        // Area damage spells the rotation casts on packs (AreaDamageBehavior vetoes the ones
+        // that would pull aggro or do less than the filler).
+        virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
+        // The single target damage spell the rotation casts most: what an area spell is compared
+        // with (AreaDamageBehavior) and how fast mana goes (ManaBudgetBehavior self restore).
+        virtual SpellEntry const* Filler() const { return nullptr; }
+        // Channelled restore of its own mana (Evocation). Only the Commander casts it
+        // (ManaBudgetBehavior): in combat, when the mana would run out long before the fight ends.
+        virtual SpellEntry const* SelfManaRestore() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

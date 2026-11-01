@@ -12,12 +12,17 @@
  *
  * Chasers: enemies that act, are not crowd controlled, have melee on (EnemyFacts::meleeEnabled),
  * hit this bot and stand within TRIGGER_GAP of it (edge distance).
- * Danger (user, 2026-11-01: "many mobs, or a few hits kill it"; weak mobs: shield and fight):
- *   survive = (health + shields) / Value::IncomingOn(bot), no heals; shields = active absorbs
- *   (Power Word: Shield, Ice Barrier, Mana Shield up to the mana left) or, for a mage without
- *   one, the Ice Barrier / Mana Shield it can cast now (the rotation casts Mana Shield when
- *   attackers are near). Dangerous = survive < DANGER_SEC and survive < the time the slowest
- *   chaser needs to die (Value::EnemyTimeToDie). More chasers count through the incoming damage.
+ * Danger (user, 2026-11-01: "many mobs, or a few hits kill it"):
+ *   survive = (health + active absorbs) / Value::IncomingOn(bot), no heals; absorbs = Power
+ *   Word: Shield, Ice Barrier, Mana Shield up to the mana left. Dangerous = survive < DANGER_SEC
+ *   and survive < the time the slowest chaser needs to die (Value::EnemyTimeToDie). More
+ *   chasers count through the incoming damage.
+ *
+ *  0. Dangerous and nothing absorbs: cast the class kit shield (ClassKit::ReactiveShields)
+ *     that absorbs most, tier Urgent; benefit = Points(min(absorb, incoming x DANGER_SEC)),
+ *     cost = LostAction(GCD). The mage rotation puts Ice Barrier up by itself when attacked;
+ *     Mana Shield (2 mana per point absorbed) only comes from here (user, 2026-11-01: only
+ *     when it is really dangerous; strat-20261101-235124 lost a third of its mana to it).
  *
  * Hold spells (HoldSpells: mage Frost Nova, druid Entangling Roots, paladin Hammer of Justice,
  * priest Shackle Undead on undead). Effect read from the spell: a stun holds for its duration, a
@@ -49,7 +54,7 @@
  *
  * Weak chasers: no hold spell (not dangerous), and running is valued against the walk: little
  * damage on top of the tank and a few seconds to live give little benefit, so the bot stays
- * and fights (the mage under its Mana Shield).
+ * and fights (a frost mage under its Ice Barrier).
  *
  * Known limits: the tank's position is from the last refresh and it may move on; the tank is
  * assumed to take the enemy on arrival; no Blink; ranged chasers (casters standing back) are

@@ -21,6 +21,17 @@
  * Sent directly, not through TeamPlan::notes: behaviors only get the plan read-only.
  *
  * Not done: future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.
+ *
+ * Self restore (any role whose class kit has one: ClassKit::SelfManaRestore, mage Evocation;
+ * user, 2026-11-01: an emergency resource, only in combat, never right after the fight):
+ * in combat, not hit by anything, the fight rate measured, the spell castable. The filler
+ * (ClassKit::Filler) spends S = mana / busy time - regeneration while casting per second.
+ * Over the rest of the fight T (Value::FightRemainingSec) the bot casts
+ *   without:  min(T, M / S)
+ *   with:     min(T - channel, (M + R) / S),  R = regeneration outside the five second rule x
+ *             (1 + the spell's power regen percent / 100) x channel, capped at the empty pool.
+ * Proposed (Cast, tier Assigned) with benefit LostAction(with), cost LostAction(without):
+ * only when channelling now leaves more casting time than running dry at the end.
  */
 
 #ifndef MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
@@ -61,6 +72,9 @@ namespace Commander
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
     private:
+        // Self restore (header): mage Evocation when it buys casting time.
+        void ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Tells the leader when this healer is low on mana for the rest of the fight.
         // One behavior object serves every bot on every map thread: the last note time per
         // healer is kept in a locked table in the .cpp.

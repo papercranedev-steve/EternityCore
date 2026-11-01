@@ -198,6 +198,7 @@ set (game_SRCS
     PlayerBots/PlayerBotMgr.cpp
     PlayerBots/RoleCapability.cpp
     PlayerBots/HealSpells.cpp
+    PlayerBots/DamageSpells.cpp
     Server/Protocol/Opcodes.cpp
     Server/Packets/Battleground.cpp
     Server/Packets/AuctionHouse.cpp
@@ -454,6 +455,7 @@ set (game_SRCS
     PlayerBots/PlayerBotMgr.h
     PlayerBots/RoleCapability.h
     PlayerBots/HealSpells.h
+    PlayerBots/DamageSpells.h
     Server/Protocol/Opcodes.h
     Server/Protocol/Opcodes_active.h
     Server/Packet.h

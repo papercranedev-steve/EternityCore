@@ -7,6 +7,9 @@
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "HealSpells.h"
+#include "DamageSpells.h"
+#include "Commander/Classes/ClassKit.h"
+#include "SpellAuraDefines.h"
 #include "Chat.h"
 #include "Timer.h"
 #include "SpellEntry.h"
@@ -137,7 +140,7 @@ namespace Commander
 
     bool ManaBudgetBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        return bot->GetRole() == ROLE_HEALER;
+        return bot->GetRole() == ROLE_HEALER || bot->Kit().SelfManaRestore();
     }
 
     void ManaBudgetBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -146,6 +149,60 @@ namespace Commander
         if (world.enemies.empty())
             return;
 
+        ProposeSelfRestore(bot, world, out);
+        if (bot->GetRole() == ROLE_HEALER)
+            ProposeHealVeto(bot, world, out);
+    }
+
+    void ManaBudgetBehavior::ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world,
+                                                std::vector<Proposal>& out) const
+    {
+        SpellEntry const* restore = bot->Kit().SelfManaRestore();
+        SpellEntry const* filler = bot->Kit().Filler();
+        Player* me = bot->me;
+        if (!restore || !filler || !me->IsInCombat() || !world.rates.dealtMeasured)
+            return;
+        PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+        if (!self || !self->UsesMana() || !self->CanAct())
+            return;
+        // Hits push the channel back and cut it short.
+        for (EnemyFacts const& e : world.enemies)
+            if (e.acting && !e.crowdControlled && e.victim == self->guid)
+                return;
+        if (!bot->CanTryToCastSpell(me, restore))
+            return;
+
+        float const spend = DamageSpells::ManaCost(me, filler) / DamageSpells::BusySec(me, filler) - self->manaRegenCasting;
+        if (spend <= 0.0f)
+            return;
+        float const fightSec = Value::FightRemainingSec(world);
+        float const mana = float(self->mana);
+        float const channelSec = DamageSpells::BusySec(me, restore);
+        float regenPct = 0.0f;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (restore->Effect[i] == SPELL_EFFECT_APPLY_AURA && restore->EffectApplyAuraName[i] == SPELL_AURA_MOD_POWER_REGEN_PERCENT)
+                regenPct += float(restore->CalculateSimpleValue(SpellEffectIndex(i)));
+        float const restored = std::min(float(self->maxMana) - mana,
+                                        self->manaRegen * (1.0f + regenPct / 100.0f) * channelSec);
+
+        float const castWithout = std::min(fightSec, mana / spend);
+        float const castWith = std::min(std::max(0.0f, fightSec - channelSec), (mana + restored) / spend);
+        if (castWith <= castWithout)
+            return;
+
+        Proposal p;
+        p.tier = ProposalTier::Assigned;
+        p.source = "mana";
+        p.reason = "mana runs out before the fight ends: restore";
+        p.action.type = BotActionType::Cast;
+        p.action.spell = restore;
+        p.SetValue(Value::LostAction(world, *self, castWith), Value::LostAction(world, *self, castWithout));
+        out.push_back(p);
+    }
+
+    void ManaBudgetBehavior::ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world,
+                                             std::vector<Proposal>& out) const
+    {
         Budget budget;
         if (!ComputeBudget(bot, world, budget))
             return;
