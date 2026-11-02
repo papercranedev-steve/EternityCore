@@ -182,8 +182,14 @@ namespace Commander
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             if (restore->Effect[i] == SPELL_EFFECT_APPLY_AURA && restore->EffectApplyAuraName[i] == SPELL_AURA_MOD_POWER_REGEN_PERCENT)
                 regenPct += float(restore->CalculateSimpleValue(SpellEffectIndex(i)));
-        float const restored = std::min(float(self->maxMana) - mana,
-                                        self->manaRegen * (1.0f + regenPct / 100.0f) * channelSec);
+        float const fullRestore = self->manaRegen * (1.0f + regenPct / 100.0f) * channelSec;
+        float const missing = float(self->maxMana) - mana;
+        // Restoring now is capped by the missing mana: a few more casts first make the same
+        // channel give more. So wait until it all fits, unless the next fillers cannot be paid
+        // (strat-20261102-220932: Evocation at 79% mana restored 1100 of its ~4000).
+        if (missing < fullRestore && mana >= DamageSpells::ManaCost(me, filler) * DRY_FILLER_CASTS)
+            return;
+        float const restored = std::min(missing, fullRestore);
 
         float const castWithout = std::min(fightSec, mana / spend);
         float const castWith = std::min(std::max(0.0f, fightSec - channelSec), (mana + restored) / spend);

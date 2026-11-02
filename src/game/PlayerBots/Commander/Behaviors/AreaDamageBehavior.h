@@ -47,8 +47,9 @@ namespace Commander
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
-        // `spell` is one of the bot's ClassKit::AreaDamage spells and this module is on: its
-        // threat is judged here, PartyBotAI::PassesPartyCastChecks skips its rough check.
+        // `spell` is one of the bot's ClassKit::AreaDamage spells, this module is on and the bot
+        // is in combat (only then the arbiter runs it before the rotation): its threat is judged
+        // here, PartyBotAI::PassesPartyCastChecks skips its rough check.
         static bool Judges(PartyBotAI const* bot, SpellEntry const* spell);
     };
 }

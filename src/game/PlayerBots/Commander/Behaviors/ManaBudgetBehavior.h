@@ -32,6 +32,10 @@
  *             (1 + the spell's power regen percent / 100) x channel, capped at the empty pool.
  * Proposed (Cast, tier Assigned) with benefit LostAction(with), cost LostAction(without):
  * only when channelling now leaves more casting time than running dry at the end.
+ * Timing (2026-11-02, strat-20261102-220932: Evocation at 79% mana, 1100 of ~4000 restored):
+ * while the missing mana is less than the uncapped R, every filler cast first makes the same
+ * channel restore more, so it waits until R fits, or until the mana pays fewer than
+ * DRY_FILLER_CASTS fillers (running dry before R fits: big regeneration pool).
  */
 
 #ifndef MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
@@ -50,6 +54,8 @@ namespace Commander
         static constexpr float DELAY_TICKS = 2.0f;
         // The low mana note (ManaBudget::WantsLowManaWarning) is sent at most this often per healer.
         static constexpr uint32 LOW_MANA_NOTE_REPEAT_MS = 60000;
+        // Self restore before its whole amount fits only when the mana pays fewer fillers than this.
+        static constexpr float DRY_FILLER_CASTS = 2.0f;
 
         struct Budget
         {

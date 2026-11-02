@@ -97,6 +97,12 @@ namespace Commander
     {
         if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("aoe"))
             return false;
+        // The module only judges in combat, in the arbiter pass before the rotation. Out of
+        // combat the rotation's opener (MageRotation::UpdateOutOfCombat -> UpdateInCombat) runs
+        // before any arbiter pass, so no veto exists yet: keep PartyBot's rough rule then
+        // (strat-20261102-220932: Blizzard on a pack that had just turned to the healer).
+        if (!bot->me->IsInCombat())
+            return false;
         uint32 const first = sSpellMgr.GetFirstSpellInChain(spell->Id);
         for (AreaDamageSpell const& a : bot->Kit().AreaDamage())
             if (a.spell && sSpellMgr.GetFirstSpellInChain(a.spell->Id) == first)
