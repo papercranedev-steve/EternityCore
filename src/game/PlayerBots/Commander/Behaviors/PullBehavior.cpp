@@ -3,6 +3,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/ShotSpot.h"
 #include "PartyBotAI.h"
 #include "DBCStores.h"
 #include "Map.h"
@@ -18,32 +19,32 @@ namespace Commander
         enum class ShotStep : uint8
         {
             Shoot,      // in position: shoot (again)
-            Wait,       // walking the retry step
             Retry,      // no fight after the shot: step closer, once
             WalkIn,     // no fight after the retry either: walk-in pull
         };
 
-        // Called in range with line of sight. `walking` = the tank is still on a held walk.
-        // Keeps its state in PullPlan::rangedShot (mutable, see TeamPlan.h): only the tank's
-        // tick calls this, on the commander's map thread. A new pull resets it with the plan
-        // (one target per plan), a new Approach (held back to WaitReady and out again) here.
-        ShotStep NextShotStep(PullPlan const& pull, bool targetInCombat, bool walking, uint32 nowMs)
+        // The shot steps of this Approach, kept in PullPlan::rangedShot (mutable, see
+        // TeamPlan.h): only the tank's tick writes it, on the commander's map thread. A new
+        // pull resets it with the plan, a new Approach (held back to WaitReady and out again,
+        // or a new spot or target from the brain) here.
+        PullShotState& ShotState(PullPlan const& pull)
         {
-            uint32 const noCombatMs = PullBehavior::RANGED_NO_COMBAT_MS;
             PullShotState& s = pull.rangedShot;
             if (s.approachSinceMs != pull.phaseSinceMs)
             {
                 s = PullShotState();
                 s.approachSinceMs = pull.phaseSinceMs;
+                s.standAt = pull.rangedSpot;
             }
+            return s;
+        }
 
+        // Called on the stand point, in range, with line of sight.
+        ShotStep NextShotStep(PullShotState& s, bool targetInCombat, uint32 nowMs)
+        {
+            uint32 const noCombatMs = PullBehavior::RANGED_NO_COMBAT_MS;
             if (s.walkIn)
                 return ShotStep::WalkIn;
-            if (s.retried && walking)
-            {
-                s.shotAtMs = nowMs;     // the retry window starts once the tank stands
-                return ShotStep::Wait;
-            }
             // Fight started: PullAssigner moves on with the next refresh.
             if (!s.shotAtMs || targetInCombat || WorldTimer::getMSTimeDiff(s.shotAtMs, nowMs) < noCombatMs)
             {
@@ -129,8 +130,25 @@ namespace Commander
             return p;
         }
 
-        // Ranged pull (PullPlan::rangedPullSpell). Returns false when the tank should attack
-        // normally instead (spell gone, already closer than the spell's minimum range).
+        void SpotFailed(PullShotState& s, char const* why)
+        {
+            s.spotFailed = true;
+            s.spotFailWhy = why;
+        }
+
+        float Distance2d(Position3 const& a, Position3 const& b)
+        {
+            float const dx = a.x - b.x, dy = a.y - b.y;
+            return std::sqrt(dx * dx + dy * dy);
+        }
+
+        // Ranged pull (PullPlan::rangedPullSpell): walk to the shot spot the brain picked
+        // (PullPlan::rangedSpot, Perception/ShotSpot.h), then shoot. Returns false when the tank
+        // should attack normally instead (spell gone, already closer than the spell's minimum
+        // range, the shot did not start the fight after the retry).
+        // The tank never steps closer to find line of sight: on the spot without sight or out
+        // of range (the target wandered), or not there in time, it holds and reports
+        // (PullShotState::spotFailed); the brain answers with another spot or target.
         bool ProposeRangedPull(PartyBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -150,82 +168,100 @@ namespace Commander
                 return true;
             }
 
-            bool const inRange = distance <= pull.rangedPullRange;
-            if (inRange && me->IsWithinLOSInMap(target))
-            {
-                bool const walking = me->IsMoving() && bot->IsMovementHeld();
-                switch (NextShotStep(pull, target->IsInCombat(), walking, WorldTimer::getMSTime()))
-                {
-                    case ShotStep::WalkIn:
-                        return false;
-                    case ShotStep::Wait:
-                        out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
-                        return true;
-                    case ShotStep::Retry:
-                    {
-                        // A few yards closer (not inside the minimum range), then shoot again.
-                        float const retryStep = PullBehavior::RANGED_RETRY_STEP_YD;
-                        Position3 const here = PositionOf(me);
-                        Position3 const there = PositionOf(target);
-                        float const total = PackResolver::Distance(here, there);
-                        float const step = std::min(retryStep, distance - (minRange + 1.0f));
-                        if (step >= 1.0f)
-                        {
-                            float const f = step / std::max(total, 0.1f);
-                            Position3 to;
-                            to.x = here.x + (there.x - here.x) * f;
-                            to.y = here.y + (there.y - here.y) * f;
-                            to.z = here.z + (there.z - here.z) * f;
-                            out.push_back(MoveTo(to, step));
-                            return true;
-                        }
-                        break;      // no room to step closer: just shoot again
-                    }
-                    case ShotStep::Shoot:
-                        break;
-                }
-                Proposal cast = Make(ProposalTier::Assigned, 5.0f, BotActionType::Cast, pull.target);
-                cast.action.spell = spell;
-                out.push_back(cast);
-                // Not castable this tick (GCD, cooldown, form): stand still rather than letting the
-                // original AI run in. PullAssigner falls back to a walk-in pull after a while.
-                out.push_back(Make(ProposalTier::Assigned, 4.0f, BotActionType::Hold));
-                return true;
-            }
-
-            // Still walking: do not restart the spline every tick.
-            if (me->IsMoving() && bot->IsMovementHeld())
+            uint32 const now = WorldTimer::getMSTime();
+            PullShotState& s = ShotState(pull);
+            if (s.walkIn)
+                return false;
+            // Waiting for the brain's answer (next refresh).
+            if (s.spotFailed)
             {
                 out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
                 return true;
             }
 
+            // Not on the stand point yet: walk there (pathfinding).
             Position3 const here = PositionOf(me);
-            Position3 const there = PositionOf(target);
-            if (inRange)
+            float const toStand = Distance2d(here, s.standAt);
+            bool const arrived = toStand <= PullBehavior::SPOT_ARRIVED_YD ||
+                (toStand <= PullBehavior::SPOT_NEAR_YD && !me->IsMoving());
+            if (!arrived)
             {
-                // In range but no line of sight: step towards the target, then look again.
-                float const step = std::min(PullBehavior::LOS_STEP_YD, PackResolver::Distance(here, there));
-                float const f = step / std::max(PackResolver::Distance(here, there), 0.1f);
-                Position3 to;
-                to.x = here.x + (there.x - here.x) * f;
-                to.y = here.y + (there.y - here.y) * f;
-                to.z = here.z + (there.z - here.z) * f;
-                out.push_back(MoveTo(to, step));
+                // The retry window starts once the tank stands.
+                if (s.retried)
+                    s.shotAtMs = now;
+                if (!s.walkSinceMs)
+                {
+                    s.walkSinceMs = now;
+                    s.walkBudgetMs = uint32(toStand / PullBehavior::RUN_SPEED_YD_PER_SEC * 1000.0f *
+                                            PullBehavior::SPOT_WALK_TIME_FACTOR) + PullBehavior::SPOT_WALK_EXTRA_MS;
+                }
+                else if (WorldTimer::getMSTimeDiff(s.walkSinceMs, now) > s.walkBudgetMs)
+                {
+                    SpotFailed(s, "cannot get to the spot");
+                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                    return true;
+                }
+                // Still walking: do not restart the spline every tick.
+                if (me->IsMoving() && bot->IsMovementHeld())
+                {
+                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                    return true;
+                }
+                out.push_back(MoveTo(s.standAt, toStand * PullBehavior::SPOT_WALK_TIME_FACTOR));
                 return true;
             }
 
-            // Walk to a point inside the range on the line to the target: the tank stops there
-            // instead of running into the pack (a hold left from walking would delay Return).
-            float const total = PackResolver::Distance(here, there);
-            float const keep = std::max(pull.rangedPullRange - PullPlanner::RANGED_STAND_MARGIN, minRange + 1.0f);
-            float const walk = std::max(total - keep, 1.0f);
-            float const f = walk / std::max(total, 0.1f);
-            Position3 to;
-            to.x = here.x + (there.x - here.x) * f;
-            to.y = here.y + (there.y - here.y) * f;
-            to.z = here.z + (there.z - here.z) * f;
-            out.push_back(MoveTo(to, walk));
+            if (distance > pull.rangedPullRange)
+            {
+                SpotFailed(s, "out of range from the spot");
+                out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                return true;
+            }
+            if (!me->IsWithinLOSInMap(target))
+            {
+                SpotFailed(s, "no line of sight from the spot");
+                out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                return true;
+            }
+
+            switch (NextShotStep(s, target->IsInCombat(), now))
+            {
+                case ShotStep::WalkIn:
+                    return false;
+                case ShotStep::Retry:
+                {
+                    // A few yards closer (not inside the minimum range, not into an idle
+                    // creature's aggro range), then shoot again; no such step: shoot again here.
+                    Position3 const there = PositionOf(target);
+                    float const total = PackResolver::Distance(here, there);
+                    float const step = std::min(PullBehavior::RANGED_RETRY_STEP_YD, distance - (minRange + 1.0f));
+                    if (step >= 1.0f)
+                    {
+                        float const f = step / std::max(total, 0.1f);
+                        Position3 to;
+                        to.x = here.x + (there.x - here.x) * f;
+                        to.y = here.y + (there.y - here.y) * f;
+                        to.z = here.z + (there.z - here.z) * f;
+                        Creature const* creature = target->ToCreature();
+                        if (creature && ShotSpot::IsClear(creature, me, to))
+                        {
+                            s.standAt = to;
+                            s.walkSinceMs = 0;
+                            out.push_back(MoveTo(to, step));
+                            return true;
+                        }
+                    }
+                    break;
+                }
+                case ShotStep::Shoot:
+                    break;
+            }
+            Proposal cast = Make(ProposalTier::Assigned, 5.0f, BotActionType::Cast, pull.target);
+            cast.action.spell = spell;
+            out.push_back(cast);
+            // Not castable this tick (GCD, cooldown, form): stand still rather than letting the
+            // original AI run in. PullAssigner falls back to a walk-in pull after a while.
+            out.push_back(Make(ProposalTier::Assigned, 4.0f, BotActionType::Hold));
             return true;
         }
     }

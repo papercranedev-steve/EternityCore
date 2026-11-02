@@ -7,12 +7,17 @@
  *                      maps are idle. Picks the pack member that brings the fewest extra
  *                      creatures (assistance, aggro-together groups, and creatures whose aggro
  *                      range the tank walks into) and fills TeamPlan::pull. Decides whether the
- *                      tank opens from range (ranged pull) and reports patrols that will pass.
+ *                      tank opens from range (ranged pull: only from a shot spot,
+ *                      Perception/ShotSpot.h) and reports patrols that will pass.
+ *                      Ranking: fewest joiners, a shot spot when a ranged pull is wanted,
+ *                      fewest elites, melee before casters, nearest.
  * PullPlanner::RecheckBeforeApproach
  *                    - map thread (ClearPlanner::Step), for single pulls and the clear alike:
- *                      when the tank is about to go, predict again and hold the pull in
- *                      WaitReady while a patrol is about to walk next to the target or the
- *                      fight spot.
+ *                      when the tank is about to go, look for the shot spot again (none:
+ *                      another target), predict again and hold the pull in WaitReady while a
+ *                      patrol is about to walk next to the pulled creatures or the fight spot.
+ *                      In Approach it answers the tank's "cannot shoot from this spot"
+ *                      (PullShotState::spotFailed) with another spot or target.
  *                      In Settle it also looks for a line of sight pull point (SearchLosBreak).
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
  *                      A fight with other enemies before the pull starts ends it as
@@ -103,7 +108,8 @@ namespace Commander
         float const RETURN_MIN_DISTANCE = 15.0f;
 
         // Patrols (PatrolTracker, WorldModel::patrols): a patrol that comes within
-        // max(PATROL_MIN_CLEARANCE, its aggro range) of the target or the fight spot while the
+        // max(PATROL_MIN_CLEARANCE, its aggro range) of any pulled creature (the target and every
+        // expected joiner: a patrol next to any of them is called in for help) or the fight spot while the
         // fight is expected to last holds the pull in WaitReady until the start that keeps it
         // away for the whole fight, at most PATROL_WAIT_MAX_MS (then a single pull goes anyway,
         // the clear skips the pack). No such start (a loop shorter than the fight, Patchwork
@@ -124,10 +130,14 @@ namespace Commander
         uint32 const RECHECK_PATROL_WAIT_MS = 500;
         uint32 const RECHECK_HOLD_MS = 1000;
 
-        // Ranged pull: the tank opens from at most this far (combat scenario 13, rows 10-12).
+        // Ranged pull: the tank opens from at most this far (combat scenario 13, rows 10-12),
+        // from a shot spot (Perception/ShotSpot.h) found within it.
         float const PULL_RANGE = 25.0f;
-        // Prediction stand point is this much inside the range (the tank stops once in range).
-        float const RANGED_STAND_MARGIN = 3.0f;
+        // The tank reports its spot failed (PullShotState::spotFailed): another spot for the
+        // same target, up to this many failures of that target; then another pack member that
+        // can be shot, up to MAX_TARGET_SWITCHES targets given up per pull; then it walks in.
+        uint32 const MAX_SPOT_FAILURES = 2;
+        uint32 const MAX_TARGET_SWITCHES = 2;
         // Hostile creatures this close to the target that the prediction does not bring are
         // a risk of walking in (scenario 13, D next to G and P2): open from range.
         float const RANGED_PULL_NEIGHBOR_RADIUS = 10.0f;

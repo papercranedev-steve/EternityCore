@@ -78,13 +78,22 @@ namespace Commander
         std::string name;
     };
 
-    // Ranged pull shot steps of one Approach (PullBehavior::NextShotStep).
+    // Ranged pull shot steps of one Approach (PullBehavior). A new Approach (phaseSinceMs
+    // changed: held back and out again, or the brain gave a new spot or target) starts over.
     struct PullShotState
     {
-        uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs of its Approach: a new Approach starts over
+        uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs of its Approach
+        Position3 standAt;              // PullPlan::rangedSpot, or the retry step's point
+        uint32 walkSinceMs = 0;         // first walk order to standAt, 0 = none yet
+        uint32 walkBudgetMs = 0;        // standAt not reached by then: spot failed (unreachable)
         uint32 shotAtMs = 0;            // first time in position, or the end of the retry walk; 0 = none yet
         bool retried = false;           // stepped RANGED_RETRY_STEP_YD closer once
         bool walkIn = false;            // gave up on the shot: walk-in pull
+        // The tank stands on standAt but cannot shoot from there (no line of sight, out of
+        // range: the target wandered), or cannot get there. It holds and does not step closer;
+        // PullPlanner::RecheckBeforeApproach (brain, map thread) gives another spot or target.
+        bool spotFailed = false;
+        char const* spotFailWhy = "";   // static text for the note
     };
 
     // Line of sight pull (PullPlanner::SearchLosBreak, PullAssigner Settle).
@@ -141,11 +150,21 @@ namespace Commander
         // ranged pull did not start the fight in time (tank walks in instead).
         uint32 rangedPullSpell = 0;
         float rangedPullRange = 0.0f;
+        // Where the tank shoots from (Perception/ShotSpot: target in sight, outside every idle
+        // creature's aggro range, safe walk). Found by PullPlanner::Plan, looked for again
+        // before the tank goes and when the tank reports the spot failed (rangedShot.spotFailed).
+        Position3 rangedSpot;
+        std::vector<Position3> failedSpots;     // of this target, not offered again
+        uint32 spotFailures = 0;                // of this target
+        // Pack members given up as targets because no spot works (PullPlanner picks another).
+        std::vector<ObjectGuid> excludedTargets;
         // Written by the tank's PullBehavior::Propose, the one exception to "behaviors only
         // read the plan": only the behavior sees when the tank stands in range with line of
         // sight and whether it is still on a held walk (live checks, every bot tick, not in
         // the facts). The plan belongs to one PartyCommander, which only its map thread
         // touches, so no lock is needed. Reset with the plan (new pull) and by a new Approach.
+        // The brain only reads it (spotFailed, standAt) and answers by changing rangedSpot or
+        // the target and starting a new Approach.
         mutable PullShotState rangedShot;
 
         // Ranged pull fought where the pack stands (not brought back): Settle starts with the

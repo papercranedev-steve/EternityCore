@@ -777,10 +777,21 @@ namespace DevConsole
         }
         if (plan.pull.phase != Commander::PullPhase::None)
         {
-            lua_createtable(L, 0, 3);
+            lua_createtable(L, 0, 5);
             SetFieldS(L, "phase", PullPhaseName(plan.pull.phase));
             SetFieldG(L, "target", plan.pull.target);
             SetFieldG(L, "tank", plan.pull.tank);
+            // Ranged pull: the shot spot {x, y, z} and whether the tank reported it failed.
+            if (plan.pull.rangedPullSpell)
+            {
+                lua_createtable(L, 0, 3);
+                SetFieldN(L, "x", Round2(plan.pull.rangedSpot.x));
+                SetFieldN(L, "y", Round2(plan.pull.rangedSpot.y));
+                SetFieldN(L, "z", Round2(plan.pull.rangedSpot.z));
+                lua_setfield(L, -2, "spot");
+                if (plan.pull.rangedShot.spotFailed)
+                    SetFieldS(L, "spotFailed", plan.pull.rangedShot.spotFailWhy);
+            }
             lua_setfield(L, -2, "pull");
         }
         if (plan.clear.active)

@@ -6,12 +6,15 @@
  *                     fought where the pack stands: then the class's opener charge
  *                     (ClassKit::OpenerCharge, warrior Charge; the tank rotation never charges).
  *                     No charging when the pack is brought back: VetoType::GapCloser.
- *                     Ranged pull (PullPlan::rangedPullSpell): walk to a point inside
- *                     rangedPullRange on the line to the target, step closer while there is no
- *                     line of sight, then cast the spell (Shoot / Throw / Faerie Fire (Feral) /
- *                     Auto Shot). Closer than the spell's minimum range: walk-in pull.
+ *                     Ranged pull (PullPlan::rangedPullSpell): walk to the shot spot the brain
+ *                     picked (PullPlan::rangedSpot, Perception/ShotSpot.h), then cast the spell
+ *                     (Shoot / Throw / Faerie Fire (Feral) / Auto Shot). Closer than the
+ *                     spell's minimum range: walk-in pull. On the spot without line of sight or
+ *                     out of range, or not there in time: hold, never step closer, and report
+ *                     (PullShotState::spotFailed); the brain gives another spot or target.
  *                     No fight RANGED_NO_COMBAT_MS after the shot: one retry a few yards
- *                     closer, then walk-in pull.
+ *                     closer if that step stays out of every idle creature's aggro range
+ *                     (ShotSpot::IsClear; else shoot again in place), then walk-in pull.
  *                     The shot steps are kept in PullPlan::rangedShot (TeamPlan.h).
  *           Return:   walk backwards to the fight spot facing the pack (Backpedal.h: parry, block,
  *                     swings and the rotation keep working); the enemies follow. Forward walk
@@ -38,8 +41,15 @@ namespace Commander
     {
     public:
         static constexpr float RUN_SPEED_YD_PER_SEC = 7.0f;
-        // Ranged pull in range without line of sight: walk this far towards the target, look again.
-        static constexpr float LOS_STEP_YD = 4.0f;
+        // Ranged pull: on the shot spot within SPOT_ARRIVED_YD, or within SPOT_NEAR_YD and
+        // standing (a path may end a little short, SafeRoute::OFF_MESH_STEP).
+        static constexpr float SPOT_ARRIVED_YD = 2.0f;
+        static constexpr float SPOT_NEAR_YD = 3.5f;
+        // Not there after the straight walk at RUN_SPEED_YD_PER_SEC x SPOT_WALK_TIME_FACTOR
+        // (path detours) + SPOT_WALK_EXTRA_MS: the spot failed (unreachable). The walk order's
+        // hold uses the same factor.
+        static constexpr float SPOT_WALK_TIME_FACTOR = 1.5f;
+        static constexpr uint32 SPOT_WALK_EXTRA_MS = 3000;
         // Ranged pull in range with line of sight, target still out of combat this long after
         // the first shot (miss, dodge, range edge, cast refused): step RANGED_RETRY_STEP_YD
         // closer and shoot again, once. Still nothing after another RANGED_NO_COMBAT_MS: walk in
