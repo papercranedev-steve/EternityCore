@@ -19,6 +19,13 @@
  * walking; a cast-time spell pauses the walk until it is cast, Player::SetPosition would
  * interrupt it).
  *
+ * Facing only matters while something can hit the bot. While no unit attacking it (its
+ * attacker set: the pack chasing after a shot, a caster) is within RUN_FORWARD_YD, it runs
+ * forwards along the same path (MOVEFLAG_FORWARD, run speed, MSG_MOVE_START_FORWARD): after a
+ * ranged pull the pack was 25-30 yd away and the tank walked back at 4.5 yd/s, so it was
+ * caught halfway and slowed by Hamstring (strat-20261103-004601). It turns around once one is
+ * within TURN_AROUND_YD (hysteresis between the two).
+ *
  * Ends at the point, when the order runs out, when the bot cannot move freely (root, stun,
  * fear, confuse, taxi), when something else moves it (a MotionMaster generator or spline:
  * player commands, another module's MoveTo) or on Stop (PartyBotAI::ClearMovementHold).
@@ -50,6 +57,7 @@ namespace Commander
         uint32 orderMs = 0;             // last Order (start or renewal)
         uint32 durationMs = 0;          // the order runs out this long after orderMs
         uint32 lastBeatMs = 0;
+        bool forward = false;           // running forwards now (nothing attacking it is close)
     };
 
     namespace Backpedal
@@ -62,6 +70,11 @@ namespace Commander
         constexpr float MAX_GROUND_STEP_YD = 3.0f;
         // Frame time used at most for one step (a lag spike must not jump the bot).
         constexpr uint32 MAX_STEP_MS = 400;
+        // Turns to walk backwards when a unit attacking the bot comes this close (yards between
+        // bounding radii): a chaser at run speed is in melee about 2 s later. Runs forwards again
+        // when none is within RUN_FORWARD_YD.
+        constexpr float TURN_AROUND_YD = 8.0f;
+        constexpr float RUN_FORWARD_YD = 12.0f;
 
         // Starts the walk, or renews the order (same point within SAME_DEST_YD: keeps the path).
         // False when the bot cannot walk there (rooted, no path).

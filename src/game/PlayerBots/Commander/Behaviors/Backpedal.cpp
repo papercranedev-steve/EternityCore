@@ -31,13 +31,22 @@ namespace Backpedal
             return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
         }
 
-        // Facing away from the walking direction a -> b.
-        float BackwardsOrientation(Position3 const& a, Position3 const& b)
+        // Facing the walking direction a -> b (forward) or away from it (backwards).
+        float WalkOrientation(Position3 const& a, Position3 const& b, bool forward)
         {
-            float o = std::atan2(a.y - b.y, a.x - b.x);
+            float o = forward ? std::atan2(b.y - a.y, b.x - a.x) : std::atan2(a.y - b.y, a.x - b.x);
             if (o < 0.0f)
                 o += 2.0f * float(M_PI);
             return o;
+        }
+
+        // A unit attacking `me` (its victim is `me`) is within `yards` (between bounding radii).
+        bool AttackerWithin(Player const* me, float yards)
+        {
+            for (Unit const* attacker : me->GetAttackers())
+                if (attacker->IsAlive() && attacker->IsInMap(me) && me->IsWithinDist(attacker, yards))
+                    return true;
+            return false;
         }
 
         bool BuildPath(Player* me, Position3 const& to, std::vector<Position3>& out)
@@ -81,14 +90,14 @@ namespace Backpedal
 
         bool Walking(Player const* me)
         {
-            return me->m_movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD);
+            return me->m_movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD | MOVEFLAG_FORWARD);
         }
 
-        void SetWalking(Player* me, bool on)
+        void SetWalking(Player* me, bool on, bool forward = false)
         {
             uint32 flags = me->GetUnitMovementFlags() & ~uint32(MOVEFLAG_MASK_MOVING);
             if (on)
-                flags |= MOVEFLAG_BACKWARD;
+                flags |= forward ? MOVEFLAG_FORWARD : MOVEFLAG_BACKWARD;
             me->SetUnitMovementFlags(flags);
         }
 
@@ -164,6 +173,7 @@ namespace Backpedal
         state.orderMs = now;
         state.durationMs = durationMs;
         state.lastBeatMs = 0;
+        state.forward = false;
         return true;
     }
 
@@ -221,7 +231,10 @@ namespace Backpedal
             return;
         }
 
-        float left = std::max(1.0f, me->GetSpeed(MOVE_RUN_BACK)) * float(std::min(diff, MAX_STEP_MS)) / 1000.0f;
+        // Forwards while nothing attacking it is close, backwards once something is (hysteresis).
+        bool const forward = !AttackerWithin(me, state.forward ? TURN_AROUND_YD : RUN_FORWARD_YD);
+        float const speed = me->GetSpeed(forward ? MOVE_RUN : MOVE_RUN_BACK);
+        float left = std::max(1.0f, speed) * float(std::min(diff, MAX_STEP_MS)) / 1000.0f;
         Position3 at = PositionOf(me);
         size_t const startNext = state.next;
         while (left > 0.0f && state.next < state.path.size())
@@ -248,22 +261,24 @@ namespace Backpedal
         if (ground > INVALID_HEIGHT && std::fabs(ground - at.z) <= MAX_GROUND_STEP_YD)
             at.z = ground;
 
-        // Orientation: the segment walked now, turned around.
+        // Orientation: the segment walked now (turned around when walking backwards).
         float o = me->GetOrientation();
         if (state.next < state.path.size())
         {
             Position3 const& toward = state.path[state.next];
             if (Distance2d(at, toward) >= 0.1f)
-                o = BackwardsOrientation(at, toward);
+                o = WalkOrientation(at, toward, forward);
         }
 
-        bool const starting = !Walking(me);
+        // Starting, or turning around: MSG_MOVE_START_FORWARD / _BACKWARD from where it stands,
+        // already turned (as a client does).
+        bool const starting = !Walking(me) || forward != state.forward;
         if (starting)
         {
-            // MSG_MOVE_START_BACKWARD from where it stands, already turned (as a client does).
-            SetWalking(me, true);
+            state.forward = forward;
+            SetWalking(me, true, forward);
             me->SetPosition(me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), o);
-            me->SendMovementPacket(MSG_MOVE_START_BACKWARD, false);
+            me->SendMovementPacket(forward ? MSG_MOVE_START_FORWARD : MSG_MOVE_START_BACKWARD, false);
             state.lastBeatMs = now;
         }
 
