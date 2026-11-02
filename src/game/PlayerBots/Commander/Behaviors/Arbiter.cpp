@@ -83,7 +83,6 @@ namespace Commander
                 case VetoType::Interrupt: return "no-interrupt";
                 case VetoType::Heal:   return "no-heal";
                 case VetoType::GapCloser: return "no-charge";
-                case VetoType::Cast:   return "no-cast";
             }
             return "?";
         }

@@ -95,7 +95,6 @@ namespace Commander
         // Do not cast a spell that charges at `target` (empty = any): Charge, Intercept, Feral
         // Charge (PartyBotAI::PassesPartyCastChecks). The pull brings the pack back.
         GapCloser,
-        Cast,       // do not cast `spellId` (any rank, empty target = anywhere) (PartyBotAI::IsCastVetoed, class rotations)
     };
 
     struct Veto

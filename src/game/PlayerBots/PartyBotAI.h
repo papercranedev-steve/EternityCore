@@ -207,9 +207,6 @@ public:
     float GetIncomingDps(Unit const* pTarget) const override;
     // The class rotations' reflex interrupts ask this first.
     bool IsInterruptVetoed(Unit const* pVictim) const;
-    // The class rotations ask this before spells a Commander module judges (area spells:
-    // Commander/Behaviors/AreaDamageBehavior.h).
-    bool IsCastVetoed(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
     // member mind controlled by a creature is not attacked (Commander::VetoChecks).
     bool IsValidHostileTarget(Unit const* pTarget) const;
@@ -260,6 +257,8 @@ public:
     bool m_followChecked = false;
     // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
+    // Last area channel check (Commander/Behaviors/AreaDamageBehavior.h WatchChannel).
+    uint32 m_areaChannelCheckMs = 0;
     // Commander walk backwards (Commander/Behaviors/Backpedal.h), every frame in UpdateAI.
     Commander::BackpedalState m_backpedal;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the

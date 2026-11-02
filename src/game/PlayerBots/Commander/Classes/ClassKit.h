@@ -74,8 +74,8 @@ namespace Commander
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
         // Instant absorb on an ally, last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }
-        // Area damage spells the rotation casts on packs (AreaDamageBehavior vetoes the ones
-        // that would pull aggro or do less than the filler).
+        // Area damage spells the Commander casts on packs (AreaDamageBehavior decides when and
+        // where; the rotations do not cast them).
         virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
         // The single target damage spell the rotation casts most: what an area spell is compared
         // with (AreaDamageBehavior) and how fast mana goes (ManaBudgetBehavior self restore).

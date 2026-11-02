@@ -111,14 +111,6 @@ namespace VetoChecks
                bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
     }
 
-    bool IsCastVetoed(PartyBotAI const* bot, SpellEntry const* spell)
-    {
-        if (!spell || !sCommanderMgr.IsEnabled())
-            return false;
-        return bot->Directives().IsVetoed(VetoType::Cast, ObjectGuid(), sSpellMgr.GetFirstSpellInChain(spell->Id),
-                                          WorldTimer::getMSTime());
-    }
-
     bool IsGapCloserVetoed(PartyBotAI const* bot, Unit const* target, SpellEntry const* spell)
     {
         if (!spell || !target || !sCommanderMgr.IsEnabled() || !spell->HasEffect(SPELL_EFFECT_CHARGE))

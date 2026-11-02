@@ -12,9 +12,8 @@
  *      Mana Shield is not cast here: EscapeBehavior proposes it when the hits are dangerous.
  *   3. Without the Commander escape module: the old Blink / Frost Nova / run away block.
  *   4. Counterspell (behind the interrupt veto), Polymorph on a second attacker.
- *   5. Area spells on AREA_MIN_ENEMIES or more: Blizzard on the victim's pack, Cone of Cold /
- *      Blast Wave / Arcane Explosion around the mage. Each behind IsCastVetoed: the Commander
- *      area damage module vetoes the ones that would pull aggro or do less than the filler.
+ *   5. No area spells (user, 2026-11-02): the Commander area damage module decides when, which
+ *      and where (Commander/Behaviors/AreaDamageBehavior.h); without it the mage casts the filler.
  *   6. Burst of other builds (Combustion, Arcane Power, Presence of Mind + Pyroblast).
  *   7. Fire Blast to finish the victim (it dies from it), or while moving above half mana.
  *   8. The filler (ClassKit::Filler: Frostbolt, Fireball for a fire build).
@@ -38,8 +37,6 @@ namespace
     float const LEGACY_MANA_SHIELD_HEALTH_PCT = 50.0f;
     float const MOVING_FIRE_BLAST_MANA_PCT = 50.0f;
     float const WAND_MANA_PCT = 5.0f;
-    float const AREA_RADIUS = 10.0f;
-    uint32 const AREA_MIN_ENEMIES = 3;
 
     class MageRotation : public ClassRotation
     {
@@ -131,9 +128,6 @@ namespace
                         return;
                 }
             }
-
-            if (AreaSpells(pVictim))
-                return;
 
             if (Burst(pVictim))
                 return;
@@ -232,38 +226,6 @@ namespace
                 me->SetCasterChaseDistance(25.0f);
                 return true;
             }
-            return false;
-        }
-
-        bool AreaAllowed(SpellEntry const* pSpell) const
-        {
-            return pSpell && !m_bot.IsCastVetoed(pSpell);
-        }
-
-        bool AreaSpells(Unit* pVictim)
-        {
-            Player* me = m_bot.me;
-            auto const& s = m_bot.m_spells.mage;
-
-            if (AreaAllowed(s.pBlizzard) && !me->IsMoving() &&
-                me->GetEnemyCountInRadiusAround(pVictim, AREA_RADIUS) >= AREA_MIN_ENEMIES &&
-                Cast(pVictim, s.pBlizzard))
-                return true;
-
-            if (me->GetEnemyCountInRadiusAround(me, AREA_RADIUS) < AREA_MIN_ENEMIES)
-                return false;
-
-            if (AreaAllowed(s.pConeofCold) && !me->IsMoving() &&
-                m_bot.CanTryToCastSpell(me, s.pConeofCold) &&
-                m_bot.DoCastSpell(pVictim, s.pConeofCold) == SPELL_CAST_OK)
-                return true;
-
-            if (AreaAllowed(s.pBlastWave) && Cast(me, s.pBlastWave))
-                return true;
-
-            if (AreaAllowed(s.pArcaneExplosion) && Cast(me, s.pArcaneExplosion))
-                return true;
-
             return false;
         }
 

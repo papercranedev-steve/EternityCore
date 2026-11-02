@@ -406,11 +406,6 @@ bool PartyBotAI::IsInterruptVetoed(Unit const* pVictim) const
     return Commander::VetoChecks::IsInterruptVetoed(this, pVictim);
 }
 
-bool PartyBotAI::IsCastVetoed(SpellEntry const* pSpellEntry) const
-{
-    return Commander::VetoChecks::IsCastVetoed(this, pSpellEntry);
-}
-
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 {
     return CombatBotBaseAI::IsValidHostileTarget(pTarget) &&
@@ -1025,6 +1020,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!m_initialized || !me->IsInWorld() || me->IsBeingTeleported() || !me->IsAlive())
         m_castWatch.spell = nullptr;
     else if (Commander::CastWatch::Update(this, m_castWatch))
+        m_updateTimer.Reset(0);
+    // Same for an area channel (Blizzard): stop before the next tick pulls aggro.
+    else if (Commander::AreaDamageBehavior::WatchChannel(this, m_areaChannelCheckMs))
         m_updateTimer.Reset(0);
 
     // Commander walk backwards: one step every frame, so the position and the packets follow

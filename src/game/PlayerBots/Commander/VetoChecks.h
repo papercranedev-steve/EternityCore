@@ -31,10 +31,6 @@ namespace VetoChecks
     // Healing `target` now would pull aggro and is not needed yet (ThreatBehavior).
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target);
 
-    // Casting `spell` (any rank: vetoes are stored for the first rank) is not worth it or not
-    // safe now (AreaDamageBehavior: area spells that pull aggro or do less than the filler).
-    bool IsCastVetoed(PartyBotAI const* bot, SpellEntry const* spell);
-
     // `spell` charges at `target` (SPELL_EFFECT_CHARGE: Charge, Intercept, Feral Charge) and a
     // module asked for no charging (PullBehavior: the tank brings the pack back).
     bool IsGapCloserVetoed(PartyBotAI const* bot, Unit const* target, SpellEntry const* spell);
