@@ -13,6 +13,8 @@
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
 #include "Commander/Encounters/IEncounter.h"
+#include <deque>
+#include <string>
 
 class PartyBotAI;
 
@@ -62,6 +64,17 @@ namespace Commander
         // (EncounterBehavior, debug commands).
         IEncounter const* GetActiveEncounter() const { return m_activeEncounter; }
 
+        // Notes sent to the leader (TeamPlan::notes), the last NOTE_LOG_SIZE, oldest first.
+        // Kept for the dev console (u:notes, combat recorder): a headless leader drops the chat
+        // message and the plan clears its notes once sent.
+        struct NoteRecord
+        {
+            uint32 timeMs = 0;      // server ms (WorldTimer::getMSTime) when sent
+            std::string text;
+        };
+        static constexpr size_t NOTE_LOG_SIZE = 50;
+        std::deque<NoteRecord> const& GetNoteLog() const { return m_noteLog; }
+
     private:
         void Refresh(PartyBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
@@ -89,6 +102,8 @@ namespace Commander
         // Own instances (per-party state), only the modules listed for this map.
         EncounterList m_encounters;
         IEncounter* m_activeEncounter = nullptr;
+
+        std::deque<NoteRecord> m_noteLog;
     };
 }
 

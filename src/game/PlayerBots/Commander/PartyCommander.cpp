@@ -159,6 +159,16 @@ namespace Commander
             for (std::string const& note : notes)
                 handler.PSendSysMessage("[PartyBot] %s", note.c_str());
         }
+        uint32 const now = WorldTimer::getMSTime();
+        for (std::string& note : notes)
+        {
+            NoteRecord record;
+            record.timeMs = now;
+            record.text = std::move(note);
+            m_noteLog.push_back(std::move(record));
+            if (m_noteLog.size() > NOTE_LOG_SIZE)
+                m_noteLog.pop_front();
+        }
         notes.clear();
     }
 

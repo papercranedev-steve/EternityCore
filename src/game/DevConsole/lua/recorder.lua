@@ -14,6 +14,10 @@
 --   dec     {type, t, bot, cands=[{src, what, tier, score, b, c, reason, res}]}   one Commander
 --           arbiter decision of a bot (u:decisions); res = exec / failed / nottried /
 --           lowertier / dropped (benefit <= cost) / veto
+--   note    {type, t, text}   a Commander note sent to the leader (u:notes), from 3 s before the fight
+--   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
+--           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
+--           intercepts; {} = nothing running
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name}, dropped}
 --
 -- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
@@ -92,6 +96,9 @@ local function beginFight(w, members)
     w.names = {}
     w.lastVictim = {}
     w.lastDec = {}
+    -- notes from the 3 s before the fight are kept (the patrol / pull judgement comes first)
+    w.lastNote = w.fightStart - 3000
+    w.lastPlan = nil
     w.aggroLost = 0
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
@@ -191,6 +198,21 @@ local function tick(w)
                 write(w, { type = "dec", t = d.t, bot = m:guid(), cands = d.cands })
                 w.lastDec[m:guid()] = d.t
             end
+        end
+    end
+
+    -- Commander notes to the leader since the last tick, and the plan state when it changed
+    -- (u:notes / u:plan are missing on a mangosd built before 2026-11-02: skipped)
+    for _, n in ipairs(leader.notes and leader:notes(w.lastNote) or {}) do
+        write(w, { type = "note", t = n.t, text = n.text })
+        w.lastNote = n.t
+    end
+    local plan = leader.plan and leader:plan()
+    if plan then
+        local text = json(plan)
+        if text ~= w.lastPlan then
+            write(w, { type = "plan", t = now(), plan = plan })
+            w.lastPlan = text
         end
     end
 

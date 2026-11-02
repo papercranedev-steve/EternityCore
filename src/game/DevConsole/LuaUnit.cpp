@@ -33,6 +33,8 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
 #include "Commander/Perception/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
@@ -670,6 +672,215 @@ namespace DevConsole
         return 1;
     }
 
+    // Commander of a player's party on the player's map (bot or human member), null if none.
+    static std::shared_ptr<Commander::PartyCommander> CommanderOf(Unit* u)
+    {
+        if (!u || !u->IsPlayer())
+            return nullptr;
+        return sCommanderMgr.FindCommander(static_cast<Player*>(u));
+    }
+
+    static void SetFieldG(lua_State* L, char const* key, ObjectGuid guid)
+    {
+        if (guid.IsEmpty())
+            return;
+        SetFieldS(L, key, GuidToString(guid).c_str());
+    }
+
+    static void PushGuidList(lua_State* L, std::vector<ObjectGuid> const& guids)
+    {
+        lua_createtable(L, int(guids.size()), 0);
+        int i = 0;
+        for (ObjectGuid g : guids)
+        {
+            lua_pushstring(L, GuidToString(g).c_str());
+            lua_rawseti(L, -2, ++i);
+        }
+    }
+
+    // u:notes([sinceMs]): notes the party's Commander sent to the leader (TeamPlan::notes,
+    // last PartyCommander::NOTE_LOG_SIZE), newer than sinceMs. [{t, text}]; nil without one.
+    static int U_notes(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        if (!commander)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        uint32 const since = uint32(luaL_optinteger(L, 2, 0));
+        auto const& log = commander->GetNoteLog();
+        lua_createtable(L, int(log.size()), 0);
+        int i = 0;
+        for (Commander::PartyCommander::NoteRecord const& n : log)
+        {
+            if (since && uint32(since - n.timeMs) < 0x80000000u)
+                continue;   // not newer than since (getMSTime wraps after 49 days)
+            lua_createtable(L, 0, 2);
+            SetField(L, "t", n.timeMs);
+            SetFieldS(L, "text", n.text.c_str());
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
+
+    static char const* PullPhaseName(Commander::PullPhase p)
+    {
+        using P = Commander::PullPhase;
+        switch (p)
+        {
+            case P::None:      return "none";
+            case P::WaitReady: return "waitready";
+            case P::Approach:  return "approach";
+            case P::Return:    return "return";
+            case P::Settle:    return "settle";
+        }
+        return "?";
+    }
+
+    static char const* LureStateName(Commander::PatrolLureState s)
+    {
+        using S = Commander::PatrolLureState;
+        switch (s)
+        {
+            case S::Search:  return "search";
+            case S::Active:  return "active";
+            case S::NoPoint: return "nopoint";
+            case S::Done:    return "done";
+            case S::Failed:  return "failed";
+        }
+        return "?";
+    }
+
+    // u:plan(): compact state of the party's TeamPlan (what the recorder writes as `plan`
+    // lines). Only plans that are running appear: focus, pull, clear, retreat, patrol,
+    // interrupts, intercepts. nil without a Commander.
+    static int U_plan(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        if (!commander)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        Commander::TeamPlan const& plan = commander->GetPlan();
+        lua_createtable(L, 0, 8);
+
+        if (!plan.focus.enemy.IsEmpty())
+        {
+            lua_createtable(L, 0, 2);
+            SetFieldG(L, "enemy", plan.focus.enemy);
+            SetFieldS(L, "reason", plan.focus.reason.c_str());
+            lua_setfield(L, -2, "focus");
+        }
+        if (plan.pull.phase != Commander::PullPhase::None)
+        {
+            lua_createtable(L, 0, 3);
+            SetFieldS(L, "phase", PullPhaseName(plan.pull.phase));
+            SetFieldG(L, "target", plan.pull.target);
+            SetFieldG(L, "tank", plan.pull.tank);
+            lua_setfield(L, -2, "pull");
+        }
+        if (plan.clear.active)
+        {
+            lua_createtable(L, 0, 2);
+            SetField(L, "cleared", plan.clear.cleared);
+            SetFieldB(L, "paused", plan.clear.paused);
+            lua_setfield(L, -2, "clear");
+        }
+        if (plan.retreat.active)
+        {
+            lua_createtable(L, 0, 3);
+            SetFieldN(L, "x", Round2(plan.retreat.point.x));
+            SetFieldN(L, "y", Round2(plan.retreat.point.y));
+            SetFieldN(L, "z", Round2(plan.retreat.point.z));
+            lua_setfield(L, -2, "retreat");
+        }
+        Commander::PatrolMovePlan const& m = plan.patrolMove;
+        if (m.active)
+        {
+            lua_createtable(L, 0, 10);
+            SetFieldS(L, "phase", m.phase == Commander::PatrolPhase::Guard ? "guard" : "move");
+            SetFieldG(L, "patrol", m.patrol);
+            SetFieldG(L, "tank", m.tank);
+            SetFieldN(L, "startX", Round2(m.tankStart.x));
+            SetFieldN(L, "startY", Round2(m.tankStart.y));
+            SetField(L, "chosen", m.chosen);
+            if (m.chosen >= 0)
+            {
+                SetFieldN(L, "spotX", Round2(m.chosenSpot.x));
+                SetFieldN(L, "spotY", Round2(m.chosenSpot.y));
+            }
+            lua_createtable(L, int(m.followers.size()), 0);
+            int i = 0;
+            for (Commander::PatrolFollower const& f : m.followers)
+            {
+                lua_createtable(L, 0, 2);
+                SetFieldG(L, "g", f.guid);
+                SetField(L, "state", f.state);
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "followers");
+            if (!m.avoid.empty())
+            {
+                PushGuidList(L, m.avoid);
+                lua_setfield(L, -2, "avoid");
+            }
+            if (!m.kill.empty())
+            {
+                PushGuidList(L, m.kill);
+                lua_setfield(L, -2, "kill");
+            }
+            if (!m.lures.empty())
+            {
+                lua_createtable(L, int(m.lures.size()), 0);
+                int j = 0;
+                for (Commander::PatrolLure const& l : m.lures)
+                {
+                    lua_createtable(L, 0, 3);
+                    SetFieldG(L, "hider", l.hider);
+                    SetFieldS(L, "state", LureStateName(l.state));
+                    PushGuidList(L, l.casters);
+                    lua_setfield(L, -2, "casters");
+                    lua_rawseti(L, -2, ++j);
+                }
+                lua_setfield(L, -2, "lures");
+            }
+            lua_setfield(L, -2, "patrol");
+        }
+        if (!plan.interrupts.empty())
+        {
+            lua_createtable(L, int(plan.interrupts.size()), 0);
+            int i = 0;
+            for (Commander::InterruptDuty const& d : plan.interrupts)
+            {
+                lua_createtable(L, 0, 3);
+                SetFieldG(L, "enemy", d.enemy);
+                SetFieldG(L, "primary", d.primary);
+                SetFieldG(L, "backup", d.backup);
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "interrupts");
+        }
+        if (!plan.intercepts.empty())
+        {
+            lua_createtable(L, int(plan.intercepts.size()), 0);
+            int i = 0;
+            for (Commander::InterceptDuty const& d : plan.intercepts)
+            {
+                lua_createtable(L, 0, 3);
+                SetFieldG(L, "enemy", d.enemy);
+                SetFieldG(L, "bot", d.bot);
+                SetFieldS(L, "reason", d.reason);
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "intercepts");
+        }
+        return 1;
+    }
+
     // Compact snapshot used by the recorder and for quick looks.
     static int U_info(lua_State* L)
     {
@@ -1209,7 +1420,8 @@ namespace DevConsole
             { "hostile", U_hostile }, { "friendly", U_friendly }, { "nearby", U_nearby },
             { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint }, { "aggroat", U_aggroat },
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
-            { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions }, { "info", U_info },
+            { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions },
+            { "notes", U_notes }, { "plan", U_plan }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },
             { "setpowerpct", U_setpowerpct }, { "refill", U_refill }, { "kill", U_kill },
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },
