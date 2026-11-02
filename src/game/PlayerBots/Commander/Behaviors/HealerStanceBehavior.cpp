@@ -4,6 +4,7 @@
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/PatrolAssigner.h"     // InPath: pure, facts only
 #include "PartyBotAI.h"
 #include "Map.h"
 #include <algorithm>
@@ -97,6 +98,18 @@ namespace Commander
             return gap;
         }
 
+        // An idle patrol's predicted walk (WorldModel::patrols, filled while the party fights)
+        // comes within its aggro range + margin of `p` before the fight should end.
+        bool InPatrolPath(WorldModel const& world, Position3 const& p)
+        {
+            float const remaining = Value::FightRemainingSec(world);
+            for (PatrolFacts const& patrol : world.patrols)
+                if (patrol.aggressive && !patrol.noAggro && !patrol.tappedByOther &&
+                    PatrolAssigner::InPath(patrol, p, remaining))
+                    return true;
+            return false;
+        }
+
         // Straight behind the anchor as seen from the enemies near it; no enemies: towards the healer.
         float BehindAngle(Context const& ctx)
         {
@@ -138,7 +151,8 @@ namespace Commander
                     float const gap = MinGap(ctx, s.pos);
                     if (gap < minGap)
                         continue;
-                    if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos) || idle.Near(s.pos))
+                    if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos) || idle.Near(s.pos) ||
+                        InPatrolPath(world, s.pos))
                         continue;
                     // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
                     float covered = 0.0f;

@@ -29,6 +29,10 @@
  *    RELAXED_ENEMY_GAP on RELAXED_RADII);
  *  - outside every area dangerous to healers (HazardZones, same as the "position" module);
  *  - neither the point nor the path there is within an idle creature's aggro range (SafeRoute);
+ *  - no idle patrol's predicted walk comes within its aggro range + PatrolAssigner::ZONE_MARGIN
+ *    of the point before the fight should end (PatrolAssigner::InPath on WorldModel::patrols;
+ *    added 2026-11-03 for the line of sight pull, where the tank hides around a corner and the
+ *    healer follows it out of sight on its own instead of the pull asking healers to see it);
  *  - ground within MAX_STEP_Z of the anchor, line of sight to the anchor.
  * Order: walk distance (-1 per yd), other members within heal range of the point
  * (+COVER_WEIGHT each), enemy distance (+GAP_WEIGHT per yd up to GAP_CAP). The map checks

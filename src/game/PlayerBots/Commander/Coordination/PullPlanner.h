@@ -69,7 +69,8 @@ namespace Commander
         // A pulled caster standing back casting at the tank more than LOS_CASTER_MIN_DISTANCE
         // away: look for a point (LosBreak::FindPoint) around the fight
         // spot (around the tank when the pack was not brought back) that the casters cannot
-        // see, the tank can see (short walk) and every healer bot can see (they do not move).
+        // see and the tank reaches by a short safe walk (around a corner is fine). Healer bots
+        // need not see it: one that loses sight of the tank moves itself (HealerStanceBehavior).
         // Found: losBreak = Active, the tank goes
         // there (PullBehavior) and PullAssigner keeps Settle going until the casters came.
         // Not found: NoPoint, fight where we are (as before).
@@ -146,12 +147,11 @@ namespace Commander
 
         // Line of sight pull (SearchLosBreak). Casters closer than this to the tank are left alone.
         float const LOS_CASTER_MIN_DISTANCE = 10.0f;
-        // Candidate ring, ground and check budget: LosBreak.h (shared with the patrol guard).
+        // Candidate rays, ground, walk and check budget: LosBreak.h (shared with the patrol guard).
         // A candidate this close to an idle hostile creature not in the pull, and closer to it
         // than the spot is, is skipped.
         float const LOS_OTHER_CREATURE_CLEARANCE = 20.0f;
         uint32 const LOS_MAX_CASTERS = 2;     // the point must hide from each of them
-        uint32 const LOS_MAX_HEALERS = 2;     // healer bots that must still see the point
 
         // Pure: who is not ready. Players count too (the leader's own health matters).
         // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.

@@ -400,6 +400,11 @@ namespace Commander
                             std::vector<ObjectGuid> const& candidates, std::vector<ObjectGuid> const& excluded,
                             Player* tank, uint32 rangedSpell, float rangedRange, bool forceRanged, uint32& stealthed)
         {
+            // A pack with a hostile member is pulled through a hostile one. strat-20261103-005941:
+            // a neutral Ghostly Citizen wandering in the Ravaged Cadaver pack brought only
+            // itself (fewest joiners), had no shot spot, and the tank walking to it took the
+            // whole pack by aggro range. Neutral and no-aggro creatures never come on their own.
+            bool const anyHostile = pack && AnyMember(*pack, [](PackCreature const& m) { return m.aggressive && !m.noAggro; });
             Option best;
             for (ObjectGuid guid : candidates)
             {
@@ -409,6 +414,8 @@ namespace Commander
                 if (!c || !c->IsAlive() || c->IsInCombat() || !tank->IsValidAttackTarget(c))
                     continue;
                 PackCreature const* facts = FindMemberFacts(pack, guid);
+                if (anyHostile && facts && (!facts->aggressive || facts->noAggro))
+                    continue;
                 if (facts && facts->stealthed)
                 {
                     ++stealthed;
@@ -1027,21 +1034,12 @@ namespace Commander
         // Around the fight spot when the pack was brought back, else where the tank fights.
         Position3 const center = pull.returnToSpot ? pull.spot : tankAt;
 
-        // Shared search (LosBreak.h). Healer bots must still see the tank at the point (they do
-        // not move with it).
+        // Shared search (LosBreak.h). No watchers: a healer bot that loses sight of the tank
+        // finds itself a spot (HealerStanceBehavior, "tank out of reach").
         LosBreak::Search search;
         search.center = center;
         search.casters.assign(casters.begin(), casters.end());
         search.mover = tank;
-        for (PartyMemberFacts const& m : world.party)
-        {
-            if (m.isPet || !m.isBot || !m.alive || m.role != ROLE_HEALER || m.guid == pull.tank)
-                continue;
-            if (Unit* h = map->GetUnit(m.guid))
-                search.watchers.push_back(h);
-            if (search.watchers.size() >= LOS_MAX_HEALERS)
-                break;
-        }
         search.rejects = [&world, &pull, &center](Position3 const& p)
         {
             return TowardsOtherCreature(world, pull, p, center);
