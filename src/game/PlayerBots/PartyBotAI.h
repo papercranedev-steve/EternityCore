@@ -171,6 +171,9 @@ public:
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;
+    // In combat: the enemy `pUnit` stands in the path of a patrol the party moved off
+    // (Commander PatrolMovePlan::avoid). Nobody chases it there. False when the Commander is off.
+    bool IsInPatrolPath(Unit const* pUnit) const;
     // Healer in combat with the Commander "stance" module on: the module picks where it stands
     // (Commander/Behaviors/HealerStanceBehavior.h), so it does not follow the leader.
     bool HasCombatStance() const;

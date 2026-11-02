@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/ClearPlanner.h"
+#include "Commander/Coordination/PatrolPlanner.h"
 #include "Commander/Encounters/EncounterRegistry.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/CommanderMgr.h"
@@ -47,6 +48,7 @@ namespace Commander
         RunAssigners(assigners);
         if (m_activeEncounter)
             m_activeEncounter->AdjustPlan(m_world, m_plan);
+        PatrolPlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op unless guarding off a patrol
         ApplyRoles(bot);
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running

@@ -1,4 +1,5 @@
 #include "Commander/Coordination/PatrolAssigner.h"
+#include "Commander/Coordination/LosBreak.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/PackResolver.h"
@@ -44,10 +45,10 @@ namespace Commander
             return -1.0f;
         }
 
-        std::string NameOf(uint32 entry)
+        std::string NameOf(uint32 entry, char const* fallback = "patrol")
         {
             std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(entry);
-            return profile ? profile->name : std::string("patrol");
+            return profile ? profile->name : std::string(fallback);
         }
 
         std::string Format(char const* fmt, ...)
@@ -91,7 +92,7 @@ namespace Commander
             return spots;
         }
 
-        // Bots that do not follow the tank's enemies in melee (TeamPlan.h, PatrolFollower).
+        // Every bot but the tank walks the tank's shift (TeamPlan.h, PatrolFollower).
         std::vector<PatrolFollower> Followers(WorldModel const& world, ObjectGuid tank)
         {
             std::vector<PatrolFollower> out;
@@ -99,7 +100,7 @@ namespace Commander
             {
                 if (!m.isBot || m.isPet || !m.alive || m.guid == tank)
                     continue;
-                if (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS)
+                if (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS && m.role != ROLE_MELEE_DPS)
                     continue;
                 PatrolFollower f;
                 f.guid = m.guid;
@@ -128,15 +129,181 @@ namespace Commander
         void End(PatrolMovePlan& m)
         {
             m.active = false;
+            m.phase = PatrolPhase::Move;
             m.followers.clear();
             m.spots.clear();
             m.chosen = -1;
+            m.avoid.clear();
+            m.lures.clear();
+            m.kill.clear();
         }
+
+        // Stands back and casts at its victim instead of following it.
+        bool StandsBack(WorldModel const& world, EnemyFacts const& e)
+        {
+            if (!e.acting || e.crowdControlled || !e.health)
+                return false;
+            PartyMemberFacts const* victim = world.FindMember(e.victim);
+            if (!victim || PackResolver::Distance(e.pos, victim->pos) <= PatrolAssigner::LURE_MIN_DISTANCE)
+                return false;
+            return !e.meleeEnabled || LosBreak::IsRangedCaster(e.entry);
+        }
+
+        PatrolLure* LureOfHider(PatrolMovePlan& m, ObjectGuid hider)
+        {
+            for (PatrolLure& l : m.lures)
+                if (l.hider == hider)
+                    return &l;
+            return nullptr;
+        }
+
+        PatrolLure* LureWithCaster(PatrolMovePlan& m, ObjectGuid caster)
+        {
+            for (PatrolLure& l : m.lures)
+                if (Contains(l.casters, caster))
+                    return &l;
+            return nullptr;
+        }
+
+        // The caster no longer needs the lure: gone, out of the path, turned to someone else,
+        // or came close to the hider.
+        bool CasterCame(WorldModel const& world, PatrolMovePlan const& m, PatrolLure const& l, ObjectGuid caster)
+        {
+            EnemyFacts const* e = world.FindEnemy(caster);
+            if (!e || !e->acting || e->crowdControlled || !Contains(m.avoid, caster) || e->victim != l.hider)
+                return true;
+            PartyMemberFacts const* hider = world.FindMember(l.hider);
+            return !hider || PackResolver::Distance(e->pos, hider->pos) <= PatrolAssigner::LURE_ARRIVED;
+        }
+
+        // Guard: lures for casters standing back in the path, the rest goes to `kill`.
+        void UpdateLures(WorldModel const& world, PatrolMovePlan& m, std::vector<std::string>& notes)
+        {
+            uint32 const now = world.refreshedAtMs;
+            for (PatrolLure& l : m.lures)
+            {
+                PartyMemberFacts const* hider = world.FindMember(l.hider);
+                if (l.state == PatrolLureState::Search && (!hider || !hider->CanAct()))
+                    l.state = PatrolLureState::NoPoint;
+                if (l.state != PatrolLureState::Active)
+                    continue;
+                bool const allCame = std::all_of(l.casters.begin(), l.casters.end(),
+                    [&](ObjectGuid g) { return CasterCame(world, m, l, g); });
+                if (allCame || !hider || !hider->CanAct())
+                    l.state = PatrolLureState::Done;
+                else if (WorldTimer::getMSTimeDiff(l.sinceMs, now) > PatrolAssigner::LURE_TIMEOUT_MS)
+                {
+                    l.state = PatrolLureState::Failed;
+                    EnemyFacts const* first = world.FindEnemy(l.casters.front());
+                    notes.push_back(Format("%s did not come out of the patrol's path in %u s: killing it from range.",
+                        NameOf(first ? first->entry : 0, "The caster").c_str(), PatrolAssigner::LURE_TIMEOUT_MS / 1000));
+                }
+            }
+
+            m.kill.clear();
+            for (ObjectGuid g : m.avoid)
+            {
+                EnemyFacts const* e = world.FindEnemy(g);
+                if (!e || !StandsBack(world, *e))
+                    continue;
+                if (PatrolLure* l = LureWithCaster(m, g))
+                {
+                    if (l->state != PatrolLureState::Search && l->state != PatrolLureState::Active)
+                        m.kill.push_back(g);
+                    continue;
+                }
+                // Its victim hides; only a bot can be told to, and only once per fight.
+                PartyMemberFacts const* victim = world.FindMember(e->victim);
+                bool const canHide = victim && victim->isBot && !victim->isPet && victim->CanAct();
+                PatrolLure* own = canHide ? LureOfHider(m, victim->guid) : nullptr;
+                if (own && own->state == PatrolLureState::Search && own->casters.size() < PatrolAssigner::MAX_LURE_CASTERS)
+                {
+                    own->casters.push_back(g);
+                    continue;
+                }
+                if (!canHide || own)
+                {
+                    m.kill.push_back(g);
+                    continue;
+                }
+                PatrolLure l;
+                l.hider = victim->guid;
+                l.casters.push_back(g);
+                m.lures.push_back(l);
+            }
+        }
+    }
+
+    float PatrolAssigner::ZoneRadius(PatrolFacts const& p)
+    {
+        return p.reach + ZONE_MARGIN;
+    }
+
+    bool PatrolAssigner::InPath(PatrolFacts const& p, Position3 const& pos, float withinSec)
+    {
+        float const t = FirstTouch(p, { pos }, ZoneRadius(p));
+        return t >= 0.0f && t < withinSec;
+    }
+
+    PatrolFacts const* PatrolAssigner::FindPatrol(WorldModel const& world, PatrolMovePlan const& m)
+    {
+        for (PatrolFacts const& p : world.patrols)
+            if (p.guid == m.patrol)
+                return &p;
+        return nullptr;
     }
 
     void PatrolAssigner::Clear(TeamPlan& plan) const
     {
         plan.patrolMove = PatrolMovePlan();
+    }
+
+    void PatrolAssigner::Continue(WorldModel const& world, TeamPlan& plan, PartyMemberFacts const& tank) const
+    {
+        PatrolMovePlan& m = plan.patrolMove;
+        PatrolFacts const* patrol = FindPatrol(world, m);
+        // Joined the fight (now an enemy), died, or walked out of the scan.
+        if (m.tank != tank.guid || !patrol)
+        {
+            End(m);
+            return;
+        }
+        std::string const name = NameOf(patrol->entry);
+        float const remaining = Value::FightRemainingSec(world);
+
+        m.avoid.clear();
+        for (EnemyFacts const& e : world.enemies)
+            if (e.health && InPath(*patrol, e.pos, remaining))
+                m.avoid.push_back(e.guid);
+
+        if (m.phase == PatrolPhase::Move)
+        {
+            if (m.chosen == -2)
+            {
+                plan.notes.push_back("No reachable spot away from the patrol's path, fighting here.");
+                End(m);
+                return;
+            }
+            bool const arrived = m.chosen >= 0 && PackResolver::Distance(tank.pos, m.chosenSpot) <= ARRIVED_DISTANCE &&
+                                 FollowersArrived(world, m);
+            bool const timedOut = WorldTimer::getMSTimeDiff(m.sinceMs, world.refreshedAtMs) > MOVE_TIMEOUT_MS;
+            if (!arrived && !timedOut)
+                return;
+            if (timedOut && !arrived)
+                plan.notes.push_back(name + ": moving the fight took too long, staying out of its path from here.");
+            m.phase = PatrolPhase::Guard;
+            m.guardSinceMs = world.refreshedAtMs;
+        }
+
+        // Guard until the patrol walked past: the old fight spot is clear of its walk for the
+        // rest of the fight and no enemy stands in it.
+        if ((!InPath(*patrol, m.tankStart, remaining) && m.avoid.empty()) ||
+            WorldTimer::getMSTimeDiff(m.guardSinceMs, world.refreshedAtMs) > GUARD_TIMEOUT_MS)
+        {
+            End(m);
+            return;
+        }
+        UpdateLures(world, m, plan.notes);
     }
 
     void PatrolAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
@@ -162,27 +329,7 @@ namespace Commander
 
         if (m.active)
         {
-            auto patrol = std::find_if(world.patrols.begin(), world.patrols.end(),
-                [&m](PatrolFacts const& p) { return p.guid == m.patrol; });
-            std::string const name = patrol != world.patrols.end() ? NameOf(patrol->entry) : std::string("The patrol");
-            if (m.tank != tank->guid)
-                End(m);
-            else if (m.chosen == -2)
-            {
-                plan.notes.push_back("No reachable spot away from the patrol's path, fighting here.");
-                End(m);
-            }
-            else if (m.chosen >= 0 && PackResolver::Distance(tank->pos, m.chosenSpot) <= ARRIVED_DISTANCE &&
-                     FollowersArrived(world, m))
-                End(m);
-            // Joined the fight (now an enemy), died, or walked out of the scan.
-            else if (patrol == world.patrols.end())
-                End(m);
-            else if (WorldTimer::getMSTimeDiff(m.sinceMs, world.refreshedAtMs) > MOVE_TIMEOUT_MS)
-            {
-                plan.notes.push_back(name + ": moving the fight took too long, fighting here.");
-                End(m);
-            }
+            Continue(world, plan, *tank);
             return;
         }
 
@@ -193,7 +340,7 @@ namespace Commander
         {
             if (!p.aggressive || p.noAggro || p.tappedByOther || p.track.empty() || Contains(m.judged, p.guid))
                 continue;
-            float const radius = p.reach + ZONE_MARGIN;
+            float const radius = ZoneRadius(p);
             float const arrive = FirstTouch(p, members, radius);
             if (arrive < 0.0f || arrive >= remaining)
                 continue;
@@ -226,6 +373,7 @@ namespace Commander
             }
 
             m.active = true;
+            m.phase = PatrolPhase::Move;
             m.patrol = p.guid;
             m.tank = tank->guid;
             m.tankStart = tank->pos;
@@ -235,7 +383,11 @@ namespace Commander
             m.benefit = benefit;
             m.cost = cost;
             m.sinceMs = world.refreshedAtMs;
+            m.guardSinceMs = 0;
             m.chosen = -1;
+            m.avoid.clear();
+            m.lures.clear();
+            m.kill.clear();
             plan.notes.push_back(Format("%s reaches the fight in about %.0f s (fight about %.0f s left): "
                 "moving the fight about %.0f yd off its path (%.1f vs %.1f).", name.c_str(), arrive, remaining,
                 PackResolver::Distance(tank->pos, m.spots.front()), benefit, cost));

@@ -1,7 +1,15 @@
 /*
- * PartyBot Commander layer 3: walks the tank to the spot TeamPlan::patrolMove chose
- * (PatrolAssigner: an idle patrol would walk into the fight), and the healers and ranged bots
- * the same shift. The enemies chase the tank and the melee chase their targets.
+ * PartyBot Commander layer 3 (cerebellum): walks the tank to the spot TeamPlan::patrolMove
+ * chose (PatrolAssigner: an idle patrol would walk into the fight), and every other bot the
+ * same shift (melee too since strat-20261102-225354). The enemies chase the tank.
+ *
+ * Guard (after the move, until the patrol walked past):
+ *   - Hider of an Active lure (PatrolLure): walks backwards to the lure's point and stays there
+ *     (Backpedal renewed every tick, MoveTo as fallback); not a healer and its target is one of
+ *     the casters or off limits: Attack the nearest other enemy within HIDE_MELEE_REACH of the
+ *     point (melee) or TARGET_RANGE (ranged), so it keeps fighting while it waits.
+ *   - Anyone else but healers: its target is in PatrolMovePlan::avoid (and not its intercept)
+ *     and out of melee reach: Attack the nearest enemy within TARGET_RANGE not in avoid.
  *
  * Fix: before, only the tank moved. A healer anchors on the tank but only moves once the tank
  * is out of heal range (HealerStanceBehavior), ranged keep their 25 yd chase distance: a 15-25
@@ -36,6 +44,8 @@ namespace Commander
         static constexpr float PATH_FACTOR = 1.3f;
         static constexpr uint32 HOLD_EXTRA_MS = 1000;
         static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
+        static constexpr float HIDE_MELEE_REACH = 5.0f;     // from the point to the enemy's edge
+        static constexpr float TARGET_RANGE = 30.0f;
 
         char const* GetId() const override { return "patrol"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

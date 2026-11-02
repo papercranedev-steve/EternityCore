@@ -1,5 +1,6 @@
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/ClearPlanner.h"
+#include "Commander/Coordination/LosBreak.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/AssistPredictor.h"
 #include "Commander/Perception/PackResolver.h"
@@ -109,8 +110,7 @@ namespace Commander
         // does not follow the tank.
         bool IsRangedCaster(Creature const* c)
         {
-            std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(c->GetEntry());
-            return profile && profile->mainRangedSpellId;
+            return LosBreak::IsRangedCaster(c->GetEntry());
         }
 
         // Point on the line from the target towards the tank, `distance` from the target
@@ -916,85 +916,29 @@ namespace Commander
         // Around the fight spot when the pack was brought back, else where the tank fights.
         Position3 const center = pull.returnToSpot ? pull.spot : tankAt;
 
-        // Healer bots must still see the tank at the point (they do not move with it).
-        std::vector<Unit*> healers;
+        // Shared search (LosBreak.h). Healer bots must still see the tank at the point (they do
+        // not move with it).
+        LosBreak::Search search;
+        search.center = center;
+        search.casters.assign(casters.begin(), casters.end());
+        search.mover = tank;
         for (PartyMemberFacts const& m : world.party)
         {
             if (m.isPet || !m.isBot || !m.alive || m.role != ROLE_HEALER || m.guid == pull.tank)
                 continue;
             if (Unit* h = map->GetUnit(m.guid))
-                healers.push_back(h);
-            if (healers.size() >= LOS_MAX_HEALERS)
+                search.watchers.push_back(h);
+            if (search.watchers.size() >= LOS_MAX_HEALERS)
                 break;
         }
-
-        // Candidates: a ring around the center, first straight away from the first caster
-        // (the far side of whatever is between), then turning towards it. Inner radius first:
-        // the healers stay in range.
-        static float const TURNS[] = { 0.0f, 1.0472f, -1.0472f, 2.0944f, -2.0944f, 3.1416f };   // 0, +-60, +-120, 180 deg
-        float const radii[] = { LOS_RING_INNER, LOS_RING_OUTER };
-        Creature const* first = casters.front();
-        float const away = std::atan2(center.y - first->GetPositionY(), center.x - first->GetPositionX());
-        float const tankHeight = 2.0f;      // WorldObject::IsWithinLOS default target height
-
-        uint32 checks = 0;
-        // True = usable point. Stops counting at LOS_MAX_CHECKS.
-        auto tryPoint = [&](Position3 const& p)
+        search.rejects = [&world, &pull, &center](Position3 const& p)
         {
-            // Spell line of sight is checked from the caster's eyes to the target's position
-            // + 1 yd (WorldObject::IsWithinLOSInMap, GetLosCheckPosition): same here.
-            for (Creature const* c : casters)
-            {
-                if (checks >= LOS_MAX_CHECKS)
-                    return false;
-                ++checks;
-                if (c->IsWithinLOS(p.x, p.y, p.z, true, 1.0f))
-                    return false;
-            }
-            // Reachable: a straight look from the tank (MovePoint uses pathfinding; the point
-            // is at most LOS_RING_OUTER from the spot, so a clear line means a short walk).
-            if (checks >= LOS_MAX_CHECKS)
-                return false;
-            ++checks;
-            if (!tank->IsWithinLOS(p.x, p.y, p.z, true, tankHeight))
-                return false;
-            for (Unit const* h : healers)
-            {
-                if (checks >= LOS_MAX_CHECKS)
-                    return false;
-                ++checks;
-                if (!h->IsWithinLOS(p.x, p.y, p.z, true, tankHeight))
-                    return false;
-            }
-            return true;
+            return TowardsOtherCreature(world, pull, p, center);
         };
 
-        bool found = false;
+        Creature const* first = casters.front();
         Position3 point;
-        for (float const turn : TURNS)
-        {
-            for (float const radius : radii)
-            {
-                if (found || checks >= LOS_MAX_CHECKS)
-                    break;
-                Position3 p;
-                p.x = center.x + std::cos(away + turn) * radius;
-                p.y = center.y + std::sin(away + turn) * radius;
-                // Ground near the spot's height: no ledges, no floors above or below.
-                float const ground = map->GetHeight(p.x, p.y, center.z + 2.0f);
-                if (ground <= INVALID_HEIGHT || std::fabs(ground - center.z) > LOS_POINT_MAX_HEIGHT_DIFF)
-                    continue;
-                p.z = ground;
-                if (TowardsOtherCreature(world, pull, p, center))
-                    continue;
-                if (tryPoint(p))
-                {
-                    found = true;
-                    point = p;
-                }
-            }
-        }
-
+        bool const found = LosBreak::FindPoint(map, search, point);
         if (!found)
         {
             pull.losBreak = PullLosBreak::NoPoint;

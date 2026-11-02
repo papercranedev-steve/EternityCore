@@ -10,6 +10,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -193,13 +194,14 @@ namespace Commander
 
     // Fight-time patrol response (PatrolAssigner): an idle patrol walks into the fight before
     // it ends and moving the fight is worth it. The tank walks to the first candidate that
-    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies and
-    // the melee follow the tank, the followers below walk the same shift.
+    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies
+    // follow the tank, the followers below walk the same shift.
     //
-    // A bot that does not chase the tank's enemies in melee (healer, ranged): it keeps its
-    // place in range (HealerStanceBehavior, the 25 yd caster chase) and would stay in the
-    // patrol's path. It walks start + (tank's chosen spot - tankStart), the position the
-    // assigner already checked against the patrol's walk.
+    // Every other bot (healer, ranged, melee): healers and ranged keep their place in range
+    // (HealerStanceBehavior, the 25 yd caster chase), melee stay on their target, so they
+    // would stay in the patrol's path (strat-20261102-225354: the rogue stayed with two
+    // casters at the old spot). It walks start + (tank's chosen spot - tankStart), the
+    // position the assigner already checked against the patrol's walk.
     struct PatrolFollower
     {
         ObjectGuid guid;
@@ -210,9 +212,37 @@ namespace Commander
         mutable Position3 target;
     };
 
+    enum class PatrolPhase : uint8
+    {
+        Move,       // the tank and the followers walk to the chosen spot
+        Guard,      // arrived: nobody goes back into the path until the patrol walked past
+    };
+
+    enum class PatrolLureState : uint8
+    {
+        Search,     // PatrolPlanner::Step looks for a point on the map thread
+        Active,     // the hider stands at `point` until the casters came (PatrolAssigner)
+        NoPoint,    // no point found: the casters are killed from range instead
+        Done,       // the casters came out (or died, or turned to someone else)
+        Failed,     // they did not come within LURE_TIMEOUT_MS: killed from range instead
+    };
+
+    // Casters left standing in the patrol's path, casting at `hider` (their victim, a bot):
+    // the hider steps out of their sight (LosBreak.h) and keeps fighting what it can reach
+    // there, so they walk out of the path to it. One lure per hider and fight.
+    struct PatrolLure
+    {
+        ObjectGuid hider;
+        std::vector<ObjectGuid> casters;
+        PatrolLureState state = PatrolLureState::Search;
+        Position3 point;
+        uint32 sinceMs = 0;                 // Active since then
+    };
+
     struct PatrolMovePlan
     {
         bool active = false;
+        PatrolPhase phase = PatrolPhase::Move;
         ObjectGuid patrol;
         ObjectGuid tank;
         Position3 tankStart;                // the tank's position at decision time
@@ -222,13 +252,42 @@ namespace Commander
         float benefit = 0.0f;               // points not lost to the patrol
         float cost = 0.0f;                  // points lost walking there
         uint32 sinceMs = 0;
+        uint32 guardSinceMs = 0;
         // Written by the tank's PatrolBehavior (same exception as PullPlan::rangedShot): index
         // of the spot that passed the live checks, -1 = none yet, -2 = none of them passed.
         mutable int32 chosen = -1;
         mutable Position3 chosenSpot;       // spots[chosen] with its ground height
 
+        // Enemies standing where the patrol walks before the fight ends, every refresh while
+        // active. Nobody chases them (PartyBotAI::BeginChasing), the tank does not walk over
+        // to win them back (ThreatBehavior), they are not the focus (FocusAssigner), and in
+        // Guard a bot whose target is one of them switches to another enemy (PatrolBehavior),
+        // unless it was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
+        std::vector<ObjectGuid> avoid;
+        // Guard only. Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
+        std::vector<PatrolLure> lures;
+        // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot): a
+        // ranged damage dealer kills each (FocusAssigner intercept, read one refresh later).
+        std::vector<ObjectGuid> kill;
+
         // Patrols already judged this fight (moved for, or staying put): one note each.
         std::vector<ObjectGuid> judged;
+
+        bool Avoids(ObjectGuid enemy) const
+        {
+            return active && std::find(avoid.begin(), avoid.end(), enemy) != avoid.end();
+        }
+
+        // The lure `bot` hides for, still going (Active), or null.
+        PatrolLure const* ActiveLureOf(ObjectGuid bot) const
+        {
+            if (!active)
+                return nullptr;
+            for (PatrolLure const& l : lures)
+                if (l.hider == bot && l.state == PatrolLureState::Active)
+                    return &l;
+            return nullptr;
+        }
     };
 
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).

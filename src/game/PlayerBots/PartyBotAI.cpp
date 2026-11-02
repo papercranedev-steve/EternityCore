@@ -209,6 +209,15 @@ bool PartyBotAI::IsEscapeControlled() const
     return m_directives && m_directives->IsEscapeControlled(WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsInPatrolPath(Unit const* pUnit) const
+{
+    if (!pUnit || !me->IsInCombat() || IsInDuel() || !sCommanderMgr.IsEnabled())
+        return false;
+    // Same map as the bot, so the commander belongs to this map thread.
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().patrolMove.Avoids(pUnit->GetObjectGuid());
+}
+
 bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
 {
     uint8 const roleBit = Commander::HazardZones::RoleBit(GetRole());
@@ -323,6 +332,10 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
 void PartyBotAI::BeginChasing(Unit* pVictim) const
 {
     if (IsMovementHeld())
+        return;
+    // Fix: the rogue chased its casters back into a patrol's path after the party moved off
+    // it (strat-20261102-225354). The Commander patrol guard brings them out instead.
+    if (IsInPatrolPath(pVictim))
         return;
 
     CombatBotBaseAI::BeginChasing(pVictim);

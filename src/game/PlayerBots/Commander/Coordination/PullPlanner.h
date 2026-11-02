@@ -62,10 +62,10 @@ namespace Commander
 
         // Line of sight pull, map thread, Settle only, once per pull (PullPlan::losBreak).
         // A pulled caster standing back casting at the tank more than LOS_CASTER_MIN_DISTANCE
-        // away: look for a point on a ring (LOS_RING_INNER / LOS_RING_OUTER) around the fight
+        // away: look for a point (LosBreak::FindPoint) around the fight
         // spot (around the tank when the pack was not brought back) that the casters cannot
         // see, the tank can see (short walk) and every healer bot can see (they do not move).
-        // At most LOS_MAX_CHECKS line of sight checks. Found: losBreak = Active, the tank goes
+        // Found: losBreak = Active, the tank goes
         // there (PullBehavior) and PullAssigner keeps Settle going until the casters came.
         // Not found: NoPoint, fight where we are (as before).
         // Why it works: CreatureAI::DoSpellsListCasts tries the spell list every 1.2 s. A
@@ -136,15 +136,10 @@ namespace Commander
 
         // Line of sight pull (SearchLosBreak). Casters closer than this to the tank are left alone.
         float const LOS_CASTER_MIN_DISTANCE = 10.0f;
-        // Candidate ring around the fight spot: 6 directions x these two radii.
-        float const LOS_RING_INNER = 6.0f;
-        float const LOS_RING_OUTER = 11.0f;
-        // Ground of a candidate within this of the spot's height (no ledges, no other floor).
-        float const LOS_POINT_MAX_HEIGHT_DIFF = 3.0f;
+        // Candidate ring, ground and check budget: LosBreak.h (shared with the patrol guard).
         // A candidate this close to an idle hostile creature not in the pull, and closer to it
         // than the spot is, is skipped.
         float const LOS_OTHER_CREATURE_CLEARANCE = 20.0f;
-        uint32 const LOS_MAX_CHECKS = 16;     // line of sight checks per pull
         uint32 const LOS_MAX_CASTERS = 2;     // the point must hide from each of them
         uint32 const LOS_MAX_HEALERS = 2;     // healer bots that must still see the point
 

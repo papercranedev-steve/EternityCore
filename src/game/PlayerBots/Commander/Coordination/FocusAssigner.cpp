@@ -136,6 +136,7 @@ namespace Commander
             float points = 0.0f;
             float distanceToVictim = 0.0f;  // closest to its victim = most urgent
             char const* reason = "";
+            bool rangedOnly = false;        // melee would walk to it
         };
 
         // Judged on facts only (simple version, see design doc "limits"):
@@ -171,14 +172,29 @@ namespace Commander
             return false;
         }
 
-        std::vector<InterceptDuty> BuildIntercepts(WorldModel const& world, std::vector<InterceptDuty> const& previous)
+        std::vector<InterceptDuty> BuildIntercepts(WorldModel const& world, TeamPlan const& plan)
         {
+            std::vector<InterceptDuty> const& previous = plan.intercepts;
             std::vector<InterceptNeed> needs;
             for (EnemyFacts const& e : world.enemies)
             {
                 InterceptNeed n;
                 if (NeedsIntercept(world, e, n))
                     needs.push_back(n);
+                // A caster standing in a patrol's path that no lure brings out (PatrolAssigner,
+                // previous refresh: it runs after this one). Worth what the patrol would cost.
+                else if (plan.patrolMove.active &&
+                         std::find(plan.patrolMove.kill.begin(), plan.patrolMove.kill.end(), e.guid) != plan.patrolMove.kill.end() &&
+                         e.acting && !e.crowdControlled && e.health)
+                {
+                    PartyMemberFacts const* victim = world.FindMember(e.victim);
+                    n.enemy = &e;
+                    n.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
+                    n.reason = "caster in a patrol's path";
+                    n.points = plan.patrolMove.benefit;
+                    n.rangedOnly = true;
+                    needs.push_back(n);
+                }
             }
             std::stable_sort(needs.begin(), needs.end(), [](InterceptNeed const& a, InterceptNeed const& b)
             {
@@ -198,7 +214,11 @@ namespace Commander
                 PartyMemberFacts const* chosen = nullptr;
                 for (uint8 role : { uint8(ROLE_RANGE_DPS), uint8(ROLE_MELEE_DPS) })
                 {
-                    float const range = role == ROLE_RANGE_DPS ? FocusAssigner::INTERCEPT_RANGE
+                    if (n.rangedOnly && role != ROLE_RANGE_DPS)
+                        break;
+                    // In a patrol's path: within spell range, they do not walk closer.
+                    float const range = n.rangedOnly ? FocusAssigner::PATROL_INTERCEPT_RANGE :
+                                        role == ROLE_RANGE_DPS ? FocusAssigner::INTERCEPT_RANGE
                                                                : FocusAssigner::MELEE_INTERCEPT_RANGE;
                     float bestDistance = 0.0f;
                     for (PartyMemberFacts const& m : world.party)
@@ -355,7 +375,7 @@ namespace Commander
 
     void FocusAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
-        plan.intercepts = BuildIntercepts(world, plan.intercepts);
+        plan.intercepts = BuildIntercepts(world, plan);
 
         // Intercepted enemies are one bot's job; the party focus stays where it is (scenario 8:
         // a skull on the bomb would pull the tank and the melee over too).
@@ -369,7 +389,8 @@ namespace Commander
         FocusScore bestScore;
         for (EnemyFacts const& e : world.enemies)
         {
-            if (!IsEligible(world, e) || intercepted(e.guid))
+            // Standing in a patrol's path: the party stays off it (PatrolAssigner.h).
+            if (!IsEligible(world, e) || intercepted(e.guid) || plan.patrolMove.Avoids(e.guid))
                 continue;
             FocusScore s = Evaluate(world, e);
             if (s.score <= 0.0f)
@@ -392,7 +413,8 @@ namespace Commander
         if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != best->guid)
         {
             EnemyFacts const* previous = world.FindEnemy(plan.focus.enemy);
-            if (previous && IsEligible(world, *previous) && !intercepted(previous->guid))
+            if (previous && IsEligible(world, *previous) && !intercepted(previous->guid) &&
+                !plan.patrolMove.Avoids(previous->guid))
             {
                 FocusScore const kept = Evaluate(world, *previous);
                 if (kept.score >= STICKY_SHARE * bestScore.score)

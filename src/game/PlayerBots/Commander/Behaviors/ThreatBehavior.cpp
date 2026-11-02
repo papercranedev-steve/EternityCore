@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/HealPlanBehavior.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/ManaBudget.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/PackResolver.h"
@@ -375,7 +376,7 @@ namespace Commander
     }
 
     void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
-                                 TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
+                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // Pet actions run besides the bot's own action (Arbiter), so both are proposed.
         ProposePet(bot, world, out);
@@ -386,7 +387,7 @@ namespace Commander
         switch (bot->GetRole())
         {
             case ROLE_TANK:
-                ProposeTank(bot, world, out);
+                ProposeTank(bot, world, plan, out);
                 break;
             case ROLE_MELEE_DPS:
             case ROLE_RANGE_DPS:
@@ -401,7 +402,8 @@ namespace Commander
     }
 
     // Tank: threat-behavior doc section 3, value-scoring doc 5.3.
-    void ThreatBehavior::ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ThreatBehavior::ProposeTank(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                     std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
@@ -531,7 +533,11 @@ namespace Commander
 
             // Win it back with threat (also the fallback when the taunt is on cooldown).
             // If it already is our target, the rotation builds threat on it.
-            if (e.guid != myTarget)
+            // Not when it stands in a patrol's path out of melee reach: walking over took the
+            // pack back to the old spot and the patrol joined (strat-20261102-225354). The
+            // patrol guard brings it out (PatrolAssigner.h); a taunt from here is still fine.
+            bool const inPatrolPath = plan.patrolMove.Avoids(e.guid) && !me->CanReachWithMeleeAutoAttack(unit);
+            if (e.guid != myTarget && !inPatrolPath)
             {
                 Proposal p = MakeProposal(tier, BotActionType::Attack, e.guid);
                 p.reason = "win back with threat";
@@ -615,6 +621,9 @@ namespace Commander
         for (EnemyFacts const& e : world.enemies)
         {
             if (e.crowdControlled || !e.acting || e.victim != self)
+                continue;
+            // Switching to one in a patrol's path walks the tank there (see "win back" above).
+            if (e.guid != myTarget && plan.patrolMove.Avoids(e.guid))
                 continue;
             float const ratio = ThreatView::VictimLead(e) / std::max(1.0f, e.victimThreat);
             if (e.guid == myTarget)
