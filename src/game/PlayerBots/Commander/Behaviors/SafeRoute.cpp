@@ -110,6 +110,21 @@ namespace SafeRoute
         }
     }
 
+    bool PathReaches(Map const* map, PathInfo const& path, Position3 const& to)
+    {
+        auto const& pts = path.getPath();
+        if (pts.empty())
+            return false;
+        Position3 end;
+        end.x = pts.back().x;
+        end.y = pts.back().y;
+        end.z = pts.back().z;
+        float const gap = Distance2d(end, to);
+        if (gap <= PATH_END_TOLERANCE)
+            return true;
+        return gap <= OFF_MESH_STEP && map->isInLineOfSight(end.x, end.y, end.z + 2.0f, to.x, to.y, to.z + 2.0f);
+    }
+
     bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour)
     {
         Position3 const here = PositionOf(me);
@@ -120,6 +135,8 @@ namespace SafeRoute
             return false;
         if (type & PATHFIND_NOT_USING_PATH)
             return me->GetMap()->isInLineOfSight(here.x, here.y, here.z + 2.0f, to.x, to.y, to.z + 2.0f);
+        if (!PathReaches(me->GetMap(), path, to))
+            return false;
 
         if (path.Length() > Distance2d(here, to) * maxDetour + 2.0f)
             return false;

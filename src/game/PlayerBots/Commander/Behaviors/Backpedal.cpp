@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Backpedal.h"
+#include "Commander/Behaviors/SafeRoute.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "MotionMaster.h"
@@ -58,6 +59,10 @@ namespace Backpedal
                 out.push_back(to);
                 return true;
             }
+            // A "normal" path can stop at the mesh edge, short of `to` (behind a wall): walking it
+            // ends there and the next order finds no way on. Not reachable then.
+            if (!SafeRoute::PathReaches(me->GetMap(), path, to))
+                return false;
             out.push_back(here);
             for (auto const& p : path.getPath())
             {
@@ -68,6 +73,9 @@ namespace Backpedal
                 if (Distance2d(q, out.back()) >= 0.1f)
                     out.push_back(q);
             }
+            // The last step off the mesh edge (PathReaches allows it), so the walk ends on `to`.
+            if (Distance2d(to, out.back()) >= 0.1f)
+                out.push_back(to);
             return out.size() >= 2;
         }
 

@@ -19,6 +19,8 @@
 #include <vector>
 
 class Creature;
+class Map;
+class PathInfo;
 class Player;
 class WorldObject;
 
@@ -54,9 +56,21 @@ namespace Commander
             std::vector<Idle> m_idle;
         };
 
-        // The walk from `me` to `to` (pathfinding): reachable, at most `maxDetour` times the
-        // straight line (+2 yd), and every sampled point outside `idle`. Without a navmesh path
-        // (PATHFIND_NOT_USING_PATH): straight line of sight instead.
+        // PathFinder still reports PATHFIND_NORMAL when `to` is up to 7 yd off the navmesh: the
+        // path then ends at the mesh edge, e.g. in front of the wall `to` stands behind
+        // (strat-20261102-232926: a patrol spot 4.6 yd behind a wall, the tank's backwards walk
+        // stopped at the edge and the forward fallback walked into the wall).
+        // A path ending this close to `to` reaches it.
+        float const PATH_END_TOLERANCE = 1.5f;
+        // Or a straight step of at most this many yards from the path's end, in line of sight (+2 yd).
+        float const OFF_MESH_STEP = 3.0f;
+
+        // The calculated navmesh path `path` gets to `to` (see PATH_END_TOLERANCE, OFF_MESH_STEP).
+        bool PathReaches(Map const* map, PathInfo const& path, Position3 const& to);
+
+        // The walk from `me` to `to` (pathfinding): reachable (PathReaches), at most `maxDetour`
+        // times the straight line (+2 yd), and every sampled point outside `idle`. Without a
+        // navmesh path (PATHFIND_NOT_USING_PATH): straight line of sight instead.
         bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour);
 
         // The walk from `me` to `to` along the navmesh path (the straight line when there is no
