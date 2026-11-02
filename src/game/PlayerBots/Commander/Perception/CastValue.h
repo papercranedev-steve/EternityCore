@@ -49,11 +49,6 @@ namespace Commander
         // stun-immune boss), or to its school. Unknown creature: true.
         bool CanStop(InterruptAbility const& ability, EnemyFacts const& enemy);
 
-        // The enemy has the mana for `spellId` (or is casting it already: paid at the end of
-        // the cast). Spell::CalculatePowerCost without the per-level part (creature spells
-        // in spell_template have manaCostPerlevel 0 or close to it).
-        bool CanAfford(EnemyFacts const& enemy, uint32 spellId);
-
         // Points lost if `enemy` completes `spellId` on `target`. Empty target = not known yet
         // (planning, or no unit target): the enemy's victim, or the party average for control
         // and mana drain. A unit target outside the party (friendly NPC, an enemy) takes no

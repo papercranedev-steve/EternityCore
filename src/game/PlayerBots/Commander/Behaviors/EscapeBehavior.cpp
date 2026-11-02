@@ -4,7 +4,6 @@
 #include "Commander/Behaviors/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
-#include "Commander/Perception/CastValue.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/ThreatView.h"
@@ -30,15 +29,6 @@ namespace Commander
             Unit* unit;
             bool rooted;
         };
-
-        // A caster with the mana for its main ranged spell: in melee only for a moment (silenced
-        // by our Counterspell, just pulled) and then casting from where it stands, so walking
-        // away saves nothing and costs the casts on the way (strat-20261102-205906: the mage ran
-        // 17 yd from a silenced Skeletal Guardian).
-        bool CastsAtRange(EnemyFacts const& e)
-        {
-            return e.mainRangedSpellId && CastValues::CanAfford(e, e.mainRangedSpellId);
-        }
 
         // The run this module started (MoveTo, BotDirectives::GetMovementOwner) is still under
         // way: stop it where the bot is. False = not walking, or somebody else's walk.
@@ -96,14 +86,23 @@ namespace Commander
             return radius;
         }
 
-        // Health the bot's active shields will still take: Power Word: Shield, Ice Barrier;
-        // Mana Shield as far as the mana lasts.
+        // Health the bot's paid-up shields will still take: Power Word: Shield, Ice Barrier.
+        // Hits they absorb cost nothing more: no health and no spell pushback (Unit::DealDamage
+        // delays a cast only for damage that got through).
+        float FreeAbsorb(PartyBotAI const* bot)
+        {
+            float absorb = 0.0f;
+            for (Aura const* aura : bot->me->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
+                absorb += std::max(0.0f, aura->GetModifier()->m_amount);
+            return absorb;
+        }
+
+        // FreeAbsorb plus Mana Shield as far as the mana lasts (it costs mana per point, so it
+        // counts for surviving, not as free).
         float ActiveAbsorb(PartyBotAI const* bot)
         {
             Player* me = bot->me;
-            float absorb = 0.0f;
-            for (Aura const* aura : me->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
-                absorb += std::max(0.0f, aura->GetModifier()->m_amount);
+            float absorb = FreeAbsorb(bot);
             for (Aura const* aura : me->GetAurasByType(SPELL_AURA_MANA_SHIELD))
             {
                 float amount = std::max(0.0f, aura->GetModifier()->m_amount);
@@ -272,18 +271,10 @@ namespace Commander
             return;
         }
 
-        // The chasers worth getting away from: not casters that cast from range anyway.
-        std::vector<Chaser> runFrom;
-        for (Chaser const& c : chasers)
-            if (!CastsAtRange(*c.facts))
-                runFrom.push_back(c);
-
         // A MoveTo (this module's or another's) is under way: keep walking (a cast-time spell
-        // of the rotation would stop it). Only casters left on us: stop our own run and cast.
+        // of the rotation would stop it).
         if (bot->IsMovementHeld() && me->IsMoving())
         {
-            if (runFrom.empty() && ProposeStopOwnRun(bot, "only casters on me, stop and cast", out))
-                return;
             Proposal hold = MakeProposal(ProposalTier::Assigned, "running away, keep running");
             hold.score = 0.0f;
             hold.action.type = BotActionType::Hold;
@@ -300,6 +291,12 @@ namespace Commander
         float const absorb = ActiveAbsorb(bot);
         float const surviveSec = incoming > 0.0f ? (float(self->health) + absorb) / incoming : ThreatView::NO_LIMIT;
         bool const dangerous = surviveSec < DANGER_SEC && surviveSec < killSec;
+        bool const allHeld = std::all_of(chasers.begin(), chasers.end(), [](Chaser const& c) { return c.rooted; });
+        // Seconds of the hits the free shields still take (Ice Barrier, Power Word: Shield):
+        // no damage and no pushback until then, so getting away saves only what comes after
+        // (strat-20261102-205906: the mage under Ice Barrier ran from a Skeletal Guardian
+        // hitting for ~50 and took 0 damage the whole fight).
+        float const absorbedSec = incoming > 0.0f ? FreeAbsorb(bot) / incoming : 0.0f;
 
         // 0. Dangerous and nothing absorbs: the class's shield first (instant). Mana Shield
         // costs 2 mana per point absorbed, so the rotation never casts it by itself
@@ -320,21 +317,15 @@ namespace Commander
             }
         }
 
-        // Steps 1-3 get the bot away from its chasers; a caster casts after it (and a rooted
-        // one too), so only the others count. Only casters: stay and fight.
-        if (runFrom.empty())
-            return;
-        bool const runFromHeld = std::all_of(runFrom.begin(), runFrom.end(), [](Chaser const& c) { return c.rooted; });
-
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns.
-        if (dangerous && !runFromHeld)
+        if (dangerous && !allHeld)
         {
             Proposal best;
             bool found = false;
             for (SpellEntry const* spell : bot->Kit().HoldSpells())
             {
                 Proposal p;
-                if (ProposeHold(bot, world, *self, runFrom, spell, p) && (!found || p.score > best.score))
+                if (ProposeHold(bot, world, *self, chasers, spell, p) && (!found || p.score > best.score))
                 {
                     best = p;
                     found = true;
@@ -375,18 +366,20 @@ namespace Commander
             if (idle.Near(to) || !SafeRoute::PathIsSafe(me, idle, to, MAX_PATH_DETOUR))
             {
                 // FleePoint prefers the tank too, else the party, else a ring; never an idle pack.
-                if (!FleePoint::Find(me, runFrom.front().unit, &world, to.x, to.y, to.z))
+                if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
                     return;
                 reason = "melee enemy on me: way to the tank blocked, run to a safe spot";
             }
 
             float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
             float benefit = 0.0f;
-            for (Chaser const& c : runFrom)
+            for (Chaser const& c : chasers)
             {
                 float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::EnemyTimeToDie(world, *c.facts)));
+                // Loss of `seconds` more on me: the first absorbedSec of it costs nothing.
                 auto const loss = [&](float seconds)
                 {
+                    seconds = std::max(0.0f, seconds - absorbedSec);
                     return Value::MoveLoss(world, *c.facts, *self, *tank, seconds) +
                            Value::HarassLoss(world, *c.facts, *self, seconds);
                 };
@@ -400,15 +393,16 @@ namespace Commander
         }
 
         // 3. Nobody to take it: only get away while it is rooted (the old Nova-and-run).
-        if (!runFromHeld)
+        if (!allHeld)
             return;
         Position3 to;
-        if (!FleePoint::Find(me, runFrom.front().unit, &world, to.x, to.y, to.z))
+        if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
             return;
         float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
         Proposal p = MakeProposal(tier, "enemies rooted, no tank: run to a safe spot");
         SetMove(p, to, walkSec);
-        p.SetValue(SavedWhileAway(world, runFrom, *self, ROOT_HOLD_SEC), Value::LostAction(world, *self, walkSec));
+        p.SetValue(SavedWhileAway(world, chasers, *self, std::max(0.0f, ROOT_HOLD_SEC - absorbedSec)),
+                   Value::LostAction(world, *self, walkSec));
         out.push_back(p);
     }
 }

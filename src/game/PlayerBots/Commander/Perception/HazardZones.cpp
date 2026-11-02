@@ -197,6 +197,20 @@ namespace HazardZones
             return 1.0f / float(std::max(1u, count));
         }
 
+        // The enemy has the mana for `spellId` (or is casting it already: paid at the end of
+        // the cast). Spell::CalculatePowerCost without the per-level part (creature spells
+        // in spell_template have manaCostPerlevel 0 or close to it).
+        bool CanAfford(EnemyFacts const& e, uint32 spellId)
+        {
+            if (e.castingSpellId == spellId)
+                return true;
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            if (!spell || spell->powerType != POWER_MANA || e.maxMana == 0)
+                return true;
+            uint32 const cost = spell->manaCost + spell->ManaCostPercentage * e.createMana / 100;
+            return e.mana >= cost;
+        }
+
         bool MakeZone(WorldModel const& world, EnemyFacts const& e, HazardSource const& s, HazardZone& z)
         {
             // Casts need a creature that can cast; periodic triggers tick regardless.
@@ -204,7 +218,7 @@ namespace HazardZones
                 return false;
             if (s.healthPct > 0.0f && e.healthPct > s.healthPct + CastValues::HP_EVENT_WINDOW_PCT)
                 return false;
-            if (s.kind != HazardKind::Pulse && !CastValues::CanAfford(e, s.spellId))
+            if (s.kind != HazardKind::Pulse && !CanAfford(e, s.spellId))
                 return false;
 
             SpellEntry const* hit = sSpellMgr.GetSpellEntry(s.hitSpellId);

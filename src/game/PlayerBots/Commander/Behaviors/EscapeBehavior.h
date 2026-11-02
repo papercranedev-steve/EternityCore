@@ -51,14 +51,13 @@
  * holdMs = walk x 1000 + HOLD_EXTRA_MS.
  *
  *
- * Casters (2026-11-02, strat-20261102-205906): a chaser with a main ranged spell it has the mana
- * for (EnemyFacts::mainRangedSpellId, CastValues::CanAfford) is in melee only for a moment
- * (silenced by our Counterspell, just pulled) and casts from where it stands afterwards, so
- * steps 1-3 leave it out: walking away saves nothing and costs the casts. It still counts for
- * the danger and step 0 (shield). Only casters on the bot: stay and fight. An out-of-mana caster
- * keeps meleeing and counts as a normal chaser.
- * Stopping: once nobody chases (the tank took it) or only such casters are left, the module's
- * own run (BotDirectives::GetMovementOwner == "escape") is stopped where the bot is
+ * Free shields (2026-11-02, strat-20261102-205906): hits taken by Ice Barrier / Power Word:
+ * Shield cost no health and no spell pushback, so in steps 2 and 3 the losses start only after
+ * absorbedSec = free absorb / IncomingOn(bot). A frost mage under Ice Barrier stays and casts
+ * at a weak chaser (it ran 17 yd from a Skeletal Guardian hitting for ~50 and took 0 damage).
+ * Mana Shield counts for the danger only (it costs mana per point).
+ * Stopping: once nobody chases (the tank took it), the module's own run
+ * (BotDirectives::GetMovementOwner == "escape") is stopped where the bot is
  * (BotActionType::StopMove); before, the mage walked on for ~3 s after the tank's taunt.
  *
  * Not while: the retreat runs, the pull is in Approach / Return, out of combat, rooted, cannot act.
@@ -68,7 +67,8 @@
  * and fights (a frost mage under its Ice Barrier).
  *
  * Known limits: the tank's position is from the last refresh and it may move on; the tank is
- * assumed to take the enemy on arrival; no Blink; ranged chasers (casters standing back) are
+ * assumed to take the enemy on arrival, and staying is valued as if nobody took it over within
+ * the horizon (the tank's taunt from range is not predicted); no Blink; ranged chasers (casters standing back) are
  * left to the tank's own valuation; absorbed damage costs mana, not counted as a loss; hunters,
  * shamans and warlocks have no root / stun in their spell lists (slows and fears not used).
  */

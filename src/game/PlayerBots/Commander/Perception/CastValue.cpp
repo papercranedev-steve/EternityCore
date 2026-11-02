@@ -173,17 +173,6 @@ namespace CastValues
                Value::FightExtension(world, health / Value::DealtDps(world));
     }
 
-    bool CanAfford(EnemyFacts const& e, uint32 spellId)
-    {
-        if (e.castingSpellId == spellId)
-            return true;
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
-        if (!spell || spell->powerType != POWER_MANA || e.maxMana == 0)
-            return true;
-        uint32 const cost = spell->manaCost + spell->ManaCostPercentage * e.createMana / 100;
-        return e.mana >= cost;
-    }
-
     bool CanStop(InterruptAbility const& ability, EnemyFacts const& enemy)
     {
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(ability.spellId);
