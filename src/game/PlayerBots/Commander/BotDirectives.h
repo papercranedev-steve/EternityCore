@@ -54,12 +54,21 @@ namespace Commander
         static size_t const LOG_SIZE = 20;
 
         // While held, PartyBotAI does not issue MoveFollow / MoveChase / run-away moves.
-        void HoldMovement(uint32 nowMs, uint32 durationMs)
+        // `owner` = the module whose MoveTo started it (Proposal::source, a string literal), so
+        // that module can tell its own walk from another's (EscapeBehavior stops its run when
+        // nobody chases any more). Null = not from a module proposal.
+        void HoldMovement(uint32 nowMs, uint32 durationMs, char const* owner = nullptr)
         {
             m_holdStartMs = nowMs;
             m_holdDurationMs = durationMs;
+            m_holdOwner = owner;
         }
-        void ReleaseMovement() { m_holdDurationMs = 0; }
+        void ReleaseMovement() { m_holdDurationMs = 0; m_holdOwner = nullptr; }
+        // Module that started the movement hold in force now; null when not held or not known.
+        char const* GetMovementOwner(uint32 nowMs) const
+        {
+            return IsMovementHeld(nowMs) ? m_holdOwner : nullptr;
+        }
         bool IsMovementHeld(uint32 nowMs) const
         {
             return m_holdDurationMs && WorldTimer::getMSTimeDiff(m_holdStartMs, nowMs) < m_holdDurationMs;
@@ -216,6 +225,7 @@ namespace Commander
 
         uint32 m_holdStartMs = 0;
         uint32 m_holdDurationMs = 0;
+        char const* m_holdOwner = nullptr;
         uint32 m_tauntStartMs = 0;
         uint32 m_tauntDurationMs = 0;
         uint32 m_escapeStartMs = 0;

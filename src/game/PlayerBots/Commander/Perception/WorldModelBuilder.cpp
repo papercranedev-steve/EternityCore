@@ -250,6 +250,7 @@ namespace WorldModelBuilder
                 e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(e.entry))
             {
+                e.mainRangedSpellId = profile->mainRangedSpellId;
                 // Standing back with melee off: it hurts with its main ranged spell instead.
                 if (profile->mainRangedSpellId && !e.meleeEnabled)
                     e.rangedDps = RangedSpellDps(*profile, e.level, e.meleeHit);

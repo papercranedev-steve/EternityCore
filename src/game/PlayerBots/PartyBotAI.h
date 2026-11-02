@@ -68,6 +68,10 @@ public:
     bool IsRoleLocked() const { return m_roleLocked; }
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
+    // The class kit's filler (Frostbolt, Fireball) is cast while its own slow / burn is still on
+    // the target: the "already has the aura" rule left the mage idle until Frostbolt's 9 s slow
+    // ran out (strat-20261102-205906, 13-19 s).
+    bool IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const override;
     // PartyBotAI's checks on top of CombatBotBaseAI's (no AoE next to crowd control marks, no
     // AoE that hits an idle creature, no AoE that pulls aggro for non-tanks).
     bool PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;

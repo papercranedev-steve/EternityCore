@@ -4,6 +4,8 @@
 #include "Commander/Behaviors/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/CastValue.h"
+#include "Commander/BotDirectives.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/ThreatView.h"
 #include "PartyBotAI.h"
@@ -13,6 +15,7 @@
 #include "SpellEntry.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace Commander
 {
@@ -27,6 +30,36 @@ namespace Commander
             Unit* unit;
             bool rooted;
         };
+
+        // A caster with the mana for its main ranged spell: in melee only for a moment (silenced
+        // by our Counterspell, just pulled) and then casting from where it stands, so walking
+        // away saves nothing and costs the casts on the way (strat-20261102-205906: the mage ran
+        // 17 yd from a silenced Skeletal Guardian).
+        bool CastsAtRange(EnemyFacts const& e)
+        {
+            return e.mainRangedSpellId && CastValues::CanAfford(e, e.mainRangedSpellId);
+        }
+
+        // The run this module started (MoveTo, BotDirectives::GetMovementOwner) is still under
+        // way: stop it where the bot is. False = not walking, or somebody else's walk.
+        bool ProposeStopOwnRun(PartyBotAI const* bot, char const* reason, std::vector<Proposal>& out)
+        {
+            if (!bot->me->IsMoving())
+                return false;
+            char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
+            if (!owner || strcmp(owner, "escape") != 0)
+                return false;
+            Proposal p;
+            p.tier = ProposalTier::Assigned;
+            p.source = "escape";
+            p.reason = reason;
+            // Above the "keep walking" Holds (score 0) other modules give for any MoveTo under
+            // way: this walk is ours, they only keep it from being cut by a cast.
+            p.score = 0.01f;
+            p.action.type = BotActionType::StopMove;
+            out.push_back(p);
+            return true;
+        }
 
         // Spells that stop a chaser where it stands come from the class kit
         // (ClassKit::HoldSpells); what they do (root / stun, area or single target, duration,
@@ -232,13 +265,25 @@ namespace Commander
                 continue;
             chasers.push_back({ &e, unit, unit->HasUnitState(UNIT_STATE_ROOT) });
         }
+        // Nobody chases any more (the tank took it): no reason to keep running.
         if (chasers.empty())
+        {
+            ProposeStopOwnRun(bot, "nobody chasing any more, stop", out);
             return;
+        }
+
+        // The chasers worth getting away from: not casters that cast from range anyway.
+        std::vector<Chaser> runFrom;
+        for (Chaser const& c : chasers)
+            if (!CastsAtRange(*c.facts))
+                runFrom.push_back(c);
 
         // A MoveTo (this module's or another's) is under way: keep walking (a cast-time spell
-        // of the rotation would stop it).
+        // of the rotation would stop it). Only casters left on us: stop our own run and cast.
         if (bot->IsMovementHeld() && me->IsMoving())
         {
+            if (runFrom.empty() && ProposeStopOwnRun(bot, "only casters on me, stop and cast", out))
+                return;
             Proposal hold = MakeProposal(ProposalTier::Assigned, "running away, keep running");
             hold.score = 0.0f;
             hold.action.type = BotActionType::Hold;
@@ -255,7 +300,6 @@ namespace Commander
         float const absorb = ActiveAbsorb(bot);
         float const surviveSec = incoming > 0.0f ? (float(self->health) + absorb) / incoming : ThreatView::NO_LIMIT;
         bool const dangerous = surviveSec < DANGER_SEC && surviveSec < killSec;
-        bool const allHeld = std::all_of(chasers.begin(), chasers.end(), [](Chaser const& c) { return c.rooted; });
 
         // 0. Dangerous and nothing absorbs: the class's shield first (instant). Mana Shield
         // costs 2 mana per point absorbed, so the rotation never casts it by itself
@@ -276,15 +320,21 @@ namespace Commander
             }
         }
 
+        // Steps 1-3 get the bot away from its chasers; a caster casts after it (and a rooted
+        // one too), so only the others count. Only casters: stay and fight.
+        if (runFrom.empty())
+            return;
+        bool const runFromHeld = std::all_of(runFrom.begin(), runFrom.end(), [](Chaser const& c) { return c.rooted; });
+
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns.
-        if (dangerous && !allHeld)
+        if (dangerous && !runFromHeld)
         {
             Proposal best;
             bool found = false;
             for (SpellEntry const* spell : bot->Kit().HoldSpells())
             {
                 Proposal p;
-                if (ProposeHold(bot, world, *self, chasers, spell, p) && (!found || p.score > best.score))
+                if (ProposeHold(bot, world, *self, runFrom, spell, p) && (!found || p.score > best.score))
                 {
                     best = p;
                     found = true;
@@ -325,14 +375,14 @@ namespace Commander
             if (idle.Near(to) || !SafeRoute::PathIsSafe(me, idle, to, MAX_PATH_DETOUR))
             {
                 // FleePoint prefers the tank too, else the party, else a ring; never an idle pack.
-                if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
+                if (!FleePoint::Find(me, runFrom.front().unit, &world, to.x, to.y, to.z))
                     return;
                 reason = "melee enemy on me: way to the tank blocked, run to a safe spot";
             }
 
             float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
             float benefit = 0.0f;
-            for (Chaser const& c : chasers)
+            for (Chaser const& c : runFrom)
             {
                 float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::EnemyTimeToDie(world, *c.facts)));
                 auto const loss = [&](float seconds)
@@ -350,15 +400,15 @@ namespace Commander
         }
 
         // 3. Nobody to take it: only get away while it is rooted (the old Nova-and-run).
-        if (!allHeld)
+        if (!runFromHeld)
             return;
         Position3 to;
-        if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
+        if (!FleePoint::Find(me, runFrom.front().unit, &world, to.x, to.y, to.z))
             return;
         float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
         Proposal p = MakeProposal(tier, "enemies rooted, no tank: run to a safe spot");
         SetMove(p, to, walkSec);
-        p.SetValue(SavedWhileAway(world, chasers, *self, ROOT_HOLD_SEC), Value::LostAction(world, *self, walkSec));
+        p.SetValue(SavedWhileAway(world, runFrom, *self, ROOT_HOLD_SEC), Value::LostAction(world, *self, walkSec));
         out.push_back(p);
     }
 }

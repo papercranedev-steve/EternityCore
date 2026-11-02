@@ -30,6 +30,10 @@ namespace Commander
         Cast,       // cast spell on target (empty target = self)
         Attack,     // switch melee/ranged attack to target
         MoveTo,     // move to x/y/z and keep original movement suppressed for holdMs
+        // Stop the walk of the proposing module's own MoveTo (BotDirectives::GetMovementOwner
+        // == Proposal::source) and release the hold; fails when the walk is somebody else's.
+        // The rotation still runs in the same tick (casts right where it stopped).
+        StopMove,
         // Walk backwards to x/y/z facing the way it came (Behaviors/Backpedal.h), order valid
         // for holdMs (propose it again every tick to keep it); `target` is faced at the end.
         // The original rotation still runs in the same tick (instant abilities while walking).

@@ -146,6 +146,10 @@ namespace Commander
         // Main ranged spell damage per second (CreatureProfile::mainRangedSpellId), counted
         // while it stands back casting (melee off). Before resistances.
         float rangedDps = 0.0f;
+        // CreatureProfile::mainRangedSpellId, whether it stands back now or not: 0 = no ranged
+        // spell (not a caster). With the mana for it (CastValues::CanAfford) a caster in melee is
+        // there only for a moment (silenced, just pulled) and casts again from where it stands.
+        uint32 mainRangedSpellId = 0;
         bool silenced = false;          // UNIT_FLAG_SILENCED: no casts, no interrupter needed
         // Mana now and the creature's base mana (GetCreateMana, for ManaCostPercentage).
         // maxMana 0 = no mana pool. A caster out of mana casts nothing that costs mana

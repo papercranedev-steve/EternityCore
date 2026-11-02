@@ -621,6 +621,11 @@ bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpell
     return CombatBotBaseAI::CanTryToCastSpell(pTarget, pSpellEntry) && PassesPartyCastChecks(pTarget, pSpellEntry);
 }
 
+bool PartyBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
+{
+    return pSpellEntry && pSpellEntry == Kit().Filler();
+}
+
 bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
     // The pull brings the pack back: charging in would put the tank in the middle of it.

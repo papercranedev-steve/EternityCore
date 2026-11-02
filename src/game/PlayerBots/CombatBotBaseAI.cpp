@@ -2881,7 +2881,8 @@ bool CombatBotBaseAI::CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const*
     if (pSpellEntry->GetErrorAtShapeshiftedCast(form) != SPELL_CAST_OK)
         return false;
 
-    if (pSpellEntry->IsSpellAppliesAura() && pTarget->HasAura(pSpellEntry->Id))
+    if (pSpellEntry->IsSpellAppliesAura() && pTarget->HasAura(pSpellEntry->Id) &&
+       !IsSpammedOverOwnAura(pSpellEntry))
         return false;
 
     SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex);

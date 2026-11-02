@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace Commander
 {
@@ -24,6 +25,7 @@ namespace Commander
                 case BotActionType::Cast:   return "cast";
                 case BotActionType::Attack: return "attack";
                 case BotActionType::MoveTo: return "move";
+                case BotActionType::StopMove: return "stop";
                 case BotActionType::Backpedal: return "backpedal";
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::HoldFire: return "holdfire";
@@ -60,7 +62,8 @@ namespace Commander
         // The original rotation still runs in the tick the action executed (Arbiter::Run).
         bool LetsRotationRun(BotActionType type)
         {
-            return type == BotActionType::Attack || type == BotActionType::Backpedal;
+            return type == BotActionType::Attack || type == BotActionType::Backpedal ||
+                   type == BotActionType::StopMove;
         }
 
         // Highest tier first, then the highest score inside the tier.
@@ -378,7 +381,22 @@ namespace Commander
                 if (me->HasUnitState(UNIT_STATE_ROOT))
                     return false;
                 me->GetMotionMaster()->MovePoint(0, action.x, action.y, action.z, MOVE_PATHFINDING);
-                bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs);
+                bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs, proposal.source);
+                return true;
+            }
+            case BotActionType::StopMove:
+            {
+                // Only a module's own walk (BotActionType::StopMove): another module's MoveTo
+                // or a player command started since then is left alone.
+                BotDirectives& directives = bot->Directives();
+                char const* owner = directives.GetMovementOwner(WorldTimer::getMSTime());
+                if (!owner || !proposal.source || strcmp(owner, proposal.source) != 0)
+                    return false;
+                directives.ReleaseMovement();
+                if (!me->IsStopped())
+                    me->StopMoving();
+                me->GetMotionMaster()->Clear(false, true);
+                me->GetMotionMaster()->MoveIdle();
                 return true;
             }
             case BotActionType::Backpedal:

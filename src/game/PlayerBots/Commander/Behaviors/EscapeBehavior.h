@@ -50,6 +50,17 @@
  *     it around the room).
  * holdMs = walk x 1000 + HOLD_EXTRA_MS.
  *
+ *
+ * Casters (2026-11-02, strat-20261102-205906): a chaser with a main ranged spell it has the mana
+ * for (EnemyFacts::mainRangedSpellId, CastValues::CanAfford) is in melee only for a moment
+ * (silenced by our Counterspell, just pulled) and casts from where it stands afterwards, so
+ * steps 1-3 leave it out: walking away saves nothing and costs the casts. It still counts for
+ * the danger and step 0 (shield). Only casters on the bot: stay and fight. An out-of-mana caster
+ * keeps meleeing and counts as a normal chaser.
+ * Stopping: once nobody chases (the tank took it) or only such casters are left, the module's
+ * own run (BotDirectives::GetMovementOwner == "escape") is stopped where the bot is
+ * (BotActionType::StopMove); before, the mage walked on for ~3 s after the tank's taunt.
+ *
  * Not while: the retreat runs, the pull is in Approach / Return, out of combat, rooted, cannot act.
  *
  * Weak chasers: no hold spell (not dangerous), and running is valued against the walk: little
