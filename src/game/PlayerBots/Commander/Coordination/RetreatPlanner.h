@@ -73,8 +73,10 @@ namespace Commander
 
         // Hint "consider retreating", sent at most once per fight (bots never retreat on their own).
         //  a) incoming damage per second above what the healers can heal, for DANGER_SUSTAIN_MS.
-        //     Healing capacity is a rough estimate: HEALER_HPS_PER_LEVEL * level per healer bot that
-        //     can act and has at least HEALER_MIN_MANA_PCT mana (about 175 at 44, 240 at 60).
+        //     Healing capacity: per healer bot that can act and has at least HEALER_MIN_MANA_PCT
+        //     mana, its fastest direct heal chain cast (HealCapacity::MaxHps: real spells,
+        //     +healing gear, crit) less ManaBudget::OVERHEAL; HEALER_HPS_PER_LEVEL * level
+        //     only for a healer bot without direct heals.
         //     Parties without a healer bot only use (b), otherwise every fight would trigger it.
         //  b) a tank bot below TANK_LOW_HEALTH_PCT and no healer bot can act (dead, controlled, oom).
         static constexpr uint32 DANGER_SUSTAIN_MS = 5000;

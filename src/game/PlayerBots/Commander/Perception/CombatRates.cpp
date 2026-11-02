@@ -37,12 +37,24 @@ namespace Commander
                 r.incomingDps += Value::HitDps(e, *victim);
         }
 
-        // No enemies: the fight is over, start a new measurement next time.
+        // No enemies: the fight is over, start a new measurement next time. A long enough fight
+        // is remembered for the next pull (Value::DealtDps before it is measured).
         if (!world.HasPartyEnemy())
         {
+            if (m_fightStartMs && WorldTimer::getMSTimeDiff(m_fightStartMs, m_fightLastMs) >= MIN_REMEMBERED_FIGHT_MS)
+            {
+                m_lastFightDps = m_fightLost / (WorldTimer::getMSTimeDiff(m_fightStartMs, m_fightLastMs) / 1000.0f);
+                m_lastFightDealers = r.damageDealers;
+            }
+            m_fightStartMs = 0;
+            m_fightLost = 0.0f;
             m_samples.clear();
+            r.lastFightDps = m_lastFightDps;
+            r.lastFightDealers = m_lastFightDealers;
             return;
         }
+        r.lastFightDps = m_lastFightDps;
+        r.lastFightDealers = m_lastFightDealers;
 
         while (!m_samples.empty() && WorldTimer::getMSTimeDiff(m_samples.front().timeMs, nowMs) > MAX_WINDOW_MS)
             m_samples.pop_front();
@@ -82,6 +94,19 @@ namespace Commander
             r.dealtDps = lost / seconds;
             r.dealtMeasured = true;
         }
+
+        // Whole fight: health lost since the previous sample.
+        if (!m_fightStartMs)
+            m_fightStartMs = nowMs;
+        if (!m_samples.empty())
+        {
+            for (Row const& row : m_samples.back().rows)
+            {
+                EnemyFacts const* now = world.FindEnemy(row.enemy);
+                m_fightLost += now ? std::max(0.0f, row.health - float(now->health)) : row.health;
+            }
+        }
+        m_fightLastMs = nowMs;
 
         Sample sample;
         sample.timeMs = nowMs;

@@ -15,7 +15,8 @@
  *                    - map thread (ClearPlanner::Step), for single pulls and the clear alike:
  *                      when the tank is about to go, look for the shot spot again (none:
  *                      another target), predict again and hold the pull in WaitReady while a
- *                      patrol is about to walk next to the pulled creatures or the fight spot.
+ *                      patrol walking next to the pull makes the fight too hard (FightLoad)
+ *                      and waiting for it to walk on helps (see "Patrols" below).
  *                      In Approach it answers the tank's "cannot shoot from this spot"
  *                      (PullShotState::spotFailed) with another spot or target.
  *                      In Settle it also looks for a line of sight pull point (SearchLosBreak).
@@ -108,22 +109,27 @@ namespace Commander
         // backwards facing the pack with charges vetoed (PullBehavior).
         float const RETURN_MIN_DISTANCE = 15.0f;
 
-        // Patrols (PatrolTracker, WorldModel::patrols): a patrol that comes within
-        // max(PATROL_MIN_CLEARANCE, its aggro range) of any pulled creature (the target and every
-        // expected joiner: a patrol next to any of them is called in for help) or the fight spot while the
-        // fight is expected to last holds the pull in WaitReady until the start that keeps it
-        // away for the whole fight, at most PATROL_WAIT_MAX_MS (then a single pull goes anyway,
-        // the clear skips the pack). No such start (a loop shorter than the fight, Patchwork
-        // Horror in strat-20261101-225111): waiting does not help, the pull goes and says so.
-        // Fight length = health of the expected creatures / party damage x FIGHT_TIME_MARGIN
-        // + PULL_LEAD_SEC (the tank walking out and back), within PATROL_HORIZON_SEC ..
-        // PATROL_HORIZON_MAX_SEC.
+        // Patrols (PatrolTracker, WorldModel::patrols), also those the prediction counts as
+        // joiners because they walk past the pack right now (strat-20261103-013312): a patrol
+        // joins when its walk comes within max(PATROL_MIN_CLEARANCE, its aggro range) of any
+        // pulled creature (a patrol next to any of them is called in for help) or of the fight
+        // spot. The fight is estimated (Perception/FightLoad.h: the creatures' damage on the
+        // tank, the party's damage, the healer bots' real heals and mana) with every patrol
+        // joining when its walk brings it:
+        //  - bearable pulled now (a bat): pull now, the party takes it.
+        //  - else the earliest start within PATROL_WAIT_MAX_MS that is bearable (Patchwork
+        //    Horror walking on), held in WaitReady until then;
+        //  - none: the start with the best estimate if it is PATROL_WAIT_MIN_GAIN better
+        //    (tank health points) than now, else pull now (waiting does not help).
+        // After PATROL_WAIT_MAX_MS of waiting a single pull goes, the clear skips the pack.
+        // Fight length for the tracks = the estimate without the patrols + PULL_LEAD_SEC (the
+        // tank walking out and back), within PATROL_HORIZON_SEC .. PATROL_HORIZON_MAX_SEC.
         float const PATROL_HORIZON_SEC = 20.0f;
         float const PATROL_HORIZON_MAX_SEC = 120.0f;
-        float const FIGHT_TIME_MARGIN = 1.25f;
         float const PULL_LEAD_SEC = 5.0f;
         float const PATROL_MIN_CLEARANCE = 15.0f;
         uint32 const PATROL_WAIT_MAX_MS = 30 * 1000;
+        float const PATROL_WAIT_MIN_GAIN = 10.0f;
         // While a held pull comes back to Approach on every refresh, RecheckBeforeApproach
         // predicts again (assist prediction, every patrol's track) at most this often; in
         // between it holds the pull with the previous answer. Waiting for a patrol needs a

@@ -3,6 +3,8 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/HealCapacity.h"
+#include "Commander/Perception/ManaBudget.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "Group.h"
@@ -401,7 +403,10 @@ namespace Commander
             if (m.role == ROLE_HEALER && m.CanAct() && (m.manaPct < 0.0f || m.manaPct >= HEALER_MIN_MANA_PCT))
             {
                 healerCanAct = true;
-                healing += HEALER_HPS_PER_LEVEL * m.level;
+                // Its real heals (HealCapacity: +healing gear, talents, crit), the level guess
+                // only for a healer without direct heals.
+                float const hps = HealCapacity::MaxHps(m.healRates);
+                healing += hps > 0.0f ? hps * (1.0f - ManaBudget::OVERHEAL) : HEALER_HPS_PER_LEVEL * m.level;
             }
         }
 

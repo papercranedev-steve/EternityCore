@@ -21,10 +21,21 @@ namespace Commander
         static uint32 const MIN_WINDOW_MS = 2000;
         static uint32 const MAX_WINDOW_MS = 6000;
 
+        // A fight at least this long leaves its whole-fight damage per second in
+        // RateFacts::lastFightDps for the next pull's estimates.
+        static uint32 const MIN_REMEMBERED_FIGHT_MS = 8000;
+
         // Fills world.rates from the freshly built model and stores a sample.
         void Annotate(WorldModel& world, uint32 nowMs);
 
     private:
+        // Whole fight: enemy health lost from sample to sample since the first one.
+        uint32 m_fightStartMs = 0;
+        uint32 m_fightLastMs = 0;
+        float m_fightLost = 0.0f;
+        float m_lastFightDps = 0.0f;
+        uint32 m_lastFightDealers = 0;
+
         struct Row
         {
             ObjectGuid enemy;

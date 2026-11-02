@@ -5,6 +5,7 @@
 #include "Commander/Perception/DamageIntake.h"
 #include "Commander/Perception/PatrolTracker.h"
 #include "Commander/Perception/CreatureProfile.h"
+#include "Commander/Perception/HealCapacity.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "RoleCapability.h"
@@ -121,26 +122,26 @@ namespace WorldModelBuilder
                     return uint32(std::max(0, spell->GetDuration()));
             return 0;
         }
+    }
 
+    float RangedSpellDps(CreatureProfile const& profile, uint32 level, float meleeHit)
+    {
+        SpellEntry const* spell = sSpellMgr.GetSpellEntry(profile.mainRangedSpellId);
+        std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(profile.mainRangedSpellId);
+        CreatureSpellRef const* ref = profile.FindSpell(profile.mainRangedSpellId);
+        if (!spell || !sp || !ref)
+            return 0.0f;
+        float const damage = SpellProfiles::Estimate(spell, level, meleeHit).TotalDamage();
+        // The repeat delay runs from the start of the cast; the spell list is checked every
+        // 1.2 s (CreatureAI.cpp CREATURE_CASTING_DELAY), so half of that is lost on average.
+        float const castSec = sp->castMs / 1000.0f + CREATURE_SPELL_CHECK_SEC / 2.0f;
+        float const repeatSec = (ref->repeatMinMs + ref->repeatMaxMs) / 2000.0f;
+        float const cycle = std::max(castSec, repeatSec);
+        return cycle > 0.0f ? damage / cycle : 0.0f;
+    }
 
-        // Damage per second of the main ranged spell: one cast per (cast time + creature
-        // spell list check delay or the entry's repeat delay, whichever is longer).
-        float RangedSpellDps(CreatureProfile const& profile, uint32 level, float meleeHit)
-        {
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(profile.mainRangedSpellId);
-            std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(profile.mainRangedSpellId);
-            CreatureSpellRef const* ref = profile.FindSpell(profile.mainRangedSpellId);
-            if (!spell || !sp || !ref)
-                return 0.0f;
-            float const damage = SpellProfiles::Estimate(spell, level, meleeHit).TotalDamage();
-            // The repeat delay runs from the start of the cast; the spell list is checked every
-            // 1.2 s (CreatureAI.cpp CREATURE_CASTING_DELAY), so half of that is lost on average.
-            float const castSec = sp->castMs / 1000.0f + CREATURE_SPELL_CHECK_SEC / 2.0f;
-            float const repeatSec = (ref->repeatMinMs + ref->repeatMaxMs) / 2000.0f;
-            float const cycle = std::max(castSec, repeatSec);
-            return cycle > 0.0f ? damage / cycle : 0.0f;
-        }
-
+    namespace
+    {
         bool IgnoresAssistThreat(Unit const* enemy)
         {
             // ThreatManager::addThreat zeroes assist (heal/buff) threat in these states
@@ -435,6 +436,8 @@ namespace WorldModelBuilder
                     f.roleLocked = ai->IsRoleLocked();
                     if (member->IsAlive())
                         FillInterrupts(ai, f);
+                    if (member->IsAlive() && f.role == ROLE_HEALER)
+                        f.healRates = HealCapacity::Rates(ai);
                     if (f.CanAct() && HasRangedInterrupt(f))
                         sightCheckers.push_back(member);
                 }

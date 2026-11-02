@@ -12,6 +12,8 @@ class PartyBotAI;
 
 namespace Commander
 {
+struct CreatureProfile;
+
 namespace WorldModelBuilder
 {
     // Radius around the party leader scanned for out-of-combat packs.
@@ -43,6 +45,11 @@ namespace WorldModelBuilder
     // Out-of-combat creatures near the leader, grouped into packs, and the ally candidate scan.
     // Grid searches, run less often.
     void RefreshPacks(PartyBotAI* bot, WorldModel& world);
+
+    // Damage per second of a creature's main ranged spell (CreatureProfile::mainRangedSpellId)
+    // while it stands back casting: one cast per (cast time + half a spell list check, or the
+    // entry's repeat delay, whichever is longer). 0 = none or unknown. Before resistances.
+    float RangedSpellDps(CreatureProfile const& profile, uint32 level, float meleeHit);
 }
 }
 

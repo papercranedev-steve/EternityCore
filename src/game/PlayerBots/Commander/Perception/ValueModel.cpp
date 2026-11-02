@@ -37,6 +37,10 @@ namespace Value
     {
         if (world.rates.dealtMeasured && world.rates.dealtDps > 0.0f)
             return world.rates.dealtDps;
+        // The last fight, scaled to the damage dealers there are now.
+        if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
+            return std::max(1.0f, world.rates.lastFightDps * float(world.rates.damageDealers) /
+                                  float(world.rates.lastFightDealers));
 
         float estimate = 0.0f;
         for (PartyMemberFacts const& m : world.party)

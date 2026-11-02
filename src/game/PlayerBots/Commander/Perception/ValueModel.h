@@ -37,7 +37,9 @@ namespace Commander
 
         float DeathPenalty(PartyMemberFacts const& member);
 
-        // Damage the party deals per second (measured, or the fallback estimate).
+        // Damage the party deals per second: measured in this fight, else the last fight's
+        // (RateFacts::lastFightDps, scaled by the number of damage dealers), else the fallback
+        // estimate.
         float DealtDps(WorldModel const& world);
         // Seconds until all current enemies are dead at the current rate.
         float FightRemainingSec(WorldModel const& world);

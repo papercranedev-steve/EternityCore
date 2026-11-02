@@ -110,6 +110,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Backpedal.cpp
   ${COMMANDER_DIR}/Perception/PullOdds.h
   ${COMMANDER_DIR}/Perception/PullOdds.cpp
+  ${COMMANDER_DIR}/Perception/HealCapacity.h
+  ${COMMANDER_DIR}/Perception/HealCapacity.cpp
+  ${COMMANDER_DIR}/Perception/FightLoad.h
+  ${COMMANDER_DIR}/Perception/FightLoad.cpp
   ${COMMANDER_DIR}/Behaviors/FleePoint.h
   ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
   ${COMMANDER_DIR}/Behaviors/SafeRoute.h

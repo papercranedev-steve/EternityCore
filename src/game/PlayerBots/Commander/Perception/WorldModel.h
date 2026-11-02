@@ -39,6 +39,13 @@ namespace Commander
         bool needsFront = false;
     };
 
+    // One direct heal of a healer bot, chain cast (Perception/HealCapacity.h).
+    struct HealRate
+    {
+        float hps = 0.0f;           // healing per second: heal (crits included) / max(cast, GCD)
+        float perMana = 0.0f;       // healing per mana
+    };
+
     // A party member or a party member's pet on this map.
     struct PartyMemberFacts
     {
@@ -86,6 +93,9 @@ namespace Commander
         float manaRegen = 0.0f;
         float manaRegenCasting = 0.0f;
         uint32 fiveSecondRuleMs = 0;
+        // Healer-role bots: their direct heals with their real numbers (+healing gear,
+        // talents, crit), valued on themselves (Perception/HealCapacity.h). Empty otherwise.
+        std::vector<HealRate> healRates;
 
         bool CanAct() const { return alive && !controlled; }
         bool UsesMana() const { return maxMana > 0; }
@@ -270,6 +280,11 @@ namespace Commander
         float incomingDps = 0.0f;
         float dealtDps = 0.0f;          // measured drop of enemy health per second
         bool dealtMeasured = false;     // false = not enough samples yet, dealtDps is an estimate
+        // The last fight's damage per second over its whole length (CombatRates), 0 = none
+        // yet, and how many damage dealers the party had then. Value::DealtDps uses it
+        // before the next fight is measured.
+        float lastFightDps = 0.0f;
+        uint32 lastFightDealers = 0;
         float enemyHealth = 0.0f;       // current health of all enemies
         uint32 healers = 0;             // healer-role bots that can act (alive, not controlled)
         uint32 damageDealers = 0;       // members that can act and are not healers (tanks included)
