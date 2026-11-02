@@ -7,6 +7,7 @@ set(ROTATIONS_SRCS
   ${ROTATIONS_DIR}/ClassRotation.h
   ${ROTATIONS_DIR}/ClassRotation.cpp
   ${ROTATIONS_DIR}/MageRotation.cpp
+  ${ROTATIONS_DIR}/WarriorTankRotation.cpp
 )
 
 target_sources(game PRIVATE ${ROTATIONS_SRCS})

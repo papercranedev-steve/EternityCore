@@ -2,8 +2,10 @@
  * PartyBot Commander layer 3: executes TeamPlan::pull (step 5).
  * Design: .kiro/docs/2026-11-01-pull-planning.md
  *
- *  Tank     Approach: walk-in pull: attack the chosen target (original chase / charge brings it there;
- *                     no charging when the pack is brought back: VetoType::GapCloser).
+ *  Tank     Approach: walk-in pull: attack the chosen target (original chase brings it there);
+ *                     fought where the pack stands: then the class's opener charge
+ *                     (ClassKit::OpenerCharge, warrior Charge; the tank rotation never charges).
+ *                     No charging when the pack is brought back: VetoType::GapCloser.
  *                     Ranged pull (PullPlan::rangedPullSpell): walk to a point inside
  *                     rangedPullRange on the line to the target, step closer while there is no
  *                     line of sight, then cast the spell (Shoot / Throw / Faerie Fire (Feral) /
@@ -14,10 +16,13 @@
  *           Return:   walk backwards to the fight spot facing the pack (Backpedal.h: parry, block,
  *                     swings and the rotation keep working); the enemies follow. Forward walk
  *                     only when no backwards path is found.
- *           Settle:   line of sight pull (PullPlan::losBreak Active): walk backwards to PullPlan::losPoint,
+ *           Settle:   ranged pull fought in place (PullPlan::awaitArrival): stay at the point
+ *                     the shot was fired from, facing the pack, chase held and charges vetoed,
+ *                     until PullAssigner says the pack came.
+ *                     Line of sight pull (PullPlan::losBreak Active): walk backwards to PullPlan::losPoint,
  *                     out of sight of the casters standing back, and stay there (movement held,
  *                     still fighting) until PullAssigner ends it.
- *  Others   Approach / Return, and the first PullAssigner::SETTLE_MS of Settle: stay where they
+ *  Others   Approach / Return, the wait for the pack, and the first PullAssigner::SETTLE_MS of Settle: stay where they
  *           are while out of combat. Healers and ranged never follow the line of sight move.
  *           Once in combat (healers and damage dealers alike) the original AI acts normally.
  */

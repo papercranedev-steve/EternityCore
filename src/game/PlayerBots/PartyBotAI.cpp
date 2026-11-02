@@ -170,9 +170,12 @@ Commander::ClassKit const& PartyBotAI::Kit() const
 
 ClassRotation* PartyBotAI::Rotation()
 {
-    if (!m_rotationCreated)
+    // The rotation may depend on the role too (warrior tank): made again after a role change.
+    CombatBotRoles const role = GetRole();
+    if (!m_rotationCreated || role != m_rotationRole)
     {
         m_rotation = ClassRotations::Create(*this);
+        m_rotationRole = role;
         m_rotationCreated = true;
     }
     return m_rotation.get();
@@ -1107,8 +1110,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         PopulateSpellData();
         // The class is final now (a clone or a loaded character): give the bot its class kit.
         m_classKit = Commander::ClassKits::Create(*this);
-        m_rotation = ClassRotations::Create(*this);
-        m_rotationCreated = true;
+        m_rotationCreated = false;
+        Rotation();
         AddAllSpellReagents();
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
         SummonPetIfNeeded();
@@ -2714,15 +2717,6 @@ namespace
         return FORM_NONE;
     }
 
-    // Radius of the spell's first area effect.
-    float SpellRadius(SpellEntry const* pSpellEntry)
-    {
-        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-            if (pSpellEntry->EffectRadiusIndex[i])
-                return Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[i]));
-        return ATTACK_DISTANCE;
-    }
-
     // Warrior threat by stance (vanilla): Defensive Stance x1.3, Battle and Berserker x0.8.
     float StanceThreat(ShapeshiftForm form)
     {
@@ -2844,140 +2838,15 @@ float PartyBotAI::StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const
     return StanceThreat(StanceForm(pStance)) / StanceThreat(me->GetShapeshiftForm());
 }
 
-uint32 PartyBotAI::CountEnemiesWithoutAura(float radius, uint32 spellId) const
-{
-    std::list<Unit*> enemies;
-    me->GetEnemyListInRadiusAround(me, radius, enemies);
-    uint32 count = 0;
-    for (Unit* pEnemy : enemies)
-        if (pEnemy->IsAlive() && pEnemy->IsInCombat() && pEnemy->CanHaveThreatList() && !pEnemy->HasAura(spellId))
-            ++count;
-    return count;
-}
-
-// Tank role warrior (doc 2026-11-01-warrior-tank.md). Defensive Stance always: x1.3 threat
-// (x0.8 in the others), Taunt, Revenge and Shield Block need it. Before 2026-11-01 the tank went
-// to Berserker Stance against lower level enemies, so it could not taunt and spent its rage on
-// Demoralizing Shout every global cooldown (strat-20261101-200215).
-// Area threat beyond the opener and the Demoralizing Shout upkeep (Thunder Clap after a stance
-// swap, repeated shouts) is the Commander threat module's call (ThreatBehavior group threat).
-void PartyBotAI::UpdateInCombatAI_WarriorTank(Unit* pVictim)
-{
-    auto const& w = m_spells.warrior;
-    ShapeshiftForm const form = me->GetShapeshiftForm();
-
-    if (form != FORM_DEFENSIVESTANCE && w.pDefensiveStance && !m_stanceSwap.spell)
-    {
-        // Opener: still in Battle Stance after Charge. Thunder Clap first when several enemies
-        // are around (no extra swap), unless it would break crowd control.
-        if (form == FORM_BATTLESTANCE && w.pThunderClap &&
-            CountEnemiesWithoutAura(SpellRadius(w.pThunderClap), w.pThunderClap->Id) >= 2 &&
-            CanTryToCastSpell(pVictim, w.pThunderClap))
-        {
-            bool crowdControl = false;
-            std::list<Unit*> enemies;
-            me->GetEnemyListInRadiusAround(me, SpellRadius(w.pThunderClap), enemies);
-            for (Unit* pEnemy : enemies)
-                crowdControl = crowdControl || pEnemy->HasBreakableByDamageCrowdControlAura();
-            if (!crowdControl && DoCastSpell(pVictim, w.pThunderClap) == SPELL_CAST_OK)
-                return;
-        }
-        if (CanTryToCastSpell(me, w.pDefensiveStance))
-        {
-            // The stance spell goes off on the next spell update: another cast now would replace it.
-            if (DoCastSpell(me, w.pDefensiveStance) == SPELL_CAST_OK)
-                return;
-        }
-    }
-
-    if (pVictim->IsNonMeleeSpellCasted(false, false, true) && !IsInterruptVetoed(pVictim))
-    {
-        if (w.pShieldBash && IsWearingShield(me) && CanTryToCastSpell(pVictim, w.pShieldBash))
-        {
-            if (DoCastSpell(pVictim, w.pShieldBash) == SPELL_CAST_OK)
-                return;
-        }
-    }
-
-    if (w.pLastStand && me->GetHealthPercent() < 20.0f && CanTryToCastSpell(me, w.pLastStand))
-    {
-        if (DoCastSpell(me, w.pLastStand) == SPELL_CAST_OK)
-            return;
-    }
-
-    bool const shield = IsWearingShield(me);
-    bool const attacked = !me->GetAttackers().empty();
-    if (shield && attacked && w.pShieldWall && me->GetHealthPercent() < 40.0f && CanTryToCastSpell(me, w.pShieldWall))
-    {
-        if (DoCastSpell(me, w.pShieldWall) == SPELL_CAST_OK)
-            return;
-    }
-
-    // Revenge: 5 rage, the most threat per rage (after a block, dodge or parry).
-    if (w.pRevenge && CanTryToCastSpell(pVictim, w.pRevenge))
-    {
-        if (DoCastSpell(pVictim, w.pRevenge) == SPELL_CAST_OK)
-            return;
-    }
-
-    // Shield Block: fewer hits taken, and every block allows Revenge. Only when hurt: the rage
-    // is threat otherwise. With "or 2+ attackers" it went off every 5 s in every pack and took
-    // the rage Shield Slam and Sunder needed (strat-20261101-210522: 5 blocks, 0 Sunder).
-    if (shield && attacked && w.pShieldBlock &&
-        me->GetHealthPercent() < PB_SHIELD_BLOCK_HEALTH_PCT &&
-        CanTryToCastSpell(me, w.pShieldBlock))
-    {
-        if (DoCastSpell(me, w.pShieldBlock) == SPELL_CAST_OK)
-            return;
-    }
-
-    if (shield && w.pShieldSlam && CanTryToCastSpell(pVictim, w.pShieldSlam))
-    {
-        if (DoCastSpell(pVictim, w.pShieldSlam) == SPELL_CAST_OK)
-            return;
-    }
-
-    if (w.pConcussionBlow &&
-       (pVictim->IsNonMeleeSpellCasted() || pVictim->IsMoving() || me->GetHealthPercent() < 50.0f) &&
-        CanTryToCastSpell(pVictim, w.pConcussionBlow))
-    {
-        if (DoCastSpell(pVictim, w.pConcussionBlow) == SPELL_CAST_OK)
-            return;
-    }
-
-    if (w.pSunderArmor && CanTryToCastSpell(pVictim, w.pSunderArmor))
-    {
-        if (DoCastSpell(pVictim, w.pSunderArmor) == SPELL_CAST_OK)
-            return;
-    }
-
-    // Demoralizing Shout upkeep: an enemy around without it. Each cast puts 43 threat (x stance)
-    // on every enemy in 10 yd, also on those that still have it (measured, see the doc); casting
-    // it again for threat is the Commander's group threat decision, not a reflex.
-    if (w.pDemoralizingShout &&
-        CountEnemiesWithoutAura(SpellRadius(w.pDemoralizingShout), w.pDemoralizingShout->Id) > 0 &&
-        CanTryToCastSpell(me, w.pDemoralizingShout))
-    {
-        if (DoCastSpell(me, w.pDemoralizingShout) == SPELL_CAST_OK)
-            return;
-    }
-
-    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE &&
-       !me->CanReachWithMeleeAutoAttack(pVictim))
-        BeginChasing(pVictim);
-
-    // Rage left over: on the next swing (no global cooldown).
-    if (me->GetPower(POWER_RAGE) > PB_TANK_RAGE_DUMP)
-    {
-        SpellEntry const* pDump = (w.pCleave && me->GetEnemyCountInRadiusAround(pVictim, 8.0f) > 1) ?
-                                   w.pCleave : w.pHeroicStrike;
-        if (pDump && CanTryToCastSpell(pVictim, pDump))
-            DoCastSpell(pVictim, pDump);
-    }
-}
-
+// Tank role: Rotations/WarriorTankRotation.cpp (ClassRotation). Other roles: below.
 void PartyBotAI::UpdateOutOfCombatAI_Warrior()
 {
+    if (ClassRotation* pRotation = Rotation())
+    {
+        pRotation->UpdateOutOfCombat();
+        return;
+    }
+
     if (m_spells.warrior.pBattleStance &&
         CanTryToCastSpell(me, m_spells.warrior.pBattleStance))
     {
@@ -3011,9 +2880,9 @@ void PartyBotAI::UpdateOutOfCombatAI_Warrior()
 
 void PartyBotAI::UpdateInCombatAI_Warrior()
 {
-    if (m_role == ROLE_TANK && me->GetVictim())
+    if (ClassRotation* pRotation = Rotation())
     {
-        UpdateInCombatAI_WarriorTank(me->GetVictim());
+        pRotation->UpdateInCombat();
         return;
     }
 
@@ -3172,7 +3041,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        // (the tank role has its own rotation: UpdateInCombatAI_WarriorTank)
+        // (the tank role has its own rotation: Rotations/WarriorTankRotation.cpp)
         if (me->GetHealthPercent() < 20.0f)
         {
             if (m_spells.warrior.pDefensiveStance &&

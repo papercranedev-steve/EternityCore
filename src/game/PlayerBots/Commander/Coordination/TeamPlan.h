@@ -147,6 +147,15 @@ namespace Commander
         // touches, so no lock is needed. Reset with the plan (new pull) and by a new Approach.
         mutable PullShotState rangedShot;
 
+        // Ranged pull fought where the pack stands (not brought back): Settle starts with the
+        // tank staying at arrivalPoint (where it shot) until the pack came, so the party does
+        // not meet the pack halfway, next to the creatures the ranged pull was meant to leave
+        // alone. PullAssigner ends the wait (PackArrived, arrivalTimeoutMs after Settle began,
+        // a line of sight pull taking over) and starts Settle's own time then.
+        bool awaitArrival = false;
+        Position3 arrivalPoint;
+        uint32 arrivalTimeoutMs = 0;
+
         // Line of sight pull. A pulled caster standing back casting at the tank (melee off, or
         // a main ranged spell and not moving) more than PullPlanner::LOS_CASTER_MIN_DISTANCE
         // away: during Settle the tank moves to a nearby point the caster cannot see. Its main

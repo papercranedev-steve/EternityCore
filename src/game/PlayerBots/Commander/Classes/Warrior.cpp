@@ -10,13 +10,21 @@ namespace Commander
         public:
             using ClassKit::ClassKit;
 
+            // Concussion Blow (talent, 5 s stun) stops a cast too; the tank rotation no longer
+            // casts it by itself (Rotations/WarriorTankRotation.cpp).
             std::vector<SpellEntry const*> Interrupts() const override
             {
                 auto const& s = m_bot.m_spells.warrior;
                 std::vector<SpellEntry const*> out = { s.pPummel };
                 if (m_bot.IsWearingShield(m_bot.me))
                     out.push_back(s.pShieldBash);
+                out.push_back(s.pConcussionBlow);
                 return out;
+            }
+
+            SpellEntry const* OpenerCharge() const override
+            {
+                return m_bot.m_spells.warrior.pCharge;
             }
 
             std::vector<SpellEntry const*> ReflexInterrupts() const override

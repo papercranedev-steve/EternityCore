@@ -8,12 +8,15 @@
  * (Commander/Classes/ClassKit.h). Keep decisions out of here.
  *
  * Classes move out of PartyBotAI.cpp one at a time, when their rotation needs changes
- * (user, 2026-11-01). ClassRotations::Create returns nullptr for a class still in
- * PartyBotAI.cpp; PartyBotAI's UpdateInCombatAI_<Class> of a moved class only delegates.
+ * (user, 2026-11-01). A class may have one rotation per role when the roles do different jobs
+ * (warrior: WarriorTankRotation for the tank role, the damage roles still in PartyBotAI.cpp).
+ * ClassRotations::Create returns nullptr for a class / role still in PartyBotAI.cpp;
+ * PartyBotAI's UpdateInCombatAI_<Class> delegates when there is a rotation.
  *
  * Injection: PartyBotAI creates its rotation with its class kit (UpdateAI init) and holds it
- * (PartyBotAI::Rotation()). The rotation keeps a reference to its bot and reads bot.m_spells
- * on every call, so rebuilt spell data (ResetSpellData) is seen at once. Map thread of the bot.
+ * (PartyBotAI::Rotation(), made again when the role changes). The rotation keeps a reference to
+ * its bot and reads bot.m_spells on every call, so rebuilt spell data (ResetSpellData) is seen
+ * at once. Map thread of the bot.
  */
 
 #ifndef MANGOS_PARTYBOT_CLASS_ROTATION_H
@@ -44,11 +47,12 @@ namespace ClassRotations
     // Spells every rotation may use (same ids as PartyBotAI.cpp PartyBotSpells).
     uint32 const SPELL_SHOOT_WAND = 5019;
 
-    // The rotation of the bot's class, nullptr while that class is still in PartyBotAI.cpp.
+    // The rotation of the bot's class and role, nullptr while it is still in PartyBotAI.cpp.
     std::unique_ptr<ClassRotation> Create(PartyBotAI& bot);
 
-    // One per class file (Rotations/<Class>Rotation.cpp).
+    // One per file (Rotations/<Class>[<Role>]Rotation.cpp).
     std::unique_ptr<ClassRotation> MakeMage(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarriorTank(PartyBotAI& bot);
 }
 
 #endif

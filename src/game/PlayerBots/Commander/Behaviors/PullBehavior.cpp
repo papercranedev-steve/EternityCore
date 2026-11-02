@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/PullBehavior.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/PackResolver.h"
 #include "PartyBotAI.h"
 #include "DBCStores.h"
@@ -256,6 +257,17 @@ namespace Commander
                     return;
                 if (me->GetVictim() != target)
                     out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Attack, pull.target));
+                // Walk-in pull fought where the pack stands: charge in once it is the victim
+                // (ClassKit::OpenerCharge; a stance swap first when needed). Bringing the pack
+                // back gains nothing from it: the tank would only have to walk back further.
+                else if (!pull.returnToSpot)
+                    if (SpellEntry const* charge = bot->Kit().OpenerCharge())
+                        if (bot->CanCastWithStance(target, charge))
+                        {
+                            Proposal p = Make(ProposalTier::Assigned, 5.0f, BotActionType::Cast, pull.target);
+                            p.action.spell = charge;
+                            out.push_back(p);
+                        }
             }
             else if (pull.phase == PullPhase::Return)
             {
@@ -263,6 +275,15 @@ namespace Commander
                 // keeps building threat (instant abilities), nothing hits the tank's back.
                 out.push_back(NoCharge());
                 WalkBack(bot, pull, pull.spot, out);
+            }
+            else if (pull.phase == PullPhase::Settle && pull.awaitArrival && pull.losBreak != PullLosBreak::Active)
+            {
+                // Ranged pull fought in place: stay where the shot was fired, facing the pack,
+                // until it came (PullAssigner). Walking to it met the pack halfway, next to the
+                // creatures the shot was meant to leave alone. The rotation keeps working (the
+                // backpedal order lets it run); its chase is held.
+                out.push_back(NoCharge());
+                WalkBack(bot, pull, pull.arrivalPoint, out);
             }
             else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active)
             {
@@ -285,7 +306,9 @@ namespace Commander
         // Settle holds for SETTLE_MS only. A line of sight pull keeps Settle going for up to
         // LOS_BREAK_TIMEOUT_MS more; a healer not in combat yet must be free to heal the tank then.
         uint32 const settleMs = PullAssigner::SETTLE_MS;
-        if (pull.phase == PullPhase::Settle && WorldTimer::getMSTimeDiff(pull.phaseSinceMs, WorldTimer::getMSTime()) >= settleMs)
+        // While the tank waits for the pack after a ranged pull, everyone waits too.
+        if (pull.phase == PullPhase::Settle && !pull.awaitArrival &&
+            WorldTimer::getMSTimeDiff(pull.phaseSinceMs, WorldTimer::getMSTime()) >= settleMs)
             return;
         out.push_back(Make(ProposalTier::Assigned, 1.0f, BotActionType::Hold));
     }

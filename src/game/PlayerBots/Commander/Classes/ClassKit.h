@@ -83,6 +83,9 @@ namespace Commander
         // Channelled restore of its own mana (Evocation). Only the Commander casts it
         // (ManaBudgetBehavior): in combat, when the mana would run out long before the fight ends.
         virtual SpellEntry const* SelfManaRestore() const { return nullptr; }
+        // Charge at an enemy to open a fight (warrior Charge). Only the Commander casts it
+        // (PullBehavior: a walk-in pull fought where the pack stands); the tank rotation does not.
+        virtual SpellEntry const* OpenerCharge() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

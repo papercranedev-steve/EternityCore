@@ -232,7 +232,8 @@ namespace
 
         if (plan.pull.phase != Commander::PullPhase::None)
             handler->PSendSysMessage("Pull: %s, %s -> %s, %u expected, phase for %.1fs",
-                PullPhaseName(plan.pull.phase), NameOf(map, plan.pull.tank).c_str(), NameOf(map, plan.pull.target).c_str(),
+                plan.pull.awaitArrival ? "tank waiting for the pack" : PullPhaseName(plan.pull.phase),
+                NameOf(map, plan.pull.tank).c_str(), NameOf(map, plan.pull.target).c_str(),
                 uint32(plan.pull.expected.size()), WorldTimer::getMSTimeDiffToNow(plan.pull.phaseSinceMs) / 1000.0f);
         else
             handler->SendSysMessage("Pull: none");

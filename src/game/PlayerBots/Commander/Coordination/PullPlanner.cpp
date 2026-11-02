@@ -218,6 +218,39 @@ namespace Commander
             return !(e.summoned && Contains(pull.expected, e.summoner));
         }
 
+        // Pulled enemy the tank waits for after a ranged pull fought in place: in the fight,
+        // acting, coming for the tank with melee on (a caster standing back is not coming).
+        bool IsComingToTank(EnemyFacts const& e, PullPlan const& pull)
+        {
+            return e.acting && !e.crowdControlled && e.meleeEnabled && e.victim == pull.tank;
+        }
+
+        // Every enemy coming to the tank is next to it (PullAssigner::ARRIVAL_DISTANCE).
+        bool PackArrived(WorldModel const& world, PullPlan const& pull, Position3 const& tankAt)
+        {
+            for (ObjectGuid g : pull.expected)
+            {
+                EnemyFacts const* e = world.FindEnemy(g);
+                if (e && IsComingToTank(*e, pull) &&
+                    PackResolver::Distance(e->pos, tankAt) - e->boundingRadius > PullAssigner::ARRIVAL_DISTANCE)
+                    return false;
+            }
+            return true;
+        }
+
+        // How long the pack may take to reach the tank (PullAssigner::ARRIVAL_*).
+        uint32 ArrivalTimeoutMs(WorldModel const& world, PullPlan const& pull, Position3 const& tankAt)
+        {
+            float farthest = 0.0f;
+            for (ObjectGuid g : pull.expected)
+                if (EnemyFacts const* e = world.FindEnemy(g))
+                    farthest = std::max(farthest, PackResolver::Distance(e->pos, tankAt));
+            float const walkMs = farthest / PullAssigner::ARRIVAL_SPEED * 1000.0f * PullAssigner::ARRIVAL_TIME_FACTOR;
+            // (copies: std::min takes references, the constants have no definition)
+            uint32 const maxMs = PullAssigner::ARRIVAL_TIMEOUT_MAX_MS;
+            return std::min(maxMs, uint32(walkMs) + PullAssigner::ARRIVAL_EXTRA_MS);
+        }
+
         // One way to pull one candidate.
         struct Option
         {
@@ -1204,6 +1237,13 @@ namespace Commander
                 if (fightStarted)
                 {
                     enter(pull.returnToSpot ? PullPhase::Return : PullPhase::Settle);
+                    // Opened from range, fought here: wait where the tank shot.
+                    if (!pull.returnToSpot && pull.rangedPullSpell)
+                    {
+                        pull.awaitArrival = true;
+                        pull.arrivalPoint = tank->pos;
+                        pull.arrivalTimeoutMs = ArrivalTimeoutMs(world, pull, tank->pos);
+                    }
                     if (pull.returnToSpot)
                     {
                         // (copies: std::min takes references, the constants have no definition)
@@ -1233,6 +1273,21 @@ namespace Commander
                     enter(PullPhase::Settle);
                 return;
             case PullPhase::Settle:
+                // Ranged pull fought in place: the tank stays where it shot until the pack came.
+                // Settle's own time starts then (the others hold until SETTLE_MS after it).
+                if (pull.awaitArrival)
+                {
+                    bool const timedOut = elapsed > pull.arrivalTimeoutMs;
+                    if (!timedOut && pull.losBreak != PullLosBreak::Active && world.HasPartyEnemy() &&
+                        !PackArrived(world, pull, tank->pos))
+                        return;
+                    pull.awaitArrival = false;
+                    pull.phaseSinceMs = now;
+                    if (timedOut)
+                        plan.notes.push_back(Format("The pack did not reach %s within %.0f seconds, fighting anyway.",
+                            NameIn(pull, world, pull.tank).c_str(), pull.arrivalTimeoutMs / 1000.0f));
+                    return;
+                }
                 // Line of sight pull (point found by PullPlanner::SearchLosBreak on the map
                 // thread): Settle lasts until the casters came or the timeout.
                 if (pull.losBreak == PullLosBreak::Active)

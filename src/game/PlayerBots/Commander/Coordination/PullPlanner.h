@@ -17,7 +17,8 @@
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
  *                      A fight with other enemies before the pull starts ends it as
  *                      Interrupted; real failures end it as Cancelled. Settle waits for an
- *                      active line of sight pull (casters walked in, or the timeout).
+ *                      active line of sight pull (casters walked in, or the timeout), and
+ *                      after a ranged pull fought in place for the pack to reach the tank.
  */
 
 #ifndef MANGOS_COMMANDER_PULL_PLANNER_H
@@ -181,6 +182,17 @@ namespace Commander
         // was found. Long enough for one cast to finish plus a 1.2 s spell list try after it.
         static constexpr uint32 LOS_BREAK_TIMEOUT_MS = 8 * 1000;
         static constexpr float LOS_CASTER_ARRIVED = 8.0f;
+        // Ranged pull fought where the pack stands (PullPlan::awaitArrival): the pack came when
+        // every pulled enemy that goes for the tank with melee on is within ARRIVAL_DISTANCE of
+        // it (from the enemy's edge). Casters standing back (melee off) are not waited for: the
+        // line of sight pull or the party deals with them. The wait lasts at most the farthest
+        // one's walk at ARRIVAL_SPEED x ARRIVAL_TIME_FACTOR plus ARRIVAL_EXTRA_MS, no more than
+        // ARRIVAL_TIMEOUT_MAX_MS (pathing detours, a creature that does not come).
+        static constexpr float ARRIVAL_DISTANCE = 5.0f;
+        static constexpr float ARRIVAL_SPEED = 6.0f;        // yd/s, a chasing creature (run speed 7)
+        static constexpr float ARRIVAL_TIME_FACTOR = 1.5f;
+        static constexpr uint32 ARRIVAL_EXTRA_MS = 2 * 1000;
+        static constexpr uint32 ARRIVAL_TIMEOUT_MAX_MS = 10 * 1000;
 
         char const* GetId() const override { return "pull"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;

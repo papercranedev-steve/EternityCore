@@ -100,9 +100,6 @@ public:
     uint32 RageKeptOnStanceSwap() const;
     static constexpr uint32 PB_STANCE_SWAP_MAX_RAGE_LOSS = 100;   // 10 rage
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
-    // Tank warrior rotation (UpdateInCombatAI_WarriorTank).
-    static constexpr float PB_SHIELD_BLOCK_HEALTH_PCT = 60.0f;    // Shield Block only below this health
-    static constexpr uint32 PB_TANK_RAGE_DUMP = 300;               // Heroic Strike / Cleave above 30 rage
 
     Player* GetPartyLeader() const;
     bool AttackStart(Unit* pVictim);
@@ -141,12 +138,8 @@ public:
     void UpdateOutOfCombatAI_Warlock() final;
     void UpdateInCombatAI_Warrior() final;
     void UpdateOutOfCombatAI_Warrior() final;
-    // Tank role warrior in combat: Defensive Stance, threat rotation (UpdateInCombatAI_Warrior).
-    void UpdateInCombatAI_WarriorTank(Unit* pVictim);
     // The cast waiting for a stance swap (DoCastWithStance). True: it was cast or is still waiting.
     bool ContinueStanceSwap();
-    // Enemies within `radius` yards fighting the bot or its party, without aura `spellId`.
-    uint32 CountEnemiesWithoutAura(float radius, uint32 spellId) const;
     void UpdateInCombatAI_Rogue() final;
     void UpdateOutOfCombatAI_Rogue() final;
     void UpdateInCombatAI_Druid() final;
@@ -159,7 +152,8 @@ public:
     // the world (spells known); before that, on first use. Map thread of the bot.
     Commander::ClassKit const& Kit() const;
     // The class rotation moved out of this file (Rotations/ClassRotation.h); nullptr while the
-    // class still runs its UpdateInCombatAI_<Class> here. Created with the kit.
+    // class (or this role of it) still runs its UpdateInCombatAI_<Class> here. Created with the
+    // kit, made again when the role changes.
     ClassRotation* Rotation();
     bool IsMovementHeld() const;
     // Player commands (.partybot cometome, attackstart, attackstop, pull, pause, unpause in
@@ -279,6 +273,7 @@ public:
     // Class rotation (Rotations/ClassRotation.h); shared_ptr for the incomplete type.
     std::shared_ptr<ClassRotation> m_rotation;
     bool m_rotationCreated = false;
+    CombatBotRoles m_rotationRole = ROLE_INVALID;   // role m_rotation was made for
 };
 
 #endif
