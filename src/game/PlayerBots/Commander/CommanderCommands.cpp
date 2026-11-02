@@ -21,6 +21,8 @@
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
  *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
  *                                    hostile pack) once everyone is ready; "now" skips the wait
+ *   .partybot ai pullmethod [auto|ranged|melee]   how the tank opens your pulls and clears
+ *                                    (PullMethod.h); no argument shows it
  *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
  *                                    n mobs per pull), waiting until ready in between; "clear stop"
  *   .partybot ai retreat [stop]      whole party stops attacking and runs to a point out of every
@@ -166,6 +168,28 @@ namespace
         }
         sCommanderMgr.SetThreatWatch(player->GetObjectGuid(), mode);
         handler->PSendSysMessage("PBOK;;threatwatch;%s", Commander::ThreatWatchName(mode));
+        return true;
+    }
+
+    // .partybot ai pullmethod [auto|ranged|melee]   (no argument = show)
+    // Replies PBOK;;pullmethod;<method> for the addon's pull method button.
+    bool SetPullMethod(ChatHandler* handler, Player* player, char const* arg)
+    {
+        Commander::PullMethod method = sCommanderMgr.GetPullMethod(player->GetObjectGuid());
+        if (arg && !Commander::ParsePullMethod(arg, method))
+        {
+            handler->SendSysMessage("Usage: .partybot ai pullmethod [auto|ranged|melee]");
+            return false;
+        }
+        if (arg)
+            sCommanderMgr.SetPullMethod(player->GetObjectGuid(), method);
+        static char const* const meaning[] = {
+            "the tank decides (walks in, opens from range when that brings fewer or the pack is brought back)",
+            "the tank opens from range whenever it has a ranged pull",
+            "the tank always walks in",
+        };
+        handler->PSendSysMessage("Pull method: %s, %s.", Commander::PullMethodName(method), meaning[uint8(method)]);
+        handler->PSendSysMessage("PBOK;;pullmethod;%s", Commander::PullMethodName(method));
         return true;
     }
 
@@ -739,11 +763,14 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     }
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
-        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat"))
+        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
+        !strcmp(sub, "pullmethod"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
-        if (!strcmp(sub, "threat"))
+        if (!strcmp(sub, "pullmethod"))
+            ok = SetPullMethod(this, player, ExtractLiteralArg(&args));
+        else if (!strcmp(sub, "threat"))
         {
             char const* arg = ExtractLiteralArg(&args);
             ok = arg && !strcmp(arg, "watch") ? SetThreatWatch(this, player, ExtractLiteralArg(&args))
@@ -782,7 +809,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|melee]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

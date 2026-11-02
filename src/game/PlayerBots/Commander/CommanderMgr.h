@@ -14,6 +14,7 @@
 #include "ObjectGuid.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
+#include "Commander/Coordination/PullMethod.h"
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -85,6 +86,11 @@ namespace Commander
         void SetThreatWatch(ObjectGuid player, ThreatWatch mode);
         ThreatWatch GetThreatWatch(ObjectGuid player) const;
 
+        // How the tank opens pulls this player starts (`.partybot ai pullmethod`, the addon's
+        // pull method button). Runtime only, any thread.
+        void SetPullMethod(ObjectGuid player, PullMethod method);
+        PullMethod GetPullMethod(ObjectGuid player) const;
+
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);
         TickStats GetStats() const;
@@ -116,6 +122,9 @@ namespace Commander
 
         mutable std::mutex m_threatWatchLock;
         std::map<uint64, ThreatWatch> m_threatWatch;    // player guid -> mode, Off not stored
+
+        mutable std::mutex m_pullMethodLock;
+        std::map<uint64, PullMethod> m_pullMethods;     // player guid -> method, Auto not stored
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

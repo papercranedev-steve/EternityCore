@@ -143,6 +143,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/PatrolPlanner.cpp
   ${COMMANDER_DIR}/Coordination/LosBreak.h
   ${COMMANDER_DIR}/Coordination/LosBreak.cpp
+  ${COMMANDER_DIR}/Coordination/PullMethod.h
   ${COMMANDER_DIR}/Behaviors/PatrolBehavior.h
   ${COMMANDER_DIR}/Behaviors/PatrolBehavior.cpp
 )

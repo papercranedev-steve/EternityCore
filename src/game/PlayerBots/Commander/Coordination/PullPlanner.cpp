@@ -1,6 +1,8 @@
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/ClearPlanner.h"
 #include "Commander/Coordination/LosBreak.h"
+#include "Commander/Coordination/PullMethod.h"
+#include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/AssistPredictor.h"
 #include "Commander/Perception/PackResolver.h"
@@ -286,7 +288,10 @@ namespace Commander
             return nullptr;
         }
 
-        Option Evaluate(WorldModel const& world, Map* map, Creature* c, Player* tank, uint32 rangedSpell, float rangedRange)
+        // `forceRanged` (PullMethod::Ranged): open from range whenever there is a spell, even with
+        // no reason for it or when it brings more.
+        Option Evaluate(WorldModel const& world, Map* map, Creature* c, Player* tank, uint32 rangedSpell, float rangedRange,
+                        bool forceRanged)
         {
             Option o;
             o.pullTarget = c;
@@ -302,7 +307,7 @@ namespace Commander
             bool const walkInAdds = !o.aggroAdds.empty();
             if (!rangedSpell)
                 o.meleeAggroAddsNoRanged = uint32(o.aggroAdds.size());
-            if (rangedSpell && (caster || walkInAdds || neighbour))
+            if (rangedSpell && (forceRanged || caster || walkInAdds || neighbour))
             {
                 Position3 const rangedAt = PullStandPoint(c, tank, rangedSpell, rangedRange);
                 std::vector<AssistPredictor::Joiner> const ranged = AssistPredictor::PredictDetailed(c, tank, &rangedAt);
@@ -315,10 +320,12 @@ namespace Commander
                     AddUnique(rangedExpected, o.aggroAdds);
                     AddUnique(rangedAggro, o.aggroAdds);
                 }
-                if (rangedExpected.size() <= o.expected.size())
+                if (forceRanged || rangedExpected.size() <= o.expected.size())
                 {
                     o.ranged = true;
-                    if (caster)
+                    if (forceRanged)
+                        o.rangedWhy = "you chose ranged pulls";
+                    else if (caster)
                         o.rangedWhy = Format("%s stands back and casts", c->GetName());
                     else if (walkInAdds)
                         o.rangedWhy = Format("walking in would bring %u more by aggro range", uint32(o.aggroAdds.size()));
@@ -714,13 +721,18 @@ namespace Commander
                 candidates.push_back(m.guid);
         }
 
+        // The leader's pull method (PullMethod.h): melee never looks for a ranged opener.
+        PullMethod const method = sCommanderMgr.GetPullMethod(leader->GetObjectGuid());
+        bool const forceRanged = method == PullMethod::Ranged;
         float rangedRange = 0.0f;
-        uint32 const rangedSpell = FindRangedPullSpell(tank, rangedRange);
-        if (!rangedSpell)
+        uint32 const rangedSpell = method == PullMethod::Melee ? 0 : FindRangedPullSpell(tank, rangedRange);
+        if (!rangedSpell && method != PullMethod::Melee)
         {
             std::string const ammoNote = MissingAmmoNote(tank);
             if (!ammoNote.empty())
                 notes.push_back(ammoNote);
+            else if (forceRanged)
+                notes.push_back(Format("You chose ranged pulls, but %s has no ranged pull: walking in.", tank->GetName()));
         }
 
         // Pick the member that brings the fewest creatures, then fewest elites, then nearest to the tank.
@@ -740,7 +752,7 @@ namespace Commander
                 continue;
             }
 
-            Option o = Evaluate(world, map, c, tank, rangedSpell, rangedRange);
+            Option o = Evaluate(world, map, c, tank, rangedSpell, rangedRange, forceRanged);
             bool better = !best.pullTarget ||
                 o.expected.size() < best.expected.size() ||
                 (o.expected.size() == best.expected.size() && o.elites < best.elites) ||
@@ -845,6 +857,10 @@ namespace Commander
             report.push_back(Format("Ranged pull: %s opens with %s from up to %.0f yd (%s).", tank->GetName(),
                 spell ? spell->SpellName[0].c_str() : "?", rangedRange, best.rangedWhy.c_str()));
         }
+        else if (method == PullMethod::Melee)
+            report.push_back(best.meleeAggroAddsNoRanged
+                ? Format("Walking in (you chose melee pulls); that brings %u by aggro range.", best.meleeAggroAddsNoRanged)
+                : std::string("Walking in (you chose melee pulls)."));
         else if (best.meleeAggroAddsNoRanged)
             report.push_back(Format("Walking in brings %u by aggro range; %s has no ranged pull (warrior: bow/gun/crossbow "
                 "with ammo or a thrown weapon; druid: Faerie Fire (Feral)).", best.meleeAggroAddsNoRanged, tank->GetName()));
