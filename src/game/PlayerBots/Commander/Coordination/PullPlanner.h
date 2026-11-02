@@ -85,6 +85,9 @@ namespace Commander
         //  Paladin  none: Judgement needs a seal and 10 yd, Exorcism only hits undead and demons.
         //  Others   none (not tank classes).
         uint32 FindRangedPullSpell(Player* tank, float& range);
+        // "No ranged pull: ..." when a warrior or hunter tank has a bow / gun / crossbow but no
+        // ammo equipped, else empty. Plan reports it; a clear says it once (ClearPlan).
+        std::string MissingAmmoNote(Player* tank);
 
         float const READY_HEALTH_PCT = 90.0f;
         float const READY_MANA_PCT = 80.0f;

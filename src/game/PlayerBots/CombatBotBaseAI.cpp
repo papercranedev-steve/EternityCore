@@ -2960,6 +2960,59 @@ void CombatBotBaseAI::AddItemToInventory(uint32 itemId, uint32 count)
     }
 }
 
+uint32 CombatBotBaseAI::GetRequiredAmmoSubClass(Player const* player)
+{
+    Item const* pWeapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
+    ItemPrototype const* pProto = pWeapon ? pWeapon->GetProto() : nullptr;
+    if (!pProto || pProto->Class != ITEM_CLASS_WEAPON)
+        return 0;
+    switch (pProto->SubClass)
+    {
+        case ITEM_SUBCLASS_WEAPON_GUN:
+            return ITEM_SUBCLASS_BULLET;
+        case ITEM_SUBCLASS_WEAPON_BOW:
+        case ITEM_SUBCLASS_WEAPON_CROSSBOW:
+            return ITEM_SUBCLASS_ARROW;
+        default:
+            return 0;
+    }
+}
+
+bool CombatBotBaseAI::HasAmmoEquipped(Player const* player)
+{
+    uint32 const ammo = player->GetUInt32Value(PLAYER_AMMO_ID);
+    return ammo && player->HasItemCount(ammo, 1);
+}
+
+bool CombatBotBaseAI::EquipAmmoFromBags()
+{
+    uint32 const ammoType = GetRequiredAmmoSubClass(me);
+    if (!ammoType || HasAmmoEquipped(me))
+        return false;
+
+    // Best usable ammo in the backpack and bags (quivers / ammo pouches are bags too).
+    ItemPrototype const* pBest = nullptr;
+    auto consider = [&](Item const* pItem)
+    {
+        ItemPrototype const* pProto = pItem ? pItem->GetProto() : nullptr;
+        if (pProto && pProto->Class == ITEM_CLASS_PROJECTILE && pProto->SubClass == ammoType &&
+            (!pBest || pBest->ItemLevel < pProto->ItemLevel) &&
+            me->CanUseAmmo(pProto->ItemId) == EQUIP_ERR_OK)
+            pBest = pProto;
+    };
+    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+        consider(me->GetItemByPos(INVENTORY_SLOT_BAG_0, i));
+    for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+        if (Bag* pBag = (Bag*)me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            for (uint32 j = 0; j < pBag->GetBagSize(); ++j)
+                consider(pBag->GetItemByPos(uint8(j)));
+
+    if (!pBest)
+        return false;
+    me->SetAmmo(pBest->ItemId);
+    return true;
+}
+
 void CombatBotBaseAI::AddHunterAmmo()
 {
     if (Item* pWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
@@ -2968,19 +3021,9 @@ void CombatBotBaseAI::AddHunterAmmo()
         {
             if (pWeaponProto->Class == ITEM_CLASS_WEAPON)
             {
-                uint32 ammoType;
-                switch (pWeaponProto->SubClass)
-                {
-                    case ITEM_SUBCLASS_WEAPON_GUN:
-                        ammoType = ITEM_SUBCLASS_BULLET;
-                        break;
-                    case ITEM_SUBCLASS_WEAPON_BOW:
-                    case ITEM_SUBCLASS_WEAPON_CROSSBOW:
-                        ammoType = ITEM_SUBCLASS_ARROW;
-                        break;
-                    default:
-                        return;
-                }
+                uint32 const ammoType = GetRequiredAmmoSubClass(me);
+                if (!ammoType)
+                    return;
 
                 ItemPrototype const* pAmmoProto = nullptr;
                 for (auto const& itr : sObjectMgr.GetItemPrototypeMap())

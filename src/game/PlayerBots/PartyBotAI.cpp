@@ -1244,6 +1244,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (me->GetTargetGuid() == me->GetObjectGuid())
         me->ClearTarget();
 
+    // Ammo given to the bot (trade, bag panel) goes into the ammo slot, so Shoot Bow / Gun /
+    // Crossbow (ranged pull) and Auto Shot work. Cheap when nothing is missing.
+    if (!me->IsInCombat())
+        EquipAmmoFromBags();
+
     bool const commanderOutOfCombat = !me->IsInCombat() && sCommanderMgr.WantsOutOfCombatControl(this);
 
     if (!me->IsInCombat())

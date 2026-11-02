@@ -585,9 +585,16 @@ namespace ClearPlanner
                 if (!report.empty())
                     Note(plan, report.front());
                 for (std::string const& line : report)
+                {
                     if (line.find("casts from range") != std::string::npos ||
                         line.rfind("Ranged pull:", 0) == 0 || line.rfind("Patrol ", 0) == 0)
                         Note(plan, line);
+                    else if (line.rfind("No ranged pull:", 0) == 0 && !clear.missingAmmoNoted)
+                    {
+                        clear.missingAmmoNoted = true;
+                        Note(plan, line);
+                    }
+                }
                 if (hard)
                     Note(plan, "Healers drink to full mana first.");
                 return;

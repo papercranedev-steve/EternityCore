@@ -156,6 +156,15 @@ public:
     void CollectBagItemGuids(std::set<ObjectGuid>& guids) const;
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
+    // Projectile subclass (ITEM_SUBCLASS_ARROW / ITEM_SUBCLASS_BULLET) the equipped ranged weapon
+    // shoots, 0 = no ranged weapon or one without ammo (thrown, wand).
+    static uint32 GetRequiredAmmoSubClass(Player const* player);
+    // The ammo slot holds ammo that is still in the bags (needed by Shoot Bow/Gun/Crossbow, Auto Shot).
+    static bool HasAmmoEquipped(Player const* player);
+    // Out of combat: ranged weapon needs ammo and none is equipped -> put the best usable ammo
+    // already in the bags into the ammo slot. Never creates items (bots are the user's own
+    // characters; AddHunterAmmo is the hunter-only fallback in combat). True = slot set.
+    bool EquipAmmoFromBags();
     uint8 GetHighestHonorRankFromEquippedItems() const;
     void UpdateVisualHonorRankBasedOnItems();
     void BeginChasing(Unit* pVictim) const;

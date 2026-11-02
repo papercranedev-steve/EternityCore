@@ -497,11 +497,7 @@ namespace Commander
         uint32 spellId = 0;
         PartyBotAI const* ai = tank->AI() ? dynamic_cast<PartyBotAI const*>(tank->AI()) : nullptr;
 
-        auto hasAmmo = [tank]()
-        {
-            uint32 const ammo = tank->GetUInt32Value(PLAYER_AMMO_ID);
-            return ammo && tank->HasItemCount(ammo, 1);
-        };
+        auto hasAmmo = [tank]() { return CombatBotBaseAI::HasAmmoEquipped(tank); };
 
         switch (tank->GetClass())
         {
@@ -546,6 +542,18 @@ namespace Commander
             return 0;
         range = std::min(PULL_RANGE, maxRange);
         return spellId;
+    }
+
+    std::string PullPlanner::MissingAmmoNote(Player* tank)
+    {
+        uint32 const ammoType = CombatBotBaseAI::GetRequiredAmmoSubClass(tank);
+        if (!ammoType || CombatBotBaseAI::HasAmmoEquipped(tank))
+            return std::string();
+        if (tank->GetClass() != CLASS_WARRIOR && tank->GetClass() != CLASS_HUNTER)
+            return std::string();
+        Item const* weapon = tank->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
+        return Format("No ranged pull: %s has %s but no %s. Give it some (it equips them out of combat).",
+            tank->GetName(), weapon->GetProto()->Name1, ammoType == ITEM_SUBCLASS_BULLET ? "bullets" : "arrows");
     }
 
     std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct)
@@ -675,6 +683,12 @@ namespace Commander
 
         float rangedRange = 0.0f;
         uint32 const rangedSpell = FindRangedPullSpell(tank, rangedRange);
+        if (!rangedSpell)
+        {
+            std::string const ammoNote = MissingAmmoNote(tank);
+            if (!ammoNote.empty())
+                notes.push_back(ammoNote);
+        }
 
         // Pick the member that brings the fewest creatures, then fewest elites, then nearest to the tank.
         // Each candidate is judged with its best approach (walk in, or open from range).

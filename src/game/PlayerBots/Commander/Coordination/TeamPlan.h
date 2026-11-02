@@ -66,6 +66,7 @@ namespace Commander
         // First member of packs with only stealthed hostile members, already reported. Such
         // packs are not skipped: they are looked at again every round (they may unstealth).
         std::vector<ObjectGuid> stealthNoted;
+        bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
     };
 
     // Display name of a party member, captured when the pull is planned (the pure assigner

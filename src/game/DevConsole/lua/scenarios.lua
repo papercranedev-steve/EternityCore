@@ -13,7 +13,9 @@
 --   spot               {x, y, z, o}       where the party waits; nil = computed from 'pack'
 --   pack               {x, y, z}          centre of the target pack (for spot search and respawn)
 --   approach           min/max distance of the computed spot from the pack centre
---   bots               { {class=, role=}, ... }
+--   bots               { {class=, role=, items=}, ... }
+--                      items: { {itemId, count}, ... } added after the premade gear (bags are
+--                      cleared first), e.g. ammo; the bot equips ammo itself out of combat
 
 scenario = scenario or {}
 
@@ -53,7 +55,8 @@ scenario.list = {
         needsRecordedSpot = true,
         approach = { min = 26, max = 38, clear = 24 },
         bots = {
-            { class = "warrior", role = "tank" },
+            -- Jagged Arrows for the premade crossbow (Blackcrow): tests the ranged pull with ammo
+            { class = "warrior", role = "tank", items = { { 11285, 200 } } },
             { class = "rogue",   role = "meleedps" },
             { class = "mage",    role = "rangedps" },
             { class = "priest",  role = "healer" },
@@ -208,6 +211,15 @@ local function finish(leader, s)
         local want = s.bots[i]
         local role = (b:ai() and b:ai().role) or (want and want.role) or "auto"
         applyPremades(b, s.level, role, leader)
+        -- group order need not follow s.bots: the items go to the entry with this bot's role
+        local items
+        for _, w in ipairs(s.bots) do
+            if w.role == role and w.items then items = w.items end
+        end
+        for _, it in ipairs(items or {}) do
+            leader:select(b)
+            leader:cmd(string.format(".additem %d %d", it[1], it[2] or 1))
+        end
         b:revive()
         b:refill()
         b:resetcd()
