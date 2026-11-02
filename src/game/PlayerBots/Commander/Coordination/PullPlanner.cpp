@@ -921,6 +921,7 @@ namespace Commander
         pull.spot = spot;
         pull.returnToSpot = returnToSpot;
         pull.phaseSinceMs = WorldTimer::getMSTime();
+        pull.plannedAtMs = pull.phaseSinceMs;
         pull.phase = skipReady ? PullPhase::Approach : PullPhase::WaitReady;
         pull.healerManaPct = READY_MANA_PCT;
         // `pull now` means now: no second prediction, no waiting for patrols.
@@ -1012,6 +1013,7 @@ namespace Commander
 
         if (!skipReady)
             report.push_back("Waiting until everyone is ready (90% hp, 80% mana, within 40 yd). '.partybot ai pull now' skips this.");
+        pull.report = report;
         return true;
     }
 

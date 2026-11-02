@@ -126,6 +126,11 @@ namespace Commander
         bool readyAnnounced = false;        // "everyone ready" is sent once
         std::vector<PullMemberName> names;
 
+        // What PullPlanner::Plan told the player (target, expected, ranged or not and why,
+        // fight there or bring back, patrols), for the combat recorder (u:pull()).
+        uint32 plannedAtMs = 0;
+        std::vector<std::string> report;
+
         // Predict again and look at patrols when the tank is about to go
         // (PullPlanner::RecheckBeforeApproach, run from ClearPlanner::Step on the map thread).
         // Set for every pull except `.partybot ai pull now`.

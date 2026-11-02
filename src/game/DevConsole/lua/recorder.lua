@@ -18,6 +18,9 @@
 --   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
 --           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
 --           intercepts; {} = nothing running
+--   pull    {type, t, planned, phase, target, targetName, ranged, returnToSpot,
+--           expected=[{g, name, aggro}], report=[lines the player was told]}   the pull as
+--           planned (u:pull), once per pull and again when its target or expected list changed
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name}, dropped}
 --
 -- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
@@ -99,6 +102,7 @@ local function beginFight(w, members)
     -- notes from the 3 s before the fight are kept (the patrol / pull judgement comes first)
     w.lastNote = w.fightStart - 3000
     w.lastPlan = nil
+    w.lastPull = nil
     w.aggroLost = 0
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
@@ -213,6 +217,19 @@ local function tick(w)
         if text ~= w.lastPlan then
             write(w, { type = "plan", t = now(), plan = plan })
             w.lastPlan = text
+        end
+    end
+    -- The pull as planned (u:pull): once per pull, again when the target or the expected list
+    -- changed (recheck before the tank goes, another target after a failed shot spot).
+    local pull = leader.pull and leader:pull()
+    if pull then
+        local key = string.format("%d/%s/%d", pull.t or 0, pull.target or "", #(pull.expected or {}))
+        if key ~= w.lastPull then
+            pull.type = "pull"
+            pull.planned = pull.t
+            pull.t = now()
+            write(w, pull)
+            w.lastPull = key
         end
     end
 

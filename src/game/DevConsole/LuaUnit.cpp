@@ -892,6 +892,53 @@ namespace DevConsole
         return 1;
     }
 
+    // u:pull(): the party's running pull as planned (the recorder writes it as a `pull` line):
+    // {t = planned at, phase, target, targetName, ranged, returnToSpot,
+    //  expected = [{g, name, aggro (joins by aggro range)}], report = [what the player was told]}.
+    // nil without a Commander or a pull.
+    static int U_pull(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        if (!commander || commander->GetPlan().pull.phase == Commander::PullPhase::None)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        Commander::PullPlan const& pull = commander->GetPlan().pull;
+        Map* map = u->GetMap();
+        lua_createtable(L, 0, 8);
+        SetField(L, "t", pull.plannedAtMs);
+        SetFieldS(L, "phase", PullPhaseName(pull.phase));
+        SetFieldG(L, "target", pull.target);
+        if (Creature const* target = map->GetCreature(pull.target))
+            SetFieldS(L, "targetName", target->GetName());
+        SetFieldB(L, "ranged", pull.rangedPullSpell != 0);
+        SetFieldB(L, "returnToSpot", pull.returnToSpot);
+        lua_createtable(L, int(pull.expected.size()), 0);
+        int i = 0;
+        for (ObjectGuid g : pull.expected)
+        {
+            lua_createtable(L, 0, 3);
+            SetFieldG(L, "g", g);
+            Creature const* c = map->GetCreature(g);
+            SetFieldS(L, "name", c ? c->GetName() : "?");
+            SetFieldB(L, "aggro", std::find(pull.aggroRangeAdds.begin(), pull.aggroRangeAdds.end(), g) !=
+                pull.aggroRangeAdds.end());
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "expected");
+        lua_createtable(L, int(pull.report.size()), 0);
+        i = 0;
+        for (std::string const& line : pull.report)
+        {
+            lua_pushstring(L, line.c_str());
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "report");
+        return 1;
+    }
+
     // Compact snapshot used by the recorder and for quick looks.
     static int U_info(lua_State* L)
     {
@@ -1432,7 +1479,7 @@ namespace DevConsole
             { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint }, { "aggroat", U_aggroat },
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
             { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions },
-            { "notes", U_notes }, { "plan", U_plan }, { "info", U_info },
+            { "notes", U_notes }, { "plan", U_plan }, { "pull", U_pull }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },
             { "setpowerpct", U_setpowerpct }, { "refill", U_refill }, { "kill", U_kill },
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },
