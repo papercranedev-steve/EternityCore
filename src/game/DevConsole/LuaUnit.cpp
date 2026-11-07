@@ -547,6 +547,18 @@ namespace DevConsole
         lua_pushboolean(L, u->IsSpellReady(e));
         return 1;
     }
+    // u:cooldown(spellId) -> ms left on the spell's own / category / lockout cooldown (0 = ready,
+    // -1 = permanent), and whether its GCD category is running
+    static int U_cooldown(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        SpellEntry const* e = sSpellMgr.GetSpellEntry(uint32(luaL_checkinteger(L, 2)));
+        if (!e)
+            return luaL_error(L, "unknown spell");
+        lua_pushinteger(L, u->GetSpellCooldownLeft(e));
+        lua_pushboolean(L, u->HasGCD(e));
+        return 2;
+    }
     static int U_group(lua_State* L)
     {
         Player* p = CheckPlayer(L, 1);
@@ -628,6 +640,8 @@ namespace DevConsole
     // u:decisions([sinceMs]): the Commander arbiter's decision log of a party bot (last
     // BotDirectives::LOG_SIZE ticks with proposals), newer than sinceMs (server ms, now()).
     // [{t, cands=[{src, what, tier, score, b, c, valued, reason, res}]}]; nil if not a bot.
+    // Second value: true when records newer than sinceMs were already pushed out of the log
+    // (the caller polled too slowly; the combat recorder writes a `gap` line).
     static int U_decisions(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -669,7 +683,10 @@ namespace DevConsole
             lua_setfield(L, -2, "cands");
             lua_rawseti(L, -2, ++i);
         }
-        return 1;
+        bool const gap = since && log.size() >= Commander::BotDirectives::LOG_SIZE &&
+                         uint32(log.front().timeMs - since) - 1 < 0x7FFFFFFFu;  // oldest is newer than since
+        lua_pushboolean(L, gap);
+        return 2;
     }
 
     // Commander of a player's party on the player's map (bot or human member), null if none.
@@ -1530,6 +1547,7 @@ namespace DevConsole
             { "hostile", U_hostile }, { "friendly", U_friendly }, { "nearby", U_nearby },
             { "path", U_path }, { "height", U_height }, { "lospoint", U_lospoint }, { "aggroat", U_aggroat },
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
+            { "cooldown", U_cooldown },
             { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions },
             { "notes", U_notes }, { "plan", U_plan }, { "pull", U_pull }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },

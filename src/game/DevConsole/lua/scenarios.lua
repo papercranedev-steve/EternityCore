@@ -375,7 +375,7 @@ function scenario.stop(leader)
     status(leader, "stopped", "")
 end
 
--- .scenario [list | <id> | reset | stop | status]
+-- .scenario [list | <id> | reset | stop | status | setspot <id> | mark [text]]
 function scenario.command(leader, args)
     args = (args or ""):match("^%s*(.-)%s*$")
     if args == "" or args == "list" then
@@ -387,7 +387,11 @@ function scenario.command(leader, args)
             for _, s in ipairs(scenario.list) do say(leader, ".scenario " .. s.id .. "  " .. s.title) end
             say(leader, ".scenario reset  重开当前场景    .scenario stop  结束")
             say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
+            say(leader, ".scenario mark [说明]  战斗中觉得不对时标记这一刻（记下现场，复盘时看）")
         end
+    elseif args:match("^mark") then
+        local text = args:match("^mark%s+(.+)$") or ""
+        if not rec.mark(leader, text) then say(leader, "现在没有在录制战斗，标记不了") end
     elseif args:match("^setspot") then
         local id = args:match("^setspot%s+(%S+)") or scenario.current
         local s = id and scenario.find(id)

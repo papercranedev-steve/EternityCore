@@ -8,5 +8,6 @@ local function load(name)
 end
 
 load("core.lua")
+load("review.lua")
 load("recorder.lua")
 load("scenarios.lua")

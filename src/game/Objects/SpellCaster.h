@@ -374,6 +374,9 @@ public:
     virtual void RemoveAllCooldowns(bool /*sendOnly*/ = false) { m_GCDCatMap.clear(); m_cooldownMap.clear(); m_lockoutMap.clear(); }
     bool IsSpellReady(SpellEntry const* spellEntry, ItemPrototype const* itemProto = nullptr) const;
     bool IsSpellOnPermanentCooldown(SpellEntry const* spellEntry) const;
+    // PartyBot dev console: ms until the spell's own, category and school lockout cooldowns end
+    // (the checks of IsSpellReady); 0 = ready, -1 = permanent (held until an event). No GCD.
+    int32 GetSpellCooldownLeft(SpellEntry const* spellEntry) const;
     virtual void LockOutSpells(SpellSchoolMask schoolMask, uint32 duration);
     void PrintCooldownList(ChatHandler& chat) const;
     bool CheckLockout(SpellSchoolMask schoolMask) const;

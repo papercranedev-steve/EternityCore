@@ -2515,6 +2515,48 @@ bool SpellCaster::IsSpellReady(SpellEntry const* spellEntry, ItemPrototype const
     return true;
 }
 
+int32 SpellCaster::GetSpellCooldownLeft(SpellEntry const* spellEntry) const
+{
+    TimePoint const now = World::GetCurrentClockTime();
+    TimePoint latest = now;
+    auto later = [&latest](TimePoint t) { if (t > latest) latest = t; };
+
+    auto spellItr = m_cooldownMap.FindBySpellId(spellEntry->Id);
+    if (spellItr != m_cooldownMap.end())
+    {
+        CooldownData const& cd = *spellItr->second;
+        if (cd.IsPermanent())
+            return -1;
+        TimePoint t;
+        if (cd.GetSpellCDExpireTime(t))
+            later(t);
+        if (cd.GetCategory() && cd.GetCatCDExpireTime(t))
+            later(t);
+    }
+    if (spellEntry->Category)
+    {
+        auto catItr = m_cooldownMap.FindByCategory(spellEntry->Category);
+        if (catItr != m_cooldownMap.end())
+        {
+            CooldownData const& cd = *catItr->second;
+            if (cd.IsPermanent())
+                return -1;
+            TimePoint t;
+            if (cd.GetCatCDExpireTime(t))
+                later(t);
+        }
+    }
+    if (spellEntry->PreventionType == SPELL_PREVENTION_TYPE_SILENCE)
+    {
+        for (auto const& lockout : m_lockoutMap)
+        {
+            if (SpellSchoolMask(1 << lockout.first) & spellEntry->GetSpellSchoolMask())
+                later(lockout.second);
+        }
+    }
+    return int32(std::chrono::duration_cast<std::chrono::milliseconds>(latest - now).count());
+}
+
 bool SpellCaster::IsSpellOnPermanentCooldown(SpellEntry const* spellEntry) const
 {
     TimePoint now = World::GetCurrentClockTime();

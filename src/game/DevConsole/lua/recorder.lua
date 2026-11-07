@@ -10,10 +10,11 @@
 --               SpellCastResult code, reason = los / range / facing / ... for common codes),
 --               aura+ (amount = duration, extra = stacks),
 --               aura- (extra = remove mode), death
---   aggro   {type, t, enemy, from, to, toRole}   an enemy switched to a non-tank party member
+--   anomaly / detail   an anomaly the review detectors found and the live state then (review.lua)
 --   dec     {type, t, bot, cands=[{src, what, tier, score, b, c, reason, res}]}   one Commander
 --           arbiter decision of a bot (u:decisions); res = exec / failed / nottried /
---           lowertier / dropped (benefit <= cost) / veto
+--           lowertier / dropped (benefit <= cost) / veto / order (heal order)
+--   gap     {type, t, bot, what="dec"}   decisions of the bot were lost since the last tick
 --   note    {type, t, text}   a Commander note sent to the leader (u:notes), from 3 s before the fight
 --   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
 --           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
@@ -21,7 +22,8 @@
 --   pull    {type, t, planned, phase, target, targetName, ranged, returnToSpot,
 --           expected=[{g, name, aggro}], report=[lines the player was told]}   the pull as
 --           planned (u:pull), once per pull and again when its target or expected list changed
---   end     {type, t, duration, result, stats={guid={...}}, names={guid=name}, dropped}
+--   end     {type, t, duration, result, stats={guid={...}}, names={guid=name},
+--           spells={id=name} (every spell in the ev lines), anomalies={kind=count}, dropped}
 --
 -- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
 
@@ -38,6 +40,7 @@ end
 local function write(w, obj)
     if w.file then w.file:write(json(obj), "\n") end
 end
+rec.writeLine = write
 
 local function memberRows(members)
     return map(members, function(m)
@@ -58,6 +61,7 @@ local function stat(w, guid)
 end
 
 local function account(w, e)
+    if e.spell then review.spellName(w, e.spell) end
     if e.ev == "dmg" then
         if e.src then stat(w, e.src).dmgDone = stat(w, e.src).dmgDone + (e.amount or 0) end
         if e.dst then stat(w, e.dst).dmgTaken = stat(w, e.dst).dmgTaken + (e.amount or 0) end
@@ -97,19 +101,20 @@ local function beginFight(w, members)
     w.quietSince = nil
     w.stats = {}
     w.names = {}
-    w.lastVictim = {}
+    w.spellNames = {}
     w.lastDec = {}
     -- notes from the 3 s before the fight are kept (the patrol / pull judgement comes first)
     w.lastNote = w.fightStart - 3000
     w.lastPlan = nil
     w.lastPull = nil
-    w.aggroLost = 0
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
+    review.begin(w, members)
     write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
     for _, e in ipairs(w.pre) do
         e.type = "ev"
         write(w, e)
         account(w, e)
+        w.review.recent[#w.review.recent + 1] = e
     end
     w.pre = {}
     rec.last = path
@@ -124,15 +129,21 @@ local function endFight(w, members, reason)
     local alive = 0
     for _, m in ipairs(members) do if m:exists() and m:alive() then alive = alive + 1 end end
     local result = (reason == "stopped") and "stopped" or ((alive == 0) and "wipe" or "ok")
+    local counts = w.review.counts
+    local spells = {}
+    for id, n in pairs(w.spellNames) do spells[tostring(id)] = n end
     write(w, { type = "end", t = now(), duration = now() - w.fightStart, reason = reason,
-               result = result, aliveMembers = alive, aggroLost = w.aggroLost,
-               stats = w.stats, names = w.names, dropped = combatlog.dropped() })
+               result = result, aliveMembers = alive, aggroLost = counts.aggro or 0, anomalies = counts,
+               stats = w.stats, names = w.names, spells = spells, dropped = combatlog.dropped() })
     w.file:close()
     w.file = nil
-    rec.lastSummary = { file = w.path, duration = now() - w.fightStart, aggroLost = w.aggroLost, result = result }
+    rec.lastSummary = { file = w.path, duration = now() - w.fightStart, anomalies = counts, result = result }
     local leader = w.leader and unit(w.leader)
     if leader then
-        leader:tell(string.format("[录制] 战斗结束 %.1f 秒，记录：%s", (now() - w.fightStart) / 1000, w.path))
+        local parts = {}
+        for kind, n in pairs(counts) do parts[#parts + 1] = (review.labels[kind] or kind) .. " " .. n end
+        leader:tell(string.format("[录制] 战斗结束 %.1f 秒，%s，异常：%s。记录：%s", (now() - w.fightStart) / 1000,
+            result, #parts > 0 and table.concat(parts, "，") or "无", w.path))
     end
 end
 
@@ -168,12 +179,10 @@ local function tick(w)
     end
 
     -- snapshot
-    local roleOf = {}
     local party = {}
     for _, m in ipairs(members) do
         local i = m:info()
         party[#party + 1] = i
-        roleOf[i.guid] = i.role or "player"
         w.names[i.guid] = i.name
     end
     local enemyRows = {}
@@ -182,36 +191,39 @@ local function tick(w)
         i.threat = map(e:threat(), function(r) return { g = r.unit:guid(), v = r.threat } end)
         enemyRows[#enemyRows + 1] = i
         w.names[i.guid] = i.name
-        local prev = w.lastVictim[i.guid]
-        if i.victim and prev ~= i.victim then
-            local role = roleOf[i.victim]
-            if prev and role and role ~= "tank" then
-                w.aggroLost = w.aggroLost + 1
-                write(w, { type = "aggro", t = now(), enemy = i.guid, from = prev, to = i.victim, toRole = role })
-            end
-            w.lastVictim[i.guid] = i.victim
-        end
     end
-    write(w, { type = "snap", t = now(), party = party, enemies = enemyRows })
 
-    -- Commander decisions of the bots since the last tick (u:decisions keeps the last 20)
+    -- Everything of this tick is read first, so the review detectors see it before it is written:
+    -- events, Commander decisions of the bots since the last tick, notes, plan, pull.
+    local evs = combatlog.drain()
+    local decs, gaps = {}, {}
     for _, m in ipairs(members) do
-        local log = m:decisions(w.lastDec[m:guid()] or 0)
+        local log, gap = m:decisions(w.lastDec[m:guid()] or 0)
         if log then
             for _, d in ipairs(log) do
-                write(w, { type = "dec", t = d.t, bot = m:guid(), cands = d.cands })
+                decs[#decs + 1] = { type = "dec", t = d.t, bot = m:guid(), cands = d.cands }
                 w.lastDec[m:guid()] = d.t
             end
+            if gap then gaps[#gaps + 1] = m:guid() end
         end
     end
+    -- (u:notes / u:plan are missing on a mangosd built before 2026-11-02: skipped)
+    local notes = leader.notes and leader:notes(w.lastNote) or {}
+    local plan = leader.plan and leader:plan()
+    local pull = leader.pull and leader:pull()
+
+    write(w, { type = "snap", t = now(), party = party, enemies = enemyRows })
+    review.observe(w, { leader = leader, members = members, party = party, enemies = enemies,
+                        enemyRows = enemyRows, evs = evs, decs = decs, plan = plan, pull = pull, now = now() })
+
+    for _, g in ipairs(gaps) do write(w, { type = "gap", t = now(), bot = g, what = "dec" }) end
+    for _, d in ipairs(decs) do write(w, d) end
 
     -- Commander notes to the leader since the last tick, and the plan state when it changed
-    -- (u:notes / u:plan are missing on a mangosd built before 2026-11-02: skipped)
-    for _, n in ipairs(leader.notes and leader:notes(w.lastNote) or {}) do
+    for _, n in ipairs(notes) do
         write(w, { type = "note", t = n.t, text = n.text })
         w.lastNote = n.t
     end
-    local plan = leader.plan and leader:plan()
     if plan then
         local text = json(plan)
         if text ~= w.lastPlan then
@@ -221,7 +233,6 @@ local function tick(w)
     end
     -- The pull as planned (u:pull): once per pull, again when the target or the expected list
     -- changed (recheck before the tank goes, another target after a failed shot spot).
-    local pull = leader.pull and leader:pull()
     if pull then
         local key = string.format("%d/%s/%d", pull.t or 0, pull.target or "", #(pull.expected or {}))
         if key ~= w.lastPull then
@@ -233,7 +244,7 @@ local function tick(w)
         end
     end
 
-    for _, e in ipairs(combatlog.drain()) do
+    for _, e in ipairs(evs) do
         e.type = "ev"
         write(w, e)
         account(w, e)
@@ -278,6 +289,16 @@ function rec.stop()
     end
     combatlog.enable(false)
     rec.watcher = nil
+end
+
+-- A player mark in the fight being recorded (".scenario mark [text]"): anomaly kind "mark" with
+-- the live state. Returns the anomaly id, nil when no fight is being recorded.
+function rec.mark(who, text)
+    local w = rec.watcher
+    if not w or not w.file then return nil end
+    local id = review.mark(w, who, text or "")
+    w.file:flush()
+    return id
 end
 
 function rec.status()
