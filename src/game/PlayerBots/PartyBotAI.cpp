@@ -457,8 +457,21 @@ bool PartyBotAI::SkipsReflexInterrupt(Unit const* pVictim) const
 
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 {
-    return CombatBotBaseAI::IsValidHostileTarget(pTarget) &&
-          !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget);
+    // The bot the Commander sent to wake the last controlled enemy may attack it
+    // (Coordination/ControlledEnd.h); everyone else leaves a breakable control alone.
+    bool const valid = CombatBotBaseAI::IsValidHostileTarget(pTarget) ||
+                      (CombatBotBaseAI::IsValidHostileTargetIgnoringControl(pTarget) && IsAssignedToBreakControl(pTarget));
+    return valid && !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget);
+}
+
+bool PartyBotAI::IsAssignedToBreakControl(Unit const* pTarget) const
+{
+    if (!pTarget || !me->IsInCombat() || IsInDuel() || !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("cc"))
+        return false;
+    // Same map as the bot, so the commander belongs to this map thread.
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().controlEnd.Breaks(me->GetObjectGuid(), pTarget->GetObjectGuid(),
+                                                               WorldTimer::getMSTime());
 }
 
 // Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above.

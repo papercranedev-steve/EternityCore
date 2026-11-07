@@ -14,6 +14,9 @@ namespace Commander
 {
     bool CrowdControlBehavior::AppliesTo(PartyBotAI const* bot) const
     {
+        // Tanks wake the last controlled enemy (ControlledEnd.h), with or without controls.
+        if (bot->GetRole() == ROLE_TANK)
+            return true;
         for (SpellEntry const* s : bot->Kit().Controls())
             if (s)
                 return true;
@@ -55,6 +58,23 @@ namespace Commander
                 p.action.z = opening.spot.z;
                 p.action.holdMs = uint32(left / OPENING_WALK_YD_PER_SEC * 1000.0f) + 1000;
             }
+            out.push_back(p);
+            return;
+        }
+
+        // Only controlled enemies left (ControlledEnd.h): the tank wakes the first one when the
+        // brain says (PartyBotAI::IsAssignedToBreakControl lets it pick that target).
+        if (plan.controlEnd.Breaks(self->guid, plan.controlEnd.enemy, world.refreshedAtMs))
+        {
+            if (me->GetVictim() && me->GetVictim()->GetObjectGuid() == plan.controlEnd.enemy)
+                return;
+            Proposal p;
+            p.tier = ProposalTier::Assigned;
+            p.source = "cc";
+            p.reason = "only controlled enemies left: wake one";
+            p.score = 5.0f;
+            p.action.type = BotActionType::Attack;
+            p.action.target = plan.controlEnd.enemy;
             out.push_back(p);
             return;
         }

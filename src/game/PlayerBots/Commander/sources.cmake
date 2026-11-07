@@ -81,6 +81,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.cpp
   ${COMMANDER_DIR}/Coordination/PullControl.h
   ${COMMANDER_DIR}/Coordination/PullControl.cpp
+  ${COMMANDER_DIR}/Coordination/ControlledEnd.h
+  ${COMMANDER_DIR}/Coordination/ControlledEnd.cpp
   ${COMMANDER_DIR}/ProfileCommands.h
   ${COMMANDER_DIR}/ProfileCommands.cpp
   ${COMMANDER_DIR}/Encounters/IEncounter.h

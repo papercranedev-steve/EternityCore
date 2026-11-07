@@ -1,0 +1,113 @@
+#include "Commander/Coordination/ControlledEnd.h"
+#include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/FightLoad.h"
+#include "Commander/Perception/ManaWorth.h"
+#include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/WorldModel.h"
+#include <algorithm>
+#include <cstdio>
+
+namespace Commander
+{
+    namespace
+    {
+        using CE = ControlledEndAssigner;
+
+        // An idle patrol walks next to `at` within `sec` (PatrolFacts::track, filled in fights).
+        bool PatrolComes(WorldModel const& world, Position3 const& at, float sec)
+        {
+            for (PatrolFacts const& p : world.patrols)
+            {
+                if (p.trackStepSec <= 0.0f || !p.aggressive || p.noAggro)
+                    continue;
+                for (size_t i = 0; i < p.track.size() && float(i) * p.trackStepSec <= sec; ++i)
+                    if (PackResolver::Distance(p.track[i], at) <= p.reach + CE::PATROL_MARGIN_YD)
+                        return true;
+            }
+            return false;
+        }
+    }
+
+    void ControlledEndAssigner::Clear(TeamPlan& plan) const
+    {
+        plan.controlEnd = ControlEndPlan();
+    }
+
+    void ControlledEndAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
+    {
+        ControlEndPlan& end = plan.controlEnd;
+        EnemyFacts const* first = nullptr;
+        bool any = false;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (e.onAllyOnly || !e.acting || !e.health)
+                continue;
+            any = true;
+            // Someone is still fighting, or held by something the party may hit through (a
+            // stun, a fear): not this situation.
+            if (!e.control.spellId || !e.control.breaksOnDamage)
+            {
+                end = ControlEndPlan();
+                return;
+            }
+            if (!first || e.control.remainingMs < first->control.remainingMs)
+                first = &e;
+        }
+        PartyMemberFacts const* tank = Tanks::Main(world);
+        if (!any || !first || !tank || !tank->CanAct())
+        {
+            end = ControlEndPlan();
+            return;
+        }
+        // Decided for this enemy already: keep it.
+        if (end.active && end.enemy == first->guid && end.breaker == tank->guid)
+            return;
+
+        end = ControlEndPlan();
+        end.active = true;
+        end.enemy = first->guid;
+        end.breaker = tank->guid;
+
+        float const walkSec = std::max(0.0f, PackResolver::Distance(tank->pos, first->pos) - first->boundingRadius) / RUN_YD_PER_SEC;
+        float const waitSec = std::max(0.0f, first->control.remainingMs / 1000.0f - BREAK_LEAD_SEC - walkSec);
+
+        // The fight still to come: every controlled enemy, all at once (rough: they wake one by one).
+        FightLoad::Input fight;
+        ManaWorth::Fight planned;
+        if (FightLoad::FromWorld(world, fight))
+        {
+            for (FightLoad::Foe& f : fight.foes)
+            {
+                f.arriveSec = 0.0f;
+                f.sameFight = false;
+            }
+            FightLoad::Result const r = FightLoad::Simulate(fight);
+            planned.sec = r.fightSec;
+            planned.incomingDps = r.damage / std::max(1.0f, r.fightSec);
+        }
+
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet || !m.alive || !m.UsesMana() || m.manaRegen <= 0.0f)
+                continue;
+            float const regained = std::min(m.manaRegen * waitSec, float(m.maxMana) - float(m.mana));
+            if (regained > 0.0f)
+                end.waitGain += ManaWorth::Points(world, m, regained, planned);
+        }
+        end.waitCost = WAIT_POINTS_PER_SEC * waitSec;
+        bool const patrol = waitSec > 0.0f && PatrolComes(world, first->pos, waitSec + planned.sec);
+        bool const wait = waitSec > 0.0f && !patrol && end.waitGain > end.waitCost;
+        end.breakAtMs = world.refreshedAtMs + (wait ? uint32(waitSec * 1000.0f) : 0);
+
+        char buf[200];
+        if (wait)
+            snprintf(buf, sizeof(buf), "Only controlled enemies left: waiting %.0f s for mana (%.1f pt vs %.1f), then the tank wakes the first.",
+                waitSec, end.waitGain, end.waitCost);
+        else
+            snprintf(buf, sizeof(buf), "Only controlled enemies left: the tank wakes the first now%s.",
+                patrol ? " (a patrol is coming)" : "");
+        plan.notes.push_back(buf);
+        end.noted = true;
+    }
+}

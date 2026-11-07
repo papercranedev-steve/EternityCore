@@ -451,6 +451,24 @@ namespace Commander
         bool breaksOnDamage = false;
     };
 
+    // Only controlled enemies are left (ControlledEndAssigner): wait for mana while they sleep,
+    // then the tank wakes the first one (attacks it, PartyBotAI::IsAssignedToBreakControl).
+    struct ControlEndPlan
+    {
+        bool active = false;
+        ObjectGuid enemy;            // the one to wake first (its control ends soonest)
+        ObjectGuid breaker;          // the main tank
+        uint32 breakAtMs = 0;        // wake it from then on (now = no wait)
+        float waitGain = 0.0f;       // points of mana regained while waiting
+        float waitCost = 0.0f;       // points of time and risk
+        bool noted = false;          // the leader was told
+
+        bool Breaks(ObjectGuid bot, ObjectGuid target, uint32 nowMs) const
+        {
+            return active && bot == breaker && target == enemy && int32(nowMs - breakAtMs) >= 0;
+        }
+    };
+
     // Role the "roles" assigner gives a bot whose role is not locked (RoleAssigner.h).
     struct RoleDuty
     {
@@ -475,6 +493,7 @@ namespace Commander
         // ThreatBehavior): enemies about to get a control that breaks on damage
         // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
         std::vector<ObjectGuid> protectedEnemies;
+        ControlEndPlan controlEnd;
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;

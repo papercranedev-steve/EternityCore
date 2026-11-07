@@ -140,7 +140,9 @@ namespace Commander
 
                 for (EnemyFacts const& e : world.enemies)
                 {
-                    if (e.guid == openingTarget || e.onAllyOnly || !e.acting || !e.health || HeldLongEnough(e, a) ||
+                    // The one the tank is to wake (ControlledEnd.h): no recast.
+                    bool const toWake = plan.controlEnd.active && plan.controlEnd.enemy == e.guid;
+                    if (toWake || e.guid == openingTarget || e.onAllyOnly || !e.acting || !e.health || HeldLongEnough(e, a) ||
                         !ControlValue::Affects(a, e.entry, e.creatureTypeMask))
                         continue;
                     if (PackResolver::Distance(b.pos, e.pos) - e.boundingRadius > a.maxRange + REACH_SLACK_YD)

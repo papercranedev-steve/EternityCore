@@ -223,8 +223,12 @@ public:
     // `pVictim` is immune to all of them.
     bool SkipsReflexInterrupt(Unit const* pVictim) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
-    // member mind controlled by a creature is not attacked (Commander::VetoChecks).
+    // member mind controlled by a creature is not attacked (Commander::VetoChecks); the bot the
+    // Commander sent to wake the last controlled enemy may attack it (IsAssignedToBreakControl).
     bool IsValidHostileTarget(Unit const* pTarget) const;
+    // In combat: the Commander plan sends this bot to wake `pTarget`, the first of the
+    // controlled enemies that are all that is left (Commander/Coordination/ControlledEnd.h).
+    bool IsAssignedToBreakControl(Unit const* pTarget) const;
 
     std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;

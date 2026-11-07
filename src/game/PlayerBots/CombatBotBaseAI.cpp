@@ -2158,9 +2158,14 @@ bool CombatBotBaseAI::FindAndPreHealTarget()
 
 bool CombatBotBaseAI::IsValidHostileTarget(Unit const* pTarget) const
 {
+    return IsValidHostileTargetIgnoringControl(pTarget) &&
+           !pTarget->HasBreakableByDamageCrowdControlAura();
+}
+
+bool CombatBotBaseAI::IsValidHostileTargetIgnoringControl(Unit const* pTarget) const
+{
     return me->IsValidAttackTarget(pTarget) &&
            pTarget->IsVisibleForOrDetect(me, me, false) &&
-           !pTarget->HasBreakableByDamageCrowdControlAura() &&
            !pTarget->IsTotalImmune() &&
            pTarget->GetTransport() == me->GetTransport();
 }

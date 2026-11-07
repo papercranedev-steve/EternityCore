@@ -121,6 +121,9 @@ public:
     bool IsValidBuffTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     bool IsValidHealTarget(Unit const* pTarget, float healthPercent = 100.0f) const;
     bool IsValidHostileTarget(Unit const* pTarget) const;
+    // IsValidHostileTarget without "not under a control that breaks on damage" (PartyBotAI:
+    // the bot sent to wake the last controlled enemy).
+    bool IsValidHostileTargetIgnoringControl(Unit const* pTarget) const;
     bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     bool FindAndPreHealTarget();
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
