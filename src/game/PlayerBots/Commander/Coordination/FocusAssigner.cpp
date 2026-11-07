@@ -331,11 +331,10 @@ namespace Commander
 
         // One-off bonuses, as "lost within ONE_OFF_HORIZON_SEC if still alive".
         float oneOff = 0.0f;
-        if (profile && profile->fleeAtHealthPct > 0.0f && e.healthPct > profile->fleeAtHealthPct &&
-            e.healthPct <= profile->fleeAtHealthPct + FLEE_WINDOW_PCT)
+        if (e.flee.predicted && !e.flee.fleeing && e.flee.points > 0.0f)
         {
-            oneOff += FLEE_POINTS;
-            AddReason(s.reason, "flees at %.0f%%", profile->fleeAtHealthPct);
+            oneOff += e.flee.points;
+            AddReason(s.reason, "flee brings %.1f", e.flee.points);
         }
         if (e.summoned && (IsTotem(e.entry) || HasHealSpell(profile.get())))
         {

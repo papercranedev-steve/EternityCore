@@ -254,6 +254,8 @@ namespace Commander
         }
         // (after the packs: an enemy's pack mates are left out of its route check)
         m_meleeRoutes.Annotate(bot->me->GetMap(), m_world, nowMs);
+        // (after the rates: time to the flee line uses the party's damage)
+        m_fleePredictor.Annotate(bot->me->GetMap(), m_world, nowMs);
 
         ++m_world.version;
         m_world.refreshedAtMs = nowMs;

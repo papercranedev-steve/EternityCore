@@ -178,6 +178,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/SafeRoute.cpp
   ${COMMANDER_DIR}/Perception/MeleeRoutes.h
   ${COMMANDER_DIR}/Perception/MeleeRoutes.cpp
+  ${COMMANDER_DIR}/Perception/FleePredictor.h
+  ${COMMANDER_DIR}/Perception/FleePredictor.cpp
   ${COMMANDER_DIR}/Perception/AggroRange.h
   ${COMMANDER_DIR}/Perception/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/ShotSpot.h

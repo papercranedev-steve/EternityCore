@@ -16,18 +16,8 @@ namespace ControlValue
 {
     namespace
     {
-        float Risk(FightLoad::Result const& r)
-        {
-            if (r.tankDies || r.unfinished)
-                return 1.0f;
-            float const floor = FightLoad::TANK_FLOOR_PCT;
-            return std::min(1.0f, std::max(0.0f, (floor - r.lowestTankPct) / floor));
-        }
-
-        float Loss(WorldModel const& world, FightLoad::Result const& r, float penalty)
-        {
-            return Value::Points(world, r.damage) + Risk(r) * penalty;
-        }
+        using FightLoad::Risk;
+        using FightLoad::Loss;
 
         bool IsTarget(std::vector<EnemyFacts const*> const& targets, ObjectGuid guid)
         {

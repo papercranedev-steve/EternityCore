@@ -166,6 +166,18 @@ namespace FightLoad
         return r.lowestTankPct;
     }
 
+    float Risk(Result const& r)
+    {
+        if (r.tankDies || r.unfinished)
+            return 1.0f;
+        return std::min(1.0f, std::max(0.0f, (TANK_FLOOR_PCT - r.lowestTankPct) / TANK_FLOOR_PCT));
+    }
+
+    float Loss(WorldModel const& world, Result const& r, float penalty)
+    {
+        return Value::Points(world, r.damage) + Risk(r) * penalty;
+    }
+
     std::string Describe(Result const& r)
     {
         char buf[200];

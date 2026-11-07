@@ -91,6 +91,12 @@ namespace FightLoad
     // Higher is better: the tank's lowest health percent; a death or an unfinished fight:
     // minus the share of creature health left.
     float Score(Result const& r);
+    // 1 if the tank dies or the fight does not end, else how far the tank drops below
+    // TANK_FLOOR_PCT (0 above it, 1 at 0%).
+    float Risk(Result const& r);
+    // What the fight costs the party in points: Points(damage on the tank) + Risk x `penalty`
+    // (Value::DeathPenalty of the tank). Compare two runs of the same fight with it.
+    float Loss(WorldModel const& world, Result const& r, float penalty);
     // "fight ~62 s, tank down to 41%, incoming up to 520/s, healer mana 5400 -> 1200"
     std::string Describe(Result const& r);
 

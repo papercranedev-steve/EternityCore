@@ -347,6 +347,49 @@ namespace ProfileCommands
         return true;
     }
 
+    bool ShowFlee(ChatHandler* handler, Player* player)
+    {
+        std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(player);
+        if (!commander)
+        {
+            handler->SendSysMessage("No commander for your party on this map.");
+            return false;
+        }
+
+        WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        auto name = [map](ObjectGuid guid) -> char const*
+        {
+            Unit* unit = map->GetUnit(guid);
+            return unit ? unit->GetName() : "?";
+        };
+        uint32 shown = 0;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            FleeFacts const& f = e.flee;
+            if (f.atPct <= 0.0f)
+                continue;
+            ++shown;
+            char const* state = f.fleeing ? "FLEEING" : f.spent ? "already fled" : f.prevented ? "prevented" : "";
+            handler->PSendSysMessage("%s: %.0f%% health, flees at %.0f%%, in ~%.1f s %s", name(e.guid),
+                e.healthPct, f.atPct, f.secToFlee, state);
+            if (!f.predicted)
+                continue;
+            std::string joiners;
+            for (ObjectGuid g : f.joiners)
+            {
+                if (!joiners.empty())
+                    joiners += ", ";
+                joiners += name(g);
+            }
+            handler->PSendSysMessage("  may bring %u (%s): costs %.1f points", uint32(f.joiners.size()),
+                joiners.empty() ? "nobody" : joiners.c_str(), f.points);
+        }
+        if (!shown)
+            handler->SendSysMessage("No enemy of ours flees at low health.");
+        return true;
+    }
+
     void ReloadOverrides(ChatHandler* handler)
     {
         handler->SendSysMessage(sProfileStore.ReloadOverrides().c_str());

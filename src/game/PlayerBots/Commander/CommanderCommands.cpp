@@ -873,6 +873,16 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "flee"))
+    {
+        if (!Commander::ProfileCommands::ShowFlee(this, m_session->GetPlayer()))
+        {
+            SetSentErrorMessage(true);
+            return false;
+        }
+        return true;
+    }
+
     if (!strcmp(sub, "rates"))
     {
         if (!Commander::ProfileCommands::ShowRates(this, m_session->GetPlayer()))

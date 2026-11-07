@@ -134,6 +134,22 @@ namespace Commander
         bool fear = false;
     };
 
+    // Running away at low health (Perception/FleePredictor.h fills it; EnemyFacts::flee).
+    struct FleeFacts
+    {
+        float atPct = 0.0f;             // flees at this health percent (CreatureProfile), 0 = never
+        bool fleeing = false;           // running now (not a fear)
+        bool spent = false;             // already ran and came back: once per life (until it evades)
+        bool prevented = false;         // an aura stops it (Curse of Recklessness, Judgement of Justice)
+        float secToFlee = 0.0f;         // until it reaches atPct at its share of the party's damage, 0 = there
+        // Filled while it is fleeing or within FleePredictor::WINDOW_PCT above atPct, not
+        // prevented: the idle creatures that may join if it runs (worst case: every one it can
+        // reach, with their packs) and what that costs the party, in points.
+        bool predicted = false;
+        std::vector<ObjectGuid> joiners;
+        float points = 0.0f;
+    };
+
     // A harmful, dispellable aura a creature put on a party member (players only).
     struct DebuffFacts
     {
@@ -327,6 +343,7 @@ namespace Commander
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.
         bool onAllyOnly = false;
+        FleeFacts flee;
 
         // Every spell (interruptible or not) seen cast by it since it joined our lists, with the
         // start of its latest cast. Creature repeat delays run from the cast start, so

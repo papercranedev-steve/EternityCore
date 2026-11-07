@@ -71,13 +71,42 @@ namespace AssistPredictor
         };
     }
 
+    namespace
+    {
+        // Every caller calls assistance once (Creature::CallAssistance); helpers do not call
+        // again, their aggro-together groups do. Bounded: every creature is added once.
+        void CallAssistance(std::deque<Creature*>& callers, Unit* enemy, std::set<ObjectGuid>& seen, std::vector<Joiner>& out)
+        {
+            float const radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
+            while (!callers.empty())
+            {
+                Creature* caller = callers.front();
+                callers.pop_front();
+                if (radius <= 0.0f)
+                    continue;
+
+                std::list<Creature*> helpers;
+                MaNGOS::AnyAssistCreatureInRangeCheck check(caller, enemy, radius);
+                MaNGOS::CreatureListSearcher<MaNGOS::AnyAssistCreatureInRangeCheck> searcher(helpers, check);
+                Cell::VisitGridObjects(caller, searcher, radius);
+
+                for (Creature* h : helpers)
+                {
+                    if (seen.count(h->GetObjectGuid()))
+                        continue;
+                    Add(h, JoinReason::Assist, seen, out);
+                    AddGroupMembers(h, seen, callers, out);
+                }
+            }
+        }
+    }
+
     std::vector<Joiner> PredictDetailed(Creature* target, Unit* puller, Position3 const* standAt)
     {
         std::vector<Joiner> out;
         if (!target || !puller)
             return out;
 
-        float const radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
         std::set<ObjectGuid> seen;
         std::deque<Creature*> callers;
 
@@ -106,28 +135,26 @@ namespace AssistPredictor
             }
         }
 
-        // Bounded: every creature is added once.
-        while (!callers.empty())
+        CallAssistance(callers, puller, seen, out);
+        return out;
+    }
+
+    std::vector<Joiner> Expand(std::vector<Creature*> const& seeds, Unit* enemy, std::vector<ObjectGuid> const& exclude)
+    {
+        std::vector<Joiner> out;
+        if (!enemy)
+            return out;
+        std::set<ObjectGuid> seen(exclude.begin(), exclude.end());
+        std::deque<Creature*> callers;
+        for (Creature* c : seeds)
         {
-            Creature* caller = callers.front();
-            callers.pop_front();
-            if (radius <= 0.0f)
+            if (!c || seen.count(c->GetObjectGuid()))
                 continue;
-
-            std::list<Creature*> helpers;
-            MaNGOS::AnyAssistCreatureInRangeCheck check(caller, puller, radius);
-            MaNGOS::CreatureListSearcher<MaNGOS::AnyAssistCreatureInRangeCheck> searcher(helpers, check);
-            Cell::VisitGridObjects(caller, searcher, radius);
-
-            for (Creature* h : helpers)
-            {
-                if (seen.count(h->GetObjectGuid()))
-                    continue;
-                Add(h, JoinReason::Assist, seen, out);
-                // helper itself does not call again, but its aggro-together group joins and calls
-                AddGroupMembers(h, seen, callers, out);
-            }
+            Add(c, JoinReason::FleeCall, seen, out);
+            callers.push_back(c);
+            AddGroupMembers(c, seen, callers, out);
         }
+        CallAssistance(callers, enemy, seen, out);
         return out;
     }
 
@@ -153,6 +180,7 @@ namespace AssistPredictor
             case JoinReason::Assist:        return "assist";
             case JoinReason::AggroTogether: return "group";
             case JoinReason::AggroRange:    return "aggro range";
+            case JoinReason::FleeCall:      return "flee call";
         }
         return "?";
     }

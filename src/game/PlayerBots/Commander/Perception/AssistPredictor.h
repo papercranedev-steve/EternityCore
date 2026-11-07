@@ -45,6 +45,7 @@ namespace AssistPredictor
         Assist,         // called for help by a creature that started attacking
         AggroTogether,  // creature_groups member of a joiner
         AggroRange,     // the puller stands within its aggro range
+        FleeCall,       // a fleeing creature ran past it (FleePredictor.h)
     };
 
     struct Joiner
@@ -59,6 +60,11 @@ namespace AssistPredictor
 
     // Assistance and aggro-together only (no aggro range), guids only.
     std::vector<ObjectGuid> Predict(Creature* target, Unit* puller);
+
+    // `seeds` start attacking `enemy` (reason FleeCall): them, their aggro-together groups and
+    // the assistance they call, the same rules as above. Creatures in `exclude` are skipped
+    // (already fighting, or the one that made them start).
+    std::vector<Joiner> Expand(std::vector<Creature*> const& seeds, Unit* enemy, std::vector<ObjectGuid> const& exclude);
 
     std::vector<ObjectGuid> Guids(std::vector<Joiner> const& joiners);
     char const* ReasonName(JoinReason reason);
