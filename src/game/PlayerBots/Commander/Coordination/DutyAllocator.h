@@ -40,6 +40,7 @@ namespace Commander
         Interrupt,      // InterruptAssigner
         Intercept,      // FocusAssigner: kill a must-kill enemy without moving the focus
         Dispel,         // DispelAssigner: remove a debuff from a party member
+        CrowdControl,   // CrowdControlAssigner: take an enemy out of the fight for a while
     };
 
     struct DutyCandidate

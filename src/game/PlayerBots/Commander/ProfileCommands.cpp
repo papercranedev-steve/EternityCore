@@ -328,7 +328,10 @@ namespace ProfileCommands
                     std::vector<EnemyFacts const*> const targets = ControlValue::Targets(world, m, a, target);
                     if (targets.empty())
                         return;
-                    ControlValue::Worth const w = ControlValue::Of(world, fight, m, a, targets, 0.0f);
+                    // Same aoe cost as CrowdControlAssigner.
+                    float const aoe = (a.breaksOnDamage && target)
+                        ? ControlValue::AreaLoss(world, *target, ControlValue::ExpectedSec(world, a, *target)) : 0.0f;
+                    ControlValue::Worth const w = ControlValue::Of(world, fight, m, a, targets, aoe);
                     handler->PSendSysMessage("    %s%s: %s", target ? "on " : "", target ? name(target->guid) : "around",
                         ControlValue::Describe(w).c_str());
                 };

@@ -148,6 +148,13 @@ namespace Commander
         std::vector<InterruptAbility> interrupts;   // bots only
         std::vector<DispelAbility> dispels;         // bots only
         std::vector<ControlAbility> controls;       // bots only
+        // Damage dealer bots with ClassKit::AreaDamage spells, on their victim: the best area
+        // spell's damage per second on each target it hits, its radius, and the filler's
+        // damage per second (what the area spell has to beat). 0 = none. For the area damage
+        // a crowd control gives up (ControlValue::AreaLoss).
+        float areaDpsPerTarget = 0.0f;
+        float areaRadius = 0.0f;
+        float fillerDps = 0.0f;
         // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
         // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
         float fillerManaPerSec = 0.0f;

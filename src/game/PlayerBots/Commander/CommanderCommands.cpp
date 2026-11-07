@@ -325,6 +325,24 @@ namespace
             // Better-ranked bots the allocator did not make primary (DutyAllocator.h).
             for (Commander::DutyResult const& r : plan.duties)
             {
+        // Crowd control (CrowdControlAssigner); values per option: .partybot ai control
+        if (!plan.controls.empty())
+        {
+            handler->SendSysMessage("Controls:");
+            for (Commander::ControlDuty const& d : plan.controls)
+            {
+                handler->PSendSysMessage("    %s: %s on |cffffcc00%s|r (%.1f pt%s)",
+                    NameOf(map, d.bot).c_str(), SpellName(d.spellId).c_str(), NameOf(map, d.enemy).c_str(),
+                    d.points, d.area ? ", area" : "");
+                for (Commander::DutyResult const& r : plan.duties)
+                    if (r.kind == Commander::DutyKind::CrowdControl && r.target == d.enemy)
+                        for (Commander::DutyPass const& pass : r.passed)
+                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
+                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
+                                NameOf(map, pass.busyTarget).c_str());
+            }
+        }
+
                 if (r.kind != Commander::DutyKind::Interrupt || r.target != d.enemy)
                     continue;
                 for (Commander::DutyPass const& pass : r.passed)

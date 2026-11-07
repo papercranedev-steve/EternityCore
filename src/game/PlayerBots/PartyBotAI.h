@@ -174,6 +174,13 @@ public:
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;
+    // In combat the Commander crowd control module decides controls (CrowdControlAssigner):
+    // the rotations' own sheep / Blind / Hibernate / Shackle / Banish / Fear / Howl /
+    // Intimidating Shout and marked-target controls stand down.
+    bool IsCrowdControlControlled() const;
+    // The Commander crowd control module is on (any time): raid marks are not used for
+    // controls, the brain chooses (user, 2026-11-07). Out of combat too, for the marked pull.
+    bool IgnoresCrowdControlMarks() const;
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;

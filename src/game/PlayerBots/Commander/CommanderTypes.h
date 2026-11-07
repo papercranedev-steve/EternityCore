@@ -68,6 +68,9 @@ namespace Commander
         float y = 0.0f;
         float z = 0.0f;
         uint32 holdMs = 0;
+        // Cast: after a successful cast, stop attacking `target` if it is the bot's victim
+        // (a control that breaks on damage: the bot's own next swing or shot would end it).
+        bool dropTarget = false;
     };
 
     // Replace: do this action this tick instead of the original rotation.
@@ -96,6 +99,9 @@ namespace Commander
         Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), in combat
         ThreatDrop, // Fade (ThreatBehavior)
         Dispel,     // friendly dispels in combat (DispelAssigner / DispelBehavior)
+        // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
+        // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
+        CrowdControl,
         Count
     };
 

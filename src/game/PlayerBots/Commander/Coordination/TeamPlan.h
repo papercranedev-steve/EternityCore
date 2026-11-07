@@ -415,6 +415,17 @@ namespace Commander
         PatrolMovePlan patrolMove;
         std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
 
+    // One control spell to put on an enemy now, and who casts it (CrowdControlAssigner).
+    struct ControlDuty
+    {
+        ObjectGuid enemy;            // the target; an area spell (radius around the caster): the first enemy it takes
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        float points = 0.0f;         // net worth (Perception/ControlValue.h)
+        bool area = false;
+        bool breaksOnDamage = false;
+    };
+
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const
         {
             for (InterruptDuty const& d : interrupts)
@@ -434,3 +445,25 @@ namespace Commander
 }
 
 #endif
+        std::vector<ControlDuty> controls;
+        // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
+        // ThreatBehavior): enemies about to get a control that breaks on damage
+        // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
+        std::vector<ObjectGuid> protectedEnemies;
+
+        ControlDuty const* FindControlFor(ObjectGuid bot) const
+        {
+            for (ControlDuty const& d : controls)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        // An area spell must leave `e` alone: it is under a control that breaks on damage
+        // (anyone's, a player's sheep too), or the brain is about to put one on it.
+        bool KeepsUnbroken(EnemyFacts const& e) const
+        {
+            if (e.control.spellId && e.control.breaksOnDamage)
+                return true;
+            return std::find(protectedEnemies.begin(), protectedEnemies.end(), e.guid) != protectedEnemies.end();
+        }

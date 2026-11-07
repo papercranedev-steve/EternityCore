@@ -22,12 +22,22 @@
  *   mana     ManaWorth::Points(mana cost)
  *   cooldown COOLDOWN_POINTS_PER_MIN x min(cooldown, fight left) / 60 for cooldowns longer than
  *            a GCD: not there for a later emergency in this fight
- *   aoe      given by the caller: area damage the party gives up to keep the targets
- *            unbroken (brain decides, todo 10b)
+ *   aoe      given by the caller (AreaLoss for a control that breaks on damage): area damage
+ *            the party gives up to keep the targets unbroken
+ *
+ * AreaLoss(x, sec): every damage dealer bot with an area spell (PartyMemberFacts::
+ * areaDpsPerTarget): n = enemies within its radius of x, x included, that an area spell may hit
+ * now; while x must stay unbroken that cluster gets no area spell, so it loses
+ * max(0, n x per target - filler) damage per second for min(sec, fight left), as seconds of
+ * its own output (Value::LostAction, the same valuation as AreaDamageBehavior). The live
+ * threat limit of AreaDamageBehavior is not counted (early in a fight the loss is too high).
  *   fears only:
  *   adds     for each pack FearRisk::Of returns: chance x (Loss(controlled + the pack joining
  *            ADD_ARRIVE_SEC in) - Loss(controlled)), Loss = Points(damage) + Risk x penalty
  *   scatter  melee members (tank, melee, pets) on a target: LostAction(min(sec, REGATHER_SEC))
+ *   other controls:
+ *   scatter  members on a target turn to another enemy: LostAction(SwitchCost::SWITCH_SEC +
+ *            their combo points on it x COMBO_POINT_SEC)
  *
  * Pure: WorldModel facts and static profiles (immunities from CreatureProfile).
  */
@@ -85,6 +95,9 @@ namespace ControlValue
     // `fight`: FightLoad::FromWorld(world) (built once per refresh by the caller).
     Worth Of(WorldModel const& world, FightLoad::Input const& fight, PartyMemberFacts const& member,
              ControlAbility const& a, std::vector<EnemyFacts const*> const& targets, float aoeLoss);
+
+    // Area damage given up while `enemy` must not be hit for `sec` (header).
+    float AreaLoss(WorldModel const& world, EnemyFacts const& enemy, float sec);
 
     // "net +4.2 (8 s: damage 3.1 danger 2.0 victims 0.5 | action 0.6 mana 0.4 adds 0.4)"
     std::string Describe(Worth const& w);

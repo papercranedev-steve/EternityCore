@@ -12,7 +12,9 @@
 #include "Commander/Behaviors/EscapeBehavior.h"
 #include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Behaviors/PatrolBehavior.h"
+#include "Commander/Behaviors/CrowdControlBehavior.h"
 #include "Commander/Encounters/EncounterBehavior.h"
+#include "Commander/Coordination/CrowdControlAssigner.h"
 #include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/DispelAssigner.h"
@@ -30,6 +32,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<InterruptBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PullBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<DispelBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CrowdControlBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FocusBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
@@ -50,6 +53,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<DispelAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrowdControlAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
     }

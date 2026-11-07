@@ -13,6 +13,7 @@ namespace DutyAllocator
             case DutyKind::Interrupt: return "interrupt";
             case DutyKind::Intercept: return "intercept";
             case DutyKind::Dispel: return "dispel";
+            case DutyKind::CrowdControl: return "control";
         }
         return "?";
     }
@@ -46,6 +47,9 @@ namespace DutyAllocator
             DutyResult r;
             r.kind = need.kind;
             r.target = need.target;
+            // Fix: was not copied, so every dispel duty had debuff 0 and DispelBehavior's
+            // HasAura(0) check dropped it (dispels never cast since 2026-11-03).
+            r.auraSpellId = need.auraSpellId;
             r.now = need.now;
             r.points = need.points;
             r.detail = need.detail;

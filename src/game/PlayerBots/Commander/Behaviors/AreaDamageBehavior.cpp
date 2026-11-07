@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ValueModel.h"
@@ -82,7 +83,7 @@ namespace Commander
         };
 
         // The area spell centred on `centre`: who it hits and for how many ticks it is safe.
-        Judgement Judge(PartyBotAI const* bot, WorldModel const& world, SpellEntry const* spell,
+        Judgement Judge(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, SpellEntry const* spell,
                         Position3 const& centre, float perTarget, Ticks const& ticks)
         {
             Player* me = bot->me;
@@ -100,12 +101,16 @@ namespace Commander
             {
                 if (!e.acting || PackResolver::Distance(centre, e.pos) - e.boundingRadius > radius)
                     continue;
-                // Polymorph, sap, a stun that breaks on damage: the area spell wakes it up.
-                if (e.crowdControlled)
+                // Polymorph, sap, a stun that breaks on damage, or one the brain is about to put
+                // on it (TeamPlan::KeepsUnbroken): the area spell would wake it up.
+                if (plan.KeepsUnbroken(e))
                 {
                     j.safeTicks = 0;
                     continue;
                 }
+                // Feared, stunned for good: not woken, but not standing still either; not counted.
+                if (e.crowdControlled)
+                    continue;
                 ++j.targets;
                 healths.push_back(float(e.health));
                 if (e.victim == self || e.victim.IsEmpty())
@@ -162,7 +167,7 @@ namespace Commander
     }
 
     void AreaDamageBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
-                                     TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
+                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         Unit* victim = me->GetVictim();
@@ -219,7 +224,7 @@ namespace Commander
                 // Range, mana, cooldown, idle creatures in the area (PartyBotAI::PassesPartyCastChecks).
                 if (!bot->CanTryToCastSpell(centre ? centre : me, spell))
                     continue;
-                Judgement const j = Judge(bot, world, spell, PositionOf(centre ? centre : me), perTarget, ticks);
+                Judgement const j = Judge(bot, world, plan, spell, PositionOf(centre ? centre : me), perTarget, ticks);
                 if (j.safeTicks == 0 || j.targets == 0)
                     continue;
                 if (!found || j.damage > best.damage)

@@ -7,8 +7,11 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/ThreatView.h"
+#include "Commander/Perception/ControlValue.h"
+#include "Commander/Perception/FightLoad.h"
 #include "PartyBotAI.h"
 #include "SpellAuras.h"
+#include "SpellMgr.h"
 #include "DBCStores.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -217,6 +220,40 @@ namespace Commander
             p.SetValue(SavedWhileAway(world, held, self, hold), cost);
             return true;
         }
+
+        // An area fear around the bot from its ClassKit::Controls (Psychic Scream, Howl of
+        // Terror), valued by ControlValue (user, 2026-11-07: a priest saving itself when
+        // everything runs at it counts; fear's add risk and scatter are in the worth). The
+        // fear does not change threat: they come back to the bot, the worth only counts what
+        // happens until the tank would have them (ControlValue::TAKEOVER_SEC).
+        bool ProposeSelfFear(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, Proposal& p)
+        {
+            FightLoad::Input fight;
+            bool haveFight = false;
+            bool found = false;
+            for (ControlAbility const& a : self.controls)
+            {
+                if (!a.ready || !a.fear || a.radius <= 0.0f)
+                    continue;
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                if (!spell || spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY || !bot->CanTryToCastSpell(bot->me, spell))
+                    continue;
+                std::vector<EnemyFacts const*> const targets = ControlValue::Targets(world, self, a, nullptr);
+                if (targets.empty())
+                    continue;
+                if (!haveFight && !(haveFight = FightLoad::FromWorld(world, fight)))
+                    return false;
+                ControlValue::Worth const w = ControlValue::Of(world, fight, self, a, targets, 0.0f);
+                if (found && w.Net() <= p.score)
+                    continue;
+                p = MakeProposal(ProposalTier::Urgent, "dangerous hits: fear them off");
+                p.action.type = BotActionType::Cast;
+                p.action.spell = spell;
+                p.SetValue(w.Benefit(), w.Cost());
+                found = true;
+            }
+            return found;
+        }
     }
 
     bool EscapeBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -317,7 +354,8 @@ namespace Commander
             }
         }
 
-        // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns.
+        // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns,
+        // or an area fear around the bot (Psychic Scream) valued like the brain's controls.
         if (dangerous && !allHeld)
         {
             Proposal best;
@@ -330,6 +368,12 @@ namespace Commander
                     best = p;
                     found = true;
                 }
+            }
+            Proposal fear;
+            if (ProposeSelfFear(bot, world, *self, fear) && fear.score > 0.0f && (!found || fear.score > best.score))
+            {
+                best = fear;
+                found = true;
             }
             if (found)
             {

@@ -214,6 +214,16 @@ bool PartyBotAI::IsDispelControlled() const
     return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::Dispel, WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsCrowdControlControlled() const
+{
+    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::CrowdControl, WorldTimer::getMSTime());
+}
+
+bool PartyBotAI::IgnoresCrowdControlMarks() const
+{
+    return !IsInDuel() && sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
+}
+
 bool PartyBotAI::IsThreatDropControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
@@ -657,7 +667,9 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())
     {
-        if (!m_marksToCC.empty())
+        // (With the Commander crowd control module on, marks are not used; area spells keep
+        // off controlled enemies through TeamPlan::KeepsUnbroken instead.)
+        if (!m_marksToCC.empty() && !IgnoresCrowdControlMarks())
             return false;
 
         float radius;
@@ -927,6 +939,10 @@ Player* PartyBotAI::SelectShieldTarget() const
 
 bool PartyBotAI::CrowdControlMarkedTargets()
 {
+    // The Commander chooses controls by value, marks are not read (crowd control doc 2026-11-07).
+    if (IgnoresCrowdControlMarks())
+        return false;
+
     SpellEntry const* pSpellEntry = GetCrowdControlSpell();
     if (!pSpellEntry)
         return false;
@@ -2386,7 +2402,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        if (m_spells.priest.pShackleUndead)
+        if (m_spells.priest.pShackleUndead && !IsCrowdControlControlled())
         {
             Unit* pAttacker = *me->GetAttackers().begin();
             if ((pAttacker->GetHealth() > me->GetHealth()) &&
@@ -2615,7 +2631,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
                 return;
         }
 
-        if (m_spells.warlock.pBanish &&
+        if (m_spells.warlock.pBanish && !IsCrowdControlControlled() &&
             me->GetAttackers().size() > 1)
         {
             Unit* pAttacker = *me->GetAttackers().begin();
@@ -2685,7 +2701,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
                 return;
         }
 
-        if (m_spells.warlock.pFear &&
+        if (m_spells.warlock.pFear && !IsCrowdControlControlled() &&
             pVictim->GetVictim() == me &&
             CanTryToCastSpell(pVictim, m_spells.warlock.pFear))
         {
@@ -2706,7 +2722,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
             BeginChasing(pVictim);
         }
 
-        if (m_spells.warlock.pHowlofTerror &&
+        if (m_spells.warlock.pHowlofTerror && !IsCrowdControlControlled() &&
             GetAttackersInRangeCount(10.0f) > 1 &&
             CanTryToCastSpell(me, m_spells.warlock.pHowlofTerror))
         {
@@ -3015,7 +3031,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if (m_spells.warrior.pIntimidatingShout &&
+        if (m_spells.warrior.pIntimidatingShout && !IsCrowdControlControlled() &&
            (me->GetHealthPercent() < 30.0f) &&
            (GetAttackersInRangeCount(10.0f) > 2) &&
             CanTryToCastSpell(pVictim, m_spells.warrior.pIntimidatingShout))
@@ -3313,7 +3329,7 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
             }
         }
 
-        if (m_spells.rogue.pBlind)
+        if (m_spells.rogue.pBlind && !IsCrowdControlControlled())
         {
             if (Unit* pTarget = SelectAttackerDifferentFrom(pVictim))
             {
@@ -3536,7 +3552,7 @@ void PartyBotAI::UpdateInCombatAI_Druid()
 
     if (form == FORM_NONE)
     {
-        if (m_spells.druid.pHibernate &&
+        if (m_spells.druid.pHibernate && !IsCrowdControlControlled() &&
             m_role != ROLE_TANK &&
             !me->GetAttackers().empty())
         {

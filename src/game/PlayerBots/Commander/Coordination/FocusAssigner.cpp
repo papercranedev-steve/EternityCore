@@ -383,10 +383,14 @@ namespace Commander
 
         // Intercepted enemies are one bot's job; the party focus stays where it is (scenario 8:
         // a skull on the bomb would pull the tank and the melee over too).
-        auto intercepted = [&plan](ObjectGuid guid)
+        // An enemy given a control this allocation (CrowdControlAssigner) is not the focus
+        // either: it is about to leave the fight.
+        auto intercepted = [&plan, &results](ObjectGuid guid)
         {
             return std::any_of(plan.intercepts.begin(), plan.intercepts.end(),
-                [guid](InterceptDuty const& d) { return d.enemy == guid; });
+                       [guid](InterceptDuty const& d) { return d.enemy == guid; }) ||
+                   std::any_of(results.begin(), results.end(), [guid](DutyResult const& r)
+                       { return r.kind == DutyKind::CrowdControl && !r.primary.IsEmpty() && r.target == guid; });
         };
 
         EnemyFacts const* best = nullptr;

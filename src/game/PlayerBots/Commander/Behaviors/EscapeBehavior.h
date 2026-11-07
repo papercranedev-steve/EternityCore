@@ -26,9 +26,12 @@
  *
  * Hold spells (HoldSpells: mage Frost Nova, druid Entangling Roots, paladin Hammer of Justice,
  * priest Shackle Undead on undead). Effect read from the spell: a stun holds for its duration, a
- * root (or control broken by damage) at most ROOT_HOLD_SEC; fears and slows are not used (a
- * feared enemy runs into the next pack). Self-area spells take every free chaser in the radius,
- * single target spells the chaser they save most on (creature type checked).
+ * root (or control broken by damage) at most ROOT_HOLD_SEC; slows are not used. Self-area
+ * spells take every free chaser in the radius, single target spells the chaser they save most
+ * on (creature type checked). Since 2026-11-07 (user: a priest saving itself with Psychic
+ * Scream when everything runs at it counts) an area fear around the bot from
+ * ClassKit::Controls (Psychic Scream, Howl of Terror) competes with them, valued by
+ * Perception/ControlValue (add risk near idle packs, scatter, mana, cooldown included).
  *
  * Proposals (one per tick, besides Hold while a MoveTo of any module is under way):
  *  1. Hold spell, only in danger, castable, best value first. Tier Urgent.

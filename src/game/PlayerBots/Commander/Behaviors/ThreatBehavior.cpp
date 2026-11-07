@@ -295,12 +295,14 @@ namespace Commander
         // the benefit over every loose enemy around the tank and whether someone would die
         // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec).
         template <typename ValueFn>
-        void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, float tankRate,
+        void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, float tankRate,
                                 float switchCost, float stanceCost, float enemyMelee, ValueFn valueOf,
                                 std::vector<Proposal>& out)
         {
             Unit* victim = bot->me->GetVictim();
-            // Damage breaks crowd control (Polymorph, Sap, Shackle) on enemies around the tank.
+            // Damage breaks crowd control (Polymorph, Sap, Shackle) on enemies around the tank:
+            // the plan's constraint (TeamPlan::KeepsUnbroken: breakable controls on them, or
+            // about to be put on them). A stun or fear that damage does not end is no reason.
             bool crowdControlNear = false;
             Position3 myPos;
             myPos.x = bot->me->GetPositionX();
@@ -308,7 +310,7 @@ namespace Commander
             myPos.z = bot->me->GetPositionZ();
             for (EnemyFacts const& e : world.enemies)
                 crowdControlNear = crowdControlNear ||
-                    (e.crowdControlled && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
+                    (plan.KeepsUnbroken(e) && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
             // A warrior's Thunder Clap from Defensive Stance is cast after a stance swap
             // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
             for (GroupThreatOption const& o : bot->Kit().AreaThreat())
@@ -602,7 +604,7 @@ namespace Commander
         // one area threat ability (Thunder Clap, Consecration, Challenging Roar) instead of one
         // switch per enemy per tick (combat scenarios 6 and 9).
         if (loose.size() + fragile.size() >= GROUP_THREAT_MIN_ENEMIES)
-            ProposeGroupThreat(bot, world, tankRate, switchCost, stanceCost, enemyMelee,
+            ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee,
                 [&](float threatAdded, float holdSec) -> std::pair<float, bool>
                 {
                     float benefit = 0.0f;

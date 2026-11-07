@@ -4,6 +4,7 @@
 #include "Commander/Perception/ManaWorth.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ProfileStore.h"
+#include "Commander/Perception/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
 #include <algorithm>
@@ -137,6 +138,13 @@ namespace ControlValue
         }
         w.reach = Value::LostAction(world, member, wait);
         w.mana = ManaWorth::Points(world, member, float(a.manaCost));
+        // Members on a target that is not feared turn to another enemy (it stands there,
+        // untouchable: polymorph, sap, shackle, banish); combo points on it are lost.
+        if (!a.fear)
+            for (PartyMemberFacts const& m : world.party)
+                if (m.alive && IsTarget(targets, m.victim))
+                    w.scatter += Value::LostAction(world, m, SwitchCost::SWITCH_SEC +
+                        (m.comboTarget == m.victim ? m.comboPoints * SwitchCost::COMBO_POINT_SEC : 0.0f));
         float const cooldownSec = a.cooldownMs / 1000.0f;
         if (cooldownSec > Value::GCD_SEC)
             w.cooldown = COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, Value::FightRemainingSec(world)) / 60.0f;
@@ -160,6 +168,34 @@ namespace ControlValue
                     w.scatter += Value::LostAction(world, m, std::min(w.sec, REGATHER_SEC));
         }
         return w;
+    }
+
+    float AreaLoss(WorldModel const& world, EnemyFacts const& enemy, float sec)
+    {
+        sec = std::min(sec, Value::FightRemainingSec(world));
+        if (sec <= 0.0f)
+            return 0.0f;
+        float loss = 0.0f;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.CanAct() || m.areaDpsPerTarget <= 0.0f || m.fillerDps <= 0.0f)
+                continue;
+            uint32 n = 0;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.onAllyOnly || !e.acting)
+                    continue;
+                // Already under a breakable control (not this one): no area spell there anyway.
+                if (e.guid != enemy.guid && e.control.spellId && e.control.breaksOnDamage)
+                    continue;
+                if (PackResolver::Distance(e.pos, enemy.pos) - e.boundingRadius <= m.areaRadius)
+                    ++n;
+            }
+            float const extra = float(n) * m.areaDpsPerTarget - m.fillerDps;
+            if (extra > 0.0f)
+                loss += Value::LostAction(world, m, extra * sec / m.fillerDps);
+        }
+        return loss;
     }
 
     std::string Describe(Worth const& w)

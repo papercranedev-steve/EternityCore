@@ -117,7 +117,8 @@ namespace
                 Cast(pVictim, s.pCounterspell))
                 return;
 
-            if (s.pPolymorph)
+            // In combat the Commander decides sheep (Takeover::CrowdControl).
+            if (s.pPolymorph && !bot.IsCrowdControlControlled())
             {
                 if (Unit* pTarget = bot.SelectAttackerDifferentFrom(pVictim))
                 {

@@ -75,6 +75,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/VetoChecks.cpp
   ${COMMANDER_DIR}/Behaviors/DispelBehavior.h
   ${COMMANDER_DIR}/Behaviors/DispelBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/CrowdControlBehavior.h
+  ${COMMANDER_DIR}/Behaviors/CrowdControlBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.h
+  ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.cpp
   ${COMMANDER_DIR}/ProfileCommands.h
   ${COMMANDER_DIR}/ProfileCommands.cpp
   ${COMMANDER_DIR}/Encounters/IEncounter.h

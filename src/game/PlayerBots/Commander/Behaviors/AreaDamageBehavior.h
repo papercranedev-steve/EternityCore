@@ -15,7 +15,10 @@
  *   ticks     a channel deals its damage in duration / amplitude ticks (Blizzard 8 x 1 s),
  *             anything else at once after its busy time.
  *   safe      over the acting enemies whose edge is within the radius of the centre:
- *             - a crowd controlled one (polymorph, sap, breakable stun): not at all;
+ *             - one the plan keeps unbroken (TeamPlan::KeepsUnbroken: polymorph, sap, a
+ *               breakable stun on it, or about to be put on it by CrowdControlAssigner): not
+ *               at all; since 2026-11-07 a fear or a stun damage does not end is no reason
+ *               (it is not counted as a target either);
  *             - one hitting the bot or nobody: no limit;
  *             - a new one (seen < ThreatBehavior::NEW_ENEMY_SETTLE_SEC): not at all;
  *             - else tick k is safe while my threat + k x tick threat stays under (its victim's

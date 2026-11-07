@@ -343,7 +343,11 @@ namespace Commander
                         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
                     me->Attack(pTarget, false);
                 }
-                return bot->DoCastWithStance(pCastTarget, action.spell) == SPELL_CAST_OK;
+                if (bot->DoCastWithStance(pCastTarget, action.spell) != SPELL_CAST_OK)
+                    return false;
+                if (action.dropTarget && pTarget && me->GetVictim() == pTarget)
+                    me->AttackStop();
+                return true;
             }
             case BotActionType::Attack:
             {

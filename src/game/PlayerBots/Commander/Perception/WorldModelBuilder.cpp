@@ -8,6 +8,7 @@
 #include "Commander/Perception/HealCapacity.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
+#include "DamageSpells.h"
 #include "RoleCapability.h"
 #include "World.h"
 #include "PartyBotAI.h"
@@ -533,6 +534,35 @@ namespace WorldModelBuilder
             }
         }
 
+        // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim.
+        void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            Unit* victim = me->GetVictim();
+            CombatBotRoles const role = ai->GetRole();
+            if (!victim || (role != ROLE_RANGE_DPS && role != ROLE_MELEE_DPS))
+                return;
+            std::vector<AreaDamageSpell> const spells = ai->Kit().AreaDamage();
+            SpellEntry const* filler = ai->Kit().Filler();
+            if (spells.empty() || !filler)
+                return;
+            f.fillerDps = DamageSpells::Estimate(me, victim, filler) / std::max(0.1f, DamageSpells::BusySec(me, filler));
+            for (AreaDamageSpell const& a : spells)
+            {
+                if (!a.spell || !me->IsSpellReady(a.spell))
+                    continue;
+                float const dps = DamageSpells::Estimate(me, victim, a.spell) / std::max(0.1f, DamageSpells::BusySec(me, a.spell));
+                if (dps <= f.areaDpsPerTarget)
+                    continue;
+                f.areaDpsPerTarget = dps;
+                float radius = 0.0f;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(a.spell->EffectRadiusIndex[i]))
+                        radius = std::max(radius, r->Radius);
+                f.areaRadius = radius;
+            }
+        }
+
         // ClassKit::Filler's mana per second while chain casting it (PartyMemberFacts::fillerManaPerSec).
         float FillerManaPerSec(PartyBotAI const* ai)
         {
@@ -639,6 +669,8 @@ namespace WorldModelBuilder
                         FillDispels(ai, f);
                         FillControls(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
+                        if (member->IsInCombat())
+                            FillAreaPotential(ai, f);
                     }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);
