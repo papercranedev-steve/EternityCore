@@ -29,8 +29,8 @@ namespace Commander
     using BehaviorList = std::vector<std::unique_ptr<BehaviorSlot>>;
     using AssignerList = std::vector<std::unique_ptr<AssignerSlot>>;
 
-    // Called once at startup. Behavior order only matters for ties in the arbiter;
-    // assigners run in this order.
+    // Called once at startup. Behavior order only matters for ties in the arbiter.
+    // Assigners run by stage (IAssigner.h); inside the Situation and Tasks stages in this order.
     void RegisterBehaviors(BehaviorList& out);
     void RegisterAssigners(AssignerList& out);
 }

@@ -174,13 +174,36 @@ namespace Commander
 
     void PartyCommander::RunAssigners(AssignerList const& assigners)
     {
+        // 1. Situation, then the task modules that still assign directly (IAssigner.h).
+        for (AssignStage stage : { AssignStage::Situation, AssignStage::Tasks })
+        {
+            for (auto const& slot : assigners)
+            {
+                if (slot->module->GetStage() != stage)
+                    continue;
+                if (slot->enabled.load(std::memory_order_relaxed))
+                    slot->module->Assign(m_world, m_plan);
+                else
+                    slot->module->Clear(m_plan);
+            }
+        }
+
+        // 2. Duties: every module offers against the same plan, one allocation answers them all.
+        std::vector<DutyNeed> needs;
         for (auto const& slot : assigners)
         {
+            if (slot->module->GetStage() != AssignStage::Duties)
+                continue;
             if (slot->enabled.load(std::memory_order_relaxed))
-                slot->module->Assign(m_world, m_plan);
+                slot->module->Offer(m_world, m_plan, needs);
             else
                 slot->module->Clear(m_plan);
         }
+        m_plan.duties = DutyAllocator::Allocate(std::move(needs));
+        for (auto const& slot : assigners)
+            if (slot->module->GetStage() == AssignStage::Duties && slot->enabled.load(std::memory_order_relaxed))
+                slot->module->Apply(m_world, m_plan.duties, m_plan);
+
         ++m_plan.version;
     }
 

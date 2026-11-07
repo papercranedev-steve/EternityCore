@@ -68,6 +68,7 @@ namespace Commander
         static constexpr float PATROL_INTERCEPT_RANGE = 30.0f;
         static constexpr float INTERCEPT_STICKY_YARDS = 5.0f;   // previous interceptor counts as this much closer
 
+        AssignStage GetStage() const override { return AssignStage::Tasks; }
         char const* GetId() const override { return "focus"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;

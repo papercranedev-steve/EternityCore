@@ -304,6 +304,22 @@ namespace
                 Commander::SpellTags::CategoryName(Commander::CastCategory(d.category)),
                 NameOf(map, d.primary).c_str(), SpellName(d.primarySpellId).c_str(),
                 NameOf(map, d.backup).c_str(), SpellName(d.backupSpellId).c_str());
+            // Better-ranked bots the allocator did not make primary (DutyAllocator.h).
+            for (Commander::DutyResult const& r : plan.duties)
+            {
+                if (r.kind != Commander::DutyKind::Interrupt || r.enemy != d.enemy)
+                    continue;
+                for (Commander::DutyPass const& pass : r.passed)
+                {
+                    if (pass.reason == Commander::DutyPassReason::Busy)
+                        handler->PSendSysMessage("        passed over %s: primary %s on %s",
+                            NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
+                            NameOf(map, pass.busyEnemy).c_str());
+                    else
+                        handler->PSendSysMessage("        passed over %s: backup only (no sight, too far or not in front)",
+                            NameOf(map, pass.bot).c_str());
+                }
+            }
         }
         return true;
     }

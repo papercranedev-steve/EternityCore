@@ -1,6 +1,10 @@
 /*
  * PartyBot Commander layer 2: who interrupts which enemy (step 4).
  * Design: .kiro/docs/2026-11-01-interrupt-assignment.md
+ *
+ * Duties module (2026-11-03): one need per enemy worth an interrupter, one candidate per usable
+ * ability of each bot, ranked by the SCORE_* below. DutyAllocator picks the primary and the
+ * backup (DutyAllocator.h), so a bot primary for another duty kind is not primary here.
  */
 
 #ifndef MANGOS_COMMANDER_INTERRUPT_ASSIGNER_H
@@ -29,7 +33,9 @@ namespace Commander
         static constexpr float REACTION_SEC = 0.5f;
 
         char const* GetId() const override { return "interrupt"; }
-        void Assign(WorldModel const& world, TeamPlan& plan) const override;
+        AssignStage GetStage() const override { return AssignStage::Duties; }
+        void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
+        void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
     };
 }

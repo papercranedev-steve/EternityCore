@@ -28,6 +28,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/ThreatBehavior.cpp
   ${COMMANDER_DIR}/Coordination/TeamPlan.h
   ${COMMANDER_DIR}/Coordination/IAssigner.h
+  ${COMMANDER_DIR}/Coordination/DutyAllocator.h
+  ${COMMANDER_DIR}/Coordination/DutyAllocator.cpp
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.h
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
   ${COMMANDER_DIR}/Coordination/FocusAssigner.h

@@ -10,6 +10,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -291,7 +292,7 @@ namespace Commander
         // Guard only. Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
         std::vector<PatrolLure> lures;
         // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot): a
-        // ranged damage dealer kills each (FocusAssigner intercept, read one refresh later).
+        // ranged damage dealer kills each (FocusAssigner intercept; since 2026-11-03 it runs after PatrolAssigner and reads this in the same refresh).
         std::vector<ObjectGuid> kill;
 
         // Patrols already judged this fight (moved for, or staying put): one note each.
@@ -359,6 +360,9 @@ namespace Commander
         uint32 version = 0;
         std::vector<RoleDuty> roles;
         std::vector<InterruptDuty> interrupts;
+        // Last DutyAllocator result of all duty modules (PartyCommander::RunAssigners), kept for
+        // `.partybot ai plan` (who was passed over and why). Modules read their own part above.
+        std::vector<DutyResult> duties;
         FocusTarget focus;
         std::vector<InterceptDuty> intercepts;
         PullPlan pull;

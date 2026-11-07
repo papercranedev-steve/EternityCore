@@ -8,7 +8,6 @@
 #include "Commander/Perception/ProfileStore.h"
 #include "SharedDefines.h"
 #include <algorithm>
-#include <set>
 
 namespace Commander
 {
@@ -104,11 +103,10 @@ namespace Commander
         plan.interrupts.clear();
     }
 
-    void InterruptAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
+    void InterruptAssigner::Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const
     {
         // Enemies worth an interrupter: casting an interruptible spell now, or able to cast a
         // valuable interruptible spell (creature profile), also before the first cast.
-        std::vector<Caster> casters;
         for (EnemyFacts const& e : world.enemies)
         {
             // Silenced (Serpent Form, our Silence), feigning death, totally immune: nothing to
@@ -129,70 +127,53 @@ namespace Commander
                 c.category = e.castCategory;
             else if (std::shared_ptr<SpellProfile const> p = sProfileStore.GetSpell(c.cast.spellId))
                 c.category = uint8(p->category);
-            casters.push_back(c);
-        }
 
-        // Live casts first, most valuable first, shortest remaining time first. By value, not by
-        // category: one interrupter must kick the sleep on the healer before a small heal (scenario 3).
-        std::stable_sort(casters.begin(), casters.end(), [](Caster const& a, Caster const& b)
-        {
-            if (a.live != b.live)
-                return a.live;
-            if (a.cast.points != b.cast.points)
-                return a.cast.points > b.cast.points;
-            return a.live && a.enemy->castRemainingMs < b.enemy->castRemainingMs;
-        });
+            // Live casts first, most valuable first, shortest remaining time first (DutyAllocator
+            // order). By value, not by category: one interrupter must kick the sleep on the healer
+            // before a small heal (scenario 3).
+            DutyNeed need;
+            need.kind = DutyKind::Interrupt;
+            need.enemy = e.guid;
+            need.now = c.live;
+            need.points = c.cast.points;
+            need.tieMs = c.live ? e.castRemainingMs : 0;
+            need.wantsBackup = true;
+            need.detail = c.category;
 
-        std::vector<InterruptDuty> duties;
-        std::set<ObjectGuid> busyPrimary;   // a bot is primary for at most one enemy
-
-        for (Caster const& target : casters)
-        {
-            EnemyFacts const* e = target.enemy;
-            InterruptDuty const* previous = plan.FindInterruptDuty(e->guid);
-
+            InterruptDuty const* previous = plan.FindInterruptDuty(e.guid);
             std::vector<Candidate> candidates;
             for (PartyMemberFacts const& m : world.party)
-                Evaluate(world, m, target, previous, candidates);
-            std::stable_sort(candidates.begin(), candidates.end(), [](Candidate const& a, Candidate const& b)
+                Evaluate(world, m, c, previous, candidates);
+            for (Candidate const& cand : candidates)
             {
-                return a.score > b.score;
-            });
-
-            InterruptDuty duty;
-            duty.enemy = e->guid;
-            duty.castingNow = target.live;
-            duty.category = target.category;
-            for (Candidate const& c : candidates)
-            {
-                if (c.canBePrimary && !busyPrimary.count(c.bot))
-                {
-                    duty.primary = c.bot;
-                    duty.primarySpellId = c.spellId;
-                    busyPrimary.insert(c.bot);
-                    break;
-                }
+                DutyCandidate d;
+                d.bot = cand.bot;
+                d.spellId = cand.spellId;
+                d.rank = cand.score;
+                d.canBePrimary = cand.canBePrimary;
+                need.candidates.push_back(d);
             }
-            // Backup: best other bot that is not primary elsewhere; if there is none, the best
-            // one already primary elsewhere doubles as backup here.
-            for (bool allowBusy : { false, true })
-            {
-                for (Candidate const& c : candidates)
-                {
-                    if (c.bot == duty.primary || (!allowBusy && busyPrimary.count(c.bot)))
-                        continue;
-                    duty.backup = c.bot;
-                    duty.backupSpellId = c.spellId;
-                    break;
-                }
-                if (!duty.backup.IsEmpty())
-                    break;
-            }
-
-            if (!duty.primary.IsEmpty() || !duty.backup.IsEmpty())
-                duties.push_back(duty);
+            out.push_back(std::move(need));
         }
+    }
 
+    void InterruptAssigner::Apply(WorldModel const& /*world*/, std::vector<DutyResult> const& results, TeamPlan& plan) const
+    {
+        std::vector<InterruptDuty> duties;
+        for (DutyResult const& r : results)
+        {
+            if (r.kind != DutyKind::Interrupt)
+                continue;
+            InterruptDuty duty;
+            duty.enemy = r.enemy;
+            duty.castingNow = r.now;
+            duty.category = r.detail;
+            duty.primary = r.primary;
+            duty.primarySpellId = r.primarySpellId;
+            duty.backup = r.backup;
+            duty.backupSpellId = r.backupSpellId;
+            duties.push_back(duty);
+        }
         plan.interrupts = std::move(duties);
     }
 }
