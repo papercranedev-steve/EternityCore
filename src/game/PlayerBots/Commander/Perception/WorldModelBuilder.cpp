@@ -637,6 +637,7 @@ namespace WorldModelBuilder
 
         world.party.clear();
         world.enemies.clear();
+        world.targeted.clear();
         world.leader = group ? group->GetLeaderGuid() : ObjectGuid();
         if (!group)
         {
@@ -675,6 +676,18 @@ namespace WorldModelBuilder
                     }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);
+                    for (RaidTargetIcon mark : ai->m_marksToFocus)
+                    {
+                        ObjectGuid const marked = group->GetTargetWithIcon(mark);
+                        if (!marked.IsUnit())
+                            continue;
+                        Unit const* unit = map->GetUnit(marked);
+                        if (unit && unit->IsAlive())
+                        {
+                            f.focusMarkEnemy = marked;
+                            break;
+                        }
+                    }
                     if (f.CanAct() && HasRangedInterrupt(f))
                         sightCheckers.push_back(member);
                 }
@@ -776,6 +789,20 @@ namespace WorldModelBuilder
                     if (!checker->IsWithinLOSInMap(enemies[i]))
                         e.outOfSight.push_back(checker->GetObjectGuid());
             world.enemies.push_back(std::move(e));
+        }
+
+        // Creatures one of us attacks that are not on our lists yet (WorldModel::targeted).
+        for (Unit* unit : partyUnits)
+        {
+            Unit* victim = unit->GetVictim();
+            Creature* c = victim ? victim->ToCreature() : nullptr;
+            if (!c || !c->IsInWorld() || c->GetMap() != map || !c->IsAlive() || !me->IsValidAttackTarget(c))
+                continue;
+            if (std::find(enemies.begin(), enemies.end(), c) != enemies.end() || world.FindTargeted(c->GetObjectGuid()))
+                continue;
+            EnemyFacts e;
+            FillEnemy(c, partyUnits, e);
+            world.targeted.push_back(std::move(e));
         }
 
         UpdateCastStarts(world, WorldTimer::getMSTime());

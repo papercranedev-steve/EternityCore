@@ -75,6 +75,11 @@ namespace Commander
         size_t GetCommanderCount();
         // Debug commands: the commander of this player's party on the player's map, if any.
         std::shared_ptr<PartyCommander> FindCommander(Player const* member);
+        // Player orders for TargetAssigner (TeamPlan::orders), from `.partybot attackstart` /
+        // `.partybot pull` (tanksOnly) and `.partybot attackstop`. Chat command thread, like
+        // `.partybot ai pull`. No commander yet (no bot ticked on this map): nothing stored.
+        void OrderAttack(Player const* player, ObjectGuid enemy, bool tanksOnly);
+        void OrderLeaveAlone(Player const* player, ObjectGuid enemy);
 
         // Role a player chose for himself (`.partybot setrole <role> <own name>`, the addon's role
         // button on your own character). ROLE_INVALID (0) = none: talents and gear decide

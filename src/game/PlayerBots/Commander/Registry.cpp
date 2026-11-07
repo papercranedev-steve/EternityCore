@@ -3,7 +3,7 @@
 #include "Commander/Behaviors/InterruptBehavior.h"
 #include "Commander/Behaviors/PullBehavior.h"
 #include "Commander/Behaviors/DispelBehavior.h"
-#include "Commander/Behaviors/FocusBehavior.h"
+#include "Commander/Behaviors/TargetBehavior.h"
 #include "Commander/Behaviors/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/HealPlanBehavior.h"
 #include "Commander/Behaviors/RetreatBehavior.h"
@@ -21,6 +21,7 @@
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/DispelAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
+#include "Commander/Coordination/TargetAssigner.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/RetreatPlanner.h"
 #include "Commander/Coordination/RoleAssigner.h"
@@ -35,7 +36,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PullBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<DispelBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CrowdControlBehavior>()));
-        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FocusBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealPlanBehavior>()));
@@ -55,6 +56,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TargetAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<DispelAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrowdControlAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ControlledEndAssigner>()));

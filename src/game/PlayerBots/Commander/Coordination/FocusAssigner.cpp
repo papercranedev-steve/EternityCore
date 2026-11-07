@@ -356,7 +356,6 @@ namespace Commander
 
     void FocusAssigner::Clear(TeamPlan& plan) const
     {
-        plan.focus = FocusTarget();
         plan.intercepts.clear();
     }
 
@@ -365,7 +364,7 @@ namespace Commander
         OfferIntercepts(world, plan, out);
     }
 
-    void FocusAssigner::Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const
+    void FocusAssigner::Apply(WorldModel const& /*world*/, std::vector<DutyResult> const& results, TeamPlan& plan) const
     {
         std::vector<InterceptDuty> intercepts;
         for (DutyResult const& r : results)
@@ -380,68 +379,6 @@ namespace Commander
             intercepts.push_back(d);
         }
         plan.intercepts = std::move(intercepts);
-
-        // Intercepted enemies are one bot's job; the party focus stays where it is (scenario 8:
-        // a skull on the bomb would pull the tank and the melee over too).
-        // An enemy given a control this allocation (CrowdControlAssigner) is not the focus
-        // either: it is about to leave the fight.
-        auto intercepted = [&plan, &results](ObjectGuid guid)
-        {
-            return std::any_of(plan.intercepts.begin(), plan.intercepts.end(),
-                       [guid](InterceptDuty const& d) { return d.enemy == guid; }) ||
-                   std::any_of(results.begin(), results.end(), [guid](DutyResult const& r)
-                       { return r.kind == DutyKind::CrowdControl && !r.primary.IsEmpty() && r.target == guid; });
-        };
-
-        EnemyFacts const* best = nullptr;
-        FocusScore bestScore;
-        for (EnemyFacts const& e : world.enemies)
-        {
-            // Standing in a patrol's path: the party stays off it (PatrolAssigner.h).
-            if (!IsEligible(world, e) || intercepted(e.guid) || plan.patrolMove.Avoids(e.guid))
-                continue;
-            FocusScore s = Evaluate(world, e);
-            if (s.score <= 0.0f)
-                continue;
-            if (!best || s.score > bestScore.score)
-            {
-                best = &e;
-                bestScore = std::move(s);
-            }
-        }
-
-        if (!best)
-        {
-            plan.focus = FocusTarget();
-            return;
-        }
-
-        // Sticky: switching costs every damage dealer a target change, and scores move with
-        // health and victims every refresh.
-        if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != best->guid)
-        {
-            EnemyFacts const* previous = world.FindEnemy(plan.focus.enemy);
-            if (previous && IsEligible(world, *previous) && !intercepted(previous->guid) &&
-                !plan.patrolMove.Avoids(previous->guid))
-            {
-                FocusScore const kept = Evaluate(world, *previous);
-                if (kept.score >= STICKY_SHARE * bestScore.score)
-                {
-                    plan.focus.score = kept.score;
-                    plan.focus.harmRate = kept.harmRate;
-                    plan.focus.killSec = kept.killSec;
-                    plan.focus.reason = kept.reason;
-                    return;
-                }
-            }
-        }
-
-        if (plan.focus.enemy != best->guid)
-            plan.focus.sinceMs = world.refreshedAtMs;
-        plan.focus.enemy = best->guid;
-        plan.focus.score = bestScore.score;
-        plan.focus.harmRate = bestScore.harmRate;
-        plan.focus.killSec = bestScore.killSec;
-        plan.focus.reason = std::move(bestScore.reason);
+        // The party focus is chosen by TargetAssigner since 2026-11-07 (with every bot's target).
     }
 }

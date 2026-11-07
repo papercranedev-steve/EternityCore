@@ -258,16 +258,8 @@ namespace Commander
                 return;
             }
 
-            // My target stands in the patrol's path out of reach: another one (the chase into the
-            // path is blocked anyway, PartyBotAI::BeginChasing).
-            if (healer || !victim || !offLimits(victimGuid) || me->CanReachWithMeleeAutoAttack(victim))
-                return;
-            if (Unit* other = PickTarget(bot, world, Here(me), nullptr, offLimits))
-            {
-                Proposal attack = MakeGuard(BotActionType::Attack, 2.0f, "target stands in the patrol's path");
-                attack.action.target = other->GetObjectGuid();
-                out.push_back(attack);
-            }
+            // A target standing in the patrol's path: TargetAssigner does not give it to anyone
+            // (PatrolMovePlan::avoid is one of its limits), so the bot gets another one.
         }
     }
 

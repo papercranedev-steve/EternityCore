@@ -1,4 +1,5 @@
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/PackResolver.h"
 #include <algorithm>
 
 namespace Commander
@@ -29,6 +30,14 @@ namespace Tanks
     {
         std::vector<PartyMemberFacts const*> const tanks = Alive(world, botsOnly);
         return tanks.empty() ? nullptr : tanks.front();
+    }
+
+    bool CloserBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance, float margin)
+    {
+        for (PartyMemberFacts const* t : Alive(world, true))
+            if (t->guid != self && t->CanAct() && PackResolver::Distance(t->pos, pos) < distance - margin)
+                return true;
+        return false;
     }
 
     bool Any(WorldModel const& world)

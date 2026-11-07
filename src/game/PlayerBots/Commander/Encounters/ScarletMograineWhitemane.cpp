@@ -192,7 +192,7 @@ namespace Commander
         if (whitemane && whitemane->acting)
             EncounterHelpers::SetFocus(world, plan, *whitemane, "mograine-whitemane: kill Whitemane first");
         else if (m_stage == STAGE_DIED_ONCE && !plan.focus.enemy.IsEmpty() && plan.focus.enemy == m_mograine)
-            EncounterHelpers::ClearFocus(plan);     // feigning death: cannot be attacked
+            EncounterHelpers::ClearFocus(world, plan);     // feigning death: cannot be attacked
     }
 
     void ScarletMograineWhitemane::Propose(PartyBotAI const* bot, WorldModel const& world,

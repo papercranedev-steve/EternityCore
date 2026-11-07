@@ -8,6 +8,8 @@
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/LooseEnemy.h"
+#include "Commander/Perception/ThreatRoom.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
@@ -42,9 +44,7 @@ namespace Commander
         // role, damage dealers do not pull an enemy off him onto themselves). Pets: see IsHeldByHolder.
         bool IsHolder(PartyMemberFacts const& m)
         {
-            if (m.isPet)
-                return false;
-            return !m.isBot || Tanks::IsTank(m);
+            return Tanks::IsHolder(m);
         }
 
         // Somebody holds the enemies for the party: an alive tank (bot or player) or a tank-like
@@ -58,11 +58,7 @@ namespace Commander
         // Another alive tank bot that can act is nearer to `pos` than `distance` - TANK_SHARE_MARGIN.
         bool CloserTankBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance)
         {
-            for (PartyMemberFacts const* t : Tanks::Alive(world, true))
-                if (t->guid != self && t->CanAct() &&
-                    PackResolver::Distance(t->pos, pos) < distance - ThreatBehavior::TANK_SHARE_MARGIN)
-                    return true;
-            return false;
+            return Tanks::CloserBot(world, self, pos, distance, ThreatBehavior::TANK_SHARE_MARGIN);
         }
 
         // A pet spell that makes enemies attack the pet: positive threat (Growl, Torment,
@@ -152,17 +148,7 @@ namespace Commander
         // any enemy (just switched), else a level-based guess (fight just started).
         float OwnThreatRate(WorldModel const& world, ObjectGuid self, EnemyFacts const& enemy)
         {
-            if (ThreatEntry const* t = ThreatView::FindEntry(enemy, self))
-                if (t->threatPerSec > 0.0f)
-                    return t->threatPerSec;
-            float best = 0.0f;
-            for (EnemyFacts const& e : world.enemies)
-                if (ThreatEntry const* t = ThreatView::FindEntry(e, self))
-                    best = std::max(best, t->threatPerSec);
-            if (best > 0.0f)
-                return best;
-            PartyMemberFacts const* me = world.FindMember(self);
-            return me ? Value::FALLBACK_DPS_PER_LEVEL * float(me->level) : 0.0f;
+            return ThreatRoom::OwnRate(world, self, enemy);
         }
 
         // Warlock imp: casts from range, never melees.
@@ -352,9 +338,7 @@ namespace Commander
 
         float TauntMult(EnemyFacts const& e, bool* immune)
         {
-            std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
-            *immune = p && p->tauntImmune;
-            return (p && p->hasOverride) ? p->override.tauntMult : 1.0f;
+            return LooseEnemy::Mult(e, immune);
         }
     }
 
@@ -369,6 +353,22 @@ namespace Commander
                 return true;
             default:
                 return false;
+        }
+    }
+
+    bool ThreatBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    {
+        switch (what)
+        {
+            case Takeover::Taunt:
+                return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
+            case Takeover::ThreatDrop:
+                return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop() && !bot->IsInDuel();
+            default:
+                return false;
+        }
+    }
+
     bool ThreatBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/) const
     {
         if (bot->GetRole() != ROLE_TANK)
@@ -388,22 +388,6 @@ namespace Commander
                 return true;
         }
         return false;
-    }
-
-        }
-    }
-
-    bool ThreatBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
-    {
-        switch (what)
-        {
-            case Takeover::Taunt:
-                return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
-            case Takeover::ThreatDrop:
-                return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop() && !bot->IsInDuel();
-            default:
-                return false;
-        }
     }
 
     void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -441,8 +425,6 @@ namespace Commander
     {
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
-        Unit const* pVictim = me->GetVictim();
-        ObjectGuid const myTarget = pVictim ? pVictim->GetObjectGuid() : ObjectGuid();
         PartyMemberFacts const* myFacts = world.FindMember(self);
         if (!myFacts)
             return;
@@ -464,7 +446,7 @@ namespace Commander
 
         // Enemies hitting someone else that the tank should consider for the group threat
         // proposal below: (enemy, gap, loss doing nothing, victim).
-        struct LooseEnemy
+        struct LooseEntry
         {
             EnemyFacts const* enemy;
             PartyMemberFacts const* victim;
@@ -474,7 +456,7 @@ namespace Commander
             float mult;
             bool deadly;
         };
-        std::vector<LooseEnemy> loose;
+        std::vector<LooseEntry> loose;
 
         // 1. Loose enemies hitting someone who is not a tank.
         for (EnemyFacts const& e : world.enemies)
@@ -516,27 +498,16 @@ namespace Commander
             bool tauntImmune = false;
             float const mult = TauntMult(e, &tauntImmune);
 
-            float const gap = std::max(0.0f, ThreatView::Headroom(e, self));
-            float const recovery = tankRate > 1.0f ? gap / tankRate : ThreatView::NO_LIMIT;
-            float const horizon = std::min(LOOSE_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
-
-            // Losses compare with the tank taking the hits (Value::MoveLoss): a caster's spells
-            // hurt the tank as much as anyone, so taking it over gains nothing unless the victim
-            // would die. The victim's survival counts every enemy on it, not this one alone
-            // (five zombies on the priest, strat-20261101-210522).
-            // Plus the victim's own output lost while a melee enemy chases it (Value::HarassLoss:
-            // a healer more than a ranged damage dealer; casters standing back add nothing).
-            auto const lossFor = [&](float seconds)
-            {
-                return Value::MoveLoss(world, e, *victim, *myFacts, seconds) +
-                       Value::HarassLoss(world, e, *victim, seconds);
-            };
-            // Winning it back with threat starts after the walk over (distance counts: a victim
-            // running to the tank makes it cheaper and sooner).
-            float const walkSec = std::max(0.0f, distance - MELEE_REACH) / RUN_YARDS_PER_SEC;
-            float const lossNothing = lossFor(horizon);
-            float const lossThreat = lossFor(std::min(walkSec + recovery, horizon));
-            bool const deadly = Value::SurviveAllSec(world, e, *victim) < horizon;
+            // Losses compare with the tank taking the hits (Perception/LooseEnemy.h: MoveLoss +
+            // HarassLoss). Winning it back with threat (walk over + recovery) is the brain's
+            // choice since 2026-11-07 (TargetAssigner, Coordination/TankTargets.cpp); the same
+            // values decide here whether a taunt is worth it.
+            LooseValue const v = LooseEnemy::WinBack(world, e, *victim, *myFacts, tankRate, distance);
+            float const gap = v.gap;
+            float const horizon = v.horizon;
+            float const lossNothing = v.lossNothing;
+            bool const deadly = v.deadly;
+            auto const lossFor = [&](float seconds) { return LooseEnemy::Loss(world, e, *victim, *myFacts, seconds); };
             ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
 
             if (!tauntImmune)
@@ -565,21 +536,7 @@ namespace Commander
                 }
             }
 
-            // Win it back with threat (also the fallback when the taunt is on cooldown).
-            // If it already is our target, the rotation builds threat on it.
-            // Not when it stands in a patrol's path out of melee reach: walking over took the
-            // pack back to the old spot and the patrol joined (strat-20261102-225354). The
-            // patrol guard brings it out (PatrolAssigner.h); a taunt from here is still fine.
-            bool const inPatrolPath = plan.patrolMove.Avoids(e.guid) && !me->CanReachWithMeleeAutoAttack(unit);
-            if (e.guid != myTarget && !inPatrolPath)
-            {
-                Proposal p = MakeProposal(tier, BotActionType::Attack, e.guid);
-                p.reason = "win back with threat";
-                // Walking over: lost time, and the enemies we hold follow us away from the healer.
-                float const walkCost = Value::LostAction(world, *myFacts, walkSec);
-                p.SetValue((lossNothing - lossThreat) * mult, switchCost + walkCost);
-                out.push_back(p);
-            }
+            // Winning it back with threat (walking over, switching target): TargetAssigner.
 
             if (distance <= GROUP_THREAT_RADIUS)
                 loose.push_back({ &e, victim, gap, horizon, lossNothing, mult, deadly });
@@ -641,7 +598,7 @@ namespace Commander
                         for (FragileEnemy const& f : fragile)
                             benefit += Value::MoveLoss(world, *f.enemy, *f.runnerUp, *myFacts, TANK_RECLAIM_SEC) *
                                        FRAGILE_WEIGHT * fragileShare;
-                    for (LooseEnemy const& l : loose)
+                    for (LooseEntry const& l : loose)
                     {
                         float sec;
                         if (holdSec > 0.0f)     // area taunt: back on the victim when it fades
@@ -661,33 +618,7 @@ namespace Commander
                     return { benefit, deadly };
                 }, out);
 
-        // 2. Top up the enemy we hold with the smallest lead (not valued yet).
-        EnemyFacts const* weakest = nullptr;
-        float weakestRatio = ThreatView::NO_LIMIT;
-        float currentRatio = ThreatView::NO_LIMIT;
-        for (EnemyFacts const& e : world.enemies)
-        {
-            if (e.crowdControlled || !e.acting || e.victim != self)
-                continue;
-            // Switching to one in a patrol's path walks the tank there (see "win back" above).
-            if (e.guid != myTarget && plan.patrolMove.Avoids(e.guid))
-                continue;
-            float const ratio = ThreatView::VictimLead(e) / std::max(1.0f, e.victimThreat);
-            if (e.guid == myTarget)
-                currentRatio = ratio;
-            else if (ratio < weakestRatio)
-            {
-                weakestRatio = ratio;
-                weakest = &e;
-            }
-        }
-        if (weakest && weakestRatio < TANK_LEAD_SWITCH && currentRatio > TANK_LEAD_KEEP)
-        {
-            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Attack, weakest->guid);
-            p.score = 1.0f - weakestRatio;
-            p.reason = "top up smallest lead";
-            out.push_back(p);
-        }
+        // 2. Topping up the enemy with the smallest lead (a target switch): TargetAssigner.
     }
 
     // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
@@ -720,20 +651,9 @@ namespace Commander
         float const ttd = Value::EnemyTimeToDie(world, *e);
         float const avoided = PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
 
-        Position3 myPos;
-        myPos.x = me->GetPositionX();
-        myPos.y = me->GetPositionY();
-        myPos.z = me->GetPositionZ();
-
-        // A safe alternative, the one closest to dying.
-        EnemyFacts const* best = FindSafeTarget(bot, world, self, myPos, e->guid, ObjectGuid());
-        if (best)
-        {
-            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::Attack, best->guid);
-            p.reason = "near aggro, switch";
-            p.SetValue(avoided, Value::LostAction(world, *myFacts, SWITCH_TARGET_SEC));
-            out.push_back(p);
-        }
+        // Switching to a safe enemy instead is the brain's (TargetAssigner: its stop rule is the
+        // same ThreatRoom::Stop, so the next refresh gives this bot another target if one is
+        // safe); until then stop hitting.
         Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::HoldFire);
         p.reason = "near aggro, stop";
         p.SetValue(avoided, Value::LostAction(world, *myFacts, tickSec));
@@ -742,18 +662,8 @@ namespace Commander
 
     float ThreatBehavior::NeededHeadroom(WorldModel const& world, ObjectGuid who, EnemyFacts const& enemy) const
     {
-        // Room left must cover the threat of the next tick, not only 10% of the holder's threat:
-        // a fresh add the tank has 0 (or 20) threat on is pulled by the first hit
-        // (combat scenario 6, VanCleef's summoned guards). New enemies get a settle window.
-        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
-        float const settleSec = NEW_ENEMY_SETTLE_SEC;
-        float const leadSec = NEW_ENEMY_LEAD_SEC;
-        bool const settling = enemy.firstSeenMs &&
-            WorldTimer::getMSTimeDiff(enemy.firstSeenMs, world.refreshedAtMs) < uint32(settleSec * 1000.0f);
-        float const coverSec = settling ? std::max(tickSec, leadSec) : tickSec;
-        float const share = DPS_STOP_HEADROOM * enemy.victimThreat;
-        float const ownThreat = OwnThreatRate(world, who, enemy) * coverSec;
-        return std::max(share, ownThreat);
+        // Perception/ThreatRoom.h (shared with TargetAssigner).
+        return ThreatRoom::Stop(world, who, enemy, sCommanderMgr.GetBotUpdateInterval() / 1000.0f);
     }
 
     // Pet of this bot (hunter, warlock): threat-behavior doc 4.7.

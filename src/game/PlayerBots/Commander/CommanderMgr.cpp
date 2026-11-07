@@ -176,6 +176,31 @@ namespace Commander
         return true;
     }
 
+    void CommanderMgr::OrderAttack(Player const* player, ObjectGuid enemy, bool tanksOnly)
+    {
+        std::shared_ptr<PartyCommander> commander = FindCommander(player);
+        if (!commander)
+            return;
+        PlayerOrders& orders = commander->GetPlanMutable().orders;
+        orders.attack = enemy;
+        orders.attackTanksOnly = tanksOnly;
+        orders.attackSinceMs = WorldTimer::getMSTime();
+        orders.leaveAlone.erase(std::remove(orders.leaveAlone.begin(), orders.leaveAlone.end(), enemy),
+                                orders.leaveAlone.end());
+    }
+
+    void CommanderMgr::OrderLeaveAlone(Player const* player, ObjectGuid enemy)
+    {
+        std::shared_ptr<PartyCommander> commander = FindCommander(player);
+        if (!commander)
+            return;
+        PlayerOrders& orders = commander->GetPlanMutable().orders;
+        if (!orders.LeavesAlone(enemy))
+            orders.leaveAlone.push_back(enemy);
+        if (orders.attack == enemy)
+            orders.attack.Clear();
+    }
+
     bool CommanderMgr::SetModuleEnabled(std::string const& id, bool on)
     {
         bool found = false;

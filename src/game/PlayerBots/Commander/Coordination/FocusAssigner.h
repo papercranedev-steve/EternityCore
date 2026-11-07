@@ -1,6 +1,8 @@
 /*
- * PartyBot Commander layer 2: party focus target and must-kill intercepts.
+ * PartyBot Commander layer 2: kill priority of enemies (Evaluate) and must-kill intercepts.
  * Design: .kiro/docs/2026-11-01-focus-assignment.md
+ * Since 2026-11-07 the party focus is chosen by TargetAssigner (TargetAssigner.h), together with
+ * every bot's target; this module offers the intercepts and provides the scores below.
  *
  * Focus (TeamPlan::focus): one enemy the damage dealers kill first. Kill order follows
  * Smith's rule (weighted shortest job first): highest harm rate / kill time first.
@@ -78,15 +80,14 @@ namespace Commander
         static constexpr float RANGED_REACH = 30.0f;
         static constexpr float MELEE_REACH = 5.0f;
 
-        // Duties module (2026-11-03): intercepts are offered as needs; the focus is chosen in
-        // Apply, after the allocation, so intercepted enemies are left out in the same refresh.
+        // Duties module (2026-11-03): intercepts are offered as needs, Apply writes them.
         AssignStage GetStage() const override { return AssignStage::Duties; }
         char const* GetId() const override { return "focus"; }
         void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
         void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
 
-        // Kill priority of `enemy`; also used by FocusBehavior for the bot's current target.
+        // Kill priority of `enemy` (TargetAssigner: focus and every bot's kill order).
         static FocusScore Evaluate(WorldModel const& world, EnemyFacts const& enemy);
         // Can be the party focus: acting, not controlled, not a fresh enemy the tank has not settled.
         // Enemies only fighting an ally (onAllyOnly) are excluded unless `allowAllyOnly`.

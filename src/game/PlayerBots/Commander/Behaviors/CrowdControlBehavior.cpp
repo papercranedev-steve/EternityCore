@@ -14,9 +14,6 @@ namespace Commander
 {
     bool CrowdControlBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        // Tanks wake the last controlled enemy (ControlledEnd.h), with or without controls.
-        if (bot->GetRole() == ROLE_TANK)
-            return true;
         for (SpellEntry const* s : bot->Kit().Controls())
             if (s)
                 return true;
@@ -62,22 +59,8 @@ namespace Commander
             return;
         }
 
-        // Only controlled enemies left (ControlledEnd.h): the tank wakes the first one when the
-        // brain says (PartyBotAI::IsAssignedToBreakControl lets it pick that target).
-        if (plan.controlEnd.Breaks(self->guid, plan.controlEnd.enemy, world.refreshedAtMs))
-        {
-            if (me->GetVictim() && me->GetVictim()->GetObjectGuid() == plan.controlEnd.enemy)
-                return;
-            Proposal p;
-            p.tier = ProposalTier::Assigned;
-            p.source = "cc";
-            p.reason = "only controlled enemies left: wake one";
-            p.score = 5.0f;
-            p.action.type = BotActionType::Attack;
-            p.action.target = plan.controlEnd.enemy;
-            out.push_back(p);
-            return;
-        }
+        // Only controlled enemies left (ControlledEnd.h): TargetAssigner gives the breaker that
+        // target, TargetBehavior attacks it.
 
         // Cast once the party fights (the controller of an opening may not be in combat yet).
         ControlDuty const* duty = plan.FindControlFor(self->guid);
@@ -96,11 +79,6 @@ namespace Commander
             if (!target || !target->IsAlive() || (!duty->area && target->HasAura(spell->Id)) ||
                 !me->IsWithinLOSInMap(target) || !bot->CanTryToCastSpell(target, spell))
                 return;
-
-    bool CrowdControlBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
-    {
-        return world.HasPartyEnemy() && plan.FindControlFor(bot->me->GetObjectGuid()) != nullptr;
-    }
         }
         else if (!bot->CanTryToCastSpell(me, spell))
             return;
@@ -117,5 +95,10 @@ namespace Commander
         p.action.dropTarget = duty->breaksOnDamage;
         p.SetValue(duty->points + cost, cost);
         out.push_back(p);
+    }
+
+    bool CrowdControlBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    {
+        return world.HasPartyEnemy() && plan.FindControlFor(bot->me->GetObjectGuid()) != nullptr;
     }
 }

@@ -30,6 +30,12 @@ namespace Commander
         PartyMemberFacts const* Main(WorldModel const& world, bool botsOnly = false);
         // Somebody holds enemies for the party: an alive tank, or a tank-like ally (Sergeant Bly).
         bool Any(WorldModel const& world);
+        // Another alive tank bot that can act is nearer to `pos` than `distance` - `margin`:
+        // with several tank bots the nearest one takes a loose enemy.
+        bool CloserBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance, float margin);
+        // Holds enemies it is hit by, so damage dealers leave room under its threat: a player
+        // (whatever his role) or a tank (bot or player). Pets: no (ThreatBehavior judges pets live).
+        inline bool IsHolder(PartyMemberFacts const& m) { return !m.isPet && (!m.isBot || IsTank(m)); }
     }
 }
 

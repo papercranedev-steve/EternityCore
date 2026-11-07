@@ -106,8 +106,8 @@ public:
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
-    Unit* SelectAttackTarget(Player* pLeader) const;
-    Unit* SelectPartyAttackTarget() const;
+    // Duels only (the Commander does not run there): the opponent, else an attacker.
+    Unit* SelectDuelTarget() const;
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
     Unit* GetMarkedTarget(RaidTargetIcon mark) const;

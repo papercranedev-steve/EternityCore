@@ -40,9 +40,8 @@ namespace Commander
 
         // An out-of-combat plan (pull) needs the Commander hook to run before the original AI.
         // WaitReady is excluded: bots keep eating and drinking while the party gets ready.
-        // While a pull or clear is running and the party is already fighting (player attacked
-        // first, a patrol walked in), a bot not yet on any threat list must stand up and help
-        // instead of sitting there drinking. Outside pull / clear the original AI is unchanged.
+        // While the party is already fighting (player attacked first, a patrol walked in), a bot
+        // not yet on any threat list must stand up and help instead of sitting there drinking.
         // "Fighting" = an enemy with one of us on its threat list: an ally's fight nearby (a
         // guard, an escort) does not stop the party from drinking.
         // The active boss module may ask for the same (IEncounter::WantsOutOfCombatControl):
@@ -51,10 +50,12 @@ namespace Commander
         {
             PullPhase const phase = m_plan.pull.phase;
             bool const pulling = phase != PullPhase::None && phase != PullPhase::WaitReady;
-            bool const planRunning = phase != PullPhase::None || m_plan.clear.active;
             // A retreating bot that already dropped combat must keep running to the rally point,
             // not sit down to drink or follow the leader back into the enemies.
-            return pulling || m_plan.retreat.active || (planRunning && m_world.HasPartyEnemy()) ||
+            // Since 2026-11-07 the party fighting, or one of us attacking something not fighting
+            // yet (WorldModel::targeted), is enough: the original target selection is gone, the
+            // first target of a bot comes from TargetAssigner through the Commander hook.
+            return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
                    (m_activeEncounter && m_activeEncounter->WantsOutOfCombatControl());
         }
         uint32 GetGroupId() const { return m_groupId; }
@@ -89,11 +90,11 @@ namespace Commander
         // After the assigners: gives the bots of this map the roles of TeamPlan::roles
         // (RoleAssigner), out of combat only, and tells the leader.
         void ApplyRoles(PartyBotAI* bot);
-
         // Last step of a refresh, in combat: the other bots of the party on this map that a
         // behavior has urgent work for (IBehavior::WantsTickNow) run their next update in the
         // next frame (PartyBotAI::WakeUp) instead of after the rest of their bot interval.
         void WakeBots(PartyBotAI* bot, BehaviorList const& behaviors);
+
         uint32 m_groupId;
         uint32 m_mapId;
         uint32 m_instanceId;

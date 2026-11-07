@@ -28,11 +28,13 @@ namespace Commander
         // Healer-role bot that can act with the least mana; null if none.
         PartyMemberFacts const* FindLowestManaHealer(WorldModel const& world);
 
-        // Overrides plan.focus (the focus assigner's choice) with `enemy`; keeps sinceMs when the
-        // focus does not change. Score fields come from FocusAssigner::Evaluate, so
-        // FocusBehavior's switch value stays consistent.
+        // Overrides plan.focus (TargetAssigner's choice) with `enemy`; keeps sinceMs when the
+        // focus does not change. Score fields come from FocusAssigner::Evaluate. Both hand the
+        // bots their targets again from the new focus (RedistributeTargets).
         void SetFocus(WorldModel const& world, TeamPlan& plan, EnemyFacts const& enemy, char const* reason);
-        void ClearFocus(TeamPlan& plan);
+        void ClearFocus(WorldModel const& world, TeamPlan& plan);
+        // TargetAssigner::Distribute after a boss module changed the plan (module "target" on).
+        void RedistributeTargets(WorldModel const& world, TeamPlan& plan);
 
         // Cost of not healing `target` for two bot ticks (same as ThreatBehavior's heal veto):
         // the damage it takes meanwhile, plus its death penalty if it would not last.

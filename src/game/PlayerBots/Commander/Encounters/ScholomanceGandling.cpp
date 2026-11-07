@@ -220,7 +220,7 @@ namespace Commander
             if (gandling && gandling->acting)
                 EncounterHelpers::SetFocus(world, plan, *gandling, "gandling: guardians are the teleported member's");
             else
-                EncounterHelpers::ClearFocus(plan);
+                EncounterHelpers::ClearFocus(world, plan);
         }
     }
 

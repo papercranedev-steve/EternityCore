@@ -32,7 +32,7 @@
 #include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/ThreatBehavior.h"
-#include "Commander/Behaviors/FocusBehavior.h"
+#include "Commander/Behaviors/TargetBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Map.h"
@@ -259,7 +259,7 @@ namespace Commander
         float const holdBenefit = m_holdRisk * m_pushLoss;
 
         // Fix: AdjustPlan points the focus at an original guard while the boss is held, but this
-        // HoldFire (same tier, benefit = the whole push loss) outscored FocusBehavior's switch,
+        // HoldFire (same tier, benefit = the whole push loss) outscored the focus switch,
         // so damage dealers stood idle on the boss for up to MAX_HOLD_MS instead of killing the
         // guards. Switching avoids the push as well and keeps the damage HoldFire throws away;
         // if the switch cannot execute (target invalid), the arbiter falls back to HoldFire.
@@ -267,12 +267,12 @@ namespace Commander
             std::find(m_originals.begin(), m_originals.end(), plan.focus.enemy) != m_originals.end())
         {
             Unit* guard = bot->me->GetMap()->GetUnit(plan.focus.enemy);
-            if (guard && guard->IsAlive() && bot->me->IsWithinDistInMap(guard, FocusBehavior::FOCUS_RANGE))
+            if (guard && guard->IsAlive() && bot->me->IsWithinDistInMap(guard, TargetBehavior::FOCUS_RANGE))
             {
                 float walkSec = 0.0f;
                 if (bot->GetRole() == ROLE_MELEE_DPS && !bot->me->CanReachWithMeleeAutoAttack(guard))
-                    walkSec = std::max(0.0f, bot->me->GetDistance(guard) - FocusBehavior::MELEE_REACH) /
-                              FocusBehavior::RUN_YARDS_PER_SEC;
+                    walkSec = std::max(0.0f, bot->me->GetDistance(guard) - TargetBehavior::MELEE_REACH) /
+                              TargetBehavior::RUN_YARDS_PER_SEC;
                 Proposal attack = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack,
                                                                 plan.focus.enemy);
                 attack.reason = "boss near 50% summon, kill the guards first";

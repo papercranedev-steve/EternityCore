@@ -8,7 +8,7 @@
  *                    Value::LostAction already turns time away from the boss into points.
  *   Melee off bomb = Explosion, against a target switch (ThreatBehavior::SWITCH_TARGET_SEC)
  *                    plus the walk back to the boss, or one tick for HoldFire.
- *   Bomb intercept = Explosion (InterceptDuty::points, FocusBehavior's switch benefit).
+ *   Bomb intercept = Explosion (InterceptDuty::points, TargetBehavior's switch benefit).
  *
  * Known limits:
  *   - Bombs that are not in combat yet (falling, following the boss) are not in

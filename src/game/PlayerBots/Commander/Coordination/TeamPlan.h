@@ -367,9 +367,8 @@ namespace Commander
 
         // Enemies standing where the patrol walks before the fight ends, every refresh while
         // active. Nobody chases them (PartyBotAI::BeginChasing), the tank does not walk over
-        // to win them back (ThreatBehavior), they are not the focus (FocusAssigner), and in
-        // Guard a bot whose target is one of them switches to another enemy (PatrolBehavior),
-        // unless it was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
+        // to win them back and nobody is given them as a target (TargetAssigner), unless a bot
+        // was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
         std::vector<ObjectGuid> avoid;
         // Guard only. Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
         std::vector<PatrolLure> lures;
@@ -469,6 +468,38 @@ namespace Commander
         }
     };
 
+    // The enemy one bot attacks (TargetAssigner, executed by TargetBehavior). A bot without an
+    // entry attacks nothing new: healers, bots held by a pull, bots with no safe enemy.
+    struct TargetDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid enemy;
+        // Switching from the bot's current target to `enemy` is worth `benefit` and costs `cost`
+        // (points, Perception/SwitchCost.h). 0 / 0 when `enemy` already is its target.
+        float benefit = 0.0f;
+        float cost = 0.0f;
+        bool urgent = false;         // Urgent tier (intercept, a loose enemy about to kill someone)
+        bool forced = false;         // a player order or a brain task: Urgent, not valued
+        char const* reason = "";     // static string
+        uint32 sinceMs = 0;          // world refresh time the bot got this enemy
+    };
+
+    // What the player told the bots to attack (`.partybot attackstart`, `.partybot pull`) or to
+    // leave alone (`.partybot attackstop`). Input written by those commands, read by
+    // TargetAssigner, which also ends them (enemy gone / fight over).
+    struct PlayerOrders
+    {
+        ObjectGuid attack;           // every bot (tankOnly: tanks only) attacks it
+        bool attackTanksOnly = false;
+        uint32 attackSinceMs = 0;
+        std::vector<ObjectGuid> leaveAlone;     // not attacked until the fight is over
+
+        bool LeavesAlone(ObjectGuid enemy) const
+        {
+            return std::find(leaveAlone.begin(), leaveAlone.end(), enemy) != leaveAlone.end();
+        }
+    };
+
     // Role the "roles" assigner gives a bot whose role is not locked (RoleAssigner.h).
     struct RoleDuty
     {
@@ -485,7 +516,9 @@ namespace Commander
         // Last DutyAllocator result of all duty modules (PartyCommander::RunAssigners), kept for
         // `.partybot ai plan` (who was passed over and why). Modules read their own part above.
         std::vector<DutyResult> duties;
-        FocusTarget focus;
+        FocusTarget focus;          // TargetAssigner (encounters may override it: EncounterHelpers::SetFocus)
+        std::vector<TargetDuty> targets;
+        PlayerOrders orders;
         std::vector<InterceptDuty> intercepts;
         std::vector<DispelDuty> dispels;
         std::vector<ControlDuty> controls;
@@ -505,6 +538,14 @@ namespace Commander
         {
             for (InterruptDuty const& d : interrupts)
                 if (d.enemy == enemy)
+                    return &d;
+            return nullptr;
+        }
+
+        TargetDuty const* FindTargetFor(ObjectGuid bot) const
+        {
+            for (TargetDuty const& d : targets)
+                if (d.bot == bot)
                     return &d;
             return nullptr;
         }

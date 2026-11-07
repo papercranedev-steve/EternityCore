@@ -1,5 +1,6 @@
 #include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Coordination/FocusAssigner.h"
+#include "Commander/Coordination/TargetAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ValueModel.h"
@@ -62,11 +63,19 @@ namespace EncounterHelpers
         plan.focus.harmRate = s.harmRate;
         plan.focus.killSec = s.killSec;
         plan.focus.reason = reason;
+        RedistributeTargets(world, plan);
     }
 
-    void ClearFocus(TeamPlan& plan)
+    void ClearFocus(WorldModel const& world, TeamPlan& plan)
     {
         plan.focus = FocusTarget();
+        RedistributeTargets(world, plan);
+    }
+
+    void RedistributeTargets(WorldModel const& world, TeamPlan& plan)
+    {
+        if (sCommanderMgr.IsModuleEnabled("target"))
+            TargetAssigner::Distribute(world, plan);
     }
 
     float HealDelayCost(WorldModel const& world, PartyMemberFacts const& target)

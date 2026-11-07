@@ -824,81 +824,16 @@ Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const
     return nullptr;
 }
 
-Unit* PartyBotAI::SelectAttackTarget(Player* pLeader) const
+// Was SelectAttackTarget (focus marks, the leader's victim, own attackers, the first attacker of
+// any member within 50 yd, the pet's attacker) and SelectPartyAttackTarget. Outside duels the
+// Commander chooses every target since 2026-11-07 (Coordination/TargetAssigner.h).
+Unit* PartyBotAI::SelectDuelTarget() const
 {
-    if (IsInDuel())
-    {
-        if (me->m_duel->opponent && IsValidHostileTarget(me->m_duel->opponent))
-            return me->m_duel->opponent;
-    }
-    else
-    {
-        // Stick to marked target in combat.
-        if (me->IsInCombat() || pLeader->GetVictim())
-        {
-            for (auto markId : m_marksToFocus)
-            {
-                ObjectGuid targetGuid = me->GetGroup()->GetTargetWithIcon(markId);
-                if (targetGuid.IsUnit())
-                    if (Unit* pVictim = me->GetMap()->GetUnit(targetGuid))
-                        if (IsValidHostileTarget(pVictim))
-                            return pVictim;
-            }
-        }
-
-        // Who is the leader attacking.
-        if (Unit* pVictim = pLeader->GetVictim())
-        {
-            if (IsValidHostileTarget(pVictim))
-                return pVictim;
-        }
-    }
-
-    // Who is attacking me.
+    if (me->m_duel && me->m_duel->opponent && IsValidHostileTarget(me->m_duel->opponent))
+        return me->m_duel->opponent;
     for (const auto pAttacker : me->GetAttackers())
-    {
         if (IsValidHostileTarget(pAttacker))
             return pAttacker;
-    }
-
-    if (!IsInDuel())
-    {
-        // Check if other group members are under attack.
-        if (Unit* pPartyAttacker = SelectPartyAttackTarget())
-            return pPartyAttacker;
-    }
-
-    // Assist pet if its in combat.
-    if (Pet* pPet = me->GetPet())
-    {
-        if (Unit* pPetAttacker = pPet->GetAttackerForHelper())
-            if (IsValidHostileTarget(pPetAttacker))
-                return pPetAttacker;
-    }
-
-    return nullptr;
-}
-
-Unit* PartyBotAI::SelectPartyAttackTarget() const
-{
-    Group* pGroup = me->GetGroup();
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
-    {
-        if (Player* pMember = itr->getSource())
-        {
-            // We already checked self.
-            if (pMember == me)
-                continue;
-
-            for (const auto pAttacker : pMember->GetAttackers())
-            {
-                if (IsValidHostileTarget(pAttacker) &&
-                    me->IsWithinDist(pAttacker, 50.0f))
-                    return pAttacker;
-            }
-        }
-    }
-
     return nullptr;
 }
 
@@ -1034,9 +969,6 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
     {
         case SMSG_LEARNED_SPELL:
         case SMSG_SUPERCEDED_SPELL:
-    // Any cast or channel: stop it when an assigned interrupt or an area step cannot wait for it.
-    else if (Commander::CastBreak::Update(this, m_castBreak))
-        m_updateTimer.Reset(0);
         case SMSG_REMOVED_SPELL:
         {
             if (m_initialized)
@@ -1101,6 +1033,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         m_updateTimer.Reset(0);
     // Same for an area channel (Blizzard): stop before the next tick pulls aggro.
     else if (Commander::AreaDamageBehavior::WatchChannel(this, m_areaChannelCheckMs))
+        m_updateTimer.Reset(0);
+    // Any cast or channel: stop it when an assigned interrupt or an area step cannot wait for it.
+    else if (Commander::CastBreak::Update(this, m_castBreak))
         m_updateTimer.Reset(0);
 
     // Commander walk backwards: one step every frame, so the position and the packets follow
@@ -1456,27 +1391,31 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
     }
 
-    // Commander behaviors run before the original target selection and movement,
-    // so they can pick a target or a position themselves.
+    // A victim that can no longer be hit (dead, under a control that breaks on damage, immune,
+    // a charmed member) is dropped at once. Which enemy comes next is the Commander's
+    // (TargetAssigner / TargetBehavior below).
+    if (Unit* pOld = me->GetVictim())
+        if (!IsValidHostileTarget(pOld))
+            me->AttackStop();
+
+    // Commander behaviors run before movement, so they can pick a target or a position
+    // themselves. Since 2026-11-07 every target comes from there (target assignment doc): the
+    // original target selection (leader's victim, own attackers, the first attacker of a
+    // member, the tank's "defend party members") is deleted, not bypassed.
     if ((me->IsInCombat() || commanderOutOfCombat) && sCommanderMgr.OnBotCombatUpdate(this))
         return;
 
-    Unit* pVictim = me->GetVictim();
-
-    if (GetRole() != ROLE_HEALER)
+    // The Commander does not run in duels: the opponent is the only target.
+    if (IsInDuel() && !me->GetVictim())
     {
-        if (!pVictim || !IsValidHostileTarget(pVictim))
+        if (Unit* pOpponent = SelectDuelTarget())
         {
-            if (pVictim)
-                me->AttackStop();
-
-            if (Unit* pVictim = SelectAttackTarget(pLeader))
-            {
-                AttackStart(pVictim);
-                return;
-            }
+            AttackStart(pOpponent);
+            return;
         }
     }
+
+    Unit* pVictim = me->GetVictim();
 
     if (!me->IsInCombat())
     {
@@ -1603,42 +1542,11 @@ void PartyBotAI::UpdateOutOfCombatAI()
 
 void PartyBotAI::UpdateInCombatAI()
 {
-    if (!IsInDuel())
-    {
-        if (m_role == ROLE_TANK)
-        {
-            Unit* pVictim = me->GetVictim();
-
-            // Defend party members.
-            // (skipped while a Commander module decides taunts: its loose-enemy valuation already
-            // chose whether to go after enemies hitting others; running this right after its
-            // target switch undid it in the same tick and chased adds 50 yd away)
-            if ((!pVictim || pVictim->GetVictim() == me) && !IsTauntControlled())
-            {
-                if (pVictim = SelectPartyAttackTarget())
-                {
-                    me->AttackStop(true);
-                    AttackStart(pVictim);
-                }
-            }
-
-            // Taunt target if its attacking someone else.
-            // (skipped while a Commander module decides taunts: threat-behavior doc section 3)
-            if (pVictim && pVictim->GetVictim() != me && !IsTauntControlled())
-            {
-                for (const auto& pSpellEntry : m_spellListTaunt)
-                {
-                    if (CanTryToCastSpell(pVictim, pSpellEntry))
-                    {
-                        if (DoCastSpell(pVictim, pSpellEntry) == SPELL_CAST_OK)
-                            return;
-                    }
-                }
-            }
-        }
-        else if (CrowdControlMarkedTargets())
-            return;
-    }
+    // The tank's "defend party members" (switch to the first enemy hitting a member) and its
+    // taunt on its own victim are gone since 2026-11-07: the Commander chooses the tank's targets
+    // (TargetAssigner) and its taunts (ThreatBehavior, Takeover::Taunt).
+    if (!IsInDuel() && m_role != ROLE_TANK && CrowdControlMarkedTargets())
+        return;
 
     if (CheckForDispelTargets())
         return;
@@ -3386,12 +3294,10 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
                 if (CanTryToCastSpell(pTarget, m_spells.rogue.pBlind) &&
                     CanUseCrowdControl(m_spells.rogue.pBlind, pTarget))
                 {
+                    // (the victim is unchanged by the cast; the old AttackStop / AttackStart back
+                    // onto it is gone with the original target selection, 2026-11-07)
                     if (DoCastSpell(pTarget, m_spells.rogue.pBlind) == SPELL_CAST_OK)
-                    {
-                        me->AttackStop();
-                        AttackStart(pVictim);
                         return;
-                    }
                 }
             }
         }

@@ -38,12 +38,23 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
   ${COMMANDER_DIR}/Coordination/FocusAssigner.h
   ${COMMANDER_DIR}/Coordination/FocusAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/TargetAssigner.h
+  ${COMMANDER_DIR}/Coordination/TargetAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/TargetRules.h
+  ${COMMANDER_DIR}/Coordination/TankTargets.cpp
+  ${COMMANDER_DIR}/Coordination/DamageTargets.cpp
+  ${COMMANDER_DIR}/Perception/ThreatRoom.h
+  ${COMMANDER_DIR}/Perception/ThreatRoom.cpp
+  ${COMMANDER_DIR}/Perception/LooseEnemy.h
+  ${COMMANDER_DIR}/Perception/LooseEnemy.cpp
+  ${COMMANDER_DIR}/Perception/RouteRisk.h
+  ${COMMANDER_DIR}/Perception/RouteRisk.cpp
   ${COMMANDER_DIR}/Perception/SpellTags.h
   ${COMMANDER_DIR}/Perception/SpellTags.cpp
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.h
   ${COMMANDER_DIR}/Behaviors/InterruptBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/FocusBehavior.h
-  ${COMMANDER_DIR}/Behaviors/FocusBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/TargetBehavior.h
+  ${COMMANDER_DIR}/Behaviors/TargetBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/PullBehavior.h
   ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
   ${COMMANDER_DIR}/Coordination/PullPlanner.h
@@ -122,6 +133,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/CastWatch.h
   ${COMMANDER_DIR}/Behaviors/CastWatch.cpp
+  ${COMMANDER_DIR}/Behaviors/CastBreak.h
+  ${COMMANDER_DIR}/Behaviors/CastBreak.cpp
   ${COMMANDER_DIR}/Behaviors/Backpedal.h
   ${COMMANDER_DIR}/Behaviors/Backpedal.cpp
   ${COMMANDER_DIR}/Perception/PullOdds.h
@@ -133,8 +146,6 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ManaWorth.h
   ${COMMANDER_DIR}/Perception/ManaWorth.cpp
   ${COMMANDER_DIR}/Perception/FearRisk.h
-  ${COMMANDER_DIR}/Behaviors/CastBreak.h
-  ${COMMANDER_DIR}/Behaviors/CastBreak.cpp
   ${COMMANDER_DIR}/Perception/FearRisk.cpp
   ${COMMANDER_DIR}/Perception/ControlValue.h
   ${COMMANDER_DIR}/Perception/ControlValue.cpp

@@ -3,6 +3,11 @@
  * (value-scoring doc 5.3, 5.4).
  * Design: .kiro/docs/2026-11-01-threat-behavior.md
  *
+ *  Target switches (2026-11-07): winning a loose enemy back with threat, topping up the
+ *            smallest lead and a damage dealer's switch to a safe enemy moved to the brain
+ *            (Coordination/TargetAssigner.h); the losses come from Perception/LooseEnemy.h and
+ *            the stop rule from Perception/ThreatRoom.h, shared with it. This module keeps the
+ *            taunts, area threat, stop hitting (HoldFire), Fade and pets.
  *  Tank    - loose enemy: compare doing nothing, winning it back with threat, and taunting.
  *            The loss of each option is the damage the person being hit takes until the enemy
  *            is back (death penalty if they would not survive). A taunt also costs its
@@ -51,6 +56,7 @@
 #define MANGOS_COMMANDER_THREAT_BEHAVIOR_H
 
 #include "Commander/Behaviors/IBehavior.h"
+#include "Commander/Perception/ThreatRoom.h"
 
 class Unit;
 class SpellEntry;
@@ -64,19 +70,17 @@ namespace Commander
     {
     public:
         // Tunables (user approved 2026-11-01, see design doc section 2 / 3).
-        static constexpr float DPS_STOP_HEADROOM = 0.10f;     // x holder's threat
+        static constexpr float DPS_STOP_HEADROOM = ThreatRoom::STOP_SHARE;     // x holder's threat
         static constexpr float DPS_SWITCH_HEADROOM = 0.25f;   // alternative target needs this much
         static constexpr float DPS_SWITCH_RANGE = 30.0f;
         static constexpr float DPS_SWITCH_MIN_SEC = 3.0f;     // switch target needs room for this much of my threat
         // An enemy seen for the first time less than this long ago (a summoned add, a patrol
         // that walked in) must leave room for NEW_ENEMY_LEAD_SEC of my threat before I hit it.
-        static constexpr float NEW_ENEMY_SETTLE_SEC = 3.0f;
-        static constexpr float NEW_ENEMY_LEAD_SEC = 2.0f;
+        static constexpr float NEW_ENEMY_SETTLE_SEC = ThreatRoom::NEW_ENEMY_SETTLE_SEC;
+        static constexpr float NEW_ENEMY_LEAD_SEC = ThreatRoom::NEW_ENEMY_LEAD_SEC;
         static constexpr float HEAL_IGNORE_THREAT_PCT = 30.0f;
         // Instead of vetoing a heal that pulls aggro, heal another member below this directly.
         static constexpr float OTHER_HEAL_PCT = 70.0f;
-        static constexpr float TANK_LEAD_SWITCH = 0.15f;      // lead / holder threat
-        static constexpr float TANK_LEAD_KEEP = 0.30f;        // current target must be at least this safe to leave it
 
         // Value scoring (value-scoring doc 5.3, 5.4).
         static constexpr float LOOSE_HORIZON_SEC = 10.0f;     // "do nothing" is judged over this long at most
@@ -110,14 +114,14 @@ namespace Commander
         bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-
-        // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
-        // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
-        // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
         // Tank bot: an acting enemy within TANK_REACH_RANGE hits a member that is not a tank
         // (and is not fighting an ally). Taunt or win it back without waiting for the next bot
         // interval; Propose weighs it as usual.
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+
+        // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
+        // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
+        // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
         static float HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
                                   SpellEntry const* spell, float* effectiveOut = nullptr);
 

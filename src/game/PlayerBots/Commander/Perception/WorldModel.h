@@ -130,6 +130,10 @@ namespace Commander
         uint32 maxMana = 0;
         Position3 pos;
         ObjectGuid victim;          // who this member is attacking
+        // Bots: the first live enemy carrying one of the raid marks the player told this bot to
+        // focus (`.partybot focusmark`, PartyBotAI::m_marksToFocus). Empty = none. A player
+        // order for TargetAssigner.
+        ObjectGuid focusMarkEnemy;
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
         uint32 castRemainingMs = 0; // of that cast or channel
         // Combo points (rogue, cat druid) and the enemy they are on: lost when it switches target.
@@ -384,6 +388,11 @@ namespace Commander
         // Creatures with a party member or pet on their threat list, then (onAllyOnly = true)
         // creatures fighting one of `allies` only.
         std::vector<EnemyFacts> enemies;
+        // Creatures a member (the player, a bot, a pet) is attacking that have none of us on
+        // their threat list yet and are not in `enemies`: the player just pressed attack and
+        // has not hit yet, a bot was sent at one. Not a fight yet (HasPartyEnemy ignores them);
+        // TargetAssigner picks the first target of a fight from them.
+        std::vector<EnemyFacts> targeted;
         // Friendly non-party creatures in combat near the leader (at most MAX_ALLIES, nearest first).
         std::vector<AllyFacts> allies;
         // Builder bookkeeping: friendly creatures in combat found by the last grid scan
@@ -407,6 +416,13 @@ namespace Commander
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
         EnemyFacts const* FindEnemy(ObjectGuid guid) const;
+        EnemyFacts const* FindTargeted(ObjectGuid guid) const
+        {
+            for (EnemyFacts const& e : targeted)
+                if (e.guid == guid)
+                    return &e;
+            return nullptr;
+        }
         AllyFacts const* FindAlly(ObjectGuid guid) const
         {
             for (AllyFacts const& a : allies)

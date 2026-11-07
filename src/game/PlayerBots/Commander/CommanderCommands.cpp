@@ -300,6 +300,29 @@ namespace
             handler->PSendSysMessage("Focus: |cffffcc00%s|r score %.3f (%.2f pt/s, kill %.1fs) for %.1fs: %s",
                 NameOf(map, plan.focus.enemy).c_str(), plan.focus.score, plan.focus.harmRate, plan.focus.killSec,
                 WorldTimer::getMSTimeDiffToNow(plan.focus.sinceMs) / 1000.0f, plan.focus.reason.c_str());
+        // Every bot's target (TargetAssigner).
+        if (!plan.targets.empty())
+        {
+            handler->SendSysMessage("Targets:");
+            for (Commander::TargetDuty const& d : plan.targets)
+            {
+                Commander::PartyMemberFacts const* m = world.FindMember(d.bot);
+                bool const already = m && m->victim == d.enemy;
+                if (d.forced)
+                    handler->PSendSysMessage("    %s -> |cffffcc00%s|r (%s, must)%s", NameOf(map, d.bot).c_str(),
+                        NameOf(map, d.enemy).c_str(), d.reason, already ? "" : " switching");
+                else
+                    handler->PSendSysMessage("    %s -> |cffffcc00%s|r (%s, %.1f - %.1f pt%s) for %.1fs%s",
+                        NameOf(map, d.bot).c_str(), NameOf(map, d.enemy).c_str(), d.reason, d.benefit, d.cost,
+                        d.urgent ? ", urgent" : "", WorldTimer::getMSTimeDiffToNow(d.sinceMs) / 1000.0f,
+                        already ? "" : " switching");
+            }
+        }
+        if (!plan.orders.attack.IsEmpty())
+            handler->PSendSysMessage("Order: attack |cffffcc00%s|r%s", NameOf(map, plan.orders.attack).c_str(),
+                plan.orders.attackTanksOnly ? " (tanks)" : "");
+        for (ObjectGuid const& g : plan.orders.leaveAlone)
+            handler->PSendSysMessage("Order: leave |cffffcc00%s|r alone", NameOf(map, g).c_str());
         if (!plan.intercepts.empty())
         {
             handler->SendSysMessage("Intercepts:");

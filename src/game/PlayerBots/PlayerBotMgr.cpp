@@ -1254,6 +1254,9 @@ bool ChatHandler::HandlePartyBotAttackStartCommand(char* args)
             }
         }
     }
+    // Kept by the Commander's target assignment until it dies or another order comes
+    // (TeamPlan::orders); the AttackStart above only saves waiting for the next refresh.
+    sCommanderMgr.OrderAttack(pPlayer, pTarget->GetObjectGuid(), false);
 
     PSendSysMessage("All party bots are now attacking %s.", pTarget->GetName());
     return true;
@@ -1308,6 +1311,8 @@ bool ChatHandler::HandlePartyBotAttackStopCommand(char* args)
             }
         }
     }
+    // Not attacked again for the rest of the fight (user, 2026-11-07; was: 3 s pause).
+    sCommanderMgr.OrderLeaveAlone(pPlayer, pTarget->GetObjectGuid());
 
     PSendSysMessage("All party bots have stopped attacking %s.", pTarget->GetName());
     return true;
@@ -1927,6 +1932,7 @@ bool ChatHandler::HandlePartyBotPullCommand(char* args)
             }
         }
     }
+    sCommanderMgr.OrderAttack(pPlayer, pTarget->GetObjectGuid(), true);
 
     PSendSysMessage("Tank party bots are pulling %s, DPS party bots are paused for %d seconds.", pTarget->GetName(), (duration / IN_MILLISECONDS));
     return true;
