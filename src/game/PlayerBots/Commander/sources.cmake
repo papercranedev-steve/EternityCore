@@ -59,6 +59,15 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
   ${COMMANDER_DIR}/Coordination/PullPlanner.h
   ${COMMANDER_DIR}/Coordination/PullPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/PullCommon.h
+  ${COMMANDER_DIR}/Coordination/PullCommon.cpp
+  ${COMMANDER_DIR}/Coordination/PullChoice.h
+  ${COMMANDER_DIR}/Coordination/PullChoice.cpp
+  ${COMMANDER_DIR}/Coordination/PullPatrolCheck.h
+  ${COMMANDER_DIR}/Coordination/PullPatrolCheck.cpp
+  ${COMMANDER_DIR}/Coordination/PullLosSearch.h
+  ${COMMANDER_DIR}/Coordination/PullLosSearch.cpp
+  ${COMMANDER_DIR}/Coordination/PullAssigner.cpp
   ${COMMANDER_DIR}/Coordination/ClearPlanner.h
   ${COMMANDER_DIR}/Coordination/ClearPlanner.cpp
   ${COMMANDER_DIR}/Perception/AssistPredictor.h

@@ -29,6 +29,16 @@
  *                      reach the tank, and for the opening holds (PullOpening.h: damage
  *                      dealers until the tank has threat on what came, healers also until the
  *                      casters came). Settle lasts at least SETTLE_MS.
+ *
+ * Files (split by step, todo item 14):
+ *   PullPlanner.cpp      Plan, CheckReady, RecheckBeforeApproach, FindRangedPullSpell
+ *   PullChoice.h/.cpp    target and opening choice (walk in / shot / face pull), new spot or
+ *                        target when the tank cannot shoot
+ *   PullPatrolCheck.h/.cpp  patrols next to the pull and the start they allow
+ *   PullLosSearch.h/.cpp SearchLosBreak (line of sight pull, corner) and when the break ends
+ *   PullAssigner.cpp     PullAssigner (the phases)
+ *   PullCommon.h/.cpp    helpers shared by the files above
+ *   PullControl, PullOpening  opening control, who may start after the pull
  */
 
 #ifndef MANGOS_COMMANDER_PULL_PLANNER_H

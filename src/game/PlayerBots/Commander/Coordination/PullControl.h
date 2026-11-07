@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 2 (brain): opening control of a pull (crowd control doc
  * .kiro/docs/2026-11-07/2026-11-07-crowd-control.md 4.3, todo 10c). Its own file so the pull
- * planner only calls it (PullPlanner.cpp is already too large, todo 14).
+ * planner only calls it (the pull files are split by step, PullPlanner.h).
  *
  * Choose (map thread, when the tank is about to go: PullPlanner::RecheckBeforeApproach):
  *   the fight against the expected creatures (FightLoad::Build) with and without one of them
