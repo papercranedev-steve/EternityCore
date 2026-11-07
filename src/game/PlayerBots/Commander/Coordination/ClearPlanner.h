@@ -50,9 +50,6 @@ namespace Commander
         // (Patrol waiting has its own limit, PullPlanner::PATROL_WAIT_MAX_MS.)
         uint32 const REPREDICT_WAIT_MS = 30 * 1000;
 
-        // Packs with an elite or this many mobs make healers drink to full first (cheap at low level).
-        uint32 const HARD_PACK_MOBS = 3;
-
         uint32 const MAX_LEVEL_ABOVE_LEADER = 3;
 
         void Start(Player* leader, PartyCommander& commander, float radius, uint32 maxMobs);

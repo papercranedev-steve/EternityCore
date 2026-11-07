@@ -174,7 +174,9 @@ namespace Commander
         }
 
         // WaitReady bookkeeping.
-        float healerManaPct = 80.0f;        // healer mana needed (PullPlanner::READY_MANA_PCT by default)
+        // Healer mana needed before the tank goes: from the fight estimate (PullPlanner::Plan,
+        // READY_HEALER_*), READY_MANA_PCT without one.
+        float healerManaPct = 80.0f;
         uint32 botWaitMs = 0;               // time bots were not ready; only this counts toward the timeout
         uint32 lastReadyCheckMs = 0;
         bool readyNoteSent = false;         // "still waiting for ..." is sent once

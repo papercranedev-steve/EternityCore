@@ -412,7 +412,7 @@ namespace
         if (!commander)
             return false;
         Map* map = player->GetMap();
-        // Same healer mana gate as the pull that is waiting (clear asks for full mana before hard packs).
+        // Same healer mana gate as the pull that is waiting (from its fight estimate, PullPlanner::Plan).
         Commander::PullPlan const& pull = commander->GetPlan().pull;
         float const healerMana = pull.phase == Commander::PullPhase::WaitReady ? pull.healerManaPct
                                                                                : Commander::PullPlanner::READY_MANA_PCT;

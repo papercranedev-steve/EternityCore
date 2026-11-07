@@ -104,8 +104,15 @@ namespace Commander
         std::string MissingAmmoNote(Player* tank);
 
         float const READY_HEALTH_PCT = 90.0f;
+        // Non-healers; healers too when there is no fight estimate.
         float const READY_MANA_PCT = 80.0f;
-        // "Full" for healers before a hard pack. Drinking stops at 100%; 99 leaves room for rounding.
+        // Healer bots (user, 2026-11-07: by how hard the fight is, not a fixed 80%): what the
+        // fight estimate (Perception/FightLoad.h) has them spend x the margin, at least the
+        // minimum (a healer still out of combat keeps drinking into the fight while the drink
+        // pays: Behaviors/DrinkBehavior.h). "Full" for a fight not bearable even at full mana.
+        // Drinking stops at 100%; 99 leaves room for rounding. Margin and minimum untested.
+        float const READY_HEALER_MANA_MARGIN = 1.5f;
+        float const READY_HEALER_MIN_MANA_PCT = 50.0f;
         float const READY_FULL_MANA_PCT = 99.0f;
         float const READY_MAX_DISTANCE = 40.0f;   // from the leader
         // Next to the leader, a pack further than this may be brought back to the fight spot:

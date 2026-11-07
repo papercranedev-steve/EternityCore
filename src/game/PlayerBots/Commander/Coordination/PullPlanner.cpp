@@ -208,6 +208,33 @@ namespace Commander
             return r.manaStart > 0.0f && r.manaLeft < r.manaStart * PullPlanner::CORNER_MANA_LEFT_SHARE;
         }
 
+        // Healer mana the planned fight needs before the tank goes (PullPlan::healerManaPct): the
+        // fight simulated with every healer bot full and the tank at full health; what each one
+        // spends (the total shared out) x READY_HEALER_MANA_MARGIN, as a share of the smallest
+        // pool. At least READY_HEALER_MIN_MANA_PCT, at most READY_FULL_MANA_PCT (also when not
+        // bearable even then). No estimate or no healer bot: READY_MANA_PCT as before.
+        float HealerManaNeededPct(FightLoad::Input input, bool haveLoad)
+        {
+            if (!haveLoad || input.healers.empty())
+                return PullPlanner::READY_MANA_PCT;
+            float smallestPool = 0.0f;
+            for (FightLoad::Healer& h : input.healers)
+            {
+                h.mana = h.maxMana;
+                if (h.maxMana > 0.0f && (smallestPool <= 0.0f || h.maxMana < smallestPool))
+                    smallestPool = h.maxMana;
+            }
+            if (smallestPool <= 0.0f)
+                return PullPlanner::READY_MANA_PCT;
+            input.tankHealth = input.tankMaxHealth;
+            FightLoad::Result const r = FightLoad::Simulate(input);
+            if (!FightLoad::Bearable(r))
+                return PullPlanner::READY_FULL_MANA_PCT;
+            float const spentEach = std::max(0.0f, r.manaStart - r.manaLeft) / float(input.healers.size());
+            float const pct = spentEach * PullPlanner::READY_HEALER_MANA_MARGIN / smallestPool * 100.0f;
+            return std::min(PullPlanner::READY_FULL_MANA_PCT, std::max(PullPlanner::READY_HEALER_MIN_MANA_PCT, pct));
+        }
+
         std::vector<ObjectGuid> AggroRangeGuids(std::vector<AssistPredictor::Joiner> const& joiners)
         {
             std::vector<ObjectGuid> out;
@@ -964,7 +991,7 @@ namespace Commander
                 issues.push_back({ m.guid, "combat", 0.0f });
             if (m.healthPct < READY_HEALTH_PCT)
                 issues.push_back({ m.guid, "hp", m.healthPct });
-            // Healers may need more than the others before a hard pack (ClearPlanner raises it).
+            // Healers: what the planned fight needs (PullPlan::healerManaPct, HealerManaNeededPct).
             float const manaNeeded = (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
             // Healers: the mana pool, not manaPct (a shapeshifted healer still heals with it).
             // Others: only while mana is their active power. A feral druid bot stays in bear /
@@ -1185,7 +1212,7 @@ namespace Commander
         pull.phaseSinceMs = WorldTimer::getMSTime();
         pull.plannedAtMs = pull.phaseSinceMs;
         pull.phase = skipReady ? PullPhase::Approach : PullPhase::WaitReady;
-        pull.healerManaPct = READY_MANA_PCT;
+        pull.healerManaPct = HealerManaNeededPct(load, haveLoad);
         // `pull now` means now: no second prediction, no waiting for patrols.
         pull.recheckOnApproach = !skipReady;
         if (best.ranged)
@@ -1294,7 +1321,9 @@ namespace Commander
         }
 
         if (!skipReady)
-            report.push_back("Waiting until everyone is ready (90% hp, 80% mana, within 40 yd). '.partybot ai pull now' skips this.");
+            report.push_back(Format("Waiting until everyone is ready (%.0f%% hp, healers %.0f%% mana for this fight, "
+                "others %.0f%%, within %.0f yd). '.partybot ai pull now' skips this.",
+                READY_HEALTH_PCT, pull.healerManaPct, READY_MANA_PCT, READY_MAX_DISTANCE));
         pull.report = report;
         return true;
     }

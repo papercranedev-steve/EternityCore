@@ -334,15 +334,6 @@ namespace ClearPlanner
             Note(plan, "Skipping " + whose + " pack: " + why + ".");
             plan.pull = PullPlan();
         }
-        uint32 CountElites(Map* map, std::vector<ObjectGuid> const& guids)
-        {
-            uint32 elites = 0;
-            for (ObjectGuid g : guids)
-                if (Creature* c = map->GetCreature(g))
-                    if (c->IsElite())
-                        ++elites;
-            return elites;
-        }
 
         // First member to hand to the planner: hostile, starts fights, visible to the tank.
         Creature* PickFirst(PackFacts const& pack, Map* map)
@@ -573,10 +564,8 @@ namespace ClearPlanner
                     continue;
                 }
 
-                // Hard pack (elite or several mobs): healers drink to full first. At low level this
-                // takes seconds (combat scenario 13, 1.8). No cost model yet.
-                bool const hard = CountElites(map, plan.pull.expected) > 0 || plan.pull.expected.size() >= HARD_PACK_MOBS;
-                plan.pull.healerManaPct = hard ? PullPlanner::READY_FULL_MANA_PCT : PullPlanner::READY_MANA_PCT;
+                // Healer mana before the pull: PullPlanner::Plan sets it from the fight estimate
+                // (was: full before an elite or 3 mobs, else 80%).
                 // PullPlanner::Plan sets recheckOnApproach (not a "pull now"): the second
                 // prediction, the limit and the patrol wait run in RecheckBeforeApproach.
 
@@ -595,8 +584,8 @@ namespace ClearPlanner
                         Note(plan, line);
                     }
                 }
-                if (hard)
-                    Note(plan, "Healers drink to full mana first.");
+                if (plan.pull.healerManaPct > PullPlanner::READY_MANA_PCT)
+                    Note(plan, Format("Healers drink to %.0f%% mana first (fight estimate).", plan.pull.healerManaPct));
                 return;
             }
         }
