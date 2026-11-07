@@ -422,7 +422,9 @@ namespace
                 NameOf(map, pull.patrolWaitingFor).c_str(),
                 WorldTimer::getMSTimeDiffToNow(pull.patrolWaitSinceMs) / 1000.0f,
                 Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
-        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana);
+        Commander::Position3 planned;
+        bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && pull.PlannedFightSpot(planned);
+        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana, hasPlanned ? &planned : nullptr);
         if (issues.empty())
         {
             handler->SendSysMessage("Everyone is ready.");

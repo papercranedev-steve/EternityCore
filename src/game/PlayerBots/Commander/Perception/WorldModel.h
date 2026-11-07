@@ -166,6 +166,7 @@ namespace Commander
         // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
         // on top of manaRegen. Perception/RestValue.h.
         float drinkManaPerSec = 0.0f;
+        float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
         std::vector<DebuffFacts> debuffs;           // players only
         // Damage actually taken (Perception/DamageIntake.h): per second over the last few

@@ -667,6 +667,7 @@ namespace WorldModelBuilder
                     f.role = uint8(ai->m_role);
                     f.roleLocked = ai->IsRoleLocked();
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
+                    f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
                     if (member->IsAlive())
                     {

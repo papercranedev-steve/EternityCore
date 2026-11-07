@@ -301,7 +301,8 @@ namespace Commander
                     return false;
                 return true;
             }
-            if (phase != PullPhase::Approach && phase != PullPhase::Return)
+            // (WaitReady too: members take their places, then eat and drink there)
+            if (phase != PullPhase::WaitReady && phase != PullPhase::Approach && phase != PullPhase::Return)
                 return false;
             if (returnToSpot)
                 out = spot;

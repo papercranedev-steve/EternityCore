@@ -109,7 +109,7 @@ namespace Commander
         // Healer bots (user, 2026-11-07: by how hard the fight is, not a fixed 80%): what the
         // fight estimate (Perception/FightLoad.h) has them spend x the margin, at least the
         // minimum (a healer still out of combat keeps drinking into the fight while the drink
-        // pays: Behaviors/DrinkBehavior.h). "Full" for a fight not bearable even at full mana.
+        // pays: Behaviors/RestBehavior.h). "Full" for a fight not bearable even at full mana.
         // Drinking stops at 100%; 99 leaves room for rounding. Margin and minimum untested.
         float const READY_HEALER_MANA_MARGIN = 1.5f;
         float const READY_HEALER_MIN_MANA_PCT = 50.0f;
@@ -180,13 +180,15 @@ namespace Commander
 
         // Pure: who is not ready. Players count too (the leader's own health matters).
         // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.
+        // `planned`: the pull's planned fight spot; within READY_MAX_DISTANCE of it is not far.
         struct Issue
         {
             ObjectGuid who;
             char const* what;   // "dead", "hp", "mana", "far", "combat"
             float value;
         };
-        std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT);
+        std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT,
+                                      Position3 const* planned = nullptr);
     }
 
     class PullAssigner : public IAssigner

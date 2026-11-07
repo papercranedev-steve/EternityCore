@@ -39,9 +39,10 @@ namespace Commander
         // The original rotation still runs in the same tick (instant abilities while walking).
         Backpedal,
         Hold,       // do nothing this tick and skip the original rotation
-        // Out of combat: sit down with the drink, or keep sitting (PartyBotAI::StartDrinking);
-        // fails in combat or with full mana. Every other action stands a drinking bot up first.
-        Drink,
+        // Out of combat: eat and / or drink what is missing, or keep sitting (PartyBotAI::
+        // StartResting); fails in combat or with nothing missing. Every other action stands a
+        // resting bot up first.
+        Rest,
         HoldFire,   // like Hold, and also stop melee swings / auto shot (keeps the target)
         // Drop the target (AttackStop), stop auto shot, call the pet back; then, if holdMs > 0,
         // move to x/y/z like MoveTo. Always succeeds (also when rooted), so the original

@@ -39,9 +39,10 @@ namespace Commander
         TeamPlan& GetPlanMutable() { return m_plan; }
 
         // An out-of-combat plan (pull) needs the Commander hook to run before the original AI.
-        // WaitReady is excluded: bots keep eating and drinking while the party gets ready.
+        // WaitReady too since 2026-11-07: healers and ranged walk to their places for the planned
+        // fight first, then eat and drink there (RestBehavior; the original eat and drink is gone).
         // While the party is already fighting (player attacked first, a patrol walked in), a bot
-        // not yet on any threat list must stand up and help instead of sitting there drinking.
+        // not yet on any threat list helps, or keeps drinking while that pays (RestBehavior).
         // "Fighting" = an enemy with one of us on its threat list: an ally's fight nearby (a
         // guard, an escort) does not stop the party from drinking.
         // The active boss module may ask for the same (IEncounter::WantsOutOfCombatControl):
@@ -49,7 +50,7 @@ namespace Commander
         bool WantsOutOfCombatControl() const
         {
             PullPhase const phase = m_plan.pull.phase;
-            bool const pulling = phase != PullPhase::None && phase != PullPhase::WaitReady;
+            bool const pulling = phase != PullPhase::None;
             // A retreating bot that already dropped combat must keep running to the rally point,
             // not sit down to drink or follow the leader back into the enemies.
             // Since 2026-11-07 the party fighting, or one of us attacking something not fighting

@@ -28,7 +28,7 @@ namespace Commander
                 case BotActionType::StopMove: return "stop";
                 case BotActionType::Backpedal: return "backpedal";
                 case BotActionType::Hold:   return "hold";
-                case BotActionType::Drink:  return "drink";
+                case BotActionType::Rest:   return "rest";
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::Retreat: return "retreat";
                 case BotActionType::UseObject: return "use";
@@ -312,10 +312,9 @@ namespace Commander
         Player* me = bot->me;
         BotAction const& action = proposal.action;
 
-        // A bot drinking during the party's fight (DrinkBehavior) gets up for anything else.
-        // Pet actions are not the bot's own.
-        if (action.type == BotActionType::Drink)
-            return bot->StartDrinking();
+        // A resting bot (RestBehavior) gets up for anything else. Pet actions are not the bot's own.
+        if (action.type == BotActionType::Rest)
+            return bot->StartResting();
         if (!IsPetAction(action.type) && !me->IsStandingUp())
             me->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -462,7 +461,7 @@ namespace Commander
                 return true;
             }
             case BotActionType::UseObject:
-            case BotActionType::Drink:
+            case BotActionType::Rest:
                 break;      // handled above
             case BotActionType::PetAttack:
             case BotActionType::PetFollow:

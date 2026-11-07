@@ -165,8 +165,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/DrinkBehavior.h
-  ${COMMANDER_DIR}/Behaviors/DrinkBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/RestBehavior.h
+  ${COMMANDER_DIR}/Behaviors/RestBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.h

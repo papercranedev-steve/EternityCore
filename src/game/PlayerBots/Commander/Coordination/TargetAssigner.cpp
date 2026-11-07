@@ -199,9 +199,10 @@ namespace Commander
                 return phase == PullPhase::WaitReady || phase == PullPhase::Approach;
             if (phase == PullPhase::Approach || phase == PullPhase::Return || phase == PullPhase::Settle)
                 return true;
-            // Drinking to full pays more than its part of the fight (DrinkBehavior, same value):
+            // Resting to full pays more than its part of the fight (RestBehavior, same value):
             // no target until it is done. Its first hit would put it in combat, no more drinking.
-            return !Tanks::IsTank(m) && RestValue::OfDrinking(world, m, plan.pull.PlannedFight()).Pays();
+            // (Free rest, no fight on or planned: there is no target to give either.)
+            return !Tanks::IsTank(m) && RestValue::Of(world, m, plan.pull.PlannedFight()).Pays();
         }
 
         TargetPick Forced(EnemyFacts const* e, char const* reason)

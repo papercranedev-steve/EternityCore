@@ -38,6 +38,7 @@
 #include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/RestValue.h"
 #include "HealSpells.h"
 
 #include <algorithm>
@@ -404,7 +405,7 @@ bool PartyBotAI::CastHealOrder()
     Unit* pTarget = action.target.IsEmpty() ? me : me->GetMap()->GetUnit(action.target);
     if (!pTarget || !pTarget->IsInWorld() || !pTarget->IsAlive())
         return false;
-    // A healer drinking during the party's fight (DrinkBehavior) gets up for the heal.
+    // A healer resting during the party's fight (RestBehavior) gets up for the heal.
     if (!me->IsStandingUp())
         me->SetStandState(UNIT_STAND_STATE_STAND);
     if (!CanTryToCastSpell(pTarget, action.spell))
@@ -590,70 +591,34 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
     return me->GetMotionMaster()->MoveDistance(pEnemy, 15.0f);
 }
 
-bool PartyBotAI::DrinkAndEat()
+namespace
 {
-    if (m_isBuffing)
-        return false;
-
-    if (me->GetVictim())
-        return false;
-
-    bool const needToEat = me->GetHealthPercent() < 100.0f;
-    bool const needToDrink = (me->GetPowerType() == POWER_MANA) && (me->GetPowerPercent(POWER_MANA) < 100.0f);
-
-    if (!needToEat && !needToDrink)
-        return false;
-
-    bool const isEating = me->HasAura(PB_SPELL_FOOD);
-    bool const isDrinking = me->HasAura(PB_SPELL_DRINK);
-
-    if (!isEating && needToEat)
+    // Per second of the first effect of `spellId` applying `aura` (amount per 5 s), x `rate`.
+    float RestRatePerSec(uint32 spellId, AuraType aura, float rate)
     {
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
-        {
-            me->StopMoving();
-            me->GetMotionMaster()->Clear(false, true);
-            me->GetMotionMaster()->MoveIdle();
-        }
-        if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(PB_SPELL_FOOD))
-        {
-            me->CastSpell(me, pSpellEntry, true);
-            me->RemoveSpellCooldown(pSpellEntry);
-        }
-        return true;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(spellId);
+        if (!pSpell)
+            return 0.0f;
+        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            if (pSpell->EffectApplyAuraName[i] == aura)
+                return pSpell->CalculateSimpleValue(SpellEffectIndex(i)) / 5.0f * rate;
+        return 0.0f;
     }
-
-    if (!isDrinking && needToDrink)
-    {
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
-        {
-            me->StopMoving();
-            me->GetMotionMaster()->Clear(false, true);
-            me->GetMotionMaster()->MoveIdle();
-        }
-        if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(PB_SPELL_DRINK))
-        {
-            me->CastSpell(me, pSpellEntry, true);
-            me->RemoveSpellCooldown(pSpellEntry);
-        }
-        return true;
-    }
-
-    return needToEat || needToDrink;
 }
 
 float PartyBotAI::DrinkManaPerSec() const
 {
-    if (!me->GetMaxPower(POWER_MANA))
-        return 0.0f;
-    SpellEntry const* pDrink = sSpellMgr.GetSpellEntry(PB_SPELL_DRINK);
-    if (!pDrink)
+    // (mana the active power only: a druid in bear or cat form does not drink)
+    if (me->GetPowerType() != POWER_MANA || !me->GetMaxPower(POWER_MANA))
         return 0.0f;
     // SPELL_AURA_MOD_POWER_REGEN: mana per 5 seconds (StatSystem.cpp, Player::UpdateManaRegen).
-    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-        if (pDrink->EffectApplyAuraName[i] == SPELL_AURA_MOD_POWER_REGEN && pDrink->EffectMiscValue[i] == POWER_MANA)
-            return pDrink->CalculateSimpleValue(SpellEffectIndex(i)) / 5.0f * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
-    return 0.0f;
+    return RestRatePerSec(PB_SPELL_DRINK, SPELL_AURA_MOD_POWER_REGEN, sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA));
+}
+
+float PartyBotAI::FoodHealthPerSec() const
+{
+    // SPELL_AURA_MOD_REGEN: health per 5 seconds out of combat (Player::RegenerateHealth).
+    return RestRatePerSec(PB_SPELL_FOOD, SPELL_AURA_MOD_REGEN, sWorld.getConfig(CONFIG_FLOAT_RATE_HEALTH));
 }
 
 bool PartyBotAI::IsDrinking() const
@@ -661,31 +626,62 @@ bool PartyBotAI::IsDrinking() const
     return me->HasAura(PB_SPELL_DRINK);
 }
 
-bool PartyBotAI::IsCommanderDrinking(bool commanderOutOfCombat) const
+bool PartyBotAI::IsResting() const
 {
-    return commanderOutOfCombat && !me->IsInCombat() && IsDrinking();
+    return me->HasAura(PB_SPELL_DRINK) || me->HasAura(PB_SPELL_FOOD);
 }
 
-bool PartyBotAI::StartDrinking()
+bool PartyBotAI::NeedsRest() const
 {
-    if (me->IsInCombat() || me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA))
-        return false;
-    if (IsDrinking())
+    float const full = Commander::RestValue::FULL_SHARE;
+    if (float(me->GetHealth()) < float(me->GetMaxHealth()) * full)
         return true;
-    if (me->IsMounted())
-        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
-    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
-    {
-        me->StopMoving();
-        me->GetMotionMaster()->Clear(false, true);
-        me->GetMotionMaster()->MoveIdle();
-    }
-    SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(PB_SPELL_DRINK);
-    if (!pSpellEntry)
+    return DrinkManaPerSec() > 0.0f && float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * full;
+}
+
+bool PartyBotAI::StartResting()
+{
+    if (me->IsInCombat() || m_isBuffing || me->GetVictim())
         return false;
-    me->CastSpell(me, pSpellEntry, true);
-    me->RemoveSpellCooldown(pSpellEntry);
-    return IsDrinking();
+    bool const needToEat = me->GetHealth() < me->GetMaxHealth();
+    bool const needToDrink = DrinkManaPerSec() > 0.0f && me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA);
+    if (!needToEat && !needToDrink)
+        return false;
+
+    // Far behind the leader (it is about to be teleported there): full at once, as before.
+    Player* pLeader = GetPartyLeader();
+    if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f))
+    {
+        me->SetHealth(me->GetMaxHealth());
+        if (me->GetPowerType() == POWER_MANA)
+            me->SetPower(POWER_MANA, me->GetMaxPower(POWER_MANA));
+        return false;
+    }
+
+    bool const startEat = needToEat && !me->HasAura(PB_SPELL_FOOD);
+    bool const startDrink = needToDrink && !me->HasAura(PB_SPELL_DRINK);
+    if (startEat || startDrink)
+    {
+        if (me->IsMounted())
+            me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
+        {
+            me->StopMoving();
+            me->GetMotionMaster()->Clear(false, true);
+            me->GetMotionMaster()->MoveIdle();
+        }
+    }
+    for (uint32 spellId : { startEat ? uint32(PB_SPELL_FOOD) : 0u, startDrink ? uint32(PB_SPELL_DRINK) : 0u })
+    {
+        if (!spellId)
+            continue;
+        if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(spellId))
+        {
+            me->CastSpell(me, pSpellEntry, true);
+            me->RemoveSpellCooldown(pSpellEntry);
+        }
+    }
+    return IsResting();
 }
 
 bool PartyBotAI::ShouldAutoRevive() const
@@ -1312,12 +1308,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     bool const commanderOutOfCombat = !me->IsInCombat() && sCommanderMgr.WantsOutOfCombatControl(this);
 
+    // Fix: resurrecting a dead member comes before eating/drinking: a resting bot stands up this
+    // tick so UpdateOutOfCombatAI() can cast it. Targets with a pending request are ignored so
+    // the bot does not stand up again and again.
+    bool resurrectFirst = false;
     if (!me->IsInCombat())
     {
-        // Fix: resurrecting a dead member comes before eating/drinking. Skip
-        // DrinkAndEat this tick so UpdateOutOfCombatAI() can cast it. Targets with
-        // a pending request are ignored so the bot does not stand up again and again.
-        bool resurrectFirst = false;
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
         {
             if (Player* pDead = SelectResurrectionTarget())
@@ -1326,7 +1322,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 {
                     // A resurrection that keeps failing (Rebirth without its reagent, a cast
                     // that never lands) must not keep the bot from drinking forever: after
-                    // PB_RESURRECT_TRY_MS of trying without a success, let DrinkAndEat run for
+                    // PB_RESURRECT_TRY_MS of trying without a success, let it rest for
                     // PB_RESURRECT_BACKOFF_MS, then try again.
                     // The window is per bot: keyed per corpse, two failing corpses took turns
                     // as the target and each switch restarted it, so the bot never drank.
@@ -1366,19 +1362,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             }
         }
 
-        // (no eating or drinking while a Commander pull is under way)
-        if (!commanderOutOfCombat && !resurrectFirst && DrinkAndEat())
-        {
-            if (!me->IsWithinDistInMap(pLeader, 100.0f))
-            {
-                me->SetHealth(me->GetMaxHealth());
-                if (me->GetPowerType() == POWER_MANA)
-                    me->SetPower(POWER_MANA, me->GetMaxPower(POWER_MANA));
-            }
-            else if (me->IsMounted())
-                me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
-            return;
-        }
+        // (eating and drinking: the Commander rest module, RestBehavior, through the hook below)
 
         // Teleport to leader if too far away.
         if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
@@ -1394,16 +1378,20 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
     }
 
-    // (a bot drinking under the Commander stands up when the Commander has something better)
-    bool const commanderDrinking = IsCommanderDrinking(commanderOutOfCombat);
-    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderDrinking)
+    // Eating and drinking are the Commander's (RestBehavior): the hook runs out of combat while
+    // something is missing, and a resting bot stands up when the Commander has something better
+    // (the arbiter before any other action, the heal order step), or here for a resurrection.
+    bool const commanderOn = sCommanderMgr.IsEnabled() && !IsInDuel();
+    bool const needsRest = commanderOn && !me->IsInCombat() && NeedsRest();
+    bool const commanderResting = commanderOn && !me->IsInCombat() && IsResting() && !resurrectFirst;
+    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
     if (me->GetSheath() == SHEATH_STATE_UNARMED && !me->IsMounted())
         me->SetSheath(SHEATH_STATE_MELEE);
 
     // (not while retreating: a 10 s resurrection or a buff next to the enemies stops the run)
-    if (!me->IsInCombat() && !me->IsMounted() && !commanderDrinking &&
+    if (!me->IsInCombat() && !me->IsMounted() && !commanderResting &&
         !(commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
     {
         UpdateOutOfCombatAI();
@@ -1444,7 +1432,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // themselves. Since 2026-11-07 every target comes from there (target assignment doc): the
     // original target selection (leader's victim, own attackers, the first attacker of a
     // member, the tank's "defend party members") is deleted, not bypassed.
-    if ((me->IsInCombat() || commanderOutOfCombat) && sCommanderMgr.OnBotCombatUpdate(this))
+    if ((me->IsInCombat() || commanderOutOfCombat || needsRest || commanderResting) &&
+        sCommanderMgr.OnBotCombatUpdate(this))
         return;
 
     // A healer not in combat during the party's fight: its heal step is here, after the hook

@@ -974,7 +974,8 @@ namespace Commander
             tank->GetName(), weapon->GetProto()->Name1, ammoType == ITEM_SUBCLASS_BULLET ? "bullets" : "arrows");
     }
 
-    std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct)
+    std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct,
+                                                            Position3 const* planned)
     {
         std::vector<Issue> issues;
         PartyMemberFacts const* leader = world.FindMember(world.leader);
@@ -995,7 +996,7 @@ namespace Commander
             float const manaNeeded = (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
             // Healers: the mana pool, not manaPct (a shapeshifted healer still heals with it).
             // Others: only while mana is their active power. A feral druid bot stays in bear /
-            // cat form and PartyBotAI::DrinkAndEat only drinks with mana active, so counting its
+            // cat form and PartyBotAI::StartResting only drinks with mana active, so counting its
             // pool would hold every pull until the ready timeout.
             // Players can drink in any form themselves: their pool counts too.
             bool const usePool = (m.isBot && m.role == ROLE_HEALER) || !m.isBot;
@@ -1007,8 +1008,10 @@ namespace Commander
             }
             if (leader && m.guid != leader->guid)
             {
+                // Near the planned fight spot is fine too: healers and ranged take their places
+                // there while the party gets ready (stance modules).
                 float const d = PackResolver::Distance(m.pos, leader->pos);
-                if (d > READY_MAX_DISTANCE)
+                if (d > READY_MAX_DISTANCE && !(planned && PackResolver::Distance(m.pos, *planned) <= READY_MAX_DISTANCE))
                     issues.push_back({ m.guid, "far", d });
             }
         }
@@ -1746,7 +1749,10 @@ namespace Commander
                     interrupt("a fight started.");
                     return;
                 }
-                std::vector<PullPlanner::Issue> const issues = PullPlanner::CheckReady(world, pull.healerManaPct);
+                Position3 planned;
+                bool const hasPlanned = pull.PlannedFightSpot(planned);
+                std::vector<PullPlanner::Issue> const issues =
+                    PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr);
                 if (issues.empty())
                 {
                     // Announce once: RecheckBeforeApproach may send the pull back here (new
