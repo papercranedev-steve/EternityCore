@@ -387,7 +387,9 @@ bool PartyBotAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpe
 
 bool PartyBotAI::IsHealingControlled() const
 {
-    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::Healing, WorldTimer::getMSTime());
+    // (the heal module takes over only while the party fights, also before this healer is in
+    // combat itself: HealPlanBehavior::ControlsHealingOf)
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Healing, WorldTimer::getMSTime());
 }
 
 bool PartyBotAI::CastHealOrder()
@@ -400,7 +402,12 @@ bool PartyBotAI::CastHealOrder()
     m_directives->ClearHealOrder();     // one cast per order
 
     Unit* pTarget = action.target.IsEmpty() ? me : me->GetMap()->GetUnit(action.target);
-    if (!pTarget || !pTarget->IsInWorld() || !pTarget->IsAlive() || !CanTryToCastSpell(pTarget, action.spell))
+    if (!pTarget || !pTarget->IsInWorld() || !pTarget->IsAlive())
+        return false;
+    // A healer drinking during the party's fight (DrinkBehavior) gets up for the heal.
+    if (!me->IsStandingUp())
+        me->SetStandState(UNIT_STAND_STATE_STAND);
+    if (!CanTryToCastSpell(pTarget, action.spell))
         return false;
     if (DoCastSpell(pTarget, action.spell) != SPELL_CAST_OK)
         return false;
@@ -419,9 +426,10 @@ bool PartyBotAI::FindAndPreHealTarget()
 bool PartyBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPercent)
 {
     // The Commander heal module decides target and rank (Behaviors/HealPlanBehavior.h).
-    // No order = rest: nobody needs a heal yet.
+    // No order = rest: nobody needs a heal yet. Out of combat the order is cast after the
+    // Commander hook (UpdateAI): the out of combat AI runs before the hook sets it.
     if (IsHealingControlled())
-        return CastHealOrder();
+        return me->IsInCombat() && CastHealOrder();
 
     Unit* pTarget = SelectHealTarget(selfHealPercent, groupHealPercent);
     if (!pTarget)
@@ -632,6 +640,52 @@ bool PartyBotAI::DrinkAndEat()
     }
 
     return needToEat || needToDrink;
+}
+
+float PartyBotAI::DrinkManaPerSec() const
+{
+    if (!me->GetMaxPower(POWER_MANA))
+        return 0.0f;
+    SpellEntry const* pDrink = sSpellMgr.GetSpellEntry(PB_SPELL_DRINK);
+    if (!pDrink)
+        return 0.0f;
+    // SPELL_AURA_MOD_POWER_REGEN: mana per 5 seconds (StatSystem.cpp, Player::UpdateManaRegen).
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (pDrink->EffectApplyAuraName[i] == SPELL_AURA_MOD_POWER_REGEN && pDrink->EffectMiscValue[i] == POWER_MANA)
+            return pDrink->CalculateSimpleValue(SpellEffectIndex(i)) / 5.0f * sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);
+    return 0.0f;
+}
+
+bool PartyBotAI::IsDrinking() const
+{
+    return me->HasAura(PB_SPELL_DRINK);
+}
+
+bool PartyBotAI::IsCommanderDrinking(bool commanderOutOfCombat) const
+{
+    return commanderOutOfCombat && !me->IsInCombat() && IsDrinking();
+}
+
+bool PartyBotAI::StartDrinking()
+{
+    if (me->IsInCombat() || me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA))
+        return false;
+    if (IsDrinking())
+        return true;
+    if (me->IsMounted())
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
+    {
+        me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
+    SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(PB_SPELL_DRINK);
+    if (!pSpellEntry)
+        return false;
+    me->CastSpell(me, pSpellEntry, true);
+    me->RemoveSpellCooldown(pSpellEntry);
+    return IsDrinking();
 }
 
 bool PartyBotAI::ShouldAutoRevive() const
@@ -1340,14 +1394,17 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
     }
 
-    if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+    // (a bot drinking under the Commander stands up when the Commander has something better)
+    bool const commanderDrinking = IsCommanderDrinking(commanderOutOfCombat);
+    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderDrinking)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
     if (me->GetSheath() == SHEATH_STATE_UNARMED && !me->IsMounted())
         me->SetSheath(SHEATH_STATE_MELEE);
 
     // (not while retreating: a 10 s resurrection or a buff next to the enemies stops the run)
-    if (!me->IsInCombat() && !me->IsMounted() && !(commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
+    if (!me->IsInCombat() && !me->IsMounted() && !commanderDrinking &&
+        !(commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
     {
         UpdateOutOfCombatAI();
 
@@ -1388,6 +1445,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // original target selection (leader's victim, own attackers, the first attacker of a
     // member, the tank's "defend party members") is deleted, not bypassed.
     if ((me->IsInCombat() || commanderOutOfCombat) && sCommanderMgr.OnBotCombatUpdate(this))
+        return;
+
+    // A healer not in combat during the party's fight: its heal step is here, after the hook
+    // that set this tick's heal order (the out of combat AI above runs before it).
+    if (!me->IsInCombat() && IsHealingControlled() && CastHealOrder())
         return;
 
     // The Commander does not run in duels: the opponent is the only target.

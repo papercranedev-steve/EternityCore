@@ -1178,7 +1178,10 @@ namespace Commander
         pull.returnToSpot = returnToSpot;
         pull.packAt = PositionOf(best.pullTarget);
         if (haveLoad && estimate.fightSec > 0.0f)
+        {
             pull.expectedIncomingDps = estimate.damage / estimate.fightSec;
+            pull.expectedFightSec = estimate.fightSec;
+        }
         pull.phaseSinceMs = WorldTimer::getMSTime();
         pull.plannedAtMs = pull.phaseSinceMs;
         pull.phase = skipReady ? PullPhase::Approach : PullPhase::WaitReady;

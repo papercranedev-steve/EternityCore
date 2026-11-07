@@ -163,6 +163,10 @@ namespace Commander
         // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
         // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
         float fillerManaPerSec = 0.0f;
+        // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
+        // on top of manaRegen. Perception/RestValue.h.
+        float drinkManaPerSec = 0.0f;
+        bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
         std::vector<DebuffFacts> debuffs;           // players only
         // Damage actually taken (Perception/DamageIntake.h): per second over the last few
         // seconds, and the biggest spike within a short window. Value::TakenDps combines the

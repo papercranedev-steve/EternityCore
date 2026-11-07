@@ -2,7 +2,11 @@
  * PartyBot Commander layer 3: whom a healer bot heals, when, and with which rank ("heal" module).
  * Design: .kiro/docs/2026-11-01-heal-plan.md. Arithmetic: Behaviors/HealPlan.h.
  *
- * Healer bots in combat with a party enemy. While the module runs, the rotation's own heal
+ * Healer bots while the party fights (a party enemy), also before the healer is in combat
+ * itself (2026-11-07; before, an out of combat healer healed with the original out of combat
+ * rotation, past the pull's healing hold). Out of combat the order is cast after the Commander
+ * hook (PartyBotAI::UpdateAI); while the pull holds healing (PullPlan::HoldsWaiting) only
+ * emergencies. While the module runs, the rotation's own heal
  * choice is off (PartyBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
  * the rotation casts this module's HealOrder of the tick, or nothing (rest). Fade (ThreatBehavior),
  * dispels and the rest of the rotation keep their order; while the order is an emergency

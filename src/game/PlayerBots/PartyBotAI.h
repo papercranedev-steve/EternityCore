@@ -183,6 +183,17 @@ public:
     // (Takeover::CasterChase: HealerStanceBehavior, RangedStanceBehavior), also before it is
     // in combat itself: UpdateAI does not follow the leader and stops a follow under way.
     bool IsStanceControlled() const;
+    // Mana per second the bots' drink (PB_SPELL_DRINK, no item) restores at the server's mana
+    // rate; 0 without a mana pool. A fact for the Commander (PartyMemberFacts::drinkManaPerSec).
+    float DrinkManaPerSec() const;
+    bool IsDrinking() const;
+    // Commander drink (BotActionType::Drink, Behaviors/DrinkBehavior.h): sit down with the
+    // drink, or keep sitting. False in combat, with full mana or without mana.
+    bool StartDrinking();
+    // Out of combat under the Commander (a pull, the party's fight) the Commander decides when a
+    // drinking bot stands up (the arbiter before any other action, the heal order step): UpdateAI
+    // does not stand it up and skips the out of combat AI while it drinks.
+    bool IsCommanderDrinking(bool commanderOutOfCombat) const;
     // IsStanceControlled and the bot keeps a caster distance (UsesCasterChase): BeginChasing
     // does not start the 25 yd caster chase, UpdateAI drops one under way.
     bool IsCasterChaseControlled() const;

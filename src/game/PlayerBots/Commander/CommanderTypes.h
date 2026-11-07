@@ -39,6 +39,9 @@ namespace Commander
         // The original rotation still runs in the same tick (instant abilities while walking).
         Backpedal,
         Hold,       // do nothing this tick and skip the original rotation
+        // Out of combat: sit down with the drink, or keep sitting (PartyBotAI::StartDrinking);
+        // fails in combat or with full mana. Every other action stands a drinking bot up first.
+        Drink,
         HoldFire,   // like Hold, and also stop melee swings / auto shot (keeps the target)
         // Drop the target (AttackStop), stop auto shot, call the pet back; then, if holdMs > 0,
         // move to x/y/z like MoveTo. Always succeeds (also when rooted), so the original
@@ -96,7 +99,7 @@ namespace Commander
         Taunt,      // tank auto-taunt and "protect a member" (ThreatBehavior)
         Escape,     // Frost Nova / Blink / Psychic Scream / run away from melee (EscapeBehavior)
         Interrupt,  // reflex interrupts of the class rotations (InterruptBehavior)
-        Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), in combat
+        Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), while the party fights
         ThreatDrop, // Fade (ThreatBehavior)
         Dispel,     // friendly dispels in combat (DispelAssigner / DispelBehavior)
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,

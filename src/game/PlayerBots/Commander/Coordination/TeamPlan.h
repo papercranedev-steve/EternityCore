@@ -10,6 +10,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/ManaWorth.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -159,6 +160,18 @@ namespace Commander
         // FightLoad estimate of the planned fight: damage per second on the tank (0 = none).
         // Values a bot's preparation before the fight (Value::ContributionPerSecAt).
         float expectedIncomingDps = 0.0f;
+        float expectedFightSec = 0.0f;      // same estimate: how long the fight lasts
+        // The estimate as ManaWorth's planned fight while the pull runs; none (sec 0) otherwise.
+        ManaWorth::Fight PlannedFight() const
+        {
+            ManaWorth::Fight f;
+            if (phase != PullPhase::None)
+            {
+                f.sec = expectedFightSec;
+                f.incomingDps = expectedIncomingDps;
+            }
+            return f;
+        }
 
         // WaitReady bookkeeping.
         float healerManaPct = 80.0f;        // healer mana needed (PullPlanner::READY_MANA_PCT by default)

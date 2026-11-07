@@ -460,6 +460,9 @@ namespace Commander
         // until the casters of a line of sight pull came.
         if (me->IsInCombat() || !pull.HoldsWaiting(healer))
             return;
+        // Drinking is waiting too (DrinkBehavior decides when it gets up): a hold would stand it up.
+        if (bot->IsDrinking())
+            return;
         // Someone about to die: heal now (the rotation's heal step runs without the hold).
         if (healer && pull.phase == PullPhase::Settle && !pull.awaitArrival &&
             std::any_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& m)

@@ -4,6 +4,7 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/CommanderMgr.h"
@@ -123,17 +124,19 @@ namespace Commander
     bool HealPlanBehavior::ControlsHealingOf(PartyBotAI const* bot, WorldModel const& world)
     {
         return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
-               bot->GetRole() == ROLE_HEALER && bot->me->IsInCombat() && !bot->IsInDuel() &&
-               world.HasPartyEnemy();
+               bot->GetRole() == ROLE_HEALER && !bot->IsInDuel() && world.HasPartyEnemy();
     }
 
     void HealPlanBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
-                                   TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
+                                   TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         if (!ControlsHealingOf(bot, world))
             return;
 
         Player* me = bot->me;
+        // Still out of combat and held by the pull's opening (PullOpening.h: healing starts last,
+        // its threat lands on every enemy at once): emergencies only.
+        bool const heldByPull = !me->IsInCombat() && plan.pull.HoldsWaiting(true);
         PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
         if (!myFacts)
             return;
@@ -202,6 +205,8 @@ namespace Commander
         for (Candidate& c : candidates)
         {
             bool const emergency = c.assessment.need == HealPlan::Need::Emergency;
+            if (heldByPull && !emergency)
+                continue;
             // Emergencies prefer heals that do not pull, but take one that does (HealPlan::Pick).
             if (checkAggro && c.unit->GetHealthPercent() >= ThreatBehavior::HEAL_IGNORE_THREAT_PCT)
                 for (size_t i = 0; i < c.options.size(); ++i)

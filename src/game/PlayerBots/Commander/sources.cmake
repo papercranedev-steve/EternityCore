@@ -145,6 +145,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/FightLoad.cpp
   ${COMMANDER_DIR}/Perception/ManaWorth.h
   ${COMMANDER_DIR}/Perception/ManaWorth.cpp
+  ${COMMANDER_DIR}/Perception/RestValue.h
+  ${COMMANDER_DIR}/Perception/RestValue.cpp
   ${COMMANDER_DIR}/Perception/FearRisk.h
   ${COMMANDER_DIR}/Perception/FearRisk.cpp
   ${COMMANDER_DIR}/Perception/ControlValue.h
@@ -163,6 +165,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/DrinkBehavior.h
+  ${COMMANDER_DIR}/Behaviors/DrinkBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.h

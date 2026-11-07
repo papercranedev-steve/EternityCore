@@ -666,6 +666,8 @@ namespace WorldModelBuilder
                     f.isBot = true;
                     f.role = uint8(ai->m_role);
                     f.roleLocked = ai->IsRoleLocked();
+                    f.drinkManaPerSec = ai->DrinkManaPerSec();
+                    f.drinking = ai->IsDrinking();
                     if (member->IsAlive())
                     {
                         FillInterrupts(ai, f);

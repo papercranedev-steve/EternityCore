@@ -5,6 +5,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/RestValue.h"
 #include "Commander/CommanderMgr.h"
 #include "Timer.h"
 #include <algorithm>
@@ -187,7 +188,7 @@ namespace Commander
         }
 
         // Nobody gets a target (TargetAssigner.h).
-        bool HeldOut(TeamPlan const& plan, PartyMemberFacts const& m)
+        bool HeldOut(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& m)
         {
             if (plan.retreat.active)
                 return true;
@@ -196,7 +197,11 @@ namespace Commander
             PullPhase const phase = plan.pull.phase;
             if (m.guid == plan.pull.tank)
                 return phase == PullPhase::WaitReady || phase == PullPhase::Approach;
-            return phase == PullPhase::Approach || phase == PullPhase::Return || phase == PullPhase::Settle;
+            if (phase == PullPhase::Approach || phase == PullPhase::Return || phase == PullPhase::Settle)
+                return true;
+            // Drinking to full pays more than its part of the fight (DrinkBehavior, same value):
+            // no target until it is done. Its first hit would put it in combat, no more drinking.
+            return !Tanks::IsTank(m) && RestValue::OfDrinking(world, m, plan.pull.PlannedFight()).Pays();
         }
 
         TargetPick Forced(EnemyFacts const* e, char const* reason)
@@ -254,7 +259,7 @@ namespace Commander
             {
                 if (!m.isBot || m.isPet || !m.CanAct() || m.role == ROLE_HEALER || m.role == ROLE_INVALID)
                     continue;
-                if (HeldOut(plan, m))
+                if (HeldOut(world, plan, m))
                     continue;
                 EnemyFacts const* current = ctx.Find(m.victim);
                 if (current && !ctx.Hittable(*current, m))
