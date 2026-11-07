@@ -72,6 +72,10 @@ namespace Commander
         Position3 pos;
         ObjectGuid victim;          // who this member is attacking
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
+        uint32 castRemainingMs = 0; // of that cast or channel
+        // Combo points (rogue, cat druid) and the enemy they are on: lost when it switches target.
+        uint8 comboPoints = 0;
+        ObjectGuid comboTarget;
         bool resting = false;       // eating, drinking or sitting
         bool inCombat = false;
         // Cannot act: stunned, asleep, feared, confused, polymorphed, or charmed by an enemy.

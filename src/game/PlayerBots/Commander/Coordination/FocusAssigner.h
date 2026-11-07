@@ -15,6 +15,12 @@
  *
  * Intercepts (TeamPlan::intercepts): enemies one bot kills at once without moving the party
  * focus (walking bombs, summons running at a healer). Combat scenarios 8 and 11.
+ * Since 2026-11-03 offered to DutyAllocator (one primary duty per bot, shared with interrupts):
+ * candidates are ranged damage dealers within INTERCEPT_RANGE and melee within
+ * MELEE_INTERCEPT_RANGE (ranged within PATROL_INTERCEPT_RANGE for patrol casters), ranked by the
+ * lowest switch cost (Perception/SwitchCost.h; the previous interceptor gets
+ * INTERCEPT_STICKY_YARDS of walking off), and only if the intercept is worth more than the switch.
+ * Until then: ranged first, then melee, nearest first.
  */
 
 #ifndef MANGOS_COMMANDER_FOCUS_ASSIGNER_H
@@ -68,9 +74,16 @@ namespace Commander
         static constexpr float PATROL_INTERCEPT_RANGE = 30.0f;
         static constexpr float INTERCEPT_STICKY_YARDS = 5.0f;   // previous interceptor counts as this much closer
 
-        AssignStage GetStage() const override { return AssignStage::Tasks; }
+        // Switch cost reach (Perception/SwitchCost.h): spell range of a ranged bot, melee reach.
+        static constexpr float RANGED_REACH = 30.0f;
+        static constexpr float MELEE_REACH = 5.0f;
+
+        // Duties module (2026-11-03): intercepts are offered as needs; the focus is chosen in
+        // Apply, after the allocation, so intercepted enemies are left out in the same refresh.
+        AssignStage GetStage() const override { return AssignStage::Duties; }
         char const* GetId() const override { return "focus"; }
-        void Assign(WorldModel const& world, TeamPlan& plan) const override;
+        void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
+        void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
 
         // Kill priority of `enemy`; also used by FocusBehavior for the bot's current target.

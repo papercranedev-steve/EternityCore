@@ -281,8 +281,16 @@ namespace
         {
             handler->SendSysMessage("Intercepts:");
             for (Commander::InterceptDuty const& d : plan.intercepts)
+            {
                 handler->PSendSysMessage("    |cffffcc00%s|r: %s (%s, %.1f pt)",
                     NameOf(map, d.enemy).c_str(), NameOf(map, d.bot).c_str(), d.reason, d.points);
+                for (Commander::DutyResult const& r : plan.duties)
+                    if (r.kind == Commander::DutyKind::Intercept && r.enemy == d.enemy)
+                        for (Commander::DutyPass const& pass : r.passed)
+                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
+                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
+                                NameOf(map, pass.busyEnemy).c_str());
+            }
         }
 
         if (plan.interrupts.empty())

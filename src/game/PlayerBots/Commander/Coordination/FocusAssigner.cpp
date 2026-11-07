@@ -9,6 +9,7 @@
 #include "Commander/Perception/SpellProfile.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/SwitchCost.h"
 #include "Creature.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -16,7 +17,6 @@
 #include "Timer.h"
 #include <algorithm>
 #include <cstdio>
-#include <set>
 
 namespace Commander
 {
@@ -172,87 +172,74 @@ namespace Commander
             return false;
         }
 
-        std::vector<InterceptDuty> BuildIntercepts(WorldModel const& world, TeamPlan const& plan)
+        // Every enemy that needs an intercept, with the bots that may take it. Rank =
+        // -(switch cost - stickiness): the cheapest switch first. Only candidates for whom the
+        // intercept is worth more than their switch (points > SwitchCost) are offered.
+        void OfferIntercepts(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out)
         {
-            std::vector<InterceptDuty> const& previous = plan.intercepts;
-            std::vector<InterceptNeed> needs;
             for (EnemyFacts const& e : world.enemies)
             {
                 InterceptNeed n;
-                if (NeedsIntercept(world, e, n))
-                    needs.push_back(n);
-                // A caster standing in a patrol's path that no lure brings out (PatrolAssigner,
-                // previous refresh: it runs after this one). Worth what the patrol would cost.
-                else if (plan.patrolMove.active &&
-                         std::find(plan.patrolMove.kill.begin(), plan.patrolMove.kill.end(), e.guid) != plan.patrolMove.kill.end() &&
-                         e.acting && !e.crowdControlled && e.health)
+                if (!NeedsIntercept(world, e, n))
                 {
+                    // A caster standing in a patrol's path that no lure brings out
+                    // (PatrolAssigner, same refresh: it runs in the situation stage). Worth what
+                    // the patrol would cost.
+                    if (!(plan.patrolMove.active &&
+                          std::find(plan.patrolMove.kill.begin(), plan.patrolMove.kill.end(), e.guid) != plan.patrolMove.kill.end() &&
+                          e.acting && !e.crowdControlled && e.health))
+                        continue;
                     PartyMemberFacts const* victim = world.FindMember(e.victim);
                     n.enemy = &e;
                     n.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
                     n.reason = "caster in a patrol's path";
                     n.points = plan.patrolMove.benefit;
                     n.rangedOnly = true;
-                    needs.push_back(n);
                 }
-            }
-            std::stable_sort(needs.begin(), needs.end(), [](InterceptNeed const& a, InterceptNeed const& b)
-            {
-                return a.distanceToVictim < b.distanceToVictim;
-            });
 
-            std::vector<InterceptDuty> duties;
-            std::set<ObjectGuid> busy;      // one intercept per bot
-            for (InterceptNeed const& n : needs)
-            {
                 ObjectGuid previousBot;
-                for (InterceptDuty const& d : previous)
-                    if (d.enemy == n.enemy->guid)
+                for (InterceptDuty const& d : plan.intercepts)
+                    if (d.enemy == e.guid)
                         previousBot = d.bot;
 
-                // Ranged damage dealers first; melee only if no ranged one can take it.
-                PartyMemberFacts const* chosen = nullptr;
-                for (uint8 role : { uint8(ROLE_RANGE_DPS), uint8(ROLE_MELEE_DPS) })
-                {
-                    if (n.rangedOnly && role != ROLE_RANGE_DPS)
-                        break;
-                    // In a patrol's path: within spell range, they do not walk closer.
-                    float const range = n.rangedOnly ? FocusAssigner::PATROL_INTERCEPT_RANGE :
-                                        role == ROLE_RANGE_DPS ? FocusAssigner::INTERCEPT_RANGE
-                                                               : FocusAssigner::MELEE_INTERCEPT_RANGE;
-                    float bestDistance = 0.0f;
-                    for (PartyMemberFacts const& m : world.party)
-                    {
-                        if (!m.isBot || m.isPet || !m.CanAct() || m.role != role || busy.count(m.guid))
-                            continue;
-                        float const distance = PackResolver::Distance(m.pos, n.enemy->pos);
-                        if (distance > range)
-                            continue;
-                        float const ranked = distance - (m.guid == previousBot ? FocusAssigner::INTERCEPT_STICKY_YARDS : 0.0f);
-                        if (!chosen || ranked < bestDistance)
-                        {
-                            chosen = &m;
-                            bestDistance = ranked;
-                        }
-                    }
-                    if (chosen)
-                        break;
-                }
-                if (!chosen)
-                    continue;
+                DutyNeed need;
+                need.kind = DutyKind::Intercept;
+                need.enemy = e.guid;
+                need.now = true;
+                need.points = n.points;
+                // Equal points: closest to its victim first (the most urgent).
+                need.tieMs = uint32(n.distanceToVictim * 1000.0f);
+                need.reason = n.reason;
 
-                InterceptDuty d;
-                d.enemy = n.enemy->guid;
-                d.bot = chosen->guid;
-                d.points = n.points;
-                d.reason = n.reason;
-                busy.insert(chosen->guid);
-                duties.push_back(d);
+                for (PartyMemberFacts const& m : world.party)
+                {
+                    if (!m.isBot || m.isPet || !m.CanAct())
+                        continue;
+                    bool const ranged = m.role == ROLE_RANGE_DPS;
+                    if (!ranged && (m.role != ROLE_MELEE_DPS || n.rangedOnly))
+                        continue;
+                    // In a patrol's path: within spell range, they do not walk closer. Melee only
+                    // when the enemy is already close (no running across the room).
+                    float const range = n.rangedOnly ? FocusAssigner::PATROL_INTERCEPT_RANGE :
+                                        ranged ? FocusAssigner::INTERCEPT_RANGE : FocusAssigner::MELEE_INTERCEPT_RANGE;
+                    if (PackResolver::Distance(m.pos, e.pos) > range)
+                        continue;
+                    float const reach = ranged ? FocusAssigner::RANGED_REACH : FocusAssigner::MELEE_REACH;
+                    float const cost = SwitchCost::Of(world, m, e, reach);
+                    if (n.points <= cost)
+                        continue;
+                    float sticky = 0.0f;
+                    if (m.guid == previousBot)
+                        sticky = Value::LostAction(world, m, FocusAssigner::INTERCEPT_STICKY_YARDS / CastValues::RUN_YARDS_PER_SEC);
+                    DutyCandidate c;
+                    c.bot = m.guid;
+                    c.rank = sticky - cost;
+                    need.candidates.push_back(c);
+                }
+                out.push_back(std::move(need));
             }
-            return duties;
         }
     }
-
     bool FocusAssigner::IsEligible(WorldModel const& world, EnemyFacts const& e, bool allowAllyOnly)
     {
         if (!e.acting || e.crowdControlled || !e.health)
@@ -373,9 +360,26 @@ namespace Commander
         plan.intercepts.clear();
     }
 
-    void FocusAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
+    void FocusAssigner::Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const
     {
-        plan.intercepts = BuildIntercepts(world, plan);
+        OfferIntercepts(world, plan, out);
+    }
+
+    void FocusAssigner::Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const
+    {
+        std::vector<InterceptDuty> intercepts;
+        for (DutyResult const& r : results)
+        {
+            if (r.kind != DutyKind::Intercept || r.primary.IsEmpty())
+                continue;
+            InterceptDuty d;
+            d.enemy = r.enemy;
+            d.bot = r.primary;
+            d.points = r.points;
+            d.reason = r.reason;
+            intercepts.push_back(d);
+        }
+        plan.intercepts = std::move(intercepts);
 
         // Intercepted enemies are one bot's job; the party focus stays where it is (scenario 8:
         // a skull on the bomb would pull the tank and the melee over too).

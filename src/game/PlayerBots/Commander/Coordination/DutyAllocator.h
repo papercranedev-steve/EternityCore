@@ -38,6 +38,7 @@ namespace Commander
     enum class DutyKind : uint8
     {
         Interrupt,      // InterruptAssigner
+        Intercept,      // FocusAssigner: kill a must-kill enemy without moving the focus
     };
 
     struct DutyCandidate
@@ -57,6 +58,7 @@ namespace Commander
         uint32 tieMs = 0;           // among equal points, smaller first (interrupt: cast time left)
         bool wantsBackup = false;
         uint8 detail = 0;           // module data passed through to its result (interrupt: CastCategory)
+        char const* reason = "";    // static text, passed through (intercept: why it must die)
         std::vector<DutyCandidate> candidates;
     };
 
@@ -81,6 +83,7 @@ namespace Commander
         bool now = false;
         float points = 0.0f;
         uint8 detail = 0;
+        char const* reason = "";
         ObjectGuid primary;
         uint32 primarySpellId = 0;
         ObjectGuid backup;

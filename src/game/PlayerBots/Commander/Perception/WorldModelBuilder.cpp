@@ -65,6 +65,15 @@ namespace WorldModelBuilder
             if (Unit const* victim = unit->GetVictim())
                 f.victim = victim->GetObjectGuid();
             f.casting = unit->IsNonMeleeSpellCasted(false, false, true);
+            for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
+                if (Spell const* spell = unit->GetCurrentSpell(type))
+                    if (spell->getState() != SPELL_STATE_FINISHED)
+                        f.castRemainingMs = std::max(f.castRemainingMs, uint32(std::max(0, int32(spell->GetCastedTime()))));
+            if (Player const* player = unit->ToPlayer())
+            {
+                f.comboPoints = player->GetComboPoints();
+                f.comboTarget = player->GetComboTargetGuid();
+            }
             f.resting = unit->GetStandState() != UNIT_STAND_STATE_STAND ||
                         unit->HasAuraType(SPELL_AURA_MOD_REGEN) || unit->HasAuraType(SPELL_AURA_MOD_POWER_REGEN);
             f.inCombat = unit->IsInCombat();

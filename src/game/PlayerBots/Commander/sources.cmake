@@ -63,6 +63,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/DamageIntake.cpp
   ${COMMANDER_DIR}/Perception/ValueModel.h
   ${COMMANDER_DIR}/Perception/ValueModel.cpp
+  ${COMMANDER_DIR}/Perception/SwitchCost.h
+  ${COMMANDER_DIR}/Perception/SwitchCost.cpp
   ${COMMANDER_DIR}/Perception/CastValue.h
   ${COMMANDER_DIR}/Perception/CastValue.cpp
   ${COMMANDER_DIR}/VetoChecks.h

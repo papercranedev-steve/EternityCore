@@ -11,8 +11,8 @@
  *     Assign writes the plan directly, in registration order; later stages read the result.
  *  2. Tasks     - who does what. Duties modules only Offer needs; DutyAllocator answers all
  *     of them together (one primary duty per bot) and each module writes its part (Apply).
- *     Tasks modules not moved to offers yet (FocusAssigner) still Assign directly, before the
- *     duties. New task modules are written as Duties.
+ *     Tasks modules not moved to offers yet (none left since 2026-11-03) would still Assign
+ *     directly, before the duties. New task modules are written as Duties.
  */
 
 #ifndef MANGOS_COMMANDER_IASSIGNER_H

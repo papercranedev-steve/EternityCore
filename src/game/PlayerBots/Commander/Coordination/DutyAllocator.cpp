@@ -11,6 +11,7 @@ namespace DutyAllocator
         switch (kind)
         {
             case DutyKind::Interrupt: return "interrupt";
+            case DutyKind::Intercept: return "intercept";
         }
         return "?";
     }
@@ -47,6 +48,7 @@ namespace DutyAllocator
             r.now = need.now;
             r.points = need.points;
             r.detail = need.detail;
+            r.reason = need.reason;
 
             for (DutyCandidate const& c : need.candidates)
             {
