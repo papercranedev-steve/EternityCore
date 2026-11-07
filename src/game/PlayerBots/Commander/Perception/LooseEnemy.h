@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 1 (eyes): what an enemy hitting someone other than the tank costs,
  * and what the tank winning it back with threat would save. Consequences only; whether the tank
- * goes after it is TargetAssigner's (Coordination/TankTargets.cpp), taunting it ThreatBehavior's.
+ * goes after it, taunts it or leaves it to the victim's Fade is the team rescue's (RescueValue.h, RescueAssigner).
  * Design: .kiro/docs/2026-11-01-threat-behavior.md section 3, value-scoring doc 5.3.
  *
  * Loss over `seconds` = Value::MoveLoss (what the victim takes on top of the tank: a caster's

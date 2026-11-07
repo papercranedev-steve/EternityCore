@@ -21,6 +21,9 @@
  *            none, the first other candidate even if it is primary elsewhere.
  * A need with neither is dropped. Candidates passed over for the primary are recorded with the
  * reason (DutyResult::passed, shown by `.partybot ai plan`).
+ * Alternatives (DutyNeed::exclusive, 2026-11-07 team rescue): a need whose key and target an
+ * earlier answered need already has is skipped (a control and a taunt on the same loose enemy
+ * would both spend a bot on one problem).
  *
  * Pure function of its input (no game objects): replayable offline, the place where Jev would
  * choose among the same offers later.
@@ -41,6 +44,18 @@ namespace Commander
         Intercept,      // FocusAssigner: kill a must-kill enemy without moving the focus
         Dispel,         // DispelAssigner: remove a debuff from a party member
         CrowdControl,   // CrowdControlAssigner: take an enemy out of the fight for a while
+        Rescue,         // RescueAssigner: get an enemy off a member who is not a tank
+    };
+
+    // Needs of different kinds that solve the same problem of one enemy (DutyNeed::exclusive):
+    // at most one of them with the same key and target is answered, the first in the order
+    // above (the most valuable). 0 = no such group.
+    enum class DutyExclusive : uint8
+    {
+        None = 0,
+        // The enemy is dealt with: taken off its victim (rescue), controlled (single target
+        // control) or killed by one bot (intercept of a summon on a non-tank).
+        EnemyHandled = 1,
     };
 
     struct DutyCandidate
@@ -62,6 +77,7 @@ namespace Commander
         bool wantsBackup = false;
         uint8 detail = 0;           // module data passed through to its result (interrupt: CastCategory)
         char const* reason = "";    // static text, passed through (intercept: why it must die)
+        DutyExclusive exclusive = DutyExclusive::None;
         std::vector<DutyCandidate> candidates;
     };
 

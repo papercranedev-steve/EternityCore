@@ -92,6 +92,9 @@ public:
     // CanTryToCastSpell now, or right after StanceSwapFor: with the rage Tactical Mastery keeps,
     // losing at most PB_STANCE_SWAP_MAX_RAGE_LOSS.
     bool CanCastWithStance(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // The target-free part of CanCastWithStance: off cooldown and enough power now, or after
+    // the stance swap (same rage rule). For the world model's ability facts (taunts).
+    bool IsReadyWithStance(SpellEntry const* pSpellEntry) const;
     // Casts now, or starts the swap (SPELL_CAST_OK = swap started, the spell follows).
     SpellCastResult DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry);
     // Threat of `pSpellEntry` cast after StanceSwapFor relative to now (Defensive 1.3, others 0.8);
@@ -172,7 +175,7 @@ public:
     // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
     // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
     bool IsEscapeControlled() const;
-    // The Commander threat module decides Fade (ThreatBehavior): the priest rotation's own
+    // The Commander team rescue decides Fade (RescueAssigner / RescueBehavior): the priest rotation's own
     // "attacked: Fade" stands down.
     bool IsThreatDropControlled() const;
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's

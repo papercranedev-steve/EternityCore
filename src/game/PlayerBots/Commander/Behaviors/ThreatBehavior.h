@@ -8,17 +8,17 @@
  *            (Coordination/TargetAssigner.h); the losses come from Perception/LooseEnemy.h and
  *            the stop rule from Perception/ThreatRoom.h, shared with it. This module keeps the
  *            taunts, area threat, stop hitting (HoldFire), Fade and pets.
- *  Tank    - loose enemy: compare doing nothing, winning it back with threat, and taunting.
- *            The loss of each option is the damage the person being hit takes until the enemy
- *            is back (death penalty if they would not survive). A taunt also costs its
- *            cooldown. Taunts without SPELL_EFFECT_ATTACK_ME (Mocking Blow, Challenging
- *            Shout / Roar) only lend threat while their aura lasts: their loss also counts the
- *            hits after it fades. Otherwise top up the smallest lead (not valued).
+ *  Team rescue (2026-11-07, todo 20): taking ONE loose enemy off its victim (taunt, winning it
+ *            back with threat, the victim's Fade) is the brain's (Coordination/RescueAssigner.h,
+ *            values in Perception/RescueValue.h); RescueBehavior casts the taunt and Fade and
+ *            takes Takeover::Taunt / ThreatDrop over. This module no longer taunts single
+ *            enemies or fades.
+ *  Tank    - area threat on several loose or thinly held enemies around it. Loose enemies the
+ *            brain gave someone else (the priest fades it) are not counted. Taunts without
+ *            SPELL_EFFECT_ATTACK_ME (Challenging Shout / Roar) only lend threat while their
+ *            aura lasts: their loss also counts the hits after it fades.
  *            Melee enemies on a healer or ranged bot also cost the victim's output while they
- *            chase it (Value::HarassLoss; casters standing back do not). Winning back with
- *            threat starts after the walk over (distance / RUN_YARDS_PER_SEC), so a victim
- *            running to the tank (EscapeBehavior) makes it cheaper. Only taunts castable now
- *            (range, cooldown, stance swap) are proposed.
+ *            chase it (Value::HarassLoss; casters standing back do not).
  *            Area threat: threat per enemy from spell data (spell_threat + damage x multiplier,
  *            caster modifiers); a warrior spell in the wrong stance is cast after a stance swap
  *            (PartyBotAI::DoCastWithStance) and costs STANCE_SWAP_COST_SEC more. Damaging area
@@ -36,12 +36,6 @@
  *            under tension > 1, only members below ManaBudget::HealCeilingPct. Heal ranks
  *            come from CombatBotBaseAI::ChooseHeal (HealSpells.h), the rotation's own choice.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
- *  Fade    - non-tanks with ClassKit::ThreatDrop (priest), taken over from the rotation
- *            (Takeover::ThreatDrop; it used to Fade whenever attacked). For each enemy hitting
- *            the bot: after the drop, does another row beat its threat (110% / 130%)? Benefit =
- *            the hits it does not take while that one is hit instead (Value::MoveLoss, all
- *            hits if it turns to an ally), until Fade ends or the enemy dies; cost = one global
- *            cooldown. Urgent if the bot dies within FADE_URGENT_SEC, else Assigned.
  *  Pets    - of hunter / warlock bots (threat-behavior doc 4.7). Tank in the party (alive tank
  *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.
  *            No tank and the pet has a taunt: it is a holder (damage dealers leave room under
@@ -84,7 +78,6 @@ namespace Commander
 
         // Value scoring (value-scoring doc 5.3, 5.4).
         static constexpr float LOOSE_HORIZON_SEC = 10.0f;     // "do nothing" is judged over this long at most
-        static constexpr float TAUNT_REACTION_SEC = 0.5f;     // hits taken even when taunting at once
         static constexpr float TAUNT_RESERVE_SEC = 1.0f;      // taunt cooldown cost: this many seconds of enemy melee
         static constexpr float TANK_RECLAIM_SEC = 2.0f;       // how long an enemy hits a dps/healer who pulled it
         static constexpr float SWITCH_TARGET_SEC = 0.5f;      // lost time when a dps switches target
@@ -106,18 +99,10 @@ namespace Commander
         // Battle Stance; PartyBotAI::DoCastWithStance) also costs this long of the tank's action:
         // weaker threat and armor in the other stance until the rotation swaps back.
         static constexpr float STANCE_SWAP_COST_SEC = 1.0f;
-        // Fade is Urgent when the bot would die within this long of the hits on it now.
-        static constexpr float FADE_URGENT_SEC = 4.0f;
-
         char const* GetId() const override { return "threat"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        // Tank bot: an acting enemy within TANK_REACH_RANGE hits a member that is not a tank
-        // (and is not fighting an ally). Taunt or win it back without waiting for the next bot
-        // interval; Propose weighs it as usual.
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
 
         // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
         // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
@@ -130,8 +115,6 @@ namespace Commander
                          std::vector<Proposal>& out) const;
         void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        // Non-tanks with a class threat drop (Fade): see the header comment.
-        void ProposeThreatDrop(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
         void ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Headroom `who` must keep on `enemy` (damage dealers and pets): DPS_STOP_HEADROOM of the

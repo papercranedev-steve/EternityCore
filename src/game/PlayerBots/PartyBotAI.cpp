@@ -1608,7 +1608,7 @@ void PartyBotAI::UpdateInCombatAI()
 {
     // The tank's "defend party members" (switch to the first enemy hitting a member) and its
     // taunt on its own victim are gone since 2026-11-07: the Commander chooses the tank's targets
-    // (TargetAssigner) and its taunts (ThreatBehavior, Takeover::Taunt).
+    // (TargetAssigner) and its taunts (team rescue: RescueAssigner / RescueBehavior, Takeover::Taunt).
     if (!IsInDuel() && m_role != ROLE_TANK && CrowdControlMarkedTargets())
         return;
 
@@ -2413,7 +2413,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
     if (!me->GetAttackers().empty() &&
         m_role != ROLE_TANK)
     {
-        // 2026-11-03: the Commander threat module decides Fade (ThreatBehavior, Takeover::ThreatDrop).
+        // The Commander decides Fade (team rescue since 2026-11-07: RescueBehavior, Takeover::ThreatDrop).
         if (m_spells.priest.pFade && !IsThreatDropControlled() &&
             CanTryToCastSpell(me, m_spells.priest.pFade))
         {
@@ -2853,6 +2853,24 @@ bool PartyBotAI::CanCastWithStance(Unit const* pTarget, SpellEntry const* pSpell
     uint32 const power = Powers(pSpellEntry->powerType) == POWER_RAGE ? kept : me->GetPower(Powers(pSpellEntry->powerType));
     return CanTryToCastSpellAs(pTarget, pSpellEntry, StanceForm(pStance), power) &&
            PassesPartyCastChecks(pTarget, pSpellEntry);
+}
+
+bool PartyBotAI::IsReadyWithStance(SpellEntry const* pSpellEntry) const
+{
+    if (!me->IsSpellReady(pSpellEntry))
+        return false;
+    Powers const powerType = Powers(pSpellEntry->powerType);
+    uint32 const cost = uint32(Spell::CalculatePowerCost(pSpellEntry, me));
+    if (pSpellEntry->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK)
+        return powerType == POWER_HEALTH || me->GetPower(powerType) >= cost;
+    if (m_stanceSwap.spell || !StanceSwapFor(pSpellEntry))
+        return false;
+    uint32 const rage = me->GetPower(POWER_RAGE);
+    uint32 const kept = std::min(rage, RageKeptOnStanceSwap());
+    if (rage - kept > PB_STANCE_SWAP_MAX_RAGE_LOSS)
+        return false;
+    uint32 const power = powerType == POWER_RAGE ? kept : me->GetPower(powerType);
+    return power >= cost;
 }
 
 SpellCastResult PartyBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry)

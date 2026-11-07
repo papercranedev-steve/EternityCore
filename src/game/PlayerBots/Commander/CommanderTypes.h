@@ -104,11 +104,11 @@ namespace Commander
     // version stands down; the check in official code is listed in the code-structure doc 6.2.
     enum class Takeover : uint8
     {
-        Taunt,      // tank auto-taunt and "protect a member" (ThreatBehavior)
+        Taunt,      // tank auto-taunt and "protect a member" (team rescue: RescueBehavior)
         Escape,     // Frost Nova / Blink / Psychic Scream / run away from melee (EscapeBehavior)
         Interrupt,  // reflex interrupts of the class rotations (InterruptBehavior)
         Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), while the party fights
-        ThreatDrop, // Fade (ThreatBehavior)
+        ThreatDrop, // Fade (team rescue: RescueBehavior)
         Dispel,     // friendly dispels in combat (DispelAssigner / DispelBehavior)
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
         // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)

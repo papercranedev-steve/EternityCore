@@ -1,6 +1,7 @@
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <map>
+#include <utility>
 
 namespace Commander
 {
@@ -14,6 +15,7 @@ namespace DutyAllocator
             case DutyKind::Intercept: return "intercept";
             case DutyKind::Dispel: return "dispel";
             case DutyKind::CrowdControl: return "control";
+            case DutyKind::Rescue: return "rescue";
         }
         return "?";
     }
@@ -36,9 +38,15 @@ namespace DutyAllocator
         };
         std::map<ObjectGuid, Claim> primaries;     // bot -> the primary duty it holds
 
+        std::vector<std::pair<DutyExclusive, ObjectGuid>> handled;     // answered alternatives
+
         std::vector<DutyResult> results;
         for (DutyNeed& need : needs)
         {
+            if (need.exclusive != DutyExclusive::None &&
+                std::find(handled.begin(), handled.end(), std::make_pair(need.exclusive, need.target)) != handled.end())
+                continue;
+
             std::stable_sort(need.candidates.begin(), need.candidates.end(), [](DutyCandidate const& a, DutyCandidate const& b)
             {
                 return a.rank > b.rank;
@@ -103,6 +111,8 @@ namespace DutyAllocator
                 }
             }
 
+            if (!r.primary.IsEmpty() && need.exclusive != DutyExclusive::None)
+                handled.emplace_back(need.exclusive, need.target);
             if (!r.primary.IsEmpty() || !r.backup.IsEmpty())
                 results.push_back(std::move(r));
         }

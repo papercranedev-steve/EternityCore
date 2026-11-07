@@ -1,4 +1,5 @@
 #include "Commander/Coordination/TargetRules.h"
+#include "Commander/Coordination/RescueAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/LooseEnemy.h"
 #include "Commander/Perception/PackResolver.h"
@@ -16,47 +17,35 @@ namespace TankTargets
 {
     namespace
     {
-        float Net(TargetPick const& p) { return p.benefit - p.cost; }
-
-        // 1. The most valuable loose enemy to win back with threat (the current target included).
-        TargetPick BestLoose(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
+        // 1. The rescue the brain gave this tank (RescueAssigner: a loose enemy, team rescue).
+        // Winning it back with threat: that enemy. A taunt: cast where the tank stands when in
+        // range and sight (RescueBehavior); else the tank walks over to that enemy first.
+        TargetPick FromRescue(TargetContext const& ctx, PartyMemberFacts const& tank)
         {
             WorldModel const& world = ctx.world;
-            float const tankRate = LooseEnemy::TankRate(world, tank.guid);
-            TargetPick best;
-            for (EnemyFacts const* e : ctx.candidates)
+            for (DutyResult const& r : ctx.plan.duties)
             {
-                if (e->victim.IsEmpty() || e->victim == tank.guid || !ctx.Hittable(*e, tank))
+                if (r.kind != DutyKind::Rescue || r.primary != tank.guid)
                     continue;
-                // On an ally (tank-like or not): it fights it on purpose (combat scenario 9).
-                if (world.FindAlly(e->victim))
-                    continue;
-                PartyMemberFacts const* victim = world.FindMember(e->victim);
-                if (!victim || victim->charmed || Tanks::IsTank(*victim))
-                    continue;
-                // Only this fight (a teleported member's room, combat scenario 10), and with several
-                // tank bots the nearest one takes it.
-                float const distance = PackResolver::Distance(tank.pos, e->pos);
-                if (distance > TANK_REACH || Tanks::CloserBot(world, tank.guid, e->pos, distance, TANK_SHARE_MARGIN))
-                    continue;
-                bool const isCurrent = e == current;
-                if (!isCurrent && distance > MELEE_REACH + e->boundingRadius &&
-                    RouteRisk::Blocked(world, tank, *e))
-                    continue;
-
-                LooseValue const v = LooseEnemy::WinBack(world, *e, *victim, tank, tankRate, distance);
+                EnemyFacts const* e = ctx.Find(r.target);
+                if (!e || !ctx.Hittable(*e, tank))
+                    return TargetPick();
+                if (r.primarySpellId)
+                {
+                    float const distance = PackResolver::Distance(tank.pos, e->pos) - e->boundingRadius;
+                    for (TauntAbility const& t : tank.taunts)
+                        if (t.spellId == r.primarySpellId && distance <= t.maxRange && e->InSightOf(tank.guid))
+                            return TargetPick();
+                }
                 TargetPick p;
                 p.enemy = e;
-                p.benefit = (v.lossNothing - v.lossThreat) * LooseEnemy::Mult(*e, nullptr);
-                p.cost = isCurrent ? 0.0f : SwitchCost::Of(world, tank, *e, MELEE_REACH);
-                p.urgent = v.deadly;
-                p.reason = "win back a loose enemy";
-                if (p.benefit <= p.cost)
-                    continue;
-                if (!best.enemy || Net(p) > Net(best))
-                    best = p;
+                p.cost = e->guid == tank.victim ? 0.0f : SwitchCost::Of(world, tank, *e, MELEE_REACH);
+                p.benefit = r.points + p.cost;
+                p.urgent = (r.detail & RescueAssigner::DETAIL_URGENT) != 0;
+                p.reason = r.primarySpellId ? "rescue: walk into taunt range" : "rescue: win back a loose enemy";
+                return p;
             }
-            return best;
+            return TargetPick();
         }
 
         // 2. An enemy on the tank with a lead too thin for the next heal (fresh adds at 0 threat,
@@ -156,7 +145,7 @@ namespace TankTargets
 
     TargetPick Choose(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
     {
-        TargetPick loose = BestLoose(ctx, tank, current);
+        TargetPick loose = FromRescue(ctx, tank);
         if (loose.enemy)
         {
             if (loose.enemy == current)

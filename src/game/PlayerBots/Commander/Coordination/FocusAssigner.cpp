@@ -137,6 +137,7 @@ namespace Commander
             float distanceToVictim = 0.0f;  // closest to its victim = most urgent
             char const* reason = "";
             bool rangedOnly = false;        // melee would walk to it
+            bool loose = false;             // on a member who is not a tank (team rescue is the alternative)
         };
 
         // Judged on facts only (simple version, see design doc "limits"):
@@ -165,6 +166,7 @@ namespace Commander
             if (e.summoned && victim && !victim->isPet && !Tanks::IsTank(*victim))
             {
                 out.reason = "summon on non-tank";
+                out.loose = true;
                 float const horizon = std::min(FocusAssigner::ONE_OFF_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
                 out.points = Value::HitLoss(world, e, *victim, horizon);
                 return true;
@@ -207,6 +209,10 @@ namespace Commander
                 need.target = e.guid;
                 need.now = true;
                 need.points = n.points;
+                // A summon on a non-tank is also a loose enemy (RescueAssigner): killing it or
+                // taking it off its victim, one of them.
+                if (n.loose)
+                    need.exclusive = DutyExclusive::EnemyHandled;
                 // Equal points: closest to its victim first (the most urgent).
                 need.tieMs = uint32(n.distanceToVictim * 1000.0f);
                 need.reason = n.reason;

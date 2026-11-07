@@ -66,6 +66,8 @@ namespace Commander
             n.kind = DutyKind::CrowdControl;
             n.target = enemy;
             n.now = true;
+            // Controlling a loose enemy or taking it off its victim (RescueAssigner): one of them.
+            n.exclusive = DutyExclusive::EnemyHandled;
             n.reason = "control";
             return n;
         };

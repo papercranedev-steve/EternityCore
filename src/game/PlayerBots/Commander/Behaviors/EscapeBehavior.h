@@ -45,7 +45,7 @@
  *       horizon H = min(HORIZON_SEC, time for the chaser to die); walk = distance x PATH_FACTOR / speed
  *       benefit = sum over chasers: loss(H) - loss(min(H, walk + TAUNT_REACTION_SEC)), loss =
  *                 Value::MoveLoss(vs the tank) + Value::HarassLoss: the tank takes it on arrival
- *                 (its taunt is cheap then: ThreatBehavior counts distance and harassment too)
+ *                 (its taunt is cheap then: RescueValue counts distance and harassment too)
  *       cost    = LostAction(bot, walk)
  *  3. No tank: only with every chaser rooted, run to FleePoint::Find (the old Nova-and-run);
  *     benefit = HitLoss + HarassLoss over ROOT_HOLD_SEC per chaser, cost = LostAction(walk).

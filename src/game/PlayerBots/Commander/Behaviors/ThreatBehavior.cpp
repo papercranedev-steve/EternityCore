@@ -10,6 +10,8 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/LooseEnemy.h"
 #include "Commander/Perception/ThreatRoom.h"
+#include "Commander/Perception/PetTaunt.h"
+#include "Commander/Perception/RescueValue.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
@@ -61,48 +63,6 @@ namespace Commander
             return Tanks::CloserBot(world, self, pos, distance, ThreatBehavior::TANK_SHARE_MARGIN);
         }
 
-        // A pet spell that makes enemies attack the pet: positive threat (Growl, Torment,
-        // Suffering) or a taunt. Cower and Soothing Kiss lower threat (negative value): not taunts.
-        bool IsPetTauntSpell(SpellEntry const* spell)
-        {
-            if (!spell->IsAutocastable())
-                return false;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-            {
-                if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
-                    return true;
-                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
-                    return true;
-                if (spell->Effect[i] == SPELL_EFFECT_THREAT && spell->CalculateSimpleValue(SpellEffectIndex(i)) > 0)
-                    return true;
-            }
-            return false;
-        }
-
-        // Taunt spells the pet has learned (pets keep only the highest rank).
-        void PetTauntSpells(Pet const* pet, std::vector<SpellEntry const*>& out)
-        {
-            for (auto const& learned : pet->m_petSpells)
-            {
-                if (learned.second.state == PETSPELL_REMOVED)
-                    continue;
-                if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(learned.first))
-                    if (IsPetTauntSpell(spell))
-                        out.push_back(spell);
-            }
-        }
-
-        // The pet casts one of its taunts by itself (autocast on): it pulls enemies to it.
-        bool HasTauntAutocast(Pet const* pet)
-        {
-            std::vector<SpellEntry const*> taunts;
-            PetTauntSpells(pet, taunts);
-            for (SpellEntry const* spell : taunts)
-                if (std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) != pet->m_autospells.end())
-                    return true;
-            return false;
-        }
-
         // A controlled pet (hunter, warlock) of this party that holds enemies itself: there is
         // no tank and its taunt is on autocast (voidwalker, hunter pet with Growl).
         bool IsHolderPet(PartyBotAI const* bot, WorldModel const& world, ObjectGuid guid)
@@ -113,7 +73,7 @@ namespace Commander
             Pet const* pet = unit ? unit->ToPet() : nullptr;
             if (!pet || !pet->IsControlled())
                 return false;
-            return HasTauntAutocast(pet);
+            return PetTaunt::HasAutocast(pet);
         }
 
         // `victim` holds the enemy it is being hit by: a holder member (above), a holder pet
@@ -214,37 +174,6 @@ namespace Commander
         // Area threat abilities of a tank: ClassKit::AreaThreat (Classes/<Class>.cpp).
         using GroupThreatOption = AreaThreatSpell;
 
-        // Seconds a taunt holds an enemy only through its aura (Mocking Blow, Challenging Shout,
-        // Challenging Roar): without SPELL_EFFECT_ATTACK_ME the threat it lends is taken back
-        // when the aura fades (ThreatManager::tauntFadeOut; strat-20261101-200215: Challenging
-        // Shout +748, -714 six seconds later). 0 = the threat stays (Taunt, Growl).
-        float TemporaryTauntSec(SpellEntry const* spell)
-        {
-            bool aura = false;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-            {
-                if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
-                    return 0.0f;
-                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
-                    aura = true;
-            }
-            return aura ? std::max(0, spell->GetDuration()) / 1000.0f : 0.0f;
-        }
-
-        // Seconds the enemy still hits its victim after a taunt: until the taunt lands; for a
-        // temporary taunt also after it fades, until the threat built meanwhile closes the gap.
-        float TauntSecOnVictim(float gap, float tankRate, float holdSec, float horizon)
-        {
-            float sec = std::min(ThreatBehavior::TAUNT_REACTION_SEC, horizon);
-            if (holdSec > 0.0f && holdSec < horizon)
-            {
-                float const rest = std::max(0.0f, gap - tankRate * holdSec);
-                float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
-                sec += std::min(recovery, horizon - holdSec);
-            }
-            return sec;
-        }
-
         // Threat one cast puts on each enemy it hits: flat spell_threat + direct damage x its
         // multiplier (Spell::HandleThreatSpells, Unit::DealDamage), with the caster's threat
         // modifiers and a warrior's stance swap (PartyBotAI::StanceSwapThreatFactor).
@@ -310,7 +239,7 @@ namespace Commander
                     continue;
 
                 float const threat = o.taunt ? 0.0f : ThreatPerEnemy(bot, o, tankRate);
-                std::pair<float, bool> const value = valueOf(threat, o.taunt ? TemporaryTauntSec(o.spell) : 0.0f);
+                std::pair<float, bool> const value = valueOf(threat, o.taunt ? RescueValue::TemporaryTauntSec(o.spell) : 0.0f);
                 float cost = switchCost;
                 if (bot->StanceSwapFor(o.spell) && !bot->CanTryToCastSpell(castTarget, o.spell))
                     cost += stanceCost;
@@ -336,10 +265,6 @@ namespace Commander
             return Value::HitLoss(world, e, who, seconds);
         }
 
-        float TauntMult(EnemyFacts const& e, bool* immune)
-        {
-            return LooseEnemy::Mult(e, immune);
-        }
     }
 
     bool ThreatBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -356,40 +281,6 @@ namespace Commander
         }
     }
 
-    bool ThreatBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
-    {
-        switch (what)
-        {
-            case Takeover::Taunt:
-                return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
-            case Takeover::ThreatDrop:
-                return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop() && !bot->IsInDuel();
-            default:
-                return false;
-        }
-    }
-
-    bool ThreatBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/) const
-    {
-        if (bot->GetRole() != ROLE_TANK)
-            return false;
-        PartyMemberFacts const* tank = world.FindMember(bot->me->GetObjectGuid());
-        if (!tank || !tank->CanAct())
-            return false;
-        for (EnemyFacts const& e : world.enemies)
-        {
-            if (!e.acting || e.crowdControlled || e.victim.IsEmpty() || e.victim == tank->guid || world.FindAlly(e.victim))
-                continue;
-            PartyMemberFacts const* victim = world.FindMember(e.victim);
-            if (!victim || victim->charmed || Tanks::IsTank(*victim))
-                continue;
-            // With several tank bots each one wakes; Propose leaves the enemy to the nearest.
-            if (PackResolver::Distance(tank->pos, e.pos) <= TANK_REACH_RANGE)
-                return true;
-        }
-        return false;
-    }
-
     void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
@@ -398,9 +289,6 @@ namespace Commander
 
         if (world.enemies.empty())
             return;
-
-        if (bot->GetRole() != ROLE_TANK)
-            ProposeThreatDrop(bot, world, out);
 
         switch (bot->GetRole())
         {
@@ -461,29 +349,12 @@ namespace Commander
         // 1. Loose enemies hitting someone who is not a tank.
         for (EnemyFacts const& e : world.enemies)
         {
-            if (e.crowdControlled || !e.acting || e.victim.IsEmpty() || e.victim == self)
+            // Loose: on a member who is not a tank, not an ally's fight, not a pet that growls
+            // it back (Perception/RescueValue.h, shared with the brain's rescue). Enemies on
+            // pets are loose too: with a tank around, the pet's taunt autocast is off.
+            PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
+            if (!victim)
                 continue;
-            // On an ally (tank-like or not): not loose. The ally is fighting it on purpose and
-            // taking it off the ally only moves the damage onto us (combat scenario 9).
-            if (world.FindAlly(e.victim))
-                continue;
-            PartyMemberFacts const* victim = world.FindMember(e.victim);
-            if (!victim || victim->charmed)
-                continue;   // not one of us, or mind controlled
-            // Enemies on pets are loose too: with a tank around, the pet's taunt autocast is off
-            // and it moves to a safe enemy (ProposePet), so nobody else takes it back. A few hits
-            // on a pet cost little: the value scoring below decides.
-            if (Tanks::IsTank(*victim))
-                continue;   // another tank (bot or player) holds it
-            // Except a pet that taunts by itself (the player's pet, or a bot pet before its
-            // autocast was switched off): it growls the enemy back, and taunting or switching
-            // against it is a war the tank loses its main target in.
-            if (victim->isPet)
-                if (Unit* petUnit = me->GetMap()->GetUnit(victim->guid))
-                    if (Pet const* pet = petUnit->ToPet())
-                        if (HasTauntAutocast(pet))
-                            continue;
-
             // Only this fight: an enemy in another room hitting a teleported member (Gandling's
             // Shadow Portal) or far away is not ours to run after (combat scenario 10).
             Unit const* unit = me->GetMap()->GetUnit(e.guid);
@@ -495,51 +366,21 @@ namespace Commander
             if (CloserTankBot(world, self, e.pos, distance))
                 continue;
 
-            bool tauntImmune = false;
-            float const mult = TauntMult(e, &tauntImmune);
-
-            // Losses compare with the tank taking the hits (Perception/LooseEnemy.h: MoveLoss +
-            // HarassLoss). Winning it back with threat (walk over + recovery) is the brain's
-            // choice since 2026-11-07 (TargetAssigner, Coordination/TankTargets.cpp); the same
-            // values decide here whether a taunt is worth it.
+            float const mult = LooseEnemy::Mult(e, nullptr);
+            // Taking one loose enemy off its victim (taunt, winning it back with threat, the
+            // victim's Fade) is the brain's since 2026-11-07 (team rescue: RescueAssigner,
+            // RescueBehavior casts the taunt). Here only the area threat that takes several.
+            // One the brain gave somebody else (the priest fades it) is not counted again.
+            RescueDuty const* rescue = nullptr;
+            for (RescueDuty const& d : plan.rescues)
+                if (d.enemy == e.guid)
+                    rescue = &d;
+            if (rescue && rescue->bot != self)
+                continue;
             LooseValue const v = LooseEnemy::WinBack(world, e, *victim, *myFacts, tankRate, distance);
-            float const gap = v.gap;
-            float const horizon = v.horizon;
-            float const lossNothing = v.lossNothing;
-            bool const deadly = v.deadly;
-            auto const lossFor = [&](float seconds) { return LooseEnemy::Loss(world, e, *victim, *myFacts, seconds); };
-            ProposalTier const tier = deadly ? ProposalTier::Urgent : ProposalTier::Assigned;
-
-            if (!tauntImmune)
-            {
-                uint32 lastTauntId = 0;
-                for (SpellEntry const* pTaunt : bot->m_spellListTaunt)
-                {
-                    // Only taunts castable now (range, cooldown, rage, stance swap): an out of range
-                    // or cooling down taunt only failed at execution. Duplicates listed once.
-                    if (pTaunt->Id == lastTauntId || !bot->CanCastWithStance(unit, pTaunt))
-                        continue;
-                    lastTauntId = pTaunt->Id;
-                    // Cooldown: Taunt and Mocking Blow use the category cooldown (Taunt 355 has
-                    // RecoveryTime 0 and CategoryRecoveryTime 10 s).
-                    uint32 const cooldownMs = pTaunt->GetRecoveryTime();
-                    float const share = std::min(1.0f, (cooldownMs / 1000.0f) / LOOSE_HORIZON_SEC);
-                    float const reserve = share * Value::Points(world, enemyMelee * TAUNT_RESERVE_SEC);
-                    float const lossTaunt = lossFor(TauntSecOnVictim(gap, tankRate, TemporaryTauntSec(pTaunt), horizon));
-                    float cost = switchCost + reserve;
-                    if (bot->StanceSwapFor(pTaunt))
-                        cost += stanceCost;
-                    Proposal p = MakeProposal(tier, BotActionType::Cast, e.guid, pTaunt);
-                    p.reason = "taunt loose enemy";
-                    p.SetValue((lossNothing - lossTaunt) * mult, cost);
-                    out.push_back(p);
-                }
-            }
-
-            // Winning it back with threat (walking over, switching target): TargetAssigner.
 
             if (distance <= GROUP_THREAT_RADIUS)
-                loose.push_back({ &e, victim, gap, horizon, lossNothing, mult, deadly });
+                loose.push_back({ &e, victim, v.gap, v.horizon, v.lossNothing, mult, v.deadly });
         }
 
         // Enemies on the tank with a lead thinner than one global cooldown of tank threat:
@@ -602,7 +443,7 @@ namespace Commander
                     {
                         float sec;
                         if (holdSec > 0.0f)     // area taunt: back on the victim when it fades
-                            sec = TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon);
+                            sec = RescueValue::TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon);
                         else
                         {
                             float const rest = std::max(0.0f, l.gap - threatAdded);
@@ -683,7 +524,7 @@ namespace Commander
         // The tank roles do not flip mid-fight (Tanks.h), so no stance-based hysteresis is needed.
         bool const tank = HasTank(world);
         std::vector<SpellEntry const*> taunts;
-        PetTauntSpells(pet, taunts);
+        PetTaunt::Spells(pet, taunts);
         for (SpellEntry const* spell : taunts)
         {
             bool const autocast = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) !=
@@ -701,7 +542,7 @@ namespace Commander
         if (world.enemies.empty())
             return;
         // No tank and the pet taunts by itself: it holds enemies (IsHolderPet), leave it.
-        if (!tank && HasTauntAutocast(pet))
+        if (!tank && PetTaunt::HasAutocast(pet))
             return;
 
         // The enemy the pet hits, else the one the rotation sends it to next (hunter and warlock
@@ -1009,65 +850,5 @@ namespace Commander
         veto.veto.target = pTarget->GetObjectGuid();
         veto.SetValue(loss, delayCost);
         out.push_back(veto);
-    }
-
-    void ThreatBehavior::ProposeThreatDrop(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
-    {
-        SpellEntry const* spell = bot->Kit().ThreatDrop();
-        Player* me = bot->me;
-        if (!spell || !bot->CanTryToCastSpell(me, spell))
-            return;
-        ObjectGuid const self = me->GetObjectGuid();
-        PartyMemberFacts const* myFacts = world.FindMember(self);
-        if (!myFacts)
-            return;
-
-        // Fade: SPELL_AURA_MOD_TOTAL_THREAT with a negative amount on every threat list, for the
-        // aura's duration (ThreatManager::setTempThreatModifier, never below 0).
-        float const drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
-        float const durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
-        if (drop <= 0.0f || durationSec <= 0.0f)
-            return;
-
-        float saved = 0.0f;
-        for (EnemyFacts const& e : world.enemies)
-        {
-            if (!e.acting || e.crowdControlled || e.victim != self)
-                continue;
-            float mine = 0.0f;
-            for (ThreatEntry const& r : e.threat)
-                if (r.guid == self)
-                    mine = r.threat;
-            float const after = std::max(0.0f, mine - drop);
-            // Who it turns to: the highest other row that beats my lowered threat by the
-            // aggro rule (110% in melee reach, 130% otherwise). Nobody: Fade changes nothing here.
-            ThreatEntry const* next = nullptr;
-            for (ThreatEntry const& r : e.threat)
-            {
-                if (r.guid == self || !r.onList)
-                    continue;
-                if (r.threat > after * (r.inMeleeReach ? 1.1f : 1.3f) && (!next || r.threat > next->threat))
-                    next = &r;
-            }
-            if (!next)
-                continue;
-            // Hits I do not take while it hits `next` instead (only what I would take on top),
-            // until Fade ends or it dies. An ally or another unit: all of my hits count.
-            float const seconds = std::min(durationSec, Value::EnemyTimeToDie(world, e));
-            if (PartyMemberFacts const* holder = world.FindMember(next->guid))
-                saved += std::max(0.0f, Value::MoveLoss(world, e, *myFacts, *holder, seconds));
-            else
-                saved += Value::HitLoss(world, e, *myFacts, seconds);
-        }
-        if (saved <= 0.0f)
-            return;
-
-        // About to die: as urgent as the emergency heal it competes with.
-        float const incoming = Value::IncomingOn(world, self);
-        bool const dying = incoming > 0.0f && float(myFacts->health) / incoming < FADE_URGENT_SEC;
-        Proposal p = MakeProposal(dying ? ProposalTier::Urgent : ProposalTier::Assigned, BotActionType::Cast, self, spell);
-        p.reason = "attacked: fade";
-        p.SetValue(saved, Value::LostAction(world, *myFacts, Value::GCD_SEC));
-        out.push_back(p);
     }
 }

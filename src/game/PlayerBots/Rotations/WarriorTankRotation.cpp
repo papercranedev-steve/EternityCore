@@ -24,8 +24,7 @@
  *   Concussion Blow        the interrupt module (ClassKit::Interrupts); the old rotation stunned
  *                          on any cast without the interrupt veto, on moving targets, below 50%.
  *   Shield Wall, Last Stand  nobody for now: a Commander survival decision is planned (user).
- *   Taunts                 the shared tank step in PartyBotAI::UpdateInCombatAI while the threat
- *                          module is off, else the threat module.
+ *   Taunts                 the team rescue (RescueAssigner / RescueBehavior, Takeover::Taunt).
  */
 
 #include "Rotations/ClassRotation.h"

@@ -99,6 +99,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/CrowdControlBehavior.cpp
   ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.h
   ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/RescueAssigner.h
+  ${COMMANDER_DIR}/Coordination/RescueAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/RescueBehavior.h
+  ${COMMANDER_DIR}/Behaviors/RescueBehavior.cpp
+  ${COMMANDER_DIR}/Perception/RescueValue.h
+  ${COMMANDER_DIR}/Perception/RescueValue.cpp
+  ${COMMANDER_DIR}/Perception/PetTaunt.h
+  ${COMMANDER_DIR}/Perception/PetTaunt.cpp
   ${COMMANDER_DIR}/Coordination/PullControl.h
   ${COMMANDER_DIR}/Coordination/PullControl.cpp
   ${COMMANDER_DIR}/Coordination/ControlledEnd.h

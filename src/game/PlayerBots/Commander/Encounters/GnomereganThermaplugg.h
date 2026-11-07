@@ -33,7 +33,7 @@
  *     within the 5 yd trigger range and the blast hits the whole melee pile.
  *   Tank: nothing. After Knock Away the tank's victim is still the boss, so an Attack on the boss
  *     would fail (Arbiter: same victim) and the original chase already walks it back;
- *     ThreatBehavior taunts once it is in range (scenario 8, T+17s).
+ *     the team rescue (RescueAssigner) has it taunted once it is in range (scenario 8, T+17s).
  *
  * Known limits: see the .cpp file comment at the top.
  */

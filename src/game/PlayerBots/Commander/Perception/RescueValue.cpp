@@ -1,0 +1,138 @@
+#include "Commander/Perception/RescueValue.h"
+#include "Commander/Perception/ControlValue.h"
+#include "Commander/Perception/LooseEnemy.h"
+#include "Commander/Perception/ManaWorth.h"
+#include "Commander/Perception/SwitchCost.h"
+#include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/ThreatView.h"
+#include "Commander/Perception/ValueModel.h"
+#include "SpellEntry.h"
+#include <algorithm>
+
+namespace Commander
+{
+namespace RescueValue
+{
+    PartyMemberFacts const* LooseVictim(WorldModel const& world, EnemyFacts const& e)
+    {
+        if (!e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim.IsEmpty())
+            return nullptr;
+        // On an ally (tank-like or not): it fights it on purpose (combat scenario 9).
+        if (world.FindAlly(e.victim))
+            return nullptr;
+        PartyMemberFacts const* victim = world.FindMember(e.victim);
+        if (!victim || victim->charmed || Tanks::IsTank(*victim))
+            return nullptr;
+        // A pet that growls it back: taking it from the pet is a war the tank loses.
+        if (victim->isPet && victim->tauntsItself)
+            return nullptr;
+        return victim;
+    }
+
+    float TemporaryTauntSec(SpellEntry const* spell)
+    {
+        bool aura = false;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
+                return 0.0f;
+            if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
+                aura = true;
+        }
+        return aura ? std::max(0, spell->GetDuration()) / 1000.0f : 0.0f;
+    }
+
+    float TauntSecOnVictim(float gap, float tankRate, float holdSec, float horizon)
+    {
+        float sec = std::min(TAUNT_REACTION_SEC, horizon);
+        if (holdSec > 0.0f && holdSec < horizon)
+        {
+            float const rest = std::max(0.0f, gap - tankRate * holdSec);
+            float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
+            sec += std::min(recovery, horizon - holdSec);
+        }
+        return sec;
+    }
+
+    float EnemyDps(WorldModel const& world)
+    {
+        float dps = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+            if (!e.crowdControlled && e.acting && !e.onAllyOnly)
+                dps += e.meleeDps + e.rangedDps;
+        return dps;
+    }
+
+    Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+                 PartyMemberFacts const& tank, TauntAbility const& taunt, float tankRate, float distance,
+                 float enemyDps)
+    {
+        Option o;
+        bool immune = false;
+        float const mult = LooseEnemy::Mult(e, &immune);
+        if (immune || !taunt.ready || !e.InSightOf(tank.guid))
+            return o;
+        LooseValue const v = LooseEnemy::WinBack(world, e, victim, tank, tankRate, distance);
+        float const walkSec = std::max(0.0f, distance - e.boundingRadius - taunt.maxRange) / RUN_YARDS_PER_SEC;
+        float const onVictim = std::min(v.horizon, walkSec + TauntSecOnVictim(v.gap, tankRate, taunt.holdSec, v.horizon));
+        o.benefit = (v.lossNothing - LooseEnemy::Loss(world, e, victim, tank, onVictim)) * mult;
+        float const share = std::min(1.0f, (taunt.cooldownMs / 1000.0f) / RESERVE_HORIZON_SEC);
+        o.cost = Value::LostAction(world, tank, Value::GCD_SEC + walkSec) +
+                 share * Value::Points(world, enemyDps * TAUNT_RESERVE_SEC);
+        if (taunt.stanceSwap)
+            o.cost += Value::LostAction(world, tank, STANCE_SWAP_COST_SEC);
+        o.urgent = v.deadly;
+        return o;
+    }
+
+    Option Threat(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+                  PartyMemberFacts const& tank, float tankRate, float distance)
+    {
+        Option o;
+        LooseValue const v = LooseEnemy::WinBack(world, e, victim, tank, tankRate, distance);
+        o.benefit = (v.lossNothing - v.lossThreat) * LooseEnemy::Mult(e, nullptr);
+        o.cost = tank.victim == e.guid ? 0.0f : SwitchCost::Of(world, tank, e, MELEE_REACH);
+        o.urgent = v.deadly;
+        return o;
+    }
+
+    Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim)
+    {
+        Option o;
+        ThreatDropAbility const& a = victim.threatDrop;
+        if (!a.spellId || !a.ready || a.drop <= 0.0f || a.durationSec <= 0.0f)
+            return o;
+        float mine = 0.0f;
+        for (ThreatEntry const& r : e.threat)
+            if (r.guid == victim.guid)
+                mine = r.threat;
+        float const after = std::max(0.0f, mine - a.drop);
+        // Who it turns to: the highest other row that beats my lowered threat by the aggro rule.
+        ThreatEntry const* next = nullptr;
+        for (ThreatEntry const& r : e.threat)
+        {
+            if (r.guid == victim.guid || !r.onList)
+                continue;
+            if (r.threat > after * (r.inMeleeReach ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR) &&
+                (!next || r.threat > next->threat))
+                next = &r;
+        }
+        if (!next)
+            return o;
+        float const seconds = std::min(a.durationSec, Value::EnemyTimeToDie(world, e));
+        if (PartyMemberFacts const* holder = world.FindMember(next->guid))
+            o.benefit = std::max(0.0f, Value::MoveLoss(world, e, victim, *holder, seconds));
+        else
+            o.benefit = Value::HitLoss(world, e, victim, seconds);
+
+        o.cost = Value::LostAction(world, victim, Value::GCD_SEC) + ManaWorth::Points(world, victim, float(a.manaCost));
+        float const cooldownSec = a.cooldownMs / 1000.0f;
+        if (cooldownSec > Value::GCD_SEC)
+            o.cost += ControlValue::COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, Value::FightRemainingSec(world)) / 60.0f;
+
+        float const incoming = Value::IncomingOn(world, victim.guid);
+        o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;
+        return o;
+    }
+}
+}

@@ -74,6 +74,33 @@ namespace Commander
         bool ready = false;
     };
 
+    // A taunt a tank bot has learned (CombatBotBaseAI::m_spellListTaunt, one entry per spell):
+    // what team rescue can give it (Perception/RescueValue.h).
+    struct TauntAbility
+    {
+        uint32 spellId = 0;
+        float maxRange = 0.0f;
+        uint32 cooldownMs = 0;          // its cooldown (Taunt: the 10 s category cooldown)
+        // Without SPELL_EFFECT_ATTACK_ME (Mocking Blow) the threat it lends is taken back when
+        // its aura fades: seconds it holds. 0 = the threat stays (RescueValue::TemporaryTauntSec).
+        float holdSec = 0.0f;
+        bool stanceSwap = false;        // needs a warrior stance swap first (PartyBotAI::StanceSwapFor)
+        // Off cooldown and enough power, after the stance swap if one is needed
+        // (PartyBotAI::IsReadyWithStance). Range and sight are per enemy.
+        bool ready = false;
+    };
+
+    // A non-tank bot's own threat drop (ClassKit::ThreatDrop: priest Fade).
+    struct ThreatDropAbility
+    {
+        uint32 spellId = 0;             // 0 = none
+        float drop = 0.0f;              // threat taken off every threat list, for durationSec
+        float durationSec = 0.0f;
+        uint32 manaCost = 0;
+        uint32 cooldownMs = 0;
+        bool ready = false;             // off cooldown, enough mana, can act and cast
+    };
+
     // The control effect an enemy is under now (the one lasting longest).
     struct ActiveControl
     {
@@ -152,6 +179,11 @@ namespace Commander
         std::vector<InterruptAbility> interrupts;   // bots only
         std::vector<DispelAbility> dispels;         // bots only
         std::vector<ControlAbility> controls;       // bots only
+        std::vector<TauntAbility> taunts;           // tank-role bots only
+        ThreatDropAbility threatDrop;               // non-tank bots only
+        // Pets: casts a taunt by itself (Growl, Torment, Suffering on autocast). An enemy on it
+        // is growled back, so the tank does not take it (Perception/PetTaunt.h).
+        bool tauntsItself = false;
         // Damage dealer bots with ClassKit::AreaDamage spells, on their victim (out of combat:
         // on itself): the best area
         // spell's damage per second on each target it hits, its radius, and the filler's
@@ -267,8 +299,10 @@ namespace Commander
         // start of its latest cast. Creature repeat delays run from the cast start, so
         // refreshedAtMs - lastStartMs vs the repeat delay tells how soon it can come again.
         std::vector<CastStart> castStarts;
-        // Bots with a ranged interrupt that have no line of sight to it. Filled only while it
-        // casts an interruptible spell (empty otherwise: line of sight not checked).
+        // Bots with a ranged interrupt that have no line of sight to it, filled only while it
+        // casts an interruptible spell; and tank bots with a taunt that have none, filled only
+        // while it hits a party member who is not a tank (team rescue). Empty otherwise: line
+        // of sight not checked.
         std::vector<ObjectGuid> outOfSight;
 
         // 0 = not seen casting `spellId`.

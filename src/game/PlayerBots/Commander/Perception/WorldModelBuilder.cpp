@@ -6,6 +6,8 @@
 #include "Commander/Perception/PatrolTracker.h"
 #include "Commander/Perception/CreatureProfile.h"
 #include "Commander/Perception/HealCapacity.h"
+#include "Commander/Perception/PetTaunt.h"
+#include "Commander/Perception/RescueValue.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "DamageSpells.h"
@@ -534,6 +536,47 @@ namespace WorldModelBuilder
             }
         }
 
+        // Team rescue (Perception/RescueValue.h): a tank bot's taunts, one entry per spell.
+        void FillTaunts(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            if (ai->GetRole() != ROLE_TANK)
+                return;
+            for (SpellEntry const* spell : ai->m_spellListTaunt)
+            {
+                if (!spell || std::any_of(f.taunts.begin(), f.taunts.end(),
+                        [spell](TauntAbility const& t) { return t.spellId == spell->Id; }))
+                    continue;
+                TauntAbility t;
+                t.spellId = spell->Id;
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+                t.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                // Taunt 355: RecoveryTime 0, CategoryRecoveryTime 10 s.
+                t.cooldownMs = spell->GetRecoveryTime();
+                t.holdSec = RescueValue::TemporaryTauntSec(spell);
+                t.stanceSwap = ai->StanceSwapFor(spell) != nullptr;
+                t.ready = f.CanAct() && ai->IsReadyWithStance(spell);
+                f.taunts.push_back(t);
+            }
+        }
+
+        // Fade (ClassKit::ThreatDrop) of a non-tank bot: SPELL_AURA_MOD_TOTAL_THREAT with a
+        // negative amount on every threat list for the aura's duration.
+        void FillThreatDrop(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            SpellEntry const* spell = ai->Kit().ThreatDrop();
+            if (!spell || ai->GetRole() == ROLE_TANK)
+                return;
+            Player* me = ai->me;
+            ThreatDropAbility& a = f.threatDrop;
+            a.spellId = spell->Id;
+            a.drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
+            a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+            a.cooldownMs = spell->GetRecoveryTime();
+            if (Powers(spell->powerType) == POWER_MANA)
+                a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+            a.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, spell);
+        }
+
         // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim.
         void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -649,6 +692,7 @@ namespace WorldModelBuilder
         // Party members and pets on this map.
         std::vector<Unit*> partyUnits;
         std::vector<Player*> sightCheckers;     // bots with a ranged interrupt that can act
+        std::vector<Player*> tauntCheckers;     // tank bots with a taunt that can act
         for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
         {
             Player* member = itr->getSource();
@@ -674,6 +718,8 @@ namespace WorldModelBuilder
                         FillInterrupts(ai, f);
                         FillDispels(ai, f);
                         FillControls(ai, f);
+                        FillTaunts(ai, f);
+                        FillThreatDrop(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
                     }
@@ -693,6 +739,8 @@ namespace WorldModelBuilder
                     }
                     if (f.CanAct() && HasRangedInterrupt(f))
                         sightCheckers.push_back(member);
+                    if (f.CanAct() && !f.taunts.empty())
+                        tauntCheckers.push_back(member);
                 }
             }
             world.party.push_back(f);
@@ -706,6 +754,7 @@ namespace WorldModelBuilder
                     FillUnitFacts(pet, pf);
                     pf.isPet = true;
                     pf.ownerGuid = member->GetObjectGuid();
+                    pf.tauntsItself = PetTaunt::HasAutocast(pet);
                     world.party.push_back(pf);
                     partyUnits.push_back(pet);
                 }
@@ -791,6 +840,14 @@ namespace WorldModelBuilder
                 for (Player* checker : sightCheckers)
                     if (!checker->IsWithinLOSInMap(enemies[i]))
                         e.outOfSight.push_back(checker->GetObjectGuid());
+            // And for team rescue (RescueValue::Taunt): a tank's taunt on an enemy hitting a
+            // member who is not a tank.
+            if (!e.onAllyOnly && !tauntCheckers.empty())
+                if (PartyMemberFacts const* victim = world.FindMember(e.victim))
+                    if (!Tanks::IsTank(*victim))
+                        for (Player* checker : tauntCheckers)
+                            if (e.InSightOf(checker->GetObjectGuid()) && !checker->IsWithinLOSInMap(enemies[i]))
+                                e.outOfSight.push_back(checker->GetObjectGuid());
             world.enemies.push_back(std::move(e));
         }
 

@@ -8,7 +8,7 @@
  * hook (PartyBotAI::UpdateAI); while the pull holds healing (PullPlan::HoldsWaiting) only
  * emergencies. While the module runs, the rotation's own heal
  * choice is off (PartyBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
- * the rotation casts this module's HealOrder of the tick, or nothing (rest). Fade (ThreatBehavior),
+ * the rotation casts this module's HealOrder of the tick, or nothing (rest). Fade (RescueBehavior),
  * dispels and the rest of the rotation keep their order; while the order is an emergency
  * (Urgent) only control effects are dispelled before it (VetoChecks::IsDispelVetoed). ThreatBehavior's healer branch and
  * ManaBudgetBehavior's heal veto stand down; aggro is checked here (ThreatBehavior::HealPullLoss)

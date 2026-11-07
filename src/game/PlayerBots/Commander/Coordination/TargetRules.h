@@ -3,13 +3,13 @@
  * TankTargets.cpp (the tank's next enemy) and DamageTargets.cpp (damage dealers).
  *
  * Tank (TankTargets::Choose), first that applies:
- *  1. Loose enemy: hitting a member that is not a tank (not an ally, not a charmed member),
- *     within TANK_REACH yd, no other tank bot nearer by TANK_SHARE_MARGIN, a walk that does
- *     not pass an idle creature (RouteRisk::Blocked: the navmesh route of
- *     Perception/MeleeRoutes.h, the straight line before it is checked).
- *     benefit = (loss doing nothing - loss until won back with threat) x override weight
- *     (Perception/LooseEnemy.h), cost = SwitchCost; the best positive one. Urgent when the
- *     victim dies within the horizon. Already the tank's target: kept.
+ *  1. Rescue (team rescue, 2026-11-07): the loose enemy RescueAssigner gave this tank, in the
+ *     same allocation (TeamPlan::duties). Winning it back with threat: that enemy. A taunt:
+ *     only when it is out of the taunt's range or sight (the tank walks over; in range
+ *     RescueBehavior casts it where the tank stands). benefit = the rescue's net + the switch,
+ *     cost = SwitchCost; Urgent when the victim dies within the horizon. Already the tank's
+ *     target: kept. Which tank, and taunt or threat or the victim's Fade, is the rescue's
+ *     choice (Coordination/RescueAssigner.h); the loose rule is RescueValue::LooseVictim.
  *  2. Top up: an enemy on the tank whose lead (ThreatView::VictimLead / its threat) is below
  *     LEAD_SWITCH while the current target's is above LEAD_KEEP. benefit = what the runner-up
  *     would take for RECLAIM_SEC (LooseEnemy::Loss) x FRAGILE_WEIGHT (chance the thin lead
@@ -98,8 +98,6 @@ namespace Commander
 
     namespace TankTargets
     {
-        static constexpr float TANK_REACH = 40.0f;
-        static constexpr float TANK_SHARE_MARGIN = 2.0f;
         static constexpr float LEAD_SWITCH = 0.15f;
         static constexpr float LEAD_KEEP = 0.30f;
         static constexpr float RECLAIM_SEC = 2.0f;

@@ -519,6 +519,25 @@ namespace Commander
         bool breaksOnDamage = false;
     };
 
+    // How one loose enemy is taken off its victim, and by whom (RescueAssigner).
+    enum class RescueWay : uint8
+    {
+        Taunt,          // the tank taunts it (spellId), then holds it (TargetAssigner gives it the enemy)
+        Threat,         // the tank walks over and wins it back with threat (its target)
+        ThreatDrop,     // the victim drops its threat (Fade, spellId)
+    };
+
+    struct RescueDuty
+    {
+        ObjectGuid enemy;
+        ObjectGuid victim;
+        ObjectGuid bot;
+        RescueWay way = RescueWay::Threat;
+        uint32 spellId = 0;          // Taunt, ThreatDrop
+        float points = 0.0f;         // net worth (Perception/RescueValue.h)
+        bool urgent = false;         // the victim dies within the horizon: Urgent tier
+    };
+
     // Only controlled enemies are left (ControlledEndAssigner): wait for mana while they sleep,
     // then the tank wakes the first one (attacks it, PartyBotAI::IsAssignedToBreakControl).
     struct ControlEndPlan
@@ -591,6 +610,7 @@ namespace Commander
         std::vector<InterceptDuty> intercepts;
         std::vector<DispelDuty> dispels;
         std::vector<ControlDuty> controls;
+        std::vector<RescueDuty> rescues;
         // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
         // ThreatBehavior): enemies about to get a control that breaks on damage
         // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
@@ -622,6 +642,14 @@ namespace Commander
         InterceptDuty const* FindInterceptFor(ObjectGuid bot) const
         {
             for (InterceptDuty const& d : intercepts)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        RescueDuty const* FindRescueFor(ObjectGuid bot) const
+        {
+            for (RescueDuty const& d : rescues)
                 if (d.bot == bot)
                     return &d;
             return nullptr;

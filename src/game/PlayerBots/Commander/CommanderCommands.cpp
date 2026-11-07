@@ -366,6 +366,26 @@ namespace
             }
         }
 
+        // Team rescue (RescueAssigner): one way off each loose enemy's victim.
+        if (!plan.rescues.empty())
+        {
+            handler->SendSysMessage("Rescues:");
+            for (Commander::RescueDuty const& d : plan.rescues)
+            {
+                char const* way = d.way == Commander::RescueWay::Taunt ? "taunt" :
+                                  d.way == Commander::RescueWay::ThreatDrop ? "threat drop" : "win back with threat";
+                handler->PSendSysMessage("    |cffffcc00%s|r on %s: %s, %s%s (%.1f pt%s)",
+                    NameOf(map, d.enemy).c_str(), NameOf(map, d.victim).c_str(), NameOf(map, d.bot).c_str(), way,
+                    d.spellId ? (" " + SpellName(d.spellId)).c_str() : "", d.points, d.urgent ? ", urgent" : "");
+                for (Commander::DutyResult const& r : plan.duties)
+                    if (r.kind == Commander::DutyKind::Rescue && r.target == d.enemy)
+                        for (Commander::DutyPass const& pass : r.passed)
+                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
+                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
+                                NameOf(map, pass.busyTarget).c_str());
+            }
+        }
+
         if (plan.interrupts.empty())
         {
             handler->SendSysMessage("No interrupt duties (no enemy has cast an interruptible spell yet).");
