@@ -25,6 +25,11 @@ namespace Commander
                 auto const& s = m_bot.m_spells.shaman;
                 return { s.pCureDisease, s.pCurePoison };
             }
+
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                return { m_bot.m_spells.shaman.pFrostShock };
+            }
         };
     }
 

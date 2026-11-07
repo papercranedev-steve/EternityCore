@@ -230,6 +230,8 @@ public:
     // tank must not charge now.
     bool IsEngageForbidden(Unit const* pUnit) const;
     bool IsGapCloserForbidden(SpellEntry const* pSpell) const;
+    // Commander flee stop keeps this spell (TeamPlan::HoldsSpell): the rotation does not cast it.
+    bool IsSpellHeld(SpellEntry const* pSpell) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).

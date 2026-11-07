@@ -134,6 +134,33 @@ namespace Commander
         bool fear = false;
     };
 
+    // A stun, root or slow a bot can put on an enemy running away (ClassKit::FleeStoppers,
+    // flee interception todo 13). Read from the spell data.
+    struct FleeStopAbility
+    {
+        uint32 spellId = 0;
+        float holdSec = 0.0f;           // stun or root: seconds it stands still (0 = a slow)
+        float slowPct = 0.0f;           // slow: speed taken off, 0..1
+        float maxRange = 0.0f;          // yards (melee abilities: 5)
+        float radius = 0.0f;            // around the caster (Frost Nova, Piercing Howl), 0 = on a target
+        uint32 castMs = 0;
+        uint32 cooldownMs = 0;
+        uint32 manaCost = 0;            // 0 for rage / energy abilities
+        bool needsCombo = false;        // a finisher (Kidney Shot): combo points on the target
+        bool ready = false;             // off cooldown, enough power, the right form, can act
+    };
+
+    // An idle creature that may join if an enemy runs away (FleeFacts::joiners).
+    struct FleeJoiner
+    {
+        ObjectGuid guid;
+        // The run reaches it when it covers this many yards (its caller's distance - the call
+        // radius; group members and helpers take their caller's).
+        float needYd = 0.0f;
+        float health = 0.0f;
+        float dps = 0.0f;               // on the main tank, after armor (FightLoad::Foe)
+    };
+
     // Running away at low health (Perception/FleePredictor.h fills it; EnemyFacts::flee).
     struct FleeFacts
     {
@@ -146,8 +173,18 @@ namespace Commander
         // prevented: the idle creatures that may join if it runs (worst case: every one it can
         // reach, with their packs) and what that costs the party, in points.
         bool predicted = false;
-        std::vector<ObjectGuid> joiners;
-        float points = 0.0f;
+        std::vector<FleeJoiner> joiners;
+        float runSpeed = 0.0f;          // yards per second
+        float reachYd = 0.0f;           // how far the whole run gets
+        float points = 0.0f;            // the whole run (nobody kills it while it runs)
+        // The party on it when it starts to run: seconds until it dies (melee lose it at once,
+        // ranged keep hitting), how far it gets by then, and what that run brings in.
+        float runKillSec = 0.0f;
+        float focusedReachYd = 0.0f;
+        float focusedPoints = 0.0f;
+
+        // What having the party on it before it runs saves.
+        float FocusSaves() const { return std::max(0.0f, points - focusedPoints); }
     };
 
     // A harmful, dispellable aura a creature put on a party member (players only).
@@ -221,6 +258,7 @@ namespace Commander
         std::vector<TauntAbility> taunts;           // tank-role bots only
         ThreatDropAbility threatDrop;               // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
+        std::vector<FleeStopAbility> fleeStops;     // bots only
         // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,
         // and mechanics it is immune to as 1 << mechanic (Weakened Soul: MECHANIC_SHIELD,
@@ -366,6 +404,14 @@ namespace Commander
         bool InSightOf(ObjectGuid member) const
         {
             return std::find(outOfSight.begin(), outOfSight.end(), member) == outOfSight.end();
+        }
+        // crowdControlled, but the party keeps hitting it (flee interception, todo 13): it runs
+        // away at low health (the server counts the run as "cannot react"), or a stun that
+        // damage does not break holds a creature that flees (kill it before the stun ends).
+        bool HitWhileControlled() const
+        {
+            return flee.fleeing ||
+                   (flee.atPct > 0.0f && control.spellId && !control.breaksOnDamage && !control.fear);
         }
 
         // Sorted by threat, highest first. Every row of the live threat list (party members,

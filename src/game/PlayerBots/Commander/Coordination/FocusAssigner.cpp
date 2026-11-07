@@ -251,7 +251,9 @@ namespace Commander
     }
     bool FocusAssigner::IsEligible(WorldModel const& world, EnemyFacts const& e, bool allowAllyOnly)
     {
-        if (!e.acting || e.crowdControlled || !e.health)
+        // A runner stays the focus (todo 13: the party was turning away from it, letting it
+        // run off for help).
+        if (!e.acting || (e.crowdControlled && !e.HitWhileControlled()) || !e.health)
             return false;
         // Only fighting an ally (a guard, an escort): not our fight unless a boss module says so
         // (Zul'Farrak: adds on Weegli are a focus tier).
@@ -331,10 +333,12 @@ namespace Commander
 
         // One-off bonuses, as "lost within ONE_OFF_HORIZON_SEC if still alive".
         float oneOff = 0.0f;
-        if (e.flee.predicted && !e.flee.fleeing && e.flee.points > 0.0f)
+        // About to run away, or running: what having the party on it saves (the whole run's
+        // joiners minus those a focused kill still lets in, FleeFacts::FocusSaves; todo 13).
+        if (e.flee.predicted && e.flee.FocusSaves() > 0.0f)
         {
-            oneOff += e.flee.points;
-            AddReason(s.reason, "flee brings %.1f", e.flee.points);
+            oneOff += e.flee.FocusSaves();
+            AddReason(s.reason, "focus saves flee %.1f", e.flee.FocusSaves());
         }
         if (e.summoned && (IsTotem(e.entry) || HasHealSpell(profile.get())))
         {

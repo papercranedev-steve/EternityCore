@@ -7,6 +7,8 @@
 #include "Commander/Perception/CastValue.h"
 #include "Commander/Perception/ControlValue.h"
 #include "Commander/Perception/FightLoad.h"
+#include "Commander/Perception/FleeStopValue.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Chat.h"
 #include "Creature.h"
 #include "Map.h"
@@ -376,14 +378,38 @@ namespace ProfileCommands
             if (!f.predicted)
                 continue;
             std::string joiners;
-            for (ObjectGuid g : f.joiners)
+            uint32 focused = 0;
+            for (FleeJoiner const& j : f.joiners)
             {
                 if (!joiners.empty())
                     joiners += ", ";
-                joiners += name(g);
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%s %.0f yd", name(j.guid), j.needYd);
+                joiners += buf;
+                if (j.needYd <= f.focusedReachYd)
+                    ++focused;
             }
-            handler->PSendSysMessage("  may bring %u (%s): costs %.1f points", uint32(f.joiners.size()),
-                joiners.empty() ? "nobody" : joiners.c_str(), f.points);
+            handler->PSendSysMessage("  whole run %.0f yd: may bring %u (%s), costs %.1f points", f.reachYd,
+                uint32(f.joiners.size()), joiners.empty() ? "nobody" : joiners.c_str(), f.points);
+            handler->PSendSysMessage("  party on it: dies %.1f s into the run, %.0f yd: brings %u, costs %.1f (focus saves %.1f)",
+                f.runKillSec, f.focusedReachYd, focused, f.focusedPoints, f.FocusSaves());
+            for (PartyMemberFacts const& m : world.party)
+                for (FleeStopAbility const& a : m.fleeStops)
+                {
+                    FleeStopValue::Worth const w = FleeStopValue::Of(world, m, a, e);
+                    if (w.benefit <= 0.0f && !a.ready)
+                        continue;
+                    SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                    handler->PSendSysMessage("    %s %s%s: %s", name(m.guid), spell ? spell->SpellName[0].c_str() : "?",
+                        a.ready ? "" : " (not ready)", FleeStopValue::Describe(w).c_str());
+                }
+        }
+        for (FleeStopDuty const& d : commander->GetPlan().fleeStops)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(d.spellId);
+            handler->PSendSysMessage("Kept: %s holds %s for %s (%s, net %.1f)", name(d.bot),
+                spell ? spell->SpellName[0].c_str() : "?", name(d.enemy),
+                d.hold ? "stun / root once it dies within it" : "slow once it runs", d.points);
         }
         if (!shown)
             handler->SendSysMessage("No enemy of ours flees at low health.");

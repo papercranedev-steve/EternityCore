@@ -38,6 +38,17 @@ namespace Commander
                 return { m_bot.m_spells.druid.pEntanglingRoots };
             }
 
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                return { m_bot.m_spells.druid.pEntanglingRoots };
+            }
+
+            // Cat form (CanTryToCastSpell checks the form).
+            SpellEntry const* ComboFinisher() const override
+            {
+                return m_bot.m_spells.druid.pFerociousBite;
+            }
+
             // Hibernate: beasts and dragonkin, caster form.
             std::vector<SpellEntry const*> Controls() const override
             {

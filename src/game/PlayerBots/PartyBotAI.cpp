@@ -317,6 +317,14 @@ bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
     return commander && commander->GetPlan().ForbidsGapCloser(me->GetObjectGuid());
 }
 
+bool PartyBotAI::IsSpellHeld(SpellEntry const* pSpell) const
+{
+    if (!pSpell || IsInDuel() || !sCommanderMgr.IsEnabled())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().HoldsSpell(me->GetObjectGuid(), pSpell->Id, pSpell->NeedsComboPoints());
+}
+
 void PartyBotAI::AutoAssignRole()
 {
     // Before: only the 31-point talents counted (Shield Slam, Holy Shield, Shadowform...), so
@@ -787,6 +795,9 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 {
     // The pull brings the pack back: charging in would put the tank in the middle of it.
     if (IsGapCloserForbidden(pSpellEntry))
+        return false;
+    // Kept for an enemy about to run away (Commander flee stop): only that module casts it.
+    if (IsSpellHeld(pSpellEntry))
         return false;
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())

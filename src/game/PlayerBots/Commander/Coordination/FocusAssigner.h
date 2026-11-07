@@ -55,9 +55,11 @@ namespace Commander
         // One-off bonuses (points) are spread over this many seconds to become a harm rate:
         // "lost within the next ~10 s if it is not dead by then".
         static constexpr float ONE_OFF_HORIZON_SEC = 10.0f;
-        // About to flee (health within FleePredictor::WINDOW_PCT above its flee line): what its
-        // run would bring in, EnemyFacts::flee.points (Perception/FleePredictor.h). Nothing to
-        // call: no bonus. Since 2026-11-08; before that a flat 10 points.
+        // About to flee (health within FleePredictor::WINDOW_PCT above its flee line) or
+        // running: what having the party on it saves, FleeFacts::FocusSaves (the whole run's
+        // joiners minus a focused kill's, Perception/FleePredictor.h). Nothing to call: no
+        // bonus. Since 2026-11-08; before that a flat 10 points. A runner stays eligible
+        // (EnemyFacts::HitWhileControlled).
         // Summon that supports its side (totem, or has a heal spell: Healing Ward, scenario 11).
         static constexpr float SUPPORT_SUMMON_POINTS = 8.0f;
         // Summon the party kills within this many seconds ("a few hits").

@@ -180,6 +180,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/MeleeRoutes.cpp
   ${COMMANDER_DIR}/Perception/FleePredictor.h
   ${COMMANDER_DIR}/Perception/FleePredictor.cpp
+  ${COMMANDER_DIR}/Perception/FleeStopValue.h
+  ${COMMANDER_DIR}/Perception/FleeStopValue.cpp
+  ${COMMANDER_DIR}/Coordination/FleeStopAssigner.h
+  ${COMMANDER_DIR}/Coordination/FleeStopAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/FleeStopBehavior.h
+  ${COMMANDER_DIR}/Behaviors/FleeStopBehavior.cpp
   ${COMMANDER_DIR}/Perception/AggroRange.h
   ${COMMANDER_DIR}/Perception/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/ShotSpot.h

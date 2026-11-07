@@ -553,6 +553,62 @@ namespace WorldModelBuilder
             }
         }
 
+        // Flee interception (todo 13): ClassKit::FleeStoppers with what the spell data says.
+        // Stun or root: seconds it holds (a root, or a stun that damage breaks, at most
+        // FLEE_ROOT_HOLD_SEC: the party's hits break it); slow: the speed it takes off.
+        float const FLEE_ROOT_HOLD_SEC = 2.0f;
+        void FillFleeStops(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (SpellEntry const* spell : ai->Kit().FleeStoppers())
+            {
+                if (!spell)
+                    continue;
+                FleeStopAbility a;
+                a.spellId = spell->Id;
+                bool root = false, stun = false;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
+                        continue;
+                    switch (spell->EffectApplyAuraName[i])
+                    {
+                        case SPELL_AURA_MOD_ROOT: root = true; break;
+                        case SPELL_AURA_MOD_STUN: stun = true; break;
+                        case SPELL_AURA_MOD_DECREASE_SPEED:
+                            a.slowPct = std::max(a.slowPct, std::min(1.0f, -float(spell->CalculateSimpleValue(SpellEffectIndex(i))) / 100.0f));
+                            break;
+                        default: break;
+                    }
+                    if (spell->EffectRadiusIndex[i])
+                        if (SpellRadiusEntry const* radius = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                            a.radius = std::max(a.radius, radius->Radius);
+                }
+                float const sec = std::max(0, spell->GetDuration()) / 1000.0f;
+                if (stun && !spell->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS))
+                    a.holdSec = sec;
+                else if (root || stun)
+                    a.holdSec = std::min(sec, FLEE_ROOT_HOLD_SEC);
+                if (a.holdSec <= 0.0f && a.slowPct <= 0.0f)
+                    continue;
+                if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY)
+                    a.radius = 0.0f;
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+                a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                a.castMs = spell->GetCastTime(me);
+                a.cooldownMs = spell->GetRecoveryTime();
+                Powers const powerType = Powers(spell->powerType);
+                if (powerType == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.needsCombo = spell->NeedsComboPoints();
+                a.ready = !f.controlled && me->IsSpellReady(spell) &&
+                          (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
+                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+                          !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
+                f.fleeStops.push_back(a);
+            }
+        }
+
         // Team rescue (Perception/RescueValue.h): a tank bot's taunts, one entry per spell.
         void FillTaunts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -789,6 +845,7 @@ namespace WorldModelBuilder
                         FillInterrupts(ai, f);
                         FillDispels(ai, f);
                         FillControls(ai, f);
+                        FillFleeStops(ai, f);
                         FillTaunts(ai, f);
                         FillThreatDrop(ai, f);
                         FillSurvival(ai, f);

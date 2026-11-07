@@ -6,6 +6,7 @@
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
+#include <cstring>
 
 namespace Commander
 {
@@ -18,7 +19,7 @@ namespace Commander
         }
 
         char const* BrokenByCast(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                 BotAction const& action, uint32 nowMs)
+                                 BotAction const& action, char const* source, uint32 nowMs)
         {
             SpellEntry const* spell = action.spell;
             if (!spell)
@@ -28,6 +29,9 @@ namespace Commander
 
             if (spell->HasEffect(SPELL_EFFECT_CHARGE) && plan.ForbidsGapCloser(self))
                 return "no charge (pull)";
+            // Kept for an enemy about to run away (FleeStopBehavior casts it).
+            if (strcmp(source, "fleestop") && plan.HoldsSpell(self, spell->Id, spell->NeedsComboPoints()))
+                return "kept for a flee stop";
 
             if (!SpellTags::DealsDamage(spell))
                 return nullptr;
@@ -75,7 +79,7 @@ namespace Commander
                 case BotActionType::PetAttack:
                     return plan.EngageBlock(self, p.action.target);
                 case BotActionType::Cast:
-                    return BrokenByCast(bot, world, plan, p.action, nowMs);
+                    return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:
                     return plan.ForbidsRest(self) ? "no rest" : nullptr;
                 default:

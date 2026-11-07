@@ -31,6 +31,17 @@ namespace Commander
                 return { s.pSap, s.pBlind };
             }
 
+            // Kidney Shot: a finisher, needs combo points on the target.
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                return { m_bot.m_spells.rogue.pKidneyShot };
+            }
+
+            SpellEntry const* ComboFinisher() const override
+            {
+                return m_bot.m_spells.rogue.pEviscerate;
+            }
+
             // Vanish: the enemies on the rogue turn to someone else.
             std::vector<SurvivalSpell> Survival() const override
             {

@@ -10,6 +10,8 @@
  *   Attack, Chase, PetAttack   the target: TeamPlan::EngageBlock (patrol path, player's
  *                              "leave it alone"; the bot's own intercept is allowed)
  *   Cast with a charge effect  TeamPlan::ForbidsGapCloser
+ *   Cast of a kept spell       TeamPlan::HoldsSpell (a flee stop's spell, and a kept
+ *                              finisher's other finishers), except FleeStopBehavior's own
  *   Cast that deals damage     the target, and for an area spell every acting enemy whose
  *                              edge is within SpellTags::AreaRadius of the centre (the target,
  *                              or the bot without one: same rule as AreaDamageBehavior),

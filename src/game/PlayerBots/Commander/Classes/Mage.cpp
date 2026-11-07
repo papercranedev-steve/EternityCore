@@ -30,6 +30,13 @@ namespace Commander
                 return { m_bot.m_spells.mage.pFrostNova };
             }
 
+            // Frost Nova: around the mage, only when the runner is next to it. (Frostbolt slows
+            // too, but it is the filler: not held for this.)
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                return { m_bot.m_spells.mage.pFrostNova };
+            }
+
             // Humanoids and beasts; one of the sheep / pig / turtle variants (ResetSpellData).
             std::vector<SpellEntry const*> Controls() const override
             {

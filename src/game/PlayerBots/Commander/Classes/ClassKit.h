@@ -134,6 +134,16 @@ namespace Commander
         // Charge at an enemy to open a fight (warrior Charge). Only the Commander casts it
         // (PullBehavior: a walk-in pull fought where the pack stands); the tank rotation does not.
         virtual SpellEntry const* OpenerCharge() const { return nullptr; }
+        // Stuns, roots and slows that keep an enemy running away at low health from getting
+        // far (flee interception, FleeStopAssigner, todo 13). What each does (stun / root
+        // duration, slow percent, range) is read from the spell data (WorldModelBuilder fills
+        // FleeStopAbility). Only the Commander casts them for that: the rotations keep their
+        // own uses, except while the plan holds the spell (TeamPlan::HoldsSpell).
+        virtual std::vector<SpellEntry const*> FleeStoppers() const { return {}; }
+        // The finisher that spends combo points as damage on the current target (rogue
+        // Eviscerate, cat Ferocious Bite): cast before a planned target switch so the points
+        // are not lost (TargetBehavior, a suggested switch).
+        virtual SpellEntry const* ComboFinisher() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

@@ -32,6 +32,11 @@
  *   others    Coordination/DamageTargets.cpp
  * Forced = Urgent tier, not valued (a must, expressed by tier). Otherwise TargetBehavior proposes
  * the switch at benefit - cost, cost = Perception/SwitchCost.h.
+ * Suggestion (todo 13, user 2026-11-08: turning to an enemy about to run away is advice, the bot
+ * finishes what it is doing): a valued switch to an enemy whose run the focus would cut
+ * (FleeFacts::FocusSaves > 0, not running yet) gets TargetDuty::suggestUntilMs = now +
+ * (secToFlee - SwitchCost::Seconds - SUGGEST_MARGIN_SEC); at or below 0 it is a plain switch.
+ * Also a runner is a candidate focus (EnemyFacts::HitWhileControlled).
  */
 
 #ifndef MANGOS_COMMANDER_TARGET_ASSIGNER_H
@@ -47,6 +52,8 @@ namespace Commander
         // An attack order whose enemy is not on any list is dropped after this long (the bots
         // need a refresh or two after the command to have it as their victim).
         static constexpr uint32 ORDER_GRACE_MS = 3000;
+        // A suggested switch ends this long before the switch would come too late (header).
+        static constexpr float SUGGEST_MARGIN_SEC = 1.0f;
 
         AssignStage GetStage() const override { return AssignStage::Duties; }
         char const* GetId() const override { return "target"; }

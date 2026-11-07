@@ -46,6 +46,7 @@ namespace Commander
         CrowdControl,   // CrowdControlAssigner: take an enemy out of the fight for a while
         Rescue,         // RescueAssigner: get an enemy off a member who is not a tank
         Save,           // RescueAssigner: keep a member who is about to die alive (Shield Wall, a shield)
+        FleeStop,       // FleeStopAssigner: stun / root / slow an enemy running away (a reservation until it is due)
     };
 
     // Needs of different kinds that solve the same problem (team rescue, 2026-11-07): a need is

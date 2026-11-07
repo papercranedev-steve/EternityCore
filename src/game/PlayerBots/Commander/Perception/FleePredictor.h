@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 1 (eyes): which enemies are about to run away at low health, and
  * what it costs the party if they do (todo 12, .kiro/docs/2026-11-08-flee-predictor.md).
- * Facts only: who stops the run is the brain's (todo 13).
+ * Facts only: who stops the run is the brain's (todo 13, FleeStopAssigner).
  *
  * Server rules (code reading, 2026-11-08):
  *  - Who: creature_ai_events EVENT_T_HP + SCRIPT_COMMAND_FLEE (CreatureProfile::fleeAtHealthPct).
@@ -11,7 +11,8 @@
  *    used by one outdoor creature only: not modelled.
  *  - Where: Creature::DoFlee -> TimedFleeingMovementGenerator, CreatureFamilyFleeDelay (7 s).
  *    Legs in random directions (30 yd path limit, 0.8-1.5 s pause), until 28-38 yd from its
- *    victim; then it attacks the same victim again. A stun pauses the run and its timer.
+ *    victim; then it attacks the same victim again. A stun or root pauses the run and its
+ *    timer (it does not end it).
  *  - Who comes: every update while running, Creature::CallForHelp(10): idle creatures within
  *    10 yd in sight that are friendly to it (any faction, not only its own) attack its victim at
  *    once. They start attacking, so they call assistance and bring their groups.
@@ -19,13 +20,19 @@
  *
  * Worst case (user, 2026-11-08): every creature the run can come near joins.
  *   reach    min(run speed x flee time, MAX_RUN_YD) from where it stands now
- *   seeds    idle creatures passing the server's CallForHelp checks within reach + CALL_YD,
+ *   callers  idle creatures passing the server's CallForHelp checks within reach + CALL_YD,
  *            in sight from it, or with a navmesh path from it no longer than that
- *   joiners  AssistPredictor::Expand(seeds): their aggro-together groups and the assistance
- *            they call
- *   points   FightLoad: the current fight (FromWorld) once as it is and once with the joiners
- *            arriving secToFlee + JOIN_SEC in (sameFight); Loss(with) - Loss(as is), >= 0.
- *            The runner's own 7 s away is not counted.
+ *   joiners  each caller with what it brings (AssistPredictor::Expand: aggro-together groups,
+ *            assistance), FleeJoiner::needYd = the caller's distance - CALL_YD
+ *   points   PointsWithin(reach): FightLoad, the current fight (FromWorld) once as it is and
+ *            once with the joiners within that reach arriving secToFlee + JOIN_SEC in
+ *            (sameFight); Loss(with) - Loss(as is), >= 0. The runner's own 7 s away is not
+ *            counted.
+ * Focused (todo 13, user 2026-11-08: the usual answer is to have the party on it in time):
+ *   runKillSec   (health when it starts to run - melee share x MELEE_CONTACT_SEC) / ranged
+ *                share of Value::DealtDps: melee are as fast as it is and lose it, ranged keep
+ *                shooting; the whole flee time when nobody ranged is there
+ *   focusedReachYd  min(reach, run speed x runKillSec); focusedPoints = PointsWithin(it)
  * secToFlee = Value::EnemyTimeToDie x (health% - atPct) / health%.
  *
  * Cost: one grid search and up to MAX_PATHS_PER_ENEMY navmesh queries per predicted enemy,
@@ -38,7 +45,6 @@
 #ifndef MANGOS_COMMANDER_FLEE_PREDICTOR_H
 #define MANGOS_COMMANDER_FLEE_PREDICTOR_H
 
-#include "Commander/Perception/FightLoad.h"
 #include "Commander/Perception/WorldModel.h"
 #include <vector>
 
@@ -56,6 +62,8 @@ namespace Commander
         static constexpr float CALL_YD = 10.0f;         // FleeingMovementGenerator: CallForHelp(10)
         // Joiners come while it runs, not when it starts: about the first leg. Untested guess.
         static constexpr float JOIN_SEC = 2.0f;
+        // Melee still hit it this long after it turns (the first steps). Untested guess.
+        static constexpr float MELEE_CONTACT_SEC = 1.0f;
         static constexpr float MOVED_YD = 4.0f;
         static constexpr uint32 MAX_AGE_MS = 2000;
         static constexpr uint32 MAX_SEARCHES_PER_REFRESH = 3;
@@ -64,14 +72,21 @@ namespace Commander
         // Fills EnemyFacts::flee of world.enemies.
         void Annotate(Map* map, WorldModel& world, uint32 nowMs);
 
+        // Points the joiners of `e` within a run of `reachYd` cost (header). Pure.
+        static float PointsWithin(WorldModel const& world, EnemyFacts const& e, float reachYd);
+        // Health it has when it starts to run (now if it already runs).
+        static float HealthAtRun(EnemyFacts const& e);
+        // Seconds the party needs to kill it while it runs (header), FleeFacts::runKillSec.
+        static float RunKillSec(WorldModel const& world, EnemyFacts const& e, float fleeSec);
+        static float FleeSec();
+
     private:
         struct Entry
         {
             ObjectGuid enemy;
             Position3 at;
             uint32 atMs = 0;
-            std::vector<ObjectGuid> joiners;
-            std::vector<FightLoad::Foe> foes;   // the joiners on the tank, arriveSec 0
+            std::vector<FleeJoiner> joiners;
         };
         std::vector<Entry> m_cache;
         std::vector<ObjectGuid> m_fled;         // seen running, alive and still on our lists

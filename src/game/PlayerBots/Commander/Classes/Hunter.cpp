@@ -19,6 +19,13 @@ namespace Commander
                 fd.selfOnly = true;
                 return { fd };
             }
+
+            // Concussive Shot (ranged), Wing Clip (melee).
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                auto const& s = m_bot.m_spells.hunter;
+                return { s.pConcussiveShot, s.pWingClip };
+            }
         };
     }
 

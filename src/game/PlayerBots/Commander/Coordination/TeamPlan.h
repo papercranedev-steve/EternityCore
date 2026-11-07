@@ -539,6 +539,21 @@ namespace Commander
         bool urgent = false;         // the victim dies within the horizon: Urgent tier
     };
 
+    // A stun, root or slow kept for an enemy about to run away (FleeStopAssigner, todo 13): a
+    // reservation. Before it is due the bot holds the spell (HoldsSpell) and fights as usual;
+    // FleeStopBehavior checks the trigger live every tick and casts.
+    struct FleeStopDuty
+    {
+        ObjectGuid enemy;
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        float points = 0.0f;         // net worth (Perception/FleeStopValue.h)
+        bool hold = false;           // stun / root: cast when the party kills it within holdSec
+        float holdSec = 0.0f;
+        bool needsCombo = false;     // a finisher: its other finishers are held too
+        float triggerPct = 0.0f;     // hold: cast from this health percent on (also once it runs)
+    };
+
     // Only controlled enemies are left (ControlledEndAssigner): wait for mana while they sleep,
     // then the tank wakes the first one (attacks it, PartyBotAI::IsAssignedToBreakControl).
     struct ControlEndPlan
@@ -571,6 +586,11 @@ namespace Commander
         bool forced = false;         // a player order or a brain task: Urgent, not valued
         char const* reason = "";     // static string
         uint32 sinceMs = 0;          // world refresh time the bot got this enemy
+        // A suggestion until this WorldTimer ms (0 = switch now, a task): the bot may finish
+        // what it is doing first (spend its combo points on the current target; a cast is
+        // finished anyway), then switch; from then on it switches (TargetBehavior). Set for an
+        // enemy about to run away (todo 13, TargetAssigner.h).
+        uint32 suggestUntilMs = 0;
     };
 
     // What the player told the bots to attack (`.partybot attackstart`, `.partybot pull`) or to
@@ -612,6 +632,7 @@ namespace Commander
         std::vector<DispelDuty> dispels;
         std::vector<ControlDuty> controls;
         std::vector<RescueDuty> rescues;
+        std::vector<FleeStopDuty> fleeStops;
         // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
         // ThreatBehavior): enemies about to get a control that breaks on damage
         // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
@@ -654,6 +675,14 @@ namespace Commander
         RescueDuty const* FindRescueFor(ObjectGuid bot) const
         {
             for (RescueDuty const& d : rescues)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        FleeStopDuty const* FindFleeStopFor(ObjectGuid bot) const
+        {
+            for (FleeStopDuty const& d : fleeStops)
                 if (d.bot == bot)
                     return &d;
             return nullptr;
@@ -722,6 +751,16 @@ namespace Commander
                 case PullPhase::Settle:   return pull.awaitArrival && pull.losBreak != PullLosBreak::Active;
                 default:                  return false;
             }
+        }
+
+        // `bot` keeps `spellId` for a flee stop (todo 13): nobody else casts it, the rotation
+        // neither (PartyBotAI::IsSpellHeld), only FleeStopBehavior. A finisher kept (Kidney
+        // Shot) holds the bot's other finishers too (`finisher`: the spell needs combo
+        // points), so the points stay for it.
+        bool HoldsSpell(ObjectGuid bot, uint32 spellId, bool finisher) const
+        {
+            FleeStopDuty const* d = FindFleeStopFor(bot);
+            return d && (d->spellId == spellId || (finisher && d->needsCombo));
         }
 
         // `bot` must not sit down to eat or drink: a retreat runs, the boss module says so, or it

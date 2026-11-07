@@ -204,6 +204,21 @@ namespace Commander
             return !Tanks::IsTank(m) && RestValue::Of(world, m, plan.pull.PlannedFight()).Pays();
         }
 
+        // TargetDuty::suggestUntilMs (header): a valued switch to an enemy about to run away.
+        uint32 SuggestUntil(WorldModel const& world, PartyMemberFacts const& m, EnemyFacts const& e, TargetDuty const& d)
+        {
+            if (d.forced || d.urgent || d.enemy == m.victim)
+                return 0;
+            FleeFacts const& f = e.flee;
+            if (!f.predicted || f.fleeing || f.FocusSaves() <= 0.0f)
+                return 0;
+            float const reach = m.role == ROLE_RANGE_DPS ? DamageTargets::RANGED_REACH : DamageTargets::MELEE_REACH;
+            float const slack = f.secToFlee - SwitchCost::Seconds(world, m, e, reach) - TargetAssigner::SUGGEST_MARGIN_SEC;
+            if (slack <= 0.0f)
+                return 0;
+            return world.refreshedAtMs + uint32(slack * 1000.0f);
+        }
+
         TargetPick Forced(EnemyFacts const* e, char const* reason)
         {
             TargetPick p;
@@ -279,6 +294,7 @@ namespace Commander
                 d.reason = pick.reason;
                 TargetDuty const* previous = plan.FindTargetFor(m.guid);
                 d.sinceMs = previous && previous->enemy == d.enemy ? previous->sinceMs : world.refreshedAtMs;
+                d.suggestUntilMs = SuggestUntil(world, m, *pick.enemy, d);
                 targets.push_back(d);
             }
         }

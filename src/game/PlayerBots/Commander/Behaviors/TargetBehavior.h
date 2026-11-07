@@ -10,6 +10,11 @@
  *   otherwise                           Assigned, benefit - cost from the plan
  * Live checks only: the enemy is still a valid target (PartyBotAI::IsValidHostileTarget), and a
  * ranged damage dealer sees it within RANGED_SIGHT_RANGE (melee and tanks walk there).
+ * Suggested switch (TargetDuty::suggestUntilMs not passed yet, todo 13): with combo points on
+ * its current victim the bot casts its ClassKit::ComboFinisher on it first (Assigned, benefit =
+ * the points' rebuild time, SwitchCost::COMBO_POINT_SEC each, which the switch would lose);
+ * while that is not castable yet (energy) it keeps waiting. A cast in progress is finished
+ * anyway (the arbiter does not run while the bot casts). Past the time: the plain switch.
  * Tanks, melee and ranged damage dealers; healers never get a target.
  */
 

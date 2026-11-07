@@ -17,6 +17,7 @@ namespace DutyAllocator
             case DutyKind::CrowdControl: return "control";
             case DutyKind::Rescue: return "rescue";
             case DutyKind::Save: return "save";
+            case DutyKind::FleeStop: return "flee stop";
         }
         return "?";
     }

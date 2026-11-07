@@ -27,6 +27,13 @@ namespace Commander
                 return m_bot.m_spells.warrior.pCharge;
             }
 
+            // Hamstring (Battle / Berserker Stance), Piercing Howl (talent, around the warrior).
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                auto const& s = m_bot.m_spells.warrior;
+                return { s.pHamstring, s.pPiercingHowl };
+            }
+
             // Intimidating Shout: its target cowers, everyone around runs (rage, 3 min).
             std::vector<SpellEntry const*> Controls() const override
             {

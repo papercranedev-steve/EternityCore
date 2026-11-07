@@ -32,6 +32,11 @@ namespace Commander
                 return { { m_bot.m_spells.paladin.pConsecration, 0.5f, false, false, true } };
             }
 
+            std::vector<SpellEntry const*> FleeStoppers() const override
+            {
+                return { m_bot.m_spells.paladin.pHammerOfJustice };
+            }
+
             // 6 s stun: holds a chaser for its whole duration.
             std::vector<SpellEntry const*> HoldSpells() const override
             {
