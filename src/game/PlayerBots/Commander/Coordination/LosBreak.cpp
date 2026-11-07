@@ -103,11 +103,17 @@ namespace Commander
                 }
                 if (!watched)
                     continue;
+                bool const seesAll = std::all_of(search.sees.begin(), search.sees.end(), [map, &p](Position3 const& s)
+                {
+                    return map->isInLineOfSight(p.x, p.y, p.z + UNIT_HEIGHT, s.x, s.y, s.z + UNIT_HEIGHT);
+                });
+                if (!seesAll)
+                    continue;
                 ++paths;
                 bool const reachable = walker
                     ? SafeRoute::PathIsSafe(walker, *idle, p, MAX_DETOUR)
                     : search.mover->IsWithinLOS(p.x, p.y, p.z, true, UNIT_HEIGHT);
-                if (reachable)
+                if (reachable && (!search.accepts || search.accepts(p)))
                 {
                     point = p;
                     return true;

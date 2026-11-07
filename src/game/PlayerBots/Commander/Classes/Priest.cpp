@@ -21,7 +21,12 @@ namespace Commander
                 return { m_bot.m_spells.priest.pSilence };
             }
 
-            bool CanDispel() const override { return true; }
+            // Dispel Magic, Abolish Disease (Cure Disease until learned).
+            std::vector<SpellEntry const*> Dispels() const override
+            {
+                auto const& s = m_bot.m_spells.priest;
+                return { s.pDispelMagic, s.pAbolishDisease ? s.pAbolishDisease : s.pCureDisease };
+            }
 
             // Undead only (TargetCreatureType, checked by EscapeBehavior); breaks on damage.
             // Psychic Scream is not a hold spell: feared enemies run into the next pack.

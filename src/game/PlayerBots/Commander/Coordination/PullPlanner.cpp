@@ -1,7 +1,10 @@
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/ClearPlanner.h"
 #include "Commander/Coordination/LosBreak.h"
+#include "Commander/Coordination/LosHealerSpot.h"
+#include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/PullMethod.h"
+#include "Commander/Coordination/PullOpening.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/AssistPredictor.h"
@@ -696,9 +699,25 @@ namespace Commander
             return false;
         }
 
+        // An aggressive idle patrol walks past `point` before the fight should end
+        // (PatrolAssigner::InPath): a hiding point there brings the patrol in, and the patrol
+        // module would only move the fight away again (strat-20261107-143623: the tank walked
+        // to the hiding point, then 15 yd off the patrol's path, then to the patrol guard's
+        // hiding point, in sight of the casters most of the time).
+        bool InPatrolPath(WorldModel const& world, Position3 const& point)
+        {
+            float const remaining = Value::FightRemainingSec(world);
+            for (PatrolFacts const& p : world.patrols)
+                if (p.aggressive && !p.noAggro && !p.tappedByOther && !p.track.empty() &&
+                    PatrolAssigner::InPath(p, point, remaining))
+                    return true;
+            return false;
+        }
+
         // Pure (PullAssigner). The break ends when every caster came within LOS_CASTER_ARRIVED of
-        // the tank or cannot come (dead, out of the fight, crowd controlled), the fight is over,
-        // or after LOS_BREAK_TIMEOUT_MS. `timedOut` says which.
+        // the tank or cannot come (dead, out of the fight, crowd controlled), turned to someone
+        // else (hiding the tank does nothing then; the threat module takes it back), the fight
+        // is over, or after LOS_BREAK_TIMEOUT_MS. `timedOut` says which.
         // A caster turning melee back on is not the end yet: it has only started to walk, and
         // the tank leaving the point would put it back in its sight (it stops again).
         bool LosBreakOver(WorldModel const& world, PullPlan const& pull, Position3 const& tankAt, uint32 nowMs,
@@ -717,7 +736,8 @@ namespace Commander
             for (ObjectGuid g : pull.losCasters)
             {
                 EnemyFacts const* e = world.FindEnemy(g);
-                if (e && e->acting && !e->crowdControlled && PackResolver::Distance(e->pos, tankAt) > arrived)
+                if (e && e->acting && !e->crowdControlled && e->victim == pull.tank &&
+                    PackResolver::Distance(e->pos, tankAt) > arrived)
                     return false;
             }
             return true;
@@ -1130,7 +1150,7 @@ namespace Commander
         search.mover = tank;
         search.rejects = [&world, &pull, &center](Position3 const& p)
         {
-            return TowardsOtherCreature(world, pull, p, center);
+            return TowardsOtherCreature(world, pull, p, center) || InPatrolPath(world, p);
         };
 
         Creature const* first = casters.front();
@@ -1151,6 +1171,28 @@ namespace Commander
             pull.losCasters.push_back(c->GetObjectGuid());
         plan.notes.push_back(Format("%s stands back and casts: %s steps out of its sight (%.0f yd) so it comes closer.",
             first->GetName(), tank->GetName(), PackResolver::Distance(tankAt, point)));
+
+        // Healer bots hide too, behind the tank as seen from the casters (LosHealerSpot.h).
+        pull.losHiders.clear();
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.isBot || m.isPet || !m.alive || !m.CanAct() || m.role != ROLE_HEALER || m.guid == pull.tank)
+                continue;
+            Player* healer = map->GetPlayer(m.guid);
+            if (!healer)
+                continue;
+            PullHider hider;
+            hider.bot = m.guid;
+            if (LosHealerSpot::Find(map, healer, point, casters, search.rejects, hider.point))
+            {
+                pull.losHiders.push_back(hider);
+                plan.notes.push_back(Format("%s hides behind %s (%.0f yd from it) so a caster it pulls walks past the tank.",
+                    healer->GetName(), tank->GetName(), PackResolver::Distance(point, hider.point)));
+            }
+            else
+                plan.notes.push_back(Format("%s: no spot out of the casters' sight behind %s, staying.",
+                    healer->GetName(), tank->GetName()));
+        }
     }
 
     namespace
@@ -1421,6 +1463,14 @@ namespace Commander
         {
             pull.phase = phase;
             pull.phaseSinceMs = now;
+            // Everyone keeps waiting until the first Settle refresh past the arrival wait
+            // decides (PullOpening::Update).
+            if (phase == PullPhase::Settle)
+            {
+                PullOpening::Release(pull);
+                pull.holdDamage = true;
+                pull.holdHealing = true;
+            }
         };
         // `pull.expected` is kept: ClearPlanner reads it after an interrupted pull.
         auto finish = [&](PullOutcome outcome, std::string const& text)
@@ -1530,7 +1580,7 @@ namespace Commander
                 return;
             case PullPhase::Settle:
                 // Ranged pull fought in place: the tank stays where it shot until the pack came.
-                // Settle's own time starts then (the others hold until SETTLE_MS after it).
+                // Settle's own time starts then (the opening holds below start then too).
                 if (pull.awaitArrival)
                 {
                     bool const timedOut = elapsed > pull.arrivalTimeoutMs;
@@ -1549,13 +1599,19 @@ namespace Commander
                 if (pull.losBreak == PullLosBreak::Active)
                 {
                     bool timedOut = false;
-                    if (!LosBreakOver(world, pull, tank->pos, now, timedOut))
-                        return;
-                    pull.losBreak = PullLosBreak::Ended;
-                    if (timedOut)
-                        plan.notes.push_back(Format("The caster did not come out within %u seconds, fighting here.",
-                            LOS_BREAK_TIMEOUT_MS / 1000));
+                    if (LosBreakOver(world, pull, tank->pos, now, timedOut))
+                    {
+                        pull.losBreak = PullLosBreak::Ended;
+                        if (timedOut)
+                            plan.notes.push_back(Format("The caster did not come out within %u seconds, fighting here.",
+                                LOS_BREAK_TIMEOUT_MS / 1000));
+                    }
                 }
+                // Who may start (PullOpening.h): damage once the tank has threat on what came,
+                // healing also once the casters of the break came.
+                PullOpening::Update(world, pull, tank->pos, now);
+                if (pull.losBreak == PullLosBreak::Active || pull.holdDamage || pull.holdHealing)
+                    return;
                 if (elapsed >= SETTLE_MS || !world.HasPartyEnemy())
                 {
                     pull.phase = PullPhase::None;

@@ -204,7 +204,7 @@ namespace Commander
 
                 DutyNeed need;
                 need.kind = DutyKind::Intercept;
-                need.enemy = e.guid;
+                need.target = e.guid;
                 need.now = true;
                 need.points = n.points;
                 // Equal points: closest to its victim first (the most urgent).
@@ -373,7 +373,7 @@ namespace Commander
             if (r.kind != DutyKind::Intercept || r.primary.IsEmpty())
                 continue;
             InterceptDuty d;
-            d.enemy = r.enemy;
+            d.enemy = r.target;
             d.bot = r.primary;
             d.points = r.points;
             d.reason = r.reason;

@@ -285,12 +285,21 @@ namespace
                 handler->PSendSysMessage("    |cffffcc00%s|r: %s (%s, %.1f pt)",
                     NameOf(map, d.enemy).c_str(), NameOf(map, d.bot).c_str(), d.reason, d.points);
                 for (Commander::DutyResult const& r : plan.duties)
-                    if (r.kind == Commander::DutyKind::Intercept && r.enemy == d.enemy)
+                    if (r.kind == Commander::DutyKind::Intercept && r.target == d.enemy)
                         for (Commander::DutyPass const& pass : r.passed)
                             handler->PSendSysMessage("        passed over %s: primary %s on %s",
                                 NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                                NameOf(map, pass.busyEnemy).c_str());
+                                NameOf(map, pass.busyTarget).c_str());
             }
+        }
+
+        if (!plan.dispels.empty())
+        {
+            handler->SendSysMessage("Dispels:");
+            for (Commander::DispelDuty const& d : plan.dispels)
+                handler->PSendSysMessage("    %s: %s from |cffffcc00%s|r with %s (%.1f pt%s)",
+                    NameOf(map, d.bot).c_str(), SpellName(d.auraSpellId).c_str(), NameOf(map, d.target).c_str(),
+                    SpellName(d.spellId).c_str(), d.points, d.control ? ", cannot act" : "");
         }
 
         if (plan.interrupts.empty())
@@ -315,14 +324,14 @@ namespace
             // Better-ranked bots the allocator did not make primary (DutyAllocator.h).
             for (Commander::DutyResult const& r : plan.duties)
             {
-                if (r.kind != Commander::DutyKind::Interrupt || r.enemy != d.enemy)
+                if (r.kind != Commander::DutyKind::Interrupt || r.target != d.enemy)
                     continue;
                 for (Commander::DutyPass const& pass : r.passed)
                 {
                     if (pass.reason == Commander::DutyPassReason::Busy)
                         handler->PSendSysMessage("        passed over %s: primary %s on %s",
                             NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                            NameOf(map, pass.busyEnemy).c_str());
+                            NameOf(map, pass.busyTarget).c_str());
                     else
                         handler->PSendSysMessage("        passed over %s: backup only (no sight, too far or not in front)",
                             NameOf(map, pass.bot).c_str());

@@ -17,8 +17,12 @@ namespace Commander
                 return { s.pBash, s.pFeralCharge };
             }
 
-            // Remove Curse, Cure / Abolish Poison.
-            bool CanDispel() const override { return true; }
+            // Remove Curse, Abolish Poison (Cure Poison until learned).
+            std::vector<SpellEntry const*> Dispels() const override
+            {
+                auto const& s = m_bot.m_spells.druid;
+                return { s.pRemoveCurse, s.pAbolishPoison ? s.pAbolishPoison : s.pCurePoison };
+            }
 
             std::vector<AreaThreatSpell> AreaThreat() const override
             {

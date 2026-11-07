@@ -39,6 +39,32 @@ namespace Commander
         bool needsFront = false;
     };
 
+    // A friendly dispel a bot has learned (ClassKit::Dispels).
+    struct DispelAbility
+    {
+        uint32 spellId = 0;
+        uint32 dispelMask = 0;       // 1 << DispelType of every SPELL_EFFECT_DISPEL
+        float maxRange = 0.0f;
+        bool ready = false;          // off cooldown, enough mana, can act and cast
+        // Can also target a member mind controlled by a creature (Dispel Magic; the friendly-only
+        // ones fail on such a target: PartyBotAI::SelectDispelTarget).
+        bool hostileOk = false;
+    };
+
+    // A harmful, dispellable aura a creature put on a party member (players only).
+    struct DebuffFacts
+    {
+        uint32 spellId = 0;
+        uint8 dispelType = 0;        // SpellEntry::Dispel
+        ObjectGuid caster;
+        uint32 casterLevel = 0;
+        uint32 remainingMs = 0;
+        uint32 stacks = 1;
+        // The caster is alive, hitting the member and its profile puts the spell back: seconds
+        // until it does (on-hit proc: attack time / chance; spell list: repeat delay). 0 = not.
+        float reapplySec = 0.0f;
+    };
+
     // One direct heal of a healer bot, chain cast (Perception/HealCapacity.h).
     struct HealRate
     {
@@ -87,6 +113,8 @@ namespace Commander
         // paladin with Righteous Fury. A state, not who the tanks are (that is `role`, Tanks.h).
         bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
+        std::vector<DispelAbility> dispels;         // bots only
+        std::vector<DebuffFacts> debuffs;           // players only
         // Damage actually taken (Perception/DamageIntake.h): per second over the last few
         // seconds, and the biggest spike within a short window. Value::TakenDps combines the
         // rate with the prediction from enemy melee.

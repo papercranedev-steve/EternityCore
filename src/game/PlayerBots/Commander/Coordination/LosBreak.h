@@ -15,9 +15,10 @@
  * ground is more than MAX_HEIGHT_DIFF from the center's or the caller's filter rejects it.
  * At most MAX_LOS_CHECKS caster checks per search.
  * The candidates, nearest to the center first, are then checked for the walk (at most
- * MAX_PATHS): every watcher sees the point, and the mover gets there by a path at most
- * MAX_DETOUR times the straight line that passes no idle creature (SafeRoute::PathIsSafe; a
- * mover that is not a player: straight line of sight instead). The first that passes is used.
+ * MAX_PATHS): every watcher sees the point, the point sees every `sees` place, the mover gets
+ * there by a path at most MAX_DETOUR times the straight line that passes no idle creature
+ * (SafeRoute::PathIsSafe; a mover that is not a player: straight line of sight instead), and
+ * the caller's `accepts` agrees. The first that passes is used.
  *
  * Before 2026-11-03: two rings (6 and 11 yd) x 6 directions, and the mover had to see the point
  * in a straight line (stand-in for a short walk). strat-20261103-010704: both Skeletal
@@ -59,8 +60,14 @@ namespace Commander
             std::vector<Creature const*> casters;   // the point hides from each of them (not empty)
             Unit* mover = nullptr;                  // walks there
             std::vector<Unit const*> watchers;      // must still see the point (optional)
+            // Optional: the point sees these places (eye height at both ends), e.g. where
+            // another bot will stand.
+            std::vector<Position3> sees;
             // Optional: true = skip this candidate (idle creatures nearby, a patrol's path).
             std::function<bool(Position3 const&)> rejects;
+            // Optional: final check of a candidate that passed everything else (expensive
+            // checks such as a creature's path; counted in MAX_PATHS).
+            std::function<bool(Position3 const&)> accepts;
         };
 
         // True and `point` (with its ground height) when a usable point was found.

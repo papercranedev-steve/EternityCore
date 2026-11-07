@@ -15,6 +15,7 @@
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/InterruptAssigner.h"
+#include "Commander/Coordination/DispelAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/RetreatPlanner.h"
@@ -48,6 +49,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<DispelAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
     }

@@ -209,6 +209,11 @@ bool PartyBotAI::IsEscapeControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Escape, WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsDispelControlled() const
+{
+    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::Dispel, WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsThreatDropControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
@@ -1610,6 +1615,9 @@ void PartyBotAI::UpdateInCombatAI()
 bool PartyBotAI::CheckForDispelTargets()
 {
     if (me->GetShapeshiftForm() != FORM_NONE)
+        return false;
+    // In combat the Commander decides who dispels what (DispelAssigner, Takeover::Dispel).
+    if (IsDispelControlled())
         return false;
 
     switch (me->GetClass())

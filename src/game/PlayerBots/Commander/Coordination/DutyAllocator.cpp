@@ -12,6 +12,7 @@ namespace DutyAllocator
         {
             case DutyKind::Interrupt: return "interrupt";
             case DutyKind::Intercept: return "intercept";
+            case DutyKind::Dispel: return "dispel";
         }
         return "?";
     }
@@ -30,7 +31,7 @@ namespace DutyAllocator
         struct Claim
         {
             DutyKind kind;
-            ObjectGuid enemy;
+            ObjectGuid target;
         };
         std::map<ObjectGuid, Claim> primaries;     // bot -> the primary duty it holds
 
@@ -44,7 +45,7 @@ namespace DutyAllocator
 
             DutyResult r;
             r.kind = need.kind;
-            r.enemy = need.enemy;
+            r.target = need.target;
             r.now = need.now;
             r.points = need.points;
             r.detail = need.detail;
@@ -57,7 +58,7 @@ namespace DutyAllocator
                 {
                     r.primary = c.bot;
                     r.primarySpellId = c.spellId;
-                    primaries[c.bot] = { need.kind, need.enemy };
+                    primaries[c.bot] = { need.kind, need.target };
                     break;
                 }
                 DutyPass pass;
@@ -66,7 +67,7 @@ namespace DutyAllocator
                 {
                     pass.reason = DutyPassReason::Busy;
                     pass.busyKind = held->second.kind;
-                    pass.busyEnemy = held->second.enemy;
+                    pass.busyTarget = held->second.target;
                 }
                 else
                     pass.reason = DutyPassReason::NotPrimary;

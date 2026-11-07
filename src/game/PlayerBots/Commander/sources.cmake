@@ -30,6 +30,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/IAssigner.h
   ${COMMANDER_DIR}/Coordination/DutyAllocator.h
   ${COMMANDER_DIR}/Coordination/DutyAllocator.cpp
+  ${COMMANDER_DIR}/Coordination/DispelAssigner.h
+  ${COMMANDER_DIR}/Coordination/DispelAssigner.cpp
+  ${COMMANDER_DIR}/Perception/DispelValue.h
+  ${COMMANDER_DIR}/Perception/DispelValue.cpp
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.h
   ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
   ${COMMANDER_DIR}/Coordination/FocusAssigner.h
@@ -153,6 +157,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/PatrolPlanner.cpp
   ${COMMANDER_DIR}/Coordination/LosBreak.h
   ${COMMANDER_DIR}/Coordination/LosBreak.cpp
+  ${COMMANDER_DIR}/Coordination/PullOpening.h
+  ${COMMANDER_DIR}/Coordination/PullOpening.cpp
+  ${COMMANDER_DIR}/Coordination/LosHealerSpot.h
+  ${COMMANDER_DIR}/Coordination/LosHealerSpot.cpp
   ${COMMANDER_DIR}/Coordination/PullMethod.h
   ${COMMANDER_DIR}/Behaviors/PatrolBehavior.h
   ${COMMANDER_DIR}/Behaviors/PatrolBehavior.cpp

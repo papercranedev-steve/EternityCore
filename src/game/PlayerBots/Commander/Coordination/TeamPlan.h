@@ -106,6 +106,13 @@ namespace Commander
         Ended,
     };
 
+    // A healer bot hiding from the casters of a line of sight pull too (PullPlanner::SearchLosBreak).
+    struct PullHider
+    {
+        ObjectGuid bot;
+        Position3 point;
+    };
+
     struct PullPlan
     {
         PullPhase phase = PullPhase::None;
@@ -191,6 +198,30 @@ namespace Commander
         Position3 losPoint;
         std::vector<ObjectGuid> losCasters;  // casters the point hides from
         uint32 losSinceMs = 0;              // Active since then (PullAssigner::LOS_BREAK_TIMEOUT_MS)
+        // Healer bots that hide too while the break is Active: out of the casters' sight, in
+        // sight of losPoint, and placed so that a caster walking to the healer passes the tank
+        // (a heal that pulls it brings it to the tank anyway). A healer without a point stays
+        // (HealerStanceBehavior moves it when it loses the tank).
+        std::vector<PullHider> losHiders;
+
+        // Opening holds, written by PullAssigner during Settle once the arrival wait is over
+        // (PullAssigner.h "Opening threat"). Out of combat bots wait while set (PullBehavior):
+        // damage dealers until the tank has threat on every pulled enemy next to it, healers
+        // also until the casters of a line of sight pull came (healing is the last to start:
+        // its threat lands on every enemy at once).
+        bool holdDamage = false;
+        bool holdHealing = false;
+        uint32 threatSinceMs = 0;           // first pulled enemy reached the tank, 0 = none yet
+
+        PullHider const* LosHiderOf(ObjectGuid bot) const
+        {
+            if (losBreak != PullLosBreak::Active)
+                return nullptr;
+            for (PullHider const& h : losHiders)
+                if (h.bot == bot)
+                    return &h;
+            return nullptr;
+        }
     };
     enum class RetreatOutcome : uint8
     {
@@ -347,6 +378,17 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
+    // One debuff to remove from a party member, and who does it (DispelAssigner).
+    struct DispelDuty
+    {
+        ObjectGuid target;           // the party member
+        uint32 auraSpellId = 0;      // the debuff
+        ObjectGuid bot;
+        uint32 spellId = 0;          // the dispel it casts
+        float points = 0.0f;         // what removing it is worth (Perception/DispelValue.h)
+        bool control = false;        // the member cannot act: urgent
+    };
+
     // Role the "roles" assigner gives a bot whose role is not locked (RoleAssigner.h).
     struct RoleDuty
     {
@@ -365,6 +407,7 @@ namespace Commander
         std::vector<DutyResult> duties;
         FocusTarget focus;
         std::vector<InterceptDuty> intercepts;
+        std::vector<DispelDuty> dispels;
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;

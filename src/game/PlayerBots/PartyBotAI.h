@@ -171,6 +171,9 @@ public:
     // The Commander threat module decides Fade (ThreatBehavior): the priest rotation's own
     // "attacked: Fade" stands down.
     bool IsThreatDropControlled() const;
+    // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
+    // CheckForDispelTargets stands down. Out of combat it dispels as before.
+    bool IsDispelControlled() const;
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;

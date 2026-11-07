@@ -25,8 +25,17 @@
  *                     Line of sight pull (PullPlan::losBreak Active): walk backwards to PullPlan::losPoint,
  *                     out of sight of the casters standing back, and stay there (movement held,
  *                     still fighting) until PullAssigner ends it.
- *  Others   Approach / Return, the wait for the pack, and the first PullAssigner::SETTLE_MS of Settle: stay where they
- *           are while out of combat. Healers and ranged never follow the line of sight move.
+ *                     Standing on either point, the "stay" order scores only STAY_SCORE: the
+ *                     threat module's casts (Thunder Clap, Demoralizing Shout, taunts) beat it
+ *                     for one tick; the last order's movement hold (BACKPEDAL_ORDER_MS) keeps
+ *                     the tank on the point meanwhile.
+ *  Others   Approach / Return and the wait for the pack: stay where they are while out of
+ *           combat. Settle after that: damage dealers while PullPlan::holdDamage, healers while
+ *           PullPlan::holdHealing (Coordination/PullOpening.h); a healer still heals when a
+ *           member is below HOLD_HEAL_BELOW_PCT (the hold stands down, the rotation heals).
+ *           A healer with a hiding point of a line of sight pull (PullPlan::losHiders) walks
+ *           there while the break is Active, in combat or not. Ranged damage dealers do not
+ *           follow the line of sight move.
  *           Once in combat (healers and damage dealers alike) the original AI acts normally.
  */
 
@@ -59,6 +68,11 @@ namespace Commander
         // Walking backwards (Return, line of sight point): each order lasts this long and is
         // proposed again every tick; ends this long after the phase ends.
         static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
+        // On the point (within POINT_ARRIVED_YD): the order only keeps the tank there.
+        static constexpr float POINT_ARRIVED_YD = 1.5f;
+        static constexpr float STAY_SCORE = 0.5f;
+        // Held healer bots still heal a member below this (the rotation's heal step runs).
+        static constexpr float HOLD_HEAL_BELOW_PCT = 50.0f;
 
         char const* GetId() const override { return "pull"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

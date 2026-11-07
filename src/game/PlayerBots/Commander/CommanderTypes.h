@@ -95,6 +95,7 @@ namespace Commander
         Interrupt,  // reflex interrupts of the class rotations (InterruptBehavior)
         Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), in combat
         ThreatDrop, // Fade (ThreatBehavior)
+        Dispel,     // friendly dispels in combat (DispelAssigner / DispelBehavior)
         Count
     };
 
@@ -103,7 +104,7 @@ namespace Commander
     enum class VetoType : uint8
     {
         None,
-        Dispel,     // do not dispel aura `spellId` from `target` (PartyBotAI::IsValidDispelTarget)
+
         Heal,       // do not heal `target` this tick (PartyBotAI::FindAndHealInjuredAlly)
         // Do not cast a spell that charges at `target` (empty = any): Charge, Intercept, Feral
         // Charge (PartyBotAI::PassesPartyCastChecks). The pull brings the pack back.

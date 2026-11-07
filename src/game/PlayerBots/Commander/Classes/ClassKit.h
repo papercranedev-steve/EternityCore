@@ -63,8 +63,17 @@ namespace Commander
         // only when the interrupt module does not control the bot (module off, no commander);
         // VetoChecks::ImmuneToReflexInterrupts checks immunity against these.
         virtual std::vector<SpellEntry const*> ReflexInterrupts() const { return {}; }
-        // Removes harmful magic / curses / poisons / diseases from allies (DispelBehavior).
-        virtual bool CanDispel() const { return false; }
+        // Friendly dispels it has learned (best rank, fallbacks when the better spell is not
+        // learned yet): what DispelAssigner can give it. Only the Commander casts them in
+        // combat (Takeover::Dispel); out of combat the rotation does.
+        virtual std::vector<SpellEntry const*> Dispels() const { return {}; }
+        bool CanDispel() const
+        {
+            for (SpellEntry const* s : Dispels())
+                if (s)
+                    return true;
+            return false;
+        }
         // Area threat abilities, strongest first (ThreatBehavior group threat).
         virtual std::vector<AreaThreatSpell> AreaThreat() const { return {}; }
         // Roots / stuns that stop a melee enemy chasing the bot (EscapeBehavior; what each spell

@@ -20,7 +20,11 @@ namespace Commander
                 return { m_bot.m_spells.shaman.pEarthShock };
             }
 
-            bool CanDispel() const override { return true; }
+            std::vector<SpellEntry const*> Dispels() const override
+            {
+                auto const& s = m_bot.m_spells.shaman;
+                return { s.pCureDisease, s.pCurePoison };
+            }
         };
     }
 

@@ -21,6 +21,7 @@
 #include "Commander/Perception/ProfileStore.h"
 #include "SpellMgr.h"
 #include "Spell.h"
+#include "SpellAuras.h"
 #include "ThreatManager.h"
 #include "HostileRefManager.h"
 #include "GridNotifiers.h"
@@ -406,6 +407,87 @@ namespace WorldModelBuilder
             for (SpellEntry const* spell : ai->Kit().Interrupts())
                 AddInterrupt(ai, spell, f);
         }
+
+        void FillDispels(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (SpellEntry const* spell : ai->Kit().Dispels())
+            {
+                if (!spell)
+                    continue;
+                DispelAbility a;
+                a.spellId = spell->Id;
+                a.hostileOk = true;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (spell->Effect[i] != SPELL_EFFECT_DISPEL)
+                        continue;
+                    a.dispelMask |= Spells::GetDispellMask(DispelType(spell->EffectMiscValue[i]));
+                    if (spell->EffectImplicitTargetA[i] == TARGET_UNIT_FRIEND)
+                        a.hostileOk = false;
+                }
+                if (!a.dispelMask)
+                    continue;
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+                a.maxRange = range ? range->maxRange : 30.0f;
+                a.ready = !f.controlled && !f.silenced && me->IsSpellReady(spell) &&
+                          me->GetPower(Powers(spell->powerType)) >= Spell::CalculatePowerCost(spell, me) &&
+                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
+                f.dispels.push_back(a);
+            }
+        }
+
+        // Seconds until `caster` puts `spellId` back after a dispel, 0 = it does not (dead, not
+        // hitting the member, or its profile does not reapply the spell).
+        float ReapplySec(Creature const* caster, Unit const* member, uint32 spellId)
+        {
+            if (!caster || !caster->IsAlive() ||
+                (caster->GetVictim() != member && !caster->CanReachWithMeleeAutoAttack(member)))
+                return 0.0f;
+            std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(caster->GetEntry());
+            CreatureSpellRef const* ref = profile ? profile->FindSpell(spellId) : nullptr;
+            if (!ref || !ref->reapplies)
+                return 0.0f;
+            float const fallback = 4.0f;    // on-hit chance or repeat delay unknown
+            if (ref->source == SpellSource::OnHit)
+            {
+                float const attackSec = caster->GetAttackTime(BASE_ATTACK) / 1000.0f;
+                if (attackSec <= 0.0f)
+                    return fallback;
+                float const chance = (ref->procChance > 0 && ref->procChance <= 100) ? ref->procChance / 100.0f : 1.0f;
+                return attackSec / chance;
+            }
+            if (ref->repeatMaxMs)
+                return (ref->repeatMinMs + ref->repeatMaxMs) / 2000.0f;
+            return fallback;
+        }
+
+        // Harmful dispellable auras creatures put on `member` (players: pets are not dispelled).
+        void FillDebuffs(Player const* member, PartyMemberFacts& f)
+        {
+            if (!member->IsAlive())
+                return;
+            Map* map = member->GetMap();
+            for (auto const& itr : member->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                SpellEntry const* spell = holder->GetSpellProto();
+                if (holder->IsPositive() || !spell->Dispel || !holder->GetCasterGuid().IsCreature())
+                    continue;
+                if (std::any_of(f.debuffs.begin(), f.debuffs.end(), [spell](DebuffFacts const& d) { return d.spellId == spell->Id; }))
+                    continue;   // one entry per spell (an aura holder per effect group)
+                DebuffFacts d;
+                d.spellId = spell->Id;
+                d.dispelType = uint8(spell->Dispel);
+                d.caster = holder->GetCasterGuid();
+                Creature const* caster = map->GetCreature(d.caster);
+                d.casterLevel = caster ? caster->GetLevel() : member->GetLevel();
+                d.remainingMs = uint32(std::max(0, holder->GetAuraDuration()));
+                d.stacks = std::max<uint32>(1, holder->GetStackAmount());
+                d.reapplySec = ReapplySec(caster, member, spell->Id);
+                f.debuffs.push_back(d);
+            }
+        }
     }
 
     void RefreshCombat(PartyBotAI* bot, WorldModel& world)
@@ -436,6 +518,7 @@ namespace WorldModelBuilder
             PartyMemberFacts f;
             FillUnitFacts(member, f);
             f.cap = RoleCapabilities::Assess(member);
+            FillDebuffs(member, f);
             if (member->AI())
             {
                 if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
@@ -444,7 +527,10 @@ namespace WorldModelBuilder
                     f.role = uint8(ai->m_role);
                     f.roleLocked = ai->IsRoleLocked();
                     if (member->IsAlive())
+                    {
                         FillInterrupts(ai, f);
+                        FillDispels(ai, f);
+                    }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);
                     if (f.CanAct() && HasRangedInterrupt(f))

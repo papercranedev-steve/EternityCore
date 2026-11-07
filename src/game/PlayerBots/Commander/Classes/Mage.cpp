@@ -20,8 +20,10 @@ namespace Commander
                 return { m_bot.m_spells.mage.pCounterspell };
             }
 
-            // Remove Lesser Curse.
-            bool CanDispel() const override { return true; }
+            std::vector<SpellEntry const*> Dispels() const override
+            {
+                return { m_bot.m_spells.mage.pRemoveLesserCurse };
+            }
 
             std::vector<SpellEntry const*> HoldSpells() const override
             {

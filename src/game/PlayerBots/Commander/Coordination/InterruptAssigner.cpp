@@ -133,7 +133,7 @@ namespace Commander
             // before a small heal (scenario 3).
             DutyNeed need;
             need.kind = DutyKind::Interrupt;
-            need.enemy = e.guid;
+            need.target = e.guid;
             need.now = c.live;
             need.points = c.cast.points;
             need.tieMs = c.live ? e.castRemainingMs : 0;
@@ -165,7 +165,7 @@ namespace Commander
             if (r.kind != DutyKind::Interrupt)
                 continue;
             InterruptDuty duty;
-            duty.enemy = r.enemy;
+            duty.enemy = r.target;
             duty.castingNow = r.now;
             duty.category = r.detail;
             duty.primary = r.primary;

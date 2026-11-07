@@ -79,7 +79,7 @@ namespace Commander
             switch (type)
             {
                 case VetoType::None:   return "none";
-                case VetoType::Dispel: return "no-dispel";
+
                 case VetoType::Heal:   return "no-heal";
                 case VetoType::GapCloser: return "no-charge";
             }

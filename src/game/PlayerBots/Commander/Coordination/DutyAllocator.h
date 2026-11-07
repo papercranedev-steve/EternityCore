@@ -39,6 +39,7 @@ namespace Commander
     {
         Interrupt,      // InterruptAssigner
         Intercept,      // FocusAssigner: kill a must-kill enemy without moving the focus
+        Dispel,         // DispelAssigner: remove a debuff from a party member
     };
 
     struct DutyCandidate
@@ -52,7 +53,8 @@ namespace Commander
     struct DutyNeed
     {
         DutyKind kind = DutyKind::Interrupt;
-        ObjectGuid enemy;
+        ObjectGuid target;          // the enemy; for dispels the party member
+        uint32 auraSpellId = 0;     // dispels: the debuff to remove (one need per member and debuff)
         bool now = false;           // the need is acting now (live cast), not a pre-assignment
         float points = 0.0f;        // what answering it is worth (ValueModel points)
         uint32 tieMs = 0;           // among equal points, smaller first (interrupt: cast time left)
@@ -73,13 +75,14 @@ namespace Commander
         ObjectGuid bot;
         DutyPassReason reason = DutyPassReason::Busy;
         DutyKind busyKind = DutyKind::Interrupt;    // Busy: the duty that holds it
-        ObjectGuid busyEnemy;
+        ObjectGuid busyTarget;
     };
 
     struct DutyResult
     {
         DutyKind kind = DutyKind::Interrupt;
-        ObjectGuid enemy;
+        ObjectGuid target;
+        uint32 auraSpellId = 0;
         bool now = false;
         float points = 0.0f;
         uint8 detail = 0;

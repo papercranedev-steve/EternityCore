@@ -1,19 +1,19 @@
 /*
- * PartyBot Commander layer 3: dispel concern (value-scoring doc 4.2, 5.2).
+ * PartyBot Commander layer 3: casts the dispels DispelAssigner gave this bot (2026-11-03).
  *
- * Vetoes dispelling a debuff that its caster puts straight back: the caster is
- * alive, hitting the debuffed member, and its profile says the spell is reapplied
- * (on-hit proc aura, or a spell list entry repeating every few seconds).
- * The veto is only kept when the dispel costs more than the debuff would do
- * before it comes back. Control effects are not vetoed for that reason; the one exception
- * is a control that breaks on damage (sleep) on a member who is being hit: the next hit
- * ends it anyway (combat scenario 3).
- * A debuff whose auras only slow movement is vetoed too, unless the member is a healer or
- * ranged damage dealer with a melee enemy on it (it has to walk away to the tank); from
- * strat-20261102-012937 (Dispel Magic on a chilled rogue at full health, twice).
- * While the bot holds an urgent heal order, every non-control dispel stands down without a
- * veto (VetoChecks::IsDispelVetoed).
- * Out of combat the vetoes expire and the original rotation dispels as before.
+ * Takeover (Takeover::Dispel): in combat the rotation's own dispels (PartyBotAI::
+ * CheckForDispelTargets) stand down; who removes what is decided by the brain
+ * (Coordination/DispelAssigner.h, worth: Perception/DispelValue.h). Out of combat the
+ * rotation dispels as before.
+ * Live checks before proposing: the member is still there with the debuff, in line of sight
+ * (not in the facts), and the spell is castable. Tier Urgent for control effects (the member
+ * cannot act), else Assigned; benefit = the debuff's worth, cost = one global cooldown.
+ * An urgent heal order (tier Urgent) beats an Assigned dispel in the arbiter, which replaces
+ * the old "no non-control dispels while an urgent heal waits" rule (VetoChecks keeps it for
+ * the rotation when this module is off).
+ * Until 2026-11-03 this module only vetoed dispels of the rotation (reapplied debuffs, sleeps
+ * that the next hit breaks, slows on members who need not move); those cases are now part of
+ * the worth (DispelValue).
  */
 
 #ifndef MANGOS_COMMANDER_DISPEL_BEHAVIOR_H
@@ -26,13 +26,9 @@ namespace Commander
     class DispelBehavior : public IBehavior
     {
     public:
-        // Seconds until an on-hit proc comes back when its chance is unknown.
-        static constexpr float DEFAULT_REAPPLY_SEC = 4.0f;
-        // A sleep on someone being hit lasts about this long before the next hit breaks it.
-        static constexpr float WAKE_ON_DAMAGE_SEC = 2.0f;
-
         char const* GetId() const override { return "dispel"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };

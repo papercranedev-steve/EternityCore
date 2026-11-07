@@ -77,14 +77,12 @@ namespace VetoChecks
             }
         }
 
-        uint32 const now = WorldTimer::getMSTime();
         // Someone is about to die and this bot's heal order waits for the heal step after the
         // dispels: only a control effect (the member cannot act) is worth the global cooldown
         // (strat-20261102-012937: three dispels of a slow on a full-health rogue while the tank died).
-        if (bot->Directives().HasUrgentHealOrder(now) && !(profile && profile->controls))
-            return true;
-
-        return bot->Directives().IsVetoed(VetoType::Dispel, target->GetObjectGuid(), spellId, now);
+        // Only matters while the dispel module is off: with it on, the rotation does not
+        // dispel in combat (Takeover::Dispel) and the arbiter weighs heal against dispel.
+        return bot->Directives().HasUrgentHealOrder(WorldTimer::getMSTime()) && !(profile && profile->controls);
     }
 
     bool ImmuneToReflexInterrupts(PartyBotAI const* bot, Unit const* enemy)

@@ -20,7 +20,12 @@ namespace Commander
                 return { m_bot.m_spells.paladin.pHammerOfJustice };
             }
 
-            bool CanDispel() const override { return true; }
+            // Cleanse (Purify until learned).
+            std::vector<SpellEntry const*> Dispels() const override
+            {
+                auto const& s = m_bot.m_spells.paladin;
+                return { s.pCleanse ? s.pCleanse : s.pPurify };
+            }
 
             std::vector<AreaThreatSpell> AreaThreat() const override
             {
