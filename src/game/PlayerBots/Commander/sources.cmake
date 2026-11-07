@@ -190,6 +190,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/ShotSpot.h
   ${COMMANDER_DIR}/Perception/ShotSpot.cpp
+  ${COMMANDER_DIR}/Perception/StealthDetect.h
+  ${COMMANDER_DIR}/Perception/StealthDetect.cpp
+  ${COMMANDER_DIR}/Perception/SapSpot.h
+  ${COMMANDER_DIR}/Perception/SapSpot.cpp
+  ${COMMANDER_DIR}/Perception/SapValue.h
+  ${COMMANDER_DIR}/Perception/SapValue.cpp
   ${COMMANDER_DIR}/Behaviors/FollowSpot.h
   ${COMMANDER_DIR}/Behaviors/FollowSpot.cpp
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.h

@@ -106,7 +106,8 @@ namespace Commander
         return bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const
+    bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+                                         TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
                !bot->me->GetTransport();

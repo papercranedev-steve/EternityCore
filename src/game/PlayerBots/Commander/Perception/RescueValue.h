@@ -30,6 +30,13 @@
  *             the enemy dies. Urgent when the victim dies within FADE_URGENT_SEC of the hits on
  *             it. cost = LostAction(GCD) + ManaWorth::Points(mana) + cooldown points
  *             (ControlValue::COOLDOWN_POINTS_PER_MIN, as for controls).
+ *             A wipe (ThreatDropAbility::wipe, rogue Vanish, since 2026-11-08: the Sap doc
+ *             .kiro/docs/2026-11-08-sap.md 5): one cast frees the victim of every enemy on
+ *             it, so the option counts all of them (whichever enemy's need it is offered
+ *             in): each turns to its highest other row with any threat (MoveLoss onto it, 0
+ *             when that is worse), or with nobody else on its list leaves the fight (all its
+ *             hits, Value::HitLoss), until it dies or HORIZON_SEC. cost = LostAction(GCD) +
+ *             cooldown points over the fight left + WIPE_NEXT_FIGHTS_SEC (as SurvivalValue).
  * Pure: WorldModel facts and static creature profiles.
  */
 
@@ -54,6 +61,9 @@ namespace Commander
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float FADE_URGENT_SEC = 4.0f;
+        // A long threat wipe cooldown (Vanish) is also missed in the next fights
+        // (= SurvivalValue::NEXT_FIGHTS_SEC).
+        static constexpr float WIPE_NEXT_FIGHTS_SEC = 120.0f;
 
         struct Option
         {

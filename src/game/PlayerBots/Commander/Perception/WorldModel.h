@@ -70,7 +70,9 @@ namespace Commander
         bool needsStealth = false;      // Sap
         bool peacefulOnly = false;      // target must not be in combat (Sap)
         // Off cooldown, enough power, reagents, right form, can act and cast. Target checks
-        // (creature type, immunity, range, line of sight) are the user's.
+        // (creature type, immunity, range, line of sight) are the user's. A spell that needs
+        // stealth (Sap) is also ready out of combat when the bot can go into stealth now
+        // (ClassKit::Stealth): the Sap controller stealths on its way (CrowdControlBehavior).
         bool ready = false;
     };
 
@@ -90,12 +92,15 @@ namespace Commander
         bool ready = false;
     };
 
-    // A non-tank bot's own threat drop (ClassKit::ThreatDrop: priest Fade).
+    // A non-tank bot's own threat drop (ClassKit::ThreatDrop: priest Fade, rogue Vanish).
     struct ThreatDropAbility
     {
         uint32 spellId = 0;             // 0 = none
         float drop = 0.0f;              // threat taken off every threat list, for durationSec
         float durationSec = 0.0f;
+        // Takes it off every threat list for good (SPELL_EFFECT_SANCTUARY: Vanish); drop and
+        // durationSec are not used. An enemy with nobody else on its list leaves the fight.
+        bool wipe = false;
         uint32 manaCost = 0;
         uint32 cooldownMs = 0;
         bool ready = false;             // off cooldown, enough mana, can act and cast
@@ -469,6 +474,9 @@ namespace Commander
         uint32 health = 0;
         uint32 maxHealth = 0;
         float meleeDps = 0.0f;          // estimate before armor (CreatureProfiles::EstimateMeleeDps)
+        // A harmful aura that takes it out (SpellTags::IsDisableEffect) while it is not in
+        // combat: a Sap before the pull (PullControl). 0 = none.
+        uint32 controlSpellId = 0;
     };
 
     // A creature walking a waypoint path, not in combat (WorldModel::patrols).

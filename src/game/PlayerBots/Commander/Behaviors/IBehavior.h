@@ -33,8 +33,10 @@ namespace Commander
                              TeamPlan const& plan, std::vector<Proposal>& out) const = 0;
 
         // True = this module makes decision `what` for this bot now; the class rotation's own
-        // version stands down (BotDirectives::IsTakenOver). Asked every combat tick.
-        virtual bool TakesOver(Takeover /*what*/, PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }
+        // version stands down (BotDirectives::IsTakenOver). Asked every arbiter tick (also out
+        // of combat: the Sap controller's stealth before a pull reads the plan).
+        virtual bool TakesOver(Takeover /*what*/, PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+                               TeamPlan const& /*plan*/) const { return false; }
         // Optional: rescore or drop proposals made by other modules.
         virtual void Adjust(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                             std::vector<Proposal>& /*proposals*/) const {}

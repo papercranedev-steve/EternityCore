@@ -273,7 +273,8 @@ namespace Commander
         return bot->GetRole() == ROLE_HEALER;
     }
 
-    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const
+    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+                                         TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
                !bot->me->GetTransport();

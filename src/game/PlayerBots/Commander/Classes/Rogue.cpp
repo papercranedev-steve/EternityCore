@@ -42,6 +42,19 @@ namespace Commander
                 return m_bot.m_spells.rogue.pEviscerate;
             }
 
+            SpellEntry const* Stealth() const override
+            {
+                return m_bot.m_spells.rogue.pStealth;
+            }
+
+            // Vanish also as a way to shake an enemy off (team rescue "loose enemy", user
+            // 2026-11-08: a failed Sap, scored against the tank's taunt); and to keep the
+            // rogue alive below.
+            SpellEntry const* ThreatDrop() const override
+            {
+                return m_bot.m_spells.rogue.pVanish;
+            }
+
             // Vanish: the enemies on the rogue turn to someone else.
             std::vector<SurvivalSpell> Survival() const override
             {

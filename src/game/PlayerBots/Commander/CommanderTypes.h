@@ -113,6 +113,10 @@ namespace Commander
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
         // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
         CrowdControl,
+        // A rogue's own stealth while it is the Sap controller of a pull (CrowdControlBehavior,
+        // Sap doc .kiro/docs/2026-11-08-sap.md): the rotation's "go into / cancel stealth"
+        // (PartyBotAI::EnterStealthIfNeeded) stands down.
+        Stealth,
         // Keeping someone about to die alive (team rescue: RescueBehavior): the rotations'
         // health threshold reflexes stand down (Divine Shield, Blessing of Protection, Lay on
         // Hands, Feign Death, Vanish, Ice Block, a damage warrior's Shield Wall / Last Stand).

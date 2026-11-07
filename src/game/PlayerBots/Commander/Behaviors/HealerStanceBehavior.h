@@ -128,7 +128,7 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         // Takeover::Stance in combat (2026-11-07): a healer with a victim (a damage spell
         // between heals) no longer chases it to 25 yd; this module keeps it with the anchor.
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };

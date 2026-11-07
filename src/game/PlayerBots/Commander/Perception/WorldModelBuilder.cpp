@@ -256,6 +256,22 @@ namespace WorldModelBuilder
                 a.victim = victim->GetObjectGuid();
         }
 
+        // PackCreature::controlSpellId: a harmful aura taking an idle creature out (a Sap).
+        uint32 IdleControl(Creature const* creature)
+        {
+            for (auto const& itr : creature->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                if (holder->IsPositive())
+                    continue;
+                SpellEntry const* spell = holder->GetSpellProto();
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (SpellTags::IsDisableEffect(spell, i))
+                        return spell->Id;
+            }
+            return 0;
+        }
+
         // The longest control effect on `creature` (EnemyFacts::control) and the longest periodic
         // damage a party member put on it (partyDotMs).
         void FillControlState(Creature const* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
@@ -544,9 +560,14 @@ namespace WorldModelBuilder
                 a.needsStealth = (spell->Stances & (1u << (FORM_STEALTH - 1))) != 0;
                 a.peacefulOnly = spell->HasAttribute(SPELL_ATTR_EX_ONLY_PEACEFUL_TARGETS);
                 Powers const powerType = Powers(spell->powerType);
+                bool formOk = spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
+                // Sap: it goes into stealth on its way (ControlAbility::ready).
+                if (!formOk && a.needsStealth && !me->IsInCombat())
+                    if (SpellEntry const* stealth = ai->Kit().Stealth())
+                        formOk = ai->CanTryToCastSpell(me, stealth);
                 a.ready = !f.controlled && me->IsSpellReady(spell) &&
                           (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
-                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+                          formOk &&
                           HasReagents(me, spell) &&
                           !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
                 f.controls.push_back(a);
@@ -632,8 +653,9 @@ namespace WorldModelBuilder
             }
         }
 
-        // Fade (ClassKit::ThreatDrop) of a non-tank bot: SPELL_AURA_MOD_TOTAL_THREAT with a
-        // negative amount on every threat list for the aura's duration.
+        // ClassKit::ThreatDrop of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
+        // negative amount on every threat list for the aura's duration. Vanish: a sanctuary
+        // effect (Spell::EffectSanctuary removes the rogue from every threat list).
         void FillThreatDrop(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             SpellEntry const* spell = ai->Kit().ThreatDrop();
@@ -642,8 +664,12 @@ namespace WorldModelBuilder
             Player* me = ai->me;
             ThreatDropAbility& a = f.threatDrop;
             a.spellId = spell->Id;
-            a.drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
-            a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+            a.wipe = spell->HasEffect(SPELL_EFFECT_SANCTUARY);
+            if (!a.wipe)
+            {
+                a.drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
+                a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+            }
             a.cooldownMs = spell->GetRecoveryTime();
             if (Powers(spell->powerType) == POWER_MANA)
                 a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
@@ -1071,6 +1097,7 @@ namespace WorldModelBuilder
             c.reach = creature->GetAttackDistance(reachAgainst);
             c.health = creature->GetHealth();
             c.maxHealth = creature->GetMaxHealth();
+            c.controlSpellId = IdleControl(creature);
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(c.entry))
             {
                 c.boss = profile->boss;

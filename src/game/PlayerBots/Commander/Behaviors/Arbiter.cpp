@@ -158,7 +158,7 @@ namespace Commander
             Takeover const what = Takeover(i);
             for (IBehavior const* b : active)
             {
-                if (b->TakesOver(what, bot, world))
+                if (b->TakesOver(what, bot, world, plan))
                 {
                     directives.TakeOver(what, now, TAKEOVER_MS);
                     break;

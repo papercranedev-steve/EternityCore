@@ -187,7 +187,8 @@ namespace Commander
         out.insert(out.end(), made.begin(), made.end());
     }
 
-    bool InterruptBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    bool InterruptBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
+                                      TeamPlan const& /*plan*/) const
     {
         // Duels are not ours (the arbiter does not run there either).
         return what == Takeover::Interrupt && !bot->IsInDuel();

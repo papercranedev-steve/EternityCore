@@ -17,6 +17,10 @@
  * before the fight, the controller walks to its spot and holds there (MoveTo renewed every
  * tick, Hold once there); the duty comes once the fight started. Casting needs the party to
  * fight (WorldModel::HasPartyEnemy), not the bot itself: the controller is not in combat yet.
+ * Sap (beforeOpener, .kiro/docs/2026-11-08-sap.md): Stealth (ClassKit::Stealth) first, sneak
+ * to the spot, cast Sap there (target alive, not in combat, in sight, CanTryToCastSpell), then
+ * hold until the fight starts; Takeover::Stealth meanwhile (the rogue rotation would cancel
+ * the stealth out of combat).
  *
  * Known limit: CanTryToCastSpell refuses a spell whose aura the target still has, so a sheep
  * is cast again only once the old one ended (not RECAST_LEAD_SEC before).
@@ -29,6 +33,8 @@
 
 namespace Commander
 {
+    struct PartyMemberFacts;
+
     class CrowdControlBehavior : public IBehavior
     {
     public:
@@ -36,11 +42,16 @@ namespace Commander
 
         char const* GetId() const override { return "cc"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         // The bot has a control duty while the party fights (a new add hits someone until it is cast).
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+
+    private:
+        // The Sap controller before the pull (PullControlPlan::beforeOpener).
+        void ProposeSap(PartyBotAI const* bot, TeamPlan const& plan, PartyMemberFacts const& self,
+                        std::vector<Proposal>& out) const;
     };
 }
 

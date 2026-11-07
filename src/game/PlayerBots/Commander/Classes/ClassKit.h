@@ -113,8 +113,9 @@ namespace Commander
         // Absorb shields on itself the rotation puts up when attacked (EscapeBehavior counts them
         // into survival before they are cast). Active absorbs are read from auras for every class.
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
-        // Drops its own threat for a while so enemies turn to someone else (priest Fade). Only
-        // the Commander casts it (ThreatBehavior takes it over, Takeover::ThreatDrop).
+        // Drops its own threat so enemies turn to someone else (priest Fade for a while, rogue
+        // Vanish for good). The team rescue decides it for an enemy hitting the bot
+        // (RescueAssigner "loose enemy", RescueBehavior, Takeover::ThreatDrop).
         virtual SpellEntry const* ThreatDrop() const { return nullptr; }
         // Instant absorb on an ally: the healer itself hit while casting (HealPlanBehavior),
         // last resort while running (RetreatBehavior).
@@ -144,6 +145,9 @@ namespace Commander
         // Eviscerate, cat Ferocious Bite): cast before a planned target switch so the points
         // are not lost (TargetBehavior, a suggested switch).
         virtual SpellEntry const* ComboFinisher() const { return nullptr; }
+        // Its own stealth (rogue Stealth): the Sap controller of a pull goes into stealth on
+        // its way (CrowdControlBehavior, Takeover::Stealth); the rotation decides otherwise.
+        virtual SpellEntry const* Stealth() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

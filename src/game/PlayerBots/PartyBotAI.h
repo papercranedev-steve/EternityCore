@@ -178,6 +178,9 @@ public:
     // The Commander team rescue decides Fade (RescueAssigner / RescueBehavior): the priest rotation's own
     // "attacked: Fade" stands down.
     bool IsThreatDropControlled() const;
+    // The Commander keeps the Sap controller of a pull in stealth (CrowdControlBehavior,
+    // Takeover::Stealth): the rogue rotation's stealth in / cancel stands down.
+    bool IsStealthControlled() const;
     // The Commander team rescue decides who is kept alive and how (RescueBehavior,
     // Takeover::Survival): the rotations' health threshold Divine Shield, Blessing of
     // Protection, Lay on Hands, Feign Death, Vanish, Ice Block, Shield Wall, Last Stand stand down.

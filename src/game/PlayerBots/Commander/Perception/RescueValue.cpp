@@ -110,11 +110,45 @@ namespace RescueValue
         return o;
     }
 
+    namespace
+    {
+        // Vanish (ThreatDropAbility::wipe): every enemy on the victim turns away at once.
+        Option Wipe(WorldModel const& world, PartyMemberFacts const& victim)
+        {
+            Option o;
+            ThreatDropAbility const& a = victim.threatDrop;
+            for (EnemyFacts const& other : world.enemies)
+            {
+                if (!other.acting || other.crowdControlled || other.victim != victim.guid)
+                    continue;
+                float const seconds = std::min(HORIZON_SEC, Value::EnemyTimeToDie(world, other));
+                ThreatEntry const* next = NextHolder(other, victim.guid, 0.0f);
+                PartyMemberFacts const* holder = next ? world.FindMember(next->guid) : nullptr;
+                if (holder)
+                    o.benefit += std::max(0.0f, Value::MoveLoss(world, other, victim, *holder, seconds));
+                else if (!next)
+                    o.benefit += Value::HitLoss(world, other, victim, seconds);     // it leaves the fight
+            }
+            o.cost = Value::LostAction(world, victim, Value::GCD_SEC);
+            float const cooldownSec = a.cooldownMs / 1000.0f;
+            if (cooldownSec > Value::GCD_SEC)
+                o.cost += ControlValue::COOLDOWN_POINTS_PER_MIN *
+                          std::min(cooldownSec, Value::FightRemainingSec(world) + WIPE_NEXT_FIGHTS_SEC) / 60.0f;
+            float const incoming = Value::IncomingOn(world, victim.guid);
+            o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;
+            return o;
+        }
+    }
+
     Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim)
     {
         Option o;
         ThreatDropAbility const& a = victim.threatDrop;
-        if (!a.spellId || !a.ready || a.drop <= 0.0f || a.durationSec <= 0.0f)
+        if (!a.spellId || !a.ready)
+            return o;
+        if (a.wipe)
+            return Wipe(world, victim);
+        if (a.drop <= 0.0f || a.durationSec <= 0.0f)
             return o;
         float mine = 0.0f;
         for (ThreatEntry const& r : e.threat)

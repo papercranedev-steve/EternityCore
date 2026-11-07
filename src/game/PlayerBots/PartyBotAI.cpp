@@ -300,6 +300,11 @@ bool PartyBotAI::IsThreatDropControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsStealthControlled() const
+{
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Stealth, WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 {
     if (!pUnit || IsInDuel() || !sCommanderMgr.IsEnabled())
@@ -3252,6 +3257,10 @@ bool PartyBotAI::ShouldEnterStealth() const
 
 bool PartyBotAI::EnterStealthIfNeeded(SpellEntry const* pStealthSpell)
 {
+    // The Sap controller of a pull: the Commander keeps it stealthed (Takeover::Stealth).
+    if (IsStealthControlled())
+        return false;
+
     if (pStealthSpell)
     {
         bool const shouldStealth = ShouldEnterStealth();

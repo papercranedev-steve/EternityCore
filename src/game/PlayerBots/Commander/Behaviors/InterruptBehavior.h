@@ -39,7 +39,7 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // The bot is primary or backup of a duty whose enemy casts now.
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // Own cast: the duty's enemy cast ends before it does (CAST_BREAK_SLACK_MS), nobody free

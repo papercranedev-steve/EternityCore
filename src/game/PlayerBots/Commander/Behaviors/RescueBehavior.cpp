@@ -30,7 +30,8 @@ namespace Commander
         return bot->Kit().ThreatDrop() != nullptr;
     }
 
-    bool RescueBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    bool RescueBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
+                                   TeamPlan const& /*plan*/) const
     {
         if (bot->IsInDuel())
             return false;
@@ -89,7 +90,7 @@ namespace Commander
         {
             if (!bot->CanTryToCastSpell(me, spell))
                 return;
-            p.reason = "rescue: attacked, fade";
+            p.reason = "rescue: attacked, drop threat";
             p.action.target = me->GetObjectGuid();
         }
         float const cost = Value::LostAction(world, *self, Value::GCD_SEC);

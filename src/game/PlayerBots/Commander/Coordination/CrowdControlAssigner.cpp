@@ -78,7 +78,8 @@ namespace Commander
         // is left out of the offers below meanwhile (one need per enemy).
         PullControlPlan const& opening = plan.pull.control;
         ObjectGuid openingTarget;
-        if (opening.Active() && plan.pull.phase != PullPhase::None)
+        // A Sap is cast before the fight (CrowdControlBehavior on its own), never in it.
+        if (opening.Active() && !opening.beforeOpener && plan.pull.phase != PullPhase::None)
         {
             EnemyFacts const* e = world.FindEnemy(opening.target);
             PartyMemberFacts const* b = world.FindMember(opening.bot);

@@ -125,6 +125,8 @@ namespace Commander
     // PullAssigner): `bot` stands at `spot` (in range and sight of `target`, out of every idle
     // creature's aggro range) before the tank opens, then casts `spellId` on `target` once the
     // fight started (CrowdControlAssigner offers it, CrowdControlBehavior casts it).
+    // beforeOpener (Sap, .kiro/docs/2026-11-08-sap.md): the rogue walks there stealthed and
+    // casts before the tank opens; the tank waits until the Sap is on the target (landed).
     struct PullControlPlan
     {
         bool decided = false;           // Choose ran for this Approach (with or without a control)
@@ -132,14 +134,19 @@ namespace Commander
         ObjectGuid target;
         uint32 spellId = 0;
         Position3 spot;
-        float points = 0.0f;            // net worth (ControlValue::OfPull)
-        bool inPlace = false;           // the controller reached the spot: the tank may open
+        float points = 0.0f;            // net worth (ControlValue::OfPull, SapValue::Of)
+        bool beforeOpener = false;      // cast out of combat, before the tank opens (Sap)
+        bool inPlace = false;           // the controller reached the spot: the tank may open (Sap: cast now)
+        bool landed = false;            // beforeOpener: the target has the control
         bool dropped = false;           // not in place in time, or the controller cannot act
         uint32 sinceMs = 0;             // decided at
+        uint32 placeTimeoutMs = 0;      // the walk there may take this long
+        uint32 inPlaceMs = 0;           // reached the spot at
 
         bool Active() const { return decided && !bot.IsEmpty() && !dropped; }
-        // The tank waits before opening: not decided yet, or the controller is still walking.
-        bool HoldsOpener() const { return !decided || (Active() && !inPlace); }
+        // The tank waits before opening: not decided yet, or the controller is still walking
+        // (Sap: until it is on the target).
+        bool HoldsOpener() const { return !decided || (Active() && (beforeOpener ? !landed : !inPlace)); }
     };
 
     struct PullPlan
