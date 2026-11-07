@@ -34,8 +34,6 @@
 #include "Rotations/ClassRotation.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Perception/HazardZones.h"
-#include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/FleePoint.h"
 #include "Commander/Behaviors/AreaDamageBehavior.h"
 #include "Commander/Perception/ValueModel.h"
@@ -231,10 +229,33 @@ bool PartyBotAI::IgnoresCrowdControlMarks() const
     return !IsInDuel() && sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
 }
 
+bool PartyBotAI::IsStanceControlled() const
+{
+    // (the stance modules take over only while the party fights: no own combat check here,
+    // a healer still out of combat is placed too)
+    return m_directives && (GetRole() == ROLE_HEALER || UsesCasterChase()) &&
+           m_directives->IsTakenOver(Commander::Takeover::CasterChase, WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsCasterChaseControlled() const
 {
-    return m_directives && me->IsInCombat() && UsesCasterChase() &&
-           m_directives->IsTakenOver(Commander::Takeover::CasterChase, WorldTimer::getMSTime());
+    return UsesCasterChase() && IsStanceControlled();
+}
+
+void PartyBotAI::StopTakenOverMovement()
+{
+    if (IsMovementHeld())
+        return;
+    // MoveIdle alone left the follow spline running to its end (up to a few yards).
+    MovementGeneratorType const motion = me->GetMotionMaster()->GetCurrentMovementGeneratorType();
+    if ((motion == FOLLOW_MOTION_TYPE && IsStanceControlled()) ||
+        (motion == CHASE_MOTION_TYPE && me->GetVictim() && IsCasterChaseControlled()))
+    {
+        if (!me->IsStopped())
+            me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
 }
 
 bool PartyBotAI::IsThreatDropControlled() const
@@ -244,30 +265,11 @@ bool PartyBotAI::IsThreatDropControlled() const
 
 bool PartyBotAI::IsInPatrolPath(Unit const* pUnit) const
 {
-    if (!pUnit || !me->IsInCombat() || IsInDuel() || !sCommanderMgr.IsEnabled())
+    if (!pUnit || IsInDuel() || !sCommanderMgr.IsEnabled())
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().patrolMove.Avoids(pUnit->GetObjectGuid());
-}
-
-bool PartyBotAI::IsInHazardZone(Unit const* pUnit) const
-{
-    uint8 const roleBit = Commander::HazardZones::RoleBit(GetRole());
-    if (!roleBit || !me->IsInCombat() || IsInDuel() ||
-        !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("position"))
-        return false;
-
-    // Same map as the bot, so the commander belongs to this map thread.
-    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    if (!commander)
-        return false;
-
-    Commander::Position3 pos;
-    pos.x = pUnit->GetPositionX();
-    pos.y = pUnit->GetPositionY();
-    pos.z = pUnit->GetPositionZ();
-    return Commander::HazardZones::IsInside(Commander::HazardZones::Get(commander->GetWorld()), roleBit, pos);
 }
 
 void PartyBotAI::AutoAssignRole()
@@ -292,12 +294,6 @@ void PartyBotAI::AssignRole(CombatBotRoles role)
         return;
     m_role = role;
     m_resetSpellData = true;
-}
-
-bool PartyBotAI::HasCombatStance() const
-{
-    return GetRole() == ROLE_HEALER && me->IsInCombat() && !IsInDuel() && !me->GetTransport() &&
-           sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("stance");
 }
 
 bool PartyBotAI::UsesSafeFollow() const
@@ -1368,9 +1364,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // hold the follow spot went unchecked; she stopped 17.8 yd from a wanderer's home and its
     // group of seven came (strat-20261107-164236).
     {
-        Unit* pVictim = me->GetVictim();
         // (also while walking: the follow point moves with the leader)
-        if (!pVictim && !IsMovementHeld() && !HasCombatStance())
+        if (!me->GetVictim() && !IsMovementHeld() && !IsStanceControlled())
             KeepFollowSpotSafe(pLeader);
 
         // Fix: a healer that was following when the fight started kept following until it stood
@@ -1378,17 +1373,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Pummel (strat-20261101-214026). Stop at once, also with a victim (a damage spell
         // between heals); the stance module picks the spot. A caster chase started before the
         // stance module took over (fight start): the same.
-        // MoveIdle alone left the follow spline running to its end (up to a few yards).
-        MovementGeneratorType const motion = me->GetMotionMaster()->GetCurrentMovementGeneratorType();
-        if (!IsMovementHeld() &&
-            ((HasCombatStance() && motion == FOLLOW_MOTION_TYPE) ||
-             (pVictim && IsCasterChaseControlled() && motion == CHASE_MOTION_TYPE)))
-        {
-            if (!me->IsStopped())
-                me->StopMoving();
-            me->GetMotionMaster()->Clear(false, true);
-            me->GetMotionMaster()->MoveIdle();
-        }
+        StopTakenOverMovement();
     }
 
     // A victim that can no longer be hit (dead, under a control that breaks on damage, immune,
@@ -1447,25 +1432,20 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     }
 
-    // (follow spot check and the stop of taken-over follow / chase: before the Commander hook)
+    // (follow spot check: before the Commander hook) The stance takeover may have started in
+    // the hook's tick: stop its follow now, not one bot interval later.
+    StopTakenOverMovement();
 
     if (!me->IsMoving() && !IsMovementHeld())
     {
         if (!pVictim)
         {
-            // Fix: in combat, a healer (no victim) that the Commander position module just walked
-            // out of an area followed the leader standing in it straight back in, and was moved
-            // out again on the next tick. Stay put while the leader is in such an area and within
-            // heal range; farther away, follow as before (the module moves the bot out again).
-            // A healer in combat with the Commander stance module stands where that module puts
-            // it: following the leader walked the priest into the next pack (Stockade,
-            // stockade-20261101-143825).
-            // (a follow under way was stopped before the Commander hook)
-            float const healRange = Commander::PositioningBehavior::HEAL_RANGE;
-            if (!HasCombatStance() &&
-                me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
-              !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && me->IsWithinLOSInMap(pLeader) &&
-                IsInHazardZone(pLeader)))
+            // Healers and ranged stand where the Commander stance modules put them while the
+            // party fights, in combat themselves or not yet: following the leader walked the
+            // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
+            // that had not healed yet with the player while the tank fought further away.
+            if (!IsStanceControlled() &&
+                me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
                 StartFollowing(pLeader);
         }
         else

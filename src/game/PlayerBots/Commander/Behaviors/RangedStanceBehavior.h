@@ -17,9 +17,13 @@
  *    edge of its circle (SafeRoute::IdleCreatures::Near): a constraint, tier Urgent;
  *  - the victim is farther than CAST_RANGE (to its edge) or out of line of sight: tier
  *    Assigned, benefit = the bot's lost action over HORIZON_SEC (it cannot do its job).
- * Not while: the retreat runs, the pull is in Approach / Return, out of combat, rooted,
- * casting, the victim chases the bot itself (the escape module's job), or a MoveTo is under
- * way (then Hold so the rotation's first cast does not stop the walk).
+ * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself; no
+ * victim yet: the brain's target for it (TeamPlan::targets; TargetBehavior attacks only in
+ * range and sight). Ranged bots do not follow the leader then (PartyBotAI::IsStanceControlled).
+ * Not while: the retreat runs, the pull is in Approach / Return, out of combat and held by
+ * the pull (PullPlan::HoldsWaiting), rooted, casting, the victim chases the bot itself (the
+ * escape module's job), or a MoveTo is under way (then Hold so the rotation's first cast does
+ * not stop the walk).
  *
  * Where: rings RADII around the victim (plus its combat reach), RING_POINTS directions
  * starting from the bot's side, nearest walk first. A point is kept when it is outside every

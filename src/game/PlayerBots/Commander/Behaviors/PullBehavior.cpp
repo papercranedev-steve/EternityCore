@@ -458,19 +458,15 @@ namespace Commander
         // must not stand idle. In Settle, past the arrival wait, the brain says who still waits
         // (PullOpening.h): damage dealers until the tank has threat on what came, healers also
         // until the casters of a line of sight pull came.
-        if (me->IsInCombat())
+        if (me->IsInCombat() || !pull.HoldsWaiting(healer))
             return;
-        if (pull.phase == PullPhase::Settle && !pull.awaitArrival)
-        {
-            if (!(healer ? pull.holdHealing : pull.holdDamage))
-                return;
-            // Someone about to die: heal now (the rotation's heal step runs without the hold).
-            if (healer && std::any_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& m)
-                {
-                    return m.alive && !m.isPet && m.healthPct < PullBehavior::HOLD_HEAL_BELOW_PCT;
-                }))
-                return;
-        }
+        // Someone about to die: heal now (the rotation's heal step runs without the hold).
+        if (healer && pull.phase == PullPhase::Settle && !pull.awaitArrival &&
+            std::any_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& m)
+            {
+                return m.alive && !m.isPet && m.healthPct < PullBehavior::HOLD_HEAL_BELOW_PCT;
+            }))
+            return;
         out.push_back(Make(ProposalTier::Assigned, 1.0f, BotActionType::Hold));
     }
 }

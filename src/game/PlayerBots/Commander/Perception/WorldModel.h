@@ -439,6 +439,11 @@ namespace Commander
                     return true;
             return false;
         }
+        // A bot takes its place in the fight (stance, position modules) while this is true, not
+        // only once it is in combat itself: a healer still following the player, out of
+        // combat, must go to the tank fighting 30 yd away. `inCombat`: the bot's own flag (an
+        // ally's fight it joined counts too).
+        bool InFight(bool inCombat) const { return inCombat || HasPartyEnemy(); }
     };
 }
 

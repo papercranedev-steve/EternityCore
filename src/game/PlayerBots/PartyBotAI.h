@@ -179,8 +179,12 @@ public:
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;
-    // In combat a Commander stance module places this bot (Takeover::CasterChase): BeginChasing
-    // does not start the 25 yd caster chase (UsesCasterChase), UpdateAI drops one under way.
+    // While the party fights a Commander stance module places this healer or ranged bot
+    // (Takeover::CasterChase: HealerStanceBehavior, RangedStanceBehavior), also before it is
+    // in combat itself: UpdateAI does not follow the leader and stops a follow under way.
+    bool IsStanceControlled() const;
+    // IsStanceControlled and the bot keeps a caster distance (UsesCasterChase): BeginChasing
+    // does not start the 25 yd caster chase, UpdateAI drops one under way.
     bool IsCasterChaseControlled() const;
     // In combat the Commander crowd control module decides controls (CrowdControlAssigner):
     // the rotations' own sheep / Blind / Hibernate / Shackle / Banish / Fear / Howl /
@@ -189,15 +193,12 @@ public:
     // The Commander crowd control module is on (any time): raid marks are not used for
     // controls, the brain chooses (user, 2026-11-07). Out of combat too, for the marked pull.
     bool IgnoresCrowdControlMarks() const;
-    // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
-    // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
-    bool IsInHazardZone(Unit const* pUnit) const;
-    // In combat: the enemy `pUnit` stands in the path of a patrol the party moved off
-    // (Commander PatrolMovePlan::avoid). Nobody chases it there. False when the Commander is off.
+    // The enemy `pUnit` stands in the path of a patrol the party moved off (Commander
+    // PatrolMovePlan::avoid, only set during a fight). Nobody chases it there.
     bool IsInPatrolPath(Unit const* pUnit) const;
-    // Healer in combat with the Commander "stance" module on: the module picks where it stands
-    // (Commander/Behaviors/HealerStanceBehavior.h), so it does not follow the leader.
-    bool HasCombatStance() const;
+    // Stops a follow (or a caster chase) a Commander stance module took over (UpdateAI, before
+    // and after the Commander hook: the takeover may start in the hook's tick).
+    void StopTakenOverMovement();
     // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
     // idle creatures' aggro range (Commander/Behaviors/FollowSpot.h).
     void StartFollowing(Unit* pLeader);

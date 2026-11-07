@@ -99,9 +99,10 @@ namespace Commander
         return bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const
     {
-        return what == Takeover::CasterChase && bot->me->IsInCombat() && !bot->IsInDuel() && !bot->me->GetTransport();
+        return what == Takeover::CasterChase && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
+               !bot->me->GetTransport();
     }
 
     void RangedStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -115,7 +116,10 @@ namespace Commander
             return;
 
         Player* me = bot->me;
-        if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT) || !bot->UsesCasterChase())
+        if (!world.InFight(me->IsInCombat()) || me->HasUnitState(UNIT_STATE_ROOT) || !bot->UsesCasterChase())
+            return;
+        // Still out of combat and told to wait by the pull (opening hold, pack not arrived yet).
+        if (!me->IsInCombat() && plan.pull.HoldsWaiting(false))
             return;
 
         // A MoveTo (this module's or another's) is under way: keep walking. Without a proposal
@@ -137,7 +141,13 @@ namespace Commander
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())
             return;
+        // No victim yet: the target the brain gave it. TargetBehavior only attacks it in range
+        // and sight, so without this the bot stood where it was (it no longer follows the
+        // leader during the party's fight).
         Unit* victim = me->GetVictim();
+        if (!victim)
+            if (TargetDuty const* duty = plan.FindTargetFor(me->GetObjectGuid()))
+                victim = me->GetMap()->GetUnit(duty->enemy);
         if (!victim || !victim->IsAlive())
             return;
         // It comes for the bot: running from melee is the escape module's job.

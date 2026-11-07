@@ -252,9 +252,10 @@ namespace Commander
         return bot->GetRole() == ROLE_HEALER;
     }
 
-    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const
     {
-        return what == Takeover::CasterChase && bot->me->IsInCombat() && !bot->IsInDuel() && !bot->me->GetTransport();
+        return what == Takeover::CasterChase && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
+               !bot->me->GetTransport();
     }
 
     void HealerStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -268,7 +269,10 @@ namespace Commander
             return;
 
         Player* me = bot->me;
-        if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT))
+        if (!world.InFight(me->IsInCombat()) || me->HasUnitState(UNIT_STATE_ROOT))
+            return;
+        // Still out of combat and told to wait by the pull (opening hold, pack not arrived yet).
+        if (!me->IsInCombat() && plan.pull.HoldsWaiting(true))
             return;
         // Hiding behind the tank during a line of sight pull: the brain chose the spot (PullBehavior).
         if (plan.pull.phase == PullPhase::Settle && plan.pull.LosHiderOf(me->GetObjectGuid()))

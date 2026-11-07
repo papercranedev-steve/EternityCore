@@ -7,8 +7,11 @@
  * the enemies for the rest of the fight: 8 heals cancelled (at least 3 by Kick), 23 casts in
  * 183 s, tank dead at 65 s.
  *
- * Now, while this module is on, PartyBotAI does not follow the leader with a healer in combat
- * (PartyBotAI::HasCombatStance); this module moves it instead.
+ * Now PartyBotAI does not follow the leader with a healer while the party fights
+ * (PartyBotAI::IsStanceControlled); this module moves it instead. "The party fights"
+ * (WorldModel::InFight), not "the healer is in combat": before 2026-11-07 a healer that had
+ * not healed yet kept following the player while the tank fought further away.
+ * Out of combat it still waits while the pull holds it (PullPlan::HoldsWaiting).
  *
  * Anchor (who to stay with): a tank (Perception/Tanks.h, bot or player; with several, the one
  * most enemies hit); else the member most enemies are hitting; else the party leader. Other

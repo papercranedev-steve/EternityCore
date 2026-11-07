@@ -264,6 +264,24 @@ namespace Commander
         bool holdHealing = false;
         uint32 threatSinceMs = 0;           // first pulled enemy reached the tank, 0 = none yet
 
+        // Members other than the tank that are still out of combat wait where they stand while
+        // true (PullBehavior holds them, the stance modules leave them there): the tank goes
+        // out or brings the pack back, the pack has not arrived yet, or the opening hold of
+        // their kind (damage / healing) is on.
+        bool HoldsWaiting(bool healer) const
+        {
+            switch (phase)
+            {
+                case PullPhase::Approach:
+                case PullPhase::Return:
+                    return true;
+                case PullPhase::Settle:
+                    return awaitArrival || (healer ? holdHealing : holdDamage);
+                default:
+                    return false;
+            }
+        }
+
         PullHider const* LosHiderOf(ObjectGuid bot) const
         {
             if (losBreak != PullLosBreak::Active)

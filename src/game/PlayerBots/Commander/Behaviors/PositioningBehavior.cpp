@@ -438,7 +438,7 @@ namespace Commander
             return;
 
         Player* me = bot->me;
-        if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT))
+        if (!world.InFight(me->IsInCombat()) || me->HasUnitState(UNIT_STATE_ROOT))
             return;
         Context ctx;
         ctx.roleBit = HazardZones::RoleBit(bot->GetRole());

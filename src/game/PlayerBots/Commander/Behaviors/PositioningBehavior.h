@@ -50,9 +50,11 @@
  *
  * Jitter: proposes only ENTER_MARGIN inside; the target ring is RING_EXTRA outside, so a bot
  * needs to drift back ~3.5 yd before the next move. Apart from the melee record above there is
- * no "just moved" timer; the margins are the hysteresis. In combat PartyBotAI does not start
- * following the leader while the leader stands in an area dangerous to the bot
- * (PartyBotAI::IsInHazardZone), so a healer is not walked straight back in after the hold.
+ * no "just moved" timer; the margins are the hysteresis. Healers and ranged do not follow the
+ * leader during the party's fight (PartyBotAI::IsStanceControlled), so they are not walked
+ * straight back in after the hold.
+ *
+ * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself.
  *
  * Timing: a refresh that sees the bot inside such a zone wakes it (WantsTickNow); a bot busy
  * with its own cast stops it when staying until the cast ends costs more (CastBreakBenefit).
