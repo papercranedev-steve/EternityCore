@@ -792,6 +792,41 @@ namespace DevConsole
                 if (plan.pull.rangedShot.spotFailed)
                     SetFieldS(L, "spotFailed", plan.pull.rangedShot.spotFailWhy);
             }
+            // Settle: the tank waits for the pack, who still holds (PullOpening.h), and the line
+            // of sight pull {state, x, y, z, hiders = [{g, x, y, z}]}.
+            if (plan.pull.awaitArrival)
+                SetFieldB(L, "awaitArrival", true);
+            if (plan.pull.phase == Commander::PullPhase::Settle)
+            {
+                SetFieldB(L, "holdDamage", plan.pull.holdDamage);
+                SetFieldB(L, "holdHealing", plan.pull.holdHealing);
+            }
+            if (plan.pull.losBreak != Commander::PullLosBreak::None)
+            {
+                using B = Commander::PullLosBreak;
+                B const state = plan.pull.losBreak;
+                lua_createtable(L, 0, 5);
+                SetFieldS(L, "state", state == B::Active ? "active" : state == B::NoPoint ? "nopoint" : "ended");
+                if (state != B::NoPoint)
+                {
+                    SetFieldN(L, "x", Round2(plan.pull.losPoint.x));
+                    SetFieldN(L, "y", Round2(plan.pull.losPoint.y));
+                    SetFieldN(L, "z", Round2(plan.pull.losPoint.z));
+                }
+                lua_createtable(L, int(plan.pull.losHiders.size()), 0);
+                int i = 0;
+                for (Commander::PullHider const& h : plan.pull.losHiders)
+                {
+                    lua_createtable(L, 0, 4);
+                    SetFieldG(L, "g", h.bot);
+                    SetFieldN(L, "x", Round2(h.point.x));
+                    SetFieldN(L, "y", Round2(h.point.y));
+                    SetFieldN(L, "z", Round2(h.point.z));
+                    lua_rawseti(L, -2, ++i);
+                }
+                lua_setfield(L, -2, "hiders");
+                lua_setfield(L, -2, "los");
+            }
             lua_setfield(L, -2, "pull");
         }
         if (plan.clear.active)

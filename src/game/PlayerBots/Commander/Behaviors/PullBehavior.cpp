@@ -103,16 +103,22 @@ namespace Commander
             if (!target || !target->IsAlive())
                 face = me->GetVictim() ? me->GetVictim()->GetObjectGuid() : ObjectGuid();
 
-            Proposal back = Make(ProposalTier::Assigned, 5.0f, BotActionType::Backpedal, face);
+            // On the point the order only keeps the tank there: area threat and taunts of the
+            // threat module come first (strat-20261107-143623: the stay order at 5.0 beat them
+            // for 7 s while the pack stood on the tank at 0 threat).
+            float const left = PackResolver::Distance(PositionOf(me), to);
+            bool const onPoint = left <= PullBehavior::POINT_ARRIVED_YD;
+            Proposal back = Make(ProposalTier::Assigned, onPoint ? PullBehavior::STAY_SCORE : 5.0f,
+                                 BotActionType::Backpedal, face);
             back.action.x = to.x;
             back.action.y = to.y;
             back.action.z = to.z;
             back.action.holdMs = PullBehavior::BACKPEDAL_ORDER_MS;
             out.push_back(back);
 
-            if (!bot->IsMovementHeld())
+            if (!onPoint && !bot->IsMovementHeld())
             {
-                Proposal forward = MoveTo(to, PackResolver::Distance(PositionOf(me), to));
+                Proposal forward = MoveTo(to, left);
                 forward.score = 4.0f;
                 out.push_back(forward);
             }
@@ -271,7 +277,7 @@ namespace Commander
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    void PullBehavior::Propose(PartyBotAI const* bot, WorldModel const& /*world*/,
+    void PullBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         PullPlan const& pull = plan.pull;
@@ -334,18 +340,43 @@ namespace Commander
             return;
         }
 
+        bool const healer = bot->GetRole() == ROLE_HEALER;
+
+        // A healer hiding behind the tank from the casters of a line of sight pull
+        // (PullPlan::losHiders): walk there, in combat or not. The cast under way finishes first.
+        if (PullHider const* hider = pull.LosHiderOf(me->GetObjectGuid()))
+        {
+            float const left = PackResolver::Distance(PositionOf(me), hider->point);
+            if (left > PullBehavior::POINT_ARRIVED_YD && !me->IsNonMeleeSpellCasted(false, false, true) &&
+                !me->HasUnitState(UNIT_STATE_ROOT))
+            {
+                // Already walking there: keep walking (a cast-time heal would stop the walk).
+                if (bot->IsMovementHeld() && me->IsMoving())
+                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                else
+                    out.push_back(MoveTo(hider->point, left));
+                return;
+            }
+        }
+
         // Everyone else waits for the tank. Higher-scored proposals (interrupts, threat) still win.
         // Only out of combat: a bot already in a fight (the player attacked first, a patrol joined)
-        // must not stand idle for up to 20 seconds. Waiting for first threat is the threat module's job.
+        // must not stand idle. In Settle, past the arrival wait, the brain says who still waits
+        // (PullOpening.h): damage dealers until the tank has threat on what came, healers also
+        // until the casters of a line of sight pull came.
         if (me->IsInCombat())
             return;
-        // Settle holds for SETTLE_MS only. A line of sight pull keeps Settle going for up to
-        // LOS_BREAK_TIMEOUT_MS more; a healer not in combat yet must be free to heal the tank then.
-        uint32 const settleMs = PullAssigner::SETTLE_MS;
-        // While the tank waits for the pack after a ranged pull, everyone waits too.
-        if (pull.phase == PullPhase::Settle && !pull.awaitArrival &&
-            WorldTimer::getMSTimeDiff(pull.phaseSinceMs, WorldTimer::getMSTime()) >= settleMs)
-            return;
+        if (pull.phase == PullPhase::Settle && !pull.awaitArrival)
+        {
+            if (!(healer ? pull.holdHealing : pull.holdDamage))
+                return;
+            // Someone about to die: heal now (the rotation's heal step runs without the hold).
+            if (healer && std::any_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& m)
+                {
+                    return m.alive && !m.isPet && m.healthPct < PullBehavior::HOLD_HEAL_BELOW_PCT;
+                }))
+                return;
+        }
         out.push_back(Make(ProposalTier::Assigned, 1.0f, BotActionType::Hold));
     }
 }

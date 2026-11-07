@@ -17,6 +17,9 @@
  *                while the tank walks and the enemies follow
  * benefit > cost and a spot: TeamPlan::patrolMove (PatrolBehavior walks the tank there).
  * Otherwise the party stays and the leader is told why. Each patrol is judged once per fight.
+ * While the pull still places the tank (Settle with the arrival wait or an Active line of sight
+ * pull, whose point already avoids patrol paths) a patrol arriving after
+ * PULL_PLACING_DEFER_SEC is judged once that is over.
  *
  * Every other bot (healer, ranged, melee) is a follower (TeamPlan.h, PatrolFollower) and walks
  * the tank's shift itself (PatrolBehavior).
@@ -75,6 +78,10 @@ namespace Commander
         static constexpr float LURE_ARRIVED = 8.0f;
         static constexpr uint32 LURE_TIMEOUT_MS = 8 * 1000;
         static constexpr uint32 MAX_LURE_CASTERS = 2;
+        // While the pull still places the tank (arrival wait, line of sight pull), a patrol
+        // arriving later than this is judged afterwards: the line of sight break lasts at most
+        // PullAssigner::LOS_BREAK_TIMEOUT_MS (8 s), plus a move of about 15 yd.
+        static constexpr float PULL_PLACING_DEFER_SEC = 20.0f;
 
         char const* GetId() const override { return "patrol"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;

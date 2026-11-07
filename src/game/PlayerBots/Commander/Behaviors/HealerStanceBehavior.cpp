@@ -236,6 +236,9 @@ namespace Commander
         Player* me = bot->me;
         if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT))
             return;
+        // Hiding behind the tank during a line of sight pull: the brain chose the spot (PullBehavior).
+        if (plan.pull.phase == PullPhase::Settle && plan.pull.LosHiderOf(me->GetObjectGuid()))
+            return;
 
         // A MoveTo (this module's or another's) is under way: keep walking. Without a proposal
         // the rotation's first cast-time heal stops the walk (DoCastSpell -> StopMoving).

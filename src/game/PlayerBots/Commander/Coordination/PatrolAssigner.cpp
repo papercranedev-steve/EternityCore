@@ -333,6 +333,15 @@ namespace Commander
             return;
         }
 
+        // The pull still places the tank (waiting for the pack, or hiding from casters standing
+        // back): one place at a time. A patrol arriving later is judged once that is over, from
+        // where the fight then is; the line of sight point already avoids patrol paths
+        // (strat-20261107-143623: hiding point, then 15 yd off the path, then the guard's hiding
+        // point; the casters saw the tank most of the time). Reads the pull as PullAssigner
+        // left it, this refresh or the last one (one refresh late at worst either way).
+        bool const pullPlacing = plan.pull.phase == PullPhase::Settle &&
+            (plan.pull.awaitArrival || plan.pull.losBreak == PullLosBreak::Active);
+
         float const remaining = Value::FightRemainingSec(world);
         float const dealt = std::max(1.0f, Value::DealtDps(world));
         std::vector<Position3> const members = Members(world, 0.0f, 0.0f);
@@ -344,6 +353,8 @@ namespace Commander
             float const arrive = FirstTouch(p, members, radius);
             if (arrive < 0.0f || arrive >= remaining)
                 continue;
+            if (pullPlacing && arrive > PULL_PLACING_DEFER_SEC)
+                continue;   // not judged yet
             m.judged.push_back(p.guid);
             std::string const name = NameOf(p.entry);
 

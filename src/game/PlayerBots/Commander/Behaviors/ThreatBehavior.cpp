@@ -578,11 +578,24 @@ namespace Commander
             if (PackResolver::Distance(myFacts->pos, e.pos) > GROUP_THREAT_RADIUS)
                 continue;
             ObjectGuid closest;
-            if (ThreatView::VictimLead(e, &closest) >= thinLead)
+            // No threat of its own yet (it came along with the one the tank pulled): any heal
+            // takes it, whatever the tank's rate (a rate of 0 right after a ranged pull made
+            // thinLead 0 and nothing counted, strat-20261107-143623).
+            ThreatEntry const* own = ThreatView::FindEntry(e, self);
+            bool const untouched = !own || own->threat <= 0.0f;
+            if (ThreatView::VictimLead(e, &closest) >= thinLead && !untouched)
                 continue;
-            if (PartyMemberFacts const* runnerUp = world.FindMember(closest))
-                if (!runnerUp->isPet)
-                    fragile.push_back({ &e, runnerUp });
+            PartyMemberFacts const* runnerUp = closest.IsEmpty() ? nullptr : world.FindMember(closest);
+            // Untouched with nobody else on its list yet: the healer's first heal puts it there.
+            if (!runnerUp && untouched)
+                for (PartyMemberFacts const& m : world.party)
+                    if (m.alive && !m.isPet && m.role == ROLE_HEALER && m.guid != self)
+                    {
+                        runnerUp = &m;
+                        break;
+                    }
+            if (runnerUp && !runnerUp->isPet)
+                fragile.push_back({ &e, runnerUp });
         }
 
         // 1b. Several loose or fragile enemies around the tank (summoned adds, a wave arriving):
@@ -600,7 +613,7 @@ namespace Commander
                     // (56) does not make a lead of one global cooldown, and counting it in full
                     // spent the tank's rage on shouts (strat-20261101-210522).
                     float const fragileShare = holdSec > 0.0f ? 1.0f :
-                        (thinLead > 0.0f ? std::min(1.0f, threatAdded / thinLead) : 0.0f);
+                        (thinLead > 0.0f ? std::min(1.0f, threatAdded / thinLead) : (threatAdded > 0.0f ? 1.0f : 0.0f));
                     if (fragileShare > 0.0f)
                         for (FragileEnemy const& f : fragile)
                             benefit += Value::MoveLoss(world, *f.enemy, *f.runnerUp, *myFacts, TANK_RECLAIM_SEC) *

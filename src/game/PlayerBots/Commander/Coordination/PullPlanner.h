@@ -23,8 +23,11 @@
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
  *                      A fight with other enemies before the pull starts ends it as
  *                      Interrupted; real failures end it as Cancelled. Settle waits for an
- *                      active line of sight pull (casters walked in, or the timeout), and
- *                      after a ranged pull fought in place for the pack to reach the tank.
+ *                      active line of sight pull (casters walked in, turned to someone else,
+ *                      or the timeout), after a ranged pull fought in place for the pack to
+ *                      reach the tank, and for the opening holds (PullOpening.h: damage
+ *                      dealers until the tank has threat on what came, healers also until the
+ *                      casters came). Settle lasts at least SETTLE_MS.
  */
 
 #ifndef MANGOS_COMMANDER_PULL_PLANNER_H
@@ -70,8 +73,10 @@ namespace Commander
         // A pulled caster standing back casting at the tank more than LOS_CASTER_MIN_DISTANCE
         // away: look for a point (LosBreak::FindPoint) around the fight
         // spot (around the tank when the pack was not brought back) that the casters cannot
-        // see and the tank reaches by a short safe walk (around a corner is fine). Healer bots
-        // need not see it: one that loses sight of the tank moves itself (HealerStanceBehavior).
+        // see and the tank reaches by a short safe walk (around a corner is fine), not where an
+        // idle patrol walks before the fight ends (PatrolAssigner::InPath). Healer bots get a
+        // hiding point behind the tank (PullPlan::losHiders, LosHealerSpot.h); one without a
+        // point stays and moves itself if it loses the tank (HealerStanceBehavior).
         // Found: losBreak = Active, the tank goes
         // there (PullBehavior) and PullAssigner keeps Settle going until the casters came.
         // Not found: NoPoint, fight where we are (as before).
@@ -186,7 +191,7 @@ namespace Commander
         static constexpr uint32 RETURN_TIMEOUT_MAX_MS = 30 * 1000;
         static constexpr float RETURN_BACK_SPEED = 4.5f;   // yd/s, base run-back speed
         static constexpr float RETURN_TIME_FACTOR = 1.5f;  // path detours, pauses for casts
-        static constexpr uint32 SETTLE_MS = 2500;
+        static constexpr uint32 SETTLE_MS = 2500;      // shortest Settle (holds: PullOpening.h)
         static constexpr float RETURN_ARRIVED = 4.0f;
         // Line of sight pull: Settle lasts until every caster is within LOS_CASTER_ARRIVED of the
         // tank (or dead, crowd controlled, out of the fight), at most this long after the point
