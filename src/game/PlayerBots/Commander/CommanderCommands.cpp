@@ -14,6 +14,7 @@
  *   .partybot ai profile             selected creature's profile (melee, spells, on-hit debuffs)
  *   .partybot ai spell <id> [level]  one spell's profile and amounts at a caster level
  *   .partybot ai rates               fight-wide rates and value units of your party
+ *   .partybot ai control             bots' crowd control spells and what each is worth now (ControlValue.h)
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai threat watch [off|target|all]   addon threat meter feed (ThreatFeed.h)
  *   .partybot ai packs               out-of-combat packs within 50 yards
@@ -752,6 +753,16 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         if (!ExtractOptUInt32(&args, level, 0) || !level)
             level = GetSelectedCreature() ? GetSelectedCreature()->GetLevel() : m_session->GetPlayer()->GetLevel();
         if (!Commander::ProfileCommands::ShowSpell(this, spellId, level))
+        {
+            SetSentErrorMessage(true);
+            return false;
+        }
+        return true;
+    }
+
+    if (!strcmp(sub, "control"))
+    {
+        if (!Commander::ProfileCommands::ShowControls(this, m_session->GetPlayer()))
         {
             SetSentErrorMessage(true);
             return false;

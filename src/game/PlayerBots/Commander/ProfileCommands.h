@@ -24,6 +24,8 @@ namespace ProfileCommands
     bool ShowSpell(ChatHandler* handler, uint32 spellId, uint32 casterLevel);
     // .partybot ai rates              fight-wide rates of your party
     bool ShowRates(ChatHandler* handler, Player* player);
+    // .partybot ai control            control spells of the bots and what each is worth now
+    bool ShowControls(ChatHandler* handler, Player* player);
     // .partybot ai reload overrides
     void ReloadOverrides(ChatHandler* handler);
     // part of .partybot ai bot: the last `count` arbiter decisions, newest first

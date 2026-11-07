@@ -30,6 +30,12 @@ namespace Commander
                 return { m_bot.m_spells.mage.pFrostNova };
             }
 
+            // Humanoids and beasts; one of the sheep / pig / turtle variants (ResetSpellData).
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                return { m_bot.m_spells.mage.pPolymorph };
+            }
+
             // The rotation puts Ice Barrier (frost talent, no mana per absorbed point) up when
             // attacked; Mana Shield (2 mana per point) only when EscapeBehavior finds the hits
             // dangerous and nothing else absorbs (Rotations/MageRotation.cpp).

@@ -37,6 +37,23 @@ namespace SpellTags
                spell->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER;
     }
 
+    bool IsDisableEffect(SpellEntry const* spell, uint32 i)
+    {
+        if (!IsControlEffect(spell, i))
+            return false;
+        switch (spell->EffectApplyAuraName[i])
+        {
+            case SPELL_AURA_MOD_FEAR:
+            case SPELL_AURA_MOD_CONFUSE:
+            case SPELL_AURA_MOD_CHARM:
+            case SPELL_AURA_MOD_POSSESS:
+            case SPELL_AURA_MOD_STUN:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     bool IsCreatureSummonEffect(uint32 effect)
     {
         switch (effect)

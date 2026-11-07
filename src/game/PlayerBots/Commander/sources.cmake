@@ -122,6 +122,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/HealCapacity.cpp
   ${COMMANDER_DIR}/Perception/FightLoad.h
   ${COMMANDER_DIR}/Perception/FightLoad.cpp
+  ${COMMANDER_DIR}/Perception/ManaWorth.h
+  ${COMMANDER_DIR}/Perception/ManaWorth.cpp
+  ${COMMANDER_DIR}/Perception/FearRisk.h
+  ${COMMANDER_DIR}/Perception/FearRisk.cpp
+  ${COMMANDER_DIR}/Perception/ControlValue.h
+  ${COMMANDER_DIR}/Perception/ControlValue.cpp
   ${COMMANDER_DIR}/Behaviors/FleePoint.h
   ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
   ${COMMANDER_DIR}/Behaviors/SafeRoute.h
@@ -147,6 +153,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Classes/Shaman.cpp
   ${COMMANDER_DIR}/Classes/Mage.cpp
   ${COMMANDER_DIR}/Classes/Druid.cpp
+  ${COMMANDER_DIR}/Classes/Warlock.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/RoleAssigner.h

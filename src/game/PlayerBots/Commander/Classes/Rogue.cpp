@@ -23,6 +23,13 @@ namespace Commander
                 auto const& s = m_bot.m_spells.rogue;
                 return { s.pGouge, s.pKick };
             }
+
+            // Sap: stealthed, humanoids not in combat. Blind: needs Blinding Powder.
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                auto const& s = m_bot.m_spells.rogue;
+                return { s.pSap, s.pBlind };
+            }
         };
     }
 

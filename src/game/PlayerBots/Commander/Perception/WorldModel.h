@@ -51,6 +51,39 @@ namespace Commander
         bool hostileOk = false;
     };
 
+    // A crowd control spell a bot has learned (ClassKit::Controls): what it can take out of the
+    // fight and for how long. Read from the spell data (Perception/ControlValue.h values it).
+    struct ControlAbility
+    {
+        uint32 spellId = 0;
+        uint32 creatureTypeMask = 0;    // SpellEntry::TargetCreatureType (1 << (type - 1)), 0 = any type
+        uint32 mechanicMask = 0;        // 1 << (mechanic - 1): what an immune creature resists
+        uint8 school = 0;
+        float maxRange = 0.0f;          // single target: spell range
+        float radius = 0.0f;            // > 0: every enemy within this of the caster (Psychic Scream)
+        uint32 castMs = 0;
+        float durationSec = 0.0f;       // full effect duration
+        uint32 cooldownMs = 0;
+        uint32 manaCost = 0;            // 0 for rage / energy abilities
+        bool breaksOnDamage = false;    // AURA_INTERRUPT_DAMAGE_CANCELS: polymorph, sap, sleep
+        bool fear = false;              // the target runs around (SPELL_AURA_MOD_FEAR)
+        bool needsStealth = false;      // Sap
+        bool peacefulOnly = false;      // target must not be in combat (Sap)
+        // Off cooldown, enough power, reagents, right form, can act and cast. Target checks
+        // (creature type, immunity, range, line of sight) are the user's.
+        bool ready = false;
+    };
+
+    // The control effect an enemy is under now (the one lasting longest).
+    struct ActiveControl
+    {
+        uint32 spellId = 0;             // 0 = none
+        ObjectGuid caster;
+        uint32 remainingMs = 0;
+        bool breaksOnDamage = false;
+        bool fear = false;
+    };
+
     // A harmful, dispellable aura a creature put on a party member (players only).
     struct DebuffFacts
     {
@@ -114,6 +147,10 @@ namespace Commander
         bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
         std::vector<DispelAbility> dispels;         // bots only
+        std::vector<ControlAbility> controls;       // bots only
+        // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
+        // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
+        float fillerManaPerSec = 0.0f;
         std::vector<DebuffFacts> debuffs;           // players only
         // Damage actually taken (Perception/DamageIntake.h): per second over the last few
         // seconds, and the biggest spike within a short window. Value::TakenDps combines the
@@ -178,6 +215,11 @@ namespace Commander
         uint32 castTotalMs = 0;
         uint32 lastCastSpellId = 0;     // most recent interruptible cast seen this fight (kept after it ends)
         bool crowdControlled = false;   // cannot act (stun, fear, polymorph, ...)
+        ActiveControl control;          // the control effect on it, if any (also from players)
+        uint32 creatureTypeMask = 0;    // Unit::GetCreatureTypeMask: 1 << (CreatureType - 1)
+        // Longest periodic damage a party member put on it, ms left (0 = none): it wakes a
+        // control that breaks on damage at the next tick.
+        uint32 partyDotMs = 0;
         bool ignoresAssistThreat = false; // heal/buff threat is zeroed (fear, confuse, breakable stun)
         // False while it cannot be attacked and does nothing: feign death phases (not selectable),
         // total immunity (divine shield), evading. Such enemies are left out of damage rates,
@@ -274,7 +316,12 @@ namespace Commander
         bool tappedByOther = false; // somebody outside the party has loot rights
         bool boss = false;          // CreatureProfile::boss: pull and clear leave it to the player
         bool noAggro = false;       // CREATURE_FLAG_EXTRA_NO_AGGRO: never starts a fight
+        uint32 creatureTypeMask = 0;    // 1 << (CreatureType - 1)
         Position3 pos;
+        float reach = 0.0f;             // aggro range against the main tank while fighting, else this bot
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+        float meleeDps = 0.0f;          // estimate before armor (CreatureProfiles::EstimateMeleeDps)
     };
 
     // A creature walking a waypoint path, not in combat (WorldModel::patrols).
@@ -285,10 +332,6 @@ namespace Commander
         // (PatrolTracker::Predict, PATROL_FIGHT_HORIZON_SEC ahead; track[0] = now).
         float trackStepSec = 0.0f;
         std::vector<Position3> track;
-        float reach = 0.0f;             // aggro range against the main tank (or this bot)
-        uint32 health = 0;
-        uint32 maxHealth = 0;
-        float meleeDps = 0.0f;          // estimate before armor (CreatureProfiles::EstimateMeleeDps)
     };
 
     struct PackFacts

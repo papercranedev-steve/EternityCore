@@ -72,7 +72,16 @@ namespace FightLoad
                 incoming += in.foes[i].dps * DAMAGE_MARGIN;
             }
             if (!anyPresent)
-                break;      // the rest comes after this fight: another fight
+            {
+                // The rest comes after this fight: another fight. Unless it is still this one
+                // (a controlled enemy waking up): the time passes, healers top up and regenerate.
+                bool waiting = false;
+                for (size_t i = 0; i < in.foes.size(); ++i)
+                    if (health[i] > 0.0f && in.foes[i].sameFight)
+                        waiting = true;
+                if (!waiting)
+                    break;
+            }
             r.peakDps = std::max(r.peakDps, incoming);
             tank -= incoming * STEP_SEC;
             r.damage += incoming * STEP_SEC;
@@ -195,30 +204,90 @@ namespace FightLoad
         return f;
     }
 
+    Foe FoeOf(EnemyFacts const& enemy, PartyMemberFacts const& tank)
+    {
+        Foe f;
+        f.guid = enemy.guid;
+        f.health = float(enemy.health);
+        float melee = enemy.meleeDps;
+        if (enemy.meleePhysical)
+            melee *= 1.0f - Value::ArmorReduction(tank.armor, enemy.level);
+        f.dps = std::max(melee, enemy.rangedDps);
+        return f;
+    }
+
+    Foe FoeOf(PackCreature const& creature, PartyMemberFacts const& tank, float arriveSec)
+    {
+        Foe f;
+        f.guid = creature.guid;
+        f.health = float(creature.health);
+        f.dps = creature.meleeDps * (1.0f - Value::ArmorReduction(tank.armor, creature.level));
+        f.arriveSec = arriveSec;
+        f.sameFight = true;
+        return f;
+    }
+
+    namespace
+    {
+        bool StartInput(WorldModel const& world, Input& out, PartyMemberFacts const*& tank)
+        {
+            tank = Tanks::Main(world);
+            if (!tank || !tank->alive)
+                return false;
+            out = Input();
+            out.tankHealth = float(tank->health);
+            out.tankMaxHealth = float(std::max(1u, tank->maxHealth));
+            out.partyDps = Value::DealtDps(world);
+            return true;
+        }
+
+        void AddHealers(WorldModel const& world, Input& out)
+        {
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || m.role != ROLE_HEALER || !m.CanAct() || m.healRates.empty())
+                    continue;
+                Healer h;
+                h.rates = m.healRates;
+                h.mana = float(m.mana);
+                h.maxMana = float(m.maxMana);
+                h.regenPerSec = m.manaRegenCasting;
+                out.healers.push_back(std::move(h));
+            }
+        }
+    }
+
+    bool FromWorld(WorldModel const& world, Input& out)
+    {
+        PartyMemberFacts const* tank = nullptr;
+        if (!StartInput(world, out, tank))
+            return false;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (e.onAllyOnly || !e.acting || !e.health)
+                continue;
+            Foe f = FoeOf(e, *tank);
+            if (e.control.spellId)
+            {
+                f.arriveSec = e.control.remainingMs / 1000.0f;
+                f.sameFight = true;
+            }
+            out.foes.push_back(f);
+        }
+        AddHealers(world, out);
+        return true;
+    }
+
     bool Build(WorldModel const& world, Map* map, std::vector<ObjectGuid> const& creatures, Input& out)
     {
-        PartyMemberFacts const* tank = Tanks::Main(world);
-        if (!tank || !tank->alive)
+        PartyMemberFacts const* tank = nullptr;
+        if (!StartInput(world, out, tank))
             return false;
-        out = Input();
-        out.tankHealth = float(tank->health);
-        out.tankMaxHealth = float(std::max(1u, tank->maxHealth));
-        out.partyDps = Value::DealtDps(world);
         for (ObjectGuid g : creatures)
             if (Creature const* c = map->GetCreature(g))
                 if (c->IsAlive())
                     out.foes.push_back(FoeOf(c, *tank));
-        for (PartyMemberFacts const& m : world.party)
-        {
-            if (!m.isBot || m.isPet || m.role != ROLE_HEALER || !m.CanAct() || m.healRates.empty())
-                continue;
-            Healer h;
-            h.rates = m.healRates;
-            h.mana = float(m.mana);
-            h.maxMana = float(m.maxMana);
-            h.regenPerSec = m.manaRegenCasting;
-            out.healers.push_back(std::move(h));
-        }
+        AddHealers(world, out);
         return true;
     }
 }

@@ -35,6 +35,13 @@ namespace Commander
                 return { m_bot.m_spells.priest.pShackleUndead };
             }
 
+            // Shackle Undead: undead only. Psychic Scream: everyone around the priest runs.
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                auto const& s = m_bot.m_spells.priest;
+                return { s.pShackleUndead, s.pPsychicScream };
+            }
+
             SpellEntry const* ThreatDrop() const override
             {
                 return m_bot.m_spells.priest.pFade;

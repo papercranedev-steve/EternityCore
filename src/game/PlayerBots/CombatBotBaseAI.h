@@ -538,6 +538,7 @@ public:
             SpellEntry const* pBladeFlurry;
             SpellEntry const* pVanish;
             SpellEntry const* pBlind;
+            SpellEntry const* pSap;     // only the Commander casts it (crowd control, before a pull)
             SpellEntry const* pPreparation;
             SpellEntry const* pEvasion;
             SpellEntry const* pRiposte;

@@ -33,6 +33,10 @@ namespace Commander
         // spell's target. Auras on the caster itself do not count (Serpent Form silences
         // its own caster).
         bool IsControlEffect(SpellEntry const* spell, uint32 i);
+        // The narrower part of IsControlEffect that takes the target out of the fight: it
+        // cannot attack or cast (fear, confuse / polymorph, stun / sleep / sap / shackle /
+        // banish, charm). Silence and pacify are left out: the target still fights.
+        bool IsDisableEffect(SpellEntry const* spell, uint32 i);
 
         // Effect `i` summons creatures (EffectMiscValue = creature entry). Object and
         // critter summons are left out.

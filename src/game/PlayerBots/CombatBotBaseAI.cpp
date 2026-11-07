@@ -1370,6 +1370,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.rogue.pBlind))
                         m_spells.rogue.pBlind = pSpellEntry;
                 }
+                else if (pSpellEntry->IsFitToFamily<SPELLFAMILY_ROGUE, CF_ROGUE_SAP>())
+                {
+                    if (IsHigherRankSpell(m_spells.rogue.pSap))
+                        m_spells.rogue.pSap = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Preparation") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.rogue.pPreparation))

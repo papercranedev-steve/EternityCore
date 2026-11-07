@@ -74,6 +74,11 @@ namespace Commander
                     return true;
             return false;
         }
+        // Crowd control it can put on enemies: polymorph, sap, shackle, sleep, banish, fears
+        // (crowd control doc .kiro/docs/2026-11-07/2026-11-07-crowd-control.md). What each
+        // spell does (creature types, duration, area, breaks on damage) is read from its data
+        // (WorldModelBuilder fills ControlAbility); ControlValue values them.
+        virtual std::vector<SpellEntry const*> Controls() const { return {}; }
         // Area threat abilities, strongest first (ThreatBehavior group threat).
         virtual std::vector<AreaThreatSpell> AreaThreat() const { return {}; }
         // Roots / stuns that stop a melee enemy chasing the bot (EscapeBehavior; what each spell
@@ -109,8 +114,8 @@ namespace Commander
         // The kit for the bot's class (Player::GetClass); the base kit (has nothing) for others.
         std::unique_ptr<ClassKit> Create(PartyBotAI const& bot);
 
-        // One per class file (Classes/<Class>.cpp). Hunters and warlocks have nothing the
-        // modules ask for yet: base kit (add Classes/Hunter.cpp etc. when they do).
+        // One per class file (Classes/<Class>.cpp). Hunters have nothing the modules ask
+        // for yet: base kit (add Classes/Hunter.cpp when they do, todo item 18).
         std::unique_ptr<ClassKit> MakeWarrior(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakePaladin(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeRogue(PartyBotAI const& bot);
@@ -118,6 +123,7 @@ namespace Commander
         std::unique_ptr<ClassKit> MakeShaman(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeMage(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeDruid(PartyBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeWarlock(PartyBotAI const& bot);
     }
 }
 

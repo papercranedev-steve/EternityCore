@@ -27,6 +27,12 @@ namespace Commander
                 return m_bot.m_spells.warrior.pCharge;
             }
 
+            // Intimidating Shout: its target cowers, everyone around runs (rage, 3 min).
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                return { m_bot.m_spells.warrior.pIntimidatingShout };
+            }
+
             std::vector<SpellEntry const*> ReflexInterrupts() const override
             {
                 auto const& s = m_bot.m_spells.warrior;

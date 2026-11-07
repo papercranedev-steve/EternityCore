@@ -37,6 +37,12 @@ namespace Commander
             {
                 return { m_bot.m_spells.druid.pEntanglingRoots };
             }
+
+            // Hibernate: beasts and dragonkin, caster form.
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                return { m_bot.m_spells.druid.pHibernate };
+            }
         };
     }
 

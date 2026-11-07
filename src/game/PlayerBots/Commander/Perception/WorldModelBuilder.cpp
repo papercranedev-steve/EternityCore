@@ -236,6 +236,48 @@ namespace WorldModelBuilder
                 a.victim = victim->GetObjectGuid();
         }
 
+        // The longest control effect on `creature` (EnemyFacts::control) and the longest periodic
+        // damage a party member put on it (partyDotMs).
+        void FillControlState(Creature const* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
+        {
+            for (auto const& itr : creature->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                SpellEntry const* spell = holder->GetSpellProto();
+                uint32 const left = uint32(std::max(0, holder->GetAuraDuration()));
+                bool disables = false;
+                bool fear = false;
+                bool dot = false;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (SpellTags::IsDisableEffect(spell, i))
+                    {
+                        disables = true;
+                        fear = fear || spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_FEAR;
+                    }
+                    if (spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE ||
+                        spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_LEECH)
+                        dot = true;
+                }
+                if (disables && !holder->IsPositive() && left >= e.control.remainingMs)
+                {
+                    e.control.spellId = spell->Id;
+                    e.control.caster = holder->GetCasterGuid();
+                    e.control.remainingMs = left;
+                    e.control.breaksOnDamage = spell->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS);
+                    e.control.fear = fear;
+                }
+                if (dot)
+                {
+                    ObjectGuid const caster = holder->GetCasterGuid();
+                    bool const ours = std::any_of(partyUnits.begin(), partyUnits.end(),
+                        [caster](Unit const* u) { return u->GetObjectGuid() == caster; });
+                    if (ours)
+                        e.partyDotMs = std::max(e.partyDotMs, left);
+                }
+            }
+        }
+
         void FillEnemy(Creature* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
         {
             e.guid = creature->GetObjectGuid();
@@ -254,6 +296,8 @@ namespace WorldModelBuilder
             e.boundingRadius = creature->GetObjectBoundingRadius();
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
+            e.creatureTypeMask = creature->GetCreatureTypeMask();
+            FillControlState(creature, partyUnits, e);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
             e.meleeEnabled = !creature->AI() || creature->AI()->IsMeleeAttackEnabled();
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
@@ -437,6 +481,69 @@ namespace WorldModelBuilder
             }
         }
 
+        bool HasReagents(Player const* me, SpellEntry const* spell)
+        {
+            for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                if (spell->Reagent[i] > 0 && !me->HasItemCount(spell->Reagent[i], spell->ReagentCount[i]))
+                    return false;
+            return true;
+        }
+
+        void FillControls(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (SpellEntry const* spell : ai->Kit().Controls())
+            {
+                if (!spell)
+                    continue;
+                std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(spell->Id);
+                if (!profile || !profile->controls)
+                    continue;
+                ControlAbility a;
+                a.spellId = spell->Id;
+                a.creatureTypeMask = spell->TargetCreatureType;
+                a.mechanicMask = SpellTags::StopMechanicMask(spell);
+                a.school = uint8(spell->School);
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+                a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                // Area around the caster (Psychic Scream, Howl of Terror; Intimidating Shout
+                // fears everyone around, its target only cowers): a radius on a control effect.
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (SpellTags::IsDisableEffect(spell, i) && spell->EffectRadiusIndex[i])
+                        if (SpellRadiusEntry const* radius = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                            a.radius = std::max(a.radius, radius->Radius);
+                a.castMs = profile->castMs;
+                a.durationSec = profile->durationMs / 1000.0f;
+                a.cooldownMs = spell->GetRecoveryTime();
+                if (Powers(spell->powerType) == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.breaksOnDamage = profile->breaksOnDamage;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (SpellTags::IsDisableEffect(spell, i) && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_FEAR)
+                        a.fear = true;
+                a.needsStealth = (spell->Stances & (1u << (FORM_STEALTH - 1))) != 0;
+                a.peacefulOnly = spell->HasAttribute(SPELL_ATTR_EX_ONLY_PEACEFUL_TARGETS);
+                Powers const powerType = Powers(spell->powerType);
+                a.ready = !f.controlled && me->IsSpellReady(spell) &&
+                          (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
+                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+                          HasReagents(me, spell) &&
+                          !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
+                f.controls.push_back(a);
+            }
+        }
+
+        // ClassKit::Filler's mana per second while chain casting it (PartyMemberFacts::fillerManaPerSec).
+        float FillerManaPerSec(PartyBotAI const* ai)
+        {
+            SpellEntry const* filler = ai->Kit().Filler();
+            if (!filler || Powers(filler->powerType) != POWER_MANA)
+                return 0.0f;
+            float const cost = float(Spell::CalculatePowerCost(filler, ai->me));
+            float const castSec = std::max(filler->GetCastTime(ai->me) / 1000.0f, 1.5f);
+            return cost / castSec;
+        }
+
         // Seconds until `caster` puts `spellId` back after a dispel, 0 = it does not (dead, not
         // hitting the member, or its profile does not reapply the spell).
         float ReapplySec(Creature const* caster, Unit const* member, uint32 spellId)
@@ -530,6 +637,8 @@ namespace WorldModelBuilder
                     {
                         FillInterrupts(ai, f);
                         FillDispels(ai, f);
+                        FillControls(ai, f);
+                        f.fillerManaPerSec = FillerManaPerSec(ai);
                     }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);
@@ -641,18 +750,13 @@ namespace WorldModelBuilder
 
     namespace
     {
-        void FillPatrolTrack(Creature* creature, Unit const* reachAgainst, PatrolFacts& pf)
+        void FillPatrolTrack(Creature* creature, PatrolFacts& pf)
         {
             PatrolTracker::Track const track = PatrolTracker::Predict(creature, PATROL_FIGHT_HORIZON_SEC, PATROL_FIGHT_STEP_SEC);
             pf.trackStepSec = PATROL_FIGHT_STEP_SEC;
             pf.track.reserve(track.points.size());
             for (PatrolTracker::TrackPoint const& p : track.points)
                 pf.track.push_back(p.pos);
-            pf.reach = creature->GetAttackDistance(reachAgainst);
-            pf.health = creature->GetHealth();
-            pf.maxHealth = creature->GetMaxHealth();
-            if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(pf.entry))
-                pf.meleeDps = CreatureProfiles::EstimateMeleeDps(*profile, pf.level);
         }
     }
 
@@ -697,6 +801,10 @@ namespace WorldModelBuilder
             if (FactionTemplateEntry const* faction = creature->GetFactionTemplateEntry())
                 if (faction->ourMask & (FACTION_MASK_ALLIANCE | FACTION_MASK_HORDE))
                     continue;
+            bool const inPackRange = center->IsWithinDistInMap(creature, PACK_SCAN_RADIUS);
+            bool const patrol = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
+            if (!inPackRange && !patrol)
+                continue;
 
             PackCreature c;
             c.guid = creature->GetObjectGuid();
@@ -707,21 +815,28 @@ namespace WorldModelBuilder
             c.elite = creature->IsElite();
             c.aggressive = me->IsHostileTo(creature);
             c.stealthed = creature->HasAuraType(SPELL_AURA_MOD_STEALTH);
-            c.patrol = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
+            c.patrol = patrol;
             c.tappedByOther = creature->HasLootRecipient() && (!leader || !creature->IsTappedBy(leader));
             c.noAggro = creature->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO);
+            c.creatureTypeMask = creature->GetCreatureTypeMask();
+            c.reach = creature->GetAttackDistance(reachAgainst);
+            c.health = creature->GetHealth();
+            c.maxHealth = creature->GetMaxHealth();
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(c.entry))
+            {
                 c.boss = profile->boss;
+                c.meleeDps = CreatureProfiles::EstimateMeleeDps(*profile, c.level);
+            }
             c.pos = PositionOf(creature);
             if (c.patrol)
             {
                 PatrolFacts pf;
                 static_cast<PackCreature&>(pf) = c;
                 if (fighting)
-                    FillPatrolTrack(creature, reachAgainst, pf);
+                    FillPatrolTrack(creature, pf);
                 world.patrols.push_back(std::move(pf));
             }
-            if (center->IsWithinDistInMap(creature, PACK_SCAN_RADIUS))
+            if (inPackRange)
                 creatures.push_back(c);
         }
 

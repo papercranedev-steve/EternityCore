@@ -5,6 +5,8 @@
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/CastValue.h"
+#include "Commander/Perception/ControlValue.h"
+#include "Commander/Perception/FightLoad.h"
 #include "Chat.h"
 #include "Creature.h"
 #include "Map.h"
@@ -273,6 +275,70 @@ namespace ProfileCommands
                     Value::HitDps(e, *victim), victimUnit ? victimUnit->GetName() : "?", Value::SurviveSec(e, *victim));
             else
                 handler->PSendSysMessage("  enemy %s: %.1f melee dps, not hitting us", unit ? unit->GetName() : "?", e.meleeDps);
+        }
+        return true;
+    }
+
+    bool ShowControls(ChatHandler* handler, Player* player)
+    {
+        std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(player);
+        if (!commander)
+        {
+            handler->SendSysMessage("No commander for your party on this map.");
+            return false;
+        }
+
+        WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        auto name = [map](ObjectGuid guid) -> char const*
+        {
+            Unit* unit = map->GetUnit(guid);
+            return unit ? unit->GetName() : "?";
+        };
+        FightLoad::Input fight;
+        bool const haveFight = FightLoad::FromWorld(world, fight);
+        if (haveFight)
+            handler->PSendSysMessage("Fight as it is: %s", FightLoad::Describe(FightLoad::Simulate(fight)).c_str());
+        else
+            handler->SendSysMessage("No alive tank: values without the fight simulation.");
+
+        for (EnemyFacts const& e : world.enemies)
+            if (e.control.spellId)
+                handler->PSendSysMessage("  %s is controlled: spell %u by %s, %.1f s left%s%s", name(e.guid),
+                    e.control.spellId, name(e.control.caster), e.control.remainingMs / 1000.0f,
+                    e.control.breaksOnDamage ? ", breaks on damage" : "", e.control.fear ? ", feared" : "");
+
+        uint32 shown = 0;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.controls.empty())
+                continue;
+            for (ControlAbility const& a : m.controls)
+            {
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                handler->PSendSysMessage("%s: %s (%u)%s, %.0f s, %s%s%s", name(m.guid),
+                    spell ? spell->SpellName[0].c_str() : "?", a.spellId, a.ready ? "" : " not ready",
+                    a.durationSec, a.radius > 0.0f ? "area" : "single target",
+                    a.breaksOnDamage ? ", breaks on damage" : "", a.fear ? ", fear" : "");
+                // Sap needs a target out of combat: before a pull only (todo 10c).
+                if (!a.ready || !haveFight || a.peacefulOnly)
+                    continue;
+                auto show = [&](EnemyFacts const* target)
+                {
+                    std::vector<EnemyFacts const*> const targets = ControlValue::Targets(world, m, a, target);
+                    if (targets.empty())
+                        return;
+                    ControlValue::Worth const w = ControlValue::Of(world, fight, m, a, targets, 0.0f);
+                    handler->PSendSysMessage("    %s%s: %s", target ? "on " : "", target ? name(target->guid) : "around",
+                        ControlValue::Describe(w).c_str());
+                };
+                if (a.radius > 0.0f)
+                    show(nullptr);
+                else
+                    for (EnemyFacts const& e : world.enemies)
+                        if (!e.onAllyOnly && e.acting && ControlValue::Affects(a, e.entry, e.creatureTypeMask) && ++shown <= 30)
+                            show(&e);
+            }
         }
         return true;
     }

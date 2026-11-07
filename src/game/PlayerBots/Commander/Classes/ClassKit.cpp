@@ -17,6 +17,7 @@ namespace ClassKits
             case CLASS_SHAMAN:  return MakeShaman(bot);
             case CLASS_MAGE:    return MakeMage(bot);
             case CLASS_DRUID:   return MakeDruid(bot);
+            case CLASS_WARLOCK: return MakeWarlock(bot);
             default:            return std::make_unique<ClassKit>(bot);
         }
     }

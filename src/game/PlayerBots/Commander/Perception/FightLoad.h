@@ -16,10 +16,12 @@
  *            heal plus ManaBudget::OVERHEAL waste, regenerating at its in-combat rate.
  *            Player healers are not counted (their spells are not known).
  * The fight ends when no present creature is left; one that arrives after that is another
- * fight. Bearable: the tank survives and never drops below TANK_FLOOR_PCT.
+ * fight, unless it is marked sameFight (a controlled enemy waking up: the gap passes with
+ * healing and regeneration, no eating). Bearable: the tank survives and never drops below
+ * TANK_FLOOR_PCT.
  *
- * Simulate / Bearable / Score / Describe are pure. Build and FoeOf read live objects (map
- * thread, or the world thread while maps are idle).
+ * Simulate / Bearable / Score / Describe / FromWorld / FoeOf(facts) are pure. Build and
+ * FoeOf(Creature) read live objects (map thread, or the world thread while maps are idle).
  */
 
 #ifndef MANGOS_COMMANDER_FIGHT_LOAD_H
@@ -48,6 +50,9 @@ namespace FightLoad
         float health = 0.0f;
         float dps = 0.0f;           // on the tank, after armor, before DAMAGE_MARGIN
         float arriveSec = 0.0f;     // joins the fight this many seconds after the start
+        // Part of this fight even if it arrives after the others died: a controlled enemy that
+        // wakes later (the party is still in combat: no eating or drinking in between).
+        bool sameFight = false;
     };
 
     struct Healer
@@ -93,6 +98,12 @@ namespace FightLoad
     // bots as they are now. False when the party has no alive tank.
     bool Build(WorldModel const& world, Map* map, std::vector<ObjectGuid> const& creatures, Input& out);
     Foe FoeOf(Creature const* creature, PartyMemberFacts const& tank);
+    // The current fight from the facts only (pure): every acting enemy of ours; one under a
+    // control effect joins when it ends (sameFight).
+    bool FromWorld(WorldModel const& world, Input& out);
+    Foe FoeOf(EnemyFacts const& enemy, PartyMemberFacts const& tank);
+    // An idle creature joining later (fear add risk, ControlValue).
+    Foe FoeOf(PackCreature const& creature, PartyMemberFacts const& tank, float arriveSec);
 }
 }
 
