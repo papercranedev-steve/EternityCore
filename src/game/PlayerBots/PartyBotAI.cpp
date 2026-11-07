@@ -300,13 +300,21 @@ bool PartyBotAI::IsThreatDropControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
 }
 
-bool PartyBotAI::IsInPatrolPath(Unit const* pUnit) const
+bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 {
     if (!pUnit || IsInDuel() || !sCommanderMgr.IsEnabled())
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    return commander && commander->GetPlan().patrolMove.Avoids(pUnit->GetObjectGuid());
+    return commander && !commander->GetPlan().MayEngage(me->GetObjectGuid(), pUnit->GetObjectGuid());
+}
+
+bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
+{
+    if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_CHARGE) || IsInDuel() || !sCommanderMgr.IsEnabled())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().ForbidsGapCloser(me->GetObjectGuid());
 }
 
 void PartyBotAI::AutoAssignRole()
@@ -400,8 +408,9 @@ void PartyBotAI::BeginChasing(Unit* pVictim) const
     if (IsMovementHeld())
         return;
     // Fix: the rogue chased its casters back into a patrol's path after the party moved off
-    // it (strat-20261102-225354). The Commander patrol guard brings them out instead.
-    if (IsInPatrolPath(pVictim))
+    // it (strat-20261102-225354). The Commander patrol guard brings them out instead; a bot
+    // the brain sent to kill one may go (TeamPlan::EngageBlock).
+    if (IsEngageForbidden(pVictim))
         return;
     // Fix: the 25 yd chase walked the mage to 20 yd from a wandering Ravaged Cadaver's home
     // (aggro range 17, wander 5); it came after 14 s with its pack of seven
@@ -777,7 +786,7 @@ bool PartyBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
 bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
     // The pull brings the pack back: charging in would put the tank in the middle of it.
-    if (Commander::VetoChecks::IsGapCloserVetoed(this, pTarget, pSpellEntry))
+    if (IsGapCloserForbidden(pSpellEntry))
         return false;
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())

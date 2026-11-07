@@ -27,6 +27,7 @@ namespace Commander
             Failed,     // tried, could not execute (cooldown, range, target gone)
             LowerTier,  // a higher tier had proposals
             Dropped,    // valued and benefit <= cost
+            Forbidden,  // breaks a plan constraint (Behaviors/Constraints.h; reason names it)
             VetoSet,    // veto registered
             OrderSet,   // heal order handed to the rotation's heal step
         };

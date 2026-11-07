@@ -46,7 +46,7 @@ namespace Commander
         // not yet on any threat list helps, or keeps drinking while that pays (RestBehavior).
         // "Fighting" = an enemy with one of us on its threat list: an ally's fight nearby (a
         // guard, an escort) does not stop the party from drinking.
-        // The active boss module may ask for the same (IEncounter::WantsOutOfCombatControl):
+        // The active boss module forbidding rest (TeamPlan::noRest, IEncounter::ForbidsRest):
         // Zul'Farrak pyramid waves, where the next group arrives while bots are out of combat.
         bool WantsOutOfCombatControl() const
         {
@@ -58,7 +58,7 @@ namespace Commander
             // yet (WorldModel::targeted), is enough: the original target selection is gone, the
             // first target of a bot comes from TargetAssigner through the Commander hook.
             return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
-                   (m_activeEncounter && m_activeEncounter->WantsOutOfCombatControl());
+                   m_plan.noRest;
         }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }

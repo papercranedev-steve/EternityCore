@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Arbiter.h"
+#include "Commander/Behaviors/Constraints.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
@@ -85,7 +86,6 @@ namespace Commander
                 case VetoType::None:   return "none";
 
                 case VetoType::Heal:   return "no-heal";
-                case VetoType::GapCloser: return "no-charge";
             }
             return "?";
         }
@@ -187,6 +187,15 @@ namespace Commander
         uint32 const vetoMs = VETO_MS;
         for (Proposal const& p : proposals)
         {
+            // The brain's constraints, whichever module proposed it (Constraints.h).
+            if (char const* constraint = Constraints::Broken(bot, world, plan, p, now))
+            {
+                record.candidates.push_back(MakeRecord(Describe(bot, p), p));
+                CandidateRecord& r = record.candidates.back();
+                r.result = CandidateRecord::Result::Forbidden;
+                r.reason = std::string(constraint) + " (" + p.reason + ")";
+                continue;
+            }
             if (p.valued && p.benefit <= p.cost)
             {
                 record.candidates.push_back(MakeRecord(Describe(bot, p), p));

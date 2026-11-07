@@ -38,6 +38,13 @@ namespace Commander
         // banish, charm). Silence and pacify are left out: the target still fights.
         bool IsDisableEffect(SpellEntry const* spell, uint32 i);
 
+        // Some effect deals damage (direct, weapon, periodic, a ground area like Blizzard /
+        // Consecration): wakes a target under a control that breaks on damage.
+        bool DealsDamage(SpellEntry const* spell);
+
+        // Largest effect radius in yards, 0 = none.
+        float AreaRadius(SpellEntry const* spell);
+
         // Effect `i` summons creatures (EffectMiscValue = creature entry). Object and
         // critter summons are left out.
         bool IsCreatureSummonEffect(uint32 effect);

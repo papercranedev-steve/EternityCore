@@ -135,9 +135,8 @@ namespace Commander
         None,
 
         Heal,       // do not heal `target` this tick (PartyBotAI::FindAndHealInjuredAlly)
-        // Do not cast a spell that charges at `target` (empty = any): Charge, Intercept, Feral
-        // Charge (PartyBotAI::PassesPartyCastChecks). The pull brings the pack back.
-        GapCloser,
+        // (GapCloser, "no charging while the pull brings the pack back", became the plan
+        // constraint TeamPlan::ForbidsGapCloser on 2026-11-07, directive types doc.)
     };
 
     struct Veto

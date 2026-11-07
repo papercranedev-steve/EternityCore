@@ -128,19 +128,6 @@ namespace Commander
             }
         }
 
-        // No Charge / Intercept while the tank goes out to bring the pack back or to take it to
-        // a corner.
-        Proposal NoCharge(char const* reason = "bringing the pack back")
-        {
-            Proposal p;
-            p.kind = ProposalKind::Veto;
-            p.tier = ProposalTier::Assigned;
-            p.source = "pull";
-            p.reason = reason;
-            p.veto.type = VetoType::GapCloser;
-            return p;
-        }
-
         void SpotFailed(PullShotState& s, char const* why)
         {
             s.spotFailed = true;
@@ -376,10 +363,8 @@ namespace Commander
                     return;
                 }
                 NoteOpened(bot, pull, target, ShotState(pull), WorldTimer::getMSTime());
-                if (pull.returnToSpot)
-                    out.push_back(NoCharge());
-                else if (pull.corner)
-                    out.push_back(NoCharge("taking the pack to a corner"));
+                // (No charging when the pack is brought back or taken to a corner: the plan's
+                // constraint, TeamPlan::ForbidsGapCloser.)
                 if (pull.rangedPullSpell && ProposeRangedPull(bot, pull, target, out))
                     return;
                 if (pull.facePull && ProposeFacePull(bot, pull, target, out))
@@ -403,7 +388,6 @@ namespace Commander
             {
                 // Backwards, facing the pack: parry, block and swings keep working, the rotation
                 // keeps building threat (instant abilities), nothing hits the tank's back.
-                out.push_back(NoCharge());
                 WalkBack(bot, pull, pull.spot, out);
             }
             else if (pull.phase == PullPhase::Settle && pull.awaitArrival && pull.losBreak != PullLosBreak::Active)
@@ -412,7 +396,6 @@ namespace Commander
                 // until it came (PullAssigner). Walking to it met the pack halfway, next to the
                 // creatures the shot was meant to leave alone. The rotation keeps working (the
                 // backpedal order lets it run); its chase is held.
-                out.push_back(NoCharge());
                 WalkBack(bot, pull, pull.arrivalPoint, out);
             }
             else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active)

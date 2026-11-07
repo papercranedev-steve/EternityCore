@@ -223,9 +223,13 @@ public:
     // The Commander crowd control module is on (any time): raid marks are not used for
     // controls, the brain chooses (user, 2026-11-07). Out of combat too, for the marked pull.
     bool IgnoresCrowdControlMarks() const;
-    // The enemy `pUnit` stands in the path of a patrol the party moved off (Commander
-    // PatrolMovePlan::avoid, only set during a fight). Nobody chases it there.
-    bool IsInPatrolPath(Unit const* pUnit) const;
+    // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
+    // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
+    // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's
+    // intercept, the player's "leave it alone"). Gap closer: `pSpell` charges and the pull's
+    // tank must not charge now.
+    bool IsEngageForbidden(Unit const* pUnit) const;
+    bool IsGapCloserForbidden(SpellEntry const* pSpell) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).

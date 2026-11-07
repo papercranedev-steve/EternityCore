@@ -61,9 +61,8 @@ namespace Commander
         for (Pending const& p : m_pendingControls)
             if (p.enemy == e.guid && p.controller != bot.guid)
                 return false;
-        if (plan.patrolMove.Avoids(e.guid) && InterceptOf(bot.guid) != e.guid)
-            return false;
-        return !plan.orders.LeavesAlone(e.guid);
+        // Patrol path (unless it is this bot's intercept), the player's "leave it alone".
+        return plan.MayEngage(bot.guid, e.guid);
     }
 
     ObjectGuid TargetContext::InterceptOf(ObjectGuid bot) const
@@ -133,8 +132,8 @@ namespace Commander
             auto const eligible = [&](EnemyFacts const& e)
             {
                 // Standing in a patrol's path: the party stays off it (PatrolAssigner.h).
-                return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && !plan.patrolMove.Avoids(e.guid) &&
-                       !plan.orders.LeavesAlone(e.guid);
+                // (party-wide: no bot's intercept exception)
+                return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid);
             };
 
             EnemyFacts const* best = nullptr;

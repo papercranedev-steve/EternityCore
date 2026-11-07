@@ -631,6 +631,7 @@ namespace DevConsole
             case R::Failed:    return "failed";
             case R::LowerTier: return "lowertier";
             case R::Dropped:   return "dropped";
+            case R::Forbidden: return "forbidden";
             case R::VetoSet:   return "veto";
             case R::OrderSet:  return "order";
         }

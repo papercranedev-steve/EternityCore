@@ -100,7 +100,7 @@ namespace Commander
 
             EnemyFacts const* facts = FactsOf(world, enemy->GetObjectGuid());
             bool const blocked = !inReach &&
-                ((facts && RouteRisk::Blocked(world, self, *facts)) || plan.patrolMove.Avoids(enemy->GetObjectGuid()));
+                ((facts && RouteRisk::Blocked(world, self, *facts)) || !plan.MayEngage(self.guid, enemy->GetObjectGuid()));
             if (blocked)
             {
                 if (chasing)

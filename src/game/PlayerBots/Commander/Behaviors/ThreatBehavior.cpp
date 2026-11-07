@@ -12,6 +12,7 @@
 #include "Commander/Perception/ThreatRoom.h"
 #include "Commander/Perception/PetTaunt.h"
 #include "Commander/Perception/RescueValue.h"
+#include "Commander/Perception/SpellTags.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
@@ -194,17 +195,6 @@ namespace Commander
             return threat * bot->StanceSwapThreatFactor(spell);
         }
 
-        bool DealsDamage(SpellEntry const* spell)
-        {
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-                if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE || spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE ||
-                    spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL || spell->Effect[i] == SPELL_EFFECT_NORMALIZED_WEAPON_DMG ||
-                    spell->Effect[i] == SPELL_EFFECT_WEAPON_PERCENT_DAMAGE ||
-                    (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE) ||
-                    spell->Effect[i] == SPELL_EFFECT_PERSISTENT_AREA_AURA)
-                    return true;
-            return false;
-        }
 
         // One proposal per usable area threat ability. `valueOf(threatAdded, holdSec)` returns
         // the benefit over every loose enemy around the tank and whether someone would die
@@ -232,7 +222,7 @@ namespace Commander
             {
                 if (!o.spell)
                     continue;
-                if (crowdControlNear && DealsDamage(o.spell))
+                if (crowdControlNear && SpellTags::DealsDamage(o.spell))
                     continue;
                 Unit* castTarget = o.onTarget ? victim : bot->me;
                 if (!castTarget || !bot->CanCastWithStance(castTarget, o.spell))

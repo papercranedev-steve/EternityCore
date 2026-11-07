@@ -51,17 +51,14 @@ namespace Commander
     void RestBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
-        if (plan.retreat.active)
-            return;
         Player* me = bot->me;
+        // Retreat, the boss module's waves, the pull's tank on its way (the plan's constraint).
+        if (plan.ForbidsRest(me->GetObjectGuid()))
+            return;
         if (me->IsInCombat() || me->GetVictim() || me->IsNonMeleeSpellCasted(false, false, true))
             return;
         // Walking to its place (stance modules, the pull's hiding point): arrive first.
         if (bot->IsMovementHeld() && me->IsMoving())
-            return;
-        // The pull's tank goes out once the party is ready: no sitting down on the way.
-        if (me->GetObjectGuid() == plan.pull.tank && plan.pull.phase != PullPhase::None &&
-            plan.pull.phase != PullPhase::WaitReady)
             return;
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())

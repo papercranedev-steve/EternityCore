@@ -1,5 +1,7 @@
 #include "Commander/Perception/SpellTags.h"
 #include "SpellEntry.h"
+#include "DBCStores.h"
+#include <algorithm>
 
 namespace Commander
 {
@@ -52,6 +54,27 @@ namespace SpellTags
             default:
                 return false;
         }
+    }
+
+    bool DealsDamage(SpellEntry const* spell)
+    {
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE || spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE ||
+                spell->Effect[i] == SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL || spell->Effect[i] == SPELL_EFFECT_NORMALIZED_WEAPON_DMG ||
+                spell->Effect[i] == SPELL_EFFECT_WEAPON_PERCENT_DAMAGE ||
+                (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE) ||
+                spell->Effect[i] == SPELL_EFFECT_PERSISTENT_AREA_AURA)
+                return true;
+        return false;
+    }
+
+    float AreaRadius(SpellEntry const* spell)
+    {
+        float radius = 0.0f;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                radius = std::max(radius, r->Radius);
+        return radius;
     }
 
     bool IsCreatureSummonEffect(uint32 effect)

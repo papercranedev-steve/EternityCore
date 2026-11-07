@@ -75,6 +75,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.cpp
+  ${COMMANDER_DIR}/Behaviors/Constraints.h
+  ${COMMANDER_DIR}/Behaviors/Constraints.cpp
   ${COMMANDER_DIR}/Perception/SpellProfile.h
   ${COMMANDER_DIR}/Perception/SpellProfile.cpp
   ${COMMANDER_DIR}/Perception/CreatureProfile.h

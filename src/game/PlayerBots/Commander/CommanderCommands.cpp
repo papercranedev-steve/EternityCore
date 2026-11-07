@@ -323,6 +323,22 @@ namespace
                 plan.orders.attackTanksOnly ? " (tanks)" : "");
         for (ObjectGuid const& g : plan.orders.leaveAlone)
             handler->PSendSysMessage("Order: leave |cffffcc00%s|r alone", NameOf(map, g).c_str());
+        // Constraints in force (TeamPlan, directive types doc): the arbiter drops proposals breaking them.
+        if (plan.patrolMove.active)
+            for (ObjectGuid const& g : plan.patrolMove.avoid)
+                handler->PSendSysMessage("Constraint: nobody engages |cffffcc00%s|r (in a patrol's path, except its interceptor)",
+                    NameOf(map, g).c_str());
+        for (ObjectGuid const& g : plan.protectedEnemies)
+            handler->PSendSysMessage("Constraint: no damage on |cffffcc00%s|r (control coming)", NameOf(map, g).c_str());
+        for (Commander::EnemyFacts const& e : world.enemies)
+            if (e.control.spellId && e.control.breaksOnDamage)
+                handler->PSendSysMessage("Constraint: no damage on |cffffcc00%s|r (controlled)", NameOf(map, e.guid).c_str());
+        if (plan.ForbidsGapCloser(plan.pull.tank))
+            handler->PSendSysMessage("Constraint: %s does not charge (pull)", NameOf(map, plan.pull.tank).c_str());
+        if (plan.retreat.active || plan.noRest)
+            handler->PSendSysMessage("Constraint: nobody eats or drinks (%s)", plan.retreat.active ? "retreat" : "boss module");
+        else if (plan.ForbidsRest(plan.pull.tank))
+            handler->PSendSysMessage("Constraint: %s does not eat or drink (on its way to pull)", NameOf(map, plan.pull.tank).c_str());
         if (!plan.intercepts.empty())
         {
             handler->SendSysMessage("Intercepts:");

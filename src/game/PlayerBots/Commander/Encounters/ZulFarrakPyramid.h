@@ -42,7 +42,7 @@
  *     threat; it is split over every enemy on Weegli's list). benefit = WEEGLI_WEIGHT x points
  *     of the healing, cost = cast time of the healer's contribution.
  *
- * Eating and drinking (WantsOutOfCombatControl, computed in Refresh):
+ * Eating and drinking (ForbidsRest, computed in Refresh; TeamPlan::noRest):
  *   WAVE_1 / WAVE_2: never, unless nothing fought for QUIET_STALE_MS (a wipe leaves the phase
  *     stuck; the party then has to drink again).
  *   PRE_WAVE_2: only while the next contact (gap left + WAVE_TRAVEL_SEC) is at least
@@ -125,7 +125,7 @@ namespace Commander
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        bool WantsOutOfCombatControl() const override { return m_noRest; }
+        bool ForbidsRest() const override { return m_noRest; }
         void OnReset() override;
 
         static bool IsWaveEntry(uint32 entry);

@@ -105,13 +105,6 @@ namespace VetoChecks
                bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
     }
 
-    bool IsGapCloserVetoed(PartyBotAI const* bot, Unit const* target, SpellEntry const* spell)
-    {
-        if (!spell || !target || !sCommanderMgr.IsEnabled() || !spell->HasEffect(SPELL_EFFECT_CHARGE))
-            return false;
-        return bot->Directives().IsVetoed(VetoType::GapCloser, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
-    }
-
     bool IsCharmedPartyMember(PartyBotAI const* bot, Unit const* target)
     {
         if (!sCommanderMgr.IsEnabled() || !target || !target->IsPlayer() || !target->IsCharmed())

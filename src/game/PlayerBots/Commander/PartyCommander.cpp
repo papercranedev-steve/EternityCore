@@ -46,6 +46,7 @@ namespace Commander
 
         Refresh(bot, nowMs);
         UpdateEncounter(bot);
+        m_plan.noRest = m_activeEncounter && m_activeEncounter->ForbidsRest();
         RunAssigners(assigners);
         if (m_activeEncounter)
             m_activeEncounter->AdjustPlan(m_world, m_plan);

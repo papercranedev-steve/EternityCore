@@ -622,6 +622,9 @@ namespace Commander
         ClearPlan clear;
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
+        // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
+        // by PartyCommander every refresh). Read through ForbidsRest.
+        bool noRest = false;
         std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const
@@ -671,6 +674,64 @@ namespace Commander
             if (e.control.spellId && e.control.breaksOnDamage)
                 return true;
             return std::find(protectedEnemies.begin(), protectedEnemies.end(), e.guid) != protectedEnemies.end();
+        }
+
+        // ---- Constraints (directive types doc, .kiro/docs/2026-11-07/2026-11-07-directive-types.md).
+        // What the brain forbids. Every module reads them when it builds a proposal (to pick
+        // something else), the arbiter drops a proposal that breaks one (Behaviors/Constraints.h)
+        // and the class rotations ask the same queries (PartyBotAI::IsEngageForbidden,
+        // IsGapCloserForbidden). The exceptions live here, not at the readers.
+
+        // `bot` was given `enemy` to kill by the brain (intercept, also a caster of
+        // patrolMove.kill). This refresh's allocation.
+        bool AssignedToKill(ObjectGuid bot, ObjectGuid enemy) const
+        {
+            if (bot.IsEmpty())
+                return false;
+            for (DutyResult const& r : duties)
+                if (r.kind == DutyKind::Intercept && r.primary == bot && r.target == enemy)
+                    return true;
+            return false;
+        }
+
+        // Why `bot` must not attack, chase or target `enemy`, or null. Empty bot = a party-wide
+        // choice (focus, rescue): nobody's exception counts. Casting at it from where the bot
+        // stands (an interrupt, a control) is not forbidden by this.
+        char const* EngageBlock(ObjectGuid bot, ObjectGuid enemy) const
+        {
+            if (orders.LeavesAlone(enemy))
+                return "player: leave it alone";
+            // Standing in a patrol's path (PatrolAssigner.h): the party stays off it.
+            if (patrolMove.Avoids(enemy) && !AssignedToKill(bot, enemy))
+                return "in a patrol's path";
+            return nullptr;
+        }
+        bool MayEngage(ObjectGuid bot, ObjectGuid enemy) const { return !EngageBlock(bot, enemy); }
+
+        // No Charge / Intercept / Feral Charge for `bot`: the pull's tank going out to bring the
+        // pack back or to a corner, walking back, or waiting where it shot for the pack to come.
+        // Was a veto PullBehavior proposed every tick (VetoType::GapCloser) until 2026-11-07.
+        bool ForbidsGapCloser(ObjectGuid bot) const
+        {
+            if (bot.IsEmpty() || bot != pull.tank)
+                return false;
+            switch (pull.phase)
+            {
+                case PullPhase::Approach: return pull.returnToSpot || pull.corner;
+                case PullPhase::Return:   return true;
+                case PullPhase::Settle:   return pull.awaitArrival && pull.losBreak != PullLosBreak::Active;
+                default:                  return false;
+            }
+        }
+
+        // `bot` must not sit down to eat or drink: a retreat runs, the boss module says so, or it
+        // is the pull's tank and on its way.
+        bool ForbidsRest(ObjectGuid bot) const
+        {
+            if (retreat.active || noRest)
+                return true;
+            return !bot.IsEmpty() && bot == pull.tank && pull.phase != PullPhase::None &&
+                   pull.phase != PullPhase::WaitReady;
         }
     };
 }

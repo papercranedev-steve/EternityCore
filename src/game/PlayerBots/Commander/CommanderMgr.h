@@ -60,8 +60,9 @@ namespace Commander
         // PartyBotAI::UpdateAI, in combat, before target selection and movement.
         // True = an action was executed, skip the rest of UpdateAI for this tick.
         bool OnBotCombatUpdate(PartyBotAI* bot);
-        // True while an out-of-combat plan (pull in progress) needs the hook above to run
-        // out of combat too, and the bot must not sit down to eat or drink.
+        // True while an out-of-combat plan (pull in progress, the party fighting, a retreat, a
+        // boss module's waves) needs the hook above to run out of combat too. Whether the bot
+        // may sit down to eat or drink is the plan's constraint (TeamPlan::ForbidsRest).
         bool WantsOutOfCombatControl(PartyBotAI* bot);
         // `.partybot ai retreat` is running for the bot's party: out of combat it must not stop
         // to resurrect, dispel or buff on the way to the rally point (RetreatBehavior).

@@ -3,6 +3,7 @@
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -23,15 +24,6 @@ namespace Commander
     namespace
     {
         using AB = AreaDamageBehavior;
-
-        float AreaRadius(SpellEntry const* spell)
-        {
-            float radius = 0.0f;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-                if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
-                    radius = std::max(radius, r->Radius);
-            return radius;
-        }
 
         Position3 PositionOf(Unit const* unit)
         {
@@ -103,7 +95,7 @@ namespace Commander
             Player* me = bot->me;
             ObjectGuid const self = me->GetObjectGuid();
             Position3 const here = PositionOf(me);
-            float const radius = AreaRadius(spell);
+            float const radius = SpellTags::AreaRadius(spell);
             float const perTick = perTarget / float(ticks.count);
             float const tickThreat = ThreatOf(me, spell, perTick);
             uint32 const settleMs = uint32(ThreatBehavior::NEW_ENEMY_SETTLE_SEC * 1000.0f);
@@ -311,7 +303,7 @@ namespace Commander
             centre.y = y;
             centre.z = z;
         }
-        float const radius = AreaRadius(spell);
+        float const radius = SpellTags::AreaRadius(spell);
         Ticks const ticks = TicksOf(me, spell);
 
         // Live threat: the next tick must not make an enemy in the area turn on the bot.

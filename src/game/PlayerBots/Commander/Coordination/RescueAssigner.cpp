@@ -37,7 +37,7 @@ namespace Commander
         for (EnemyFacts const& e : world.enemies)
         {
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
-            if (!victim || plan.patrolMove.Avoids(e.guid) || plan.orders.LeavesAlone(e.guid))
+            if (!victim || !plan.MayEngage(ObjectGuid(), e.guid))
                 continue;
 
             DutyNeed need;

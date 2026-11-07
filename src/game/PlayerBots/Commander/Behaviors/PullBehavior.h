@@ -5,7 +5,8 @@
  *  Tank     Approach: walk-in pull: attack the chosen target (original chase brings it there);
  *                     fought where the pack stands: then the class's opener charge
  *                     (ClassKit::OpenerCharge, warrior Charge; the tank rotation never charges).
- *                     No charging when the pack is brought back: VetoType::GapCloser.
+ *                     No charging when the pack is brought back: the plan's constraint
+ *                     TeamPlan::ForbidsGapCloser (the arbiter and the rotation check it).
  *                     Ranged pull (PullPlan::rangedPullSpell): walk to the shot spot the brain
  *                     picked (PullPlan::rangedSpot, Perception/ShotSpot.h), then cast the spell
  *                     (Shoot / Throw / Faerie Fire (Feral) / Auto Shot). Closer than the

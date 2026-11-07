@@ -211,8 +211,8 @@ namespace Commander
             PatrolMovePlan const& m = plan.patrolMove;
             Player* me = bot->me;
             ObjectGuid const self = me->GetObjectGuid();
-            InterceptDuty const* duty = plan.FindInterceptFor(self);
-            auto const offLimits = [&m, duty](ObjectGuid g) { return m.Avoids(g) && !(duty && duty->enemy == g); };
+            // (the plan's constraint: the patrol's path unless it is this bot's intercept)
+            auto const offLimits = [&plan, self](ObjectGuid g) { return !plan.MayEngage(self, g); };
             bool const healer = bot->GetRole() == ROLE_HEALER;
             Unit* victim = me->GetVictim();
             ObjectGuid const victimGuid = victim ? victim->GetObjectGuid() : ObjectGuid();
