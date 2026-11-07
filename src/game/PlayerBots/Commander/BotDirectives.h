@@ -62,7 +62,8 @@ namespace Commander
     class BotDirectives
     {
     public:
-        // 40: the combat recorder polls every 500 ms; a bot ticking every 100 ms fills 5 per poll
+        // 40: the combat recorder polls every 200 ms (recorder.lua rec.interval); leaves room for
+        // slow polls (a reload, a long console call) at a bot tick of 100-200 ms
         static size_t const LOG_SIZE = 40;
 
         // While held, PartyBotAI does not issue MoveFollow / MoveChase / run-away moves.

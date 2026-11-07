@@ -29,7 +29,9 @@
 
 rec = rec or {}
 rec.dir = rec.dir or "../logs/combat"
-rec.interval = rec.interval or 500
+-- 200 ms: the Commander layers update about every 200 ms (2026-11-07); slower sampling missed
+-- target switches between two snaps
+rec.interval = rec.interval or 200
 rec.endAfterMs = rec.endAfterMs or 2000
 
 local function ensureDir(dir)
