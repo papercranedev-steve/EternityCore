@@ -21,8 +21,9 @@
  *                      (PullShotState::spotFailed) with another spot or target.
  *                      In Settle it also looks for a line of sight pull point (SearchLosBreak).
  * PullAssigner       - pure; advances the pull phases on every perception refresh.
- *                      A fight with other enemies before the pull starts ends it as
- *                      Interrupted; real failures end it as Cancelled. Settle waits for an
+ *                      A fight with other enemies before the tank's opener went out ends it
+ *                      as Interrupted (after it: they join, OPENED_GRACE_MS); real failures
+ *                      end it as Cancelled. Settle waits for an
  *                      active line of sight pull (casters walked in, turned to someone else,
  *                      or the timeout), after a ranged pull fought in place for the pack to
  *                      reach the tank, and for the opening holds (PullOpening.h: damage
@@ -164,6 +165,12 @@ namespace Commander
         float const LOS_OTHER_CREATURE_CLEARANCE = 20.0f;
         uint32 const LOS_MAX_CASTERS = 2;     // the point must hide from each of them
 
+        // Fight place Auto (PullPlace.h): a corner when the fight estimate (FightLoad) has the
+        // tank below this, or the healer bots ending with less than this share of their mana,
+        // or the fight is not bearable. Not when the pack is brought back.
+        float const CORNER_TANK_PCT = 50.0f;
+        float const CORNER_MANA_LEFT_SHARE = 0.25f;
+
         // Pure: who is not ready. Players count too (the leader's own health matters).
         // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.
         struct Issue
@@ -185,6 +192,10 @@ namespace Commander
         // A ranged pull that has not started the fight by then (no ammo, wrong form, no line of
         // sight anywhere on the way) becomes a normal walk-in pull.
         static constexpr uint32 RANGED_PULL_FALLBACK_MS = 10 * 1000;
+        // Once the opener went out (PullShotState::openedAtMs) an enemy nobody expected that
+        // shows up first does not end the pull: the pulled ones get this long to come (charge
+        // flight, shot travel, a face pulled target turning round). Then it is Interrupted.
+        static constexpr uint32 OPENED_GRACE_MS = 3 * 1000;
         // Return lasts at most the walk at run-back speed (Backpedal) x RETURN_TIME_FACTOR plus
         // RETURN_TIMEOUT_MS, and no more than RETURN_TIMEOUT_MAX_MS.
         static constexpr uint32 RETURN_TIMEOUT_MS = 8 * 1000;

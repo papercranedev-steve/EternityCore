@@ -223,6 +223,11 @@ namespace Commander
         return bot->GetRole() == ROLE_HEALER;
     }
 
+    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
+    {
+        return what == Takeover::CasterChase && bot->me->IsInCombat() && !bot->IsInDuel() && !bot->me->GetTransport();
+    }
+
     void HealerStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {

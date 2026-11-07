@@ -40,6 +40,23 @@ namespace AggroRange
     // `at` is within `reach` of `c` (3D), within its aggro height and in its line of sight.
     // Distance first: the line of sight check only runs for points in range.
     bool Covers(Creature const* c, float reach, Position3 const& at);
+
+    // Where a random wanderer (RANDOM_MOTION_TYPE with a wander distance) walks around:
+    // `radius` 0 = it does not wander (home = its position).
+    struct Wander
+    {
+        Position3 home;
+        float radius = 0.0f;
+    };
+    Wander WanderOf(Creature const* c);
+
+    // Covers, or for a random wanderer: `at` within reach + wander radius of its home, within
+    // its aggro height from there, and in sight from its home (HOME_EYE_HEIGHT above it).
+    // A spot a bot stands on for seconds: the wanderer walks to the edge of its circle
+    // (strat-20261107-152527: the mage stood 20.3 yd from a Ravaged Cadaver's home, aggro range
+    // 17, wander 5; it stepped closer after 14 s and brought its pack of seven).
+    float const HOME_EYE_HEIGHT = 2.0f;
+    bool CoversWandering(Creature const* c, float reach, Position3 const& at);
 }
 }
 

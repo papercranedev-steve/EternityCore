@@ -792,6 +792,21 @@ namespace DevConsole
                 if (plan.pull.rangedShot.spotFailed)
                     SetFieldS(L, "spotFailed", plan.pull.rangedShot.spotFailWhy);
             }
+            // Face pull: the spot {x, y, z}. Corner fight, the opener out (ms), unexpected joiners.
+            if (plan.pull.facePull)
+            {
+                lua_createtable(L, 0, 3);
+                SetFieldN(L, "x", Round2(plan.pull.faceSpot.x));
+                SetFieldN(L, "y", Round2(plan.pull.faceSpot.y));
+                SetFieldN(L, "z", Round2(plan.pull.faceSpot.z));
+                lua_setfield(L, -2, "face");
+            }
+            if (plan.pull.corner)
+                SetFieldB(L, "corner", true);
+            if (plan.pull.rangedShot.openedAtMs && plan.pull.rangedShot.approachSinceMs == plan.pull.phaseSinceMs)
+                SetField(L, "openedAt", plan.pull.rangedShot.openedAtMs);
+            if (!plan.pull.extra.empty())
+                SetField(L, "extra", uint32(plan.pull.extra.size()));
             // Settle: the tank waits for the pack, who still holds (PullOpening.h), and the line
             // of sight pull {state, x, y, z, hiders = [{g, x, y, z}]}.
             if (plan.pull.awaitArrival)
@@ -928,7 +943,7 @@ namespace DevConsole
     }
 
     // u:pull(): the party's running pull as planned (the recorder writes it as a `pull` line):
-    // {t = planned at, phase, target, targetName, ranged, returnToSpot,
+    // {t = planned at, phase, target, targetName, ranged, face, corner, returnToSpot,
     //  expected = [{g, name, aggro (joins by aggro range)}], report = [what the player was told]}.
     // nil without a Commander or a pull.
     static int U_pull(lua_State* L)
@@ -949,6 +964,8 @@ namespace DevConsole
         if (Creature const* target = map->GetCreature(pull.target))
             SetFieldS(L, "targetName", target->GetName());
         SetFieldB(L, "ranged", pull.rangedPullSpell != 0);
+        SetFieldB(L, "face", pull.facePull);
+        SetFieldB(L, "corner", pull.corner);
         SetFieldB(L, "returnToSpot", pull.returnToSpot);
         lua_createtable(L, int(pull.expected.size()), 0);
         int i = 0;

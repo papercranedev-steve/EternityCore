@@ -68,10 +68,18 @@ namespace SafeRoute
         }
     }
 
+    void IdleCreatures::Ignore(std::vector<ObjectGuid> const& guids)
+    {
+        m_idle.erase(std::remove_if(m_idle.begin(), m_idle.end(), [&guids](Idle const& i)
+        {
+            return std::find(guids.begin(), guids.end(), i.creature->GetObjectGuid()) != guids.end();
+        }), m_idle.end());
+    }
+
     bool IdleCreatures::Near(Position3 const& p) const
     {
         for (Idle const& c : m_idle)
-            if (AggroRange::Covers(c.creature, c.reach, p))
+            if (AggroRange::CoversWandering(c.creature, c.reach, p))
                 return true;
         return false;
     }

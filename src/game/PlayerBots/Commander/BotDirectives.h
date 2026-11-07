@@ -49,6 +49,16 @@ namespace Commander
         std::vector<CandidateRecord> candidates;
     };
 
+    // The last bot action the arbiter executed (not pet actions). Lets a module see that its
+    // own order went out, e.g. PullBehavior: the tank's opener was cast.
+    struct ExecutedAction
+    {
+        char const* source = "";       // Proposal::source (a string literal)
+        BotActionType type = BotActionType::Hold;
+        SpellEntry const* spell = nullptr;
+        uint32 timeMs = 0;              // 0 = nothing executed yet
+    };
+
     class BotDirectives
     {
     public:
@@ -177,6 +187,15 @@ namespace Commander
         std::string const& GetLastDecision() const { return m_lastDecision; }
         uint32 GetLastDecisionMs() const { return m_lastDecisionMs; }
 
+        void NoteExecuted(Proposal const& p, uint32 nowMs)
+        {
+            m_lastExecuted.source = p.source;
+            m_lastExecuted.type = p.action.type;
+            m_lastExecuted.spell = p.action.spell;
+            m_lastExecuted.timeMs = nowMs;
+        }
+        ExecutedAction const& GetLastExecuted() const { return m_lastExecuted; }
+
         void RecordDecision(DecisionRecord record)
         {
             m_log.push_back(std::move(record));
@@ -222,6 +241,7 @@ namespace Commander
         uint32 m_lastHealBusyMs = 0;
         uint32 m_lastDecisionMs = 0;
         std::string m_lastDecision;
+        ExecutedAction m_lastExecuted;
         std::vector<ActiveVeto> m_vetoes;
         std::deque<DecisionRecord> m_log;
     };

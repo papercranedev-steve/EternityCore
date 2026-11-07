@@ -174,6 +174,9 @@ public:
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;
+    // In combat a Commander stance module places this bot (Takeover::CasterChase): BeginChasing
+    // does not start the 25 yd caster chase (UsesCasterChase), UpdateAI drops one under way.
+    bool IsCasterChaseControlled() const;
     // In combat the Commander crowd control module decides controls (CrowdControlAssigner):
     // the rotations' own sheep / Blind / Hibernate / Shackle / Banish / Fear / Howl /
     // Intimidating Shout and marked-target controls stand down.

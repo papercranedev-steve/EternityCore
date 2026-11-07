@@ -3189,12 +3189,17 @@ void CombatBotBaseAI::UpdateVisualHonorRankBasedOnItems()
     me->SetByteValue(PLAYER_FIELD_BYTES, PLAYER_FIELD_BYTES_OFFSET_HIGHEST_HONOR_RANK, m_visualHonorRank);
 }
 
+bool CombatBotBaseAI::UsesCasterChase() const
+{
+    return (m_role == ROLE_RANGE_DPS || m_role == ROLE_HEALER) &&
+            IsRangedDamageClass(me->GetClass()) &&
+           !IsAttackSpeedOverridenForm(me->GetShapeshiftForm()) &&
+           (me->GetPowerPercent(POWER_MANA) > 10.0f || me->GetWeaponForAttack(RANGED_ATTACK, true, true));
+}
+
 void CombatBotBaseAI::BeginChasing(Unit* pVictim) const
 {
-    if ((m_role == ROLE_RANGE_DPS || m_role == ROLE_HEALER) &&
-        IsRangedDamageClass(me->GetClass()) &&
-       !IsAttackSpeedOverridenForm(me->GetShapeshiftForm()) &&
-       (me->GetPowerPercent(POWER_MANA) > 10.0f || me->GetWeaponForAttack(RANGED_ATTACK, true, true)))
+    if (UsesCasterChase())
         me->SetCasterChaseDistance(25.0f);
     else if (me->HasDistanceCasterMovement())
         me->SetCasterChaseDistance(0.0f);

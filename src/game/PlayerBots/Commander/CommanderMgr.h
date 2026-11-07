@@ -15,6 +15,7 @@
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
 #include "Commander/Coordination/PullMethod.h"
+#include "Commander/Coordination/PullPlace.h"
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -90,6 +91,10 @@ namespace Commander
         // pull method button). Runtime only, any thread.
         void SetPullMethod(ObjectGuid player, PullMethod method);
         PullMethod GetPullMethod(ObjectGuid player) const;
+        // Where the party fights pulls this player starts (`.partybot ai pullplace`, the addon's
+        // fight place button). Runtime only, any thread (same lock as the pull method).
+        void SetPullPlace(ObjectGuid player, PullPlace place);
+        PullPlace GetPullPlace(ObjectGuid player) const;
 
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);
@@ -125,6 +130,7 @@ namespace Commander
 
         mutable std::mutex m_pullMethodLock;
         std::map<uint64, PullMethod> m_pullMethods;     // player guid -> method, Auto not stored
+        std::map<uint64, PullPlace> m_pullPlaces;       // player guid -> place, Auto not stored
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

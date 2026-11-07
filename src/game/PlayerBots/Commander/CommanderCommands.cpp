@@ -179,18 +179,40 @@ namespace
         Commander::PullMethod method = sCommanderMgr.GetPullMethod(player->GetObjectGuid());
         if (arg && !Commander::ParsePullMethod(arg, method))
         {
-            handler->SendSysMessage("Usage: .partybot ai pullmethod [auto|ranged|melee]");
+            handler->SendSysMessage("Usage: .partybot ai pullmethod [auto|ranged|face|melee]");
             return false;
         }
         if (arg)
             sCommanderMgr.SetPullMethod(player->GetObjectGuid(), method);
+        // Indexed by PullMethod.
         static char const* const meaning[] = {
-            "the tank decides (walks in, opens from range when that brings fewer or the pack is brought back)",
-            "the tank opens from range whenever it has a ranged pull",
+            "the tank decides (walks in; shoots or face pulls when that brings fewer or the pack is brought back)",
+            "the tank shoots whenever it has a ranged pull",
             "the tank always walks in",
+            "the tank stands where the target sees it and lets it come",
         };
         handler->PSendSysMessage("Pull method: %s, %s.", Commander::PullMethodName(method), meaning[uint8(method)]);
         handler->PSendSysMessage("PBOK;;pullmethod;%s", Commander::PullMethodName(method));
+        return true;
+    }
+
+    // .partybot ai pullplace [auto|corner]   (no argument = show)
+    // Replies PBOK;;pullplace;<place> for the addon's fight place button.
+    bool SetPullPlace(ChatHandler* handler, Player* player, char const* arg)
+    {
+        Commander::PullPlace place = sCommanderMgr.GetPullPlace(player->GetObjectGuid());
+        if (arg && !Commander::ParsePullPlace(arg, place))
+        {
+            handler->SendSysMessage("Usage: .partybot ai pullplace [auto|corner]");
+            return false;
+        }
+        if (arg)
+            sCommanderMgr.SetPullPlace(player->GetObjectGuid(), place);
+        handler->PSendSysMessage("Fight place: %s, %s.", Commander::PullPlaceName(place),
+            place == Commander::PullPlace::Corner
+                ? "the tank always takes the pack round a corner, out of the pulled enemies' sight"
+                : "where the pack stands, brought back, or round a corner when the fight looks hard");
+        handler->PSendSysMessage("PBOK;;pullplace;%s", Commander::PullPlaceName(place));
         return true;
     }
 
@@ -303,6 +325,24 @@ namespace
                     SpellName(d.spellId).c_str(), d.points, d.control ? ", cannot act" : "");
         }
 
+        // Crowd control (CrowdControlAssigner); values per option: .partybot ai control
+        if (!plan.controls.empty())
+        {
+            handler->SendSysMessage("Controls:");
+            for (Commander::ControlDuty const& d : plan.controls)
+            {
+                handler->PSendSysMessage("    %s: %s on |cffffcc00%s|r (%.1f pt%s)",
+                    NameOf(map, d.bot).c_str(), SpellName(d.spellId).c_str(), NameOf(map, d.enemy).c_str(),
+                    d.points, d.area ? ", area" : "");
+                for (Commander::DutyResult const& r : plan.duties)
+                    if (r.kind == Commander::DutyKind::CrowdControl && r.target == d.enemy)
+                        for (Commander::DutyPass const& pass : r.passed)
+                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
+                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
+                                NameOf(map, pass.busyTarget).c_str());
+            }
+        }
+
         if (plan.interrupts.empty())
         {
             handler->SendSysMessage("No interrupt duties (no enemy has cast an interruptible spell yet).");
@@ -325,24 +365,6 @@ namespace
             // Better-ranked bots the allocator did not make primary (DutyAllocator.h).
             for (Commander::DutyResult const& r : plan.duties)
             {
-        // Crowd control (CrowdControlAssigner); values per option: .partybot ai control
-        if (!plan.controls.empty())
-        {
-            handler->SendSysMessage("Controls:");
-            for (Commander::ControlDuty const& d : plan.controls)
-            {
-                handler->PSendSysMessage("    %s: %s on |cffffcc00%s|r (%.1f pt%s)",
-                    NameOf(map, d.bot).c_str(), SpellName(d.spellId).c_str(), NameOf(map, d.enemy).c_str(),
-                    d.points, d.area ? ", area" : "");
-                for (Commander::DutyResult const& r : plan.duties)
-                    if (r.kind == Commander::DutyKind::CrowdControl && r.target == d.enemy)
-                        for (Commander::DutyPass const& pass : r.passed)
-                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
-                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                                NameOf(map, pass.busyTarget).c_str());
-            }
-        }
-
                 if (r.kind != Commander::DutyKind::Interrupt || r.target != d.enemy)
                     continue;
                 for (Commander::DutyPass const& pass : r.passed)
@@ -826,12 +848,14 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
-        !strcmp(sub, "pullmethod"))
+        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
         if (!strcmp(sub, "pullmethod"))
             ok = SetPullMethod(this, player, ExtractLiteralArg(&args));
+        else if (!strcmp(sub, "pullplace"))
+            ok = SetPullPlace(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "threat"))
         {
             char const* arg = ExtractLiteralArg(&args);
@@ -871,7 +895,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|melee]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

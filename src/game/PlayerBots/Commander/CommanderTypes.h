@@ -102,6 +102,10 @@ namespace Commander
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
         // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
         CrowdControl,
+        // In combat, the 25 yd chase of casters and ranged weapon users (CombatBotBaseAI::
+        // UsesCasterChase): RangedStanceBehavior (ranged damage dealers) and
+        // HealerStanceBehavior (healers) place them instead.
+        CasterChase,
         Count
     };
 

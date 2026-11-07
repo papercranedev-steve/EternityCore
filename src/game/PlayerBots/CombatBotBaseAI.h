@@ -168,6 +168,10 @@ public:
     uint8 GetHighestHonorRankFromEquippedItems() const;
     void UpdateVisualHonorRankBasedOnItems();
     void BeginChasing(Unit* pVictim) const;
+    // BeginChasing keeps a caster distance (25 yd) instead of running into melee: ranged or
+    // healer role, ranged damage class, not in a form that overrides attack speed, and mana
+    // above 10% or a ranged weapon.
+    bool UsesCasterChase() const;
     bool SummonShamanTotems();
     SpellCastResult CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot);
     bool UseTrinketEffects(bool onlyToBreakCC = false);

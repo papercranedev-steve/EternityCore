@@ -16,6 +16,14 @@
  *                     closer if that step stays out of every idle creature's aggro range
  *                     (ShotSpot::IsClear; else shoot again in place), then walk-in pull.
  *                     The shot steps are kept in PullPlan::rangedShot (TeamPlan.h).
+ *                     Face pull (PullPlan::facePull): walk to PullPlan::faceSpot the same way,
+ *                     then stand there facing the target and do nothing; not noticed within
+ *                     FACE_WAIT_MS: walk-in pull.
+ *                     When the opener went out (pull spell or Charge executed, standing on the
+ *                     face pull spot, or inside the target's aggro range) it writes
+ *                     PullShotState::openedAtMs: PullAssigner no longer calls the pull off.
+ *                     A corner fight (PullPlan::corner) does not charge either: the tank walks
+ *                     back to the corner afterwards.
  *           Return:   walk backwards to the fight spot facing the pack (Backpedal.h: parry, block,
  *                     swings and the rotation keep working); the enemies follow. Forward walk
  *                     only when no backwards path is found.
@@ -65,6 +73,9 @@ namespace Commander
         // (before PullAssigner::RANGED_PULL_FALLBACK_MS).
         static constexpr uint32 RANGED_NO_COMBAT_MS = 3000;
         static constexpr float RANGED_RETRY_STEP_YD = 5.0f;
+        // Face pull: on the spot, the target has not noticed the tank this long (it wandered
+        // away, line of sight from its new place): walk in.
+        static constexpr uint32 FACE_WAIT_MS = 2500;
         // Walking backwards (Return, line of sight point): each order lasts this long and is
         // proposed again every tick; ends this long after the phase ends.
         static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;

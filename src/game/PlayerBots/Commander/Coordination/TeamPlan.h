@@ -79,12 +79,19 @@ namespace Commander
         std::string name;
     };
 
-    // Ranged pull shot steps of one Approach (PullBehavior). A new Approach (phaseSinceMs
-    // changed: held back and out again, or the brain gave a new spot or target) starts over.
+    // The tank's steps of one Approach (PullBehavior): the walk to the shot or face pull spot,
+    // the shots, and when the opener went out. A new Approach (phaseSinceMs changed: held back
+    // and out again, or the brain gave a new spot or target) starts over.
     struct PullShotState
     {
         uint32 approachSinceMs = 0;     // PullPlan::phaseSinceMs of its Approach
-        Position3 standAt;              // PullPlan::rangedSpot, or the retry step's point
+        // The opener went out: the pull spell or Charge was cast (BotDirectives::GetLastExecuted),
+        // the tank stands on its face pull spot, or it is inside the target's aggro range. From
+        // then on the pull cannot be called off; PullAssigner no longer ends it as Interrupted
+        // when an enemy it did not expect shows up first (strat-20261107-152527: two Plagued
+        // Insects from a Stratholme crate reached the tank 0.4 s before the charged target did).
+        uint32 openedAtMs = 0;
+        Position3 standAt;              // PullPlan::rangedSpot / faceSpot, or the retry step's point
         uint32 walkSinceMs = 0;         // first walk order to standAt, 0 = none yet
         uint32 walkBudgetMs = 0;        // standAt not reached by then: spot failed (unreachable)
         uint32 shotAtMs = 0;            // first time in position, or the end of the retry walk; 0 = none yet
@@ -179,6 +186,25 @@ namespace Commander
         // The brain only reads it (spotFailed, standAt) and answers by changing rangedSpot or
         // the target and starting a new Approach.
         mutable PullShotState rangedShot;
+
+        // Face pull (PullMethod::Face, or chosen by Auto): the tank walks to faceSpot, inside the
+        // target's aggro range and in its sight (Perception/ShotSpot.h FindFace), and does
+        // nothing there: the target sees it and comes. Not noticed within
+        // PullBehavior::FACE_WAIT_MS: walks in.
+        bool facePull = false;
+        Position3 faceSpot;
+        // Opens from a distance (shot or face pull): fought in place, the tank waits where it
+        // opened (awaitArrival).
+        bool OpensFromAfar() const { return rangedPullSpell || facePull; }
+
+        // Fight at a corner (PullPlace.h): planned by PullPlanner::Plan (the player chose it, or
+        // the fight estimate is hard). Once the fight started, SearchLosBreak hides the tank
+        // from the pulled enemies standing away from it, not only from casters standing back.
+        bool corner = false;
+
+        // Enemies that were not expected and joined after the opener went out (openedAtMs).
+        // Added to `expected` too: the opening holds and the line of sight pull count them.
+        std::vector<ObjectGuid> extra;
 
         // Ranged pull fought where the pack stands (not brought back): Settle starts with the
         // tank staying at arrivalPoint (where it shot) until the pack came, so the party does
@@ -389,6 +415,17 @@ namespace Commander
         bool control = false;        // the member cannot act: urgent
     };
 
+    // One control spell to put on an enemy now, and who casts it (CrowdControlAssigner).
+    struct ControlDuty
+    {
+        ObjectGuid enemy;            // the target; an area spell (radius around the caster): the first enemy it takes
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        float points = 0.0f;         // net worth (Perception/ControlValue.h)
+        bool area = false;
+        bool breaksOnDamage = false;
+    };
+
     // Role the "roles" assigner gives a bot whose role is not locked (RoleAssigner.h).
     struct RoleDuty
     {
@@ -408,23 +445,17 @@ namespace Commander
         FocusTarget focus;
         std::vector<InterceptDuty> intercepts;
         std::vector<DispelDuty> dispels;
+        std::vector<ControlDuty> controls;
+        // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
+        // ThreatBehavior): enemies about to get a control that breaks on damage
+        // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
+        std::vector<ObjectGuid> protectedEnemies;
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
         std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
-
-    // One control spell to put on an enemy now, and who casts it (CrowdControlAssigner).
-    struct ControlDuty
-    {
-        ObjectGuid enemy;            // the target; an area spell (radius around the caster): the first enemy it takes
-        ObjectGuid bot;
-        uint32 spellId = 0;
-        float points = 0.0f;         // net worth (Perception/ControlValue.h)
-        bool area = false;
-        bool breaksOnDamage = false;
-    };
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const
         {
@@ -441,15 +472,6 @@ namespace Commander
                     return &d;
             return nullptr;
         }
-    };
-}
-
-#endif
-        std::vector<ControlDuty> controls;
-        // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
-        // ThreatBehavior): enemies about to get a control that breaks on damage
-        // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
-        std::vector<ObjectGuid> protectedEnemies;
 
         ControlDuty const* FindControlFor(ObjectGuid bot) const
         {
@@ -467,3 +489,7 @@ namespace Commander
                 return true;
             return std::find(protectedEnemies.begin(), protectedEnemies.end(), e.guid) != protectedEnemies.end();
         }
+    };
+}
+
+#endif

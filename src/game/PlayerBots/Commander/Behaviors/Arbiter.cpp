@@ -266,6 +266,7 @@ namespace Commander
                     rotationMayRun = LetsRotationRun(p.action.type);
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
+                    directives.NoteExecuted(p, now);
                 }
                 else
                     r.result = CandidateRecord::Result::Failed;

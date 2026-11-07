@@ -224,6 +224,12 @@ bool PartyBotAI::IgnoresCrowdControlMarks() const
     return !IsInDuel() && sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
 }
 
+bool PartyBotAI::IsCasterChaseControlled() const
+{
+    return m_directives && me->IsInCombat() && UsesCasterChase() &&
+           m_directives->IsTakenOver(Commander::Takeover::CasterChase, WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsThreatDropControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
@@ -356,6 +362,11 @@ void PartyBotAI::BeginChasing(Unit* pVictim) const
     // Fix: the rogue chased its casters back into a patrol's path after the party moved off
     // it (strat-20261102-225354). The Commander patrol guard brings them out instead.
     if (IsInPatrolPath(pVictim))
+        return;
+    // Fix: the 25 yd chase walked the mage to 20 yd from a wandering Ravaged Cadaver's home
+    // (aggro range 17, wander 5); it came after 14 s with its pack of seven
+    // (strat-20261107-152527). The Commander stance modules pick a spot instead.
+    if (IsCasterChaseControlled())
         return;
 
     CombatBotBaseAI::BeginChasing(pVictim);
@@ -1455,6 +1466,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // the stance module picks the spot.
     if (!pVictim && HasCombatStance() && !IsMovementHeld() &&
         me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+        me->GetMotionMaster()->MoveIdle();
+    // A caster chase started before the stance module took over (fight start): stop it, the
+    // module places the bot.
+    if (pVictim && IsCasterChaseControlled() && !IsMovementHeld() &&
+        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
         me->GetMotionMaster()->MoveIdle();
 
     if (!me->IsMoving() && !IsMovementHeld())

@@ -246,6 +246,22 @@ namespace Commander
         return itr != m_pullMethods.end() ? itr->second : PullMethod::Auto;
     }
 
+    void CommanderMgr::SetPullPlace(ObjectGuid player, PullPlace place)
+    {
+        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        if (place == PullPlace::Auto)
+            m_pullPlaces.erase(player.GetRawValue());
+        else
+            m_pullPlaces[player.GetRawValue()] = place;
+    }
+
+    PullPlace CommanderMgr::GetPullPlace(ObjectGuid player) const
+    {
+        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        auto itr = m_pullPlaces.find(player.GetRawValue());
+        return itr != m_pullPlaces.end() ? itr->second : PullPlace::Auto;
+    }
+
     void CommanderMgr::RecordBotTick(uint64 micros)
     {
         m_statTicks.fetch_add(1, std::memory_order_relaxed);

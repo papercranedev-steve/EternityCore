@@ -2,15 +2,19 @@
 #include "Commander/Coordination/PullPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Perception/AggroRange.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ShotSpot.h"
+#include "Commander/BotDirectives.h"
 #include "PartyBotAI.h"
+#include "Creature.h"
 #include "DBCStores.h"
 #include "Map.h"
 #include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace Commander
 {
@@ -34,7 +38,7 @@ namespace Commander
             {
                 s = PullShotState();
                 s.approachSinceMs = pull.phaseSinceMs;
-                s.standAt = pull.rangedSpot;
+                s.standAt = pull.facePull ? pull.faceSpot : pull.rangedSpot;
             }
             return s;
         }
@@ -124,14 +128,15 @@ namespace Commander
             }
         }
 
-        // No Charge / Intercept while the tank goes out to bring the pack back.
-        Proposal NoCharge()
+        // No Charge / Intercept while the tank goes out to bring the pack back or to take it to
+        // a corner.
+        Proposal NoCharge(char const* reason = "bringing the pack back")
         {
             Proposal p;
             p.kind = ProposalKind::Veto;
             p.tier = ProposalTier::Assigned;
             p.source = "pull";
-            p.reason = "bringing the pack back";
+            p.reason = reason;
             p.veto.type = VetoType::GapCloser;
             return p;
         }
@@ -146,6 +151,95 @@ namespace Commander
         {
             float const dx = a.x - b.x, dy = a.y - b.y;
             return std::sqrt(dx * dx + dy * dy);
+        }
+
+        enum class StandWalk : uint8
+        {
+            Arrived,
+            Walking,    // a proposal was pushed
+            Failed,     // not there in time (SpotFailed set); nothing pushed
+        };
+
+        // Walk to PullShotState::standAt (pathfinding), shared by the shot and the face pull.
+        StandWalk WalkToStand(PartyBotAI const* bot, PullShotState& s, uint32 now, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            Position3 const here = PositionOf(me);
+            float const toStand = Distance2d(here, s.standAt);
+            bool const arrived = toStand <= PullBehavior::SPOT_ARRIVED_YD ||
+                (toStand <= PullBehavior::SPOT_NEAR_YD && !me->IsMoving());
+            if (arrived)
+                return StandWalk::Arrived;
+            // The retry window starts once the tank stands.
+            if (s.retried)
+                s.shotAtMs = now;
+            if (!s.walkSinceMs)
+            {
+                s.walkSinceMs = now;
+                s.walkBudgetMs = uint32(toStand / PullBehavior::RUN_SPEED_YD_PER_SEC * 1000.0f *
+                                        PullBehavior::SPOT_WALK_TIME_FACTOR) + PullBehavior::SPOT_WALK_EXTRA_MS;
+            }
+            else if (WorldTimer::getMSTimeDiff(s.walkSinceMs, now) > s.walkBudgetMs)
+            {
+                SpotFailed(s, "cannot get to the spot");
+                return StandWalk::Failed;
+            }
+            // Still walking: do not restart the spline every tick.
+            if (me->IsMoving() && bot->IsMovementHeld())
+                out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+            else
+                out.push_back(MoveTo(s.standAt, toStand * PullBehavior::SPOT_WALK_TIME_FACTOR));
+            return StandWalk::Walking;
+        }
+
+        // The opener went out this Approach (PullShotState::openedAtMs): a pull proposal cast
+        // (the pull spell, Charge) executed since the Approach began, or the tank stands inside
+        // the target's aggro range (walk-in, face pull: it notices the tank).
+        void NoteOpened(PartyBotAI const* bot, PullPlan const& pull, Unit const* target, PullShotState& s, uint32 now)
+        {
+            if (s.openedAtMs)
+                return;
+            ExecutedAction const& last = bot->Directives().GetLastExecuted();
+            bool const cast = last.timeMs && last.type == BotActionType::Cast && !strcmp(last.source, "pull") &&
+                WorldTimer::getMSTimeDiff(pull.phaseSinceMs, last.timeMs) <= WorldTimer::getMSTimeDiff(pull.phaseSinceMs, now);
+            bool inReach = false;
+            if (Creature const* c = target->ToCreature())
+                inReach = AggroRange::Covers(c, AggroRange::Reach(c, bot->me, 0.0f), PositionOf(bot->me));
+            if (cast || inReach)
+                s.openedAtMs = now;
+        }
+
+        // Face pull (PullPlan::facePull): walk to the spot, then stand there doing nothing (a
+        // Hold: the rotation does not run, so no attack or chase starts) until the target
+        // notices. Returns false when the tank should walk in instead (not there in time, not
+        // noticed within FACE_WAIT_MS).
+        bool ProposeFacePull(PartyBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
+        {
+            uint32 const now = WorldTimer::getMSTime();
+            PullShotState& s = ShotState(pull);
+            if (s.walkIn)
+                return false;
+            switch (WalkToStand(bot, s, now, out))
+            {
+                case StandWalk::Walking:
+                    return true;
+                case StandWalk::Failed:
+                    s.walkIn = true;
+                    return false;
+                case StandWalk::Arrived:
+                    break;
+            }
+            if (!s.shotAtMs)
+                s.shotAtMs = now;
+            if (!s.openedAtMs)
+                s.openedAtMs = now;
+            if (!target->IsInCombat() && WorldTimer::getMSTimeDiff(s.shotAtMs, now) > PullBehavior::FACE_WAIT_MS)
+            {
+                s.walkIn = true;
+                return false;
+            }
+            out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+            return true;
         }
 
         // Ranged pull (PullPlan::rangedPullSpell): walk to the shot spot the brain picked
@@ -186,36 +280,17 @@ namespace Commander
             }
 
             // Not on the stand point yet: walk there (pathfinding).
-            Position3 const here = PositionOf(me);
-            float const toStand = Distance2d(here, s.standAt);
-            bool const arrived = toStand <= PullBehavior::SPOT_ARRIVED_YD ||
-                (toStand <= PullBehavior::SPOT_NEAR_YD && !me->IsMoving());
-            if (!arrived)
+            switch (WalkToStand(bot, s, now, out))
             {
-                // The retry window starts once the tank stands.
-                if (s.retried)
-                    s.shotAtMs = now;
-                if (!s.walkSinceMs)
-                {
-                    s.walkSinceMs = now;
-                    s.walkBudgetMs = uint32(toStand / PullBehavior::RUN_SPEED_YD_PER_SEC * 1000.0f *
-                                            PullBehavior::SPOT_WALK_TIME_FACTOR) + PullBehavior::SPOT_WALK_EXTRA_MS;
-                }
-                else if (WorldTimer::getMSTimeDiff(s.walkSinceMs, now) > s.walkBudgetMs)
-                {
-                    SpotFailed(s, "cannot get to the spot");
+                case StandWalk::Walking:
+                    return true;
+                case StandWalk::Failed:
                     out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
                     return true;
-                }
-                // Still walking: do not restart the spline every tick.
-                if (me->IsMoving() && bot->IsMovementHeld())
-                {
-                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
-                    return true;
-                }
-                out.push_back(MoveTo(s.standAt, toStand * PullBehavior::SPOT_WALK_TIME_FACTOR));
-                return true;
+                case StandWalk::Arrived:
+                    break;
             }
+            Position3 const here = PositionOf(me);
 
             if (distance > pull.rangedPullRange)
             {
@@ -293,16 +368,22 @@ namespace Commander
                 Unit* target = me->GetMap()->GetUnit(pull.target);
                 if (!target || !target->IsAlive())
                     return;
+                NoteOpened(bot, pull, target, ShotState(pull), WorldTimer::getMSTime());
                 if (pull.returnToSpot)
                     out.push_back(NoCharge());
+                else if (pull.corner)
+                    out.push_back(NoCharge("taking the pack to a corner"));
                 if (pull.rangedPullSpell && ProposeRangedPull(bot, pull, target, out))
+                    return;
+                if (pull.facePull && ProposeFacePull(bot, pull, target, out))
                     return;
                 if (me->GetVictim() != target)
                     out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Attack, pull.target));
                 // Walk-in pull fought where the pack stands: charge in once it is the victim
                 // (ClassKit::OpenerCharge; a stance swap first when needed). Bringing the pack
-                // back gains nothing from it: the tank would only have to walk back further.
-                else if (!pull.returnToSpot)
+                // back or to a corner gains nothing from it: the tank would only have to walk
+                // back further.
+                else if (!pull.returnToSpot && !pull.corner)
                     if (SpellEntry const* charge = bot->Kit().OpenerCharge())
                         if (bot->CanCastWithStance(target, charge))
                         {

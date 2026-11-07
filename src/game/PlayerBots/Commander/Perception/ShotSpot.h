@@ -25,6 +25,11 @@
  *    on the way).
  * At most MAX_LOS_CHECKS line of sight checks and MAX_PATHS path searches per call.
  *
+ * FindFace: a face pull spot (2026-11-07, user: "let the target see the tank, it comes by
+ * itself; do not run up to it"). Same checks, on rings FACE_INSIDE inside the target's own
+ * aggro range against the tank (never closer than its combat reach + FACE_MIN_GAP), the target
+ * and Request::ignore (its group, which comes anyway) left out of the idle creature checks.
+ *
  * Facts only, no decisions: PullPlanner picks the target with it, PullBehavior walks there.
  * Reads live creatures and pathfinds: map thread, or the world thread while maps are idle.
  */
@@ -58,14 +63,21 @@ namespace ShotSpot
     float const MAX_DETOUR = 1.8f;
     uint32 const MAX_LOS_CHECKS = 16;
     uint32 const MAX_PATHS = 4;
+    // Face pull rings: this far inside the target's aggro range (the server checks on movement
+    // updates; the target may have stepped back a little), first ring first.
+    float const FACE_INSIDE[] = { 3.0f, 6.0f };
+    // Closer than the target's combat reach + this is a walk-in, not a face pull.
+    float const FACE_MIN_GAP = 5.0f;
 
     struct Request
     {
         Creature const* target = nullptr;
         Player* shooter = nullptr;          // walks there from where it stands now
-        float maxRange = 0.0f;              // combat distance the shot is used from
+        float maxRange = 0.0f;              // combat distance the shot is used from (Find)
         float minRange = 0.0f;              // the spell's minimum range (0 = none)
         std::vector<Position3> avoid;       // ruled out by the caller (within AVOID_RADIUS)
+        // Creatures left out of the idle creature checks (they come with the pull anyway).
+        std::vector<ObjectGuid> ignore;
     };
 
     // Why no spot was found.
@@ -91,6 +103,8 @@ namespace ShotSpot
     float const NO_CREATURE_CLEARANCE = 1000.0f;
 
     bool Find(Map* map, Request const& request, Spot& out, Failure* why = nullptr);
+    // Face pull spot (see above); Spot::range = the distance from the target's centre.
+    bool FindFace(Map* map, Request const& request, Spot& out, Failure* why = nullptr);
 
     // Live check for a step the shooter is about to take: no idle creature near `target`
     // reaches `at` (same rule as a candidate's aggro check).

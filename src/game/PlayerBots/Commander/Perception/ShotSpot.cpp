@@ -54,7 +54,8 @@ namespace ShotSpot
             return p;
         }
 
-        std::vector<Idle> ScanIdle(Creature const* center, Player* who, float radius)
+        std::vector<Idle> ScanIdle(Creature const* center, Player* who, float radius,
+                                   std::vector<ObjectGuid> const& ignore = std::vector<ObjectGuid>())
         {
             std::list<Creature*> found;
             IdleCheck check(who);
@@ -64,20 +65,16 @@ namespace ShotSpot
             std::vector<Idle> out;
             for (Creature* c : found)
             {
+                if (std::find(ignore.begin(), ignore.end(), c->GetObjectGuid()) != ignore.end())
+                    continue;
                 Idle i;
                 i.reach = AggroRange::Reach(c, who, AGGRO_MARGIN);
                 if (i.reach <= 0.0f)
                     continue;
                 i.pos = PositionOf(c);
-                i.home = i.pos;
-                if (c->GetDefaultMovementType() == RANDOM_MOTION_TYPE && c->GetWanderDistance() > 0.0f)
-                {
-                    Position const& h = c->GetHomePosition();
-                    i.home.x = h.x;
-                    i.home.y = h.y;
-                    i.home.z = h.z;
-                    i.wander = c->GetWanderDistance();
-                }
+                AggroRange::Wander const w = AggroRange::WanderOf(c);
+                i.home = w.home;
+                i.wander = w.radius;
                 i.flies = c->CanFly();
                 out.push_back(i);
             }
@@ -106,99 +103,148 @@ namespace ShotSpot
             // can reach a candidate from at most its aggro range away.
             return maxRange + 5.0f + AggroRange::MAX_ATTACK_DISTANCE;
         }
+
+        // One ring of candidates: `radius` from the target's centre, reported as `range`.
+        struct Ring
+        {
+            float radius;
+            float range;
+        };
+
+        // The candidate search shared by Find and FindFace: rings in order, TURNS directions
+        // from the shooter's side; ground, the caller's avoid list, idle creatures (without
+        // request.ignore), the target's sight, the walk.
+        bool Search(Map* map, Request const& request, std::vector<Ring> const& rings, Spot& out, Failure* why)
+        {
+            // The furthest check any candidate got to (enum order) says why none was found.
+            Failure failure = Failure::None;
+            auto reached = [&failure](Failure stage) { failure = std::max(failure, stage); };
+            auto fail = [&why, &failure]()
+            {
+                if (why)
+                    *why = failure;
+                return false;
+            };
+            Creature const* target = request.target;
+            Player* shooter = request.shooter;
+            Position3 const t = PositionOf(target);
+            Position3 const s = PositionOf(shooter);
+            float const base = std::atan2(s.y - t.y, s.x - t.x);
+            float maxRadius = 0.0f;
+            for (Ring const& r : rings)
+                maxRadius = std::max(maxRadius, r.radius);
+
+            std::vector<Idle> const idle = ScanIdle(target, shooter, ScanRadius(maxRadius), request.ignore);
+            // The walk check (SafeRoute) uses the server's rule (line of sight included) around the target.
+            SafeRoute::IdleCreatures walkIdle(shooter, target, AGGRO_MARGIN, ScanRadius(maxRadius));
+            walkIdle.Ignore(request.ignore);
+
+            uint32 losChecks = 0;
+            uint32 paths = 0;
+            for (Ring const& ring : rings)
+            {
+                for (float const turn : TURNS)
+                {
+                    Position3 p;
+                    p.x = t.x + std::cos(base + turn) * ring.radius;
+                    p.y = t.y + std::sin(base + turn) * ring.radius;
+                    float const ground = map->GetHeight(p.x, p.y, t.z + 2.0f);
+                    if (ground <= INVALID_HEIGHT || std::fabs(ground - t.z) > MAX_HEIGHT_DIFF)
+                    {
+                        reached(Failure::NoGround);
+                        continue;
+                    }
+                    p.z = ground;
+
+                    if (std::any_of(request.avoid.begin(), request.avoid.end(),
+                        [&p](Position3 const& a) { return SafeRoute::Distance2d(a, p) < AVOID_RADIUS; }))
+                        continue;
+
+                    float const clearance = Clearance(idle, p);
+                    if (clearance < 0.0f)
+                    {
+                        reached(Failure::Aggro);
+                        continue;
+                    }
+
+                    if (losChecks >= MAX_LOS_CHECKS)
+                    {
+                        reached(Failure::Budget);
+                        return fail();
+                    }
+                    ++losChecks;
+                    if (!target->IsWithinLOS(p.x, p.y, p.z, true, UNIT_HEIGHT))
+                    {
+                        reached(Failure::NoSight);
+                        continue;
+                    }
+
+                    if (paths >= MAX_PATHS)
+                    {
+                        reached(Failure::Budget);
+                        return fail();
+                    }
+                    ++paths;
+                    if (!SafeRoute::PathIsSafe(shooter, walkIdle, p, MAX_DETOUR))
+                    {
+                        reached(Failure::NoPath);
+                        continue;
+                    }
+
+                    out.at = p;
+                    out.range = ring.range;
+                    out.clearance = clearance;
+                    if (why)
+                        *why = Failure::None;
+                    return true;
+                }
+            }
+            return fail();
+        }
     }
 
     bool Find(Map* map, Request const& request, Spot& out, Failure* why)
     {
-        // The furthest check any candidate got to (enum order) says why none was found.
-        Failure failure = Failure::None;
-        auto reached = [&failure](Failure stage) { failure = std::max(failure, stage); };
-        auto fail = [&why, &failure]()
-        {
-            if (why)
-                *why = failure;
+        if (why)
+            *why = Failure::None;
+        if (!map || !request.target || !request.shooter || request.maxRange <= 0.0f)
             return false;
-        };
-        Creature const* target = request.target;
-        Player* shooter = request.shooter;
-        if (!map || !target || !shooter || request.maxRange <= 0.0f)
-            return fail();
-
-        Position3 const t = PositionOf(target);
-        Position3 const s = PositionOf(shooter);
-        float const reaches = target->GetCombatReach() + shooter->GetCombatReach();
-        float const base = std::atan2(s.y - t.y, s.x - t.x);
+        float const reaches = request.target->GetCombatReach() + request.shooter->GetCombatReach();
         float const closest = request.minRange > 0.0f ? request.minRange + MIN_RANGE_EXTRA : 0.0f;
-
-        std::vector<Idle> const idle = ScanIdle(target, shooter, ScanRadius(request.maxRange));
-        // The walk check (SafeRoute) uses the server's rule (line of sight included) around the target.
-        SafeRoute::IdleCreatures const walkIdle(shooter, target, AGGRO_MARGIN, ScanRadius(request.maxRange));
-
-        uint32 losChecks = 0;
-        uint32 paths = 0;
+        std::vector<Ring> rings;
         for (float const offset : RING_OFFSETS)
         {
             float const range = request.maxRange - offset;
             if (range < closest || range <= 0.0f)
                 continue;
-            float const radius = range + reaches;
-            for (float const turn : TURNS)
-            {
-                Position3 p;
-                p.x = t.x + std::cos(base + turn) * radius;
-                p.y = t.y + std::sin(base + turn) * radius;
-                float const ground = map->GetHeight(p.x, p.y, t.z + 2.0f);
-                if (ground <= INVALID_HEIGHT || std::fabs(ground - t.z) > MAX_HEIGHT_DIFF)
-                {
-                    reached(Failure::NoGround);
-                    continue;
-                }
-                p.z = ground;
-
-                if (std::any_of(request.avoid.begin(), request.avoid.end(),
-                    [&p](Position3 const& a) { return SafeRoute::Distance2d(a, p) < AVOID_RADIUS; }))
-                    continue;
-
-                float const clearance = Clearance(idle, p);
-                if (clearance < 0.0f)
-                {
-                    reached(Failure::Aggro);
-                    continue;
-                }
-
-                if (losChecks >= MAX_LOS_CHECKS)
-                {
-                    reached(Failure::Budget);
-                    return fail();
-                }
-                ++losChecks;
-                if (!target->IsWithinLOS(p.x, p.y, p.z, true, UNIT_HEIGHT))
-                {
-                    reached(Failure::NoSight);
-                    continue;
-                }
-
-                if (paths >= MAX_PATHS)
-                {
-                    reached(Failure::Budget);
-                    return fail();
-                }
-                ++paths;
-                if (!SafeRoute::PathIsSafe(shooter, walkIdle, p, MAX_DETOUR))
-                {
-                    reached(Failure::NoPath);
-                    continue;
-                }
-
-                out.at = p;
-                out.range = range;
-                out.clearance = clearance;
-                if (why)
-                    *why = Failure::None;
-                return true;
-            }
+            rings.push_back({ range + reaches, range });
         }
-        return fail();
+        return Search(map, request, rings, out, why);
+    }
+
+    bool FindFace(Map* map, Request const& request, Spot& out, Failure* why)
+    {
+        if (why)
+            *why = Failure::None;
+        if (!map || !request.target || !request.shooter)
+            return false;
+        // The target's own aggro range against the tank, centre to centre (AggroRange::Covers).
+        float const reach = AggroRange::Reach(request.target, request.shooter, 0.0f);
+        float const closest = request.target->GetCombatReach() + FACE_MIN_GAP;
+        std::vector<Ring> rings;
+        for (float const inside : FACE_INSIDE)
+        {
+            float const radius = reach - inside;
+            if (radius >= closest)
+                rings.push_back({ radius, radius });
+        }
+        if (rings.empty())
+            return false;
+        Request own = request;
+        // The target is meant to see the tank there.
+        if (std::find(own.ignore.begin(), own.ignore.end(), request.target->GetObjectGuid()) == own.ignore.end())
+            own.ignore.push_back(request.target->GetObjectGuid());
+        return Search(map, own, rings, out, why);
     }
 
     bool IsClear(Creature const* target, Player* shooter, Position3 const& at)

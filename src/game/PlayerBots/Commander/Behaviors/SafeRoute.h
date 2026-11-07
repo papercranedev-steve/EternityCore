@@ -4,8 +4,10 @@
  * Uses what the server knows: positions and aggro ranges of every hostile creature that is not
  * fighting yet (a player would know the room from looking at it). A point is unsafe when an idle
  * creature would attack the bot standing there (AggroRange.h: the server's proximity aggro rule,
- * line of sight included) with its range widened by the caller's margin; a route is unsafe when
- * the end point or any point sampled along the path every PATH_SAMPLE_STEP is.
+ * line of sight included) with its range widened by the caller's margin, also from anywhere in
+ * a random wanderer's circle (AggroRange::CoversWandering, since 2026-11-07: same rule as the
+ * shot spots); a route is unsafe when the end point or any point sampled along the path every
+ * PATH_SAMPLE_STEP is.
  *
  * Shared by FleePoint (where to run from a melee enemy), HealerStanceBehavior (where a healer
  * stands in combat) and FollowSpot (where a bot follows the leader). Map thread of the bot:
@@ -43,9 +45,13 @@ namespace Commander
         public:
             explicit IdleCreatures(Player* me, WorldObject const* center = nullptr,
                                    float margin = IDLE_MARGIN, float scanRadius = SCAN_RADIUS);
-            // A creature would attack the bot standing at `p`.
+            // A creature would attack the bot standing at `p`, or would once it wandered
+            // (AggroRange::CoversWandering).
             bool Near(Position3 const& p) const;
             bool Empty() const { return m_idle.empty(); }
+            // Leave these out (they come anyway: the pull target and its group, for the walk
+            // to a face pull spot).
+            void Ignore(std::vector<ObjectGuid> const& guids);
 
         private:
             struct Idle
