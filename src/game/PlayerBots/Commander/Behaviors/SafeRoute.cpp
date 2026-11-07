@@ -63,9 +63,20 @@ namespace SafeRoute
             Idle i;
             i.creature = c;
             i.reach = AggroRange::Reach(c, me, margin);
+            i.home = AggroRange::WanderOf(c).home;
             if (i.reach > 0.0f)
                 m_idle.push_back(i);
         }
+    }
+
+    IdleCreatures IdleCreatures::LeavingFrom(Position3 const& from) const
+    {
+        IdleCreatures out;
+        out.m_idle = m_idle;
+        for (Idle& i : out.m_idle)
+            if (AggroRange::CoversWandering(i.creature, i.reach, from))
+                i.leaveGap = Distance2d(from, i.home);
+        return out;
     }
 
     void IdleCreatures::Ignore(std::vector<ObjectGuid> const& guids)
@@ -79,8 +90,13 @@ namespace SafeRoute
     bool IdleCreatures::Near(Position3 const& p) const
     {
         for (Idle const& c : m_idle)
+        {
+            // Walking out: no closer to it than the start.
+            if (c.leaveGap >= 0.0f && Distance2d(p, c.home) >= c.leaveGap - LEAVE_TOLERANCE)
+                continue;
             if (AggroRange::CoversWandering(c.creature, c.reach, p))
                 return true;
+        }
         return false;
     }
 

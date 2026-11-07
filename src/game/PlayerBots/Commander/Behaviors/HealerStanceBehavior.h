@@ -15,13 +15,23 @@
  * tanks within heal range of a spot count TANK_COVER_MULT members in its order.
  *
  * When to move (checked every tick, nothing otherwise):
+ *  - the healer stands where an idle creature would attack it, also once a wanderer walked to
+ *    the edge of its circle (SafeRoute::IdleCreatures::Near; added 2026-11-07,
+ *    strat-20261107-164236: the priest stood 17.8 yd from a wandering Ravaged Cadaver's home,
+ *    reach 17 + 5 margin + wander 5, its group of seven came 4 s later and killed her). A
+ *    constraint as in the "rangedstance" module: tier Urgent, score -walk seconds, so it wins
+ *    over the routine heal orders (Assigned) and an emergency heal order (Urgent, score > 0)
+ *    still goes first. The walk out may pass inside the circles that cover the start, no
+ *    closer to their homes (IdleCreatures::LeavingFrom); the new spot must be outside all;
  *  - the anchor is farther than HEAL_RANGE or out of line of sight ("tank out of reach"), or
  *  - an enemy that is not hitting the healer stands within TRIGGER_ENEMY_GAP ("too close").
  *    Enemies hitting the healer are left to the rotation (Fade) and the escape module (run
  *    to the tank: EscapeBehavior.h).
  * Not while: the retreat runs, the pull is in Approach / Return, rooted, casting (the heal
- * finishes first), a member below URGENT_HEALTH_PCT is healable from here (heal first), or a
- * MoveTo is already under way (then Hold so the rotation's first cast does not stop the walk).
+ * finishes first), a member below URGENT_HEALTH_PCT is healable from here (heal first; not
+ * when standing in an idle creature's reach, see above), or a MoveTo is already under way
+ * (then Hold so the rotation's first cast does not stop the walk; tier Urgent while still in
+ * an idle creature's reach).
  *
  * Where: rings around the anchor (STRICT_RADII), starting straight behind it as seen from the
  * enemies near it, then turning both ways. A point is kept when:
@@ -37,7 +47,8 @@
  * Order: walk distance (-1 per yd), other members within heal range of the point
  * (+COVER_WEIGHT each), enemy distance (+GAP_WEIGHT per yd up to GAP_CAP). The map checks
  * (height, line of sight, pathfinding) run for at most MAX_GEOMETRY_CHECKS points per tick.
- * Nothing found and the anchor out of reach: walk to the anchor itself if that path is safe.
+ * Nothing found and the anchor out of reach, or the healer in an idle creature's reach: walk
+ * to the anchor itself if it stands outside every idle reach and that path is safe.
  *
  * Value (points): benefit - cost, horizon H = min(HORIZON_SEC, fight remaining), at least 1 s.
  *  benefit = Value::LostAction(healer, H) when the anchor is out of reach (the healer cannot do

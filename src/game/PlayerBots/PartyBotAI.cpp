@@ -1417,6 +1417,35 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             return;
     }
 
+    // Original movement the Commander took over or checks, before the Commander hook: a tick in
+    // which a module acts (a cast, the pull's hold) returns from the hook. Below it, the priest
+    // kept following the player about 2.5 s into the fight, and out of combat under the pull's
+    // hold the follow spot went unchecked; she stopped 17.8 yd from a wanderer's home and its
+    // group of seven came (strat-20261107-164236).
+    {
+        Unit* pVictim = me->GetVictim();
+        // (also while walking: the follow point moves with the leader)
+        if (!pVictim && !IsMovementHeld() && !HasCombatStance())
+            KeepFollowSpotSafe(pLeader);
+
+        // Fix: a healer that was following when the fight started kept following until it stood
+        // still: the priest walked 15 yd behind the player into Magistrate Barthilas' Crowd
+        // Pummel (strat-20261101-214026). Stop at once, also with a victim (a damage spell
+        // between heals); the stance module picks the spot. A caster chase started before the
+        // stance module took over (fight start): the same.
+        // MoveIdle alone left the follow spline running to its end (up to a few yards).
+        MovementGeneratorType const motion = me->GetMotionMaster()->GetCurrentMovementGeneratorType();
+        if (!IsMovementHeld() &&
+            ((HasCombatStance() && motion == FOLLOW_MOTION_TYPE) ||
+             (pVictim && IsCasterChaseControlled() && motion == CHASE_MOTION_TYPE)))
+        {
+            if (!me->IsStopped())
+                me->StopMoving();
+            me->GetMotionMaster()->Clear(false, true);
+            me->GetMotionMaster()->MoveIdle();
+        }
+    }
+
     // Commander behaviors run before the original target selection and movement,
     // so they can pick a target or a position themselves.
     if ((me->IsInCombat() || commanderOutOfCombat) && sCommanderMgr.OnBotCombatUpdate(this))
@@ -1469,22 +1498,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     }
 
-    // (also while walking: the follow point moves with the leader)
-    if (!pVictim && !IsMovementHeld() && !HasCombatStance())
-        KeepFollowSpotSafe(pLeader);
-
-    // Fix: a healer that was following when the fight started kept following until it stood
-    // still (the check below runs only when not moving): the priest walked 15 yd behind the
-    // player into Magistrate Barthilas' Crowd Pummel (strat-20261101-214026). Stop at once;
-    // the stance module picks the spot.
-    if (!pVictim && HasCombatStance() && !IsMovementHeld() &&
-        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
-        me->GetMotionMaster()->MoveIdle();
-    // A caster chase started before the stance module took over (fight start): stop it, the
-    // module places the bot.
-    if (pVictim && IsCasterChaseControlled() && !IsMovementHeld() &&
-        me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
-        me->GetMotionMaster()->MoveIdle();
+    // (follow spot check and the stop of taken-over follow / chase: before the Commander hook)
 
     if (!me->IsMoving() && !IsMovementHeld())
     {
@@ -1497,13 +1511,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // A healer in combat with the Commander stance module stands where that module puts
             // it: following the leader walked the priest into the next pack (Stockade,
             // stockade-20261101-143825).
+            // (a follow under way was stopped before the Commander hook)
             float const healRange = Commander::PositioningBehavior::HEAL_RANGE;
-            if (HasCombatStance())
-            {
-                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
-                    me->GetMotionMaster()->MoveIdle();
-            }
-            else if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
+            if (!HasCombatStance() &&
+                me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE &&
               !(me->IsInCombat() && me->IsWithinDistInMap(pLeader, healRange) && me->IsWithinLOSInMap(pLeader) &&
                 IsInHazardZone(pLeader)))
                 StartFollowing(pLeader);

@@ -78,8 +78,10 @@ namespace Commander
         }
 
         // Map checks: ground near the victim's height, out of idle reach there, line of sight
-        // to the victim, safe path.
-        bool GeometryOk(Player* me, SafeRoute::IdleCreatures const& idle, Position3 const& victim, Spot& s)
+        // to the victim, safe path. `pathIdle`: `idle`, or its LeavingFrom(here) copy when the
+        // bot stands in reach now.
+        bool GeometryOk(Player* me, SafeRoute::IdleCreatures const& idle, SafeRoute::IdleCreatures const& pathIdle,
+                        Position3 const& victim, Spot& s)
         {
             Map* map = me->GetMap();
             float const ground = map->GetHeight(s.pos.x, s.pos.y, victim.z + 3.0f);
@@ -88,7 +90,7 @@ namespace Commander
             s.pos.z = ground;
             if (idle.Near(s.pos) || !Los(map, s.pos, victim))
                 return false;
-            return SafeRoute::PathIsSafe(me, idle, s.pos, RS::MAX_PATH_DETOUR);
+            return SafeRoute::PathIsSafe(me, pathIdle, s.pos, RS::MAX_PATH_DETOUR);
         }
     }
 
@@ -152,13 +154,15 @@ namespace Commander
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
         std::vector<Spot> spots = Candidates(world, idle, zones, here, at, victim->GetCombatReach());
+        // The walk out of an idle creature's reach starts inside it.
+        SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;
         for (Spot& s : spots)
         {
             if (checks >= MAX_GEOMETRY_CHECKS)
                 break;
             ++checks;
-            if (!GeometryOk(me, idle, at, s))
+            if (!GeometryOk(me, idle, pathIdle, at, s))
                 continue;
 
             float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));

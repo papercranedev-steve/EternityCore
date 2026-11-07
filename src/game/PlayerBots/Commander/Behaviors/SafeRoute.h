@@ -52,15 +52,28 @@ namespace Commander
             // Leave these out (they come anyway: the pull target and its group, for the walk
             // to a face pull spot).
             void Ignore(std::vector<ObjectGuid> const& guids);
+            // For the walk out of an unsafe spot `from` (stance modules): a copy in which a
+            // creature that already covers `from` only counts at points closer to its home than
+            // `from` (by more than LEAVE_TOLERANCE). Without it every path sample inside the
+            // circle failed and a bot standing deep in it found no way out
+            // (strat-20261107-164236: the priest stopped 17.8 yd from a wanderer's home, reach
+            // 22 + wander 5). Check the end point with the original (strict) set.
+            IdleCreatures LeavingFrom(Position3 const& from) const;
 
         private:
+            IdleCreatures() = default;
             struct Idle
             {
                 Creature const* creature = nullptr;
                 float reach = 0.0f;
+                Position3 home;             // AggroRange::WanderOf (its position when not wandering)
+                float leaveGap = -1.0f;     // >= 0: covers the start of a walk out (LeavingFrom)
             };
             std::vector<Idle> m_idle;
         };
+
+        // A walk out may run along the circle (navmesh corners) at about the start's distance.
+        float const LEAVE_TOLERANCE = 1.0f;
 
         // PathFinder still reports PATHFIND_NORMAL when `to` is up to 7 yd off the navmesh: the
         // path then ends at the mesh edge, e.g. in front of the wall `to` stands behind

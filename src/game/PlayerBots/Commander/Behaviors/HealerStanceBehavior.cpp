@@ -44,6 +44,15 @@ namespace Commander
             return map->isInLineOfSight(a.x, a.y, a.z + HS::LOS_EYE_HEIGHT, b.x, b.y, b.z + HS::LOS_EYE_HEIGHT);
         }
 
+        Position3 PositionOf(WorldObject const* obj)
+        {
+            Position3 p;
+            p.x = obj->GetPositionX();
+            p.y = obj->GetPositionY();
+            p.z = obj->GetPositionZ();
+            return p;
+        }
+
         uint32 HitsOn(WorldModel const& world, ObjectGuid guid)
         {
             uint32 hits = 0;
@@ -170,7 +179,9 @@ namespace Commander
         }
 
         // Map checks: ground near the anchor's height, line of sight to the anchor, safe path.
-        bool GeometryOk(Context const& ctx, SafeRoute::IdleCreatures const& idle, Spot& s)
+        // `pathIdle`: `idle`, or its LeavingFrom(here) copy when the healer stands in reach now.
+        bool GeometryOk(Context const& ctx, SafeRoute::IdleCreatures const& idle,
+                        SafeRoute::IdleCreatures const& pathIdle, Spot& s)
         {
             Position3 const& a = ctx.anchor->pos;
             float const ground = ctx.map->GetHeight(s.pos.x, s.pos.y, a.z + 3.0f);
@@ -179,7 +190,25 @@ namespace Commander
             s.pos.z = ground;
             if (idle.Near(s.pos) || !Los(ctx.map, s.pos, a))
                 return false;
-            return SafeRoute::PathIsSafe(ctx.me, idle, s.pos, HS::MAX_PATH_DETOUR);
+            return SafeRoute::PathIsSafe(ctx.me, pathIdle, s.pos, HS::MAX_PATH_DETOUR);
+        }
+
+        // Standing where an idle creature would attack: a constraint, not a trade (same as the
+        // "rangedstance" module). Urgent beats the routine heal orders (Assigned), an emergency
+        // heal order (Urgent, score > 0) still goes first.
+        void MakeUnsafeProposal(Context const& ctx, Position3 const& to, Proposal& p)
+        {
+            float const speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
+            float const walkSec = Distance2d(ctx.here, to) * HS::PATH_FACTOR / speed;
+            p.tier = ProposalTier::Urgent;
+            p.source = "stance";
+            p.reason = "an idle creature would attack here";
+            p.action.type = BotActionType::MoveTo;
+            p.action.x = to.x;
+            p.action.y = to.y;
+            p.action.z = to.z;
+            p.action.holdMs = uint32(walkSec * 1000.0f) + HS::HOLD_EXTRA_MS;
+            p.score = -walkSec;
         }
 
         void MakeProposal(Context const& ctx, WorldModel const& world, Position3 const& to, bool anchorOk,
@@ -245,15 +274,22 @@ namespace Commander
         if (plan.pull.phase == PullPhase::Settle && plan.pull.LosHiderOf(me->GetObjectGuid()))
             return;
 
+        Position3 const here = PositionOf(me);
+        SafeRoute::IdleCreatures const idle(me);
+        bool const unsafe = idle.Near(here);
+
         // A MoveTo (this module's or another's) is under way: keep walking. Without a proposal
         // the rotation's first cast-time heal stops the walk (DoCastSpell -> StopMoving).
+        // Still in an idle creature's reach: Urgent, so a routine heal order does not stop
+        // the walk out there.
         if (bot->IsMovementHeld() && me->IsMoving())
         {
             Proposal hold;
-            hold.tier = ProposalTier::Assigned;
+            hold.tier = unsafe ? ProposalTier::Urgent : ProposalTier::Assigned;
             hold.score = 0.0f;
             hold.source = "stance";
-            hold.reason = "walking to a healing spot, keep walking";
+            hold.reason = unsafe ? "walking out of an idle creature's reach, keep walking"
+                                 : "walking to a healing spot, keep walking";
             hold.action.type = BotActionType::Hold;
             out.push_back(hold);
             return;
@@ -270,14 +306,13 @@ namespace Commander
         ctx.anchor = FindAnchor(world, me->GetObjectGuid());
         if (!ctx.anchor)
             return;
-        ctx.here.x = me->GetPositionX();
-        ctx.here.y = me->GetPositionY();
-        ctx.here.z = me->GetPositionZ();
+        ctx.here = here;
         for (EnemyFacts const& e : world.enemies)
             if (e.acting && !e.onAllyOnly && e.victim != ctx.self->guid)
                 ctx.enemies.push_back(&e);
 
-        // Someone is about to die and can be healed from here: heal first.
+        // Someone is about to die and can be healed from here: heal first. Not when standing in
+        // an idle creature's reach: the arbiter weighs the emergency heal order against the walk.
         bool anyInjured = false;
         for (PartyMemberFacts const& m : world.party)
         {
@@ -285,19 +320,20 @@ namespace Commander
                 continue;
             if (m.healthPct < INJURED_PCT)
                 anyInjured = true;
-            if (m.healthPct < URGENT_HEALTH_PCT && Distance2d(ctx.here, m.pos) <= HEAL_RANGE &&
+            if (!unsafe && m.healthPct < URGENT_HEALTH_PCT && Distance2d(ctx.here, m.pos) <= HEAL_RANGE &&
                 (m.guid == ctx.self->guid || Los(ctx.map, ctx.here, m.pos)))
                 return;
         }
 
         bool const anchorOk = Distance2d(ctx.here, ctx.anchor->pos) <= HEAL_RANGE && Los(ctx.map, ctx.here, ctx.anchor->pos);
         bool const crowded = MinGap(ctx, ctx.here) < TRIGGER_ENEMY_GAP;
-        if (anchorOk && !crowded)
+        if (anchorOk && !crowded && !unsafe)
             return;
         char const* const reason = anchorOk ? "too close to the enemies" : "tank out of reach";
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        SafeRoute::IdleCreatures const idle(me);
+        // The walk out of an idle creature's reach starts inside it.
+        SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
 
         uint32 checks = 0;
         for (uint32 pass = 0; pass < 2; ++pass)
@@ -310,21 +346,29 @@ namespace Commander
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;
-                if (!GeometryOk(ctx, idle, s))
+                if (!GeometryOk(ctx, idle, pathIdle, s))
                     continue;
                 Proposal p;
-                MakeProposal(ctx, world, s.pos, anchorOk, anyInjured, reason, p);
+                if (unsafe)
+                    MakeUnsafeProposal(ctx, s.pos, p);
+                else
+                    MakeProposal(ctx, world, s.pos, anchorOk, anyInjured, reason, p);
                 out.push_back(p);
                 return;
             }
         }
 
-        // No spot: walk to the anchor itself while it is out of reach (what following did),
-        // unless that walk passes an idle pack.
-        if (!anchorOk && SafeRoute::PathIsSafe(me, idle, ctx.anchor->pos, MAX_PATH_DETOUR))
+        // No spot: walk to the anchor itself while it is out of reach (what following did) or
+        // the healer stands in an idle creature's reach, unless the anchor stands in one too or
+        // the walk passes an idle pack.
+        if ((!anchorOk || unsafe) && !idle.Near(ctx.anchor->pos) &&
+            SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor->pos, MAX_PATH_DETOUR))
         {
             Proposal p;
-            MakeProposal(ctx, world, ctx.anchor->pos, anchorOk, anyInjured, "tank out of reach, no free spot: go to the tank", p);
+            if (unsafe)
+                MakeUnsafeProposal(ctx, ctx.anchor->pos, p);
+            else
+                MakeProposal(ctx, world, ctx.anchor->pos, anchorOk, anyInjured, "tank out of reach, no free spot: go to the tank", p);
             out.push_back(p);
         }
     }
