@@ -49,6 +49,9 @@ namespace Commander
         // What one member contributes per second, in points per second:
         // healers keep up with incoming damage (shared between healers), others shorten the fight.
         float ContributionPerSec(WorldModel const& world, PartyMemberFacts const& member);
+        // The same in a fight with `incomingDps` damage per second on us: one that has not
+        // started yet (the pull's FightLoad estimate, PullPlan::expectedIncomingDps).
+        float ContributionPerSecAt(WorldModel const& world, PartyMemberFacts const& member, float incomingDps);
         // Points lost when `member` cannot act for `seconds` (control, global cooldown, cast time).
         float LostAction(WorldModel const& world, PartyMemberFacts const& member, float seconds);
 

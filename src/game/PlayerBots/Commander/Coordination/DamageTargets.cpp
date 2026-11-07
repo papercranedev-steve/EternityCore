@@ -41,7 +41,7 @@ namespace DamageTargets
         WorldModel const& world = ctx.world;
         bool const melee = bot.role == ROLE_MELEE_DPS;
         float const range = current ? (melee ? MELEE_SWITCH_YD : RANGED_SWITCH_YD)
-                                    : (melee ? MELEE_START_YD : RANGED_START_YD);
+                                    : JOIN_FIGHT_YD;
         float const reach = melee ? MELEE_REACH : RANGED_REACH;
 
         // Near aggro on the current target: ThreatBehavior stops hitting it, so staying is worth

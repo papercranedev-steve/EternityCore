@@ -16,15 +16,16 @@
  *  3. Keep the current target.
  *  4. No target yet: the pull target, else what the leader attacks, else what another member
  *     attacks (WorldModel::targeted first), else the nearest enemy hitting the tank, else the
- *     nearest one within TANK_REACH. benefit = its harm over its kill time x the tank's share of
+ *     nearest one, all within JOIN_FIGHT_YD. benefit = its harm over its kill time x the tank's share of
  *     the party's damage (the exchange below against no target).
  * Damage dealers (DamageTargets::Choose):
  *  Threat: an enemy held by a holder (player, tank, tank-like ally; Tanks::IsHolder) needs
  *  ThreatRoom::Enter room to switch onto, ThreatRoom::Stop to stay on (ThreatBehavior stops
  *  hitting below Stop: same rule, hysteresis between the two). An enemy nobody is fighting yet
  *  is the tank's first when there is a tank bot (else the player's: he holds it).
- *  Reach: melee within MELEE_SWITCH_YD of its edge (MELEE_START_YD with no target), no idle
- *  creature on the straight walk; ranged within RANGED_SWITCH_YD (RANGED_START_YD). Line of
+ *  Reach: melee within MELEE_SWITCH_YD of its edge (JOIN_FIGHT_YD with no target), no idle
+ *  creature on the straight walk; ranged within RANGED_SWITCH_YD (JOIN_FIGHT_YD; the ranged
+ *  stance module walks it into range and sight). Line of
  *  sight is the cerebellum's (TargetBehavior).
  *  Value (Smith's rule exchange, FocusAssigner.h): killing f before the current target c saves
  *  w_f t_c - w_c t_f (no target: w_f t_f), times the bot's share 1 / damage dealers;
@@ -86,6 +87,12 @@ namespace Commander
         mutable std::vector<std::pair<ObjectGuid, FocusScore>> m_scores;
     };
 
+    // A bot with no target joins any fight of ours this close (user, 2026-11-07: whoever can
+    // come, comes; was 40 yd). Farther is another fight: the same distance at which an out of
+    // combat bot is teleported to the leader (PartyBotAI::UpdateAI). Enemies are on this map
+    // only (WorldModelBuilder).
+    static constexpr float JOIN_FIGHT_YD = 100.0f;
+
     namespace TankTargets
     {
         static constexpr float TANK_REACH = 40.0f;
@@ -103,9 +110,7 @@ namespace Commander
     namespace DamageTargets
     {
         static constexpr float MELEE_SWITCH_YD = 10.0f;
-        static constexpr float MELEE_START_YD = 40.0f;
         static constexpr float RANGED_SWITCH_YD = 30.0f;
-        static constexpr float RANGED_START_YD = 40.0f;
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float RANGED_REACH = 30.0f;
 

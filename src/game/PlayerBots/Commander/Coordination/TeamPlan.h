@@ -153,6 +153,12 @@ namespace Commander
         bool returnToSpot = false;
         uint32 returnTimeoutMs = 0;         // Return ends by then; set when Return starts (walk length)
         uint32 phaseSinceMs = 0;
+        // The pull target's position when planned: the enemies come from there (the stance
+        // modules place healers and ranged on the far side of the fight spot).
+        Position3 packAt;
+        // FightLoad estimate of the planned fight: damage per second on the tank (0 = none).
+        // Values a bot's preparation before the fight (Value::ContributionPerSecAt).
+        float expectedIncomingDps = 0.0f;
 
         // WaitReady bookkeeping.
         float healerManaPct = 80.0f;        // healer mana needed (PullPlanner::READY_MANA_PCT by default)
@@ -264,10 +270,39 @@ namespace Commander
         bool holdHealing = false;
         uint32 threatSinceMs = 0;           // first pulled enemy reached the tank, 0 = none yet
 
-        // Members other than the tank that are still out of combat wait where they stand while
-        // true (PullBehavior holds them, the stance modules leave them there): the tank goes
-        // out or brings the pack back, the pack has not arrived yet, or the opening hold of
-        // their kind (damage / healing) is on.
+        // Where the tank will fight once the pack is on it, as planned, for the members to take
+        // their places before (stance modules). False = not known yet or the tank fights where
+        // it stands now: a walk-in fought where the pack stands (the tank goes into the pack),
+        // the fight already on (Settle past the arrival wait).
+        bool PlannedFightSpot(Position3& out) const
+        {
+            if (phase == PullPhase::Settle)
+            {
+                if (losBreak == PullLosBreak::Active)
+                    out = losPoint;
+                else if (awaitArrival)
+                    out = arrivalPoint;
+                else
+                    return false;
+                return true;
+            }
+            if (phase != PullPhase::Approach && phase != PullPhase::Return)
+                return false;
+            if (returnToSpot)
+                out = spot;
+            else if (rangedPullSpell)
+                out = rangedSpot;
+            else if (facePull)
+                out = faceSpot;
+            else
+                return false;
+            return true;
+        }
+
+        // Members other than the tank that are still out of combat wait while true (PullBehavior
+        // holds them; healers and ranged first take their places for the planned fight,
+        // PlannedFightSpot): the tank goes out or brings the pack back, the pack has not arrived
+        // yet, or the opening hold of their kind (damage / healing) is on.
         bool HoldsWaiting(bool healer) const
         {
             switch (phase)

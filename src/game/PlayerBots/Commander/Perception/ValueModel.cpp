@@ -61,16 +61,21 @@ namespace Value
 
     float ContributionPerSec(WorldModel const& world, PartyMemberFacts const& member)
     {
+        return ContributionPerSecAt(world, member, world.rates.incomingDps);
+    }
+
+    float ContributionPerSecAt(WorldModel const& world, PartyMemberFacts const& member, float incomingDps)
+    {
         if (!member.alive)
             return 0.0f;
 
         if (member.isBot && member.role == ROLE_HEALER)
-            return Points(world, world.rates.incomingDps) / float(std::max(1u, world.rates.healers));
+            return Points(world, incomingDps) / float(std::max(1u, world.rates.healers));
 
         // One second of this member's damage shortens the fight by share seconds,
         // which saves that much incoming damage.
         float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
-        return Points(world, world.rates.incomingDps) * share;
+        return Points(world, incomingDps) * share;
     }
 
     float LostAction(WorldModel const& world, PartyMemberFacts const& member, float seconds)

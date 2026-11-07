@@ -109,7 +109,7 @@ namespace TankTargets
                 if (!e || !ctx.Hittable(*e, tank))
                     return false;
                 float const distance = PackResolver::Distance(tank.pos, e->pos);
-                return distance <= TANK_REACH &&
+                return distance <= JOIN_FIGHT_YD &&
                        (distance <= MELEE_REACH + e->boundingRadius || !RouteRisk::CrossesIdle(world, tank.pos, e->pos));
             };
             auto const pick = [&](EnemyFacts const* e, char const* reason)

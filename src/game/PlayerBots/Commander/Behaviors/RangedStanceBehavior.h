@@ -17,6 +17,10 @@
  *    edge of its circle (SafeRoute::IdleCreatures::Near): a constraint, tier Urgent;
  *  - the victim is farther than CAST_RANGE (to its edge) or out of line of sight: tier
  *    Assigned, benefit = the bot's lost action over HORIZON_SEC (it cannot do its job).
+ * Before the fight (2026-11-07): out of combat while the pull runs, the brain's planned fight
+ * spot (PullPlan::PlannedFightSpot) instead of a victim, same rings and checks; value
+ * Value::ContributionPerSecAt(PullPlan::expectedIncomingDps) x walk seconds, cost 0 (see
+ * HealerStanceBehavior.h). No planned spot: it waits where it is (PullPlan::HoldsWaiting).
  * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself; no
  * victim yet: the brain's target for it (TeamPlan::targets; TargetBehavior attacks only in
  * range and sight). Ranged bots do not follow the leader then (PartyBotAI::IsStanceControlled).

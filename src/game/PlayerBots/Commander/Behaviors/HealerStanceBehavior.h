@@ -11,7 +11,16 @@
  * (PartyBotAI::IsStanceControlled); this module moves it instead. "The party fights"
  * (WorldModel::InFight), not "the healer is in combat": before 2026-11-07 a healer that had
  * not healed yet kept following the player while the tank fought further away.
- * Out of combat it still waits while the pull holds it (PullPlan::HoldsWaiting).
+ *
+ * Before the fight (added 2026-11-07, user: everyone takes their place while the pull is
+ * planned, not once in combat): out of combat while the pull runs and the brain knows where the
+ * tank will fight (PullPlan::PlannedFightSpot: the spot when bringing the pack back, the shot or
+ * face-pull spot when fought in place, the arrival / line of sight point in Settle), that spot
+ * is the anchor and "behind" is away from PullPlan::packAt. Same checks and rings. Value: the
+ * walk costs nothing now and saves walking it during the fight: Value::ContributionPerSecAt
+ * (PullPlan::expectedIncomingDps, the FightLoad estimate) x walk seconds, which has to beat
+ * PullBehavior's wait (Hold). No planned spot (walk-in fought in place, the opening hold past
+ * the arrival): it waits where it is (PullPlan::HoldsWaiting). Not in WaitReady (drinking).
  *
  * Anchor (who to stay with): a tank (Perception/Tanks.h, bot or player; with several, the one
  * most enemies hit); else the member most enemies are hitting; else the party leader. Other

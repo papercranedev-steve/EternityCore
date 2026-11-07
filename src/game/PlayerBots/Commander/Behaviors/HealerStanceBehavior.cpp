@@ -26,7 +26,13 @@ namespace Commander
             Player* me = nullptr;
             Map* map = nullptr;
             PartyMemberFacts const* self = nullptr;
-            PartyMemberFacts const* anchor = nullptr;
+            // Who to stay with (FindAnchor), or the planned fight spot (anchorGuid empty).
+            Position3 anchor;
+            ObjectGuid anchorGuid;
+            // Before the fight (PullPlan::PlannedFightSpot): the enemies come from comeFrom.
+            bool prepare = false;
+            Position3 comeFrom;
+            float expectedIncomingDps = 0.0f;   // PullPlan::expectedIncomingDps
             Position3 here;
             // Enemies that can act and are not hitting the healer.
             std::vector<EnemyFacts const*> enemies;
@@ -122,7 +128,9 @@ namespace Commander
         // Straight behind the anchor as seen from the enemies near it; no enemies: towards the healer.
         float BehindAngle(Context const& ctx)
         {
-            Position3 const& a = ctx.anchor->pos;
+            Position3 const& a = ctx.anchor;
+            if (ctx.prepare)
+                return std::atan2(a.y - ctx.comeFrom.y, a.x - ctx.comeFrom.x);
             float sx = 0.0f, sy = 0.0f;
             uint32 n = 0;
             for (EnemyFacts const* e : ctx.enemies)
@@ -144,7 +152,7 @@ namespace Commander
                                      float minGap)
         {
             std::vector<Spot> spots;
-            Position3 const& a = ctx.anchor->pos;
+            Position3 const& a = ctx.anchor;
             float const behind = BehindAngle(ctx);
             for (size_t r = 0; r < radiusCount; ++r)
             {
@@ -166,7 +174,7 @@ namespace Commander
                     // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
                     float covered = 0.0f;
                     for (PartyMemberFacts const& m : world.party)
-                        if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchor->guid &&
+                        if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchorGuid &&
                             Distance2d(s.pos, m.pos) <= HS::HEAL_RANGE)
                             covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
                     s.walk = Distance2d(ctx.here, s.pos);
@@ -183,7 +191,7 @@ namespace Commander
         bool GeometryOk(Context const& ctx, SafeRoute::IdleCreatures const& idle,
                         SafeRoute::IdleCreatures const& pathIdle, Spot& s)
         {
-            Position3 const& a = ctx.anchor->pos;
+            Position3 const& a = ctx.anchor;
             float const ground = ctx.map->GetHeight(s.pos.x, s.pos.y, a.z + 3.0f);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - a.z) > HS::MAX_STEP_Z)
                 return false;
@@ -217,6 +225,22 @@ namespace Commander
             PartyMemberFacts const& self = *ctx.self;
             float const speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
             float const walkSec = Distance2d(ctx.here, to) * HS::PATH_FACTOR / speed;
+            p.tier = ProposalTier::Assigned;
+            p.source = "stance";
+            p.reason = reason;
+            p.action.type = BotActionType::MoveTo;
+            p.action.x = to.x;
+            p.action.y = to.y;
+            p.action.z = to.z;
+            p.action.holdMs = uint32(walkSec * 1000.0f) + HS::HOLD_EXTRA_MS;
+            if (ctx.prepare)
+            {
+                // Nothing to do before the fight: the walk costs nothing now, and saves walking
+                // it once the fight is on (the healer's part of the planned fight's damage).
+                float const incoming = std::max(world.rates.incomingDps, ctx.expectedIncomingDps);
+                p.SetValue(Value::ContributionPerSecAt(world, self, incoming) * walkSec, 0.0f);
+                return;
+            }
             float const horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
 
             float benefit = anchorOk ? 0.0f : Value::LostAction(world, self, horizon);
@@ -234,15 +258,6 @@ namespace Commander
             float cost = Value::LostAction(world, self, walkSec);
             if (!anyInjured)
                 cost *= HS::IDLE_COST_FACTOR;
-
-            p.tier = ProposalTier::Assigned;
-            p.source = "stance";
-            p.reason = reason;
-            p.action.type = BotActionType::MoveTo;
-            p.action.x = to.x;
-            p.action.y = to.y;
-            p.action.z = to.z;
-            p.action.holdMs = uint32(walkSec * 1000.0f) + HS::HOLD_EXTRA_MS;
             p.SetValue(benefit, cost);
         }
     }
@@ -261,22 +276,32 @@ namespace Commander
     void HealerStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
-        // The retreat owns movement (Override tier); the pull owns it while the tank goes out
-        // and brings the pack back.
+        // The retreat owns movement (Override tier).
         if (plan.retreat.active)
             return;
-        if (plan.pull.phase == PullPhase::Approach || plan.pull.phase == PullPhase::Return)
-            return;
-
         Player* me = bot->me;
-        if (!world.InFight(me->IsInCombat()) || me->HasUnitState(UNIT_STATE_ROOT))
-            return;
-        // Still out of combat and told to wait by the pull (opening hold, pack not arrived yet).
-        if (!me->IsInCombat() && plan.pull.HoldsWaiting(true))
+        if (me->HasUnitState(UNIT_STATE_ROOT))
             return;
         // Hiding behind the tank during a line of sight pull: the brain chose the spot (PullBehavior).
         if (plan.pull.phase == PullPhase::Settle && plan.pull.LosHiderOf(me->GetObjectGuid()))
             return;
+
+        // Before the fight: out of combat while the pull runs, take a place for the fight the
+        // brain planned (PullPlan::PlannedFightSpot), then wait there (PullBehavior's hold).
+        bool const inCombat = me->IsInCombat();
+        Position3 planned;
+        bool const prepare = !inCombat && plan.pull.PlannedFightSpot(planned);
+        if (!prepare)
+        {
+            // In combat the pull owns movement while the tank goes out and brings the pack back.
+            if (plan.pull.phase == PullPhase::Approach || plan.pull.phase == PullPhase::Return)
+                return;
+            if (!world.InFight(inCombat))
+                return;
+            // Still out of combat and told to wait by the pull (opening hold).
+            if (!inCombat && plan.pull.HoldsWaiting(true))
+                return;
+        }
 
         Position3 const here = PositionOf(me);
         SafeRoute::IdleCreatures const idle(me);
@@ -307,9 +332,21 @@ namespace Commander
         ctx.self = world.FindMember(me->GetObjectGuid());
         if (!ctx.self || !ctx.self->CanAct())
             return;
-        ctx.anchor = FindAnchor(world, me->GetObjectGuid());
-        if (!ctx.anchor)
-            return;
+        if (prepare)
+        {
+            ctx.prepare = true;
+            ctx.anchor = planned;
+            ctx.comeFrom = plan.pull.packAt;
+            ctx.expectedIncomingDps = plan.pull.expectedIncomingDps;
+        }
+        else
+        {
+            PartyMemberFacts const* anchor = FindAnchor(world, me->GetObjectGuid());
+            if (!anchor)
+                return;
+            ctx.anchor = anchor->pos;
+            ctx.anchorGuid = anchor->guid;
+        }
         ctx.here = here;
         for (EnemyFacts const& e : world.enemies)
             if (e.acting && !e.onAllyOnly && e.victim != ctx.self->guid)
@@ -329,11 +366,12 @@ namespace Commander
                 return;
         }
 
-        bool const anchorOk = Distance2d(ctx.here, ctx.anchor->pos) <= HEAL_RANGE && Los(ctx.map, ctx.here, ctx.anchor->pos);
+        bool const anchorOk = Distance2d(ctx.here, ctx.anchor) <= HEAL_RANGE && Los(ctx.map, ctx.here, ctx.anchor);
         bool const crowded = MinGap(ctx, ctx.here) < TRIGGER_ENEMY_GAP;
         if (anchorOk && !crowded && !unsafe)
             return;
-        char const* const reason = anchorOk ? "too close to the enemies" : "tank out of reach";
+        char const* const reason = ctx.prepare ? "take a place for the planned fight" :
+                                   anchorOk ? "too close to the enemies" : "tank out of reach";
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
         // The walk out of an idle creature's reach starts inside it.
@@ -365,14 +403,16 @@ namespace Commander
         // No spot: walk to the anchor itself while it is out of reach (what following did) or
         // the healer stands in an idle creature's reach, unless the anchor stands in one too or
         // the walk passes an idle pack.
-        if ((!anchorOk || unsafe) && !idle.Near(ctx.anchor->pos) &&
-            SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor->pos, MAX_PATH_DETOUR))
+        if ((!anchorOk || unsafe) && !idle.Near(ctx.anchor) &&
+            SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR))
         {
             Proposal p;
             if (unsafe)
-                MakeUnsafeProposal(ctx, ctx.anchor->pos, p);
+                MakeUnsafeProposal(ctx, ctx.anchor, p);
             else
-                MakeProposal(ctx, world, ctx.anchor->pos, anchorOk, anyInjured, "tank out of reach, no free spot: go to the tank", p);
+                MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured,
+                             ctx.prepare ? "planned fight spot, no free spot around it: go there"
+                                         : "tank out of reach, no free spot: go to the tank", p);
             out.push_back(p);
         }
     }

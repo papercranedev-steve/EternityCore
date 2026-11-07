@@ -108,19 +108,29 @@ namespace Commander
     void RangedStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
-        // The retreat owns movement (Override tier); the pull owns it while the tank goes out
-        // and brings the pack back.
+        // The retreat owns movement (Override tier).
         if (plan.retreat.active)
             return;
-        if (plan.pull.phase == PullPhase::Approach || plan.pull.phase == PullPhase::Return)
+        Player* me = bot->me;
+        if (me->HasUnitState(UNIT_STATE_ROOT) || !bot->UsesCasterChase())
             return;
 
-        Player* me = bot->me;
-        if (!world.InFight(me->IsInCombat()) || me->HasUnitState(UNIT_STATE_ROOT) || !bot->UsesCasterChase())
-            return;
-        // Still out of combat and told to wait by the pull (opening hold, pack not arrived yet).
-        if (!me->IsInCombat() && plan.pull.HoldsWaiting(false))
-            return;
+        // Before the fight: out of combat while the pull runs, take a place in cast range of
+        // where the brain planned the tank to fight (PullPlan::PlannedFightSpot), then wait.
+        bool const inCombat = me->IsInCombat();
+        Position3 planned;
+        bool const prepare = !inCombat && plan.pull.PlannedFightSpot(planned);
+        if (!prepare)
+        {
+            // In combat the pull owns movement while the tank goes out and brings the pack back.
+            if (plan.pull.phase == PullPhase::Approach || plan.pull.phase == PullPhase::Return)
+                return;
+            if (!world.InFight(inCombat))
+                return;
+            // Still out of combat and told to wait by the pull (opening hold).
+            if (!inCombat && plan.pull.HoldsWaiting(false))
+                return;
+        }
 
         // A MoveTo (this module's or another's) is under way: keep walking. Without a proposal
         // the rotation's first cast stops the walk (DoCastSpell -> StopMoving).
@@ -141,29 +151,41 @@ namespace Commander
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())
             return;
-        // No victim yet: the target the brain gave it. TargetBehavior only attacks it in range
-        // and sight, so without this the bot stood where it was (it no longer follows the
-        // leader during the party's fight).
-        Unit* victim = me->GetVictim();
-        if (!victim)
-            if (TargetDuty const* duty = plan.FindTargetFor(me->GetObjectGuid()))
-                victim = me->GetMap()->GetUnit(duty->enemy);
-        if (!victim || !victim->IsAlive())
-            return;
-        // It comes for the bot: running from melee is the escape module's job.
-        if (victim->GetVictim() == me)
-            return;
-
         Position3 const here = PositionOf(me);
-        Position3 const at = PositionOf(victim);
+        Position3 at;               // what the bot must reach: its victim, or the planned fight spot
+        float atReach = 0.0f;
+        bool inReach = false;
+        if (prepare)
+        {
+            at = planned;
+            inReach = Distance2d(here, at) <= CAST_RANGE && Los(me->GetMap(), here, at);
+        }
+        else
+        {
+            // No victim yet: the target the brain gave it. TargetBehavior only attacks it in
+            // range and sight, so without this the bot stood where it was (it no longer follows
+            // the leader during the party's fight).
+            Unit* victim = me->GetVictim();
+            if (!victim)
+                if (TargetDuty const* duty = plan.FindTargetFor(me->GetObjectGuid()))
+                    victim = me->GetMap()->GetUnit(duty->enemy);
+            if (!victim || !victim->IsAlive())
+                return;
+            // It comes for the bot: running from melee is the escape module's job.
+            if (victim->GetVictim() == me)
+                return;
+            at = PositionOf(victim);
+            atReach = victim->GetCombatReach();
+            inReach = me->GetCombatDistance(victim) <= CAST_RANGE && Los(me->GetMap(), here, at);
+        }
+
         SafeRoute::IdleCreatures const idle(me);
         bool const unsafe = idle.Near(here);
-        bool const inReach = me->GetCombatDistance(victim) <= CAST_RANGE && Los(me->GetMap(), here, at);
         if (!unsafe && inReach)
             return;
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        std::vector<Spot> spots = Candidates(world, idle, zones, here, at, victim->GetCombatReach());
+        std::vector<Spot> spots = Candidates(world, idle, zones, here, at, atReach);
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;
@@ -191,6 +213,15 @@ namespace Commander
                 p.tier = ProposalTier::Urgent;
                 p.reason = "an idle creature would attack here";
                 p.score = -walkSec;
+            }
+            else if (prepare)
+            {
+                // Nothing to do before the fight: the walk costs nothing now and saves walking
+                // it once the fight is on (its part of the planned fight, FightLoad estimate).
+                float const incoming = std::max(world.rates.incomingDps, plan.pull.expectedIncomingDps);
+                p.tier = ProposalTier::Assigned;
+                p.reason = "take a place for the planned fight";
+                p.SetValue(Value::ContributionPerSecAt(world, *self, incoming) * walkSec, 0.0f);
             }
             else
             {

@@ -175,10 +175,7 @@ namespace ControlValue
         // Value::ContributionPerSec in a fight that has not started: the simulated incoming damage.
         float ContributionIn(WorldModel const& world, FightLoad::Result const& fight, PartyMemberFacts const& member)
         {
-            float const incoming = Value::Points(world, fight.damage / std::max(1.0f, fight.fightSec));
-            if (member.isBot && member.role == ROLE_HEALER)
-                return incoming / float(std::max(1u, world.rates.healers));
-            return incoming / float(std::max(1u, world.rates.damageDealers));
+            return Value::ContributionPerSecAt(world, member, fight.damage / std::max(1.0f, fight.fightSec));
         }
     }
 
