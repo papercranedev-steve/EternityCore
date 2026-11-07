@@ -170,6 +170,63 @@ namespace ControlValue
         return w;
     }
 
+    namespace
+    {
+        // Value::ContributionPerSec in a fight that has not started: the simulated incoming damage.
+        float ContributionIn(WorldModel const& world, FightLoad::Result const& fight, PartyMemberFacts const& member)
+        {
+            float const incoming = Value::Points(world, fight.damage / std::max(1.0f, fight.fightSec));
+            if (member.isBot && member.role == ROLE_HEALER)
+                return incoming / float(std::max(1u, world.rates.healers));
+            return incoming / float(std::max(1u, world.rates.damageDealers));
+        }
+    }
+
+    Worth OfPull(WorldModel const& world, FightLoad::Input const& fight, FightLoad::Result const& asIs,
+                 PartyMemberFacts const& member, ControlAbility const& a, ObjectGuid target, uint32 nearTarget)
+    {
+        Worth w;
+        w.sec = a.durationSec;
+        PartyMemberFacts const* tank = Tanks::Main(world);
+        float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
+
+        FightLoad::Input controlled = fight;
+        for (FightLoad::Foe& f : controlled.foes)
+            if (f.guid == target)
+            {
+                f.arriveSec = std::max(f.arriveSec, w.sec);
+                f.sameFight = true;
+            }
+        FightLoad::Result const ctrl = FightLoad::Simulate(controlled);
+        w.damage = Value::Points(world, asIs.damage - ctrl.damage);
+        w.danger = (Risk(asIs) - Risk(ctrl)) * penalty;
+
+        float const perSec = ContributionIn(world, asIs, member);
+        w.action = perSec * std::max(a.castMs / 1000.0f, Value::GCD_SEC);
+        ManaWorth::Fight planned;
+        planned.sec = asIs.fightSec;
+        planned.incomingDps = asIs.damage / std::max(1.0f, asIs.fightSec);
+        w.mana = ManaWorth::Points(world, member, float(a.manaCost), planned);
+        float const cooldownSec = a.cooldownMs / 1000.0f;
+        if (cooldownSec > Value::GCD_SEC)
+            w.cooldown = COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, asIs.fightSec) / 60.0f;
+
+        // Fought next to it: the party's area spells keep off the pack while it sleeps.
+        if (a.breaksOnDamage && nearTarget > 0)
+        {
+            float const sec = std::min(w.sec, asIs.fightSec);
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.CanAct() || m.areaDpsPerTarget <= 0.0f || m.fillerDps <= 0.0f)
+                    continue;
+                float const extra = float(nearTarget + 1) * m.areaDpsPerTarget - m.fillerDps;
+                if (extra > 0.0f)
+                    w.aoe += ContributionIn(world, asIs, m) * extra * sec / m.fillerDps;
+            }
+        }
+        return w;
+    }
+
     float AreaLoss(WorldModel const& world, EnemyFacts const& enemy, float sec)
     {
         sec = std::min(sec, Value::FightRemainingSec(world));

@@ -120,6 +120,27 @@ namespace Commander
         Position3 point;
     };
 
+    // Opening control of a pull (PullControl::Choose on the map thread, PullControl::Update in
+    // PullAssigner): `bot` stands at `spot` (in range and sight of `target`, out of every idle
+    // creature's aggro range) before the tank opens, then casts `spellId` on `target` once the
+    // fight started (CrowdControlAssigner offers it, CrowdControlBehavior casts it).
+    struct PullControlPlan
+    {
+        bool decided = false;           // Choose ran for this Approach (with or without a control)
+        ObjectGuid bot;                 // empty = no opening control
+        ObjectGuid target;
+        uint32 spellId = 0;
+        Position3 spot;
+        float points = 0.0f;            // net worth (ControlValue::OfPull)
+        bool inPlace = false;           // the controller reached the spot: the tank may open
+        bool dropped = false;           // not in place in time, or the controller cannot act
+        uint32 sinceMs = 0;             // decided at
+
+        bool Active() const { return decided && !bot.IsEmpty() && !dropped; }
+        // The tank waits before opening: not decided yet, or the controller is still walking.
+        bool HoldsOpener() const { return !decided || (Active() && !inPlace); }
+    };
+
     struct PullPlan
     {
         PullPhase phase = PullPhase::None;
@@ -201,6 +222,10 @@ namespace Commander
         // the fight estimate is hard). Once the fight started, SearchLosBreak hides the tank
         // from the pulled enemies standing away from it, not only from casters standing back.
         bool corner = false;
+
+        // Opening control (Coordination/PullControl.h): one pulled creature controlled as the
+        // tank opens, the controller standing ready before. Decided when the tank is about to go.
+        PullControlPlan control;
 
         // Enemies that were not expected and joined after the opener went out (openedAtMs).
         // Added to `expected` too: the opening holds and the line of sight pull count them.

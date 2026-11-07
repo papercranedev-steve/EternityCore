@@ -148,7 +148,8 @@ namespace Commander
         std::vector<InterruptAbility> interrupts;   // bots only
         std::vector<DispelAbility> dispels;         // bots only
         std::vector<ControlAbility> controls;       // bots only
-        // Damage dealer bots with ClassKit::AreaDamage spells, on their victim: the best area
+        // Damage dealer bots with ClassKit::AreaDamage spells, on their victim (out of combat:
+        // on itself): the best area
         // spell's damage per second on each target it hits, its radius, and the filler's
         // damage per second (what the area spell has to beat). 0 = none. For the area damage
         // a crowd control gives up (ControlValue::AreaLoss).

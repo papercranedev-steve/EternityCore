@@ -99,6 +99,16 @@ namespace ControlValue
     // Area damage given up while `enemy` must not be hit for `sec` (header).
     float AreaLoss(WorldModel const& world, EnemyFacts const& enemy, float sec);
 
+    // Before a pull (Coordination/PullControl.h): `target` controlled as the fight starts.
+    // `fight` = FightLoad::Build of the expected creatures, `asIs` its Simulate. Same benefit
+    // as Of (damage, danger; nobody is hit yet: no victims); costs measured in that fight
+    // (the live rates are 0 out of combat): action and aoe at the members' share of its
+    // incoming damage, mana with ManaWorth's planned fight, cooldown against its length.
+    // nearTarget = pulled creatures fought next to the target (0 when the fight is elsewhere:
+    // brought back, opened from range): area spells there would wake it.
+    Worth OfPull(WorldModel const& world, FightLoad::Input const& fight, FightLoad::Result const& asIs,
+                 PartyMemberFacts const& member, ControlAbility const& a, ObjectGuid target, uint32 nearTarget);
+
     // "net +4.2 (8 s: damage 3.1 danger 2.0 victims 0.5 | action 0.6 mana 0.4 adds 0.4)"
     std::string Describe(Worth const& w);
 }

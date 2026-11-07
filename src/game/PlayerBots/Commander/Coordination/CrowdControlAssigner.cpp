@@ -70,6 +70,35 @@ namespace Commander
             return n;
         };
 
+        // Opening control of the pull (PullControl.h): once its target is in the fight and
+        // not controlled yet, the planned controller casts it, valued as planned. The target
+        // is left out of the offers below meanwhile (one need per enemy).
+        PullControlPlan const& opening = plan.pull.control;
+        ObjectGuid openingTarget;
+        if (opening.Active() && plan.pull.phase != PullPhase::None)
+        {
+            EnemyFacts const* e = world.FindEnemy(opening.target);
+            PartyMemberFacts const* b = world.FindMember(opening.bot);
+            if (e && e->acting && !e->control.spellId && b && b->CanAct())
+            {
+                openingTarget = e->guid;
+                ControlAbility const* a = FindAbility(world, b->guid, opening.spellId);
+                DutyNeed need;
+                need.kind = DutyKind::CrowdControl;
+                need.target = e->guid;
+                need.now = true;
+                need.points = opening.points;
+                need.detail = a ? Detail(*a) : uint8(0);
+                need.reason = "opening control";
+                DutyCandidate c;
+                c.bot = b->guid;
+                c.spellId = opening.spellId;
+                c.rank = opening.points;
+                need.candidates.push_back(c);
+                out.push_back(std::move(need));
+            }
+        }
+
         for (PartyMemberFacts const& b : world.party)
         {
             if (!b.isBot || b.isPet || !b.CanAct())
@@ -111,7 +140,7 @@ namespace Commander
 
                 for (EnemyFacts const& e : world.enemies)
                 {
-                    if (e.onAllyOnly || !e.acting || !e.health || HeldLongEnough(e, a) ||
+                    if (e.guid == openingTarget || e.onAllyOnly || !e.acting || !e.health || HeldLongEnough(e, a) ||
                         !ControlValue::Affects(a, e.entry, e.creatureTypeMask))
                         continue;
                     if (PackResolver::Distance(b.pos, e.pos) - e.boundingRadius > a.maxRange + REACH_SLACK_YD)

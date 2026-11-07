@@ -36,6 +36,15 @@ namespace Commander
 
         // Points `mana` of `member` is worth now.
         float Points(WorldModel const& world, PartyMemberFacts const& member, float mana);
+
+        // A fight not started yet (a pull being planned, FightLoad estimate): its length and
+        // the damage per second it brings, instead of the live rates (0 out of combat).
+        struct Fight
+        {
+            float sec = 0.0f;
+            float incomingDps = 0.0f;
+        };
+        float Points(WorldModel const& world, PartyMemberFacts const& member, float mana, Fight const& fight);
     }
 }
 

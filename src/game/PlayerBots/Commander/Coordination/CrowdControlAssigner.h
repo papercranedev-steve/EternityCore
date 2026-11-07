@@ -15,6 +15,9 @@
  *     radius of the bot; one need per bot and spell (target = the first enemy, detail AREA).
  *     Fears do not break on damage: no aoe cost; their add risk and scatter are in the worth.
  *   Sap (target out of combat) is never offered here: before a pull only (todo 10c).
+ *   opening control of the pull (PullPlan::control, PullControl.h): once its target is in
+ *     the fight and under no control, one need with the planned controller only and the
+ *     planned points; that enemy gets no other offer meanwhile.
  * Apply: plan.controls from the results; a single target duty on an enemy an assigned area
  * spell also takes is dropped. plan.protectedEnemies = targets of duties that break on damage
  * (TeamPlan::KeepsUnbroken: area spells leave them alone from this refresh on).

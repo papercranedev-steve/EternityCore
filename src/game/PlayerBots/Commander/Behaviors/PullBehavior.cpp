@@ -368,6 +368,13 @@ namespace Commander
                 Unit* target = me->GetMap()->GetUnit(pull.target);
                 if (!target || !target->IsAlive())
                     return;
+                // Opening control (PullControl.h): wait until it is decided and the
+                // controller stands ready, so both go together.
+                if (pull.control.HoldsOpener() && !me->IsInCombat())
+                {
+                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                    return;
+                }
                 NoteOpened(bot, pull, target, ShotState(pull), WorldTimer::getMSTime());
                 if (pull.returnToSpot)
                     out.push_back(NoCharge());
@@ -422,6 +429,12 @@ namespace Commander
         }
 
         bool const healer = bot->GetRole() == ROLE_HEALER;
+
+        // The opening controller (PullControl.h) walks to its spot and casts as the fight
+        // starts (CrowdControlBehavior): not held here until its control is cast.
+        if (pull.control.Active() && pull.control.bot == me->GetObjectGuid() &&
+            (pull.phase == PullPhase::Approach || plan.FindControlFor(me->GetObjectGuid())))
+            return;
 
         // A healer hiding behind the tank from the casters of a line of sight pull
         // (PullPlan::losHiders): walk there, in combat or not. The cast under way finishes first.

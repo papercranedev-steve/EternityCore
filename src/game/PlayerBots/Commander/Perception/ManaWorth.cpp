@@ -43,24 +43,63 @@ namespace ManaWorth
             return headroom;
         }
 
-        float TensionWith(WorldModel const& world, PartyMemberFacts const& m, float mana)
+        // The fight the mana is for: the current one (live rates), or one planned (Fight).
+        struct Context
         {
-            float const fightSec = Value::FightRemainingSec(world);
+            float fightSec = 0.0f;
+            float incomingDps = 0.0f;
+            float headroom = 0.0f;
+        };
+
+        Context Live(WorldModel const& world)
+        {
+            Context c;
+            c.fightSec = Value::FightRemainingSec(world);
+            c.incomingDps = world.rates.incomingDps;
+            c.headroom = Headroom(world);
+            return c;
+        }
+
+        Context Planned(Fight const& fight)
+        {
+            Context c;
+            c.fightSec = fight.sec;
+            c.incomingDps = fight.incomingDps;
+            return c;
+        }
+
+        float TensionWith(WorldModel const& world, Context const& c, PartyMemberFacts const& m, float mana)
+        {
             if (IsHealer(m))
             {
-                float const needed = ManaBudget::NeededHealing(world.rates.incomingDps, fightSec, Headroom(world),
-                                                               world.rates.healers);
+                float const needed = ManaBudget::NeededHealing(c.incomingDps, c.fightSec, c.headroom, world.rates.healers);
                 return ManaBudget::Tension(ManaBudget::NeededMana(needed, HealPerMana(m)), mana);
             }
             if (m.fillerManaPerSec <= 0.0f)
                 return 0.0f;
             // Fight left / seconds the mana lasts = mana needed / mana.
-            return ManaBudget::Tension(fightSec * m.fillerManaPerSec, mana);
+            return ManaBudget::Tension(c.fightSec * m.fillerManaPerSec, mana);
         }
 
         float Scarce(float tension)
         {
             return std::max(SCARCITY_FLOOR, ManaBudget::Scarcity(tension));
+        }
+
+        float WorthIn(WorldModel const& world, Context const& c, PartyMemberFacts const& member, float mana)
+        {
+            if (mana <= 0.0f || !member.UsesMana())
+                return 0.0f;
+            // Scarcity after paying it: the last mana is the dearest.
+            float const scarcity = Scarce(TensionWith(world, c, member, std::max(0.0f, float(member.mana) - mana)));
+            if (IsHealer(member))
+                return Value::Points(world, mana * HealPerMana(member)) * scarcity;
+            if (member.fillerManaPerSec <= 0.0f)
+                return 0.0f;
+            // Seconds of casting the mana pays for, at this member's share of the fight
+            // (Value::ContributionPerSec with the fight's incoming damage).
+            float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
+            return Value::Points(world, c.incomingDps) * share * (mana / member.fillerManaPerSec) * scarcity;
         }
     }
 
@@ -68,20 +107,17 @@ namespace ManaWorth
     {
         if (!member.UsesMana())
             return 0.0f;
-        return TensionWith(world, member, float(member.mana));
+        return TensionWith(world, Live(world), member, float(member.mana));
     }
 
     float Points(WorldModel const& world, PartyMemberFacts const& member, float mana)
     {
-        if (mana <= 0.0f || !member.UsesMana())
-            return 0.0f;
-        // Scarcity after paying it: the last mana is the dearest.
-        float const scarcity = Scarce(TensionWith(world, member, std::max(0.0f, float(member.mana) - mana)));
-        if (IsHealer(member))
-            return Value::Points(world, mana * HealPerMana(member)) * scarcity;
-        if (member.fillerManaPerSec <= 0.0f)
-            return 0.0f;
-        return Value::LostAction(world, member, mana / member.fillerManaPerSec) * scarcity;
+        return WorthIn(world, Live(world), member, mana);
+    }
+
+    float Points(WorldModel const& world, PartyMemberFacts const& member, float mana, Fight const& fight)
+    {
+        return WorthIn(world, Planned(fight), member, mana);
     }
 }
 }

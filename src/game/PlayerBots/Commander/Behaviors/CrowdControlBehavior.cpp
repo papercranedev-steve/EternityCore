@@ -1,6 +1,8 @@
 #include "Commander/Behaviors/CrowdControlBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/PullControl.h"
+#include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
@@ -27,9 +29,39 @@ namespace Commander
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
-        ControlDuty const* duty = plan.FindControlFor(me->GetObjectGuid());
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
-        if (!duty || !self || !self->CanAct() || !me->IsInCombat())
+        if (!self || !self->CanAct())
+            return;
+
+        // Opening controller of a pull (PullControl.h), before the fight: walk to the spot and
+        // stay there (the order is renewed every tick, so following the leader does not take it away).
+        PullControlPlan const& opening = plan.pull.control;
+        if (opening.Active() && opening.bot == self->guid && plan.pull.phase == PullPhase::Approach &&
+            !world.HasPartyEnemy())
+        {
+            Proposal p;
+            p.tier = ProposalTier::Assigned;
+            p.source = "cc";
+            p.reason = "opening control: to the spot";
+            p.score = 5.0f;
+            float const left = PackResolver::Distance(self->pos, opening.spot);
+            if (left <= PullControl::ARRIVED_YD || (bot->IsMovementHeld() && me->IsMoving()))
+                p.action.type = BotActionType::Hold;
+            else
+            {
+                p.action.type = BotActionType::MoveTo;
+                p.action.x = opening.spot.x;
+                p.action.y = opening.spot.y;
+                p.action.z = opening.spot.z;
+                p.action.holdMs = uint32(left / OPENING_WALK_YD_PER_SEC * 1000.0f) + 1000;
+            }
+            out.push_back(p);
+            return;
+        }
+
+        // Cast once the party fights (the controller of an opening may not be in combat yet).
+        ControlDuty const* duty = plan.FindControlFor(self->guid);
+        if (!duty || !world.HasPartyEnemy())
             return;
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(duty->spellId);
         if (!spell)

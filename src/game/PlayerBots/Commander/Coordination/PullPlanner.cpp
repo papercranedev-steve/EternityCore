@@ -5,6 +5,7 @@
 #include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/PullMethod.h"
 #include "Commander/Coordination/PullOpening.h"
+#include "Commander/Coordination/PullControl.h"
 #include "Commander/Coordination/PullPlace.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
@@ -1484,6 +1485,10 @@ namespace Commander
             HandleSpotFailure(plan, world, map, nowMs);
             return RecheckResult::NotDue;
         }
+        // Opening control (PullControl.h), once the expected list is final for this Approach
+        // (`pull now` skips the recheck). The tank holds its opener until it is decided.
+        if (pull.phase == PullPhase::Approach && !pull.control.decided && (!pull.recheckOnApproach || pull.rechecked))
+            PullControl::Choose(plan, world, map, nowMs);
         if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked)
             return RecheckResult::NotDue;
 
@@ -1492,6 +1497,7 @@ namespace Commander
         if (!target || !tank || !target->IsAlive() || target->IsInCombat())
         {
             pull.rechecked = true;      // the assigner deals with it (fight started / timeout)
+            pull.control.decided = true;    // no opening control for a fight already going
             return RecheckResult::Go;
         }
 
@@ -1637,6 +1643,7 @@ namespace Commander
         pull.expected = std::move(expected);
         pull.aggroRangeAdds = std::move(aggroAdds);
         pull.rechecked = true;
+        PullControl::Choose(plan, world, map, nowMs);
         return RecheckResult::Go;
     }
 
@@ -1654,6 +1661,8 @@ namespace Commander
             return;
 
         uint32 const now = world.refreshedAtMs;
+        // Opening control (PullControl.h): the controller reaching its spot restarts Approach.
+        PullControl::Update(world, pull, now, plan.notes);
         uint32 const elapsed = WorldTimer::getMSTimeDiff(pull.phaseSinceMs, now);
         auto enter = [&](PullPhase phase)
         {

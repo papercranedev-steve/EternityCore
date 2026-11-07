@@ -538,10 +538,12 @@ namespace WorldModelBuilder
         void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
-            Unit* victim = me->GetVictim();
             CombatBotRoles const role = ai->GetRole();
-            if (!victim || (role != ROLE_RANGE_DPS && role != ROLE_MELEE_DPS))
+            if (role != ROLE_RANGE_DPS && role != ROLE_MELEE_DPS)
                 return;
+            // Out of combat (a pull being planned): valued on the bot itself (spell power, no
+            // resistances of a target).
+            Unit* victim = me->GetVictim() ? me->GetVictim() : static_cast<Unit*>(me);
             std::vector<AreaDamageSpell> const spells = ai->Kit().AreaDamage();
             SpellEntry const* filler = ai->Kit().Filler();
             if (spells.empty() || !filler)
@@ -669,8 +671,7 @@ namespace WorldModelBuilder
                         FillDispels(ai, f);
                         FillControls(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
-                        if (member->IsInCombat())
-                            FillAreaPotential(ai, f);
+                        FillAreaPotential(ai, f);
                     }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);

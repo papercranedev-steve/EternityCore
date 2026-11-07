@@ -13,6 +13,11 @@
  * cooldown it costs, cost = that global cooldown (the arbiter compares by net). A control that
  * breaks on damage drops the bot's own attack on its target (BotAction::dropTarget).
  *
+ * Opening control of a pull (PullPlan::control, Coordination/PullControl.h): in Approach,
+ * before the fight, the controller walks to its spot and holds there (MoveTo renewed every
+ * tick, Hold once there); the duty comes once the fight started. Casting needs the party to
+ * fight (WorldModel::HasPartyEnemy), not the bot itself: the controller is not in combat yet.
+ *
  * Known limit: CanTryToCastSpell refuses a spell whose aura the target still has, so a sheep
  * is cast again only once the old one ended (not RECAST_LEAD_SEC before).
  */
@@ -27,6 +32,8 @@ namespace Commander
     class CrowdControlBehavior : public IBehavior
     {
     public:
+        static constexpr float OPENING_WALK_YD_PER_SEC = 6.0f;
+
         char const* GetId() const override { return "cc"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
         bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
