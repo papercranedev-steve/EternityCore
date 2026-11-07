@@ -18,6 +18,10 @@
  *    AGGRO_MARGIN, or for a random wanderer distance to its home < that + its wander
  *    distance. Line of sight is not asked: the tank stands there for seconds and the
  *    creatures move;
+ *  - with Request::standSec > 0: no patrolling idle creature (waypoint movement, the target's
+ *    side included unless ignored) walks within its aggro range + AGGRO_MARGIN of it during
+ *    the next standSec seconds (PatrolTracker; strat-20261107-195427: the priest's opening
+ *    control spot lay on Patchwork Horror's path, it walked into her while the tank waited);
  *  - it is not within AVOID_RADIUS of a point the caller rules out (spots that failed live);
  *  - the target sees it (from the target's eyes to UNIT_HEIGHT above the point);
  *  - the walk there is safe (SafeRoute::PathIsSafe: reachable, at most MAX_DETOUR times the
@@ -63,6 +67,9 @@ namespace ShotSpot
     float const MAX_DETOUR = 1.8f;
     uint32 const MAX_LOS_CHECKS = 16;
     uint32 const MAX_PATHS = 4;
+    // Patrols looked for this much further out per second of Request::standSec (a running creature).
+    float const PATROL_SCAN_YD_PER_SEC = 7.0f;
+    float const PATROL_SCAN_MAX_YD = 120.0f;
     // Face pull rings: this far inside the target's aggro range (the server checks on movement
     // updates; the target may have stepped back a little), first ring first.
     float const FACE_INSIDE[] = { 3.0f, 6.0f };
@@ -76,6 +83,9 @@ namespace ShotSpot
         float maxRange = 0.0f;              // combat distance the shot is used from (Find)
         float minRange = 0.0f;              // the spell's minimum range (0 = none)
         std::vector<Position3> avoid;       // ruled out by the caller (within AVOID_RADIUS)
+        // Seconds the shooter stands at the spot before the fight: no patrol may come within
+        // reach meanwhile. 0 = patrols are checked where they stand now only.
+        float standSec = 0.0f;
         // Creatures left out of the idle creature checks (they come with the pull anyway).
         std::vector<ObjectGuid> ignore;
     };
@@ -87,6 +97,7 @@ namespace ShotSpot
         None,
         NoGround,       // no ground near the target's height
         Aggro,          // every candidate is inside some creature's aggro range
+        Patrol,         // the candidates left are on a patrol's way within Request::standSec
         NoSight,        // the target does not see the candidates left
         NoPath,         // no safe walk to the candidates left
         Budget,         // check budget used up

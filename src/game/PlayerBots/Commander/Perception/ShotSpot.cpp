@@ -1,5 +1,6 @@
 #include "Commander/Perception/ShotSpot.h"
 #include "Commander/Perception/AggroRange.h"
+#include "Commander/Perception/PatrolTracker.h"
 // SafeRoute (walk checks against idle creatures) lives with the behaviours that use it most;
 // it only reads facts, so the eye uses it too.
 #include "Commander/Behaviors/SafeRoute.h"
@@ -97,6 +98,46 @@ namespace ShotSpot
             return clearance;
         }
 
+        // A patrolling idle creature and where it walks in the next Request::standSec seconds.
+        struct Walker
+        {
+            PatrolTracker::Track track;
+            float reach = 0.0f;     // aggro range + AGGRO_MARGIN
+        };
+
+        std::vector<Walker> ScanWalkers(Creature const* center, Player* who, float radius, float standSec,
+                                        std::vector<ObjectGuid> const& ignore)
+        {
+            std::vector<Walker> out;
+            if (standSec <= 0.0f)
+                return out;
+            std::list<Creature*> found;
+            IdleCheck check(who);
+            MaNGOS::CreatureListSearcher<IdleCheck> searcher(found, check);
+            Cell::VisitGridObjects(center, searcher, radius);
+            for (Creature* c : found)
+            {
+                if (c->GetDefaultMovementType() != WAYPOINT_MOTION_TYPE ||
+                    std::find(ignore.begin(), ignore.end(), c->GetObjectGuid()) != ignore.end())
+                    continue;
+                Walker w;
+                w.reach = AggroRange::Reach(c, who, AGGRO_MARGIN);
+                if (w.reach <= 0.0f)
+                    continue;
+                w.track = PatrolTracker::Predict(c, standSec);
+                out.push_back(std::move(w));
+            }
+            return out;
+        }
+
+        bool OnPatrolWay(std::vector<Walker> const& walkers, Position3 const& at)
+        {
+            return std::any_of(walkers.begin(), walkers.end(), [&at](Walker const& w)
+            {
+                return PatrolTracker::ClosestApproach(w.track, at, w.reach).comesWithin;
+            });
+        }
+
         float ScanRadius(float maxRange)
         {
             // Candidates lie within maxRange (+ both combat reaches) of the target; a creature
@@ -138,6 +179,9 @@ namespace ShotSpot
             // The walk check (SafeRoute) uses the server's rule (line of sight included) around the target.
             SafeRoute::IdleCreatures walkIdle(shooter, target, AGGRO_MARGIN, ScanRadius(maxRadius));
             walkIdle.Ignore(request.ignore);
+            std::vector<Walker> const walkers = ScanWalkers(target, shooter,
+                std::min(PATROL_SCAN_MAX_YD, ScanRadius(maxRadius) + request.standSec * PATROL_SCAN_YD_PER_SEC),
+                request.standSec, request.ignore);
 
             uint32 losChecks = 0;
             uint32 paths = 0;
@@ -164,6 +208,11 @@ namespace ShotSpot
                     if (clearance < 0.0f)
                     {
                         reached(Failure::Aggro);
+                        continue;
+                    }
+                    if (OnPatrolWay(walkers, p))
+                    {
+                        reached(Failure::Patrol);
                         continue;
                     }
 
@@ -262,6 +311,7 @@ namespace ShotSpot
             case Failure::None:     return "no candidate";
             case Failure::NoGround: return "no ground nearby";
             case Failure::Aggro:    return "every spot is in a creature's aggro range";
+            case Failure::Patrol:   return "every spot outside aggro range is on a patrol's way";
             case Failure::NoSight:  return "no spot outside aggro range can see the target";
             case Failure::NoPath:   return "no safe walk to a spot";
             case Failure::Budget:   return "check budget used up";

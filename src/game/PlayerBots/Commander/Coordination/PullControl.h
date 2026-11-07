@@ -13,8 +13,9 @@
  *   stays at its place).
  *   Best net first, net > 0: the controller needs a spot (ShotSpot::Find: the target sees it,
  *   within the spell's range - RANGE_MARGIN_YD, out of every idle creature's aggro range,
- *   a safe walk); up to MAX_SPOT_TRIES options. Whether to control at all is the score:
- *   an easy pull gains nothing (no danger, little damage saved) and gets none.
+ *   off every patrol's way for STAND_SEC, a safe walk); up to MAX_SPOT_TRIES options.
+ *   Whether to control at all is the score: an easy pull gains nothing (no danger, little
+ *   damage saved) and gets none.
  *   Always sets PullControlPlan::decided (the tank waits for it).
  * Update (pure, PullAssigner on every refresh):
  *   WaitReady: forget the decision (the pull was held back: decide again next time).
@@ -47,6 +48,11 @@ namespace Commander
         float const ARRIVED_YD = 2.0f;
         uint32 const PLACE_TIMEOUT_MS = 10 * 1000;
         uint32 const MAX_SPOT_TRIES = 3;
+        // The controller stands at its spot before the fight: the walk there (at most
+        // PLACE_TIMEOUT_MS) plus the tank's way to its opener. No patrol may pass it meanwhile;
+        // once the fight runs, a patrol joining is the pull plan's (PullPlanner patrol check).
+        float const STAND_SEC = PLACE_TIMEOUT_MS / 1000.0f + 5.0f;
+
 
         void Choose(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs);
         void Update(WorldModel const& world, PullPlan& pull, uint32 nowMs, std::vector<std::string>& notes);

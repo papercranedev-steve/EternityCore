@@ -99,6 +99,7 @@ namespace PullControl
             request.target = o.target;
             request.shooter = controller;
             request.maxRange = std::max(5.0f, o.ability->maxRange - RANGE_MARGIN_YD);
+            request.standSec = STAND_SEC;
             ShotSpot::Spot spot;
             ShotSpot::Failure why = ShotSpot::Failure::None;
             if (!ShotSpot::Find(map, request, spot, &why))
