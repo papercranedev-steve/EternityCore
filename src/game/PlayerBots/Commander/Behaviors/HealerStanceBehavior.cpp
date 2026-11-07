@@ -20,6 +20,8 @@ namespace Commander
         float const STRICT_RADII[] = { 16.0f, 20.0f, 12.0f };
         // Second pass: closer, or further out (still inside HEAL_RANGE), with the smaller gap.
         float const RELAXED_RADII[] = { 14.0f, 24.0f, 10.0f };
+        // Before the fight only (Context::prepare), last: just inside HEAL_RANGE.
+        float const PREPARE_OUTER_RADII[] = { 27.0f, 26.0f };
 
         struct Context
         {
@@ -129,8 +131,12 @@ namespace Commander
         float BehindAngle(Context const& ctx)
         {
             Position3 const& a = ctx.anchor;
-            if (ctx.prepare)
+            // Before the fight: away from where the enemies come from; when they are fought
+            // where they stand (the anchor is the pack), towards the healer (the party's side).
+            if (ctx.prepare && Distance2d(a, ctx.comeFrom) >= 1.0f)
                 return std::atan2(a.y - ctx.comeFrom.y, a.x - ctx.comeFrom.x);
+            if (ctx.prepare)
+                return std::atan2(ctx.here.y - a.y, ctx.here.x - a.x);
             float sx = 0.0f, sy = 0.0f;
             uint32 n = 0;
             for (EnemyFacts const* e : ctx.enemies)
@@ -378,11 +384,17 @@ namespace Commander
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
 
         uint32 checks = 0;
-        for (uint32 pass = 0; pass < 2; ++pass)
+        // Before the fight a third pass at the edge of heal range: a walk-in fought where the
+        // pack stands has the idle pack itself as the anchor, the inner rings lie in its aggro range.
+        uint32 const passes = ctx.prepare ? 3 : 2;
+        for (uint32 pass = 0; pass < passes; ++pass)
         {
             std::vector<Spot> spots = pass == 0
                 ? Candidates(ctx, world, zones, idle, STRICT_RADII, sizeof(STRICT_RADII) / sizeof(float), MIN_ENEMY_GAP)
-                : Candidates(ctx, world, zones, idle, RELAXED_RADII, sizeof(RELAXED_RADII) / sizeof(float), RELAXED_ENEMY_GAP);
+                : pass == 1
+                ? Candidates(ctx, world, zones, idle, RELAXED_RADII, sizeof(RELAXED_RADII) / sizeof(float), RELAXED_ENEMY_GAP)
+                : Candidates(ctx, world, zones, idle, PREPARE_OUTER_RADII, sizeof(PREPARE_OUTER_RADII) / sizeof(float),
+                             RELAXED_ENEMY_GAP);
             for (Spot& s : spots)
             {
                 if (checks >= MAX_GEOMETRY_CHECKS)

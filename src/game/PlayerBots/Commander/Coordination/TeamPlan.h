@@ -286,9 +286,9 @@ namespace Commander
         uint32 threatSinceMs = 0;           // first pulled enemy reached the tank, 0 = none yet
 
         // Where the tank will fight once the pack is on it, as planned, for the members to take
-        // their places before (stance modules). False = not known yet or the tank fights where
-        // it stands now: a walk-in fought where the pack stands (the tank goes into the pack),
-        // the fight already on (Settle past the arrival wait).
+        // their places before (stance modules): a walk-in fought where the pack stands is fought
+        // at packAt (the stance modules keep out of the pack's aggro range, it is still idle).
+        // False = the fight is already on (Settle past the arrival wait: the tank's position).
         bool PlannedFightSpot(Position3& out) const
         {
             if (phase == PullPhase::Settle)
@@ -310,7 +310,7 @@ namespace Commander
             else if (facePull)
                 out = faceSpot;
             else
-                return false;
+                out = packAt;
             return true;
         }
 

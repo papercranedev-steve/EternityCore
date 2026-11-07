@@ -18,6 +18,10 @@ namespace Commander
 
         // Distances from the victim's edge, the old chase distance first.
         float const RADII[] = { 25.0f, 20.0f, 15.0f };
+        // Before the fight (planned fight spot): one more ring at the edge of cast range, for a
+        // walk-in fought where the pack stands (the anchor is the idle pack, inner rings lie in
+        // its aggro range).
+        float const PREPARE_RADII[] = { 28.0f, 25.0f, 20.0f, 15.0f };
 
         Position3 PositionOf(WorldObject const* obj)
         {
@@ -52,12 +56,15 @@ namespace Commander
         // Ring points passing the cheap checks (no map queries), nearest walk first.
         std::vector<Spot> Candidates(WorldModel const& world, SafeRoute::IdleCreatures const& idle,
                                      std::vector<HazardZone> const& zones, Position3 const& here,
-                                     Position3 const& victim, float victimReach)
+                                     Position3 const& victim, float victimReach, bool prepare)
         {
             std::vector<Spot> spots;
             float const start = std::atan2(here.y - victim.y, here.x - victim.x);
-            for (float const r : RADII)
+            float const* radii = prepare ? PREPARE_RADII : RADII;
+            size_t const radiusCount = prepare ? sizeof(PREPARE_RADII) / sizeof(float) : sizeof(RADII) / sizeof(float);
+            for (size_t i = 0; i < radiusCount; ++i)
             {
+                float const r = radii[i];
                 for (uint32 k = 0; k < RS::RING_POINTS; ++k)
                 {
                     // 0, +1, -1, +2, -2 ... steps away from the bot's side.
@@ -185,7 +192,7 @@ namespace Commander
             return;
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        std::vector<Spot> spots = Candidates(world, idle, zones, here, at, atReach);
+        std::vector<Spot> spots = Candidates(world, idle, zones, here, at, atReach, prepare);
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;

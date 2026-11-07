@@ -15,12 +15,15 @@
  * Before the fight (added 2026-11-07, user: everyone takes their place while the pull is
  * planned, not once in combat): out of combat while the pull runs and the brain knows where the
  * tank will fight (PullPlan::PlannedFightSpot: the spot when bringing the pack back, the shot or
- * face-pull spot when fought in place, the arrival / line of sight point in Settle), that spot
- * is the anchor and "behind" is away from PullPlan::packAt. Same checks and rings. Value: the
+ * face-pull spot when fought in place, the pack itself for a walk-in fought where it stands,
+ * the arrival / line of sight point in Settle), that spot is the anchor and "behind" is away
+ * from PullPlan::packAt (the anchor is the pack: towards the healer's side). Same checks and
+ * rings plus a last pass on PREPARE_OUTER_RADII at the edge of heal range (the idle pack's
+ * aggro range covers the inner rings; no spot outside it: the healer waits). Value: the
  * walk costs nothing now and saves walking it during the fight: Value::ContributionPerSecAt
  * (PullPlan::expectedIncomingDps, the FightLoad estimate) x walk seconds, which has to beat
- * PullBehavior's wait (Hold). No planned spot (walk-in fought in place, the opening hold past
- * the arrival): it waits where it is (PullPlan::HoldsWaiting). Not in WaitReady (drinking).
+ * PullBehavior's wait (Hold). No planned spot (the opening hold past the arrival): it waits
+ * where it is (PullPlan::HoldsWaiting). Not in WaitReady (drinking).
  *
  * Anchor (who to stay with): a tank (Perception/Tanks.h, bot or player; with several, the one
  * most enemies hit); else the member most enemies are hitting; else the party leader. Other
