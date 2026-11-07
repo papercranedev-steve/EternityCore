@@ -21,9 +21,14 @@
  *               (it is not counted as a target either);
  *             - one hitting the bot or nobody: no limit;
  *             - a new one (seen < ThreatBehavior::NEW_ENEMY_SETTLE_SEC): not at all;
- *             - else tick k is safe while my threat + k x tick threat stays under (its victim's
+ *             - else tick k is safe while my threat + my bolt still in the air towards it
+ *               (cast finished, not landed) + k x tick threat stays under (its victim's
  *               threat + TANK_GAIN_SHARE x the victim's measured threat rate x k x period) x
- *               110% (bot in its melee reach) / 130% (ThreatView).
+ *               110% (bot in its melee reach) / 130% (ThreatView). The rate only counts when
+ *               the victim is hitting this enemy (a party member hitting another one: 0).
+ *               Both since 2026-11-07: a Frostbolt landing just after the decision and the
+ *               tank's one-off threat jump on it made a Blizzard "safe" for 8 ticks that the channel
+ *               watch cancelled after 1 (strat-20261107-194655).
  *             Tick threat = damage per tick x the spell's threat multiplier x the caster's
  *             threat modifiers. The channel is valued for the ticks before the first unsafe one.
  *   damage    sum over the targets of min(per tick x safe ticks, health); DamageSpells::Estimate
@@ -36,7 +41,8 @@
  *
  * Channel watch (WatchChannel, every frame from PartyBotAI::UpdateAI, at most every
  * CHANNEL_CHECK_MS): while one of these spells is channelled, live threat of every enemy in
- * the area at the channel's destination: when the next tick would pass its victim's threat x
+ * the area at the channel's destination: when the next tick (plus a bolt still in the air
+ * towards that enemy) would pass its victim's threat x
  * 110% / 130%, the channel is cancelled (the tank built less threat than predicted, an
  * enemy walked in). So a Blizzard can start once its first ticks are safe.
  *

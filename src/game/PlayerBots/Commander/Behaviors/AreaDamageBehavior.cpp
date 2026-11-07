@@ -75,6 +75,20 @@ namespace Commander
                                                 spell->GetSpellSchoolMask());
         }
 
+        // Threat of the bot's own bolt still in the air towards `enemy` (cast finished, not landed:
+        // the generic slot in SPELL_STATE_DELAYED; a channel started after it leaves it there,
+        // SpellCaster::SetCurrentCastedSpell). Not yet in the threat list: a Frostbolt landing
+        // right after the decision added ~560 and cancelled the Blizzard after its first tick
+        // (strat-20261107-194655).
+        float InFlightThreat(Player* me, Unit const* enemy)
+        {
+            Spell const* spell = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (!spell || spell->getState() != SPELL_STATE_DELAYED ||
+                spell->m_targets.getUnitTargetGuid() != enemy->GetObjectGuid())
+                return 0.0f;
+            return ThreatOf(me, spell->m_spellInfo, DamageSpells::Estimate(me, enemy, spell->m_spellInfo));
+        }
+
         struct Judgement
         {
             uint32 targets = 0;
@@ -121,15 +135,24 @@ namespace Commander
                     j.safeTicks = 0;
                     continue;
                 }
-                // Tick k is safe while my threat stays under its victim's threat x 110% (in its
-                // melee reach) / 130%, the victim gaining TANK_GAIN_SHARE of its measured rate.
+                // Tick k is safe while my threat (with my bolt in the air) stays under its victim's
+                // threat x 110% (in its melee reach) / 130%, the victim gaining TANK_GAIN_SHARE of
+                // its measured rate if it is hitting this enemy.
                 ThreatEntry const* mine = ThreatView::FindEntry(e, self);
-                float const myThreat = mine ? mine->threat : 0.0f;
+                float myThreat = mine ? mine->threat : 0.0f;
+                if (Unit const* unit = me->GetMap()->GetUnit(e.guid))
+                    myThreat += InFlightThreat(me, unit);
                 bool const melee = PackResolver::Distance(here, e.pos) - e.boundingRadius <= AB::MELEE_REACH;
                 float const factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
+                // A party holder hitting another enemy gains little here: its measured rate is a
+                // jump of the last seconds (+200 at once, without hitting it), not what comes next
+                // (strat-20261107-194655: tank on another Cadaver, Blizzard judged safe for 8 ticks).
+                PartyMemberFacts const* holderFacts = world.FindMember(e.victim);
+                bool const holderHitsIt = !holderFacts || holderFacts->victim == e.guid;
                 float rate = 0.0f;
                 if (ThreatEntry const* holder = ThreatView::FindEntry(e, e.victim))
-                    rate = holder->threatPerSec * AB::TANK_GAIN_SHARE;
+                    if (holderHitsIt)
+                        rate = holder->threatPerSec * AB::TANK_GAIN_SHARE;
                 uint32 safe = 0;
                 while (safe < j.safeTicks)
                 {
@@ -307,7 +330,7 @@ namespace Commander
             float const factor = unit->CanReachWithMeleeAutoAttack(me) ? ThreatView::MELEE_AGGRO_FACTOR
                                                                        : ThreatView::RANGED_AGGRO_FACTOR;
             ThreatManager& threat = unit->GetThreatManager();
-            if (threat.getThreat(me) + tick > threat.getThreat(holder) * factor)
+            if (threat.getThreat(me) + InFlightThreat(me, unit) + tick > threat.getThreat(holder) * factor)
             {
                 me->InterruptSpell(CURRENT_CHANNELED_SPELL, true);
                 return true;
