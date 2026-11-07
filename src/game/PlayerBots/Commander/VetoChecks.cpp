@@ -92,7 +92,7 @@ namespace VetoChecks
 
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target)
     {
-        // Fix: a heal veto lasts Arbiter::VETO_TICKS ticks (3 s by default), but every module
+        // Fix: a heal veto lasts Arbiter::VETO_MS (3 s), but every module
         // proposing one (ThreatBehavior, ManaBudgetBehavior, boss modules) only does so above
         // its emergency threshold. A target that drops below it while the veto still runs was
         // left unhealed for up to 3 s, and SelectHealTarget keeps picking it, so nobody else

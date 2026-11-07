@@ -135,7 +135,7 @@ namespace Commander
             return;
 
         if (std::shared_ptr<PartyCommander> commander = GetCommander(bot))
-            commander->Update(bot, WorldTimer::getMSTime(), GetPerceptionInterval(), m_assigners);
+            commander->Update(bot, WorldTimer::getMSTime(), GetPerceptionInterval(), m_assigners, m_behaviors);
     }
 
     bool CommanderMgr::OnBotCombatUpdate(PartyBotAI* bot)

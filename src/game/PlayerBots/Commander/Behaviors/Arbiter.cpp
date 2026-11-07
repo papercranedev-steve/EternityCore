@@ -156,7 +156,7 @@ namespace Commander
             {
                 if (b->TakesOver(what, bot, world))
                 {
-                    directives.TakeOver(what, now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                    directives.TakeOver(what, now, TAKEOVER_MS);
                     break;
                 }
             }
@@ -180,7 +180,7 @@ namespace Commander
         std::vector<Proposal> replace;
         std::vector<Proposal> petActions;
         std::vector<Proposal> healOrders;
-        uint32 const vetoMs = VETO_TICKS * sCommanderMgr.GetBotUpdateInterval();
+        uint32 const vetoMs = VETO_MS;
         for (Proposal const& p : proposals)
         {
             if (p.valued && p.benefit <= p.cost)
@@ -214,7 +214,9 @@ namespace Commander
         std::stable_sort(healOrders.begin(), healOrders.end(), IsBetter);
 
         // The best heal order waits for the rotation's heal step (this tick, unless a Replace
-        // below executes; the order is proposed again next tick then).
+        // below executes; the order is proposed again next tick then). Its lifetime stays one
+        // bot interval on purpose: it is an order for this tick only (cleared at the start of
+        // every run), not a decision kept between ticks like takeovers and vetoes.
         for (size_t i = 0; i < healOrders.size(); ++i)
         {
             record.candidates.push_back(MakeRecord(Describe(bot, healOrders[i]), healOrders[i]));
@@ -548,7 +550,7 @@ namespace Commander
         }
         // Keep the original follow / chase off while walking. Renewed every tick the module
         // proposes it, so it runs out about holdMs after the module stops.
-        uint32 const holdMs = action.holdMs ? action.holdMs : 2 * sCommanderMgr.GetBotUpdateInterval();
+        uint32 const holdMs = action.holdMs ? action.holdMs : MOVEMENT_HOLD_MS;
         bot->Directives().HoldMovement(now, holdMs);
         return true;
     }

@@ -38,7 +38,8 @@ namespace Commander
         EncounterRegistry::Create(mapId, m_encounters);
     }
 
-    void PartyCommander::Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners)
+    void PartyCommander::Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
+                                BehaviorList const& behaviors)
     {
         if (m_world.version && WorldTimer::getMSTimeDiff(m_world.refreshedAtMs, nowMs) < perceptionMs)
             return;
@@ -54,6 +55,36 @@ namespace Commander
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
         m_threatFeed.Push(bot, m_world, nowMs);
+        WakeBots(bot, behaviors);
+    }
+
+    void PartyCommander::WakeBots(PartyBotAI* bot, BehaviorList const& behaviors)
+    {
+        if (!m_world.HasPartyEnemy())
+            return;
+        Group* group = bot->me->GetGroup();
+        if (!group)
+            return;
+        // Same map only: other maps belong to other threads.
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (!member || member == bot->me || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() ||
+                !member->IsAlive() || !member->AI())
+                continue;
+            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            if (!ai || ai->IsInDuel())
+                continue;
+            for (auto const& slot : behaviors)
+            {
+                if (slot->enabled.load(std::memory_order_relaxed) && slot->module->AppliesTo(ai) &&
+                    slot->module->WantsTickNow(ai, m_world, m_plan))
+                {
+                    ai->WakeUp();
+                    break;
+                }
+            }
+        }
     }
 
     void PartyCommander::ReleaseMovementAfterRetreat(PartyBotAI* bot)

@@ -18,7 +18,7 @@
  * Known limits:
  *   - "Tank area threat on cooldown" (scenario 6, 3.3) is not a hold reason: the module reads
  *     facts only, cooldowns are live state of the tank bot.
- *   - The heal veto lasts Arbiter::VETO_TICKS bot ticks (3 s at the default 1000 ms), so it can
+ *   - The heal veto lasts Arbiter::VETO_MS (3 s), so it can
  *     outlive HEAL_VETO_WINDOW_MS by up to that much. It is only set while the tank is above
  *     HEAL_VETO_MIN_TANK_PCT, and ThreatBehavior's own heal veto takes over afterwards.
  *   - Summons are seen on the first refresh after they put the tank on their threat list

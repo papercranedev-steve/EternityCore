@@ -437,7 +437,7 @@ namespace Commander
 
         float const awaySec = (targetDistance + Distance2d(target->buttonPos, m_bossPos)) / RUN_YARDS_PER_SEC + USE_SEC;
         Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::UseObject, target->button);
-        p.action.holdMs = 2 * sCommanderMgr.GetBotUpdateInterval();
+        // holdMs left 0: the arbiter's UseObject hold (Arbiter::MOVEMENT_HOLD_MS) applies.
         p.reason = "gnome face lit, press its button";
         p.SetValue(BOMBS_PER_FACE_WINDOW * ExplosionLoss(world), Value::LostAction(world, *myFacts, awaySec));
         out.push_back(p);

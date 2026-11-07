@@ -21,6 +21,7 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Commander/Behaviors/CastWatch.h"
+#include "Commander/Behaviors/CastBreak.h"
 #include "Commander/Behaviors/Backpedal.h"
 #include "Commander/Behaviors/FollowSpot.h"
 #include <memory>
@@ -155,6 +156,10 @@ public:
     // class (or this role of it) still runs its UpdateInCombatAI_<Class> here. Created with the
     // kit, made again when the role changes.
     ClassRotation* Rotation();
+    // Commander (PartyCommander::WakeBots): run the next bot update in the next frame instead
+    // of after the rest of the bot interval. A longer wait set by a player command (pause,
+    // attack stop: PlayerBotMgr.cpp) is kept.
+    void WakeUp();
     bool IsMovementHeld() const;
     // Player commands (.partybot cometome, attackstart, attackstop, pull, pause, unpause in
     // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
@@ -278,6 +283,8 @@ public:
     Commander::CastWatchState m_castWatch;
     // Last area channel check (Commander/Behaviors/AreaDamageBehavior.h WatchChannel).
     uint32 m_areaChannelCheckMs = 0;
+    // Commander stop of the bot's own cast (Commander/Behaviors/CastBreak.h), every frame in UpdateAI.
+    Commander::CastBreakState m_castBreak;
     // Commander walk backwards (Commander/Behaviors/Backpedal.h), every frame in UpdateAI.
     Commander::BackpedalState m_backpedal;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the

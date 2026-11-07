@@ -54,6 +54,9 @@
  * following the leader while the leader stands in an area dangerous to the bot
  * (PartyBotAI::IsInHazardZone), so a healer is not walked straight back in after the hold.
  *
+ * Timing: a refresh that sees the bot inside such a zone wakes it (WantsTickNow); a bot busy
+ * with its own cast stops it when staying until the cast ends costs more (CastBreakBenefit).
+ *
  * Known limits: stand-in reachability (line of sight, not a path: corridors, stairs and
  * ledges can still fail, MovePoint then walks around, and the idle creature check covers the
  * straight walk, not that detour); zones are
@@ -98,6 +101,15 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
+        // The bot stands ENTER_MARGIN inside a zone dangerous to its role (facts: its last position).
+        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        // Own cast, standing ENTER_MARGIN inside such zones (not one whose enemy chases the bot):
+        // hits taken by staying `castLeftMs` longer before walking out. A cast in progress: its
+        // hit when walking out now gets the bot out in time and after the own cast it does not.
+        // Otherwise castLeft / repeat delay hits. Plus the death penalty when they would kill it.
+        // Walk = distance to the zone edge + RING_EXTRA (the spot itself is found by Propose).
+        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                               uint32 castLeftMs, char const*& reason) const override;
     };
 }
 

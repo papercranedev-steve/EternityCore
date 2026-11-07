@@ -96,6 +96,11 @@ namespace Commander
             if (!target || !target->IsAlive() || (!duty->area && target->HasAura(spell->Id)) ||
                 !me->IsWithinLOSInMap(target) || !bot->CanTryToCastSpell(target, spell))
                 return;
+
+    bool CrowdControlBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    {
+        return world.HasPartyEnemy() && plan.FindControlFor(bot->me->GetObjectGuid()) != nullptr;
+    }
         }
         else if (!bot->CanTryToCastSpell(me, spell))
             return;

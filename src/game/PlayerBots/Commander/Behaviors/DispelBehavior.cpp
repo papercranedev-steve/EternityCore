@@ -50,4 +50,13 @@ namespace Commander
             out.push_back(p);
         }
     }
+
+    bool DispelBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
+    {
+        ObjectGuid const self = bot->me->GetObjectGuid();
+        for (DispelDuty const& d : plan.dispels)
+            if (d.bot == self && d.control)
+                return true;
+        return false;
+    }
 }

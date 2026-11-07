@@ -39,8 +39,16 @@ namespace Commander
         static bool Run(PartyBotAI* bot, WorldModel const& world, TeamPlan const& plan,
                         BehaviorList const& behaviors);
 
-        // Vetoes last this many bot ticks, so they expire soon after the module stops proposing them.
-        static uint32 const VETO_TICKS = 3;
+        // How long a decision stays in force without being renewed, in ms. Fixed, not a number
+        // of bot ticks: the arbiter does not run while the bot casts, and in the tick after a
+        // cast the original code that reads them (follow spot, class reflexes) runs before the
+        // arbiter renews them. With "3 ticks" a lower BotUpdateMs let a takeover run out in the
+        // middle of a cast. The values are the old ones at the default 1000 ms.
+        static uint32 const TAKEOVER_MS = 3000;
+        // Vetoes expire this long after the module stops proposing them.
+        static uint32 const VETO_MS = 3000;
+        // Movement hold of a walk whose proposal gives no holdMs (UseObject).
+        static uint32 const MOVEMENT_HOLD_MS = 2000;
 
         // UseObject walks to this many yards in front of the object (inside INTERACTION_DISTANCE).
         static constexpr float USE_APPROACH_YARDS = 2.5f;

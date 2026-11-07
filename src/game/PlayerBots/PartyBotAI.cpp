@@ -186,6 +186,13 @@ bool PartyBotAI::IsMovementHeld() const
     return m_directives && m_directives->IsMovementHeld(WorldTimer::getMSTime());
 }
 
+void PartyBotAI::WakeUp()
+{
+    // Only the normal wait between bot updates is cut short, not a pause.
+    if (m_updateTimer.GetExpiry() <= int32(sCommanderMgr.GetBotUpdateInterval()))
+        m_updateTimer.Reset(0);
+}
+
 void PartyBotAI::ClearMovementHold()
 {
     // No directives yet: nothing is held, do not create them here.
@@ -1027,6 +1034,9 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
     {
         case SMSG_LEARNED_SPELL:
         case SMSG_SUPERCEDED_SPELL:
+    // Any cast or channel: stop it when an assigned interrupt or an area step cannot wait for it.
+    else if (Commander::CastBreak::Update(this, m_castBreak))
+        m_updateTimer.Reset(0);
         case SMSG_REMOVED_SPELL:
         {
             if (m_initialized)

@@ -133,6 +133,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ManaWorth.h
   ${COMMANDER_DIR}/Perception/ManaWorth.cpp
   ${COMMANDER_DIR}/Perception/FearRisk.h
+  ${COMMANDER_DIR}/Behaviors/CastBreak.h
+  ${COMMANDER_DIR}/Behaviors/CastBreak.cpp
   ${COMMANDER_DIR}/Perception/FearRisk.cpp
   ${COMMANDER_DIR}/Perception/ControlValue.h
   ${COMMANDER_DIR}/Perception/ControlValue.cpp

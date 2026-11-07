@@ -369,6 +369,27 @@ namespace Commander
                 return true;
             default:
                 return false;
+    bool ThreatBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/) const
+    {
+        if (bot->GetRole() != ROLE_TANK)
+            return false;
+        PartyMemberFacts const* tank = world.FindMember(bot->me->GetObjectGuid());
+        if (!tank || !tank->CanAct())
+            return false;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (!e.acting || e.crowdControlled || e.victim.IsEmpty() || e.victim == tank->guid || world.FindAlly(e.victim))
+                continue;
+            PartyMemberFacts const* victim = world.FindMember(e.victim);
+            if (!victim || victim->charmed || Tanks::IsTank(*victim))
+                continue;
+            // With several tank bots each one wakes; Propose leaves the enemy to the nearest.
+            if (PackResolver::Distance(tank->pos, e.pos) <= TANK_REACH_RANGE)
+                return true;
+        }
+        return false;
+    }
+
         }
     }
 

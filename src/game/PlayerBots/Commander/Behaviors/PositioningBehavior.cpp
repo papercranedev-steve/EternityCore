@@ -353,6 +353,80 @@ namespace Commander
         return HazardZones::RoleBit(bot->GetRole()) != 0;
     }
 
+    namespace
+    {
+        // Movement belongs to another module (Propose's first checks).
+        bool MovementOwnedElsewhere(TeamPlan const& plan)
+        {
+            return plan.retreat.active || plan.pull.phase == PullPhase::Approach || plan.pull.phase == PullPhase::Return;
+        }
+    }
+
+    bool PositioningBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    {
+        if (MovementOwnedElsewhere(plan))
+            return false;
+        PartyMemberFacts const* self = world.FindMember(bot->me->GetObjectGuid());
+        uint8 const roleBit = HazardZones::RoleBit(bot->GetRole());
+        if (!self || !self->CanAct() || !roleBit)
+            return false;
+        for (HazardZone const& z : HazardZones::Get(world))
+            if (z.DangerousTo(roleBit) && Contains(z, self->pos, ENTER_MARGIN))
+                return true;
+        return false;
+    }
+
+    float PositioningBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                                uint32 castLeftMs, char const*& reason) const
+    {
+        if (MovementOwnedElsewhere(plan))
+            return 0.0f;
+        Player* me = bot->me;
+        if (me->HasUnitState(UNIT_STATE_ROOT))
+            return 0.0f;
+        Context ctx;
+        ctx.roleBit = HazardZones::RoleBit(bot->GetRole());
+        ctx.self = world.FindMember(me->GetObjectGuid());
+        if (!ctx.roleBit || !ctx.self || !ctx.self->CanAct())
+            return 0.0f;
+        ctx.me = me;
+        ctx.map = me->GetMap();
+        ctx.here.x = me->GetPositionX();
+        ctx.here.y = me->GetPositionY();
+        ctx.here.z = me->GetPositionZ();
+        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+        float const castLeftSec = castLeftMs / 1000.0f;
+
+        Loss waiting;
+        bool dodge = false;
+        for (HazardZone const& z : HazardZones::Get(world))
+        {
+            if (!z.DangerousTo(ctx.roleBit) || !Contains(z, ctx.here, ENTER_MARGIN) || ChasesMe(ctx, world, z))
+                continue;
+            float const toEdge = std::max(0.0f, z.radius + RING_EXTRA - HazardZones::DistanceTo(z, ctx.here));
+            float const walkSec = toEdge * PATH_FACTOR / speed;
+            float hits;
+            if (z.casting)
+            {
+                // The cast in progress: dodged now, not after the own cast.
+                hits = Escapes(z, walkSec) && !Escapes(z, castLeftSec + walkSec) ? 1.0f : 0.0f;
+                dodge = dodge || hits > 0.0f;
+            }
+            else
+                hits = castLeftSec / z.intervalSec;
+            AddLoss(world, z, *ctx.self, hits, waiting);
+        }
+        if (waiting.points <= 0.0f)
+            return 0.0f;
+        float benefit = waiting.points;
+        bool const lethal = waiting.damage >= float(ctx.self->health);
+        if (lethal)
+            benefit += Value::DeathPenalty(*ctx.self);
+        reason = lethal ? "area: staying until the cast ends kills" :
+                 dodge  ? "area: dodge the area cast before mine ends" : "area: hits while finishing the cast";
+        return benefit;
+    }
+
     void PositioningBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                       TeamPlan const& plan, std::vector<Proposal>& out) const
     {

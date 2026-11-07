@@ -38,6 +38,25 @@ namespace Commander
         // Optional: rescore or drop proposals made by other modules.
         virtual void Adjust(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                             std::vector<Proposal>& /*proposals*/) const {}
+
+        // Optional, after every perception refresh, for each bot of the party on the map of the
+        // refreshing bot (PartyCommander::WakeBots): true = this module has work for the bot that
+        // loses value while it waits for its next bot interval (an assigned interrupt of a cast
+        // running now), so its next tick runs in the next frame. Facts and plan only: it only
+        // brings the tick forward, Propose decides as usual. Not asked for the refreshing bot
+        // (its own tick is running).
+        virtual bool WantsTickNow(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+                                  TeamPlan const& /*plan*/) const { return false; }
+
+        // Optional, while the bot casts or channels (CastBreak, at most every
+        // CastBreak::CHECK_INTERVAL_MS; the arbiter does not run then). Points this module loses
+        // when the bot finishes the cast, `castLeftMs` from now, before acting, compared with
+        // acting now; 0 = nothing that cannot wait. CastBreak stops the cast when the best answer
+        // beats what stopping costs; Propose then acts in the tick that follows. Live reads are
+        // allowed (map thread). `reason`: static string for the decision log.
+        virtual float CastBreakBenefit(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+                                       TeamPlan const& /*plan*/, uint32 /*castLeftMs*/,
+                                       char const*& /*reason*/) const { return 0.0f; }
     };
 }
 

@@ -31,6 +31,8 @@ namespace Commander
         bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
+        // The bot has a control dispel duty (the member cannot act).
+        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
     };
 }
 

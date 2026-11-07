@@ -27,7 +27,8 @@ namespace Commander
 
         // Every bot tick, in and out of combat. Refreshes facts at most once per perceptionMs,
         // so several bots of the same party share one refresh.
-        void Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners);
+        void Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
+                    BehaviorList const& behaviors);
 
         // Combat tick of one bot: behaviors + arbiter. True = action taken, skip original AI.
         bool RunCombat(PartyBotAI* bot, BehaviorList const& behaviors);
@@ -89,6 +90,10 @@ namespace Commander
         // (RoleAssigner), out of combat only, and tells the leader.
         void ApplyRoles(PartyBotAI* bot);
 
+        // Last step of a refresh, in combat: the other bots of the party on this map that a
+        // behavior has urgent work for (IBehavior::WantsTickNow) run their next update in the
+        // next frame (PartyBotAI::WakeUp) instead of after the rest of their bot interval.
+        void WakeBots(PartyBotAI* bot, BehaviorList const& behaviors);
         uint32 m_groupId;
         uint32 m_mapId;
         uint32 m_instanceId;

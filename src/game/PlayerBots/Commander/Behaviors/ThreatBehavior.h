@@ -114,6 +114,10 @@ namespace Commander
         // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
         // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
         // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
+        // Tank bot: an acting enemy within TANK_REACH_RANGE hits a member that is not a tank
+        // (and is not fighting an ally). Taunt or win it back without waiting for the next bot
+        // interval; Propose weighs it as usual.
+        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         static float HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
                                   SpellEntry const* spell, float* effectiveOut = nullptr);
 

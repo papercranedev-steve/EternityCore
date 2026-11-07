@@ -69,6 +69,16 @@ namespace Commander
             return std::any_of(m->interrupts.begin(), m->interrupts.end(),
                 [&enemy](InterruptAbility const& a) { return a.ready && CastValues::CanStop(a, enemy); });
         }
+
+        // The same, counting a member busy casting as able: it stops its own cast for this
+        // (CastBreak) when it is the one that has to.
+        bool HasReadyInterruptOnceFree(PartyMemberFacts const* m, EnemyFacts const& enemy)
+        {
+            if (!m || !m->CanAct())
+                return false;
+            return std::any_of(m->interrupts.begin(), m->interrupts.end(),
+                [&enemy](InterruptAbility const& a) { return a.ready && CastValues::CanStop(a, enemy); });
+        }
     }
 
     bool InterruptBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -181,5 +191,73 @@ namespace Commander
     {
         // Duels are not ours (the arbiter does not run there either).
         return what == Takeover::Interrupt && !bot->IsInDuel();
+    }
+
+    bool InterruptBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
+    {
+        ObjectGuid const self = bot->me->GetObjectGuid();
+        return std::any_of(plan.interrupts.begin(), plan.interrupts.end(), [self](InterruptDuty const& d)
+        {
+            return d.castingNow && (d.primary == self || d.backup == self);
+        });
+    }
+
+    float InterruptBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                              uint32 castLeftMs, char const*& reason) const
+    {
+        Player* me = bot->me;
+        ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts || !myFacts->CanAct())
+            return 0.0f;
+
+        float best = 0.0f;
+        for (InterruptDuty const& duty : plan.interrupts)
+        {
+            bool const isPrimary = duty.primary == self;
+            bool const isBackup = duty.backup == self;
+            if (!isPrimary && !isBackup)
+                continue;
+
+            Unit* enemy = me->GetMap()->GetUnit(duty.enemy);
+            EnemyFacts const* facts = world.FindEnemy(duty.enemy);
+            if (!enemy || !enemy->IsAlive() || !facts)
+                continue;
+            LiveCast cast;
+            if (!IsCastingInterruptible(enemy, cast))
+                continue;
+            // Still in time once the own cast has ended.
+            if (cast.remainingMs > castLeftMs + CAST_BREAK_SLACK_MS)
+                continue;
+            EnemyFacts const live = LiveFacts(*facts, cast);
+
+            // One of the two stops its cast, not both: a free backup acts for a busy primary
+            // (Propose), and a busy backup leaves it to a primary that can act.
+            if (isPrimary)
+            {
+                if (!duty.backup.IsEmpty() && duty.backup != self && HasReadyInterrupt(world.FindMember(duty.backup), live))
+                    continue;
+            }
+            else if (!duty.primary.IsEmpty() && duty.primary != self &&
+                     HasReadyInterruptOnceFree(world.FindMember(duty.primary), live))
+                continue;
+
+            CastValue const value = CastValues::InterruptBenefit(world, live);
+            for (InterruptAbility const& a : myFacts->interrupts)
+            {
+                if (!a.ready || !CastValues::CanStop(a, live))
+                    continue;
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                // Usable right after the stop: a GCD still running would waste it.
+                if (!spell || !me->IsSpellReady(spell) || me->HasGCD(spell))
+                    continue;
+                float const net = value.points + CastValues::LockoutBenefit(world, live, a, value.spellId) -
+                                  CastValues::InterruptCost(world, *myFacts, a, live, value);
+                best = std::max(best, net);
+            }
+        }
+        if (best > 0.0f)
+            reason = "assigned interrupt: the enemy cast ends before mine";
+        return best;
     }
 }
