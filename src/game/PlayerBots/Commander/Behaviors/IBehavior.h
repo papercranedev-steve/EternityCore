@@ -32,22 +32,9 @@ namespace Commander
         virtual void Propose(PartyBotAI const* bot, WorldModel const& world,
                              TeamPlan const& plan, std::vector<Proposal>& out) const = 0;
 
-        // True = this module decides when the bot taunts; the original rotation's
-        // "taunt whatever attacks someone else" is suppressed (BotDirectives::IsTauntControlled).
-        virtual bool ControlsTaunt(PartyBotAI const* /*bot*/) const { return false; }
-
-        // True = this module decides how the bot gets away from melee enemies hitting it; the
-        // rotations' own Frost Nova / Blink / run away is suppressed (BotDirectives::IsEscapeControlled).
-        virtual bool ControlsEscape(PartyBotAI const* /*bot*/) const { return false; }
-
-        // True = this module decides when the bot interrupts; the class rotations' reflex
-        // interrupts are off (BotDirectives::IsInterruptControlled).
-        virtual bool ControlsInterrupts(PartyBotAI const* /*bot*/) const { return false; }
-
-        // True = this module decides whom the bot heals and with what (HealOrder proposals);
-        // the rotation's heal step casts only those orders (BotDirectives::IsHealingControlled).
-        virtual bool ControlsHealing(PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }
-
+        // True = this module makes decision `what` for this bot now; the class rotation's own
+        // version stands down (BotDirectives::IsTakenOver). Asked every combat tick.
+        virtual bool TakesOver(Takeover /*what*/, PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }
         // Optional: rescore or drop proposals made by other modules.
         virtual void Adjust(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                             std::vector<Proposal>& /*proposals*/) const {}

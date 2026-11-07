@@ -10,7 +10,7 @@
  *  Abilities the enemy is immune to (CastValues::CanStop) are never proposed; each ability's
  *            benefit includes its school lockout (CastValues::LockoutBenefit).
  *  Takeover - while this module applies to a bot, the class rotations' reflex interrupts are
- *            off (ControlsInterrupts, BotDirectives::IsInterruptControlled): only duties from
+ *            off (TakesOver Takeover::Interrupt): only duties from
  *            the plan are cast. A cast nobody was assigned to is one not worth an interrupt.
  *            (Until 2026-11-03 the reflexes ran and this module vetoed the bad ones.)
  *  Urgent tier only when the cast would kill someone; otherwise team-task tier.
@@ -33,7 +33,7 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        bool ControlsInterrupts(PartyBotAI const* bot) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
     };
 }
 

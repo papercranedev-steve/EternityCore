@@ -4,7 +4,7 @@
  *
  * Healer bots in combat with a party enemy. While the module runs, the rotation's own heal
  * choice is off (PartyBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
- * the rotation casts this module's HealOrder of the tick, or nothing (rest). Shields, Fade,
+ * the rotation casts this module's HealOrder of the tick, or nothing (rest). Fade (ThreatBehavior),
  * dispels and the rest of the rotation keep their order; while the order is an emergency
  * (Urgent) only control effects are dispelled before it (VetoChecks::IsDispelVetoed). ThreatBehavior's healer branch and
  * ManaBudgetBehavior's heal veto stand down; aggro is checked here (ThreatBehavior::HealPullLoss)
@@ -27,6 +27,13 @@
  * that pulls aggro only when no other lands in time. Below ThreatBehavior::HEAL_IGNORE_THREAT_PCT
  * aggro is not checked.
  *
+ * Power Word: Shield (2026-11-03, taken over from the rotation with the heals): ordered instead
+ * of the picked heal for the most urgent target when (a) it is an emergency and the heal would
+ * land after the target dies (or no heal fits), or (b) the target is the healer itself, being hit
+ * below SHIELD_SELF_PCT, and the heal has a cast time. Not on Weakened Soul or an active shield.
+ * Benefit = the hits it absorbs over its duration, plus the death penalty in (a) when it holds
+ * until the next heal; cost = absorb left unused. The rotation's own shield casts stand down.
+ *
  * Inputs: Value::TakenDps (measured damage or the enemy melee prediction, whichever is larger),
  * PartyMemberFacts::takenBurst for the reserve, mana regeneration and the ManaBudget tension.
  */
@@ -44,10 +51,12 @@ namespace Commander
         // A chain goes on when the next heal starts within the bot interval + this after the
         // previous one ended.
         static constexpr uint32 CHAIN_GAP_MS = 500;
+        // The healer shields itself before a cast-time heal when hit below this (no pushback).
+        static constexpr float SHIELD_SELF_PCT = 50.0f;
 
         char const* GetId() const override { return "heal"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool ControlsHealing(PartyBotAI const* bot, WorldModel const& world) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 

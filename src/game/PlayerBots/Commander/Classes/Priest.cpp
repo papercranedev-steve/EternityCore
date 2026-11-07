@@ -30,6 +30,11 @@ namespace Commander
                 return { m_bot.m_spells.priest.pShackleUndead };
             }
 
+            SpellEntry const* ThreatDrop() const override
+            {
+                return m_bot.m_spells.priest.pFade;
+            }
+
             // Weakened Soul is not checked by CanTryToCastSpell: the cast may fail, the caller
             // falls back to its other action.
             SpellEntry const* AllyShield() const override

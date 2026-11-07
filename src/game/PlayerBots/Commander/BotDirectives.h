@@ -10,6 +10,7 @@
 #include "Common.h"
 #include "Timer.h"
 #include "Commander/CommanderTypes.h"
+#include <array>
 #include <deque>
 #include <string>
 #include <vector>
@@ -80,53 +81,19 @@ namespace Commander
             return m_holdDurationMs - WorldTimer::getMSTimeDiff(m_holdStartMs, nowMs);
         }
 
-        // While controlled, PartyBotAI::UpdateInCombatAI does not auto-taunt; a Commander module decides.
-        void ControlTaunt(uint32 nowMs, uint32 durationMs)
+        // A decision a Commander module has taken over from the class rotation (Takeover,
+        // CommanderTypes.h). The arbiter renews it every tick the module applies; it expires by
+        // itself, so a disabled module or a Commander switched off gives it back.
+        void TakeOver(Takeover what, uint32 nowMs, uint32 durationMs)
         {
-            m_tauntStartMs = nowMs;
-            m_tauntDurationMs = durationMs;
+            TakeoverSlot& s = m_takeovers[size_t(what)];
+            s.startMs = nowMs;
+            s.durationMs = durationMs;
         }
-        bool IsTauntControlled(uint32 nowMs) const
+        bool IsTakenOver(Takeover what, uint32 nowMs) const
         {
-            return m_tauntDurationMs && WorldTimer::getMSTimeDiff(m_tauntStartMs, nowMs) < m_tauntDurationMs;
-        }
-
-        // While controlled, the rotations' own "a melee enemy is on me: Frost Nova / Blink and run
-        // away" (PartyBotAI::RunAwayFromTarget and the mage block) is off; EscapeBehavior decides.
-        void ControlEscape(uint32 nowMs, uint32 durationMs)
-        {
-            m_escapeStartMs = nowMs;
-            m_escapeDurationMs = durationMs;
-        }
-        bool IsEscapeControlled(uint32 nowMs) const
-        {
-            return m_escapeDurationMs && WorldTimer::getMSTimeDiff(m_escapeStartMs, nowMs) < m_escapeDurationMs;
-        }
-
-        // While controlled, the class rotations' reflex interrupts ("the target is casting: kick
-        // it") are off; InterruptAssigner assigns and InterruptBehavior casts (takeover, not
-        // veto: 2026-11-03 architecture refinement 5.2).
-        void ControlInterrupts(uint32 nowMs, uint32 durationMs)
-        {
-            m_interruptControlStartMs = nowMs;
-            m_interruptControlDurationMs = durationMs;
-        }
-        bool IsInterruptControlled(uint32 nowMs) const
-        {
-            return m_interruptControlDurationMs &&
-                   WorldTimer::getMSTimeDiff(m_interruptControlStartMs, nowMs) < m_interruptControlDurationMs;
-        }
-
-        // While controlled, the rotation's heal step only casts the Commander's heal order
-        // (none = rest, no heal); its own target and rank choice is off (HealPlanBehavior).
-        void ControlHealing(uint32 nowMs, uint32 durationMs)
-        {
-            m_healControlStartMs = nowMs;
-            m_healControlDurationMs = durationMs;
-        }
-        bool IsHealingControlled(uint32 nowMs) const
-        {
-            return m_healControlDurationMs && WorldTimer::getMSTimeDiff(m_healControlStartMs, nowMs) < m_healControlDurationMs;
+            TakeoverSlot const& s = m_takeovers[size_t(what)];
+            return s.durationMs && WorldTimer::getMSTimeDiff(s.startMs, nowMs) < s.durationMs;
         }
         // urgent: the order saves someone about to die (tier Urgent or above).
         void SetHealOrder(BotAction const& action, bool urgent, uint32 nowMs, uint32 durationMs)
@@ -240,14 +207,12 @@ namespace Commander
         uint32 m_holdStartMs = 0;
         uint32 m_holdDurationMs = 0;
         char const* m_holdOwner = nullptr;
-        uint32 m_tauntStartMs = 0;
-        uint32 m_tauntDurationMs = 0;
-        uint32 m_escapeStartMs = 0;
-        uint32 m_escapeDurationMs = 0;
-        uint32 m_interruptControlStartMs = 0;
-        uint32 m_interruptControlDurationMs = 0;
-        uint32 m_healControlStartMs = 0;
-        uint32 m_healControlDurationMs = 0;
+        struct TakeoverSlot
+        {
+            uint32 startMs = 0;
+            uint32 durationMs = 0;
+        };
+        std::array<TakeoverSlot, size_t(Takeover::Count)> m_takeovers{};
         BotAction m_healOrder;
         bool m_healOrderUrgent = false;
         uint32 m_healOrderStartMs = 0;

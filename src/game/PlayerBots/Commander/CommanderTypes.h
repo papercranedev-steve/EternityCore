@@ -72,7 +72,7 @@ namespace Commander
 
     // Replace: do this action this tick instead of the original rotation.
     // Veto: the original rotation still runs, but must not do one thing (value-scoring doc 6.1).
-    // HealOrder: the original rotation still runs (shields, Fade, dispels in their usual order;
+    // HealOrder: the original rotation still runs (dispels in their usual order;
     // non-control dispels stand down while the order is Urgent, VetoChecks::IsDispelVetoed);
     // at its heal step it casts `action` (a Cast) instead of choosing a heal itself
     // (PartyBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick and
@@ -82,6 +82,20 @@ namespace Commander
         Replace,
         Veto,
         HealOrder,
+    };
+
+    // A decision a Commander module makes instead of the class rotation (takeover instead of
+    // veto: .kiro/docs/2026-11-03-discussion/2026-11-03-architecture-refinement.md 5.2). While a
+    // module takes it over (IBehavior::TakesOver -> BotDirectives::TakeOver) the rotation's own
+    // version stands down; the check in official code is listed in the code-structure doc 6.2.
+    enum class Takeover : uint8
+    {
+        Taunt,      // tank auto-taunt and "protect a member" (ThreatBehavior)
+        Escape,     // Frost Nova / Blink / Psychic Scream / run away from melee (EscapeBehavior)
+        Interrupt,  // reflex interrupts of the class rotations (InterruptBehavior)
+        Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), in combat
+        ThreatDrop, // Fade (ThreatBehavior)
+        Count
     };
 
     // What a veto forbids. Every type has a check in official PartyBot code, listed in

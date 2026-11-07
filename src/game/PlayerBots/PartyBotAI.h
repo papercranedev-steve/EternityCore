@@ -168,6 +168,9 @@ public:
     // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
     // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
     bool IsEscapeControlled() const;
+    // The Commander threat module decides Fade (ThreatBehavior): the priest rotation's own
+    // "attacked: Fade" stands down.
+    bool IsThreatDropControlled() const;
     // In combat: `pUnit` stands in an area the Commander position module moves this bot out of
     // (Commander/Perception/HazardZones.h). False when the Commander or the module is off.
     bool IsInHazardZone(Unit const* pUnit) const;
@@ -195,7 +198,7 @@ public:
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
     // Hides CombatBotBaseAI::FindAndPreHealTarget: off while the heal module controls healing.
     bool FindAndPreHealTarget();
-    // In combat with the Commander heal module deciding heals (BotDirectives::IsHealingControlled).
+    // In combat with the Commander heal module deciding heals (BotDirectives::IsTakenOver, Takeover::Healing).
     bool IsHealingControlled() const;
     // Casts the Commander's heal order of this tick (BotDirectives::GetHealOrder), once.
     bool CastHealOrder();
@@ -203,7 +206,7 @@ public:
     // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
     float GetIncomingDps(Unit const* pTarget) const override;
     // The class rotations' reflex interrupts ask this first: true while the Commander interrupt
-    // module controls this bot's interrupts (BotDirectives::IsInterruptControlled), or when
+    // module controls this bot's interrupts (BotDirectives::IsTakenOver, Takeover::Interrupt), or when
     // `pVictim` is immune to all of them.
     bool SkipsReflexInterrupt(Unit const* pVictim) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party

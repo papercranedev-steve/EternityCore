@@ -31,6 +31,12 @@
  *            under tension > 1, only members below ManaBudget::HealCeilingPct. Heal ranks
  *            come from CombatBotBaseAI::ChooseHeal (HealSpells.h), the rotation's own choice.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
+ *  Fade    - non-tanks with ClassKit::ThreatDrop (priest), taken over from the rotation
+ *            (Takeover::ThreatDrop; it used to Fade whenever attacked). For each enemy hitting
+ *            the bot: after the drop, does another row beat its threat (110% / 130%)? Benefit =
+ *            the hits it does not take while that one is hit instead (Value::MoveLoss, all
+ *            hits if it turns to an ally), until Fade ends or the enemy dies; cost = one global
+ *            cooldown. Urgent if the bot dies within FADE_URGENT_SEC, else Assigned.
  *  Pets    - of hunter / warlock bots (threat-behavior doc 4.7). Tank in the party (alive tank
  *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.
  *            No tank and the pet has a taunt: it is a holder (damage dealers leave room under
@@ -96,10 +102,12 @@ namespace Commander
         // Battle Stance; PartyBotAI::DoCastWithStance) also costs this long of the tank's action:
         // weaker threat and armor in the other stance until the rotation swaps back.
         static constexpr float STANCE_SWAP_COST_SEC = 1.0f;
+        // Fade is Urgent when the bot would die within this long of the hits on it now.
+        static constexpr float FADE_URGENT_SEC = 4.0f;
 
         char const* GetId() const override { return "threat"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool ControlsTaunt(PartyBotAI const* bot) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
@@ -114,6 +122,8 @@ namespace Commander
                          std::vector<Proposal>& out) const;
         void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // Non-tanks with a class threat drop (Fade): see the header comment.
+        void ProposeThreatDrop(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
         void ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Headroom `who` must keep on `enemy` (damage dealers and pets): DPS_STOP_HEADROOM of the

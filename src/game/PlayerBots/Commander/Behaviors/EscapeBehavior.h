@@ -8,7 +8,7 @@
  * Skeletal Guardian walked ~100 yd away from the tank into the next pack and died.
  *
  * While this module is on, PartyBotAI::RunAwayFromTarget and the mage's Blink / Frost Nova /
- * run block stand down (ControlsEscape -> BotDirectives::IsEscapeControlled).
+ * run block stand down (TakesOver Takeover::Escape).
  *
  * Chasers: enemies that act, are not crowd controlled, have melee on (EnemyFacts::meleeEnabled),
  * hit this bot and stand within TRIGGER_GAP of it (edge distance).
@@ -97,7 +97,7 @@ namespace Commander
 
         char const* GetId() const override { return "escape"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool ControlsEscape(PartyBotAI const* bot) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };

@@ -145,41 +145,20 @@ namespace Commander
         uint32 const now = WorldTimer::getMSTime();
         BotDirectives& directives = bot->Directives();
 
-        // Keeps the original rotation's own taunt switched off while a module decides taunts.
-        // Expires by itself if the module is disabled or the Commander is turned off.
-        for (IBehavior const* b : active)
+        // Decisions modules take over from the class rotation (taunts, escapes, interrupts,
+        // heals, Fade). Renewed every tick; they expire by themselves if the module is disabled
+        // or the Commander is turned off. A heal order of the last tick is dropped below: no
+        // order now = no heal (rest).
+        for (size_t i = 0; i < size_t(Takeover::Count); ++i)
         {
-            if (b->ControlsTaunt(bot))
+            Takeover const what = Takeover(i);
+            for (IBehavior const* b : active)
             {
-                directives.ControlTaunt(now, 3 * sCommanderMgr.GetBotUpdateInterval());
-                break;
-            }
-        }
-        // Same for getting away from melee enemies (EscapeBehavior).
-        for (IBehavior const* b : active)
-        {
-            if (b->ControlsEscape(bot))
-            {
-                directives.ControlEscape(now, 3 * sCommanderMgr.GetBotUpdateInterval());
-                break;
-            }
-        }
-        // Same for interrupts (InterruptBehavior).
-        for (IBehavior const* b : active)
-        {
-            if (b->ControlsInterrupts(bot))
-            {
-                directives.ControlInterrupts(now, 3 * sCommanderMgr.GetBotUpdateInterval());
-                break;
-            }
-        }
-        // Same for heals. The order of the last tick is dropped: no order now = no heal (rest).
-        for (IBehavior const* b : active)
-        {
-            if (b->ControlsHealing(bot, world))
-            {
-                directives.ControlHealing(now, 3 * sCommanderMgr.GetBotUpdateInterval());
-                break;
+                if (b->TakesOver(what, bot, world))
+                {
+                    directives.TakeOver(what, now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                    break;
+                }
             }
         }
         directives.ClearHealOrder();

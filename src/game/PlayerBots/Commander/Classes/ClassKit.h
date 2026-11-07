@@ -73,6 +73,9 @@ namespace Commander
         // Absorb shields on itself the rotation puts up when attacked (EscapeBehavior counts them
         // into survival before they are cast). Active absorbs are read from auras for every class.
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
+        // Drops its own threat for a while so enemies turn to someone else (priest Fade). Only
+        // the Commander casts it (ThreatBehavior takes it over, Takeover::ThreatDrop).
+        virtual SpellEntry const* ThreatDrop() const { return nullptr; }
         // Instant absorb on an ally, last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }
         // Area damage spells the Commander casts on packs (AreaDamageBehavior decides when and

@@ -370,9 +370,17 @@ namespace Commander
         }
     }
 
-    bool ThreatBehavior::ControlsTaunt(PartyBotAI const* bot) const
+    bool ThreatBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/) const
     {
-        return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
+        switch (what)
+        {
+            case Takeover::Taunt:
+                return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
+            case Takeover::ThreatDrop:
+                return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop() && !bot->IsInDuel();
+            default:
+                return false;
+        }
     }
 
     void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -383,6 +391,9 @@ namespace Commander
 
         if (world.enemies.empty())
             return;
+
+        if (bot->GetRole() != ROLE_TANK)
+            ProposeThreatDrop(bot, world, out);
 
         switch (bot->GetRole())
         {
@@ -1052,5 +1063,65 @@ namespace Commander
         veto.veto.target = pTarget->GetObjectGuid();
         veto.SetValue(loss, delayCost);
         out.push_back(veto);
+    }
+
+    void ThreatBehavior::ProposeThreatDrop(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    {
+        SpellEntry const* spell = bot->Kit().ThreatDrop();
+        Player* me = bot->me;
+        if (!spell || !bot->CanTryToCastSpell(me, spell))
+            return;
+        ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts)
+            return;
+
+        // Fade: SPELL_AURA_MOD_TOTAL_THREAT with a negative amount on every threat list, for the
+        // aura's duration (ThreatManager::setTempThreatModifier, never below 0).
+        float const drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
+        float const durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+        if (drop <= 0.0f || durationSec <= 0.0f)
+            return;
+
+        float saved = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (!e.acting || e.crowdControlled || e.victim != self)
+                continue;
+            float mine = 0.0f;
+            for (ThreatEntry const& r : e.threat)
+                if (r.guid == self)
+                    mine = r.threat;
+            float const after = std::max(0.0f, mine - drop);
+            // Who it turns to: the highest other row that beats my lowered threat by the
+            // aggro rule (110% in melee reach, 130% otherwise). Nobody: Fade changes nothing here.
+            ThreatEntry const* next = nullptr;
+            for (ThreatEntry const& r : e.threat)
+            {
+                if (r.guid == self || !r.onList)
+                    continue;
+                if (r.threat > after * (r.inMeleeReach ? 1.1f : 1.3f) && (!next || r.threat > next->threat))
+                    next = &r;
+            }
+            if (!next)
+                continue;
+            // Hits I do not take while it hits `next` instead (only what I would take on top),
+            // until Fade ends or it dies. An ally or another unit: all of my hits count.
+            float const seconds = std::min(durationSec, Value::EnemyTimeToDie(world, e));
+            if (PartyMemberFacts const* holder = world.FindMember(next->guid))
+                saved += std::max(0.0f, Value::MoveLoss(world, e, *myFacts, *holder, seconds));
+            else
+                saved += Value::HitLoss(world, e, *myFacts, seconds);
+        }
+        if (saved <= 0.0f)
+            return;
+
+        // About to die: as urgent as the emergency heal it competes with.
+        float const incoming = Value::IncomingOn(world, self);
+        bool const dying = incoming > 0.0f && float(myFacts->health) / incoming < FADE_URGENT_SEC;
+        Proposal p = MakeProposal(dying ? ProposalTier::Urgent : ProposalTier::Assigned, BotActionType::Cast, self, spell);
+        p.reason = "attacked: fade";
+        p.SetValue(saved, Value::LostAction(world, *myFacts, Value::GCD_SEC));
+        out.push_back(p);
     }
 }

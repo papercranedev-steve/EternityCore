@@ -201,12 +201,17 @@ bool PartyBotAI::OrderBackpedal(Commander::Position3 const& to, ObjectGuid face,
 
 bool PartyBotAI::IsTauntControlled() const
 {
-    return m_directives && m_directives->IsTauntControlled(WorldTimer::getMSTime());
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Taunt, WorldTimer::getMSTime());
 }
 
 bool PartyBotAI::IsEscapeControlled() const
 {
-    return m_directives && m_directives->IsEscapeControlled(WorldTimer::getMSTime());
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Escape, WorldTimer::getMSTime());
+}
+
+bool PartyBotAI::IsThreatDropControlled() const
+{
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
 }
 
 bool PartyBotAI::IsInPatrolPath(Unit const* pUnit) const
@@ -353,7 +358,7 @@ bool PartyBotAI::IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpe
 
 bool PartyBotAI::IsHealingControlled() const
 {
-    return m_directives && me->IsInCombat() && m_directives->IsHealingControlled(WorldTimer::getMSTime());
+    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::Healing, WorldTimer::getMSTime());
 }
 
 bool PartyBotAI::CastHealOrder()
@@ -419,7 +424,7 @@ float PartyBotAI::GetIncomingDps(Unit const* pTarget) const
 
 bool PartyBotAI::SkipsReflexInterrupt(Unit const* pVictim) const
 {
-    if (m_directives && m_directives->IsInterruptControlled(WorldTimer::getMSTime()))
+    if (m_directives && m_directives->IsTakenOver(Commander::Takeover::Interrupt, WorldTimer::getMSTime()))
         return true;
     return Commander::VetoChecks::ImmuneToReflexInterrupts(this, pVictim);
 }
@@ -2352,7 +2357,9 @@ void PartyBotAI::UpdateInCombatAI_Priest()
     // Until 2026-11-01 the priest shielded itself whenever the spell was ready, attacked or not
     // (in the Stockade tests more mana went into shields than into heals). Now only when it is
     // in danger itself, or being hit below half health (the shield also stops cast pushback).
-    if (m_spells.priest.pPowerWordShield &&
+    // 2026-11-03: while the Commander heal module decides heals, it decides shields too
+    // (HealPlanBehavior, Takeover::Healing).
+    if (m_spells.priest.pPowerWordShield && !IsHealingControlled() &&
        (IsInHealDanger(me) || (me->GetHealthPercent() < 50.0f && GetIncomingDps(me) > 0.0f)) &&
         CanTryToCastSpell(me, m_spells.priest.pPowerWordShield))
     {
@@ -2363,7 +2370,8 @@ void PartyBotAI::UpdateInCombatAI_Priest()
     if (!me->GetAttackers().empty() &&
         m_role != ROLE_TANK)
     {
-        if (m_spells.priest.pFade &&
+        // 2026-11-03: the Commander threat module decides Fade (ThreatBehavior, Takeover::ThreatDrop).
+        if (m_spells.priest.pFade && !IsThreatDropControlled() &&
             CanTryToCastSpell(me, m_spells.priest.pFade))
         {
             if (DoCastSpell(me, m_spells.priest.pFade) == SPELL_CAST_OK)
@@ -2392,8 +2400,9 @@ void PartyBotAI::UpdateInCombatAI_Priest()
 
     if (GetRole() == ROLE_HEALER || (!me->GetVictim() && me->GetShapeshiftForm() == FORM_NONE))
     {
-        // Shield allies who may die before a heal lands.
-        if (m_spells.priest.pPowerWordShield)
+        // Shield allies who may die before a heal lands. Off while the Commander heal module
+        // decides heals: it casts shields as heal orders (HealPlanBehavior).
+        if (m_spells.priest.pPowerWordShield && !IsHealingControlled())
         {
             if (Player* pTarget = SelectShieldTarget())
             {
