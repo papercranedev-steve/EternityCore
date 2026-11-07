@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/PositioningBehavior.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/ValueModel.h"

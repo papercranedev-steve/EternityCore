@@ -7,7 +7,9 @@
  * Seconds of the member's output lost (Value::LostAction, points):
  *   SWITCH_SEC                       retargeting, a swing / cast restarting
  * + castRemainingMs                  the cast or channel it is busy with (waits it out or drops it)
- * + walk                             (distance - reach) / CastValues::RUN_YARDS_PER_SEC
+ * + walk                             (walk - reach) / CastValues::RUN_YARDS_PER_SEC; walk = the
+ *                                    navmesh path of a melee or tank bot when checked
+ *                                    (RouteRisk::WalkYd, MeleeRoutes), else the straight distance
  * + comboPoints x COMBO_POINT_SEC    combo points stay on the old target (1.12), rebuilt one per GCD
  * Zero when it already attacks the enemy.
  *
@@ -36,7 +38,7 @@ namespace Commander
         float Of(WorldModel const& world, PartyMemberFacts const& member, EnemyFacts const& enemy, float reach);
 
         // The same in seconds of its output (for display).
-        float Seconds(PartyMemberFacts const& member, EnemyFacts const& enemy, float reach);
+        float Seconds(WorldModel const& world, PartyMemberFacts const& member, EnemyFacts const& enemy, float reach);
     }
 }
 

@@ -10,6 +10,7 @@
 #include "Commander/Behaviors/PositioningBehavior.h"
 #include "Commander/Behaviors/HealerStanceBehavior.h"
 #include "Commander/Behaviors/RangedStanceBehavior.h"
+#include "Commander/Behaviors/MeleeStanceBehavior.h"
 #include "Commander/Behaviors/RestBehavior.h"
 #include "Commander/Behaviors/EscapeBehavior.h"
 #include "Commander/Behaviors/AreaDamageBehavior.h"
@@ -45,6 +46,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RangedStanceBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<MeleeStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RestBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EscapeBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaDamageBehavior>()));

@@ -1,5 +1,5 @@
 #include "Commander/Coordination/LosBreak.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/ProfileStore.h"
 #include "Commander/Perception/CreatureProfile.h"
 #include "Creature.h"

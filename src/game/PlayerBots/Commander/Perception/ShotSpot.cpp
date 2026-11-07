@@ -3,7 +3,7 @@
 #include "Commander/Perception/PatrolTracker.h"
 // SafeRoute (walk checks against idle creatures) lives with the behaviours that use it most;
 // it only reads facts, so the eye uses it too.
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Creature.h"
 #include "Map.h"
 #include "Player.h"

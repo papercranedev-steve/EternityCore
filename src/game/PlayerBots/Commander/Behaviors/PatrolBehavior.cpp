@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/PatrolBehavior.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"

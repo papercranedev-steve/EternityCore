@@ -7,7 +7,7 @@
  * 20.3 yd from a wandering Ravaged Cadaver's home (aggro range 17, wander 5); after 14 s it
  * stepped close enough and its group of seven came.
  *
- * Now, while this module is on, it takes that chase over (Takeover::CasterChase: PartyBotAI::
+ * Now, while this module is on, it takes that chase over (Takeover::Stance: PartyBotAI::
  * BeginChasing stands down for bots that keep a caster distance, CombatBotBaseAI::
  * UsesCasterChase) and moves the bot itself. Bots that fight in melee (no mana, no ranged
  * weapon, a form) keep the original chase.

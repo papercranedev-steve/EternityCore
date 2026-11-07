@@ -234,13 +234,43 @@ bool PartyBotAI::IsStanceControlled() const
 {
     // (the stance modules take over only while the party fights: no own combat check here,
     // a healer still out of combat is placed too)
-    return m_directives && (GetRole() == ROLE_HEALER || UsesCasterChase()) &&
-           m_directives->IsTakenOver(Commander::Takeover::CasterChase, WorldTimer::getMSTime());
+    // (a ranged damage dealer fighting in melee, no mana and no ranged weapon or a form, keeps
+    // the original chase: RangedStanceBehavior does not place it)
+    return m_directives && (GetRole() == ROLE_HEALER || GetRole() == ROLE_MELEE_DPS || UsesCasterChase()) &&
+           m_directives->IsTakenOver(Commander::Takeover::Stance, WorldTimer::getMSTime());
 }
 
-bool PartyBotAI::IsCasterChaseControlled() const
+bool PartyBotAI::IsChaseControlled() const
 {
-    return UsesCasterChase() && IsStanceControlled();
+    return (UsesCasterChase() || GetRole() == ROLE_MELEE_DPS) && IsStanceControlled();
+}
+
+bool PartyBotAI::OrderChase(Unit* pVictim, float angle)
+{
+    if (!pVictim || !pVictim->IsAlive() || me->HasUnitState(UNIT_STATE_ROOT))
+        return false;
+    float current;
+    if (GetChaseAngle(pVictim, current) && std::fabs(current - angle) < 0.01f)
+        return true;
+    if (me->HasDistanceCasterMovement())
+        me->SetCasterChaseDistance(0.0f);
+    // (distance 1 as the original chase, so the angle holds)
+    me->GetMotionMaster()->MoveChase(pVictim, 1.0f, angle);
+    m_chaseVictim = pVictim->GetObjectGuid();
+    m_chaseAngle = angle;
+    return true;
+}
+
+bool PartyBotAI::GetChaseAngle(Unit const* pVictim, float& angle) const
+{
+    if (!pVictim || me->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE ||
+        me->GetVictim() != pVictim)
+        return false;
+    if (m_chaseVictim == pVictim->GetObjectGuid())
+        angle = m_chaseAngle;
+    else
+        angle = GetRole() == ROLE_MELEE_DPS ? M_PI_F : 0.0f;    // the original chase (BeginChasing)
+    return true;
 }
 
 void PartyBotAI::StopTakenOverMovement()
@@ -250,7 +280,8 @@ void PartyBotAI::StopTakenOverMovement()
     // MoveIdle alone left the follow spline running to its end (up to a few yards).
     MovementGeneratorType const motion = me->GetMotionMaster()->GetCurrentMovementGeneratorType();
     if ((motion == FOLLOW_MOTION_TYPE && IsStanceControlled()) ||
-        (motion == CHASE_MOTION_TYPE && me->GetVictim() && IsCasterChaseControlled()))
+        (motion == CHASE_MOTION_TYPE && me->GetVictim() && IsChaseControlled() &&
+         m_chaseVictim != me->GetVictim()->GetObjectGuid()))
     {
         if (!me->IsStopped())
             me->StopMoving();
@@ -369,10 +400,12 @@ void PartyBotAI::BeginChasing(Unit* pVictim) const
         return;
     // Fix: the 25 yd chase walked the mage to 20 yd from a wandering Ravaged Cadaver's home
     // (aggro range 17, wander 5); it came after 14 s with its pack of seven
-    // (strat-20261107-152527). The Commander stance modules pick a spot instead.
-    if (IsCasterChaseControlled())
+    // (strat-20261107-152527). The Commander stance modules pick a spot instead; for melee the
+    // melee stance module chases itself (OrderChase), checking the route for idle packs.
+    if (IsChaseControlled())
         return;
 
+    m_chaseVictim.Clear();
     CombatBotBaseAI::BeginChasing(pVictim);
 }
 
@@ -1491,8 +1524,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         if (!pVictim)
         {
-            // Healers and ranged stand where the Commander stance modules put them while the
-            // party fights, in combat themselves or not yet: following the leader walked the
+            // Healers, ranged and melee damage dealers stand where the Commander stance modules
+            // put them while the party fights, in combat themselves or not yet: following the leader walked the
             // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
             // that had not healed yet with the player while the tank fought further away.
             if (!IsStanceControlled() &&
@@ -1961,11 +1994,8 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
                 if (DoCastSpell(pVictim, m_spells.paladin.pHolyWrath) == SPELL_CAST_OK)
                     return;
             }
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-                && !me->CanReachWithMeleeAutoAttack(pVictim))
-            {
-                BeginChasing(pVictim);
-            }
+            // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander
+            // melee stance module chases)
         }
     }
 
@@ -3118,11 +3148,8 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-            && !me->CanReachWithMeleeAutoAttack(pVictim))
-        {
-            BeginChasing(pVictim);
-        }
+        // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander melee
+        // stance module chases)
 
         if (me->GetPower(POWER_RAGE) > 300)
         {
@@ -3592,12 +3619,8 @@ void PartyBotAI::UpdateInCombatAI_Druid()
         {
             if (me->HasDistanceCasterMovement())
                 me->SetCasterChaseDistance(0.0f);
-
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-                && !me->CanReachWithMeleeAutoAttack(pVictim))
-            {
-                BeginChasing(pVictim);
-            }
+            // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander
+            // melee stance module chases)
 
             if (me->HasAuraType(SPELL_AURA_MOD_STEALTH))
             {

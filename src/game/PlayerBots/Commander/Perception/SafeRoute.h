@@ -9,9 +9,10 @@
  * shot spots); a route is unsafe when the end point or any point sampled along the path every
  * PATH_SAMPLE_STEP is.
  *
- * Shared by FleePoint (where to run from a melee enemy), HealerStanceBehavior (where a healer
- * stands in combat) and FollowSpot (where a bot follows the leader). Map thread of the bot:
- * reads creatures and pathfinds.
+ * Layer 1 (eyes): a fact about a point or a walk, no choice. Shared by the stance modules,
+ * FleePoint (where to run from a melee enemy), FollowSpot (where a bot follows the leader),
+ * ShotSpot, LosBreak and MeleeRoutes (the walks of melee bots to enemies). Moved here from
+ * Behaviors/ on 2026-11-07. Map thread of the bot: reads creatures and pathfinds.
  */
 
 #ifndef MANGOS_COMMANDER_SAFE_ROUTE_H
@@ -45,6 +46,8 @@ namespace Commander
         public:
             explicit IdleCreatures(Player* me, WorldObject const* center = nullptr,
                                    float margin = IDLE_MARGIN, float scanRadius = SCAN_RADIUS);
+            // Scanned around a point (a long walk: MeleeRoutes).
+            IdleCreatures(Player* me, Position3 const& center, float scanRadius, float margin = IDLE_MARGIN);
             // A creature would attack the bot standing at `p`, or would once it wandered
             // (AggroRange::CoversWandering).
             bool Near(Position3 const& p) const;
@@ -62,6 +65,7 @@ namespace Commander
 
         private:
             IdleCreatures() = default;
+            void Scan(Player* me, Map* map, Position3 const& center, float margin, float scanRadius);
             struct Idle
             {
                 Creature const* creature = nullptr;
@@ -89,8 +93,11 @@ namespace Commander
 
         // The walk from `me` to `to` (pathfinding): reachable (PathReaches), at most `maxDetour`
         // times the straight line (+2 yd), and every sampled point outside `idle`. Without a
-        // navmesh path (PATHFIND_NOT_USING_PATH): straight line of sight instead.
-        bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour);
+        // navmesh path (PATHFIND_NOT_USING_PATH): straight line of sight instead. `length`, if
+        // given: the path's length (the straight distance without a navmesh path), set whenever
+        // a path was found.
+        bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour,
+                        float* length = nullptr);
 
         // The walk from `me` to `to` along the navmesh path (the straight line when there is no
         // complete path) is outside `idle`. No reachability or detour rule: for a walk that

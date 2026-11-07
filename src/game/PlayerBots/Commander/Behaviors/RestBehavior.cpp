@@ -1,7 +1,7 @@
 #include "Commander/Behaviors/RestBehavior.h"
 #include "Commander/Behaviors/HealerStanceBehavior.h"
 #include "Commander/Behaviors/RangedStanceBehavior.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/RestValue.h"
 #include "Commander/Perception/Tanks.h"

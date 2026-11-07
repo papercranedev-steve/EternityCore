@@ -38,6 +38,13 @@ namespace Commander
         // for holdMs (propose it again every tick to keep it); `target` is faced at the end.
         // The original rotation still runs in the same tick (instant abilities while walking).
         Backpedal,
+        // Melee stance (MeleeStanceBehavior): attack `target` if it is not the victim yet, then
+        // chase it at angle `x` (radians from its facing, PartyBotAI::OrderChase). The chase
+        // keeps running after the tick; the original rotation still runs in the same tick.
+        Chase,
+        // Stop the chase of the victim (keeps the victim): the walk there passes an idle pack.
+        // The original rotation still runs in the same tick.
+        StopChase,
         Hold,       // do nothing this tick and skip the original rotation
         // Out of combat: eat and / or drink what is missing, or keep sitting (PartyBotAI::
         // StartResting); fails in combat or with nothing missing. Every other action stands a
@@ -106,11 +113,14 @@ namespace Commander
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
         // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
         CrowdControl,
-        // While the party fights (WorldModel::InFight), where healers and ranged stand: the
-        // 25 yd chase of casters and ranged weapon users (CombatBotBaseAI::UsesCasterChase) and
-        // following the leader. RangedStanceBehavior (ranged damage dealers) and
-        // HealerStanceBehavior (healers) place them instead (PartyBotAI::IsStanceControlled).
-        CasterChase,
+        // While the party fights (WorldModel::InFight), where a bot stands: following the
+        // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and
+        // ranged weapon users, melee behind its victim). The stance module of the bot's role
+        // places it instead (PartyBotAI::IsStanceControlled): HealerStanceBehavior (healers),
+        // RangedStanceBehavior (ranged damage dealers), MeleeStanceBehavior (melee damage
+        // dealers). Tanks are not taken over yet. Was CasterChase (healers and ranged only)
+        // until 2026-11-07.
+        Stance,
         Count
     };
 

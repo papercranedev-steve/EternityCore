@@ -1,4 +1,4 @@
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/AggroRange.h"
 #include "Creature.h"
 #include "Map.h"
@@ -21,16 +21,16 @@ namespace SafeRoute
         class IdleAggressorCheck
         {
         public:
-            IdleAggressorCheck(Player const* me, WorldObject const* center, float range)
+            IdleAggressorCheck(Player const* me, Position3 const& center, float range)
                 : m_me(me), m_center(center), m_range(range) {}
             bool operator()(Creature* c)
             {
-                return AggroRange::IsIdleAggressor(c, m_me) && m_center->IsWithinDist(c, m_range, false);
+                return AggroRange::IsIdleAggressor(c, m_me) && c->GetDistance2d(m_center.x, m_center.y) <= m_range;
             }
 
         private:
             Player const* m_me;
-            WorldObject const* m_center;
+            Position3 m_center;
             float m_range;
         };
 
@@ -54,10 +54,20 @@ namespace SafeRoute
     {
         if (!center)
             center = me;
+        Scan(me, me->GetMap(), PositionOf(center), margin, scanRadius);
+    }
+
+    IdleCreatures::IdleCreatures(Player* me, Position3 const& center, float scanRadius, float margin)
+    {
+        Scan(me, me->GetMap(), center, margin, scanRadius);
+    }
+
+    void IdleCreatures::Scan(Player* me, Map* map, Position3 const& center, float margin, float scanRadius)
+    {
         std::list<Creature*> found;
         IdleAggressorCheck check(me, center, scanRadius);
         MaNGOS::CreatureListSearcher<IdleAggressorCheck> searcher(found, check);
-        Cell::VisitGridObjects(center, searcher, scanRadius);
+        Cell::VisitGridObjects(center.x, center.y, map, searcher, scanRadius);
         for (Creature* c : found)
         {
             Idle i;
@@ -149,7 +159,7 @@ namespace SafeRoute
         return gap <= OFF_MESH_STEP && map->isInLineOfSight(end.x, end.y, end.z + 2.0f, to.x, to.y, to.z + 2.0f);
     }
 
-    bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour)
+    bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour, float* length)
     {
         Position3 const here = PositionOf(me);
         PathInfo path(me);
@@ -158,7 +168,13 @@ namespace SafeRoute
         if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
             return false;
         if (type & PATHFIND_NOT_USING_PATH)
+        {
+            if (length)
+                *length = Distance2d(here, to);
             return me->GetMap()->isInLineOfSight(here.x, here.y, here.z + 2.0f, to.x, to.y, to.z + 2.0f);
+        }
+        if (length)
+            *length = path.Length();
         if (!PathReaches(me->GetMap(), path, to))
             return false;
 

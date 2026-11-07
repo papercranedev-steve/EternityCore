@@ -41,7 +41,7 @@ namespace TankTargets
                     continue;
                 bool const isCurrent = e == current;
                 if (!isCurrent && distance > MELEE_REACH + e->boundingRadius &&
-                    RouteRisk::CrossesIdle(world, tank.pos, e->pos))
+                    RouteRisk::Blocked(world, tank, *e))
                     continue;
 
                 LooseValue const v = LooseEnemy::WinBack(world, *e, *victim, tank, tankRate, distance);
@@ -110,7 +110,7 @@ namespace TankTargets
                     return false;
                 float const distance = PackResolver::Distance(tank.pos, e->pos);
                 return distance <= JOIN_FIGHT_YD &&
-                       (distance <= MELEE_REACH + e->boundingRadius || !RouteRisk::CrossesIdle(world, tank.pos, e->pos));
+                       (distance <= MELEE_REACH + e->boundingRadius || !RouteRisk::Blocked(world, tank, *e));
             };
             auto const pick = [&](EnemyFacts const* e, char const* reason)
             {

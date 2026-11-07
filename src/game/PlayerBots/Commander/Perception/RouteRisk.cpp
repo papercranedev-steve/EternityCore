@@ -1,4 +1,6 @@
 #include "Commander/Perception/RouteRisk.h"
+#include "Commander/Perception/PackResolver.h"
+#include <algorithm>
 #include <cmath>
 
 namespace Commander
@@ -49,6 +51,21 @@ namespace RouteRisk
             if (Crosses(p, from, to))
                 return true;
         return false;
+    }
+
+    bool Blocked(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy)
+    {
+        if (RouteFact const* r = world.FindRoute(bot.guid, enemy.guid))
+            return !r->safe;
+        return CrossesIdle(world, bot.pos, enemy.pos);
+    }
+
+    float WalkYd(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy)
+    {
+        float const straight = PackResolver::Distance(bot.pos, enemy.pos);
+        if (RouteFact const* r = world.FindRoute(bot.guid, enemy.guid))
+            return std::max(straight, r->pathYd);
+        return straight;
     }
 }
 }

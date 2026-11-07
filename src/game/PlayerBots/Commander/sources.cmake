@@ -153,8 +153,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ControlValue.cpp
   ${COMMANDER_DIR}/Behaviors/FleePoint.h
   ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
-  ${COMMANDER_DIR}/Behaviors/SafeRoute.h
-  ${COMMANDER_DIR}/Behaviors/SafeRoute.cpp
+  ${COMMANDER_DIR}/Perception/SafeRoute.h
+  ${COMMANDER_DIR}/Perception/SafeRoute.cpp
+  ${COMMANDER_DIR}/Perception/MeleeRoutes.h
+  ${COMMANDER_DIR}/Perception/MeleeRoutes.cpp
   ${COMMANDER_DIR}/Perception/AggroRange.h
   ${COMMANDER_DIR}/Perception/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/ShotSpot.h
@@ -165,6 +167,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/MeleeStanceBehavior.h
+  ${COMMANDER_DIR}/Behaviors/MeleeStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/RestBehavior.h
   ${COMMANDER_DIR}/Behaviors/RestBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h

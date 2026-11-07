@@ -27,6 +27,8 @@ namespace Commander
                 case BotActionType::MoveTo: return "move";
                 case BotActionType::StopMove: return "stop";
                 case BotActionType::Backpedal: return "backpedal";
+                case BotActionType::Chase:  return "chase";
+                case BotActionType::StopChase: return "stop-chase";
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::Rest:   return "rest";
                 case BotActionType::HoldFire: return "holdfire";
@@ -64,7 +66,8 @@ namespace Commander
         bool LetsRotationRun(BotActionType type)
         {
             return type == BotActionType::Attack || type == BotActionType::Backpedal ||
-                   type == BotActionType::StopMove;
+                   type == BotActionType::StopMove || type == BotActionType::Chase ||
+                   type == BotActionType::StopChase;
         }
 
         // Highest tier first, then the highest score inside the tier.
@@ -409,6 +412,29 @@ namespace Commander
                     return false;
                 // Original follow / chase off while walking (the order is renewed every tick).
                 bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs);
+                return true;
+            }
+            case BotActionType::Chase:
+            {
+                if (!pTarget || !bot->IsValidHostileTarget(pTarget))
+                    return false;
+                if (me->GetVictim() != pTarget)
+                {
+                    if (me->IsMounted())    // Unit::Attack refuses while mounted
+                        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+                    if (!bot->AttackStart(pTarget))
+                        return false;
+                }
+                return bot->OrderChase(pTarget, action.x);
+            }
+            case BotActionType::StopChase:
+            {
+                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
+                    return false;
+                if (!me->IsStopped())
+                    me->StopMoving();
+                me->GetMotionMaster()->Clear(false, true);
+                me->GetMotionMaster()->MoveIdle();
                 return true;
             }
             case BotActionType::Hold:

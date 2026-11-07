@@ -178,10 +178,22 @@ public:
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;
-    // While the party fights a Commander stance module places this healer or ranged bot
-    // (Takeover::CasterChase: HealerStanceBehavior, RangedStanceBehavior), also before it is
-    // in combat itself: UpdateAI does not follow the leader and stops a follow under way.
+    // While the party fights a Commander stance module places this healer, ranged (keeping a
+    // caster distance) or melee damage bot (Takeover::Stance: HealerStanceBehavior,
+    // RangedStanceBehavior, MeleeStanceBehavior), also before it is in combat itself: UpdateAI
+    // does not follow the leader and stops a follow under way. Not tanks yet.
     bool IsStanceControlled() const;
+    // IsStanceControlled and the bot is not a healer: its chase belongs to the stance module
+    // (BeginChasing does not start one, UpdateAI drops one under way). Ranged: no 25 yd caster
+    // chase; melee: the module chases at the angle it chose (OrderChase).
+    bool IsChaseControlled() const;
+    // Commander melee stance (BotActionType::Chase): chase `pVictim` at `angle` (radians, from
+    // its facing; MoveChase distance 1 as the original chase). False when it cannot (rooted,
+    // dead victim). Restarted only when the victim or the angle changed.
+    bool OrderChase(Unit* pVictim, float angle);
+    // The angle of the chase this bot runs (OrderChase or the original one), or false when it
+    // does not chase `pVictim`.
+    bool GetChaseAngle(Unit const* pVictim, float& angle) const;
     // Mana per second the bots' drink (PB_SPELL_DRINK, no item) restores at the server's mana
     // rate; 0 without a mana pool. A fact for the Commander (PartyMemberFacts::drinkManaPerSec).
     float DrinkManaPerSec() const;
@@ -197,9 +209,6 @@ public:
     // leader: full at once (it is about to be teleported), false. The Commander decides when a
     // resting bot stands up (the arbiter before any other action, the heal order step).
     bool StartResting();
-    // IsStanceControlled and the bot keeps a caster distance (UsesCasterChase): BeginChasing
-    // does not start the 25 yd caster chase, UpdateAI drops one under way.
-    bool IsCasterChaseControlled() const;
     // In combat the Commander crowd control module decides controls (CrowdControlAssigner):
     // the rotations' own sheep / Blind / Hibernate / Shackle / Banish / Fear / Howl /
     // Intimidating Shout and marked-target controls stand down.
@@ -210,8 +219,9 @@ public:
     // The enemy `pUnit` stands in the path of a patrol the party moved off (Commander
     // PatrolMovePlan::avoid, only set during a fight). Nobody chases it there.
     bool IsInPatrolPath(Unit const* pUnit) const;
-    // Stops a follow (or a caster chase) a Commander stance module took over (UpdateAI, before
-    // and after the Commander hook: the takeover may start in the hook's tick).
+    // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
+    // Commander stance module took over (UpdateAI, before and after the Commander hook: the
+    // takeover may start in the hook's tick).
     void StopTakenOverMovement();
     // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
     // idle creatures' aggro range (Commander/Behaviors/FollowSpot.h).
@@ -294,6 +304,10 @@ public:
     float m_followCheckY = 0.0f;
     float m_followCheckO = 0.0f;
     bool m_followChecked = false;
+    // The last OrderChase (Commander melee stance): victim and angle. Cleared by an original
+    // chase (BeginChasing, const).
+    mutable ObjectGuid m_chaseVictim;
+    float m_chaseAngle = 0.0f;
     // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
     // Last area channel check (Commander/Behaviors/AreaDamageBehavior.h WatchChannel).

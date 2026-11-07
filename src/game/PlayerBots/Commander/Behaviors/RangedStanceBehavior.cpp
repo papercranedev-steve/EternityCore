@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/RangedStanceBehavior.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/HazardZones.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -108,7 +108,7 @@ namespace Commander
 
     bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world) const
     {
-        return what == Takeover::CasterChase && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
+        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
                !bot->me->GetTransport();
     }
 

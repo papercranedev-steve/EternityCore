@@ -1,7 +1,7 @@
 #include "Commander/Behaviors/EscapeBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/FleePoint.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/BotDirectives.h"

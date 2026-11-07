@@ -362,6 +362,17 @@ namespace Commander
         uint32 maxLevel = 0;
     };
 
+    // The walk of a melee or tank bot to an enemy (Perception/MeleeRoutes.h).
+    struct RouteFact
+    {
+        ObjectGuid bot;
+        ObjectGuid enemy;
+        // The navmesh path gets there without coming into an idle creature's aggro range
+        // (SafeRoute::PathIsSafe, wander circles included). False also when there is no path.
+        bool safe = false;
+        float pathYd = 0.0f;        // path length (straight distance without a navmesh)
+    };
+
     // Fight-wide rates for the common value unit (value-scoring doc section 3).
     // Filled by CombatRates (Perception/CombatRates.h) on every refresh.
     struct RateFacts
@@ -418,8 +429,18 @@ namespace Commander
         // party from beyond the pack scan (Patchwork Horror, strat-20261101-225111).
         std::vector<PatrolFacts> patrols;
         RateFacts rates;
+        // Walks of melee and tank bots to the enemies they could be sent to, along the navmesh
+        // path (Perception/MeleeRoutes.h). A pair missing here was not checked yet.
+        std::vector<RouteFact> routes;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
+        RouteFact const* FindRoute(ObjectGuid bot, ObjectGuid enemy) const
+        {
+            for (RouteFact const& r : routes)
+                if (r.bot == bot && r.enemy == enemy)
+                    return &r;
+            return nullptr;
+        }
         EnemyFacts const* FindEnemy(ObjectGuid guid) const;
         EnemyFacts const* FindTargeted(ObjectGuid guid) const
         {

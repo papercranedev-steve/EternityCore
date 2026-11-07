@@ -4,8 +4,9 @@
  *
  * Tank (TankTargets::Choose), first that applies:
  *  1. Loose enemy: hitting a member that is not a tank (not an ally, not a charmed member),
- *     within TANK_REACH yd, no other tank bot nearer by TANK_SHARE_MARGIN, a straight walk
- *     that does not cross an idle creature (Perception/RouteRisk.h).
+ *     within TANK_REACH yd, no other tank bot nearer by TANK_SHARE_MARGIN, a walk that does
+ *     not pass an idle creature (RouteRisk::Blocked: the navmesh route of
+ *     Perception/MeleeRoutes.h, the straight line before it is checked).
  *     benefit = (loss doing nothing - loss until won back with threat) x override weight
  *     (Perception/LooseEnemy.h), cost = SwitchCost; the best positive one. Urgent when the
  *     victim dies within the horizon. Already the tank's target: kept.
@@ -24,7 +25,9 @@
  *  hitting below Stop: same rule, hysteresis between the two). An enemy nobody is fighting yet
  *  is the tank's first when there is a tank bot (else the player's: he holds it).
  *  Reach: melee within MELEE_SWITCH_YD of its edge (JOIN_FIGHT_YD with no target), no idle
- *  creature on the straight walk; ranged within RANGED_SWITCH_YD (JOIN_FIGHT_YD; the ranged
+ *  creature on the walk (RouteRisk::Blocked, as for the tank); a melee bot's current target
+ *  it cannot walk to counts as no target (the melee stance module stops that chase);
+ *  ranged within RANGED_SWITCH_YD (JOIN_FIGHT_YD; the ranged
  *  stance module walks it into range and sight). Line of
  *  sight is the cerebellum's (TargetBehavior).
  *  Value (Smith's rule exchange, FocusAssigner.h): killing f before the current target c saves

@@ -40,9 +40,14 @@ namespace DamageTargets
     {
         WorldModel const& world = ctx.world;
         bool const melee = bot.role == ROLE_MELEE_DPS;
+        float const reach = melee ? MELEE_REACH : RANGED_REACH;
+        // A melee bot that cannot walk to its target (the route passes an idle pack, or no
+        // path): the melee stance module stops the chase, so it is a bot without a target.
+        if (melee && current && PackResolver::Distance(bot.pos, current->pos) - current->boundingRadius > reach &&
+            RouteRisk::Blocked(world, bot, *current))
+            current = nullptr;
         float const range = current ? (melee ? MELEE_SWITCH_YD : RANGED_SWITCH_YD)
                                     : JOIN_FIGHT_YD;
-        float const reach = melee ? MELEE_REACH : RANGED_REACH;
 
         // Near aggro on the current target: ThreatBehavior stops hitting it, so staying is worth
         // nothing and any safe enemy is better than standing there.
@@ -62,7 +67,7 @@ namespace DamageTargets
             float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
             if (distance > range)
                 continue;
-            if (melee && distance > reach && RouteRisk::CrossesIdle(world, bot.pos, e->pos))
+            if (melee && distance > reach && RouteRisk::Blocked(world, bot, *e))
                 continue;
             if (!ThreatAllows(ctx, bot, *e, false))
                 continue;

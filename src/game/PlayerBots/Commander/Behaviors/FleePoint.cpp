@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/FleePoint.h"
-#include "Commander/Behaviors/SafeRoute.h"
+#include "Commander/Perception/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Group.h"
