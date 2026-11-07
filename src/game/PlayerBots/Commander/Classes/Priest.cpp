@@ -53,6 +53,15 @@ namespace Commander
             {
                 return m_bot.m_spells.priest.pPowerWordShield;
             }
+
+            // Power Word: Shield on whoever is about to die (Weakened Soul: the spell's mechanic).
+            std::vector<SurvivalSpell> Survival() const override
+            {
+                SurvivalSpell s;
+                s.spell = m_bot.m_spells.priest.pPowerWordShield;
+                s.effect = SurvivalEffect::Absorb;
+                return { s };
+            }
         };
     }
 

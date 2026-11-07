@@ -178,6 +178,10 @@ public:
     // The Commander team rescue decides Fade (RescueAssigner / RescueBehavior): the priest rotation's own
     // "attacked: Fade" stands down.
     bool IsThreatDropControlled() const;
+    // The Commander team rescue decides who is kept alive and how (RescueBehavior,
+    // Takeover::Survival): the rotations' health threshold Divine Shield, Blessing of
+    // Protection, Lay on Hands, Feign Death, Vanish, Ice Block, Shield Wall, Last Stand stand down.
+    bool IsSurvivalControlled() const;
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;

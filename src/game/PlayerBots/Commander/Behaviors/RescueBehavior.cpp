@@ -10,8 +10,21 @@
 
 namespace Commander
 {
+    namespace
+    {
+        bool HasSurvival(PartyBotAI const* bot)
+        {
+            for (SurvivalSpell const& s : bot->Kit().Survival())
+                if (s.spell)
+                    return true;
+            return false;
+        }
+    }
+
     bool RescueBehavior::AppliesTo(PartyBotAI const* bot) const
     {
+        if (HasSurvival(bot))
+            return true;
         if (bot->GetRole() == ROLE_TANK)
             return !bot->m_spellListTaunt.empty();
         return bot->Kit().ThreatDrop() != nullptr;
@@ -27,6 +40,8 @@ namespace Commander
                 return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
             case Takeover::ThreatDrop:
                 return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop();
+            case Takeover::Survival:
+                return HasSurvival(bot);
             default:
                 return false;
         }
@@ -58,6 +73,17 @@ namespace Commander
                 return;
             p.reason = "rescue: taunt loose enemy";
             p.action.target = duty->enemy;
+        }
+        else if (duty->way == RescueWay::Save)
+        {
+            // On the member about to die, or on itself (Shield Wall, Ice Block, Vanish): a
+            // warrior swaps to Defensive Stance first (the arbiter, DoCastWithStance).
+            Unit* target = me->GetMap()->GetUnit(duty->victim);
+            if (!target || !target->IsAlive() || (target != me && !me->IsWithinLOSInMap(target)) ||
+                !bot->CanCastWithStance(target, spell))
+                return;
+            p.reason = "rescue: about to die, save";
+            p.action.target = duty->victim;
         }
         else
         {

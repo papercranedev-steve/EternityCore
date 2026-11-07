@@ -67,7 +67,8 @@ namespace Commander
             n.target = enemy;
             n.now = true;
             // Controlling a loose enemy or taking it off its victim (RescueAssigner): one of them.
-            n.exclusive = DutyExclusive::EnemyHandled;
+            n.blockedBy.push_back({ DutyKeyKind::EnemyHandled, enemy });
+            n.marks.push_back({ DutyKeyKind::EnemyHandled, enemy });
             n.reason = "control";
             return n;
         };

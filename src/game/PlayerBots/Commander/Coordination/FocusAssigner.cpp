@@ -212,7 +212,10 @@ namespace Commander
                 // A summon on a non-tank is also a loose enemy (RescueAssigner): killing it or
                 // taking it off its victim, one of them.
                 if (n.loose)
-                    need.exclusive = DutyExclusive::EnemyHandled;
+                {
+                    need.blockedBy.push_back({ DutyKeyKind::EnemyHandled, e.guid });
+                    need.marks.push_back({ DutyKeyKind::EnemyHandled, e.guid });
+                }
                 // Equal points: closest to its victim first (the most urgent).
                 need.tieMs = uint32(n.distanceToVictim * 1000.0f);
                 need.reason = n.reason;

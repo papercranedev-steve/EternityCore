@@ -63,13 +63,12 @@ namespace Commander
             if (!shield)
                 return false;
 
+            // Someone about to die: the team rescue's choice (RescueAssigner, Takeover::Survival).
             bool const emergency = assessment.need == HealPlan::Need::Emergency;
-            float const landSec = heal ? heal->castSec + HealPlan::LANDING_MARGIN_SEC : HealPlan::NO_LIMIT;
-            bool const tooLate = emergency && assessment.timeToDie < landSec;
             bool const self = unit == bot->me;
             bool const pushback = self && target.intake > 0.0f && heal && heal->castSec > 0.0f &&
                                   unit->GetHealthPercent() < HealPlanBehavior::SHIELD_SELF_PCT;
-            if (!tooLate && !pushback)
+            if (!pushback)
                 return false;
             // Weakened Soul gives shield immunity; one shield at a time.
             if (unit->IsImmuneToMechanic(MECHANIC_SHIELD) || unit->HasAura(shield->Id) ||
@@ -79,18 +78,14 @@ namespace Commander
             float const absorb = float(std::max(0, shield->CalculateSimpleValue(EFFECT_INDEX_0)));
             float const durationSec = std::max(0, shield->GetDuration()) / 1000.0f;
             float const taken = std::min(absorb, target.intake * durationSec);
-            // Benefit: the hits it takes; plus the death when the heal would land too late and
-            // the shield holds until the next heal can (one global cooldown, then that heal).
-            float benefit = Value::Points(world, taken);
-            if (tooLate && target.intake > 0.0f &&
-                assessment.timeToDie + absorb / target.intake >= HealPlan::GCD_SEC + (heal ? heal->castSec : 0.0f))
-                benefit += Value::DeathPenalty(facts);
+            // Benefit: the hits it takes.
+            float const benefit = Value::Points(world, taken);
 
             Proposal p;
             p.kind = ProposalKind::HealOrder;
             p.tier = emergency ? ProposalTier::Urgent : ProposalTier::Assigned;
             p.source = "heal";
-            p.reason = tooLate ? "heal lands too late: shield" : "hit while casting: shield";
+            p.reason = "hit while casting: shield";
             p.action.type = BotActionType::Cast;
             p.action.target = facts.guid;
             p.action.spell = shield;

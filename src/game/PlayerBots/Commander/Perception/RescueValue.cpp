@@ -13,6 +13,20 @@ namespace Commander
 {
 namespace RescueValue
 {
+    ThreatEntry const* NextHolder(EnemyFacts const& e, ObjectGuid who, float threatAfter)
+    {
+        ThreatEntry const* next = nullptr;
+        for (ThreatEntry const& r : e.threat)
+        {
+            if (r.guid == who || !r.onList)
+                continue;
+            if (r.threat > threatAfter * (r.inMeleeReach ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR) &&
+                (!next || r.threat > next->threat))
+                next = &r;
+        }
+        return next;
+    }
+
     PartyMemberFacts const* LooseVictim(WorldModel const& world, EnemyFacts const& e)
     {
         if (!e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim.IsEmpty())
@@ -106,17 +120,7 @@ namespace RescueValue
         for (ThreatEntry const& r : e.threat)
             if (r.guid == victim.guid)
                 mine = r.threat;
-        float const after = std::max(0.0f, mine - a.drop);
-        // Who it turns to: the highest other row that beats my lowered threat by the aggro rule.
-        ThreatEntry const* next = nullptr;
-        for (ThreatEntry const& r : e.threat)
-        {
-            if (r.guid == victim.guid || !r.onList)
-                continue;
-            if (r.threat > after * (r.inMeleeReach ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR) &&
-                (!next || r.threat > next->threat))
-                next = &r;
-        }
+        ThreatEntry const* next = NextHolder(e, victim.guid, std::max(0.0f, mine - a.drop));
         if (!next)
             return o;
         float const seconds = std::min(a.durationSec, Value::EnemyTimeToDie(world, e));

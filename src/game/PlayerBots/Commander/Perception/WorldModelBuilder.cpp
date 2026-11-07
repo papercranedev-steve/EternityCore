@@ -89,6 +89,23 @@ namespace WorldModelBuilder
             f.tankStance = form == FORM_DEFENSIVESTANCE || form == FORM_BEAR || form == FORM_DIREBEAR ||
                            (f.classId == CLASS_PALADIN && unit->HasAura(SPELL_RIGHTEOUS_FURY));
 
+            // Team rescue (Perception/SurvivalValue.h): what still protects it.
+            for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
+                f.absorb += std::max(0.0f, aura->GetModifier()->m_amount);
+            for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_MANA_SHIELD))
+            {
+                float amount = std::max(0.0f, aura->GetModifier()->m_amount);
+                if (float const perPoint = aura->GetSpellProto()->EffectMultipleValue[aura->GetEffIndex()])
+                    amount = std::min(amount, float(unit->GetPower(POWER_MANA)) / perPoint);
+                f.absorb += amount;
+            }
+            f.damageTakenMult = unit->GetTotalAuraMultiplier(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN);
+            f.immunePhysical = unit->IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL);
+            f.immuneMagic = unit->IsImmuneToDamage(SpellSchoolMask(SPELL_SCHOOL_MASK_MAGIC));
+            for (uint32 mechanic : { uint32(MECHANIC_SHIELD), uint32(MECHANIC_IMMUNE_SHIELD) })
+                if (unit->IsImmuneToMechanic(Mechanics(mechanic)))
+                    f.immuneMechanics |= 1u << mechanic;
+
             DamageIntake::Stats const taken = DamageIntake::Query(f.guid, WorldTimer::getMSTime());
             f.takenDps = taken.dps;
             f.takenBurst = taken.burst;
@@ -577,6 +594,60 @@ namespace WorldModelBuilder
             a.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, spell);
         }
 
+        // Team rescue: ClassKit::Survival with the numbers from the spell data.
+        void FillSurvival(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (SurvivalSpell const& s : ai->Kit().Survival())
+            {
+                SpellEntry const* spell = s.spell;
+                if (!spell)
+                    continue;
+                SurvivalAbility a;
+                a.spellId = spell->Id;
+                a.effect = SurvivalAbility::Effect(uint8(s.effect));
+                a.durationSec = s.durationSec > 0.0f ? s.durationSec : std::max(0, spell->GetDuration()) / 1000.0f;
+                switch (s.effect)
+                {
+                    case SurvivalEffect::Absorb:
+                        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                            if (spell->EffectApplyAuraName[i] == SPELL_AURA_SCHOOL_ABSORB)
+                                a.amount = float(std::max(0, spell->CalculateSimpleValue(SpellEffectIndex(i))));
+                        break;
+                    case SurvivalEffect::Reduce:
+                        a.amount = 1.0f;
+                        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                            if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN)
+                                a.amount = std::max(0.0f, 1.0f + spell->CalculateSimpleValue(SpellEffectIndex(i)) / 100.0f);
+                        break;
+                    case SurvivalEffect::Heal:
+                        a.amount = float(me->GetMaxHealth());
+                        break;
+                    case SurvivalEffect::ExtraHealth:
+                        a.amount = s.fraction * float(me->GetMaxHealth());
+                        break;
+                    default:
+                        break;
+                }
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+                a.maxRange = s.selfOnly ? 0.0f : std::max(range ? range->maxRange : 0.0f, 5.0f);
+                a.cooldownMs = spell->GetRecoveryTime();
+                if (s.allMana)
+                    a.manaCost = me->GetPower(POWER_MANA);
+                else if (Powers(spell->powerType) == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.mechanic = spell->Mechanic;
+                a.selfOnly = s.selfOnly;
+                a.notOnTank = s.notOnTank;
+                a.casterStops = s.casterStops;
+                a.targetStops = s.targetStops;
+                a.ready = f.CanAct() && ai->IsReadyWithStance(spell) &&
+                          !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
+                          (!s.needsShield || ai->IsWearingShield(me));
+                f.survival.push_back(a);
+            }
+        }
+
         // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim.
         void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -720,6 +791,7 @@ namespace WorldModelBuilder
                         FillControls(ai, f);
                         FillTaunts(ai, f);
                         FillThreatDrop(ai, f);
+                        FillSurvival(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
                     }

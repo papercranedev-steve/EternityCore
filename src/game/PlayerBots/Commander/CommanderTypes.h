@@ -113,6 +113,10 @@ namespace Commander
         // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
         // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
         CrowdControl,
+        // Keeping someone about to die alive (team rescue: RescueBehavior): the rotations'
+        // health threshold reflexes stand down (Divine Shield, Blessing of Protection, Lay on
+        // Hands, Feign Death, Vanish, Ice Block, a damage warrior's Shield Wall / Last Stand).
+        Survival,
         // While the party fights (WorldModel::InFight), where a bot stands: following the
         // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and
         // ranged weapon users, melee behind its victim). The stance module of the bot's role

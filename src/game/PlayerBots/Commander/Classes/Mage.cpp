@@ -66,6 +66,17 @@ namespace Commander
             {
                 return m_bot.m_spells.mage.pEvocation;
             }
+
+            // Ice Block: immune, but the mage does nothing while it lasts.
+            std::vector<SurvivalSpell> Survival() const override
+            {
+                SurvivalSpell block;
+                block.spell = m_bot.m_spells.mage.pIceBlock;
+                block.effect = SurvivalEffect::Immune;
+                block.selfOnly = true;
+                block.casterStops = true;
+                return { block };
+            }
         };
     }
 

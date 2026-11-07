@@ -37,6 +37,27 @@ namespace Commander
             {
                 return { m_bot.m_spells.paladin.pHammerOfJustice };
             }
+
+            // Forbearance (Divine Shield, Blessing of Protection) is the spells' mechanic.
+            std::vector<SurvivalSpell> Survival() const override
+            {
+                auto const& s = m_bot.m_spells.paladin;
+                SurvivalSpell shield;
+                shield.spell = s.pDivineShield;
+                shield.effect = SurvivalEffect::Immune;
+                shield.selfOnly = true;
+                shield.notOnTank = true;
+                SurvivalSpell bop;
+                bop.spell = s.pBlessingOfProtection;
+                bop.effect = SurvivalEffect::ImmunePhysical;
+                bop.notOnTank = true;
+                bop.targetStops = true;
+                SurvivalSpell loh;
+                loh.spell = s.pLayOnHands;
+                loh.effect = SurvivalEffect::Heal;
+                loh.allMana = true;
+                return { shield, bop, loh };
+            }
         };
     }
 

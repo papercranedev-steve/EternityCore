@@ -51,6 +51,32 @@ namespace Commander
         bool onTarget = false;
     };
 
+    // What a "keep someone alive" spell does (team rescue, Perception/SurvivalValue.h).
+    enum class SurvivalEffect : uint8
+    {
+        Absorb,         // absorbs damage (Power Word: Shield; amount from the spell)
+        Reduce,         // damage taken x factor for its duration (Shield Wall; from the spell's aura)
+        Immune,         // no damage for its duration (Divine Shield, Ice Block)
+        ImmunePhysical, // no physical damage for its duration (Blessing of Protection)
+        Heal,           // heals the caster's maximum health (Lay on Hands; uses all mana)
+        ExtraHealth,    // more health for a while: `fraction` of maximum health (Last Stand)
+        DropThreat,     // the enemies on it turn to someone else (Vanish, Feign Death)
+    };
+
+    struct SurvivalSpell
+    {
+        SpellEntry const* spell = nullptr;
+        SurvivalEffect effect = SurvivalEffect::Absorb;
+        float fraction = 0.0f;      // ExtraHealth
+        float durationSec = 0.0f;   // 0 = the spell's duration (Last Stand: its triggered aura's)
+        bool selfOnly = false;
+        bool notOnTank = false;     // not on a tank: it stops the tank holding (Blessing of Protection, Divine Shield)
+        bool needsShield = false;   // Shield Wall
+        bool casterStops = false;   // the caster cannot act while it lasts (Ice Block)
+        bool targetStops = false;   // the target cannot attack while it lasts (Blessing of Protection)
+        bool allMana = false;       // costs all the caster's mana (Lay on Hands)
+    };
+
     class ClassKit
     {
     public:
@@ -90,8 +116,12 @@ namespace Commander
         // Drops its own threat for a while so enemies turn to someone else (priest Fade). Only
         // the Commander casts it (ThreatBehavior takes it over, Takeover::ThreatDrop).
         virtual SpellEntry const* ThreatDrop() const { return nullptr; }
-        // Instant absorb on an ally, last resort while running (RetreatBehavior).
+        // Instant absorb on an ally: the healer itself hit while casting (HealPlanBehavior),
+        // last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }
+        // Spells that keep a member about to die alive. Only the Commander casts them
+        // (team rescue: RescueAssigner picks one per member, Takeover::Survival).
+        virtual std::vector<SurvivalSpell> Survival() const { return {}; }
         // Area damage spells the Commander casts on packs (AreaDamageBehavior decides when and
         // where; the rotations do not cast them).
         virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
@@ -114,8 +144,7 @@ namespace Commander
         // The kit for the bot's class (Player::GetClass); the base kit (has nothing) for others.
         std::unique_ptr<ClassKit> Create(PartyBotAI const& bot);
 
-        // One per class file (Classes/<Class>.cpp). Hunters have nothing the modules ask
-        // for yet: base kit (add Classes/Hunter.cpp when they do, todo item 18).
+        // One per class file (Classes/<Class>.cpp). Hunters: Feign Death only so far (todo item 18).
         std::unique_ptr<ClassKit> MakeWarrior(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakePaladin(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeRogue(PartyBotAI const& bot);
@@ -124,6 +153,7 @@ namespace Commander
         std::unique_ptr<ClassKit> MakeMage(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeDruid(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeWarlock(PartyBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeHunter(PartyBotAI const& bot);
     }
 }
 

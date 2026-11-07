@@ -63,6 +63,10 @@ namespace Commander
             float Net() const { return benefit - cost; }
         };
 
+        // Who `e` turns to when `who` has only `threatAfter` left on it: the highest other row
+        // on its list beating that by the aggro rule (110% in melee reach, 130% otherwise).
+        ThreatEntry const* NextHolder(EnemyFacts const& e, ObjectGuid who, float threatAfter);
+
         // The member `e` hits instead of a tank (see the header), null = not loose.
         PartyMemberFacts const* LooseVictim(WorldModel const& world, EnemyFacts const& e);
 

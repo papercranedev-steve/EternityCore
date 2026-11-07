@@ -21,9 +21,9 @@
  *            none, the first other candidate even if it is primary elsewhere.
  * A need with neither is dropped. Candidates passed over for the primary are recorded with the
  * reason (DutyResult::passed, shown by `.partybot ai plan`).
- * Alternatives (DutyNeed::exclusive, 2026-11-07 team rescue): a need whose key and target an
- * earlier answered need already has is skipped (a control and a taunt on the same loose enemy
- * would both spend a bot on one problem).
+ * Alternatives (DutyNeed::blockedBy / marks, 2026-11-07 team rescue): a need blocked by a key an
+ * earlier answered need marked is skipped (a control and a taunt on the same loose enemy, or a
+ * taunt and Shield Wall for the same member, would both spend a bot on one problem).
  *
  * Pure function of its input (no game objects): replayable offline, the place where Jev would
  * choose among the same offers later.
@@ -45,19 +45,31 @@ namespace Commander
         Dispel,         // DispelAssigner: remove a debuff from a party member
         CrowdControl,   // CrowdControlAssigner: take an enemy out of the fight for a while
         Rescue,         // RescueAssigner: get an enemy off a member who is not a tank
+        Save,           // RescueAssigner: keep a member who is about to die alive (Shield Wall, a shield)
     };
 
-    // Needs of different kinds that solve the same problem of one enemy (DutyNeed::exclusive):
-    // at most one of them with the same key and target is answered, the first in the order
-    // above (the most valuable). 0 = no such group.
-    enum class DutyExclusive : uint8
+    // Needs of different kinds that solve the same problem (team rescue, 2026-11-07): a need is
+    // skipped when one of its `blockedBy` keys was marked by an earlier answered need (the
+    // order above: the most valuable first); an answered need marks its `marks` keys.
+    enum class DutyKeyKind : uint8
     {
-        None = 0,
         // The enemy is dealt with: taken off its victim (rescue), controlled (single target
-        // control) or killed by one bot (intercept of a summon on a non-tank).
-        EnemyHandled = 1,
+        // control) or killed by one bot (intercept of a summon on a non-tank). Key = enemy.
+        EnemyHandled,
+        // A loose enemy was taken off this member (rescue). Key = the member: no cooldown is
+        // burnt to save it in the same refresh.
+        LooseTaken,
+        // A cooldown or shield keeps this member alive (save). Key = the member: no loose enemy
+        // on it is taunted or faded in the same refresh.
+        Saved,
     };
 
+    struct DutyKey
+    {
+        DutyKeyKind kind = DutyKeyKind::EnemyHandled;
+        ObjectGuid guid;
+        bool operator==(DutyKey const& o) const { return kind == o.kind && guid == o.guid; }
+    };
     struct DutyCandidate
     {
         ObjectGuid bot;
@@ -77,7 +89,8 @@ namespace Commander
         bool wantsBackup = false;
         uint8 detail = 0;           // module data passed through to its result (interrupt: CastCategory)
         char const* reason = "";    // static text, passed through (intercept: why it must die)
-        DutyExclusive exclusive = DutyExclusive::None;
+        std::vector<DutyKey> blockedBy;
+        std::vector<DutyKey> marks;
         std::vector<DutyCandidate> candidates;
     };
 

@@ -105,6 +105,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/RescueValue.h
   ${COMMANDER_DIR}/Perception/RescueValue.cpp
+  ${COMMANDER_DIR}/Perception/SurvivalValue.h
+  ${COMMANDER_DIR}/Perception/SurvivalValue.cpp
   ${COMMANDER_DIR}/Perception/PetTaunt.h
   ${COMMANDER_DIR}/Perception/PetTaunt.cpp
   ${COMMANDER_DIR}/Coordination/PullControl.h
@@ -202,6 +204,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Classes/Mage.cpp
   ${COMMANDER_DIR}/Classes/Druid.cpp
   ${COMMANDER_DIR}/Classes/Warlock.cpp
+  ${COMMANDER_DIR}/Classes/Hunter.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/RoleAssigner.h

@@ -30,6 +30,16 @@ namespace Commander
                 auto const& s = m_bot.m_spells.rogue;
                 return { s.pSap, s.pBlind };
             }
+
+            // Vanish: the enemies on the rogue turn to someone else.
+            std::vector<SurvivalSpell> Survival() const override
+            {
+                SurvivalSpell vanish;
+                vanish.spell = m_bot.m_spells.rogue.pVanish;
+                vanish.effect = SurvivalEffect::DropThreat;
+                vanish.selfOnly = true;
+                return { vanish };
+            }
         };
     }
 

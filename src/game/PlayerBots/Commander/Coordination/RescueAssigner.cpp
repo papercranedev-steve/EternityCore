@@ -4,6 +4,7 @@
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/RescueValue.h"
 #include "Commander/Perception/RouteRisk.h"
+#include "Commander/Perception/SurvivalValue.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/WorldModel.h"
 #include <algorithm>
@@ -43,7 +44,8 @@ namespace Commander
             need.kind = DutyKind::Rescue;
             need.target = e.guid;
             need.now = true;
-            need.exclusive = DutyExclusive::EnemyHandled;
+            need.blockedBy = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::Saved, victim->guid } };
+            need.marks = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::LooseTaken, victim->guid } };
             need.reason = "loose enemy";
             auto const add = [&](ObjectGuid bot, uint32 spellId, RescueValue::Option const& o)
             {
@@ -83,6 +85,43 @@ namespace Commander
             if (!need.candidates.empty())
                 out.push_back(std::move(need));
         }
+
+        // 2. Members about to die (Perception/SurvivalValue.h): one spell to keep each alive.
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet || !m.alive)
+                continue;
+            SurvivalValue::Danger const danger = SurvivalValue::Of(world, m);
+            if (!danger.InDanger())
+                continue;
+            DutyNeed need;
+            need.kind = DutyKind::Save;
+            need.target = m.guid;
+            need.now = true;
+            need.detail = DETAIL_URGENT;
+            need.reason = "about to die";
+            need.blockedBy = { { DutyKeyKind::LooseTaken, m.guid } };
+            need.marks = { { DutyKeyKind::Saved, m.guid } };
+            for (PartyMemberFacts const& b : world.party)
+            {
+                if (!b.isBot || b.isPet)
+                    continue;
+                for (SurvivalAbility const& a : b.survival)
+                {
+                    RescueValue::Option const o = SurvivalValue::Save(world, m, danger, b, a);
+                    if (o.Net() <= 0.0f)
+                        continue;
+                    DutyCandidate c;
+                    c.bot = b.guid;
+                    c.spellId = a.spellId;
+                    c.rank = o.Net();
+                    need.candidates.push_back(c);
+                    need.points = std::max(need.points, o.Net());
+                }
+            }
+            if (!need.candidates.empty())
+                out.push_back(std::move(need));
+        }
     }
 
     void RescueAssigner::Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const
@@ -90,6 +129,18 @@ namespace Commander
         std::vector<RescueDuty> rescues;
         for (DutyResult const& r : results)
         {
+            if (r.kind == DutyKind::Save && !r.primary.IsEmpty())
+            {
+                RescueDuty d;
+                d.victim = r.target;
+                d.bot = r.primary;
+                d.spellId = r.primarySpellId;
+                d.points = r.points;
+                d.urgent = true;
+                d.way = RescueWay::Save;
+                rescues.push_back(d);
+                continue;
+            }
             if (r.kind != DutyKind::Rescue || r.primary.IsEmpty())
                 continue;
             EnemyFacts const* e = world.FindEnemy(r.target);

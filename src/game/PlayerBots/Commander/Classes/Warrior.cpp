@@ -48,6 +48,26 @@ namespace Commander
                          { s.pDemoralizingShout, 0.3f, false, false, false },
                          { s.pChallengingShout, 0.0f, true, false, false } };
             }
+
+            // Shield Wall (-75% damage, Defensive Stance: swapped to, a shield). Last Stand: +30%
+            // of maximum health for 20 s (the triggered spell 12976 is scripted, its data says 0).
+            // Both were taken out of the tank rotation 2026-11-02 for this decision.
+            std::vector<SurvivalSpell> Survival() const override
+            {
+                auto const& s = m_bot.m_spells.warrior;
+                SurvivalSpell wall;
+                wall.spell = s.pShieldWall;
+                wall.effect = SurvivalEffect::Reduce;
+                wall.selfOnly = true;
+                wall.needsShield = true;
+                SurvivalSpell stand;
+                stand.spell = s.pLastStand;
+                stand.effect = SurvivalEffect::ExtraHealth;
+                stand.fraction = 0.3f;
+                stand.durationSec = 20.0f;
+                stand.selfOnly = true;
+                return { wall, stand };
+            }
         };
     }
 

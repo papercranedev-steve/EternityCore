@@ -290,6 +290,11 @@ void PartyBotAI::StopTakenOverMovement()
     }
 }
 
+bool PartyBotAI::IsSurvivalControlled() const
+{
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Survival, WorldTimer::getMSTime());
+}
+
 bool PartyBotAI::IsThreatDropControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
@@ -1836,7 +1841,9 @@ void PartyBotAI::UpdateOutOfCombatAI_Paladin()
 
 void PartyBotAI::UpdateInCombatAI_Paladin()
 {
-    if (m_spells.paladin.pDivineShield &&
+    // Divine Shield, Blessing of Protection, Lay on Hands below a health threshold: the team
+    // rescue decides them while the Commander runs (Takeover::Survival, 2026-11-07).
+    if (m_spells.paladin.pDivineShield && !IsSurvivalControlled() &&
        (me->GetHealthPercent() < 20.0f) &&
        (m_role != ROLE_TANK) &&
         CanTryToCastSpell(me, m_spells.paladin.pDivineShield))
@@ -1847,7 +1854,7 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
 
     if (Unit* pFriend = me->FindLowestHpFriendlyUnit(30.0f, 70, true, me))
     {
-        if (m_spells.paladin.pBlessingOfProtection &&
+        if (m_spells.paladin.pBlessingOfProtection && !IsSurvivalControlled() &&
            !IsPhysicalDamageClass(pFriend->GetClass()) &&
             CanTryToCastSpell(pFriend, m_spells.paladin.pBlessingOfProtection))
         {
@@ -1861,7 +1868,7 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
             if (DoCastSpell(pFriend, m_spells.paladin.pBlessingOfSacrifice) == SPELL_CAST_OK)
                 return;
         }
-        if (m_spells.paladin.pLayOnHands &&
+        if (m_spells.paladin.pLayOnHands && !IsSurvivalControlled() &&
            (pFriend->GetHealthPercent() < 15.0f) &&
             CanTryToCastSpell(pFriend, m_spells.paladin.pLayOnHands))
         {
@@ -1916,7 +1923,7 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
     }
     else
     {
-        if (m_spells.paladin.pLayOnHands &&
+        if (m_spells.paladin.pLayOnHands && !IsSurvivalControlled() &&
            (me->GetHealthPercent() < 15.0f) &&
             CanTryToCastSpell(me, m_spells.paladin.pLayOnHands))
         {
@@ -2261,7 +2268,7 @@ void PartyBotAI::UpdateInCombatAI_Hunter()
                     return;
             }
 
-            if (m_spells.hunter.pFeignDeath &&
+            if (m_spells.hunter.pFeignDeath && !IsSurvivalControlled() &&
                (me->GetHealthPercent() < 20.0f) &&
                 CanTryToCastSpell(me, m_spells.hunter.pFeignDeath))
             {
@@ -3006,7 +3013,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if (m_spells.warrior.pLastStand &&
+        if (m_spells.warrior.pLastStand && !IsSurvivalControlled() &&
             me->GetHealthPercent() < 20.0f &&
             CanTryToCastSpell(me, m_spells.warrior.pLastStand))
         {
@@ -3034,7 +3041,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                         return;
                 }
 
-                if (m_spells.warrior.pShieldWall &&
+                if (m_spells.warrior.pShieldWall && !IsSurvivalControlled() &&
                    (me->GetHealthPercent() < 40.0f) &&
                     CanTryToCastSpell(me, m_spells.warrior.pShieldWall))
                 {
@@ -3309,7 +3316,7 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
         }
         else
         {
-            if (m_spells.rogue.pVanish &&
+            if (m_spells.rogue.pVanish && !IsSurvivalControlled() &&
                 (me->GetHealthPercent() < 10.0f))
             {
                 if (m_spells.rogue.pPreparation &&

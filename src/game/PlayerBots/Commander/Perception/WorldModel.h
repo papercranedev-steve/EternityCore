@@ -101,6 +101,29 @@ namespace Commander
         bool ready = false;             // off cooldown, enough mana, can act and cast
     };
 
+    // A bot spell that keeps a member about to die alive (ClassKit::Survival, team rescue).
+    // Effect kinds: SurvivalAbility::Effect = ClassKit's SurvivalEffect (same order).
+    struct SurvivalAbility
+    {
+        enum class Effect : uint8 { Absorb, Reduce, Immune, ImmunePhysical, Heal, ExtraHealth, DropThreat };
+
+        uint32 spellId = 0;
+        Effect effect = Effect::Absorb;
+        // Absorb: health absorbed. Reduce: damage taken factor (Shield Wall 0.25). Heal: health
+        // healed (the caster's maximum health). ExtraHealth: health added.
+        float amount = 0.0f;
+        float durationSec = 0.0f;
+        float maxRange = 0.0f;
+        uint32 cooldownMs = 0;
+        uint32 manaCost = 0;            // Lay on Hands: all the caster's mana
+        uint32 mechanic = 0;            // a target immune to it cannot get it (Weakened Soul, Forbearance)
+        bool selfOnly = false;
+        bool notOnTank = false;
+        bool casterStops = false;
+        bool targetStops = false;
+        bool ready = false;             // off cooldown, enough power (stance swap counted), can act, a shield if needed
+    };
+
     // The control effect an enemy is under now (the one lasting longest).
     struct ActiveControl
     {
@@ -181,6 +204,16 @@ namespace Commander
         std::vector<ControlAbility> controls;       // bots only
         std::vector<TauntAbility> taunts;           // tank-role bots only
         ThreatDropAbility threatDrop;               // non-tank bots only
+        std::vector<SurvivalAbility> survival;      // bots only
+        // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far
+        // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,
+        // and mechanics it is immune to as 1 << mechanic (Weakened Soul: MECHANIC_SHIELD,
+        // Forbearance: MECHANIC_IMMUNE_SHIELD).
+        float absorb = 0.0f;
+        float damageTakenMult = 1.0f;
+        bool immunePhysical = false;
+        bool immuneMagic = false;
+        uint32 immuneMechanics = 0;
         // Pets: casts a taunt by itself (Growl, Torment, Suffering on autocast). An enemy on it
         // is growled back, so the tank does not take it (Perception/PetTaunt.h).
         bool tauntsItself = false;

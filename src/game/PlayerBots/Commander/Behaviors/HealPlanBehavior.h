@@ -32,11 +32,13 @@
  * aggro is not checked.
  *
  * Power Word: Shield (2026-11-03, taken over from the rotation with the heals): ordered instead
- * of the picked heal for the most urgent target when (a) it is an emergency and the heal would
- * land after the target dies (or no heal fits), or (b) the target is the healer itself, being hit
- * below SHIELD_SELF_PCT, and the heal has a cast time. Not on Weakened Soul or an active shield.
- * Benefit = the hits it absorbs over its duration, plus the death penalty in (a) when it holds
- * until the next heal; cost = absorb left unused. The rotation's own shield casts stand down.
+ * of the picked heal when the target is the healer itself, being hit below SHIELD_SELF_PCT, and
+ * the heal has a cast time (no pushback under the shield). Not on Weakened Soul or an active
+ * shield. Benefit = the hits it absorbs over its duration; cost = absorb left unused. The
+ * rotation's own shield casts stand down. A shield for someone about to die is the team
+ * rescue's (2026-11-07: RescueAssigner compares it with Shield Wall, Lay on Hands and the rest,
+ * so a priest does not shield a tank that walls); until then this module also shielded an
+ * emergency its heal would not reach in time.
  *
  * Inputs: Value::TakenDps (measured damage or the enemy melee prediction, whichever is larger),
  * PartyMemberFacts::takenBurst for the reserve, mana regeneration and the ManaBudget tension.

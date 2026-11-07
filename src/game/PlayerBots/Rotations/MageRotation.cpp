@@ -86,7 +86,8 @@ namespace
 
             bool const attacked = !me->GetAttackers().empty();
 
-            if (attacked && s.pIceBlock &&
+            // Ice Block: the team rescue decides it while the Commander runs (Takeover::Survival).
+            if (attacked && s.pIceBlock && !bot.IsSurvivalControlled() &&
                 me->GetHealthPercent() < ICE_BLOCK_HEALTH_PCT &&
                 Cast(me, s.pIceBlock))
                 return;

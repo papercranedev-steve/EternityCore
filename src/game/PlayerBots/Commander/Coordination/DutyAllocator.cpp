@@ -16,6 +16,7 @@ namespace DutyAllocator
             case DutyKind::Dispel: return "dispel";
             case DutyKind::CrowdControl: return "control";
             case DutyKind::Rescue: return "rescue";
+            case DutyKind::Save: return "save";
         }
         return "?";
     }
@@ -38,13 +39,13 @@ namespace DutyAllocator
         };
         std::map<ObjectGuid, Claim> primaries;     // bot -> the primary duty it holds
 
-        std::vector<std::pair<DutyExclusive, ObjectGuid>> handled;     // answered alternatives
+        std::vector<DutyKey> handled;     // marked by answered needs
 
         std::vector<DutyResult> results;
         for (DutyNeed& need : needs)
         {
-            if (need.exclusive != DutyExclusive::None &&
-                std::find(handled.begin(), handled.end(), std::make_pair(need.exclusive, need.target)) != handled.end())
+            if (std::any_of(need.blockedBy.begin(), need.blockedBy.end(), [&handled](DutyKey const& k)
+                    { return std::find(handled.begin(), handled.end(), k) != handled.end(); }))
                 continue;
 
             std::stable_sort(need.candidates.begin(), need.candidates.end(), [](DutyCandidate const& a, DutyCandidate const& b)
@@ -111,8 +112,8 @@ namespace DutyAllocator
                 }
             }
 
-            if (!r.primary.IsEmpty() && need.exclusive != DutyExclusive::None)
-                handled.emplace_back(need.exclusive, need.target);
+            if (!r.primary.IsEmpty())
+                handled.insert(handled.end(), need.marks.begin(), need.marks.end());
             if (!r.primary.IsEmpty() || !r.backup.IsEmpty())
                 results.push_back(std::move(r));
         }
