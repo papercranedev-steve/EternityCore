@@ -9,8 +9,10 @@
  *            is not immune to, busy casting, gone) or the cast is past BACKUP_AFTER_PROGRESS.
  *  Abilities the enemy is immune to (CastValues::CanStop) are never proposed; each ability's
  *            benefit includes its school lockout (CastValues::LockoutBenefit).
- *  Own target - if the cast of the bot's own target is not worth an interrupt, veto the
- *            original rotation's reflex interrupt (VetoType::Interrupt).
+ *  Takeover - while this module applies to a bot, the class rotations' reflex interrupts are
+ *            off (ControlsInterrupts, BotDirectives::IsInterruptControlled): only duties from
+ *            the plan are cast. A cast nobody was assigned to is one not worth an interrupt.
+ *            (Until 2026-11-03 the reflexes ran and this module vetoed the bad ones.)
  *  Urgent tier only when the cast would kill someone; otherwise team-task tier.
  */
 
@@ -31,10 +33,7 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-
-    private:
-        void ProposeOwnTargetVeto(PartyBotAI const* bot, WorldModel const& world,
-                                  std::vector<Proposal> const& made, std::vector<Proposal>& out) const;
+        bool ControlsInterrupts(PartyBotAI const* bot) const override;
     };
 }
 

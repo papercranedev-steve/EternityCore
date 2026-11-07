@@ -113,7 +113,7 @@ namespace
                 return;
 
             if (s.pCounterspell &&
-                pVictim->IsNonMeleeSpellCasted(false, false, true) && !bot.IsInterruptVetoed(pVictim) &&
+                pVictim->IsNonMeleeSpellCasted(false, false, true) && !bot.SkipsReflexInterrupt(pVictim) &&
                 Cast(pVictim, s.pCounterspell))
                 return;
 

@@ -77,7 +77,7 @@ namespace
 
             bool const shield = bot.IsWearingShield(me);
 
-            if (shield && pVictim->IsNonMeleeSpellCasted(false, false, true) && !bot.IsInterruptVetoed(pVictim) &&
+            if (shield && pVictim->IsNonMeleeSpellCasted(false, false, true) && !bot.SkipsReflexInterrupt(pVictim) &&
                 Cast(pVictim, w.pShieldBash))
                 return;
 

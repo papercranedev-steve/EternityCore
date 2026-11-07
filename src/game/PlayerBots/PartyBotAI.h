@@ -202,8 +202,10 @@ public:
     // Heal choice (CombatBotBaseAI::ChooseHeal) and shields use the Commander's measured
     // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
     float GetIncomingDps(Unit const* pTarget) const override;
-    // The class rotations' reflex interrupts ask this first.
-    bool IsInterruptVetoed(Unit const* pVictim) const;
+    // The class rotations' reflex interrupts ask this first: true while the Commander interrupt
+    // module controls this bot's interrupts (BotDirectives::IsInterruptControlled), or when
+    // `pVictim` is immune to all of them.
+    bool SkipsReflexInterrupt(Unit const* pVictim) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
     // member mind controlled by a creature is not attacked (Commander::VetoChecks).
     bool IsValidHostileTarget(Unit const* pTarget) const;

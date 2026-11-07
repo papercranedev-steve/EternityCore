@@ -40,6 +40,10 @@ namespace Commander
         // rotations' own Frost Nova / Blink / run away is suppressed (BotDirectives::IsEscapeControlled).
         virtual bool ControlsEscape(PartyBotAI const* /*bot*/) const { return false; }
 
+        // True = this module decides when the bot interrupts; the class rotations' reflex
+        // interrupts are off (BotDirectives::IsInterruptControlled).
+        virtual bool ControlsInterrupts(PartyBotAI const* /*bot*/) const { return false; }
+
         // True = this module decides whom the bot heals and with what (HealOrder proposals);
         // the rotation's heal step casts only those orders (BotDirectives::IsHealingControlled).
         virtual bool ControlsHealing(PartyBotAI const* /*bot*/, WorldModel const& /*world*/) const { return false; }

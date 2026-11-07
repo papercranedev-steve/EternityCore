@@ -59,8 +59,9 @@ namespace Commander
 
         // Interrupts the Commander assigns (InterruptAssigner, WorldModel interrupt facts).
         virtual std::vector<SpellEntry const*> Interrupts() const { return {}; }
-        // Interrupts the class rotation casts by itself behind PartyBotAI::IsInterruptVetoed
-        // (VetoChecks: what a veto has to block).
+        // Interrupts the class rotation casts by itself behind PartyBotAI::SkipsReflexInterrupt:
+        // only when the interrupt module does not control the bot (module off, no commander);
+        // VetoChecks::ImmuneToReflexInterrupts checks immunity against these.
         virtual std::vector<SpellEntry const*> ReflexInterrupts() const { return {}; }
         // Removes harmful magic / curses / poisons / diseases from allies (DispelBehavior).
         virtual bool CanDispel() const { return false; }

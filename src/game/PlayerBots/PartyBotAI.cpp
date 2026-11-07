@@ -417,9 +417,11 @@ float PartyBotAI::GetIncomingDps(Unit const* pTarget) const
     return CombatBotBaseAI::GetIncomingDps(pTarget);
 }
 
-bool PartyBotAI::IsInterruptVetoed(Unit const* pVictim) const
+bool PartyBotAI::SkipsReflexInterrupt(Unit const* pVictim) const
 {
-    return Commander::VetoChecks::IsInterruptVetoed(this, pVictim);
+    if (m_directives && m_directives->IsInterruptControlled(WorldTimer::getMSTime()))
+        return true;
+    return Commander::VetoChecks::ImmuneToReflexInterrupts(this, pVictim);
 }
 
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
@@ -1890,7 +1892,7 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
                     return;
             }
             if (m_spells.paladin.pHammerOfJustice &&
-               ((pVictim->IsNonMeleeSpellCasted() && !IsInterruptVetoed(pVictim)) ||
+               ((pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim)) ||
                (me->GetHealthPercent() < 20.0f && !me->GetAttackers().empty())) &&
                 CanTryToCastSpell(pVictim, m_spells.paladin.pHammerOfJustice))
             {
@@ -2014,7 +2016,7 @@ void PartyBotAI::UpdateInCombatAI_Shaman()
             }
 
             if (m_spells.shaman.pEarthShock &&
-                pVictim->IsNonMeleeSpellCasted(false, false, true) && !IsInterruptVetoed(pVictim) &&
+                pVictim->IsNonMeleeSpellCasted(false, false, true) && !SkipsReflexInterrupt(pVictim) &&
                 CanTryToCastSpell(pVictim, m_spells.shaman.pEarthShock))
             {
                 if (DoCastSpell(pVictim, m_spells.shaman.pEarthShock) == SPELL_CAST_OK)
@@ -2422,7 +2424,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
         }
 
         if (m_spells.priest.pSilence &&
-            pVictim->IsNonMeleeSpellCasted() && !IsInterruptVetoed(pVictim) &&
+            pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim) &&
             CanTryToCastSpell(pVictim, m_spells.priest.pSilence))
         {
             if (DoCastSpell(pVictim, m_spells.priest.pSilence) == SPELL_CAST_OK)
@@ -2901,7 +2903,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
 
     if (Unit* pVictim = me->GetVictim())
     {
-        if (pVictim->IsNonMeleeSpellCasted(false, false, true) && !IsInterruptVetoed(pVictim))
+        if (pVictim->IsNonMeleeSpellCasted(false, false, true) && !SkipsReflexInterrupt(pVictim))
         {
             if (m_spells.warrior.pPummel &&
                 CanTryToCastSpell(pVictim, m_spells.warrior.pPummel))
@@ -3319,7 +3321,7 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
                 return;
         }
 
-        if (pVictim->IsNonMeleeSpellCasted() && !IsInterruptVetoed(pVictim))
+        if (pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim))
         {
             if (m_spells.rogue.pGouge &&
                 CanTryToCastSpell(pVictim, m_spells.rogue.pGouge))

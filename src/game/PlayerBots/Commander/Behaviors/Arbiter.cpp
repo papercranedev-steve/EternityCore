@@ -80,7 +80,6 @@ namespace Commander
             {
                 case VetoType::None:   return "none";
                 case VetoType::Dispel: return "no-dispel";
-                case VetoType::Interrupt: return "no-interrupt";
                 case VetoType::Heal:   return "no-heal";
                 case VetoType::GapCloser: return "no-charge";
             }
@@ -162,6 +161,15 @@ namespace Commander
             if (b->ControlsEscape(bot))
             {
                 directives.ControlEscape(now, 3 * sCommanderMgr.GetBotUpdateInterval());
+                break;
+            }
+        }
+        // Same for interrupts (InterruptBehavior).
+        for (IBehavior const* b : active)
+        {
+            if (b->ControlsInterrupts(bot))
+            {
+                directives.ControlInterrupts(now, 3 * sCommanderMgr.GetBotUpdateInterval());
                 break;
             }
         }

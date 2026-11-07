@@ -24,9 +24,10 @@ namespace VetoChecks
     // heal order (BotDirectives::HasUrgentHealOrder).
     bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
 
-    // The cast of `enemy` is not worth an interrupt (InterruptBehavior), or `enemy` is immune
-    // to every interrupt / stun / silence the bot's class rotation would use on it.
-    bool IsInterruptVetoed(PartyBotAI const* bot, Unit const* enemy);
+    // `enemy` is immune to every interrupt / stun / silence the bot's class rotation would use
+    // on it (ClassKit::ReflexInterrupts). Only matters while the interrupt module does not
+    // control the bot's interrupts (PartyBotAI::SkipsReflexInterrupt).
+    bool ImmuneToReflexInterrupts(PartyBotAI const* bot, Unit const* enemy);
 
     // Healing `target` now would pull aggro and is not needed yet (ThreatBehavior).
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target);

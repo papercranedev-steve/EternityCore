@@ -46,7 +46,7 @@ namespace VetoChecks
         bool ImmuneToAllReflexInterrupts(PartyBotAI const* bot, Unit const* enemy)
         {
             bool any = false;
-            // The spells the class rotations use behind IsInterruptVetoed (ClassKit::ReflexInterrupts).
+            // The spells the class rotations use behind SkipsReflexInterrupt (ClassKit::ReflexInterrupts).
             for (SpellEntry const* spell : bot->Kit().ReflexInterrupts())
             {
                 if (!spell)
@@ -87,13 +87,9 @@ namespace VetoChecks
         return bot->Directives().IsVetoed(VetoType::Dispel, target->GetObjectGuid(), spellId, now);
     }
 
-    bool IsInterruptVetoed(PartyBotAI const* bot, Unit const* enemy)
+    bool ImmuneToReflexInterrupts(PartyBotAI const* bot, Unit const* enemy)
     {
-        if (!sCommanderMgr.IsEnabled())
-            return false;
-        if (ImmuneToAllReflexInterrupts(bot, enemy))
-            return true;
-        return bot->Directives().IsVetoed(VetoType::Interrupt, enemy->GetObjectGuid(), 0, WorldTimer::getMSTime());
+        return sCommanderMgr.IsEnabled() && ImmuneToAllReflexInterrupts(bot, enemy);
     }
 
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target)

@@ -174,56 +174,12 @@ namespace Commander
             }
         }
 
-        ProposeOwnTargetVeto(bot, world, made, out);
         out.insert(out.end(), made.begin(), made.end());
     }
 
-    void InterruptBehavior::ProposeOwnTargetVeto(PartyBotAI const* bot, WorldModel const& world,
-                                                 std::vector<Proposal> const& made, std::vector<Proposal>& out) const
+    bool InterruptBehavior::ControlsInterrupts(PartyBotAI const* bot) const
     {
-        Player* me = bot->me;
-        Unit* victim = me->GetVictim();
-        PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
-        if (!victim || !myFacts || myFacts->interrupts.empty())
-            return;
-        EnemyFacts const* facts = world.FindEnemy(victim->GetObjectGuid());
-        LiveCast cast;
-        if (!facts || !IsCastingInterruptible(victim, cast))
-            return;
-
-        // A worthwhile duty interrupt on the same enemy: let that one run.
-        for (Proposal const& p : made)
-            if (p.action.target == victim->GetObjectGuid() && p.benefit > p.cost)
-                return;
-
-        EnemyFacts const live = LiveFacts(*facts, cast);
-        CastValue const value = CastValues::InterruptBenefit(world, live);
-        // Interrupting with `a` is worth value + lockout(a) - cost(a); veto when no ability is
-        // worth it, i.e. the smallest cost - lockout is at least the cast value. Immune
-        // abilities are not an option (VetoChecks vetoes those directly).
-        bool any = false;
-        float cheapest = 0.0f;
-        for (InterruptAbility const& a : myFacts->interrupts)
-        {
-            if (!CastValues::CanStop(a, live))
-                continue;
-            float const c = CastValues::InterruptCost(world, *myFacts, a, live, value) -
-                            CastValues::LockoutBenefit(world, live, a, value.spellId);
-            if (!any || c < cheapest)
-                cheapest = c;
-            any = true;
-        }
-        if (!any)
-            return;
-
-        Proposal p;
-        p.kind = ProposalKind::Veto;
-        p.source = "interrupt";
-        p.reason = "cast not worth an interrupt";
-        p.veto.type = VetoType::Interrupt;
-        p.veto.target = victim->GetObjectGuid();
-        // Benefit of the veto = the interrupt we keep; cost = what the cast does.
-        p.SetValue(std::max(0.0f, cheapest), value.points);
-        out.push_back(p);
+        // Duels are not ours (the arbiter does not run there either).
+        return !bot->IsInDuel();
     }
 }

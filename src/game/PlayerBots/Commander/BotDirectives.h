@@ -103,6 +103,20 @@ namespace Commander
             return m_escapeDurationMs && WorldTimer::getMSTimeDiff(m_escapeStartMs, nowMs) < m_escapeDurationMs;
         }
 
+        // While controlled, the class rotations' reflex interrupts ("the target is casting: kick
+        // it") are off; InterruptAssigner assigns and InterruptBehavior casts (takeover, not
+        // veto: 2026-11-03 architecture refinement 5.2).
+        void ControlInterrupts(uint32 nowMs, uint32 durationMs)
+        {
+            m_interruptControlStartMs = nowMs;
+            m_interruptControlDurationMs = durationMs;
+        }
+        bool IsInterruptControlled(uint32 nowMs) const
+        {
+            return m_interruptControlDurationMs &&
+                   WorldTimer::getMSTimeDiff(m_interruptControlStartMs, nowMs) < m_interruptControlDurationMs;
+        }
+
         // While controlled, the rotation's heal step only casts the Commander's heal order
         // (none = rest, no heal); its own target and rank choice is off (HealPlanBehavior).
         void ControlHealing(uint32 nowMs, uint32 durationMs)
@@ -230,6 +244,8 @@ namespace Commander
         uint32 m_tauntDurationMs = 0;
         uint32 m_escapeStartMs = 0;
         uint32 m_escapeDurationMs = 0;
+        uint32 m_interruptControlStartMs = 0;
+        uint32 m_interruptControlDurationMs = 0;
         uint32 m_healControlStartMs = 0;
         uint32 m_healControlDurationMs = 0;
         BotAction m_healOrder;
