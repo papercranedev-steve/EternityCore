@@ -69,6 +69,33 @@ namespace AssistPredictor
             Unit const* m_puller;
             Position3 m_at;
         };
+
+        // AnyAssistCreatureInRangeCheck with the caller standing at `at` instead of where it is.
+        float const EYE_HEIGHT = 2.0f;
+        class AssistAtCheck
+        {
+        public:
+            AssistAtCheck(Creature const* caller, Position3 const& at, Unit const* enemy, float radius)
+                : m_caller(caller), m_at(at), m_enemy(enemy), m_radius(radius) {}
+            bool operator()(Creature* c)
+            {
+                if (c == m_caller || !c->CanAssistTo(m_caller, m_enemy))
+                    return false;
+                float const dx = c->GetPositionX() - m_at.x, dy = c->GetPositionY() - m_at.y,
+                    dz = c->GetPositionZ() - m_at.z;
+                float const reach = m_radius + c->GetObjectBoundingRadius() + m_caller->GetObjectBoundingRadius();
+                if (dx * dx + dy * dy + dz * dz > reach * reach)
+                    return false;
+                return c->GetMap()->isInLineOfSight(m_at.x, m_at.y, m_at.z + EYE_HEIGHT,
+                    c->GetPositionX(), c->GetPositionY(), c->GetPositionZ() + EYE_HEIGHT);
+            }
+
+        private:
+            Creature const* m_caller;
+            Position3 m_at;
+            Unit const* m_enemy;
+            float m_radius;
+        };
     }
 
     namespace
@@ -154,6 +181,38 @@ namespace AssistPredictor
             callers.push_back(c);
             AddGroupMembers(c, seen, callers, out);
         }
+        CallAssistance(callers, enemy, seen, out);
+        return out;
+    }
+
+    std::vector<Joiner> ExpandAt(Creature* caller, Position3 const& at, Unit* enemy, std::vector<ObjectGuid> const& exclude)
+    {
+        std::vector<Joiner> out;
+        if (!caller || !enemy)
+            return out;
+        float const radius = sWorld.getConfig(CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS);
+        std::set<ObjectGuid> seen(exclude.begin(), exclude.end());
+        seen.insert(caller->GetObjectGuid());
+        std::deque<Creature*> callers;
+        AddGroupMembers(caller, seen, callers, out);
+
+        if (radius > 0.0f)
+        {
+            std::list<Creature*> helpers;
+            AssistAtCheck check(caller, at, enemy, radius);
+            MaNGOS::CreatureListSearcher<AssistAtCheck> searcher(helpers, check);
+            // Grid search is centred on an object: the caller, widened by its distance to `at`.
+            float const dx = caller->GetPositionX() - at.x, dy = caller->GetPositionY() - at.y;
+            Cell::VisitGridObjects(caller, searcher, radius + std::sqrt(dx * dx + dy * dy));
+            for (Creature* h : helpers)
+            {
+                if (seen.count(h->GetObjectGuid()))
+                    continue;
+                Add(h, JoinReason::Assist, seen, out);
+                AddGroupMembers(h, seen, callers, out);
+            }
+        }
+
         CallAssistance(callers, enemy, seen, out);
         return out;
     }

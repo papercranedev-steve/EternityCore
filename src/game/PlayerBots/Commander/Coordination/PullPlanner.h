@@ -138,7 +138,9 @@ namespace Commander
         // pulled creature (a patrol next to any of them is called in for help) or of the fight
         // spot. The fight is estimated (Perception/FightLoad.h: the creatures' damage on the
         // tank, the party's damage, the healer bots' real heals and mana) with every patrol
-        // joining when its walk brings it:
+        // joining when its walk brings it, and the creatures it calls for help from where it
+        // is then (AssistPredictor::ExpandAt, after the assistance delay; strat-20261108-230756:
+        // Patchwork Horror met the tank beside a second pack and brought all of it):
         //  - bearable pulled now (a bat): pull now, the party takes it.
         //  - else the earliest start within PATROL_WAIT_MAX_MS that is bearable (Patchwork
         //    Horror walking on), held in WaitReady until then;

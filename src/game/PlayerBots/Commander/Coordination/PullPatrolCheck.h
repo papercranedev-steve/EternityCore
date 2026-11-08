@@ -11,6 +11,7 @@
 #include "Commander/Perception/FightLoad.h"
 #include "Commander/Perception/PatrolTracker.h"
 #include "Commander/Perception/WorldModel.h"
+#include <map>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,13 @@ namespace Commander
 {
     namespace PullDetail
     {
+        // A creature a patrol calls for help when it starts attacking next to the pull.
+        struct PatrolCall
+        {
+            ObjectGuid guid;
+            FightLoad::Foe foe;             // arriveSec: after the patrol's own arrival
+        };
+
         // A patrol that walks next to the pull while the fight lasts (PullPlanner.h, "Patrols").
         struct PatrolArrival
         {
@@ -31,15 +39,26 @@ namespace Commander
             PatrolTracker::TrackSource source = PatrolTracker::TrackSource::Standing;
             std::vector<float> atSec;       // track sample times
             std::vector<bool> inside;       // the sample is within a zone (next to the pull or the fight spot)
+            std::vector<Position3> pos;     // track sample positions
+            // Sample index -> who it calls for help starting to attack there (ChooseStart fills
+            // it for the samples it needs).
+            std::map<int, std::vector<PatrolCall>> calls;
 
+            // The sample where it is next to the pull for a pull started `startSec` from now,
+            // -1 if not within the track.
+            int ArrivalIndex(float startSec) const
+            {
+                for (size_t i = 0; i < atSec.size(); ++i)
+                    if (atSec[i] + 0.001f >= startSec && inside[i])
+                        return int(i);
+                return -1;
+            }
             // Seconds after a pull started `startSec` from now until it is next to the pull,
             // < 0 if not within the track.
             float ArriveAfter(float startSec) const
             {
-                for (size_t i = 0; i < atSec.size(); ++i)
-                    if (atSec[i] + 0.001f >= startSec && inside[i])
-                        return atSec[i] - startSec;
-                return -1.0f;
+                int const i = ArrivalIndex(startSec);
+                return i < 0 ? -1.0f : atSec[i] - startSec;
             }
         };
 
@@ -58,6 +77,7 @@ namespace Commander
             // The patrol that matters most when pulled now (earliest to join), and when it joins.
             int mainIndex = -1;
             float mainArriveNow = -1.0f;
+            uint32 mainCallsNow = 0;        // creatures the main patrol calls for help when pulled now
 
             PatrolArrival const* Main() const { return mainIndex >= 0 ? &patrols[mainIndex] : nullptr; }
         };

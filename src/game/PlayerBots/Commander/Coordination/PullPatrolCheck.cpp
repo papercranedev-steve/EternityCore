@@ -34,7 +34,9 @@
 #include "Player.h"
 #include "SpellMgr.h"
 #include "Timer.h"
+#include "World.h"
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -46,20 +48,81 @@ namespace Commander
 
     namespace
     {
+        // Who a patrol calls for help where its walk brings it next to the pull: it starts
+        // attacking the tank there (AssistPredictor::ExpandAt). Per track sample, computed the
+        // first time a start needs it.
+        struct CallSource
+        {
+            Unit* tank = nullptr;
+            PartyMemberFacts const* tankFacts = nullptr;
+            std::vector<ObjectGuid> exclude;    // the pull and every patrol: counted on their own
+            float delaySec = 0.0f;              // CreatureFamilyAssistanceDelay
+
+            std::vector<PatrolCall> const& At(PatrolArrival& a, int index) const
+            {
+                auto itr = a.calls.find(index);
+                if (itr != a.calls.end())
+                    return itr->second;
+                std::vector<PatrolCall>& calls = a.calls[index];
+                Map* map = a.patrol->GetMap();
+                std::vector<AssistPredictor::Joiner> const joiners =
+                    AssistPredictor::ExpandAt(a.patrol, a.pos[index], tank, exclude);
+                std::string names;
+                for (AssistPredictor::Joiner const& j : joiners)
+                {
+                    Creature const* c = map->GetCreature(j.guid);
+                    if (!c || !c->IsAlive())
+                        continue;
+                    PatrolCall call;
+                    call.guid = j.guid;
+                    call.foe = FightLoad::FoeOf(c, *tankFacts);
+                    call.foe.arriveSec = delaySec;
+                    calls.push_back(call);
+                    if (Trace::On())
+                        names += Trace::Format("%s\"%s\"", names.empty() ? "" : ",", c->GetName());
+                }
+                if (Trace::On())
+                    Trace::Emit("patrolcall", a.patrol->GetName(), Trace::Format(
+                        "{\"g\":\"%s\",\"atSec\":%.1f,\"x\":%.1f,\"y\":%.1f,\"delay\":%.1f,\"calls\":[%s]}",
+                        Trace::Guid(a.patrol->GetObjectGuid()).c_str(), a.atSec[index], a.pos[index].x,
+                        a.pos[index].y, delaySec, names.c_str()));
+                return calls;
+            }
+        };
+
         // Inputs of one start: the pull without the patrols plus every patrol that joins while
-        // the fight lasts, from the time it arrives.
-        FightLoad::Result SimulateStart(FightLoad::Input base, std::vector<PatrolArrival> const& patrols,
-                                        float startSec, float fightSec)
+        // the fight lasts, from the time it arrives, and the creatures it calls for help there
+        // (after the assistance delay; one called by two patrols counts once, the earliest).
+        FightLoad::Result SimulateStart(FightLoad::Input base, std::vector<PatrolArrival>& patrols,
+                                        CallSource const& source, float startSec, float fightSec)
         {
             std::string const why = Trace::On() ? Trace::Format("start +%.1f s, patrols joining", startSec) : std::string();
-            for (PatrolArrival const& p : patrols)
+            std::map<ObjectGuid, size_t> called;    // guid -> index in base.foes
+            for (PatrolArrival& p : patrols)
             {
-                float const arrive = p.ArriveAfter(startSec);
-                if (arrive < 0.0f || arrive > fightSec)
+                int const index = p.ArrivalIndex(startSec);
+                if (index < 0)
+                    continue;
+                float const arrive = p.atSec[index] - startSec;
+                if (arrive > fightSec)
                     continue;
                 FightLoad::Foe f = p.foe;
                 f.arriveSec = arrive;
                 base.foes.push_back(f);
+                for (PatrolCall const& c : source.At(p, index))
+                {
+                    float const at = arrive + c.foe.arriveSec;
+                    auto itr = called.find(c.guid);
+                    if (itr != called.end())
+                    {
+                        base.foes[itr->second].arriveSec = std::min(base.foes[itr->second].arriveSec, at);
+                        continue;
+                    }
+                    FightLoad::Foe h = c.foe;
+                    h.arriveSec = at;
+                    called[c.guid] = base.foes.size();
+                    base.foes.push_back(h);
+                }
             }
             return FightLoad::Simulate(base, why.c_str());
         }
@@ -150,6 +213,7 @@ namespace Commander
                         in = PackResolver::Distance(p.pos, pullAt[i]) <= toTank;
                     a.atSec.push_back(p.atSec);
                     a.inside.push_back(in);
+                    a.pos.push_back(p.pos);
                     any = any || in;
                 }
                 if (Trace::On())
@@ -173,8 +237,16 @@ namespace Commander
                     out.patrols.push_back(std::move(a));
             }
 
+            CallSource source;
+            source.tank = tank;
+            source.tankFacts = tankFacts;
+            source.exclude = base;
+            for (Creature const* w : walkers)
+                source.exclude.push_back(w->GetObjectGuid());
+            source.delaySec = sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY) / 1000.0f;
+
             // Comes by only after the fight when pulled now and later: not part of this pull.
-            out.now = SimulateStart(input, out.patrols, 0.0f, out.fightSec);
+            out.now = SimulateStart(input, out.patrols, source, 0.0f, out.fightSec);
             for (size_t i = 0; i < out.patrols.size(); ++i)
             {
                 float const arrive = out.patrols[i].ArriveAfter(0.0f);
@@ -186,6 +258,10 @@ namespace Commander
             }
             if (out.mainIndex < 0)
                 return out;     // nobody joins a pull started now
+            {
+                PatrolArrival& main = out.patrols[out.mainIndex];
+                out.mainCallsNow = uint32(source.At(main, main.ArrivalIndex(0.0f)).size());
+            }
             out.considered = true;
             out.bearableNow = FightLoad::Bearable(out.now);
             out.atStart = out.now;
@@ -198,7 +274,7 @@ namespace Commander
             FightLoad::Result best = out.now;
             for (float s = PatrolTracker::SAMPLE_STEP_SEC; s <= waitBudgetSec + 0.001f; s += PatrolTracker::SAMPLE_STEP_SEC)
             {
-                FightLoad::Result const r = SimulateStart(input, out.patrols, s, out.fightSec);
+                FightLoad::Result const r = SimulateStart(input, out.patrols, source, s, out.fightSec);
                 if (FightLoad::Bearable(r))
                 {
                     out.startSec = s;
@@ -229,7 +305,8 @@ namespace Commander
             std::string const name = main->patrol->GetName();
             std::string const when = s.mainArriveNow <= 0.0f ? name + " is next to the pull"
                 : Format("%s joins in about %.0f s", name.c_str(), s.mainArriveNow);
-            return when + Format(" (%s, within %.0f yd)", PatrolTracker::SourceName(main->source), main->clearance);
+            std::string const calls = s.mainCallsNow ? Format(", calling %u more for help there", s.mainCallsNow) : std::string();
+            return when + Format(" (%s, within %.0f yd)", PatrolTracker::SourceName(main->source), main->clearance) + calls;
         }
 
         // What the patrol check decided, for the report and the notes. `waiting`: "The pull

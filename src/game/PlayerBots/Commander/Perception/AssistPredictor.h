@@ -66,6 +66,14 @@ namespace AssistPredictor
     // (already fighting, or the one that made them start).
     std::vector<Joiner> Expand(std::vector<Creature*> const& seeds, Unit* enemy, std::vector<ObjectGuid> const& exclude);
 
+    // `caller` starts attacking `enemy` when it stands at `at` (a patrol reaching the pull
+    // later, PullPatrolCheck): the others that join, without the caller. Its own call is
+    // checked from `at` (assistance radius and line of sight from there); its aggro-together
+    // group and their calls from where they stand now. Creatures in `exclude` are skipped.
+    // strat-20261108-230756: Patchwork Horror met the tank next to a second pack and called
+    // all of it 1.4 s later; the pull counted the patrol alone.
+    std::vector<Joiner> ExpandAt(Creature* caller, Position3 const& at, Unit* enemy, std::vector<ObjectGuid> const& exclude);
+
     std::vector<ObjectGuid> Guids(std::vector<Joiner> const& joiners);
     char const* ReasonName(JoinReason reason);
 }
