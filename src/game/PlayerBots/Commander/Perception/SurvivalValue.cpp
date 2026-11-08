@@ -50,20 +50,55 @@ namespace SurvivalValue
         if (member.immunePhysical)
             d.dps = std::max(0.0f, d.dps - d.physicalDps);
 
+        HealIn const in = HealOn(world, member, d.dps);
+        d.heal = in.hps;
+        d.healDelaySec = in.delaySec;
+        if (d.dps > 0.0f)
+            d.ttd = TimeToDie(float(member.health) + member.absorb, d.dps, in.delaySec, d.dps - in.hps);
+        return d;
+    }
+
+    float Demand(WorldModel const& world, PartyMemberFacts const& m)
+    {
+        if (!m.alive || m.isPet)
+            return 0.0f;
+        return std::max(Value::IncomingOn(world, m.guid) * m.damageTakenMult, m.takenDps);
+    }
+
+    HealIn HealOn(WorldModel const& world, PartyMemberFacts const& member, float demand)
+    {
+        HealIn in;
+        in.delaySec = ThreatView::NO_LIMIT;
         for (PartyMemberFacts const& h : world.party)
         {
             if (!h.isBot || h.isPet || !h.CanAct() || h.healRates.empty() || !h.mana ||
                 PackResolver::Distance(h.pos, member.pos) > HEAL_RANGE_YD)
                 continue;
-            float best = 0.0f;
+            HealRate const* best = nullptr;
             for (HealRate const& r : h.healRates)
-                best = std::max(best, r.hps);
-            d.heal += best;
+                if (!best || r.hps > best->hps)
+                    best = &r;
+            // One healer, several members being hit: its heals go round by the damage each takes.
+            float others = 0.0f;
+            for (PartyMemberFacts const& o : world.party)
+                if (o.guid != member.guid && PackResolver::Distance(h.pos, o.pos) <= HEAL_RANGE_YD)
+                    others += Demand(world, o);
+            float const share = demand + others > 0.0f ? demand / (demand + others) : 1.0f;
+            in.hps += best->hps * share;
+            // The first heal lands after its cast (and after the one it is casting now).
+            float const delay = best->castSec + (h.casting ? h.castRemainingMs / 1000.0f : 0.0f);
+            in.delaySec = std::min(in.delaySec, delay);
         }
-        float const drain = d.dps - d.heal;
-        if (drain > 0.0f)
-            d.ttd = (float(member.health) + member.absorb) / drain;
-        return d;
+        if (in.hps <= 0.0f)
+            in.delaySec = 0.0f;
+        return in;
+    }
+
+    float TimeToDieUnder(float health, float dps, HealIn const& heal)
+    {
+        if (dps <= 0.0f)
+            return ThreatView::NO_LIMIT;
+        return TimeToDie(health, dps, heal.delaySec, dps - heal.hps);
     }
 
     RescueValue::Option Save(WorldModel const& world, PartyMemberFacts const& member, Danger const& danger,

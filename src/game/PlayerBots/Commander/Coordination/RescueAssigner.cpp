@@ -47,8 +47,13 @@ namespace Commander
             need.blockedBy = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::Saved, victim->guid } };
             need.marks = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::LooseTaken, victim->guid } };
             need.reason = "loose enemy";
-            auto const add = [&](ObjectGuid bot, uint32 spellId, RescueValue::Option const& o)
+            // The area phase counts on the tanks' taunts for the enemies it turns (AreaPhase,
+            // this refresh's situation step): a taunt spent outside its area pays that.
+            float const areaReserve = plan.area.active && !plan.area.Targets(e.guid) ? plan.area.tauntReserve : 0.0f;
+            auto const add = [&](ObjectGuid bot, uint32 spellId, RescueValue::Option o)
             {
+                if (spellId && bot != victim->guid)
+                    o.cost += areaReserve;
                 if (o.Net() <= 0.0f)
                     return;
                 DutyCandidate c;

@@ -32,12 +32,14 @@
  *            what is left is the measure). Mana and time already spent on it do not count.
  *            (strat-20261108-140533: the priest moved its shackle three times in 9 s.)
  *
- * AreaLoss(x, sec): every damage dealer bot with an area spell (PartyMemberFacts::
- * areaDpsPerTarget): n = enemies within its radius of x, x included, that an area spell may hit
- * now; while x must stay unbroken that cluster gets no area spell, so it loses
- * max(0, n x per target - filler) damage per second for min(sec, fight left), as seconds of
- * its own output (Value::LostAction, the same valuation as AreaDamageBehavior). The live
- * threat limit of AreaDamageBehavior is not counted (early in a fight the loss is too high).
+ * AreaLoss(x, sec): while x must stay unbroken its cluster gets no area spell. Every damage
+ * dealer bot with a ready area spell that reaches x (ground spell: x within its range; around
+ * the caster: x within its radius): the best Perception/AreaValue net of one cast on it now
+ * (whole spell, threat, turning enemies, mana, the caster's safety; enemies already under a
+ * breakable control other than x forbid it; new enemies do not), 0 when none pays; summed over
+ * the bots. One cast, not one for the whole control: since 2026-11-08 the same valuation as
+ * the area phase (strat-20261108-161025: the old "area damage for 40 s" said 97 points where
+ * the mage's own judgement gave 3). Pre-pull (OfPull) still uses areaDpsPerTarget.
  *   fears only:
  *   adds     for each pack FearRisk::Of returns: chance x (Loss(controlled + the pack joining
  *            ADD_ARRIVE_SEC in) - Loss(controlled)), Loss = Points(damage) + Risk x penalty

@@ -126,8 +126,9 @@ namespace Commander
         // Spells that keep a member about to die alive. Only the Commander casts them
         // (team rescue: RescueAssigner picks one per member, Takeover::Survival).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
-        // Area damage spells the Commander casts on packs (AreaDamageBehavior decides when and
-        // where; the rotations do not cast them).
+        // Area damage spells the Commander casts on packs (the brain's area phase decides who,
+        // which, where and when, Coordination/AreaPhase.h; AreaDamageBehavior casts it; the
+        // rotations do not cast them).
         virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
         // The single target damage spell the rotation casts most: what an area spell is compared
         // with (AreaDamageBehavior) and how fast mana goes (ManaBudgetBehavior self restore).
@@ -151,6 +152,11 @@ namespace Commander
         // Its own stealth (rogue Stealth): the Sap controller of a pull goes into stealth on
         // its way (CrowdControlBehavior, Takeover::Stealth); the rotation decides otherwise.
         virtual SpellEntry const* Stealth() const { return nullptr; }
+        // An absorb the bot puts on itself before an area spell that may turn enemies to it
+        // (mage Ice Barrier). The area phase decides it (Coordination/AreaPhase.h).
+        virtual SpellEntry const* SelfShield() const { return nullptr; }
+        // Turns its health into mana (warlock Life Tap): its mana is worth less (ManaWorth.h).
+        virtual SpellEntry const* HealthToMana() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

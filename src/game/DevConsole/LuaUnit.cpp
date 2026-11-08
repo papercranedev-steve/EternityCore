@@ -977,6 +977,23 @@ namespace DevConsole
             }
             lua_setfield(L, -2, "controls");
         }
+        // Area phase (Coordination/AreaPhase.h). No points (they change every refresh).
+        if (plan.area.active)
+        {
+            Commander::AreaPlan const& a = plan.area;
+            static char const* const steps[] = { "move", "shield", "cast", "channel" };
+            lua_createtable(L, 0, 6);
+            SetFieldG(L, "caster", a.caster);
+            SetField(L, "spell", a.spellId);
+            SetFieldS(L, "step", steps[uint8(a.step)]);
+            if (!a.centre.IsEmpty())
+                SetFieldG(L, "centre", a.centre);
+            if (a.shieldSpellId)
+                SetField(L, "shield", a.shieldSpellId);
+            if (!a.allyShieldBot.IsEmpty())
+                SetFieldG(L, "allyShield", a.allyShieldBot);
+            lua_setfield(L, -2, "area");
+        }
         return 1;
     }
 

@@ -99,7 +99,12 @@ namespace ManaWorth
             // Seconds of casting the mana pays for, at this member's share of the fight
             // (Value::ContributionPerSec with the fight's incoming damage).
             float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
-            return Value::Points(world, c.incomingDps) * share * (mana / member.fillerManaPerSec) * scarcity;
+            float const worth = Value::Points(world, c.incomingDps) * share * (mana / member.fillerManaPerSec) * scarcity;
+            // A warlock taps it back: the health it costs and the global cooldowns (header).
+            if (member.tapManaPerHealth > 0.0f && member.tapManaPerCast > 0.0f)
+                return std::min(worth, Value::Points(world, mana / member.tapManaPerHealth) +
+                                       Value::LostAction(world, member, Value::GCD_SEC * mana / member.tapManaPerCast));
+            return worth;
         }
     }
 

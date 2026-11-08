@@ -13,6 +13,9 @@
  *                   -> Value::LostAction; tension = fight left / seconds its whole mana lasts
  *   scarcity = max(SCARCITY_FLOOR, ManaBudget::Scarcity(tension)): 0 at tension 1 (enough
  *   mana for this fight), 1 at tension 2. The floor stands for drinking longer after the fight.
+ *   warlock         at most what tapping it back costs (Life Tap, since 2026-11-08, user: a
+ *                   warlock's mana is dear but less than a mage's): Value::Points(mana /
+ *                   tapManaPerHealth health) + LostAction(GCD x mana / tapManaPerCast).
  * Members without a mana pool, rage and energy costs: 0.
  */
 

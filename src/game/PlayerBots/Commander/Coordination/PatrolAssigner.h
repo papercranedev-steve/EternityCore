@@ -13,7 +13,8 @@
  *   spots      = rings of SPOT_DISTANCES around the tank where the zone of the party, moved
  *                along with the tank, is never entered by the predicted walk (as far as the
  *                track goes), nearest first, at most MAX_SPOTS
- *   cost       = Value::FightExtension(walk time to the nearest spot): the fight lasts longer
+ *   cost       = Value::FightExtension(walk time to the nearest spot) + the area phase's
+ *                endCost (TeamPlan::area, last refresh: a channel losing its tank): the fight lasts longer
  *                while the tank walks and the enemies follow
  * benefit > cost and a spot: TeamPlan::patrolMove (PatrolBehavior walks the tank there).
  * Otherwise the party stays and the leader is told why. Each patrol is judged once per fight.

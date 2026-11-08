@@ -1,4 +1,5 @@
 #include "Commander/Perception/ControlValue.h"
+#include "Commander/Perception/AreaValue.h"
 #include "Commander/Perception/CastValue.h"
 #include "Commander/Perception/FearRisk.h"
 #include "Commander/Perception/ManaWorth.h"
@@ -238,25 +239,46 @@ namespace ControlValue
         sec = std::min(sec, Value::FightRemainingSec(world));
         if (sec <= 0.0f)
             return 0.0f;
+        // Already under a breakable control (not this one): no area spell there anyway.
+        auto const forbidden = [&enemy](EnemyFacts const& e)
+        {
+            return e.guid != enemy.guid && e.control.spellId && e.control.breaksOnDamage;
+        };
         float loss = 0.0f;
         for (PartyMemberFacts const& m : world.party)
         {
-            if (!m.CanAct() || m.areaDpsPerTarget <= 0.0f || m.fillerDps <= 0.0f)
+            if (!m.isBot || !m.CanAct() || m.areaSpells.empty())
                 continue;
-            uint32 n = 0;
-            for (EnemyFacts const& e : world.enemies)
+            // The best area spell this member would cast on that cluster now (AreaValue: its
+            // whole value, threat, mana and the caster's safety included), once.
+            float best = 0.0f;
+            for (AreaSpellFacts const& a : m.areaSpells)
             {
-                if (e.onAllyOnly || !e.acting)
+                if (!a.ready)
                     continue;
-                // Already under a breakable control (not this one): no area spell there anyway.
-                if (e.guid != enemy.guid && e.control.spellId && e.control.breaksOnDamage)
-                    continue;
-                if (PackResolver::Distance(e.pos, enemy.pos) - e.boundingRadius <= m.areaRadius)
-                    ++n;
+                AreaValue::Request r;
+                r.caster = &m;
+                r.spell = &a;
+                r.from = m.pos;
+                if (a.onTarget)
+                {
+                    if (PackResolver::Distance(m.pos, enemy.pos) > a.range)
+                        continue;
+                    r.centre = enemy.pos;
+                }
+                else
+                {
+                    if (PackResolver::Distance(m.pos, enemy.pos) - enemy.boundingRadius > a.radius)
+                        continue;
+                    r.centre = m.pos;
+                }
+                r.settle = false;
+                r.forbidden = forbidden;
+                AreaValue::Result const v = AreaValue::Evaluate(world, r);
+                if (v.valid)
+                    best = std::max(best, v.net);
             }
-            float const extra = float(n) * m.areaDpsPerTarget - m.fillerDps;
-            if (extra > 0.0f)
-                loss += Value::LostAction(world, m, extra * sec / m.fillerDps);
+            loss += best;
         }
         return loss;
     }

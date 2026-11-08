@@ -23,6 +23,19 @@ namespace Commander
             {
                 return m_bot.m_spells.warlock.pShadowBolt;
             }
+
+            // Rain of Fire: a ground channel like Blizzard, same area phase rules (user
+            // 2026-11-08); its mana is cheaper through Life Tap. Hellfire burns the warlock
+            // too: not here.
+            std::vector<AreaDamageSpell> AreaDamage() const override
+            {
+                return { { m_bot.m_spells.warlock.pRainOfFire, true, 0.0f } };
+            }
+
+            SpellEntry const* HealthToMana() const override
+            {
+                return m_bot.m_spells.warlock.pLifeTap;
+            }
         };
     }
 

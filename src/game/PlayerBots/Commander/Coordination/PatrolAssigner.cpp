@@ -375,7 +375,10 @@ namespace Commander
                 continue;
             }
             float const walkSec = PackResolver::Distance(tank->pos, spots.front()) * PATH_FACTOR / RUN_YARDS_PER_SEC;
-            float const cost = Value::FightExtension(world, walkSec);
+            // The area phase loses this when the tank walks off (AreaPhase runs after this
+            // module: its result of the last refresh; strat-20261108-161025, the tank left a
+            // channelling mage with six enemies turning to him).
+            float const cost = Value::FightExtension(world, walkSec) + (plan.area.active ? plan.area.endCost : 0.0f);
             if (benefit <= cost)
             {
                 plan.notes.push_back(Format("%s reaches the fight in about %.0f s; staying (it costs %.1f, "

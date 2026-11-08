@@ -587,6 +587,53 @@ namespace Commander
         }
     };
 
+    // The area phase (Coordination/AreaPhase.h, .kiro/docs/2026-11-08-aoe-phase.md): one area
+    // damage spell the party goes for now, who casts it, where from, and what is done first.
+    // A reservation for the caster: AreaDamageBehavior walks, shields and casts in that order.
+    enum class AreaStep : uint8
+    {
+        Move,       // walk to `spot` (farther from the pack: the enemies it turns take longer to come)
+        Shield,     // put `shieldSpellId` on itself first
+        Cast,
+        Channel,    // running: the brain only keeps its value (endCost, the priest's shield)
+    };
+
+    struct AreaPlan
+    {
+        bool active = false;
+        AreaStep step = AreaStep::Cast;
+        ObjectGuid caster;
+        uint32 spellId = 0;
+        ObjectGuid centre;           // ground spell: the enemy it is centred on; empty = around the caster
+        Position3 centrePos;
+        Position3 spot;              // Move: where to cast from
+        float moveBenefit = 0.0f;    // turn loss saved there
+        float moveCost = 0.0f;       // the walk
+        float netHere = 0.0f;        // the whole spell cast from where the caster stands (Move: the fallback)
+        uint32 shieldSpellId = 0;    // Shield
+        float shieldGain = 0.0f;
+        // A healer bot shields the caster (Power Word: Shield): its turn loss is lower with it.
+        ObjectGuid allyShieldBot;
+        uint32 allyShieldSpellId = 0;
+        float allyShieldGain = 0.0f;
+        float benefit = 0.0f;        // of the whole spell from `spot` (or here)
+        float cost = 0.0f;
+        float net = 0.0f;
+        // What ending the phase now loses (a tank sent elsewhere: PatrolAssigner pays it).
+        float endCost = 0.0f;
+        // The phase counts on the tanks' taunts for the enemies it turns: what it loses
+        // without them (RescueAssigner adds it to a taunt spent on another enemy).
+        float tauntReserve = 0.0f;
+        std::vector<ObjectGuid> targets;
+        uint32 sinceMs = 0;
+
+        bool CastBy(ObjectGuid bot) const { return active && caster == bot; }
+        bool Targets(ObjectGuid enemy) const
+        {
+            return active && std::find(targets.begin(), targets.end(), enemy) != targets.end();
+        }
+    };
+
     // The enemy one bot attacks (TargetAssigner, executed by TargetBehavior). A bot without an
     // entry attacks nothing new: healers, bots held by a pull, bots with no safe enemy.
     struct TargetDuty
@@ -661,6 +708,7 @@ namespace Commander
         ClearPlan clear;
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
+        AreaPlan area;
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
         // by PartyCommander every refresh). Read through ForbidsRest.
         bool noRest = false;

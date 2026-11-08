@@ -26,6 +26,7 @@ namespace HealCapacity
             HealRate r;
             r.hps = expected / busySec;
             r.perMana = expected / cost;
+            r.castSec = float(spell->GetCastTime(me)) / 1000.0f;
             rates.push_back(r);
         }
         return rates;

@@ -366,6 +366,8 @@ namespace WorldModelBuilder
                 e.meleeDps = e.meleeHit / (attackMs / 1000.0f);
             e.pos = PositionOf(creature);
             e.boundingRadius = creature->GetObjectBoundingRadius();
+            e.speed = creature->GetSpeed(MOVE_RUN);
+            e.slowed = creature->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED);
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.creatureTypeMask = creature->GetCreatureTypeMask();
@@ -777,7 +779,8 @@ namespace WorldModelBuilder
             }
         }
 
-        // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim.
+        // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim
+        // (the pull's control valuation, ControlValue::OfPull).
         void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
@@ -809,6 +812,125 @@ namespace WorldModelBuilder
                     if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(a.spell->EffectRadiusIndex[i]))
                         radius = std::max(radius, r->Radius);
                 f.areaRadius = radius;
+            }
+        }
+
+        // A channel's ticks (amplitude of its periodic effect), anything else: once after its busy time.
+        void TicksOf(Unit const* caster, SpellEntry const* spell, AreaSpellFacts& a)
+        {
+            a.ticks = 1;
+            a.periodSec = DamageSpells::BusySec(caster, spell);
+            a.channel = spell->IsChanneledSpell();
+            if (!a.channel)
+                return;
+            int32 const duration = spell->GetDuration();
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                if (spell->EffectAmplitude[i] == 0 || duration <= 0)
+                    continue;
+                a.ticks = std::max<uint32>(1, uint32(duration) / spell->EffectAmplitude[i]);
+                a.periodSec = spell->EffectAmplitude[i] / 1000.0f;
+                break;
+            }
+        }
+
+        // Area phase facts (PartyMemberFacts::areaSpells, areaChannel, boltTarget, selfShield,
+        // tapManaPerHealth): what Perception/AreaValue.h needs without the live units.
+        void FillAreaPhase(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            CombatBotRoles const role = ai->GetRole();
+            if (role == ROLE_RANGE_DPS || role == ROLE_MELEE_DPS)
+            {
+                Unit* victim = me->GetVictim() ? me->GetVictim() : static_cast<Unit*>(me);
+                for (AreaDamageSpell const& k : ai->Kit().AreaDamage())
+                {
+                    SpellEntry const* spell = k.spell;
+                    if (!spell)
+                        continue;
+                    AreaSpellFacts a;
+                    a.spellId = spell->Id;
+                    a.onTarget = k.onTarget;
+                    a.slowPct = k.slowPct;
+                    TicksOf(me, spell, a);
+                    a.perTick = DamageSpells::Estimate(me, victim, spell) / float(a.ticks);
+                    a.tickThreat = me->ApplyTotalThreatModifier(a.perTick * sSpellMgr.GetSpellThreatMultiplier(spell),
+                                                                spell->GetSpellSchoolMask());
+                    a.mana = DamageSpells::ManaCost(me, spell);
+                    a.radius = SpellTags::AreaRadius(spell);
+                    if (k.onTarget)
+                        if (SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex))
+                            a.range = range->maxRange;
+                    a.ready = f.CanAct() && !f.silenced && me->IsSpellReady(spell) &&
+                              a.mana <= float(me->GetPower(POWER_MANA));
+                    f.areaSpells.push_back(a);
+                }
+
+                // Its own area channel running now.
+                if (Spell const* channel = me->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+                {
+                    if (channel->getState() == SPELL_STATE_CASTING && channel->m_spellInfo)
+                    {
+                        uint32 const first = sSpellMgr.GetFirstSpellInChain(channel->m_spellInfo->Id);
+                        for (AreaSpellFacts const& a : f.areaSpells)
+                        {
+                            if (sSpellMgr.GetFirstSpellInChain(a.spellId) != first || !a.channel)
+                                continue;
+                            f.areaChannel.spellId = channel->m_spellInfo->Id;
+                            f.areaChannel.centre = f.pos;
+                            float x = 0.0f, y = 0.0f, z = 0.0f;
+                            channel->m_targets.getDestination(x, y, z);
+                            if (x != 0.0f || y != 0.0f)
+                                f.areaChannel.centre = Position3{ x, y, z };
+                            uint32 const periodMs = std::max<uint32>(1, uint32(a.periodSec * 1000.0f));
+                            f.areaChannel.ticksLeft = (uint32(std::max(0, int32(channel->GetCastedTime()))) + periodMs - 1) / periodMs;
+                            break;
+                        }
+                    }
+                }
+
+                // Its bolt in the air (cast done, not landed: the generic slot in
+                // SPELL_STATE_DELAYED; a channel started after it leaves it there). Not on the
+                // threat list yet: a Frostbolt landing after the decision cancelled a Blizzard
+                // after its first tick (strat-20261107-194655).
+                if (Spell const* bolt = me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                {
+                    if (bolt->getState() == SPELL_STATE_DELAYED && bolt->m_spellInfo)
+                    {
+                        if (Unit const* target = bolt->m_targets.getUnitTarget())
+                        {
+                            f.boltTarget = target->GetObjectGuid();
+                            float const damage = DamageSpells::Estimate(me, target, bolt->m_spellInfo);
+                            f.boltThreat = me->ApplyTotalThreatModifier(damage * sSpellMgr.GetSpellThreatMultiplier(bolt->m_spellInfo),
+                                                                        bolt->m_spellInfo->GetSpellSchoolMask());
+                        }
+                    }
+                }
+
+                if (SpellEntry const* shield = ai->Kit().SelfShield())
+                {
+                    SelfShieldFacts& s = f.selfShield;
+                    s.spellId = shield->Id;
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                        if (shield->EffectApplyAuraName[i] == SPELL_AURA_SCHOOL_ABSORB)
+                            s.absorb = float(std::max(0, shield->CalculateSimpleValue(SpellEffectIndex(i))));
+                    if (Powers(shield->powerType) == POWER_MANA)
+                        s.manaCost = uint32(Spell::CalculatePowerCost(shield, me));
+                    s.up = me->HasAura(shield->Id);
+                    s.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, shield);
+                }
+            }
+
+            // Life Tap: health -> mana (EffectBasePoints on SPELL_EFFECT_DUMMY, the script
+            // gives that mana for that health; talents not counted).
+            if (SpellEntry const* tap = ai->Kit().HealthToMana())
+            {
+                float const amount = float(std::max(0, tap->CalculateSimpleValue(EFFECT_INDEX_0)));
+                if (amount > 0.0f)
+                {
+                    f.tapManaPerHealth = 1.0f;
+                    f.tapManaPerCast = amount;
+                }
             }
         }
 
@@ -967,6 +1089,7 @@ namespace WorldModelBuilder
                         FillSurvival(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
+                        FillAreaPhase(ai, f);
                         if (f.role != ROLE_HEALER)
                             f.soloDps = SoloDps(member, ai);
                     }

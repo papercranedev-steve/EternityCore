@@ -221,6 +221,43 @@ namespace Commander
     {
         float hps = 0.0f;           // healing per second: heal (crits included) / max(cast, GCD)
         float perMana = 0.0f;       // healing per mana
+        float castSec = 0.0f;       // until the first one lands
+    };
+
+    // One ClassKit::AreaDamage spell of a damage dealer bot, with its numbers on the bot's
+    // victim (out of combat: on itself). Perception/AreaValue.h values it.
+    struct AreaSpellFacts
+    {
+        uint32 spellId = 0;
+        bool onTarget = false;      // ground spell centred on an enemy (Blizzard, Rain of Fire), else around the caster
+        bool channel = false;
+        uint32 ticks = 1;           // a channel's ticks (Blizzard 8), else 1
+        float periodSec = 0.0f;     // between ticks; anything else: its busy time
+        float perTick = 0.0f;       // damage on each target per tick (spell power included)
+        float tickThreat = 0.0f;    // threat of one tick on one target (spell multiplier, caster modifiers)
+        float mana = 0.0f;          // the whole cast
+        float radius = 0.0f;
+        float range = 0.0f;         // onTarget: how far the centre may be
+        float slowPct = 0.0f;       // ClassKit::AreaDamageSpell::slowPct (Improved Blizzard)
+        bool ready = false;         // off cooldown, the mana, can act and cast
+    };
+
+    // The bot's own area channel running now (Perception/AreaValue.h continues it).
+    struct AreaChannelFacts
+    {
+        uint32 spellId = 0;         // 0 = none
+        Position3 centre;           // its destination (around the caster: the caster)
+        uint32 ticksLeft = 0;
+    };
+
+    // A shield the bot puts on itself before an area spell (ClassKit::SelfShield: Ice Barrier).
+    struct SelfShieldFacts
+    {
+        uint32 spellId = 0;         // 0 = none
+        float absorb = 0.0f;
+        uint32 manaCost = 0;
+        bool ready = false;
+        bool up = false;            // its aura is on
     };
 
     // A party member or a party member's pet on this map.
@@ -290,10 +327,23 @@ namespace Commander
         // on itself): the best area
         // spell's damage per second on each target it hits, its radius, and the filler's
         // damage per second (what the area spell has to beat). 0 = none. For the area damage
-        // a crowd control gives up (ControlValue::AreaLoss).
+        // a crowd control gives up before a pull (ControlValue::OfPull; in combat the area
+        // spells are valued one by one, `areaSpells`).
         float areaDpsPerTarget = 0.0f;
         float areaRadius = 0.0f;
         float fillerDps = 0.0f;
+        // Area phase (Perception/AreaValue.h, Coordination/AreaPhase.h): the bot's area spells,
+        // its own area channel running now, its bolt in the air (cast done, not landed: its
+        // threat is not on the list yet) and the shield it can put up first.
+        std::vector<AreaSpellFacts> areaSpells;
+        AreaChannelFacts areaChannel;
+        ObjectGuid boltTarget;
+        float boltThreat = 0.0f;
+        SelfShieldFacts selfShield;
+        // Bots with Life Tap (warlocks): mana it gives per health spent and per cast. Their mana
+        // is worth at most the health and time it takes to tap it again (ManaWorth.h).
+        float tapManaPerHealth = 0.0f;
+        float tapManaPerCast = 0.0f;
         // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
         // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
         float fillerManaPerSec = 0.0f;
@@ -358,6 +408,8 @@ namespace Commander
         Position3 pos;
         // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
         float boundingRadius = 0.0f;
+        float speed = 0.0f;             // run speed now, yards per second (slows included)
+        bool slowed = false;            // a speed decrease is on it
 
         ObjectGuid victim;              // threat manager's current victim (who it is hitting)
         float victimThreat = 0.0f;

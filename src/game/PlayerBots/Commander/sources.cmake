@@ -49,6 +49,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/LooseEnemy.cpp
   ${COMMANDER_DIR}/Perception/AggroTurnCost.h
   ${COMMANDER_DIR}/Perception/AggroTurnCost.cpp
+  ${COMMANDER_DIR}/Perception/AreaValue.h
+  ${COMMANDER_DIR}/Perception/AreaValue.cpp
   ${COMMANDER_DIR}/Perception/RouteRisk.h
   ${COMMANDER_DIR}/Perception/RouteRisk.cpp
   ${COMMANDER_DIR}/Perception/SpellTags.h
@@ -107,6 +109,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.cpp
   ${COMMANDER_DIR}/Coordination/RescueAssigner.h
   ${COMMANDER_DIR}/Coordination/RescueAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/AreaPhase.h
+  ${COMMANDER_DIR}/Coordination/AreaPhase.cpp
   ${COMMANDER_DIR}/Behaviors/RescueBehavior.h
   ${COMMANDER_DIR}/Behaviors/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/RescueValue.h

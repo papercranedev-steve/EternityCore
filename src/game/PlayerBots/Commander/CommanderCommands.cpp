@@ -382,6 +382,22 @@ namespace
             }
         }
 
+        // Area phase (AreaPhaseAssigner): who casts which area spell, from where, what first.
+        if (plan.area.active)
+        {
+            Commander::AreaPlan const& a = plan.area;
+            static char const* const steps[] = { "walk to spot", "shield first", "cast", "channelling" };
+            handler->PSendSysMessage("Area phase: %s, %s on |cffffcc00%s|r, %s (net %.1f, here %.1f, end costs %.1f, taunts kept %.1f)",
+                NameOf(map, a.caster).c_str(), SpellName(a.spellId).c_str(),
+                a.centre.IsEmpty() ? "itself" : NameOf(map, a.centre).c_str(), steps[uint8(a.step)],
+                a.net, a.netHere, a.endCost, a.tauntReserve);
+            if (a.shieldSpellId)
+                handler->PSendSysMessage("    first %s (+%.1f)", SpellName(a.shieldSpellId).c_str(), a.shieldGain);
+            if (!a.allyShieldBot.IsEmpty())
+                handler->PSendSysMessage("    %s puts %s on it (+%.1f)", NameOf(map, a.allyShieldBot).c_str(),
+                    SpellName(a.allyShieldSpellId).c_str(), a.allyShieldGain);
+        }
+
         // Team rescue (RescueAssigner): one way off each loose enemy's victim.
         if (!plan.rescues.empty())
         {
