@@ -12,7 +12,11 @@
  *   gain    = mana the party's mana users regenerate in W (PartyMemberFacts::manaRegen, the
  *             rate outside the five second rule; in combat nobody eats or drinks), capped at
  *             their missing mana, valued by ManaWorth for the fight still to come (FightLoad
- *             of the controlled enemies, all at once)
+ *             of the controlled enemies, all at once) without its after-fight floor
+ *             (ManaWorth::Fight::drinkAfter false, since 2026-11-08): drinking after the fight
+ *             gets the same mana back faster than standing in combat, so only mana that fight
+ *             would lack counts (strat-20261108-232105: the party waited 34 s for 1.8 points next
+ *             to a polymorphed insect of 784 health)
  *   cost    = WAIT_POINTS_PER_SEC x W; waiting is off when an idle patrol's walk comes within
  *             its reach + PATROL_MARGIN_YD of the enemy within W + that fight
  * gain > cost: wake it W seconds from now, else now. Decided once per enemy (kept while it

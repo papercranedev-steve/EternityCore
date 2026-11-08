@@ -79,13 +79,28 @@ namespace SafeRoute
         }
     }
 
+    void IdleCreatures::CountOnlyCloserThan(Position3 const& end)
+    {
+        for (Idle& i : m_idle)
+        {
+            if (!AggroRange::CoversWandering(i.creature, i.reach, end))
+                continue;
+            float const gap = Distance2d(end, i.home);
+            i.endGap = i.endGap < 0.0f ? gap : std::min(i.endGap, gap);
+        }
+    }
+
     IdleCreatures IdleCreatures::LeavingFrom(Position3 const& from) const
     {
-        IdleCreatures out;
-        out.m_idle = m_idle;
-        for (Idle& i : out.m_idle)
-            if (AggroRange::CoversWandering(i.creature, i.reach, from))
-                i.leaveGap = Distance2d(from, i.home);
+        IdleCreatures out = *this;
+        out.CountOnlyCloserThan(from);
+        return out;
+    }
+
+    IdleCreatures IdleCreatures::ArrivingAt(Position3 const& to) const
+    {
+        IdleCreatures out = *this;
+        out.CountOnlyCloserThan(to);
         return out;
     }
 
@@ -97,20 +112,20 @@ namespace SafeRoute
         }), m_idle.end());
     }
 
-    bool IdleCreatures::Near(Position3 const& p) const
+    Creature const* IdleCreatures::Blocker(Position3 const& p) const
     {
         for (Idle const& c : m_idle)
         {
-            // Walking out: no closer to it than the start.
-            if (c.leaveGap >= 0.0f && Distance2d(p, c.home) >= c.leaveGap - LEAVE_TOLERANCE)
+            // Walking out of its circle or into it at a fight: no closer to it than that end.
+            if (c.endGap >= 0.0f && Distance2d(p, c.home) >= c.endGap - END_GAP_TOLERANCE)
                 continue;
             if (AggroRange::CoversWandering(c.creature, c.reach, p))
-                return true;
+                return c.creature;
         }
-        return false;
+        return nullptr;
     }
 
-    bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b)
+    bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b, Creature const** blocker)
     {
         // Path corners are far apart in open rooms, so walk each segment in PATH_SAMPLE_STEP steps.
         uint32 const steps = std::max(1u, uint32(Distance2d(a, b) / PATH_SAMPLE_STEP));
@@ -121,15 +136,19 @@ namespace SafeRoute
             p.x = a.x + (b.x - a.x) * f;
             p.y = a.y + (b.y - a.y) * f;
             p.z = a.z + (b.z - a.z) * f;
-            if (idle.Near(p))
+            if (Creature const* c = idle.Blocker(p))
+            {
+                if (blocker)
+                    *blocker = c;
                 return false;
+            }
         }
         return true;
     }
 
     namespace
     {
-        bool PathPointsAreSafe(IdleCreatures const& idle, PathInfo const& path)
+        bool PathPointsAreSafe(IdleCreatures const& idle, PathInfo const& path, Creature const** blocker = nullptr)
         {
             auto const& pts = path.getPath();
             for (size_t i = 1; i < pts.size(); ++i)
@@ -137,10 +156,17 @@ namespace SafeRoute
                 Position3 a, b;
                 a.x = pts[i - 1].x; a.y = pts[i - 1].y; a.z = pts[i - 1].z;
                 b.x = pts[i].x;     b.y = pts[i].y;     b.z = pts[i].z;
-                if (!SegmentIsSafe(idle, a, b))
+                if (!SegmentIsSafe(idle, a, b, blocker))
                     return false;
             }
             return true;
+        }
+
+        bool Fail(SafeRoute::Verdict* verdict, char const* why)
+        {
+            if (verdict)
+                verdict->why = why;
+            return false;
         }
     }
 
@@ -160,8 +186,10 @@ namespace SafeRoute
     }
 
     bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour, float* length,
-                    Position3* end)
+                    Position3* end, Verdict* verdict)
     {
+        if (verdict)
+            *verdict = Verdict();
         Position3 const here = PositionOf(me);
         if (end)
             *end = to;
@@ -169,12 +197,14 @@ namespace SafeRoute
         path.calculate(to.x, to.y, to.z);
         uint32 const type = path.getPathType();
         if (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
-            return false;
+            return Fail(verdict, "no path");
         if (type & PATHFIND_NOT_USING_PATH)
         {
             if (length)
                 *length = Distance2d(here, to);
-            return me->GetMap()->isInLineOfSight(here.x, here.y, here.z + 2.0f, to.x, to.y, to.z + 2.0f);
+            if (!me->GetMap()->isInLineOfSight(here.x, here.y, here.z + 2.0f, to.x, to.y, to.z + 2.0f))
+                return Fail(verdict, "no sight");
+            return true;
         }
         if (length)
             *length = path.Length();
@@ -185,11 +215,18 @@ namespace SafeRoute
             end->z = path.getPath().back().z;
         }
         if (!PathReaches(me->GetMap(), path, to))
-            return false;
+            return Fail(verdict, "does not reach");
 
         if (path.Length() > Distance2d(here, to) * maxDetour + 2.0f)
-            return false;
-        return PathPointsAreSafe(idle, path);
+            return Fail(verdict, "detour");
+        Creature const* blocker = nullptr;
+        if (!PathPointsAreSafe(idle, path, &blocker))
+        {
+            if (verdict)
+                verdict->blocker = blocker;
+            return Fail(verdict, "idle creature");
+        }
+        return true;
     }
 
     bool WalkIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to)

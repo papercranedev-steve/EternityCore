@@ -50,7 +50,9 @@ namespace Commander
             IdleCreatures(Player* me, Position3 const& center, float scanRadius, float margin = IDLE_MARGIN);
             // A creature would attack the bot standing at `p`, or would once it wandered
             // (AggroRange::CoversWandering).
-            bool Near(Position3 const& p) const;
+            bool Near(Position3 const& p) const { return Blocker(p) != nullptr; }
+            // The first such creature, or null.
+            Creature const* Blocker(Position3 const& p) const;
             bool Empty() const { return m_idle.empty(); }
             // Leave these out (they come anyway: the pull target and its group, for the walk
             // to a face pull spot).
@@ -62,22 +64,32 @@ namespace Commander
             // (strat-20261107-164236: the priest stopped 17.8 yd from a wanderer's home, reach
             // 22 + wander 5). Check the end point with the original (strict) set.
             IdleCreatures LeavingFrom(Position3 const& from) const;
+            // For the walk to an enemy the party fights at `to` (MeleeRoutes): the same for a
+            // creature that already covers `to`. The fight is there and it did not come: the
+            // margin and its wander circle cover more than its real aggro range. Without it a
+            // melee bot never joined a fight held 20-30 yd from other packs
+            // (strat-20261108-232105: the rogue stood 9 yd from the tank for 70 s). Do not use
+            // it for an enemy that is not fighting yet: its spot proves nothing.
+            IdleCreatures ArrivingAt(Position3 const& to) const;
 
         private:
             IdleCreatures() = default;
             void Scan(Player* me, Map* map, Position3 const& center, float margin, float scanRadius);
+            void CountOnlyCloserThan(Position3 const& end);
             struct Idle
             {
                 Creature const* creature = nullptr;
                 float reach = 0.0f;
                 Position3 home;             // AggroRange::WanderOf (its position when not wandering)
-                float leaveGap = -1.0f;     // >= 0: covers the start of a walk out (LeavingFrom)
+                // >= 0: covers an end of the walk (LeavingFrom, ArrivingAt), the nearer one's
+                // distance from its home: it counts only at points closer than that.
+                float endGap = -1.0f;
             };
             std::vector<Idle> m_idle;
         };
 
-        // A walk out may run along the circle (navmesh corners) at about the start's distance.
-        float const LEAVE_TOLERANCE = 1.0f;
+        // A walk out or in may run along the circle (navmesh corners) at about the end's distance.
+        float const END_GAP_TOLERANCE = 1.0f;
 
         // PathFinder still reports PATHFIND_NORMAL when `to` is up to 7 yd off the navmesh: the
         // path then ends at the mesh edge, e.g. in front of the wall `to` stands behind
@@ -97,8 +109,14 @@ namespace Commander
         // given: the path's length (the straight distance without a navmesh path), set whenever
         // a path was found. `end`, if given: where the navmesh path ends (`to` without a navmesh
         // path), to tell a point on the mesh from one next to it (LosBreak: a crate top).
+        // `verdict`, if given: why it is not safe (for the calculation trace and RouteFact).
+        struct Verdict
+        {
+            char const* why = "";               // "" safe, "no path", "no sight", "does not reach", "detour", "idle creature"
+            Creature const* blocker = nullptr;  // "idle creature": the first one a sample came into
+        };
         bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour,
-                        float* length = nullptr, Position3* end = nullptr);
+                        float* length = nullptr, Position3* end = nullptr, Verdict* verdict = nullptr);
 
         // The walk from `me` to `to` along the navmesh path (the straight line when there is no
         // complete path) is outside `idle`. No reachability or detour rule: for a walk that
@@ -106,7 +124,9 @@ namespace Commander
         bool WalkIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to);
 
         // Every PATH_SAMPLE_STEP from `a` (excluded) to `b` (included) is outside `idle`.
-        bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b);
+        // `blocker`, if given: the creature of the first sample that is not.
+        bool SegmentIsSafe(IdleCreatures const& idle, Position3 const& a, Position3 const& b,
+                           Creature const** blocker = nullptr);
 
         float Distance2d(Position3 const& a, Position3 const& b);
     }

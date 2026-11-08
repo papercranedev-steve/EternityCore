@@ -30,6 +30,21 @@ namespace ControlValue
         {
             return m.alive && (m.isPet || m.role == ROLE_TANK || m.role == ROLE_MELEE_DPS);
         }
+
+        // Seconds the party fights on without the foes `isTarget` picks (0: nobody else).
+        template <typename IsTarget>
+        float RestOf(FightLoad::Input const& fight, IsTarget isTarget, char const* why)
+        {
+            FightLoad::Input rest = fight;
+            rest.foes.erase(std::remove_if(rest.foes.begin(), rest.foes.end(),
+                [&isTarget](FightLoad::Foe const& f) { return isTarget(f.guid); }), rest.foes.end());
+            return rest.foes.empty() ? 0.0f : FightLoad::Simulate(rest, why).fightSec;
+        }
+
+        float RestSec(FightLoad::Input const& fight, std::vector<EnemyFacts const*> const& targets, char const* why)
+        {
+            return RestOf(fight, [&targets](ObjectGuid g) { return IsTarget(targets, g); }, why);
+        }
     }
 
     bool Affects(ControlAbility const& a, uint32 entry, uint32 creatureTypeMask)
@@ -83,8 +98,16 @@ namespace ControlValue
         if (targets.empty())
             return w;
         Trace::Scope scope("control");
+        // Held only while the party has someone else to fight (header: HeldSec).
+        float const restSec = a.breaksOnDamage && !a.fear ? RestSec(fight, targets, "without the targets") : -1.0f;
+        auto const extension = [&](EnemyFacts const& e)
+        {
+            float const left = e.control.spellId ? e.control.remainingMs / 1000.0f : 0.0f;
+            float const sec = ExpectedSec(world, a, e);
+            return restSec < 0.0f ? sec : std::max(0.0f, std::min(left + sec, restSec) - left);
+        };
         for (EnemyFacts const* e : targets)
-            w.sec = std::max(w.sec, ExpectedSec(world, a, *e));
+            w.sec = std::max(w.sec, extension(*e));
 
         PartyMemberFacts const* tank = Tanks::Main(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
@@ -120,7 +143,7 @@ namespace ControlValue
                 if (e->guid == f.guid)
                 {
                     float const left = e->control.spellId ? e->control.remainingMs / 1000.0f : 0.0f;
-                    f.arriveSec = std::max(f.arriveSec, left + ExpectedSec(world, a, *e));
+                    f.arriveSec = std::max(f.arriveSec, left + extension(*e));
                 }
             f.sameFight = true;
         }
@@ -155,7 +178,7 @@ namespace ControlValue
                 PartyMemberFacts const* victim = world.FindMember(e->victim);
                 if (!victim || victim->guid == tank->guid || Tanks::IsTank(*victim))
                     continue;
-                float const sec = std::min(ExpectedSec(world, a, *e), TAKEOVER_SEC);
+                float const sec = std::min(extension(*e), TAKEOVER_SEC);
                 w.victims += Value::MoveLoss(world, *e, *victim, *tank, sec) + Value::HarassLoss(world, *e, *victim, sec);
             }
         }
@@ -216,6 +239,9 @@ namespace ControlValue
     {
         Worth w;
         w.sec = a.durationSec;
+        // Held only while the party fights the others (header: HeldSec).
+        if (a.breaksOnDamage && !a.fear)
+            w.sec = std::min(w.sec, RestOf(fight, [target](ObjectGuid g) { return g == target; }, "pull: without the target"));
         PartyMemberFacts const* tank = Tanks::Main(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
 

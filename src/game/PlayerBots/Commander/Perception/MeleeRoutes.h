@@ -14,6 +14,13 @@
  * + margin, wander circles included). The enemy and the creatures of its pack are left out:
  * they come anyway (an enemy the player just attacked is still idle). Idle creatures are
  * scanned once per bot around it, out to the farthest enemy checked + SCAN_EXTRA_YD.
+ * Ends inside a circle (since 2026-11-08, strat-20261108-232105: a fight held 20-30 yd from
+ * other packs is inside their margin + wander circles, so no melee bot ever walked in): a
+ * creature whose circle covers the bot's spot (it stands there, nothing came) or the spot of
+ * an enemy fighting the party (the fight is there, nothing came) counts only at points closer
+ * to its home than that end (SafeRoute::IdleCreatures::LeavingFrom / ArrivingAt). Not for an
+ * enemy only targeted: it is not fighting at its spot yet.
+ * Each check records why it is not safe (RouteFact::why / blocker, trace "route").
  *
  * Cost: one navmesh query per pair. Results are kept until the bot or the enemy moved
  * MOVED_YD or MAX_AGE_MS passed (idle creatures wander); at most MAX_CHECKS_PER_REFRESH new

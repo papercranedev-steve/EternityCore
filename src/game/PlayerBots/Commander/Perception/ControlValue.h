@@ -7,6 +7,14 @@
  * Seconds out of the fight (ExpectedSec): the spell's duration, minus what an active control
  * on it still lasts; 0 for a control that breaks on damage while a party DoT ticks on it or
  * a player is hitting it.
+ * HeldSec (since 2026-11-08, strat-20261108-232105: the mage kept polymorphing an insect of
+ * 784 health, also as the last enemy, and the party stood waiting): a control that breaks on
+ * damage (not a fear) holds the enemy only while the party has others to fight. Then the
+ * tank wakes it (Coordination/ControlledEnd.h), so the extension is capped at the fight
+ * without the targets (FightLoad of the others; 0 when nobody else is left). Of: worth.sec,
+ * the arrival in the controlled run and the victims' seconds use it; OfPull: worth.sec.
+ * Known limit: other controlled enemies in the rest count as waking when their control ends,
+ * while ControlledEnd may wake one sooner.
  *
  * Benefit, the fight simulated twice (FightLoad::FromWorld: every enemy on the tank, the
  * healer bots healing), once as it is and once with the targets joining `sec` later:

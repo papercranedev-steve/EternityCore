@@ -49,6 +49,7 @@ namespace ManaWorth
             float fightSec = 0.0f;
             float incomingDps = 0.0f;
             float headroom = 0.0f;
+            float floor = SCARCITY_FLOOR;
         };
 
         Context Live(WorldModel const& world)
@@ -65,6 +66,7 @@ namespace ManaWorth
             Context c;
             c.fightSec = fight.sec;
             c.incomingDps = fight.incomingDps;
+            c.floor = fight.drinkAfter ? SCARCITY_FLOOR : 0.0f;
             return c;
         }
 
@@ -81,17 +83,15 @@ namespace ManaWorth
             return ManaBudget::Tension(c.fightSec * m.fillerManaPerSec, mana);
         }
 
-        float Scarce(float tension)
-        {
-            return std::max(SCARCITY_FLOOR, ManaBudget::Scarcity(tension));
-        }
-
         float WorthIn(WorldModel const& world, Context const& c, PartyMemberFacts const& member, float mana)
         {
             if (mana <= 0.0f || !member.UsesMana())
                 return 0.0f;
             // Scarcity after paying it: the last mana is the dearest.
-            float const scarcity = Scarce(TensionWith(world, c, member, std::max(0.0f, float(member.mana) - mana)));
+            float const scarcity = std::max(c.floor,
+                ManaBudget::Scarcity(TensionWith(world, c, member, std::max(0.0f, float(member.mana) - mana))));
+            if (scarcity <= 0.0f)
+                return 0.0f;
             if (IsHealer(member))
                 return Value::Points(world, mana * HealPerMana(member)) * scarcity;
             if (member.fillerManaPerSec <= 0.0f)

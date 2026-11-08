@@ -1,6 +1,8 @@
 #include "Commander/Perception/MeleeRoutes.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SafeRoute.h"
+#include "Commander/Trace/Trace.h"
+#include "Creature.h"
 #include "Map.h"
 #include "Player.h"
 #include "SharedDefines.h"
@@ -19,6 +21,7 @@ namespace Commander
             float distance = 0.0f;
             int32 cached = -1;          // index in the cache, -1 = never checked
             bool due = false;
+            bool engaged = false;       // fighting the party at its spot (header: ArrivingAt)
         };
 
         bool WalksToMelee(PartyMemberFacts const& m)
@@ -57,6 +60,7 @@ namespace Commander
         std::vector<EnemyFacts const*> enemies;
         for (EnemyFacts const& e : world.enemies)
             enemies.push_back(&e);
+        size_t const fighting = enemies.size();     // the rest are only targeted (not fighting yet)
         for (EnemyFacts const& e : world.targeted)
             enemies.push_back(&e);
 
@@ -65,8 +69,9 @@ namespace Commander
         {
             if (!WalksToMelee(m))
                 continue;
-            for (EnemyFacts const* e : enemies)
+            for (size_t k = 0; k < enemies.size(); ++k)
             {
+                EnemyFacts const* e = enemies[k];
                 float const distance = PackResolver::Distance(m.pos, e->pos);
                 if (distance > RANGE_YD || distance - e->boundingRadius <= REACH_YD)
                     continue;
@@ -74,6 +79,7 @@ namespace Commander
                 p.bot = &m;
                 p.enemy = e;
                 p.distance = distance;
+                p.engaged = k < fighting && e->acting && !e->victim.IsEmpty();
                 for (size_t i = 0; i < m_cache.size(); ++i)
                     if (m_cache[i].fact.bot == m.guid && m_cache[i].fact.enemy == e->guid)
                         p.cached = int32(i);
@@ -137,14 +143,28 @@ namespace Commander
                     new SafeRoute::IdleCreatures(me, p->bot->pos, radius)));
                 idle = scans.back().second.get();
             }
-            SafeRoute::IdleCreatures pathIdle = *idle;
+            SafeRoute::IdleCreatures pathIdle = idle->LeavingFrom(p->bot->pos);
             pathIdle.Ignore(PackOf(world, p->enemy->guid));
+            // The party fights it there and nothing else came (header).
+            if (p->engaged)
+                pathIdle = pathIdle.ArrivingAt(p->enemy->pos);
 
             Entry e;
             e.fact.bot = p->bot->guid;
             e.fact.enemy = p->enemy->guid;
             e.fact.pathYd = p->distance;
-            e.fact.safe = SafeRoute::PathIsSafe(me, pathIdle, p->enemy->pos, MAX_DETOUR, &e.fact.pathYd);
+            SafeRoute::Verdict verdict;
+            e.fact.safe = SafeRoute::PathIsSafe(me, pathIdle, p->enemy->pos, MAX_DETOUR, &e.fact.pathYd, nullptr, &verdict);
+            e.fact.why = verdict.why;
+            if (verdict.blocker)
+                e.fact.blocker = verdict.blocker->GetObjectGuid();
+            if (Trace::On())
+                Trace::Emit("route", Trace::Format("%s -> %s: %s%s%s", me->GetName(), Trace::Guid(e.fact.enemy).c_str(),
+                        e.fact.safe ? "safe" : verdict.why,
+                        verdict.blocker ? " " : "", verdict.blocker ? verdict.blocker->GetName() : ""),
+                    Trace::Format("{\"safe\":%s,\"why\":\"%s\",\"pathYd\":%.1f,\"straightYd\":%.1f,\"engaged\":%s,\"blocker\":\"%s\"}",
+                        e.fact.safe ? "true" : "false", verdict.why, e.fact.pathYd, p->distance,
+                        p->engaged ? "true" : "false", Trace::Guid(e.fact.blocker).c_str()));
             e.from = p->bot->pos;
             e.to = p->enemy->pos;
             e.atMs = nowMs;

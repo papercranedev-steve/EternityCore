@@ -75,6 +75,7 @@ namespace Commander
         // The fight still to come: every controlled enemy, all at once (rough: they wake one by one).
         FightLoad::Input fight;
         ManaWorth::Fight planned;
+        planned.drinkAfter = false;     // header: only mana this fight lacks
         if (FightLoad::FromWorld(world, fight))
         {
             for (FightLoad::Foe& f : fight.foes)

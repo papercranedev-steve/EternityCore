@@ -584,6 +584,8 @@ namespace Commander
         // (SafeRoute::PathIsSafe, wander circles included). False also when there is no path.
         bool safe = false;
         float pathYd = 0.0f;        // path length (straight distance without a navmesh)
+        char const* why = "";       // not safe: SafeRoute::Verdict::why
+        ObjectGuid blocker;         // "idle creature": the one the walk comes into
     };
 
     // Fight-wide rates for the common value unit (value-scoring doc section 3).

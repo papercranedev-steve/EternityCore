@@ -7,6 +7,7 @@
 #include "Commander/Perception/ThreatRoom.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Trace/Trace.h"
 #include <algorithm>
 
 // Damage dealers' targets: TargetRules.h "Damage dealers".
@@ -57,20 +58,49 @@ namespace DamageTargets
         // Switching from nothing loses nothing: at least one global cooldown of its own output.
         float const idleGain = Value::ContributionPerSec(world, bot) * Value::GCD_SEC;
 
+        // Calculation trace: why each enemy was not taken (a bot without a target proposes
+        // nothing at all, so this is the only record of it).
+        std::string skipped;
+        auto const skip = [&skipped](EnemyFacts const& e, std::string const& why)
+        {
+            if (Trace::On())
+                skipped += Trace::Format("%s{\"g\":\"%s\",\"why\":\"%s\"}", skipped.empty() ? "" : ",",
+                    Trace::Guid(e.guid).c_str(), why.c_str());
+        };
+
         TargetPick best;
         TargetPick focus;
         float bestRank = 0.0f;
         for (EnemyFacts const* e : ctx.candidates)
         {
-            if (e == current || !ctx.Hittable(*e, bot))
+            if (e == current)
                 continue;
+            if (!ctx.Hittable(*e, bot))
+            {
+                skip(*e, "not hittable");
+                continue;
+            }
             float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
             if (distance > range)
+            {
+                skip(*e, Trace::On() ? Trace::Format("%.0f yd away", distance) : std::string());
                 continue;
+            }
             if (melee && distance > reach && RouteRisk::Blocked(world, bot, *e))
+            {
+                if (Trace::On())
+                {
+                    RouteFact const* r = world.FindRoute(bot.guid, e->guid);
+                    skip(*e, Trace::Format("route: %s%s%s", r ? r->why : "straight line crosses an idle creature",
+                        r && !r->blocker.IsEmpty() ? " " : "", r && !r->blocker.IsEmpty() ? Trace::Guid(r->blocker).c_str() : ""));
+                }
                 continue;
+            }
             if (!ThreatAllows(ctx, bot, *e, false))
+            {
+                skip(*e, "threat room");
                 continue;
+            }
 
             FocusScore const& f = ctx.Score(*e);
             float const switchCost = SwitchCost::Of(world, bot, *e, reach);
@@ -83,7 +113,10 @@ namespace DamageTargets
                 p.benefit = (f.harmRate * c->killSec - c->harmRate * f.killSec) * share;
                 p.cost = switchCost;
                 if (p.benefit <= p.cost)
+                {
+                    skip(*e, "switch not worth it");
                     continue;
+                }
                 rank = p.benefit - p.cost;
             }
             else
@@ -104,18 +137,21 @@ namespace DamageTargets
                 bestRank = rank;
             }
         }
+        TargetPick pick;
         if (focus.enemy)
-            return focus;
-        if (best.enemy)
-            return best;
-        if (current)
+            pick = focus;
+        else if (best.enemy)
+            pick = best;
+        else if (current)
         {
-            TargetPick keep;
-            keep.enemy = current;
-            keep.reason = stalled ? "keep (near aggro, nothing safer)" : "keep";
-            return keep;
+            pick.enemy = current;
+            pick.reason = stalled ? "keep (near aggro, nothing safer)" : "keep";
         }
-        return TargetPick();
+        if (Trace::On())
+            Trace::Emit("target", Trace::Format("%s: %s %s", Trace::Guid(bot.guid).c_str(),
+                    pick.enemy ? Trace::Guid(pick.enemy->guid).c_str() : "none", pick.reason),
+                "{\"skipped\":[" + skipped + "]}");
+        return pick;
     }
 }
 }
