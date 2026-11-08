@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/CastBreak.h"
+#include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
@@ -47,7 +48,6 @@ namespace CastBreak
         if (!self)
             return false;
 
-        bool const channel = type == CURRENT_CHANNELED_SPELL;
         uint32 const leftMs = spell->GetCastedTime();     // m_timer counts down to 0
         if (!leftMs)
             return false;
@@ -71,13 +71,12 @@ namespace CastBreak
         if (best <= 0.0f)
             return false;
 
-        float lostSec = Value::GCD_SEC;
-        if (!channel)
-        {
-            int32 const total = spell->GetCastTime();
-            lostSec = total > int32(leftMs) ? float(total - int32(leftMs)) / 1000.0f : 0.0f;
-        }
-        float const cost = Value::LostAction(world, *self, lostSec);
+        // What stopping loses: the running cast's own worth (Behaviors/CurrentAction.h: the
+        // module's live value, the order's net, or the time spent / a GCD for a rotation cast).
+        // Was a flat GCD for every channel: an area step broke a Blizzard just started for 1.3
+        // points (strat-20261108-141921).
+        CurrentAction::State const current = CurrentAction::Read(bot, world, plan);
+        float const cost = current.keep;
         if (best <= cost)
             return false;
 

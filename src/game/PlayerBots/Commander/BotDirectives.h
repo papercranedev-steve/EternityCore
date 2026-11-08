@@ -30,6 +30,10 @@ namespace Commander
             Forbidden,  // breaks a plan constraint (Behaviors/Constraints.h; reason names it)
             VetoSet,    // veto registered
             OrderSet,   // heal order handed to the rotation's heal step
+            // The bot's running cast, channel or walk (Behaviors/CurrentAction.h), shown as a
+            // candidate: it goes on, or the executed proposal ended it (and paid for that).
+            Kept,
+            Ended,
         };
 
         std::string source;
@@ -58,6 +62,10 @@ namespace Commander
         BotActionType type = BotActionType::Hold;
         SpellEntry const* spell = nullptr;
         uint32 timeMs = 0;              // 0 = nothing executed yet
+        // The proposal's value when it was executed (Proposal::score, its own part: what
+        // ending it early loses, Behaviors/CurrentAction.h). valued false = an order without one.
+        bool valued = false;
+        float net = 0.0f;
     };
 
     class BotDirectives
@@ -190,14 +198,24 @@ namespace Commander
         std::string const& GetLastDecision() const { return m_lastDecision; }
         uint32 GetLastDecisionMs() const { return m_lastDecisionMs; }
 
+        // `ownNet`: the proposal's net without what it paid for ending the bot's previous action
+        // (Proposal::interruptCost): the worth of this action itself.
         void NoteExecuted(Proposal const& p, uint32 nowMs)
         {
-            m_lastExecuted.source = p.source;
-            m_lastExecuted.type = p.action.type;
-            m_lastExecuted.spell = p.action.spell;
-            m_lastExecuted.timeMs = nowMs;
+            ExecutedAction a;
+            a.source = p.source;
+            a.type = p.action.type;
+            a.spell = p.action.spell;
+            a.timeMs = nowMs;
+            a.valued = p.valued;
+            a.net = p.valued ? p.benefit - (p.cost - p.interruptCost) : 0.0f;
+            m_lastExecuted = a;
+            if (a.type == BotActionType::MoveTo)
+                m_lastWalk = a;
         }
         ExecutedAction const& GetLastExecuted() const { return m_lastExecuted; }
+        // The last MoveTo the arbiter executed (the walk a movement hold keeps going).
+        ExecutedAction const& GetLastWalk() const { return m_lastWalk; }
 
         void RecordDecision(DecisionRecord record)
         {
@@ -245,6 +263,7 @@ namespace Commander
         uint32 m_lastDecisionMs = 0;
         std::string m_lastDecision;
         ExecutedAction m_lastExecuted;
+        ExecutedAction m_lastWalk;
         std::vector<ActiveVeto> m_vetoes;
         std::deque<DecisionRecord> m_log;
     };

@@ -8,6 +8,7 @@
 #include "Commander/Perception/HealCapacity.h"
 #include "Commander/Perception/PetTaunt.h"
 #include "Commander/Perception/RescueValue.h"
+#include "Commander/Perception/ValueModel.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "DamageSpells.h"
@@ -795,6 +796,10 @@ namespace WorldModelBuilder
             {
                 if (!a.spell || !me->IsSpellReady(a.spell))
                     continue;
+                // A mage out of mana gives up no Blizzard when a pack member is sheeped or
+                // shackled (ControlValue::AreaLoss charged it at 30 mana, strat-20261108-141921).
+                if (DamageSpells::ManaCost(me, a.spell) > float(me->GetPower(POWER_MANA)))
+                    continue;
                 float const dps = DamageSpells::Estimate(me, victim, a.spell) / std::max(0.1f, DamageSpells::BusySec(me, a.spell));
                 if (dps <= f.areaDpsPerTarget)
                     continue;
@@ -805,6 +810,45 @@ namespace WorldModelBuilder
                         radius = std::max(radius, r->Radius);
                 f.areaRadius = radius;
             }
+        }
+
+        // White damage per second of one hand from the unit's damage fields (attack power included).
+        float WeaponDps(Unit const* unit, WeaponAttackType type)
+        {
+            uint32 const attackMs = unit->GetAttackTime(type);
+            if (!attackMs)
+                return 0.0f;
+            uint16 minField = UNIT_FIELD_MINDAMAGE;
+            uint16 maxField = UNIT_FIELD_MAXDAMAGE;
+            if (type == OFF_ATTACK)
+            {
+                minField = UNIT_FIELD_MINOFFHANDDAMAGE;
+                maxField = UNIT_FIELD_MAXOFFHANDDAMAGE;
+            }
+            else if (type == RANGED_ATTACK)
+            {
+                minField = UNIT_FIELD_MINRANGEDDAMAGE;
+                maxField = UNIT_FIELD_MAXRANGEDDAMAGE;
+            }
+            float const hit = (unit->GetFloatValue(minField) + unit->GetFloatValue(maxField)) / 2.0f;
+            return hit / (attackMs / 1000.0f);
+        }
+
+        // PartyMemberFacts::soloDps: what this member deals per second on its own (see there).
+        // `ai` null = a player: weapons only (its spells are not known).
+        float SoloDps(Player* member, PartyBotAI const* ai)
+        {
+            float melee = WeaponDps(member, BASE_ATTACK);
+            if (member->HaveOffhandWeapon())
+                melee += WeaponDps(member, OFF_ATTACK) * 0.5f;      // off-hand penalty
+            if (member->GetClass() == CLASS_HUNTER)
+                melee = std::max(melee, WeaponDps(member, RANGED_ATTACK));
+            float best = melee * Value::MELEE_ABILITY_FACTOR;
+            if (ai)
+                if (SpellEntry const* filler = ai->Kit().Filler())
+                    best = std::max(best, DamageSpells::Estimate(member, member, filler) /
+                                          std::max(0.1f, DamageSpells::BusySec(member, filler)) * Value::CASTER_UPTIME);
+            return best;
         }
 
         // ClassKit::Filler's mana per second while chain casting it (PartyMemberFacts::fillerManaPerSec).
@@ -923,6 +967,8 @@ namespace WorldModelBuilder
                         FillSurvival(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
+                        if (f.role != ROLE_HEALER)
+                            f.soloDps = SoloDps(member, ai);
                     }
                     if (member->IsAlive() && f.role == ROLE_HEALER)
                         f.healRates = HealCapacity::Rates(ai);
@@ -944,6 +990,8 @@ namespace WorldModelBuilder
                         tauntCheckers.push_back(member);
                 }
             }
+            if (!f.isBot && member->IsAlive())
+                f.soloDps = SoloDps(member, nullptr);
             world.party.push_back(f);
             partyUnits.push_back(member);
 

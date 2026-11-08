@@ -39,6 +39,24 @@ namespace LooseEnemy
         return v;
     }
 
+    std::vector<float> SequentialRecovery(std::vector<float> const& gaps, float rate)
+    {
+        std::vector<float> secs(gaps.size(), ThreatView::NO_LIMIT);
+        if (rate <= 1.0f)
+            return secs;
+        std::vector<size_t> order(gaps.size());
+        for (size_t i = 0; i < order.size(); ++i)
+            order[i] = i;
+        std::stable_sort(order.begin(), order.end(), [&gaps](size_t a, size_t b) { return gaps[a] < gaps[b]; });
+        float done = 0.0f;
+        for (size_t i : order)
+        {
+            done += std::max(0.0f, gaps[i]);
+            secs[i] = done / rate;
+        }
+        return secs;
+    }
+
     float Mult(EnemyFacts const& enemy, bool* tauntImmune)
     {
         std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(enemy.entry);

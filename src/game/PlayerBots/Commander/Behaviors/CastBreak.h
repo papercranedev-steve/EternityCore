@@ -9,9 +9,10 @@
  *
  * Each enabled behavior that applies to the bot answers IBehavior::CastBreakBenefit: points it
  * loses when the bot finishes the cast first. The best answer is compared with what stopping
- * costs (Value::LostAction):
- *   cast     the time already spent on it (the cast restarts from zero; no mana was paid)
- *   channel  one GCD (the ticks that landed are kept; restarting the rest takes a GCD)
+ * costs: the running cast's own worth (CurrentAction::State::keep, since 2026-11-08): the
+ * module's live value of its spell (IBehavior::ContinueValue), the net of the order it was
+ * cast for, or for a rotation cast the time spent on it / one GCD for a channel (the rule
+ * before, which charged a Blizzard just started as one GCD).
  * Better than the cost: the cast is interrupted and the bot update runs in the same frame
  * (the caller resets the bot's update timer), where the arbiter's Propose acts on it.
  *

@@ -16,6 +16,7 @@
 #define MANGOS_COMMANDER_LOOSE_ENEMY_H
 
 #include "Commander/Perception/WorldModel.h"
+#include <vector>
 
 namespace Commander
 {
@@ -46,6 +47,15 @@ namespace Commander
         // Taunt / win-back weight from the creature override table (tauntMult, 1 = none), and
         // whether it ignores taunts.
         float Mult(EnemyFacts const& enemy, bool* tauntImmune);
+
+        // Several enemies one tank has to win back with threat at once: it hits one at a time,
+        // so its `rate` serves them one after another, the smallest gap first (the order that
+        // keeps the total time loose lowest). Seconds until each is back, in the order of
+        // `gaps` (walking not included); ThreatView::NO_LIMIT when rate <= 1. Before
+        // 2026-11-08 every enemy was counted as won back at the full rate at the same time
+        // (strat-20261108-141921: six enemies turning on a Blizzard cost as little as one,
+        // eleven Demoralizing Shouts in 30 s).
+        std::vector<float> SequentialRecovery(std::vector<float> const& gaps, float rate);
     }
 }
 

@@ -19,7 +19,11 @@
 --   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
 --           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
 --           intercepts, controls[{enemy, bot, spell, area}]; {} = nothing running
+--   offers  {type, t, offers=[{kind, target, points, now, reason, cands=[{bot, spell, rank, why}],
+--           rejected=[same: judged not worth it], primary, backup}]}   the brain's duty needs as
+--           offered (u:offers), at most every rec.offersInterval ms, when changed
 --   pull    {type, t, planned, phase, target, targetName, ranged, returnToSpot,
+--           estimate={sec, incomingDps, partyDps, dpsSource, manaStart, manaLeft, tankLowPct},
 --           expected=[{g, name, aggro}], report=[lines the player was told]}   the pull as
 --           planned (u:pull), once per pull and again when its target or expected list changed
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name},
@@ -33,6 +37,7 @@ rec.dir = rec.dir or "../logs/combat"
 -- target switches between two snaps
 rec.interval = rec.interval or 200
 rec.endAfterMs = rec.endAfterMs or 2000
+rec.offersInterval = rec.offersInterval or 1000
 
 local function ensureDir(dir)
     local win = dir:gsub("/", "\\")
@@ -131,6 +136,9 @@ local function endFight(w, members, reason)
     local alive = 0
     for _, m in ipairs(members) do if m:exists() and m:alive() then alive = alive + 1 end end
     local result = (reason == "stopped") and "stopped" or ((alive == 0) and "wipe" or "ok")
+    -- fight-end checks (estimate vs actual): their anomalies go before the end line
+    local ok, err = pcall(review.finish, w)
+    if not ok then dev.pushError("review.finish", err) end
     local counts = w.review.counts
     local spells = {}
     for id, n in pairs(w.spellNames) do spells[tostring(id)] = n end
@@ -231,6 +239,20 @@ local function tick(w)
         if text ~= w.lastPlan then
             write(w, { type = "plan", t = now(), plan = plan })
             w.lastPlan = text
+        end
+    end
+    -- The brain's duty offers (u:offers: candidates with their value, rejected ones too), at most
+    -- every rec.offersInterval ms and only when they changed: why a control or a taunt was or
+    -- was not given (points change every refresh, so not on every tick).
+    if leader.offers and now() - (w.lastOffersAt or 0) >= rec.offersInterval then
+        w.lastOffersAt = now()
+        local offers = leader:offers()
+        if #offers > 0 then
+            local text = json(offers)
+            if text ~= w.lastOffers then
+                write(w, { type = "offers", t = now(), offers = offers })
+                w.lastOffers = text
+            end
         end
     end
     -- The pull as planned (u:pull): once per pull, again when the target or the expected list

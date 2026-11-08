@@ -36,9 +36,13 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Behaviors/FleePoint.h"
 #include "Commander/Behaviors/AreaDamageBehavior.h"
+#include "Commander/Behaviors/Constraints.h"
+#include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/RestValue.h"
+#include "Commander/Perception/SpellTags.h"
+#include "SpellMgr.h"
 #include "HealSpells.h"
 
 #include <algorithm>
@@ -804,6 +808,10 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     // Kept for an enemy about to run away (Commander flee stop): only that module casts it.
     if (IsSpellHeld(pSpellEntry))
         return false;
+    // A control the brain keeps unbroken (polymorph, shackle, sap): no damage on it, its area,
+    // a chained hit or a melee splash next to it. Every cast of the bot, rotations included.
+    if (WouldWakeKeptControl(pTarget, pSpellEntry))
+        return false;
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())
     {
@@ -859,6 +867,42 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     }
 
     return true;
+}
+
+bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const
+{
+    if (!pTarget || !pSpellEntry || IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+        return false;
+    // Cheap test first: most casts of a tick are buffs and heals.
+    if (!Commander::SpellTags::DealsDamage(pSpellEntry) && Commander::SpellTags::MeleeSplashRadius(pSpellEntry) <= 0.0f)
+        return false;
+    // Same map as the bot, so the commander belongs to this map thread.
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && Commander::Constraints::WakesControl(this, commander->GetWorld(), commander->GetPlan(),
+                                                             pTarget, pSpellEntry, WorldTimer::getMSTime());
+}
+
+void PartyBotAI::CancelSplashNearKeptControl()
+{
+    Unit* pVictim = me->GetVictim();
+    if (!pVictim || IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+        return;
+    std::shared_ptr<Commander::PartyCommander> commander;
+    for (uint32 spellId : Commander::SpellTags::MELEE_SPLASH_SPELLS)
+    {
+        if (!me->HasAura(spellId))
+            continue;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(spellId);
+        if (!pSpell)
+            continue;
+        if (!commander)
+            commander = sCommanderMgr.FindCommander(me);
+        if (!commander)
+            return;
+        if (Commander::Constraints::WakesControl(this, commander->GetWorld(), commander->GetPlan(), pVictim, pSpell,
+                                                 WorldTimer::getMSTime()))
+            me->RemoveAurasDueToSpell(spellId);
+    }
 }
 
 bool PartyBotAI::WouldAreaSpellPullIdle(Unit const* pUnit) const
@@ -1490,6 +1534,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (Unit* pOld = me->GetVictim())
         if (!IsValidHostileTarget(pOld))
             me->AttackStop();
+    CancelSplashNearKeptControl();
 
     // Commander behaviors run before movement, so they can pick a target or a position
     // themselves. Since 2026-11-07 every target comes from there (target assignment doc): the
@@ -2905,10 +2950,26 @@ bool PartyBotAI::IsReadyWithStance(SpellEntry const* pSpellEntry) const
     return power >= cost;
 }
 
+void PartyBotAI::StandStillFor(SpellEntry const* pSpellEntry)
+{
+    if (!Commander::CurrentAction::NeedsStandingStill(this, pSpellEntry))
+        return;
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
+        return;     // chase / follow pause by themselves while the cast runs
+    ClearMovementHold();
+    if (!me->IsStopped())
+        me->StopMoving();
+    me->GetMotionMaster()->Clear(false, true);
+    me->GetMotionMaster()->MoveIdle();
+}
+
 SpellCastResult PartyBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry)
 {
     if (CanTryToCastSpell(pTarget, pSpellEntry))
+    {
+        StandStillFor(pSpellEntry);
         return DoCastSpell(pTarget, pSpellEntry);
+    }
     if (!CanCastWithStance(pTarget, pSpellEntry))
         return SPELL_FAILED_ONLY_SHAPESHIFT;
 
@@ -2943,7 +3004,10 @@ bool PartyBotAI::ContinueStanceSwap()
 
     m_stanceSwap = StanceSwap();
     if (CanTryToCastSpell(pTarget, pSpellEntry))
+    {
+        StandStillFor(pSpellEntry);
         return DoCastSpell(pTarget, pSpellEntry) == SPELL_CAST_OK;
+    }
     return false;
 }
 

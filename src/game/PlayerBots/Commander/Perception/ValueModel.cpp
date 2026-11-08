@@ -45,8 +45,17 @@ namespace Value
         float estimate = 0.0f;
         for (PartyMemberFacts const& m : world.party)
             if (!m.isPet && m.alive && !(m.isBot && m.role == ROLE_HEALER))
-                estimate += FALLBACK_DPS_PER_LEVEL * m.level;
+                estimate += m.soloDps > 0.0f ? m.soloDps : FALLBACK_DPS_PER_LEVEL * m.level;
         return std::max(1.0f, estimate);
+    }
+
+    char const* DealtDpsSource(WorldModel const& world)
+    {
+        if (world.rates.dealtMeasured && world.rates.dealtDps > 0.0f)
+            return "measured";
+        if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
+            return "last fight";
+        return "gear estimate";
     }
 
     float FightRemainingSec(WorldModel const& world)

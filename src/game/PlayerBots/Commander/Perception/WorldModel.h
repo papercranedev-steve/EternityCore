@@ -297,6 +297,11 @@ namespace Commander
         // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
         // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
         float fillerManaPerSec = 0.0f;
+        // Damage per second this member deals on its own, estimated from its gear and spells
+        // (WorldModelBuilder: weapon damage fields x Value::MELEE_ABILITY_FACTOR, a bot's
+        // ClassKit::Filler x Value::CASTER_UPTIME, the larger). Value::DealtDps uses it before
+        // a fight of this party was measured. 0 = unknown (pets, healer bots).
+        float soloDps = 0.0f;
         // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
         // on top of manaRegen. Perception/RestValue.h.
         float drinkManaPerSec = 0.0f;

@@ -11,6 +11,7 @@
 #include <vector>
 
 class PartyBotAI;
+class SpellEntry;
 
 namespace Commander
 {
@@ -59,6 +60,14 @@ namespace Commander
         virtual float CastBreakBenefit(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
                                        TeamPlan const& /*plan*/, uint32 /*castLeftMs*/,
                                        char const*& /*reason*/) const { return 0.0f; }
+
+        // Optional, while the bot casts or channels `spell`: the points lost if it stops now,
+        // what its remaining part still brings (>= 0), for a spell this module casts and can
+        // value live (Behaviors/CurrentAction.h). < 0 = not this module's spell: the arbiter's
+        // order value is used instead. Live reads are allowed (map thread).
+        virtual float ContinueValue(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+                                    TeamPlan const& /*plan*/, SpellEntry const* /*spell*/,
+                                    char const*& /*reason*/) const { return -1.0f; }
     };
 }
 

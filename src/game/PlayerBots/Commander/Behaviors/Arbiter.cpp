@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Behaviors/Constraints.h"
+#include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
@@ -117,6 +118,12 @@ namespace Commander
             r.benefit = p.benefit;
             r.cost = p.cost;
             r.reason = p.reason;
+            if (p.interruptCost > 0.0f)
+            {
+                char buf[96];
+                snprintf(buf, sizeof(buf), " [cost +%.2f: %s]", p.interruptCost, p.interrupts);
+                r.reason += buf;
+            }
             return r;
         }
     }
@@ -176,6 +183,27 @@ namespace Commander
 
         for (IBehavior const* b : active)
             b->Adjust(bot, world, proposals);
+
+        // What the bot is doing now has a value (Behaviors/CurrentAction.h): a valued proposal
+        // that ends the running cast, channel or walk pays for it. Unvalued ones are orders.
+        CurrentAction::State const current = CurrentAction::Read(bot, world, plan);
+        bool const anyCurrent = current.Casting() || current.walkOwner;
+        if (anyCurrent)
+        {
+            for (Proposal& p : proposals)
+            {
+                if (p.kind != ProposalKind::Replace || !p.valued || IsPetAction(p.action.type))
+                    continue;
+                char const* what = "";
+                float const extra = CurrentAction::InterruptCost(bot, current, p.action, what);
+                if (extra <= 0.0f)
+                    continue;
+                p.interruptCost = extra;
+                p.interrupts = what;
+                p.cost += extra;
+                p.score = p.benefit - p.cost;
+            }
+        }
 
         DecisionRecord record;
         record.timeMs = now;
@@ -246,6 +274,7 @@ namespace Commander
         Proposal const* bestHeal = healOrders.empty() ? nullptr : &healOrders.front();
 
         bool executed = false;
+        bool endedCurrent = false;
         bool rotationMayRun = false;
         if (!replace.empty())
         {
@@ -274,6 +303,7 @@ namespace Commander
                 if (Execute(bot, p))
                 {
                     executed = true;
+                    endedCurrent = p.interruptCost > 0.0f;
                     // A target switch only changes the victim: the original rotation can act on
                     // the new target in the same tick. Otherwise a tank switching between loose
                     // adds every tick never casts Thunder Clap or Sunder (combat scenario 9).
@@ -313,6 +343,32 @@ namespace Commander
             }
             else
                 r.result = CandidateRecord::Result::Failed;
+        }
+
+        // The running action as a candidate of its own, so the log shows what it was worth.
+        if (anyCurrent)
+        {
+            CandidateRecord r;
+            char buf[64];
+            if (current.Casting())
+            {
+                snprintf(buf, sizeof(buf), "continue spell%u", current.spell->Id);
+                r.source = current.keepFrom;
+                r.reason = current.keepReason;
+                r.benefit = current.keep;
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "keep walking");
+                r.source = current.walkOwner;
+                r.reason = "the walk's order";
+                r.benefit = current.walkKeep;
+            }
+            r.what = buf;
+            r.valued = true;
+            r.score = r.benefit;
+            r.result = endedCurrent ? CandidateRecord::Result::Ended : CandidateRecord::Result::Kept;
+            record.candidates.push_back(std::move(r));
         }
 
         directives.RecordDecision(std::move(record));

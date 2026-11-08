@@ -167,6 +167,8 @@ namespace PullControl
         uint32 const nearTarget = elsewhere ? 0 : uint32(pull.expected.size()) - 1;
 
         std::vector<Option> options;
+        // Every option judged, for the note below (which enemy was worth it and which was not).
+        std::vector<std::pair<float, std::string>> considered;
         for (ObjectGuid guid : pull.expected)
         {
             if (guid == pull.target)
@@ -192,6 +194,11 @@ namespace PullControl
                         continue;
                     o.optimistic = o.sap ? SapValue::Optimistic(world, fight, asIs, m, a, guid, nearTarget)
                                          : ControlValue::OfPull(world, fight, asIs, m, a, guid, nearTarget).Net();
+                    SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                    char buf[160];
+                    snprintf(buf, sizeof(buf), "%s %s on %s %+.1f", NameOf(pull, m.guid).c_str(),
+                        spell ? spell->SpellName[0].c_str() : "?", c->GetName(), o.optimistic);
+                    considered.push_back({ o.optimistic, buf });
                     if (o.optimistic > 0.0f)
                         options.push_back(o);
                 }
@@ -201,6 +208,18 @@ namespace PullControl
         {
             return a.optimistic > b.optimistic;
         });
+        if (!considered.empty())
+        {
+            std::stable_sort(considered.begin(), considered.end(),
+                [](std::pair<float, std::string> const& a, std::pair<float, std::string> const& b) { return a.first > b.first; });
+            std::string text = "Opening control options (net before a spot is found):";
+            size_t const shown = std::min<size_t>(considered.size(), MAX_NOTED_OPTIONS);
+            for (size_t i = 0; i < shown; ++i)
+                text += (i ? ", " : " ") + considered[i].second;
+            if (considered.size() > shown)
+                text += ", ...";
+            plan.notes.push_back(text + ".");
+        }
 
         // The first MAX_SPOT_TRIES options get a spot and their final worth (a Sap's failure
         // risk depends on its spot); the best positive one is taken.

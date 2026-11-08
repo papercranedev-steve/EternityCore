@@ -231,6 +231,7 @@ namespace Commander
             else
                 slot->module->Clear(m_plan);
         }
+        m_plan.offers = needs;      // the log of what was offered (TeamPlan::offers)
         m_plan.duties = DutyAllocator::Allocate(std::move(needs));
         for (auto const& slot : assigners)
             if (slot->module->GetStage() == AssignStage::Duties && slot->enabled.load(std::memory_order_relaxed))

@@ -330,7 +330,6 @@ namespace Commander
             PartyMemberFacts const* victim;
             float gap;
             float horizon;
-            float lossNothing;
             float mult;
             bool deadly;
         };
@@ -370,7 +369,7 @@ namespace Commander
             LooseValue const v = LooseEnemy::WinBack(world, e, *victim, *myFacts, tankRate, distance);
 
             if (distance <= GROUP_THREAT_RADIUS)
-                loose.push_back({ &e, victim, v.gap, v.horizon, v.lossNothing, mult, v.deadly });
+                loose.push_back({ &e, victim, v.gap, v.horizon, mult, v.deadly });
         }
 
         // Enemies on the tank with a lead thinner than one global cooldown of tank threat:
@@ -429,21 +428,33 @@ namespace Commander
                         for (FragileEnemy const& f : fragile)
                             benefit += Value::MoveLoss(world, *f.enemy, *f.runnerUp, *myFacts, TANK_RECLAIM_SEC) *
                                        FRAGILE_WEIGHT * fragileShare;
+                    // Loose enemies: without the ability the tank wins them back with threat one
+                    // after another (LooseEnemy::SequentialRecovery); with it each lacks
+                    // `threatAdded` less (an area taunt: back on the victim when it fades). The
+                    // benefit is the difference. Before 2026-11-08 the baseline was "nobody ever
+                    // wins it back" and every enemy recovered at the full rate at once after the
+                    // shout, so the shout was credited with the tank's whole threat rate on
+                    // every enemy: 11 Demoralizing Shouts in 30 s (strat-20261108-141921).
+                    std::vector<float> gaps;
+                    std::vector<float> rests;
                     for (LooseEntry const& l : loose)
                     {
-                        float sec;
-                        if (holdSec > 0.0f)     // area taunt: back on the victim when it fades
-                            sec = RescueValue::TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon);
-                        else
-                        {
-                            float const rest = std::max(0.0f, l.gap - threatAdded);
-                            float const recovery = tankRate > 1.0f ? rest / tankRate : ThreatView::NO_LIMIT;
-                            sec = std::min(recovery, l.horizon);
-                        }
-                        // Same loss as l.lossNothing (damage on top of the tank + harassment).
-                        float const loss = Value::MoveLoss(world, *l.enemy, *l.victim, *myFacts, sec) +
-                                           Value::HarassLoss(world, *l.enemy, *l.victim, sec);
-                        benefit += (l.lossNothing - loss) * l.mult;
+                        gaps.push_back(l.gap);
+                        rests.push_back(std::max(0.0f, l.gap - threatAdded));
+                    }
+                    std::vector<float> const before = LooseEnemy::SequentialRecovery(gaps, tankRate);
+                    std::vector<float> const after = LooseEnemy::SequentialRecovery(rests, tankRate);
+                    for (size_t i = 0; i < loose.size(); ++i)
+                    {
+                        LooseEntry const& l = loose[i];
+                        float const secBefore = std::min(before[i], l.horizon);
+                        float const secAfter = holdSec > 0.0f
+                            ? RescueValue::TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon)
+                            : std::min(after[i], l.horizon);
+                        // Damage on top of the tank + harassment (LooseEnemy::Loss).
+                        float const lossBefore = LooseEnemy::Loss(world, *l.enemy, *l.victim, *myFacts, secBefore);
+                        float const lossAfter = LooseEnemy::Loss(world, *l.enemy, *l.victim, *myFacts, secAfter);
+                        benefit += std::max(0.0f, lossBefore - lossAfter) * l.mult;
                         deadly = deadly || l.deadly;
                     }
                     return { benefit, deadly };

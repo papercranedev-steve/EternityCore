@@ -62,6 +62,8 @@ namespace Commander
         float const ARRIVED_YD = 2.0f;
         uint32 const PLACE_TIMEOUT_MS = 10 * 1000;
         uint32 const MAX_SPOT_TRIES = 3;
+        // Options listed in the "Opening control options" note (best first).
+        uint32 const MAX_NOTED_OPTIONS = 5;
         // The controller stands at its spot before the fight: the walk there (at most
         // PLACE_TIMEOUT_MS) plus the tank's way to its opener. No patrol may pass it meanwhile;
         // once the fight runs, a patrol joining is the pull plan's (PullPlanner patrol check).

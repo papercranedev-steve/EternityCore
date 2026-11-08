@@ -95,8 +95,25 @@ public:
     // The target-free part of CanCastWithStance: off cooldown and enough power now, or after
     // the stance swap (same rage rule). For the world model's ability facts (taunts).
     bool IsReadyWithStance(SpellEntry const* pSpellEntry) const;
-    // Casts now, or starts the swap (SPELL_CAST_OK = swap started, the spell follows).
+    // Casts now, or starts the swap (SPELL_CAST_OK = swap started, the spell follows). A spell
+    // that must be cast standing (cast time, a channel moving ends) stops a module's walk first
+    // (StandStillFor).
     SpellCastResult DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry);
+    // Execution: a point walk (a Commander MoveTo) does not pause for a cast the way chase and
+    // follow do (TargetedMovementGenerator stops while IsNoMovementSpellCasted), so a channel
+    // started on the way broke at once (Evocation, strat-20261108-141921). Stops it and ends
+    // its movement hold when `pSpellEntry` must be cast standing (CurrentAction::NeedsStandingStill).
+    void StandStillFor(SpellEntry const* pSpellEntry);
+    // Breakable controls the plan keeps (TeamPlan::KeepsUnbroken) that this cast would hit:
+    // the target, the area of an area spell, the enemy a chained hit jumps to, the enemies
+    // next to the victim of a melee splash buff (Blade Flurry, Sweeping Strikes). Same rule
+    // as the arbiter's (Constraints::WakesControl). Every cast of the bot passes here
+    // (PassesPartyCastChecks): rotations too.
+    bool WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // Every bot tick in combat: a melee splash buff on the bot while an enemy the plan keeps
+    // controlled stands next to its victim is cancelled (Blade Flurry broke a Shackle,
+    // strat-20261108-141921). The cast itself is refused by WouldWakeKeptControl.
+    void CancelSplashNearKeptControl();
     // Threat of `pSpellEntry` cast after StanceSwapFor relative to now (Defensive 1.3, others 0.8);
     // 1 without a swap.
     float StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const;

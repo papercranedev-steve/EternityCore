@@ -9,6 +9,8 @@
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ControlValue.h"
 #include "Commander/Perception/FightLoad.h"
+#include "Commander/Perception/ManaWorth.h"
+#include "DamageSpells.h"
 #include "PartyBotAI.h"
 #include "SpellAuras.h"
 #include "SpellMgr.h"
@@ -348,8 +350,15 @@ namespace Commander
                 Proposal p = MakeProposal(ProposalTier::Urgent, "dangerous hits: shield up");
                 p.action.type = BotActionType::Cast;
                 p.action.spell = shield;
-                p.SetValue(Value::Points(world, std::min(amount, incoming * DANGER_SEC)),
-                           Value::LostAction(world, *self, Value::GCD_SEC));
+                // The mana it costs: the cast, and for Mana Shield the mana per point it takes
+                // (a mage at 974 mana shielded and was dry two seconds later, strat-20261108-141921).
+                float const taken = std::min(amount, incoming * DANGER_SEC);
+                float mana = DamageSpells::ManaCost(me, shield);
+                if (float const perPoint = shield->EffectMultipleValue[EFFECT_INDEX_0])
+                    mana += taken * perPoint;
+                p.SetValue(Value::Points(world, taken),
+                           Value::LostAction(world, *self, Value::GCD_SEC) +
+                           (mana > 0.0f ? ManaWorth::Points(world, *self, mana) : 0.0f));
                 out.push_back(p);
                 return;
             }

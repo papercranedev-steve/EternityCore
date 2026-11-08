@@ -634,6 +634,8 @@ namespace DevConsole
             case R::Forbidden: return "forbidden";
             case R::VetoSet:   return "veto";
             case R::OrderSet:  return "order";
+            case R::Kept:      return "kept";
+            case R::Ended:     return "ended";
         }
         return "?";
     }
@@ -978,8 +980,71 @@ namespace DevConsole
         return 1;
     }
 
+    static void PushDutyCandidates(lua_State* L, std::vector<Commander::DutyCandidate> const& list, char const* field)
+    {
+        if (list.empty())
+            return;
+        lua_createtable(L, int(list.size()), 0);
+        int i = 0;
+        for (Commander::DutyCandidate const& c : list)
+        {
+            lua_createtable(L, 0, 4);
+            SetFieldG(L, "bot", c.bot);
+            if (c.spellId)
+                SetField(L, "spell", c.spellId);
+            SetFieldN(L, "rank", Round2(c.rank));
+            if (!c.why.empty())
+                SetFieldS(L, "why", c.why.c_str());
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, field);
+    }
+
+    // u:offers(): the brain's duty needs of the last refresh as offered, before the allocation
+    // (TeamPlan::offers), with what the allocation made of them:
+    // [{kind, target, points, now, reason, cands=[{bot, spell, rank, why}], rejected=[same, rank = net <= 0],
+    //   primary, backup}]. Empty table without a Commander. The recorder writes `offers` lines.
+    static int U_offers(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        if (!commander)
+        {
+            lua_newtable(L);
+            return 1;
+        }
+        Commander::TeamPlan const& plan = commander->GetPlan();
+        lua_createtable(L, int(plan.offers.size()), 0);
+        int i = 0;
+        for (Commander::DutyNeed const& n : plan.offers)
+        {
+            lua_createtable(L, 0, 9);
+            SetFieldS(L, "kind", Commander::DutyAllocator::KindName(n.kind));
+            SetFieldG(L, "target", n.target);
+            SetFieldN(L, "points", Round2(n.points));
+            SetFieldB(L, "now", n.now);
+            if (n.reason && *n.reason)
+                SetFieldS(L, "reason", n.reason);
+            PushDutyCandidates(L, n.candidates, "cands");
+            PushDutyCandidates(L, n.rejected, "rejected");
+            for (Commander::DutyResult const& r : plan.duties)
+            {
+                if (r.kind != n.kind || r.target != n.target || r.auraSpellId != n.auraSpellId)
+                    continue;
+                if (!r.primary.IsEmpty())
+                    SetFieldG(L, "primary", r.primary);
+                if (!r.backup.IsEmpty())
+                    SetFieldG(L, "backup", r.backup);
+                break;
+            }
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
+
     // u:pull(): the party's running pull as planned (the recorder writes it as a `pull` line):
     // {t = planned at, phase, target, targetName, ranged, face, corner, returnToSpot,
+    //  estimate = {sec, incomingDps, partyDps, dpsSource, manaStart, manaLeft, tankLowPct} (FightLoad),
     //  expected = [{g, name, aggro (joins by aggro range)}], report = [what the player was told]}.
     // nil without a Commander or a pull.
     static int U_pull(lua_State* L)
@@ -1003,6 +1068,19 @@ namespace DevConsole
         SetFieldB(L, "face", pull.facePull);
         SetFieldB(L, "corner", pull.corner);
         SetFieldB(L, "returnToSpot", pull.returnToSpot);
+        if (pull.expectedFightSec > 0.0f)
+        {
+            // The fight estimate the pull was planned with (review.lua compares it at the end).
+            lua_createtable(L, 0, 7);
+            SetFieldN(L, "sec", Round2(pull.expectedFightSec));
+            SetFieldN(L, "incomingDps", Round2(pull.expectedIncomingDps));
+            SetFieldN(L, "partyDps", Round2(pull.expectedPartyDps));
+            SetFieldS(L, "dpsSource", pull.expectedDpsSource);
+            SetFieldN(L, "manaStart", Round2(pull.expectedManaStart));
+            SetFieldN(L, "manaLeft", Round2(pull.expectedManaLeft));
+            SetFieldN(L, "tankLowPct", Round2(pull.expectedLowestTankPct));
+            lua_setfield(L, -2, "estimate");
+        }
         lua_createtable(L, int(pull.expected.size()), 0);
         int i = 0;
         for (ObjectGuid g : pull.expected)
@@ -1568,7 +1646,7 @@ namespace DevConsole
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
             { "cooldown", U_cooldown },
             { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions },
-            { "notes", U_notes }, { "plan", U_plan }, { "pull", U_pull }, { "info", U_info },
+            { "notes", U_notes }, { "plan", U_plan }, { "offers", U_offers }, { "pull", U_pull }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },
             { "setpowerpct", U_setpowerpct }, { "refill", U_refill }, { "kill", U_kill },
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },

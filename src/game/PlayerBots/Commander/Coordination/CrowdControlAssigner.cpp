@@ -120,7 +120,7 @@ namespace Commander
                         continue;
                     ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets, 0.0f);
                     if (w.Net() <= 0.0f)
-                        continue;
+                        continue;   // (area spells: no per-enemy need to note it on)
                     // The nearest one: the target of a shout that needs one (Intimidating Shout).
                     EnemyFacts const* nearest = targets.front();
                     for (EnemyFacts const* e : targets)
@@ -154,13 +154,17 @@ namespace Commander
                     std::vector<EnemyFacts const*> const targets = { &e };
                     float const aoe = a.breaksOnDamage ? ControlValue::AreaLoss(world, e, ControlValue::ExpectedSec(world, a, e)) : 0.0f;
                     ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets, aoe);
-                    if (w.Net() <= 0.0f)
-                        continue;
                     DutyNeed& need = needFor(e.guid);
                     DutyCandidate c;
                     c.bot = b.guid;
                     c.spellId = a.spellId;
                     c.rank = w.Net();
+                    c.why = ControlValue::Describe(w);
+                    if (w.Net() <= 0.0f)
+                    {
+                        need.rejected.push_back(std::move(c));     // the log only (TeamPlan::offers)
+                        continue;
+                    }
                     if (e.control.caster == b.guid || WasGiven(plan, b.guid, e.guid))
                         c.rank += STICKY_POINTS;
                     need.candidates.push_back(c);

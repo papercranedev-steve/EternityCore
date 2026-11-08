@@ -45,6 +45,21 @@ namespace Commander
         // Largest effect radius in yards, 0 = none.
         float AreaRadius(SpellEntry const* spell);
 
+        // Damage that jumps from the target to enemies next to it (Cleave, Multi-Shot, Chain
+        // Lightning: EffectChainTarget > 1 on a damage effect). They are not area spells
+        // (IsAreaOfEffectSpell), so the area checks missed them.
+        bool ChainsToNearby(SpellEntry const* spell);
+        // How far a chained hit jumps from its target (guess: melee cleaves reach about this
+        // far, ranged chains further but rarely matter next to a sleeping enemy).
+        static constexpr float CHAIN_JUMP_YD = 8.0f;
+
+        // An aura that makes the caster's melee hits also hit an enemy next to its victim:
+        // that distance from the victim (UnitAuraProcHandler: Blade Flurry 5 yd, Sweeping
+        // Strikes ATTACK_DISTANCE), 0 = none. Its cast deals no damage itself.
+        float MeleeSplashRadius(SpellEntry const* spell);
+        // The spells MeleeSplashRadius knows (the auras to look for on a bot).
+        static constexpr uint32 MELEE_SPLASH_SPELLS[] = { 13877, 12292 };     // Blade Flurry, Sweeping Strikes
+
         // Effect `i` summons creatures (EffectMiscValue = creature entry). Object and
         // critter summons are left out.
         bool IsCreatureSummonEffect(uint32 effect);

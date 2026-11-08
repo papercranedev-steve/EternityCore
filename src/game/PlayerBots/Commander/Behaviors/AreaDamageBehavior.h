@@ -28,9 +28,10 @@
  *               period) x 110% (bot in its melee reach) / 130% (ThreatView). The rate only
  *               counts when the victim is hitting this enemy (a party member hitting another
  *               one: 0). Bolt and rate rule since 2026-11-07 (strat-20261107-194655).
- *               From tick k on, the turn costs Perception/AggroTurnCost (its holder takes it
- *               back by threat or a taunt; a melee enemy hits only once it walked over, slowed
- *               by ClassKit's AreaDamageSpell::slowPct, Improved Blizzard). A holder that is
+ *               From tick k on, the turn costs Perception/AggroTurnCost::OfGroup over every
+ *               enemy turned by then (its holder takes them back by threat one after another
+ *               and its taunts go where they save most; a melee enemy hits only once it walked
+ *               over, slowed by ClassKit's AreaDamageSpell::slowPct, Improved Blizzard). A holder that is
  *               not a party member: all its hits on the bot (Value::HitLoss).
  *             Tick threat = damage per tick x the spell's threat multiplier x the caster's
  *             threat modifiers.
@@ -45,8 +46,12 @@
  *             ticks (ClassKit::Filler on the victim). No fight length guess (adds come
  *             unannounced).
  *   value     benefit = LostAction(damage(n) / filler damage per second); cost =
- *             LostAction(n x period) + the turns. Proposed as a Cast, tier Assigned, when
- *             the net is positive.
+ *             LostAction(n x period) + the turns + ManaWorth::Points of the mana it costs
+ *             above what the filler spends in the same time (since 2026-11-08: three
+ *             Blizzards in 10 s emptied a mage, strat-20261108-141921). Proposed as a Cast,
+ *             tier Assigned, when the net is positive. While the bot channels one of these
+ *             spells, ending it (a new Blizzard included) costs the channel watch's value of
+ *             the rest (ContinueValue, Behaviors/CurrentAction.h).
  *
  * Channel watch (WatchChannel, every frame from PartyBotAI::UpdateAI, at most every
  * CHANNEL_CHECK_MS): while one of these spells is channelled, the same tick plan over the
@@ -89,6 +94,11 @@ namespace Commander
 
         // Every frame from PartyBotAI::UpdateAI (channel watch above). True = cancelled.
         static bool WatchChannel(PartyBotAI* bot, uint32& lastCheckMs);
+
+        // The channel watch's best net of the further ticks (>= 0): what ending the bot's own
+        // area channel costs any other proposal (Behaviors/CurrentAction.h).
+        float ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                            SpellEntry const* spell, char const*& reason) const override;
     };
 }
 

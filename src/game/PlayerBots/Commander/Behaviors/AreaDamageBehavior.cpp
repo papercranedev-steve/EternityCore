@@ -125,6 +125,14 @@ namespace Commander
             TickPlan plan;
             plan.damage.assign(count, 0.0f);
             plan.turnLoss.assign(count, 0.0f);
+            // The tick each enemy turns at (0 = never) and the threat its holder then lacks.
+            struct Turning
+            {
+                uint32 tick = 0;
+                AggroTurnCost::Turn turn;
+                float hitLoss = 0.0f;       // a holder that is not a party member: all its hits on me
+            };
+            std::vector<Turning> turning;
             for (AreaTarget const& t : targets)
             {
                 for (uint32 n = 1; n <= count; ++n)
@@ -139,16 +147,42 @@ namespace Commander
                     float const holder = t.holderThreat + t.holderRate * float(k) * ticks.periodSec;
                     if (mine <= holder * t.factor)
                         continue;
-                    // The holder (a melee tank) then needs 110% of mine to take it back.
-                    float const gap = std::max(0.0f, mine * ThreatView::MELEE_AGGRO_FACTOR - holder);
-                    float const loss = t.holder
-                        ? AggroTurnCost::Of(world, *t.facts, self, *t.holder, t.speed, gap)
-                        : Value::HitLoss(world, *t.facts, self,
-                                         std::min(AggroTurnCost::HORIZON_SEC, Value::EnemyTimeToDie(world, *t.facts)));
-                    for (uint32 n = k; n <= count; ++n)
-                        plan.turnLoss[n - 1] += loss;
+                    Turning x;
+                    x.tick = k;
+                    if (t.holder)
+                    {
+                        // The holder (a melee tank) then needs 110% of mine to take it back.
+                        x.turn.enemy = t.facts;
+                        x.turn.holder = t.holder;
+                        x.turn.speed = t.speed;
+                        x.turn.gap = std::max(0.0f, mine * ThreatView::MELEE_AGGRO_FACTOR - holder);
+                    }
+                    else
+                        x.hitLoss = Value::HitLoss(world, *t.facts, self,
+                                                   std::min(AggroTurnCost::HORIZON_SEC, Value::EnemyTimeToDie(world, *t.facts)));
+                    turning.push_back(x);
                     break;
                 }
+            }
+            // After n ticks every enemy turned by then is on me at once: their holders win them
+            // back together (AggroTurnCost::OfGroup shares the tank's threat rate and taunts).
+            std::vector<AggroTurnCost::Turn> group;
+            for (uint32 n = 1; n <= count; ++n)
+            {
+                group.clear();
+                float loss = 0.0f;
+                for (Turning const& x : turning)
+                {
+                    if (x.tick > n)
+                        continue;
+                    if (x.turn.enemy)
+                        group.push_back(x.turn);
+                    else
+                        loss += x.hitLoss;
+                }
+                if (!group.empty())
+                    loss += AggroTurnCost::OfGroup(world, group, self);
+                plan.turnLoss[n - 1] = loss;
             }
             return plan;
         }
@@ -360,13 +394,21 @@ namespace Commander
                     bestCentre = centre;
                 }
             }
-            if (!best.ticks || best.net <= 0.0f)
+            if (!best.ticks)
                 continue;
 
             // Not more damage per mana than the filler, over the ticks it is expected to run:
             // no fight length guess needed (adds).
             if (mana > 0.0f && fillerPerMana > 0.0f && best.damage / mana < fillerPerMana)
                 continue;
+            // The mana it costs above the filler's over the same time (header: value).
+            float const busySec = float(best.ticks) * ticks.periodSec;
+            float const extraMana = std::max(0.0f, mana - fillerMana / DamageSpells::BusySec(me, filler) * busySec);
+            float const manaCost = extraMana > 0.0f ? ManaWorth::Points(world, *self, extraMana) : 0.0f;
+            if (best.net - manaCost <= 0.0f)
+                continue;
+            best.cost += manaCost;
+            best.net -= manaCost;
 
             Proposal p;
             p.tier = ProposalTier::Assigned;
@@ -384,6 +426,75 @@ namespace Commander
         }
     }
 
+    namespace
+    {
+        // The bot's own area channel from now on (live health, threat, positions): the best
+        // number of further ticks and its net. False: not one of its area channels, or nothing
+        // to judge (no enemy in the area).
+        bool RemainingChannel(PartyBotAI const* bot, WorldModel const& world, Choice& out)
+        {
+            Player* me = bot->me;
+            Spell* channel = me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+            if (!channel || channel->getState() != SPELL_STATE_CASTING)
+                return false;
+            SpellEntry const* spell = channel->m_spellInfo;
+            AreaDamageSpell area;
+            if (!AreaDamageBehavior::Judges(bot, spell) || bot->IsInDuel() || !KitEntry(bot, spell, area))
+                return false;
+            PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+            Unit* victim = me->GetVictim();
+            SpellEntry const* filler = bot->Kit().Filler();
+            if (!self || !filler)
+                return false;
+
+            Position3 centre = PositionOf(me);
+            float x = 0.0f, y = 0.0f, z = 0.0f;
+            channel->m_targets.getDestination(x, y, z);
+            if (x != 0.0f || y != 0.0f)
+            {
+                centre.x = x;
+                centre.y = y;
+                centre.z = z;
+            }
+            Ticks const ticks = TicksOf(me, spell);
+            uint32 const periodMs = std::max<uint32>(1, uint32(ticks.periodSec * 1000.0f));
+            uint32 const left = (channel->GetCastedTime() + periodMs - 1) / periodMs;
+            if (!left)
+                return false;
+
+            std::vector<AreaTarget> targets;
+            if (!Targets(bot, world, nullptr, spell, centre, area.slowPct, true, targets) || targets.empty())
+                return false;
+            Unit const* probe = victim ? victim : me->GetMap()->GetUnit(targets.front().facts->guid);
+            if (!probe)
+                return false;
+            float const perTick = DamageSpells::Estimate(me, probe, spell) / float(ticks.count);
+            float const fillerDamage = DamageSpells::Estimate(me, probe, filler);
+            float const fillerBusy = DamageSpells::BusySec(me, filler);
+            float const fillerPerSec = fillerDamage / fillerBusy;
+            if (fillerPerSec <= 0.0f)
+                return false;
+
+            // Going on: the next ticks are paid for, the filler instead would cost its mana.
+            TickPlan const tp = Plan(world, *self, targets, perTick, ThreatOf(me, spell, perTick), ticks, left);
+            out = Best(world, *self, tp, ticks, fillerPerSec, DamageSpells::ManaCost(me, filler) / fillerBusy);
+            return true;
+        }
+    }
+
+    float AreaDamageBehavior::ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
+                                            SpellEntry const* spell, char const*& reason) const
+    {
+        Spell const* channel = bot->me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+        if (!channel || channel->m_spellInfo != spell)
+            return -1.0f;
+        Choice best;
+        if (!RemainingChannel(bot, world, best))
+            return -1.0f;
+        reason = "the channel's next ticks";
+        return std::max(0.0f, best.net);
+    }
+
     bool AreaDamageBehavior::WatchChannel(PartyBotAI* bot, uint32& lastCheckMs)
     {
         Player* me = bot->me;
@@ -394,56 +505,15 @@ namespace Commander
         if (WorldTimer::getMSTimeDiff(lastCheckMs, now) < CHANNEL_CHECK_MS)
             return false;
         lastCheckMs = now;
-
-        SpellEntry const* spell = channel->m_spellInfo;
-        if (!Judges(bot, spell) || bot->IsInDuel())
-            return false;
-        AreaDamageSpell area;
         std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(me);
-        if (!commander || !KitEntry(bot, spell, area))
+        if (!commander)
             return false;
-        WorldModel const& world = commander->GetWorld();
-        PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
-        Unit* victim = me->GetVictim();
-        SpellEntry const* filler = bot->Kit().Filler();
-        if (!self || !filler)
-            return false;
-
-        Position3 centre = PositionOf(me);
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        channel->m_targets.getDestination(x, y, z);
-        if (x != 0.0f || y != 0.0f)
-        {
-            centre.x = x;
-            centre.y = y;
-            centre.z = z;
-        }
-        Ticks const ticks = TicksOf(me, spell);
-        uint32 const periodMs = std::max<uint32>(1, uint32(ticks.periodSec * 1000.0f));
-        uint32 const left = (channel->GetCastedTime() + periodMs - 1) / periodMs;
-        if (!left)
-            return false;
-
-        std::vector<AreaTarget> targets;
-        if (!Targets(bot, world, nullptr, spell, centre, area.slowPct, true, targets) || targets.empty())
-            return false;
-        Unit const* probe = victim ? victim : me->GetMap()->GetUnit(targets.front().facts->guid);
-        if (!probe)
-            return false;
-        float const perTick = DamageSpells::Estimate(me, probe, spell) / float(ticks.count);
-        float const fillerDamage = DamageSpells::Estimate(me, probe, filler);
-        float const fillerBusy = DamageSpells::BusySec(me, filler);
-        float const fillerPerSec = fillerDamage / fillerBusy;
-        if (fillerPerSec <= 0.0f)
-            return false;
-
-        // Going on: the next ticks are paid for, the filler instead would cost its mana.
         // Stop only when even the best number of further ticks loses points (an enemy turning
         // costs more than the damage, user 2026-11-08: a slowed melee enemy is cheap, the tank
-        // takes it back before it gets there).
-        TickPlan const tp = Plan(world, *self, targets, perTick, ThreatOf(me, spell, perTick), ticks, left);
-        Choice const best = Best(world, *self, tp, ticks, fillerPerSec, DamageSpells::ManaCost(me, filler) / fillerBusy);
-        if (best.net >= 0.0f)
+        // takes it back before it gets there). The same value is what ending it costs anyone
+        // else (ContinueValue).
+        Choice best;
+        if (!RemainingChannel(bot, commander->GetWorld(), best) || best.net >= 0.0f)
             return false;
         me->InterruptSpell(CURRENT_CHANNELED_SPELL, true);
         return true;

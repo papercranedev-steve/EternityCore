@@ -1,7 +1,9 @@
 -- Combat review: anomaly detectors run by the recorder (recorder.lua) on every tick of a recorded
 -- fight. A detector that fires writes two lines to the fight's file:
 --   anomaly {type, t, id, kind, sev, who, by, whoG, byG, cause, facts, links}
---           kind: aggro / death / healgap / stuck / idle / add / ccbreak / ccmove / mark (review.labels);
+--           kind: aggro / death / healgap / stuck / idle / add / ccbreak / ccmove / mark, and at the
+--           fight's end estimate (the pull's fight estimate far from what happened, review.finish)
+--           (review.labels);
 --           sev: high / mid / low; who = the one it happened to, by = the one who caused it
 --           (names; guids in whoG / byG); cause = one line why; facts = numbers behind the cause;
 --           links = ids of earlier anomalies that led to this one (death <- aggro, healgap)
@@ -20,6 +22,7 @@ review = review or {}
 review.labels = {
     aggro = "仇恨丢失", death = "死亡", healgap = "治疗空窗", stuck = "施法卡住", idle = "发呆",
     add = "意外加怪", ccbreak = "控制被打破", ccmove = "换锁", mark = "玩家标记",
+    estimate = "估算偏差",
 }
 
 review.windowMs = 10000        -- events and decisions kept for the cause analysis
@@ -560,7 +563,8 @@ end }
 function review.begin(w, members)
     local rs = { w = w, nextId = 0, list = {}, counts = {}, recent = {}, decs = {}, isMember = {}, maxhp = {},
                  lastVictim = {}, aggroAt = {}, lowSince = {}, lowReported = {}, fails = {}, stuckUntil = {},
-                 lastAct = {}, idleUntil = {}, known = {}, cc = {}, ccSpell = {}, taunts = {} }
+                 lastAct = {}, idleUntil = {}, known = {}, cc = {}, ccSpell = {}, taunts = {},
+                 healerMana = {}, dealt = 0 }
     for _, m in ipairs(members) do rs.isMember[m:guid()] = true end
     w.review = rs
     return rs
@@ -577,6 +581,22 @@ function review.observe(w, ctx)
     for _, e in ipairs(ctx.evs) do
         rs.recent[#rs.recent + 1] = e
         if e.src and (e.ev == "go" or e.ev == "cast" or e.ev == "dmg" or e.ev == "heal") then rs.lastAct[e.src] = e.t end
+        if e.ev == "dmg" and e.src and rs.isMember[e.src] and e.dst and not rs.isMember[e.dst] then
+            rs.dealt = rs.dealt + (e.amount or 0)
+        end
+    end
+    -- For the "estimate" check at the end (review.finish): the pull's fight estimate, the healer
+    -- bots' mana at the start and now.
+    if ctx.pull and ctx.pull.estimate and not rs.estimate then rs.estimate = ctx.pull.estimate end
+    for _, i in ipairs(ctx.party) do
+        if i.role == "healer" and i.ptype == 0 then
+            local h = rs.healerMana[i.guid]
+            if not h then
+                h = { start = i.power, max = i.maxpower }
+                rs.healerMana[i.guid] = h
+            end
+            h.last = i.power
+        end
     end
     for _, d in ipairs(ctx.decs) do rs.decs[#rs.decs + 1] = d end
     local cutoff = ctx.now - review.windowMs
@@ -592,6 +612,40 @@ function review.observe(w, ctx)
         local ok, err = pcall(d.run, rs, ctx)
         if not ok then dev.pushError("review." .. d.kind, err) end
     end
+end
+
+-- Fight end (recorder endFight, before the end line): the pull's fight estimate against what
+-- happened. An estimate that is far off decided the pull wrongly (patrol taken along, healer
+-- mana gate), so it is an anomaly of its own (strat-20261108-141921: 38 s planned, 128 s fought).
+local ESTIMATE_SEC_RATIO = 1.5
+local ESTIMATE_MANA_POOL_SHARE = 0.25
+
+function review.finish(w)
+    local rs = w.review
+    local est = rs and rs.estimate
+    if not est or not est.sec or est.sec <= 0 then return end
+    local sec = (now() - w.fightStart) / 1000
+    if sec <= 0 then return end
+    local used, pool = 0, 0
+    for _, h in pairs(rs.healerMana) do
+        used = used + math.max(0, h.start - (h.last or h.start))
+        pool = pool + (h.max or 0)
+    end
+    local expectedUsed = math.max(0, (est.manaStart or 0) - (est.manaLeft or 0))
+    local ratio = sec / est.sec
+    local secOff = ratio > ESTIMATE_SEC_RATIO or ratio < 1 / ESTIMATE_SEC_RATIO
+    local manaOff = pool > 0 and math.abs(used - expectedUsed) > ESTIMATE_MANA_POOL_SHARE * pool
+    if not secOff and not manaOff then return end
+    local dps = rs.dealt / sec
+    local cause = string.format("开怪估算 %.0f 秒，实际 %.0f 秒（%.1f 倍）；队伍伤害估 %.0f/s（%s），实际 %.0f/s",
+        est.sec, sec, ratio, est.partyDps or 0, est.dpsSource or "?", dps)
+    if pool > 0 then
+        cause = cause .. string.format("；治疗蓝估用 %.0f，实际用 %.0f", expectedUsed, used)
+    end
+    emit(rs, "estimate", { sev = "mid", cause = cause, links = {},
+        facts = { estSec = est.sec, sec = sec, estPartyDps = est.partyDps, dpsSource = est.dpsSource, partyDps = dps,
+                  estManaUsed = expectedUsed, manaUsed = used, healerPool = pool,
+                  estTankLowPct = est.tankLowPct, estIncomingDps = est.incomingDps } })
 end
 
 -- A player mark (".scenario mark [text]"): an anomaly with the live state, nothing detected.

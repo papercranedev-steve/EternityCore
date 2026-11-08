@@ -62,6 +62,8 @@ namespace ProfileCommands
                 case CandidateRecord::Result::Forbidden: return "forbidden by the plan";
                 case CandidateRecord::Result::VetoSet:   return "VETO";
                 case CandidateRecord::Result::OrderSet:  return "HEAL ORDER";
+                case CandidateRecord::Result::Kept:      return "goes on";
+                case CandidateRecord::Result::Ended:     return "ENDED";
             }
             return "?";
         }

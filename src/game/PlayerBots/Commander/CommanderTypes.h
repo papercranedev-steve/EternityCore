@@ -165,6 +165,10 @@ namespace Commander
         float benefit = 0.0f;
         float cost = 0.0f;
         char const* reason = "";      // short note for the candidate log
+        // Part of `cost` the arbiter added: what executing it ends of the bot's running cast,
+        // channel or walk (Behaviors/CurrentAction.h). 0 = ends nothing.
+        float interruptCost = 0.0f;
+        char const* interrupts = "";  // what it ends (static text), "" = nothing
 
         void SetValue(float b, float c)
         {

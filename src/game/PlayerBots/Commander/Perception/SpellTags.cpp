@@ -1,6 +1,7 @@
 #include "Commander/Perception/SpellTags.h"
 #include "SpellEntry.h"
 #include "DBCStores.h"
+#include "ObjectDefines.h"
 #include <algorithm>
 
 namespace Commander
@@ -75,6 +76,37 @@ namespace SpellTags
             if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                 radius = std::max(radius, r->Radius);
         return radius;
+    }
+
+    bool ChainsToNearby(SpellEntry const* spell)
+    {
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (spell->EffectChainTarget[i] <= 1)
+                continue;
+            switch (spell->Effect[i])
+            {
+                case SPELL_EFFECT_SCHOOL_DAMAGE:
+                case SPELL_EFFECT_WEAPON_DAMAGE:
+                case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+                case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+                case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    float MeleeSplashRadius(SpellEntry const* spell)
+    {
+        switch (spell->Id)
+        {
+            case 13877: return 5.0f;                // Blade Flurry
+            case 12292: return ATTACK_DISTANCE;     // Sweeping Strikes
+            default:    return 0.0f;
+        }
     }
 
     bool IsCreatureSummonEffect(uint32 effect)

@@ -168,6 +168,14 @@ namespace Commander
         // Values a bot's preparation before the fight (Value::ContributionPerSecAt).
         float expectedIncomingDps = 0.0f;
         float expectedFightSec = 0.0f;      // same estimate: how long the fight lasts
+        // The rest of that estimate, for the combat review to compare with what happened
+        // (review.lua "estimate"): the party damage it assumed (Value::DealtDps and where that
+        // came from), the healer bots' mana before and after, the tank's lowest health.
+        float expectedPartyDps = 0.0f;
+        char const* expectedDpsSource = "";
+        float expectedManaStart = 0.0f;
+        float expectedManaLeft = 0.0f;
+        float expectedLowestTankPct = 0.0f;
         // The estimate as ManaWorth's planned fight while the pull runs; none (sec 0) otherwise.
         ManaWorth::Fight PlannedFight() const
         {
@@ -632,6 +640,9 @@ namespace Commander
         // Last DutyAllocator result of all duty modules (PartyCommander::RunAssigners), kept for
         // `.partybot ai plan` (who was passed over and why). Modules read their own part above.
         std::vector<DutyResult> duties;
+        // The needs as offered this refresh, before the allocation (rejected candidates
+        // included): for the combat recorder (u:offers, `offers` lines). Nobody reads it to decide.
+        std::vector<DutyNeed> offers;
         FocusTarget focus;          // TargetAssigner (encounters may override it: EncounterHelpers::SetFocus)
         std::vector<TargetDuty> targets;
         PlayerOrders orders;

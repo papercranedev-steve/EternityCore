@@ -26,8 +26,15 @@ namespace Commander
 
         // Global cooldown used for the time cost of an instant ability.
         static constexpr float GCD_SEC = 1.5f;
-        // Damage per second per level of one member, used before the fight has been measured.
+        // Damage per second per level of one member whose own estimate is unknown
+        // (PartyMemberFacts::soloDps 0), used before the fight has been measured.
         static constexpr float FALLBACK_DPS_PER_LEVEL = 6.0f;
+        // PartyMemberFacts::soloDps (untested guesses, 2026-11-08). 6 x level gave 1440/s for
+        // a level 60 party that dealt 435/s, and the pull estimate said 38 s for a 128 s fight
+        // (strat-20261108-141921). Melee: white hits from the weapon fields, abilities on top.
+        // Casters: the filler chain cast, less the time spent moving, wanding and on other spells.
+        static constexpr float MELEE_ABILITY_FACTOR = 1.4f;
+        static constexpr float CASTER_UPTIME = 0.6f;
 
         // Armor mitigation of melee hits, vanilla formula (Unit::CalcArmorReducedDamage), max 75%.
         float ArmorReduction(uint32 armor, uint32 attackerLevel);
@@ -38,9 +45,12 @@ namespace Commander
         float DeathPenalty(PartyMemberFacts const& member);
 
         // Damage the party deals per second: measured in this fight, else the last fight's
-        // (RateFacts::lastFightDps, scaled by the number of damage dealers), else the fallback
-        // estimate.
+        // (RateFacts::lastFightDps, scaled by the number of damage dealers), else the sum of
+        // the damage dealers' own estimates (PartyMemberFacts::soloDps; FALLBACK_DPS_PER_LEVEL
+        // x level where unknown).
         float DealtDps(WorldModel const& world);
+        // Where DealtDps comes from now: "measured", "last fight" or "gear estimate".
+        char const* DealtDpsSource(WorldModel const& world);
         // Seconds until all current enemies are dead at the current rate.
         float FightRemainingSec(WorldModel const& world);
         // Points lost when the fight lasts `seconds` longer (incoming damage during that time).

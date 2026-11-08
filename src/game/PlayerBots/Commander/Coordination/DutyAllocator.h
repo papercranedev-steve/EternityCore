@@ -34,6 +34,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include <string>
 #include <vector>
 
 namespace Commander
@@ -77,6 +78,9 @@ namespace Commander
         uint32 spellId = 0;         // ability it would use, 0 = none in particular
         float rank = 0.0f;          // module's own order of preference, highest first
         bool canBePrimary = true;   // false: backup at most (e.g. cannot reach a live cast in time)
+        // For the log only (TeamPlan::offers, the recorder's `offers` lines): how the module
+        // valued it (e.g. ControlValue::Describe). Empty = not given.
+        std::string why;
     };
 
     struct DutyNeed
@@ -93,6 +97,10 @@ namespace Commander
         std::vector<DutyKey> blockedBy;
         std::vector<DutyKey> marks;
         std::vector<DutyCandidate> candidates;
+        // For the log only: what the module judged and left out (net <= 0), rank = that net.
+        // The allocator ignores them. Without these a need nobody was offered for ("why was the
+        // Patchwork Horror not shackled for 50 s", strat-20261108-141921) left no trace.
+        std::vector<DutyCandidate> rejected;
     };
 
     enum class DutyPassReason : uint8
