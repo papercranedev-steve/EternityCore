@@ -96,8 +96,10 @@ namespace Backpedal
         void SetWalking(Player* me, bool on, bool forward = false)
         {
             uint32 flags = me->GetUnitMovementFlags() & ~uint32(MOVEFLAG_MASK_MOVING);
+            // The steps go at run / run-back speed: a walk mode left by an earlier spline (a
+            // follow's last short step) would make observers show a slower walk than the bot moves.
             if (on)
-                flags |= forward ? MOVEFLAG_FORWARD : MOVEFLAG_BACKWARD;
+                flags = (flags & ~uint32(MOVEFLAG_WALK_MODE)) | (forward ? MOVEFLAG_FORWARD : MOVEFLAG_BACKWARD);
             me->SetUnitMovementFlags(flags);
         }
 

@@ -44,6 +44,15 @@ namespace Commander
             return "?";
         }
 
+        // Every module walk runs at run speed. MoveSplineInit takes walk mode from the movement
+        // flags when the order does not say (MOVEFLAG_WALK_MODE stays after FollowMovementGenerator's
+        // last short step, < 2 yd, or a chase spread / back step), so a plain MovePoint after one
+        // walked at 2.5 yd/s (strat-20261108-174726: the priest crossed the fight walking).
+        void RunTo(Player* me, float x, float y, float z)
+        {
+            me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE);
+        }
+
         bool IsPetAction(BotActionType type)
         {
             switch (type)
@@ -448,7 +457,7 @@ namespace Commander
             {
                 if (me->HasUnitState(UNIT_STATE_ROOT))
                     return false;
-                me->GetMotionMaster()->MovePoint(0, action.x, action.y, action.z, MOVE_PATHFINDING);
+                RunTo(me, action.x, action.y, action.z);
                 bot->Directives().HoldMovement(WorldTimer::getMSTime(), action.holdMs, proposal.source);
                 return true;
             }
@@ -543,7 +552,7 @@ namespace Commander
                     bool const onTheWay = me->IsMoving() && bot->Directives().IsMovementHeld(now);
                     if (!onTheWay)
                     {
-                        me->GetMotionMaster()->MovePoint(0, action.x, action.y, action.z, MOVE_PATHFINDING);
+                        RunTo(me, action.x, action.y, action.z);
                         bot->Directives().HoldMovement(now, action.holdMs);
                     }
                 }
@@ -645,7 +654,7 @@ namespace Commander
             float const x = go->GetPositionX() + USE_APPROACH_YARDS * std::cos(angle);
             float const y = go->GetPositionY() + USE_APPROACH_YARDS * std::sin(angle);
             float const z = go->GetPositionZ();
-            me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING);
+            RunTo(me, x, y, z);
         }
         // Keep the original follow / chase off while walking. Renewed every tick the module
         // proposes it, so it runs out about holdMs after the module stops.
