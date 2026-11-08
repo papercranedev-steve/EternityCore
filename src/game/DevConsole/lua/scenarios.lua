@@ -375,7 +375,8 @@ function scenario.stop(leader)
     status(leader, "stopped", "")
 end
 
--- .scenario [list | <id> | reset | stop | status | setspot <id> | mark [text]]
+-- .scenario [list | <id> | reset | stop | status | setspot <id> | mark [text] | rec list | rec open <file>]
+-- (rec: the addon's fight log window, recview.lua)
 function scenario.command(leader, args)
     args = (args or ""):match("^%s*(.-)%s*$")
     if args == "" or args == "list" then
@@ -388,7 +389,10 @@ function scenario.command(leader, args)
             say(leader, ".scenario reset  重开当前场景    .scenario stop  结束")
             say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
             say(leader, ".scenario mark [说明]  战斗中觉得不对时标记这一刻（记下现场，复盘时看）")
+            say(leader, "战斗录像：插件的“战斗录像”窗口（/pbr）")
         end
+    elseif args == "rec" or args:match("^rec%s") then
+        recview.command(leader, args:match("^rec%s*(.*)$"))
     elseif args:match("^mark") then
         local text = args:match("^mark%s+(.+)$") or ""
         if not rec.mark(leader, text) then say(leader, "现在没有在录制战斗，标记不了") end

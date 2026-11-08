@@ -1,14 +1,16 @@
 #include "Commander/ThreatFeed.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/PlayerChat.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/ThreatView.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
-#include "Chat.h"
 #include "Group.h"
 #include "Map.h"
 #include "Player.h"
 #include "WorldSession.h"
 #include "Timer.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -40,15 +42,19 @@ namespace Commander
             return buf;
         }
 
-        // Addon message to the player himself: whisper type so the 1.12 packet carries a sender,
-        // LANG_ADDON with "prefix\tbody" as HermesProxy expects (ChatPkt::CheckAddonPrefix).
         void Send(Player* player, std::string const& body)
         {
-            std::string const text = std::string(PREFIX) + "\t" + body;
-            WorldPacket data;
-            ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, text.c_str(), LANG_ADDON, CHAT_TAG_NONE,
-                player->GetObjectGuid(), player->GetName());
-            player->GetSession()->SendPacket(&data);
+            PlayerChat::SendAddonMessage(player, PREFIX, body);
+        }
+
+        // Highest threat on the list of anyone but the victim (0 = nobody else).
+        float SecondThreat(EnemyFacts const& e)
+        {
+            float second = 0.0f;
+            for (ThreatEntry const& t : e.threat)
+                if (t.onList && t.guid != e.victim)
+                    second = std::max(second, t.threat);
+            return second;
         }
 
         void AddTarget(Map* map, EnemyFacts const& e, std::vector<std::string>& out)
@@ -88,10 +94,12 @@ namespace Commander
                     break;
                 ObjectGuid closest;
                 float const lead = ThreatView::VictimLead(e, &closest);
+                PartyMemberFacts const* victim = world.FindMember(e.victim);
+                char const* flags = victim && Tanks::IsTank(*victim) ? "t" : "";
                 char buf[256];
-                snprintf(buf, sizeof(buf), "A;%s;%.0f;%s;%s;%s;%s", NameOf(map, e.guid).c_str(), e.healthPct,
+                snprintf(buf, sizeof(buf), "A;%s;%.0f;%s;%s;%s;%s;%s;%s", NameOf(map, e.guid).c_str(), e.healthPct,
                     NameOf(map, e.victim).c_str(), Num(e.victimThreat).c_str(), Num(lead).c_str(),
-                    NameOf(map, closest).c_str());
+                    NameOf(map, closest).c_str(), Num(SecondThreat(e)).c_str(), flags);
                 out.push_back(buf);
             }
         }

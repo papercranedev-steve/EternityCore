@@ -7,9 +7,12 @@
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/BotSpeech.h"
+#include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Group.h"
 #include "Chat.h"
+#include "Map.h"
 #include "Timer.h"
 
 namespace Commander
@@ -187,13 +190,14 @@ namespace Commander
         std::vector<std::string>& notes = m_plan.notes;
         if (notes.empty())
             return;
+        // Said by the main tank bot (it leads the pulls), else by the bot running this refresh.
+        Player* speaker = bot->me;
+        if (PartyMemberFacts const* tank = Tanks::Main(m_world, true))
+            if (Player* p = bot->me->GetMap()->GetPlayer(tank->guid))
+                speaker = p;
         Player* leader = bot->GetPartyLeader();
-        if (leader && leader->IsInWorld() && leader->GetMap() == bot->me->GetMap())
-        {
-            ChatHandler handler(leader);
-            for (std::string const& note : notes)
-                handler.PSendSysMessage("[PartyBot] %s", note.c_str());
-        }
+        for (std::string const& note : notes)
+            BotSpeech::Report(speaker, leader, note);
         uint32 const now = WorldTimer::getMSTime();
         for (std::string& note : notes)
         {

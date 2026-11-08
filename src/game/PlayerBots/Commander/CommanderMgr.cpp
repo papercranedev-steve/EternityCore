@@ -51,6 +51,7 @@ namespace Commander
     void CommanderMgr::LoadConfig()
     {
         m_enabled.store(sConfig.GetBoolDefault("PartyBot.Commander.Enable", true));
+        m_speech.store(sConfig.GetBoolDefault("PartyBot.Commander.Speech", true));
         SetBotUpdateInterval(Clamp(sConfig.GetIntDefault("PartyBot.Commander.BotUpdateMs", 1000), MIN_BOT_UPDATE_MS, MAX_BOT_UPDATE_MS));
         m_perceptionMs.store(Clamp(sConfig.GetIntDefault("PartyBot.Commander.PerceptionMs", 200), 50, 2000));
 

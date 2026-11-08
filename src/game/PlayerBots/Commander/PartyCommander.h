@@ -92,6 +92,8 @@ namespace Commander
         // Picks the matching boss module (OnReset on the one that stops matching), then its
         // Refresh and AddFacts. Before the assigners.
         void UpdateEncounter(PartyBotAI* bot);
+        // TeamPlan::notes: said in party chat by the main tank bot (BotSpeech::Report), or system
+        // messages to the leader with speech off; then into the note log.
         void FlushNotes(PartyBotAI* bot);
         // After the assigners: when the retreat ended since the last refresh, releases the
         // movement hold of every bot of the party on this map.

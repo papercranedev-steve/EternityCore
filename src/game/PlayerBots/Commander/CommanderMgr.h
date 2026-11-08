@@ -50,6 +50,12 @@ namespace Commander
         bool IsEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
         void SetEnabled(bool on) { m_enabled.store(on, std::memory_order_relaxed); }
 
+        // Bots say their decisions, the brain's notes and review anomalies in party chat
+        // (BotSpeech.h; `.partybot ai say on|off`, PartyBot.Commander.Speech). Off: notes go to
+        // the leader as system messages, decisions are not told. Any thread.
+        bool IsSpeechEnabled() const { return m_speech.load(std::memory_order_relaxed); }
+        void SetSpeechEnabled(bool on) { m_speech.store(on, std::memory_order_relaxed); }
+
         // Replaces PB_UPDATE_INTERVAL in PartyBotAI::UpdateAI.
         uint32 GetBotUpdateInterval() const { return m_botUpdateMs.load(std::memory_order_relaxed); }
         void SetBotUpdateInterval(uint32 ms);
@@ -112,6 +118,7 @@ namespace Commander
         std::shared_ptr<PartyCommander> GetCommander(PartyBotAI* bot);
 
         std::atomic<bool> m_enabled{ true };
+        std::atomic<bool> m_speech{ true };
         std::atomic<uint32> m_botUpdateMs{ 1000 };
         std::atomic<uint32> m_perceptionMs{ 200 };
 

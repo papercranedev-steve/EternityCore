@@ -16,8 +16,9 @@
  * ThreatBehavior proposes heal vetoes and smaller heals for aggro on the same target; both
  * are scored in points, the arbiter keeps whatever is worth it.
  *
- * Low mana note: when ManaBudget::WantsLowManaWarning holds, the leader gets a system message
- * (same "[PartyBot]" form as plan notes), at most once per LOW_MANA_NOTE_REPEAT_MS per healer.
+ * Low mana note: when ManaBudget::WantsLowManaWarning holds, the healer says it in party chat
+ * (BotSpeech::Report; speech off: a "[PartyBot]" system message to the leader, like plan notes),
+ * at most once per LOW_MANA_NOTE_REPEAT_MS per healer.
  * Sent directly, not through TeamPlan::notes: behaviors only get the plan read-only.
  *
  * Not done: future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.

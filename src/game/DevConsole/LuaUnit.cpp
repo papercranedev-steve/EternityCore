@@ -33,8 +33,10 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/PlayerChat.h"
 #include "Commander/Perception/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
@@ -1434,6 +1436,27 @@ namespace DevConsole
             ChatHandler(s).SendSysMessage(luaL_checkstring(L, 2));
         return 0;
     }
+    // u:addonmsg(prefix, body): addon message to a player's PartyBot addon (CHAT_MSG_ADDON).
+    // prefix + tab + body must fit PlayerChat::ADDON_MESSAGE_MAX bytes (error otherwise).
+    static int U_addonmsg(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        char const* prefix = luaL_checkstring(L, 2);
+        size_t len = 0;
+        char const* body = luaL_checklstring(L, 3, &len);
+        if (strlen(prefix) + 1 + len > Commander::PlayerChat::ADDON_MESSAGE_MAX)
+            return luaL_error(L, "addon message too long (%d bytes)", int(strlen(prefix) + 1 + len));
+        Commander::PlayerChat::SendAddonMessage(p, prefix, std::string(body, len));
+        return 0;
+    }
+    // u:partysay(text): the character says it in party chat when bot speech is on
+    // (Commander/BotSpeech.h). Returns false when off or not in a group.
+    static int U_partysay(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_pushboolean(L, Commander::BotSpeech::Say(p, luaL_checkstring(L, 2)));
+        return 1;
+    }
     static int U_select(lua_State* L)
     {
         Player* p = CheckPlayer(L, 1);
@@ -1763,6 +1786,7 @@ namespace DevConsole
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },
             { "removeaura", U_removeaura }, { "setlevel", U_setlevel }, { "resetcd", U_resetcd },
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
+            { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },

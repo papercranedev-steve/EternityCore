@@ -5,6 +5,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/BotSpeech.h"
 #include "PartyBotAI.h"
 #include "HealSpells.h"
 #include "DamageSpells.h"
@@ -14,6 +15,7 @@
 #include "Timer.h"
 #include "SpellEntry.h"
 #include <algorithm>
+#include <cstdio>
 #include <mutex>
 #include <unordered_map>
 
@@ -133,9 +135,10 @@ namespace Commander
         }
 
         // tension = fight time / time the mana lasts.
-        ChatHandler(leader).PSendSysMessage("[PartyBot] %s is low on mana (%.0f%%): about %.0f s of fight left, "
-                                            "mana for about %.0f s of it.", bot->me->GetName(), budget.manaPct,
-                                            budget.fightSec, budget.fightSec / budget.tension);
+        char text[200];
+        snprintf(text, sizeof(text), "%s is low on mana (%.0f%%): about %.0f s of fight left, mana for about %.0f s of it.",
+                 bot->me->GetName(), budget.manaPct, budget.fightSec, budget.fightSec / budget.tension);
+        BotSpeech::Report(bot->me, leader, text);
     }
 
     bool ManaBudgetBehavior::AppliesTo(PartyBotAI const* bot) const

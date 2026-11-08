@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "GameObject.h"
@@ -371,6 +372,7 @@ namespace Commander
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                     directives.NoteExecuted(p, now);
+                    BotSpeech::OnExecuted(bot, p, now);
                     primary = &p;
                 }
                 else
@@ -422,6 +424,7 @@ namespace Commander
                 // The action last: CurrentAction reads the last executed cast (its order's worth).
                 directives.NoteExecuted(move, now);
                 directives.NoteExecuted(act, now);
+                BotSpeech::OnExecuted(bot, p, now);
                 break;
             }
         }

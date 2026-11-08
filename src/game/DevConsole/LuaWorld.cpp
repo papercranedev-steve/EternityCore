@@ -9,6 +9,7 @@
  *   now()                          server ms clock
  *   log(text)                      write to Server.log
  *   json(value)                    encode as JSON string
+ *   jsondecode(text)               decode JSON text (objects / arrays as tables, null = nil), or nil, error
  *   fightload(inputJson)           re-run a traced FightLoad simulation step by step (JSON text)
  *   premades([classId])            premade gear/spec templates
  *   addbot(leader, class, role, level)  temporary party bot next to the leader
@@ -41,6 +42,7 @@
 #include "PartyBotAI.h"
 #include "Commander/Trace/FightLoadJson.h"
 #include "Utilities/Random.h"
+#include <nlohmann/json.hpp>
 
 #include <cstring>
 
@@ -188,6 +190,75 @@ namespace DevConsole
         std::string out;
         LuaToJson(L, 1, out);
         lua_pushlstring(L, out.data(), out.size());
+        return 1;
+    }
+
+    // JSON value -> Lua: objects are tables with string keys, arrays 1-based tables, null nil.
+    static void PushJson(lua_State* L, nlohmann::json const& j, int depth)
+    {
+        if (depth > 32 || !lua_checkstack(L, 3))
+        {
+            lua_pushnil(L);
+            return;
+        }
+        switch (j.type())
+        {
+            case nlohmann::json::value_t::object:
+                lua_createtable(L, 0, int(j.size()));
+                for (auto it = j.begin(); it != j.end(); ++it)
+                {
+                    PushJson(L, it.value(), depth + 1);
+                    lua_setfield(L, -2, it.key().c_str());
+                }
+                return;
+            case nlohmann::json::value_t::array:
+            {
+                lua_createtable(L, int(j.size()), 0);
+                lua_Integer i = 0;
+                for (nlohmann::json const& v : j)
+                {
+                    PushJson(L, v, depth + 1);
+                    lua_rawseti(L, -2, ++i);
+                }
+                return;
+            }
+            case nlohmann::json::value_t::string:
+            {
+                std::string const& s = j.get_ref<std::string const&>();
+                lua_pushlstring(L, s.data(), s.size());
+                return;
+            }
+            case nlohmann::json::value_t::boolean:
+                lua_pushboolean(L, j.get<bool>());
+                return;
+            case nlohmann::json::value_t::number_integer:
+                lua_pushinteger(L, lua_Integer(j.get<int64_t>()));
+                return;
+            case nlohmann::json::value_t::number_unsigned:
+                lua_pushinteger(L, lua_Integer(j.get<uint64_t>()));
+                return;
+            case nlohmann::json::value_t::number_float:
+                lua_pushnumber(L, j.get<double>());
+                return;
+            default:
+                lua_pushnil(L);
+                return;
+        }
+    }
+
+    // jsondecode(text): Lua value, or nil and an error.
+    static int W_jsondecode(lua_State* L)
+    {
+        size_t len = 0;
+        char const* text = luaL_checklstring(L, 1, &len);
+        nlohmann::json const j = nlohmann::json::parse(text, text + len, nullptr, false);
+        if (j.is_discarded())
+        {
+            lua_pushnil(L);
+            lua_pushstring(L, "invalid JSON");
+            return 2;
+        }
+        PushJson(L, j, 0);
         return 1;
     }
 
@@ -408,7 +479,8 @@ namespace DevConsole
     {
         static luaL_Reg const globals[] = {
             { "players", W_players }, { "player", W_player }, { "unit", W_unit }, { "cmd", W_cmd },
-            { "spell", W_spell }, { "now", W_now }, { "log", W_log }, { "json", W_json }, { "fightload", W_fightload },
+            { "spell", W_spell }, { "now", W_now }, { "log", W_log }, { "json", W_json }, { "jsondecode", W_jsondecode },
+            { "fightload", W_fightload },
             { "premades", W_premades }, { "addbot", W_addbot }, { "account", W_account },
         { "login", W_login }, { "logout", W_logout },
             { nullptr, nullptr }

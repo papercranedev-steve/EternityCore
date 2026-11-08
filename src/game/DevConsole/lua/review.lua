@@ -10,7 +10,9 @@
 --   detail  {type, t, id, party=[...], enemies=[...]}   live state at that moment that the
 --           snap lines don't have: casts with targets, control, AI last decision, healer -> member
 --           distance / line of sight, tank -> enemy distance, named threat tables
--- and tells the leader one line ("[复盘] #2 13.8s 仇恨丢失 ..."). dev.ps1 review reads them.
+-- and says one line ("[复盘] #2 13.8s 仇恨丢失 ...") in party chat as the bot it happened to
+-- (bot speech on, Commander/BotSpeech.h), else tells it the leader. dev.ps1 review and the addon's
+-- fight log window (recview.lua) read them.
 --
 -- Adding a detector: append { kind = "...", run = function(rs, ctx) ... emit(rs, ctx, kind, a) end }
 -- to review.detectors. ctx (built by the recorder each tick): leader, members (units), party
@@ -234,6 +236,21 @@ local function capture(rs, leader)
     return party, foes
 end
 
+-- The bot that says an anomaly: the one it happened to, else the main tank bot, else any bot.
+local function speakerFor(leader, whoG)
+    local who = whoG and unit(whoG)
+    if who and who:isbot() then return who end
+    local any
+    for _, m in ipairs(leader:group()) do
+        if m:isbot() then
+            local ai = m:ai()
+            if ai and ai.role == "tank" then return m end
+            any = any or m
+        end
+    end
+    return any
+end
+
 -- Writes the anomaly + detail lines and tells the leader. a = {who=unit|guid, by=..., cause,
 -- facts, links, sev}. Returns the id.
 local function emit(rs, kind, a)
@@ -255,12 +272,17 @@ local function emit(rs, kind, a)
         local party, foes = capture(rs, leader)
         rec.writeLine(w, { type = "detail", t = t, id = id, party = party, enemies = foes })
         if review.tell then
-            local text = string.format("|cffff8800[复盘]|r #%d %.1fs %s %s：%s", id, rel(rs, t),
+            local text = string.format("[复盘] #%d %.1fs %s %s：%s", id, rel(rs, t),
                 review.labels[kind] or kind, line.who or "", a.cause or "")
             if #a.links > 0 then
                 text = text .. "（← #" .. table.concat(map(a.links, tostring), " #") .. "）"
             end
-            leader:tell(text)
+            -- said in party chat by the bot it happened to (else the tank bot) when bot speech
+            -- is on (`.partybot ai say`), else a system line to the leader
+            local speaker = speakerFor(leader, whoG)
+            if not (speaker and speaker.partysay and speaker:partysay(text)) then
+                leader:tell("|cffff8800" .. text:gsub("^%[复盘%]", "[复盘]|r"))
+            end
         end
     end
     return id
