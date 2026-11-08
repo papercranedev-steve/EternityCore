@@ -37,6 +37,13 @@ namespace WorldModelBuilder
     // Interrupts with a longer range (InterruptAbility::maxRange, at least 5) count as ranged:
     // EnemyFacts::outOfSight is checked for bots that have one.
     float const MELEE_INTERRUPT_RANGE = 5.0f;
+    // Combat range abilities (rangeIndex 2: Taunt, Shield Bash, Kick, Gouge): the server needs
+    // the centres within both combat reaches + 4/3 yd (WorldObject::CanReachWithMeleeSpellAttack),
+    // about the target's bounding radius + 2.8 yd for a player. The abilities' maxRange is in
+    // "centre distance minus the target's bounding radius", so this, not the DBC 5.5 yd: the
+    // tank stood 6 yd off a loose enemy, the brain counted it in Taunt range and nobody walked
+    // in (strat-20261108-200046).
+    float const COMBAT_RANGE = 2.5f;
 
     // Party members, pets, allies, enemies and their threat lists. No grid search: allies come
     // from the last scan (allyCandidates), the previous allies, and the threat lists of enemies.

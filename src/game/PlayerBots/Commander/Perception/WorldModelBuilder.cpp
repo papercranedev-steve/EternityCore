@@ -52,6 +52,16 @@ namespace WorldModelBuilder
 
         uint32 const SPELL_RIGHTEOUS_FURY = 25780;     // the aura (spell_template: aura 42 / 10)
 
+        // An ability's reach (centre distance minus the target's bounding radius): COMBAT_RANGE
+        // for combat range spells, else the DBC range, at least `floor`.
+        float AbilityRange(SpellEntry const* spell, float floor)
+        {
+            if (spell->rangeIndex == SPELL_RANGE_IDX_COMBAT)
+                return COMBAT_RANGE;
+            SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+            return std::max(range ? range->maxRange : 0.0f, floor);
+        }
+
         void FillUnitFacts(Unit const* unit, PartyMemberFacts& f)
         {
             f.guid = unit->GetObjectGuid();
@@ -210,8 +220,7 @@ namespace WorldModelBuilder
 
             InterruptAbility a;
             a.spellId = spell->Id;
-            SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-            a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+            a.maxRange = AbilityRange(spell, 5.0f);
             a.cooldownMs = spell->GetRecoveryTime();
             a.lockoutMs = LockoutMs(spell);
             a.mechanicMask = SpellTags::StopMechanicMask(spell);
@@ -578,8 +587,7 @@ namespace WorldModelBuilder
                 a.creatureTypeMask = spell->TargetCreatureType;
                 a.mechanicMask = SpellTags::StopMechanicMask(spell);
                 a.school = uint8(spell->School);
-                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-                a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                a.maxRange = AbilityRange(spell, 5.0f);
                 // Area around the caster (Psychic Scream, Howl of Terror; Intimidating Shout
                 // fears everyone around, its target only cowers): a radius on a control effect.
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -663,8 +671,7 @@ namespace WorldModelBuilder
                     continue;
                 if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY)
                     a.radius = 0.0f;
-                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-                a.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                a.maxRange = AbilityRange(spell, 5.0f);
                 a.castMs = spell->GetCastTime(me);
                 a.cooldownMs = spell->GetRecoveryTime();
                 Powers const powerType = Powers(spell->powerType);
@@ -691,8 +698,7 @@ namespace WorldModelBuilder
                     continue;
                 TauntAbility t;
                 t.spellId = spell->Id;
-                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-                t.maxRange = std::max(range ? range->maxRange : 0.0f, 5.0f);
+                t.maxRange = AbilityRange(spell, 5.0f);
                 // Taunt 355: RecoveryTime 0, CategoryRecoveryTime 10 s.
                 t.cooldownMs = spell->GetRecoveryTime();
                 t.holdSec = RescueValue::TemporaryTauntSec(spell);

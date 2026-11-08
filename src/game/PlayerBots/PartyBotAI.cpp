@@ -800,8 +800,54 @@ bool PartyBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
     return pSpellEntry && pSpellEntry == Kit().Filler();
 }
 
+// Checks the server makes at cast time (Spell::CheckRange, Spell::CheckCast, Spell::CheckItems)
+// that CombatBotBaseAI::CanTryToCastSpellAs does not, or does differently. Without them the
+// bot sends the cast, gets refused and loses the tick (strat-20261108-200046: the tank's Shield
+// Slam / Sunder Armor / Taunt failed 'range' at 6-14 yd; the rogue's Backstab failed 26 "needs
+// a dagger in the main hand" and 51 "not behind" 11 times).
+bool PartyBotAI::PassesServerCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const
+{
+    // Weapon or armor the spell needs (Backstab: a dagger in the main hand; Shield Slam: a
+    // shield). The server leaves out the other hand's weapon (Spell::CheckItems).
+    if (pSpellEntry->EquippedItemClass >= 0)
+    {
+        Item const* ignore = nullptr;
+        WeaponAttackType const attack = pSpellEntry->GetWeaponAttackType();
+        if (attack == BASE_ATTACK)
+            ignore = me->GetWeaponForAttack(OFF_ATTACK);
+        else if (attack == OFF_ATTACK)
+            ignore = me->GetWeaponForAttack(BASE_ATTACK);
+        if (!me->HasItemFitToSpellReqirements(pSpellEntry, ignore))
+            return false;
+    }
+
+    if (!pTarget || pTarget == me || pSpellEntry->EffectImplicitTargetA[0] == TARGET_UNIT_CASTER)
+        return true;
+
+    // Combat range: the base check takes the combat distance (centres minus both combat
+    // reaches) against the DBC 5.5 yd, ~8.5 yd between centres on a player-sized target. The
+    // server takes the centres against both combat reaches + 4/3 yd (at least 5).
+    // (Facing is not checked here: DoCastSpell turns the bot first.)
+    if (pSpellEntry->rangeIndex == SPELL_RANGE_IDX_COMBAT && !pSpellEntry->IsNextMeleeSwingSpell())
+    {
+        float base = ATTACK_DISTANCE;
+        float const mod = 1.0f + me->ApplySpellMod(pSpellEntry->Id, SPELLMOD_RANGE, base, nullptr, false);
+        if (!me->CanReachWithMeleeSpellAttack(pTarget, mod))
+            return false;
+    }
+
+    // Must be behind the target (Backstab, Ambush, Garrote, Ravage, Shred). A creature faces its
+    // victim unless stunned, confused or fleeing: Unit::IsBehindTarget (strict).
+    if (pSpellEntry->IsFromBehindOnlySpell() && !me->IsBehindTarget(pTarget, true))
+        return false;
+
+    return true;
+}
+
 bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
+    if (!PassesServerCastChecks(pTarget, pSpellEntry))
+        return false;
     // The pull brings the pack back: charging in would put the tank in the middle of it.
     if (IsGapCloserForbidden(pSpellEntry))
         return false;
@@ -1624,6 +1670,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             }
         }
     }
+    // Walking backwards (Commander Backpedal) faces the enemies coming after it: swing at the
+    // victim without a chase (AttackStart would chase and end the walk). Without it the tank
+    // walked back to its corner for 7 s after the shot without one swing, no rage and 0 threat
+    // on five of the six enemies on it; a Counterspell and a few buffs turned them
+    // (strat-20261108-200046).
+    else if (pVictim && IsBackpedaling() && !me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
+             (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsValidHostileTarget(pVictim))
+        me->Attack(pVictim, true);
 
     if (me->IsInCombat())
         UpdateInCombatAI();

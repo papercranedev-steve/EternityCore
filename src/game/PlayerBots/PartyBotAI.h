@@ -76,6 +76,9 @@ public:
     // PartyBotAI's checks on top of CombatBotBaseAI's (no AoE next to crowd control marks, no
     // AoE that hits an idle creature, no AoE that pulls aggro for non-tanks).
     bool PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
+    // The server's cast checks the base check lacks or makes looser: combat range reach,
+    // required weapon / shield, behind the target (PartyBotAI.cpp).
+    bool PassesServerCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // An area spell hitting `pUnit` would start a new fight: a creature we may attack that is
     // not fighting (hostile or neutral), not a critter, not immune to area spells.
     bool WouldAreaSpellPullIdle(Unit const* pUnit) const;
