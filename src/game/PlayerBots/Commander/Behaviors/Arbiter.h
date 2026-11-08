@@ -12,6 +12,14 @@
  * (Attack / Backpedal let the rotation run anyway and stay). From strat-20261102-012937.
  * UseObject (gameobject target) returns true both while walking and on use, so the original
  * rotation and movement stay off until the module stops proposing it.
+ * Two channels (2026-11-08, user: "倒退和吼叫可以同时进行"): moving (MoveTo, Backpedal, Chase)
+ * and acting (Cast, Attack, HoldFire). After the winner above executes, the best proposal of
+ * the other channel (its own top tier) executes too when the two go together: an instant cast
+ * that needs no standing still (CurrentAction::NeedsStandingStill), no auto shot, and for a
+ * spell that must face its target the bot already faces it; Attack / HoldFire with any walk
+ * but a chase. A cast-time spell and a walk still compete as one (the CurrentAction costs
+ * decide). Not with an Override winner (retreat) nor with Hold, Rest, Retreat, UseObject,
+ * StopMove, StopChase. The rotation runs after them only if both let it.
  * Pet actions (PetAttack, PetFollow, PetAutocastOn/Off) are executed besides the bot's own
  * action and never skip the rotation: every autocast toggle, plus the best pet command
  * (none during a retreat, which calls the pet back itself).

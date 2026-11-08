@@ -81,6 +81,54 @@ namespace Commander
                    type == BotActionType::StopChase;
         }
 
+        // Arbiter.h "Two channels".
+        enum class Channel : uint8 { Move, Act, Exclusive };
+
+        Channel ChannelOf(BotActionType type)
+        {
+            switch (type)
+            {
+                case BotActionType::MoveTo:
+                case BotActionType::Backpedal:
+                case BotActionType::Chase:
+                    return Channel::Move;
+                case BotActionType::Cast:
+                case BotActionType::Attack:
+                case BotActionType::HoldFire:
+                    return Channel::Act;
+                default:
+                    return Channel::Exclusive;
+            }
+        }
+
+        // `act` can be done while `move` goes on: an instant cast that does not need the bot
+        // to stop (no cast time, not a channel moving ends, not an auto shot; a spell that must
+        // face its target only when the bot faces it already: DoCastSpell would stop the walk
+        // to turn), or a target switch / stop hitting that is not against a chase (a chase
+        // attacks its own target).
+        bool GoTogether(PartyBotAI const* bot, Proposal const& move, Proposal const& act)
+        {
+            Player* me = bot->me;
+            switch (act.action.type)
+            {
+                case BotActionType::Cast:
+                {
+                    SpellEntry const* spell = act.action.spell;
+                    if (!spell || CurrentAction::NeedsStandingStill(bot, spell) || spell->IsAutoRepeatRangedSpell())
+                        return false;
+                    if (act.action.target.IsEmpty() || act.action.target == me->GetObjectGuid() || !spell->IsNeedFaceTarget())
+                        return true;
+                    Unit const* target = me->GetMap()->GetUnit(act.action.target);
+                    return target && me->IsFacingTarget(target);
+                }
+                case BotActionType::Attack:
+                case BotActionType::HoldFire:
+                    return move.action.type != BotActionType::Chase;
+                default:
+                    return false;
+            }
+        }
+
         // Highest tier first, then the highest score inside the tier.
         bool IsBetter(Proposal const& a, Proposal const& b)
         {
@@ -285,6 +333,8 @@ namespace Commander
         bool executed = false;
         bool endedCurrent = false;
         bool rotationMayRun = false;
+        size_t const firstReplaceRecord = record.candidates.size();
+        Proposal const* primary = nullptr;
         if (!replace.empty())
         {
             ProposalTier const topTier = replace.front().tier;
@@ -321,12 +371,59 @@ namespace Commander
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                     directives.NoteExecuted(p, now);
+                    primary = &p;
                 }
                 else
                     r.result = CandidateRecord::Result::Failed;
             }
             if (!executed && !(bestHeal && IsBetter(*bestHeal, replace.front())))
                 directives.SetLastDecision(now, "failed: " + std::string(replace.front().source) + " " + Describe(bot, replace.front()));
+        }
+
+        // The other channel (Arbiter.h "Two channels"): the executed proposal moves the bot or
+        // acts; the best proposal of the other channel that goes with it runs too (the tank's
+        // shout or target switch while walking backwards to its corner; strat-20261108-200046:
+        // the walk won every tick and the shout never went out). Its own best tier, not the
+        // winner's: moving and acting do not take from each other.
+        if (primary && primary->tier != ProposalTier::Override && ChannelOf(primary->action.type) != Channel::Exclusive)
+        {
+            Channel const want = ChannelOf(primary->action.type) == Channel::Move ? Channel::Act : Channel::Move;
+            bool tierSet = false;
+            ProposalTier secondTier = ProposalTier::Routine;
+            for (size_t i = 0; i < replace.size(); ++i)
+            {
+                Proposal const& p = replace[i];
+                CandidateRecord& r = record.candidates[firstReplaceRecord + i];
+                if (&p == primary || ChannelOf(p.action.type) != want ||
+                    (r.result != CandidateRecord::Result::NotTried && r.result != CandidateRecord::Result::LowerTier))
+                    continue;
+                if (tierSet && p.tier != secondTier)
+                    break;      // a lower tier of this channel: only when its top tier has none
+                Proposal const& move = want == Channel::Move ? p : *primary;
+                Proposal const& act = want == Channel::Act ? p : *primary;
+                if (!GoTogether(bot, move, act))
+                    continue;
+                if (bestHeal && !LetsRotationRun(p.action.type) && IsBetter(*bestHeal, p))
+                    continue;
+                tierSet = true;
+                secondTier = p.tier;
+                if (!Execute(bot, p))
+                {
+                    r.result = CandidateRecord::Result::Failed;
+                    continue;
+                }
+                r.result = CandidateRecord::Result::Executed;
+                r.reason += " [with the ";
+                r.reason += want == Channel::Act ? "walk]" : "action]";
+                rotationMayRun = rotationMayRun && LetsRotationRun(p.action.type);
+                endedCurrent = endedCurrent || p.interruptCost > 0.0f;
+                directives.SetLastDecision(now, std::string(move.source) + " " + Describe(bot, move) + " + " +
+                                                std::string(act.source) + " " + Describe(bot, act));
+                // The action last: CurrentAction reads the last executed cast (its order's worth).
+                directives.NoteExecuted(move, now);
+                directives.NoteExecuted(act, now);
+                break;
+            }
         }
 
         // Pet actions, besides the bot's own action: every autocast toggle, and the best pet
