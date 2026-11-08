@@ -32,13 +32,12 @@ namespace Commander
         for (PartyMemberFacts const& m : world.party)
             if (m.isBot && !m.isPet && m.CanAct() && Tanks::IsTank(m))
                 tanks.push_back(&m);
-        float const enemyDps = RescueValue::EnemyDps(world);
-
         for (EnemyFacts const& e : world.enemies)
         {
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
             if (!victim || !plan.MayEngage(ObjectGuid(), e.guid))
                 continue;
+            float const enemyDps = RescueValue::NextTauntDps(world, e.guid);
 
             DutyNeed need;
             need.kind = DutyKind::Rescue;

@@ -105,13 +105,18 @@ namespace Commander
             if (p.kind != ProposalKind::Replace)
                 return nullptr;
             ObjectGuid const self = bot->me->GetObjectGuid();
+            bool const held = plan.threat.Holds(self, bot->GetRole() == ROLE_HEALER);
             switch (p.action.type)
             {
                 case BotActionType::Attack:
                 case BotActionType::Chase:
                 case BotActionType::PetAttack:
+                    if (held)
+                        return "wait for the tank's threat";
                     return plan.EngageBlock(self, p.action.target);
                 case BotActionType::Cast:
+                    if (held)
+                        return "wait for the tank's threat";
                     return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:
                     return plan.ForbidsRest(self) ? "no rest" : nullptr;

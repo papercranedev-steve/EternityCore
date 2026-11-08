@@ -77,6 +77,15 @@ namespace RescueValue
         return dps;
     }
 
+    float NextTauntDps(WorldModel const& world, ObjectGuid except)
+    {
+        float dps = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+            if (e.guid != except && !e.crowdControlled && e.acting && !e.onAllyOnly)
+                dps = std::max(dps, e.meleeDps + e.rangedDps);
+        return dps;
+    }
+
     Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
                  PartyMemberFacts const& tank, TauntAbility const& taunt, float tankRate, float distance,
                  float enemyDps)

@@ -20,8 +20,12 @@ namespace Commander
             PullPlan const& pull = plan.pull;
             if (pull.phase == PullPhase::Approach || pull.phase == PullPhase::Return)
                 return true;
+            // The threat opening first (ThreatOpening.h, registered before this module: this
+            // refresh's): the tank builds threat on what came, the area spell waits.
+            if (plan.threat.active)
+                return true;
             return pull.phase == PullPhase::Settle &&
-                   (pull.awaitArrival || pull.holdDamage || pull.losBreak == PullLosBreak::Active);
+                   (pull.awaitArrival || pull.losBreak == PullLosBreak::Active);
         }
 
         std::vector<ObjectGuid> AllTanks(WorldModel const& world)

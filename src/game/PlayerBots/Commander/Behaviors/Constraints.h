@@ -20,6 +20,9 @@
  *                              (PartyBotAI::PassesPartyCastChecks), not only Commander proposals:
  *                              a rotation's Blade Flurry broke a Shackle (strat-20261108-141921).
  *   Rest                       TeamPlan::ForbidsRest
+ *   Attack, Chase, PetAttack,  TeamPlan::threat.Holds: the threat opening, everyone but the
+ *   Cast                       tank waits (Coordination/ThreatOpening.h); every cast of the bot
+ *                              too (PartyBotAI::PassesPartyCastChecks)
  *
  * Casts are not checked against EngageBlock: an interrupt or a control from where the bot
  * stands does not walk it into a patrol's path.

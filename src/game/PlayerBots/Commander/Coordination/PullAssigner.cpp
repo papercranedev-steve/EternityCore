@@ -130,12 +130,11 @@ namespace Commander
         {
             pull.phase = phase;
             pull.phaseSinceMs = now;
-            // Everyone keeps waiting until the first Settle refresh past the arrival wait
+            // Healers keep waiting until the first Settle refresh past the arrival wait
             // decides (PullOpening::Update).
             if (phase == PullPhase::Settle)
             {
                 PullOpening::Release(pull);
-                pull.holdDamage = true;
                 pull.holdHealing = true;
             }
         };
@@ -303,10 +302,11 @@ namespace Commander
                                 LOS_BREAK_TIMEOUT_MS / 1000));
                     }
                 }
-                // Who may start (PullOpening.h): damage once the tank has threat on what came,
-                // healing also once the casters of the break came.
-                PullOpening::Update(world, pull, tank->pos, now);
-                if (pull.losBreak == PullLosBreak::Active || pull.holdDamage || pull.holdHealing)
+                // Healing once the casters of the break came (PullOpening.h). Settle also lasts
+                // while the threat opening holds the party (ThreatOpening.h: it runs after this
+                // module, so its result of the last refresh; one refresh late at worst).
+                PullOpening::Update(world, pull, now);
+                if (pull.losBreak == PullLosBreak::Active || pull.holdHealing || plan.threat.active)
                     return;
                 if (elapsed >= SETTLE_MS || !world.HasPartyEnemy())
                 {

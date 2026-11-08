@@ -51,6 +51,22 @@ namespace Commander
             return profile ? profile->name : std::string(fallback);
         }
 
+        // At least half of the acting, uncontrolled enemies fighting the party hit `tank`.
+        bool HoldsMost(WorldModel const& world, ObjectGuid tank)
+        {
+            uint32 total = 0;
+            uint32 onTank = 0;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (!e.acting || !e.health || e.crowdControlled || e.onAllyOnly || !world.FindMember(e.victim))
+                    continue;
+                ++total;
+                if (e.victim == tank)
+                    ++onTank;
+            }
+            return onTank * 2 >= total;
+        }
+
         std::string Format(char const* fmt, ...)
         {
             char buf[256];
@@ -278,6 +294,14 @@ namespace Commander
 
         if (m.phase == PatrolPhase::Move)
         {
+            // The enemies the tank does not hold stay with their victims while it walks
+            // (strat-20261108-200046: 15 s walking with one of six enemies on it).
+            if (!HoldsMost(world, tank.guid))
+            {
+                plan.notes.push_back(name + ": the tank lost most enemies while moving; taking them back first.");
+                End(m);
+                return;
+            }
             if (m.chosen == -2)
             {
                 plan.notes.push_back("No reachable spot away from the patrol's path, fighting here.");
@@ -341,6 +365,12 @@ namespace Commander
         // left it, this refresh or the last one (one refresh late at worst either way).
         bool const pullPlacing = plan.pull.phase == PullPhase::Settle &&
             (plan.pull.awaitArrival || plan.pull.losBreak == PullLosBreak::Active);
+        // The tank first holds the fight: during the threat opening (this refresh's,
+        // ThreatOpening runs before this module) or with most enemies on someone else, moving
+        // leaves them hitting their victims (strat-20261108-200046: the move began with one of
+        // six enemies on the tank). Patrols are judged again once it holds them (not marked judged).
+        if (plan.threat.active || !HoldsMost(world, tank->guid))
+            return;
 
         float const remaining = Value::FightRemainingSec(world);
         float const dealt = std::max(1.0f, Value::DealtDps(world));

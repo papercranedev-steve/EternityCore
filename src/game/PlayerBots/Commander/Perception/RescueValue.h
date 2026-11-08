@@ -18,8 +18,8 @@
  *             tank's threat closes the gap. x the creature's taunt weight; not on taunt immune
  *             creatures, not without line of sight (EnemyFacts::InSightOf).
  *             cost = LostAction(GCD + walk) + reserve (share of its cooldown in
- *             RESERVE_HORIZON_SEC x Points(enemy damage per second x TAUNT_RESERVE_SEC): a taunt
- *             used now is not there for the next one) + LostAction(STANCE_SWAP_COST_SEC) when it
+ *             RESERVE_HORIZON_SEC x Points(the next enemy's damage per second x TAUNT_RESERVE_SEC,
+ *             NextTauntDps): a taunt used now is not there for the next one) + LostAction(STANCE_SWAP_COST_SEC) when it
  *             needs a stance swap.
  *   Threat    the tank walks over and wins it back with threat (LooseEnemy::WinBack);
  *             x the taunt weight; cost = SwitchCost::Of (0 when it already is the tank's target).
@@ -87,10 +87,17 @@ namespace Commander
         // Seconds the enemy still hits its victim after a taunt (reaction, and for a temporary
         // taunt the time after it fades until `tankRate` closes `gap`), at most `horizon`.
         float TauntSecOnVictim(float gap, float tankRate, float holdSec, float horizon);
-        // Damage per second of every acting enemy not under control (what a taunt in reserve covers).
+        // Damage per second of every acting enemy not under control (what an area taunt in
+        // reserve covers: ThreatBehavior's Challenging Shout).
         float EnemyDps(WorldModel const& world);
+        // The strongest other acting enemy not under control (`except` left out): what a single
+        // taunt kept back would be used on next. Since 2026-11-08 the single taunt reserve
+        // (was EnemyDps: with seven enemies the reserve outweighed any loose enemy on a
+        // healthy victim, strat-20261108-200046: one Taunt in 83 s).
+        float NextTauntDps(WorldModel const& world, ObjectGuid except);
 
         // `distance`: tank to enemy, yards. `tankRate`: LooseEnemy::TankRate.
+        // `enemyDps`: NextTauntDps(world, e.guid).
         Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
                      PartyMemberFacts const& tank, TauntAbility const& taunt, float tankRate, float distance,
                      float enemyDps);

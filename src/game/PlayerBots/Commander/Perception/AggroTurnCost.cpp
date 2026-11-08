@@ -178,7 +178,6 @@ namespace AggroTurnCost
         float best = j.Total(j.Ends(tauntEnd));
         if (!options.noTaunts)
         {
-            float const enemyDps = RescueValue::EnemyDps(world);
             for (Group const& g : j.groups)
             {
                 for (TauntAbility const& t : g.tank->taunts)
@@ -199,8 +198,10 @@ namespace AggroTurnCost
                         float const end = std::min(it.horizon,
                             walk + RescueValue::TauntSecOnVictim(it.turn.gap, g.rate, t.holdSec, it.horizon));
                         float const share = std::min(1.0f, (t.cooldownMs / 1000.0f) / RescueValue::RESERVE_HORIZON_SEC);
+                        // (the same reserve as RescueValue::Taunt: the next enemy it would be used on)
+                        float const nextDps = RescueValue::NextTauntDps(world, it.turn.enemy->guid);
                         float cost = Value::LostAction(world, *g.tank, Value::GCD_SEC + walk) +
-                                     share * Value::Points(world, enemyDps * RescueValue::TAUNT_RESERVE_SEC);
+                                     share * Value::Points(world, nextDps * RescueValue::TAUNT_RESERVE_SEC);
                         if (t.stanceSwap)
                             cost += Value::LostAction(world, *g.tank, RescueValue::STANCE_SWAP_COST_SEC);
                         tauntEnd[i] = end;

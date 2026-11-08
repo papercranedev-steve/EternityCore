@@ -352,6 +352,14 @@ namespace Commander
         // ClassKit::Filler x Value::CASTER_UPTIME, the larger). Value::DealtDps uses it before
         // a fight of this party was measured. 0 = unknown (pets, healer bots).
         float soloDps = 0.0f;
+        // Bots: threat per point of physical damage (Unit::ApplyTotalThreatModifier: stance,
+        // Defiance, Righteous Fury...). Perception/ThreatGap.h (a tank's rate before it was measured).
+        float threatMod = 1.0f;
+        // Healer-role bots: threat their biggest direct heal adds, before it is split over the
+        // enemies fighting the one healed (heal x 0.5, paladins 0.25, x its threat modifiers:
+        // Spell::DoAllEffectOnTarget heal -> HostileRefManager::threatAssist). Full heal, no
+        // overheal: the worst case. Perception/ThreatGap.h.
+        float healThreat = 0.0f;
         // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
         // on top of manaRegen. Perception/RestValue.h.
         float drinkManaPerSec = 0.0f;

@@ -196,9 +196,10 @@ namespace Commander
         }
 
 
-        // One proposal per usable area threat ability. `valueOf(threatAdded, holdSec)` returns
-        // the benefit over every loose enemy around the tank and whether someone would die
-        // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec).
+        // One proposal per usable area threat ability. `valueOf(threatAdded, holdSec, centre,
+        // radius)` returns the benefit over the enemies it reaches and whether someone would die
+        // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec; centre and
+        // radius: where the spell lands and its area, SpellTags::AreaRadius).
         template <typename ValueFn>
         void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, float tankRate,
                                 float switchCost, float stanceCost, float enemyMelee, ValueFn valueOf,
@@ -229,7 +230,13 @@ namespace Commander
                     continue;
 
                 float const threat = o.taunt ? 0.0f : ThreatPerEnemy(bot, o, tankRate);
-                std::pair<float, bool> const value = valueOf(threat, o.taunt ? RescueValue::TemporaryTauntSec(o.spell) : 0.0f);
+                Position3 centre;
+                centre.x = castTarget->GetPositionX();
+                centre.y = castTarget->GetPositionY();
+                centre.z = castTarget->GetPositionZ();
+                float const area = SpellTags::AreaRadius(o.spell);
+                std::pair<float, bool> const value = valueOf(threat, o.taunt ? RescueValue::TemporaryTauntSec(o.spell) : 0.0f,
+                                                             centre, area > 0.0f ? area : ThreatBehavior::GROUP_THREAT_RADIUS);
                 float cost = switchCost;
                 if (bot->StanceSwapFor(o.spell) && !bot->CanTryToCastSpell(castTarget, o.spell))
                     cost += stanceCost;
@@ -280,6 +287,20 @@ namespace Commander
         if (world.enemies.empty())
             return;
 
+        // Threat opening (Coordination/ThreatOpening.h): a held bot stops hitting what it hits
+        // (its casts and new attacks are forbidden: Behaviors/Constraints.h).
+        if (plan.threat.Holds(bot->me->GetObjectGuid(), bot->GetRole() == ROLE_HEALER))
+        {
+            if (bot->me->GetVictim() || bot->me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+            {
+                Proposal p = MakeProposal(ProposalTier::Urgent, BotActionType::HoldFire);
+                p.reason = "wait for the tank's threat (opening)";
+                p.score = 1.0f;
+                out.push_back(p);
+            }
+            return;
+        }
+
         switch (bot->GetRole())
         {
             case ROLE_TANK:
@@ -308,16 +329,9 @@ namespace Commander
             return;
 
         // What we can generate: best observed threat rate on any enemy.
-        float tankRate = 0.0f;
-        for (EnemyFacts const& e : world.enemies)
-            if (ThreatEntry const* t = ThreatView::FindEntry(e, self))
-                tankRate = std::max(tankRate, t->threatPerSec);
-
-        // A taunt used now is not there for the next enemy that breaks loose.
-        float enemyMelee = 0.0f;
-        for (EnemyFacts const& e : world.enemies)
-            if (!e.crowdControlled && e.acting)
-                enemyMelee += e.meleeDps + e.rangedDps;
+        float const tankRate = LooseEnemy::TankRate(world, self);
+        // An area taunt used now is not there for the next group that breaks loose.
+        float const enemyMelee = RescueValue::EnemyDps(world);
         float const switchCost = Value::LostAction(world, *myFacts, Value::GCD_SEC);
         // A warrior out of its stance for a moment (Thunder Clap, Taunt from Battle Stance).
         float const stanceCost = Value::LostAction(world, *myFacts, STANCE_SWAP_COST_SEC);
@@ -372,62 +386,33 @@ namespace Commander
                 loose.push_back({ &e, victim, v.gap, v.horizon, mult, v.deadly });
         }
 
-        // Enemies on the tank with a lead thinner than one global cooldown of tank threat:
-        // fresh adds at 0 threat that the next heal pulls (VanCleef's guards, scenario 6).
-        struct FragileEnemy
-        {
-            EnemyFacts const* enemy;
-            PartyMemberFacts const* runnerUp;
-        };
-        std::vector<FragileEnemy> fragile;
-        float const thinLead = tankRate * Value::GCD_SEC;
-        for (EnemyFacts const& e : world.enemies)
-        {
-            if (e.crowdControlled || !e.acting || e.victim != self)
-                continue;
-            if (PackResolver::Distance(myFacts->pos, e.pos) > GROUP_THREAT_RADIUS)
-                continue;
-            ObjectGuid closest;
-            // No threat of its own yet (it came along with the one the tank pulled): any heal
-            // takes it, whatever the tank's rate (a rate of 0 right after a ranged pull made
-            // thinLead 0 and nothing counted, strat-20261107-143623).
-            ThreatEntry const* own = ThreatView::FindEntry(e, self);
-            bool const untouched = !own || own->threat <= 0.0f;
-            if (ThreatView::VictimLead(e, &closest) >= thinLead && !untouched)
-                continue;
-            PartyMemberFacts const* runnerUp = closest.IsEmpty() ? nullptr : world.FindMember(closest);
-            // Untouched with nobody else on its list yet: the healer's first heal puts it there.
-            if (!runnerUp && untouched)
-                for (PartyMemberFacts const& m : world.party)
-                    if (m.alive && !m.isPet && m.role == ROLE_HEALER && m.guid != self)
-                    {
-                        runnerUp = &m;
-                        break;
-                    }
-            if (runnerUp && !runnerUp->isPet)
-                fragile.push_back({ &e, runnerUp });
-        }
+        // 1b. The threat opening's task (Coordination/ThreatOpening.h): the enemies next to the
+        // tank it still lacks threat on. Before 2026-11-08 these were the "fragile" enemies here,
+        // valued by what one would do on the runner-up for 2 s x 0.5: a Demoralizing Shout came
+        // out at 0.06 against 0.67 and was never cast (strat-20261108-200046). Now the threat
+        // a cast adds on them is worth the time the waiting party saves: waitPerSec x the
+        // threat filled / the tank's single target rate.
+        ThreatOpeningPlan const& opening = plan.threat;
+        bool const opens = opening.active && opening.tank == self && !opening.gaps.empty();
 
-        // 1b. Several loose or fragile enemies around the tank (summoned adds, a wave arriving):
-        // one area threat ability (Thunder Clap, Consecration, Challenging Roar) instead of one
-        // switch per enemy per tick (combat scenarios 6 and 9).
-        if (loose.size() + fragile.size() >= GROUP_THREAT_MIN_ENEMIES)
+        // Several loose enemies (summoned adds, a wave arriving) or the opening: one area threat
+        // ability (Thunder Clap, Demoralizing Shout, Consecration, Challenging Roar) instead of
+        // one switch per enemy per tick (combat scenarios 6 and 9).
+        if (opens || loose.size() >= GROUP_THREAT_MIN_ENEMIES)
             ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee,
-                [&](float threatAdded, float holdSec) -> std::pair<float, bool>
+                [&](float threatAdded, float holdSec, Position3 const& centre, float radius) -> std::pair<float, bool>
                 {
                     float benefit = 0.0f;
                     bool deadly = false;
-                    // A fragile enemy would turn on the runner-up for a moment; the area ability
-                    // makes that less likely (counted at FRAGILE_WEIGHT of that loss), in
-                    // proportion to how much of the missing lead it adds: one Demoralizing Shout
-                    // (56) does not make a lead of one global cooldown, and counting it in full
-                    // spent the tank's rage on shouts (strat-20261101-210522).
-                    float const fragileShare = holdSec > 0.0f ? 1.0f :
-                        (thinLead > 0.0f ? std::min(1.0f, threatAdded / thinLead) : (threatAdded > 0.0f ? 1.0f : 0.0f));
-                    if (fragileShare > 0.0f)
-                        for (FragileEnemy const& f : fragile)
-                            benefit += Value::MoveLoss(world, *f.enemy, *f.runnerUp, *myFacts, TANK_RECLAIM_SEC) *
-                                       FRAGILE_WEIGHT * fragileShare;
+                    if (opens && threatAdded > 0.0f)
+                    {
+                        float filled = 0.0f;
+                        for (ThreatGapEntry const& g : opening.gaps)
+                            if (EnemyFacts const* e = world.FindEnemy(g.enemy))
+                                if (PackResolver::Distance(centre, e->pos) - e->boundingRadius <= radius)
+                                    filled += std::min(g.gap, threatAdded);
+                        benefit += opening.waitPerSec * filled / opening.fillRate;
+                    }
                     // Loose enemies: without the ability the tank wins them back with threat one
                     // after another (LooseEnemy::SequentialRecovery); with it each lacks
                     // `threatAdded` less (an area taunt: back on the victim when it fades). The
@@ -460,7 +445,8 @@ namespace Commander
                     return { benefit, deadly };
                 }, out);
 
-        // 2. Topping up the enemy with the smallest lead (a target switch): TargetAssigner.
+        // 2. Topping up an enemy whose lead does not survive the next heal, and the opening's
+        // single target switches: TargetAssigner (TankTargets).
     }
 
     // Damage dealers: stop before pulling aggro off a holder, when it is worth it.

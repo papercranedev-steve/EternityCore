@@ -10,12 +10,18 @@
  *     cost = SwitchCost; Urgent when the victim dies within the horizon. Already the tank's
  *     target: kept. Which tank, and taunt or threat or the victim's Fade, is the rescue's
  *     choice (Coordination/RescueAssigner.h); the loose rule is RescueValue::LooseVictim.
- *  2. Top up: an enemy on the tank whose lead (ThreatView::VictimLead / its threat) is below
- *     LEAD_SWITCH while the current target's is above LEAD_KEEP. benefit = what the runner-up
+ *  2. Threat opening (Coordination/ThreatOpening.h, this refresh's situation step): the tank's
+ *     task. The current target while it is still short (TeamPlan::threat gaps), else the enemy
+ *     short the most: benefit = waitPerSec x its gap / fillRate (the waiting party's time),
+ *     cost = SwitchCost.
+ *  3. Top up: the current target while its lead does not hold through the healer's next heal
+ *     (Perception/ThreatGap.h: stays on it until it does); else the enemy on the tank short
+ *     the most. benefit = what the runner-up (the closest on its list, else a healer bot)
  *     would take for RECLAIM_SEC (LooseEnemy::Loss) x FRAGILE_WEIGHT (chance the thin lead
- *     breaks), cost = SwitchCost.
- *  3. Keep the current target.
- *  4. No target yet: the pull target, else what the leader attacks, else what another member
+ *     breaks), cost = SwitchCost. (Until 2026-11-08: lead / threat below 15% while the
+ *     current target's was above 30%.)
+ *  4. Keep the current target.
+ *  5. No target yet: the pull target, else what the leader attacks, else what another member
  *     attacks (WorldModel::targeted first), else the nearest enemy hitting the tank, else the
  *     nearest one, all within JOIN_FIGHT_YD. benefit = its harm over its kill time x the tank's share of
  *     the party's damage (the exchange below against no target).
@@ -98,8 +104,6 @@ namespace Commander
 
     namespace TankTargets
     {
-        static constexpr float LEAD_SWITCH = 0.15f;
-        static constexpr float LEAD_KEEP = 0.30f;
         static constexpr float RECLAIM_SEC = 2.0f;
         static constexpr float FRAGILE_WEIGHT = 0.5f;
         static constexpr float MELEE_REACH = 5.0f;

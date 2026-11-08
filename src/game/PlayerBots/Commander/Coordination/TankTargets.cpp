@@ -6,6 +6,7 @@
 #include "Commander/Perception/RouteRisk.h"
 #include "Commander/Perception/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/ThreatGap.h"
 #include "Commander/Perception/ThreatView.h"
 #include "Commander/Perception/ValueModel.h"
 #include <algorithm>
@@ -48,36 +49,82 @@ namespace TankTargets
             return TargetPick();
         }
 
-        // 2. An enemy on the tank with a lead too thin for the next heal (fresh adds at 0 threat,
-        // VanCleef's guards in scenario 6), while the current one is safe enough to leave.
+        TargetPick Keep(EnemyFacts const* e, char const* reason)
+        {
+            TargetPick p;
+            p.enemy = e;
+            p.reason = reason;
+            return p;
+        }
+
+        // 2. The threat opening's task (ThreatOpening.h): stay on the current enemy while it is
+        // short, else switch to the one short the most. The switch is worth the time the waiting
+        // party saves: waitPerSec x its gap / the tank's single target rate.
+        TargetPick Opening(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
+        {
+            ThreatOpeningPlan const& t = ctx.plan.threat;
+            if (!t.active || t.tank != tank.guid || t.gaps.empty())
+                return TargetPick();
+            if (current && t.GapOf(current->guid) > 0.0f)
+                return Keep(current, "opening: build threat on it");
+            EnemyFacts const* best = nullptr;
+            float bestGap = 0.0f;
+            for (ThreatGapEntry const& g : t.gaps)
+            {
+                EnemyFacts const* e = ctx.Find(g.enemy);
+                if (e && g.gap > bestGap && ctx.Hittable(*e, tank))
+                {
+                    best = e;
+                    bestGap = g.gap;
+                }
+            }
+            if (!best)
+                return TargetPick();
+            TargetPick p;
+            p.enemy = best;
+            p.benefit = t.waitPerSec * bestGap / t.fillRate;
+            p.cost = SwitchCost::Of(ctx.world, tank, *best, MELEE_REACH);
+            p.reason = "opening: the enemy short the most";
+            return p;
+        }
+
+        // 3. An enemy on the tank whose lead does not survive the healer's next heal
+        // (Perception/ThreatGap.h; fresh adds, VanCleef's guards in scenario 6). The tank stays
+        // on it until it does (user 2026-11-08: "多打一会"), then the current target rules.
+        // Before 2026-11-08: lead / threat below 15% while the current one was above 30%.
         TargetPick TopUp(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
         {
             WorldModel const& world = ctx.world;
-            float currentRatio = ThreatView::NO_LIMIT;
-            if (current && current->victim == tank.guid)
-                currentRatio = ThreatView::VictimLead(*current) / std::max(1.0f, current->victimThreat);
-            if (currentRatio <= LEAD_KEEP)
-                return TargetPick();
+            if (current && current->victim == tank.guid && ThreatGap::Of(world, *current, tank.guid) > 0.0f)
+                return Keep(current, "top up: until it holds through the next heal");
 
             EnemyFacts const* weakest = nullptr;
-            ObjectGuid runnerUp;
-            float weakestRatio = ThreatView::NO_LIMIT;
+            float weakestGap = 0.0f;
             for (EnemyFacts const* e : ctx.candidates)
             {
                 if (e == current || e->victim != tank.guid || !ctx.Hittable(*e, tank))
                     continue;
-                ObjectGuid closest;
-                float const ratio = ThreatView::VictimLead(*e, &closest) / std::max(1.0f, e->victimThreat);
-                if (ratio < weakestRatio)
+                float const gap = ThreatGap::Of(world, *e, tank.guid);
+                if (gap > weakestGap)
                 {
-                    weakestRatio = ratio;
+                    weakestGap = gap;
                     weakest = e;
-                    runnerUp = closest;
                 }
             }
-            if (!weakest || weakestRatio >= LEAD_SWITCH)
+            if (!weakest)
                 return TargetPick();
-            PartyMemberFacts const* runner = runnerUp.IsEmpty() ? nullptr : world.FindMember(runnerUp);
+            // Who takes it when the lead breaks: the closest on its list, else a healer bot (the
+            // next heal puts it there).
+            ObjectGuid closest;
+            ThreatView::VictimLead(*weakest, &closest);
+            PartyMemberFacts const* runner = closest.IsEmpty() ? nullptr : world.FindMember(closest);
+            if (!runner)
+                for (PartyMemberFacts const& m : world.party)
+                    if (m.isBot && !m.isPet && m.alive && m.role == ROLE_HEALER)
+                    {
+                        runner = &m;
+                        break;
+                    }
             if (!runner || runner->isPet)
                 return TargetPick();
 
@@ -85,7 +132,7 @@ namespace TankTargets
             p.enemy = weakest;
             p.benefit = LooseEnemy::Loss(world, *weakest, *runner, tank, RECLAIM_SEC) * FRAGILE_WEIGHT;
             p.cost = SwitchCost::Of(world, tank, *weakest, MELEE_REACH);
-            p.reason = "top up smallest lead";
+            p.reason = "top up: lead does not hold through the next heal";
             return p.benefit > p.cost ? p : TargetPick();
         }
 
@@ -152,6 +199,9 @@ namespace TankTargets
                 loose.benefit = loose.cost = 0.0f;
             return loose;
         }
+        TargetPick const opening = Opening(ctx, tank, current);
+        if (opening.enemy)
+            return opening;
         TargetPick const topUp = TopUp(ctx, tank, current);
         if (topUp.enemy)
             return topUp;

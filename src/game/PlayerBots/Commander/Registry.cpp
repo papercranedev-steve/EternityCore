@@ -25,6 +25,7 @@
 #include "Commander/Coordination/ControlledEnd.h"
 #include "Commander/Coordination/PatrolAssigner.h"
 #include "Commander/Coordination/AreaPhase.h"
+#include "Commander/Coordination/ThreatOpening.h"
 #include "Commander/Coordination/InterruptAssigner.h"
 #include "Commander/Coordination/DispelAssigner.h"
 #include "Commander/Coordination/FocusAssigner.h"
@@ -65,6 +66,7 @@ namespace Commander
     {
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RoleAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ThreatOpeningAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TargetAssigner>()));

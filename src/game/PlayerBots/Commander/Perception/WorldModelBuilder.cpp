@@ -52,6 +52,17 @@ namespace WorldModelBuilder
 
         uint32 const SPELL_RIGHTEOUS_FURY = 25780;     // the aura (spell_template: aura 42 / 10)
 
+        // PartyMemberFacts::healThreat: the biggest heal of `rates` (hps x time per cast) as
+        // threat (Spell.cpp heal effect: x 0.5, paladins 0.25; then the healer's threat modifiers).
+        float HealThreat(Player* healer, std::vector<HealRate> const& rates)
+        {
+            float heal = 0.0f;
+            for (HealRate const& r : rates)
+                heal = std::max(heal, r.hps * std::max(r.castSec, Value::GCD_SEC));
+            float const classMod = healer->GetClass() == CLASS_PALADIN ? 0.25f : 0.5f;
+            return healer->ApplyTotalThreatModifier(heal * classMod, SPELL_SCHOOL_MASK_HOLY);
+        }
+
         // An ability's reach (centre distance minus the target's bounding radius): COMBAT_RANGE
         // for combat range spells, else the DBC range, at least `floor`.
         float AbilityRange(SpellEntry const* spell, float floor)
@@ -1099,8 +1110,12 @@ namespace WorldModelBuilder
                         if (f.role != ROLE_HEALER)
                             f.soloDps = SoloDps(member, ai);
                     }
+                    f.threatMod = member->ApplyTotalThreatModifier(1.0f, SPELL_SCHOOL_MASK_NORMAL);
                     if (member->IsAlive() && f.role == ROLE_HEALER)
+                    {
                         f.healRates = HealCapacity::Rates(ai);
+                        f.healThreat = HealThreat(member, f.healRates);
+                    }
                     for (RaidTargetIcon mark : ai->m_marksToFocus)
                     {
                         ObjectGuid const marked = group->GetTargetWithIcon(mark);

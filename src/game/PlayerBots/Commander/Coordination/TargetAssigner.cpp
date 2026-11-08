@@ -191,6 +191,10 @@ namespace Commander
         {
             if (plan.retreat.active)
                 return true;
+            // The threat opening (ThreatOpening.h, situation step of this refresh): everyone
+            // but the tank waits.
+            if (plan.threat.Holds(m.guid, m.role == ROLE_HEALER))
+                return true;
             if (m.inCombat)
                 return false;
             PullPhase const phase = plan.pull.phase;

@@ -438,9 +438,9 @@ namespace Commander
 
         // Everyone else waits for the tank. Higher-scored proposals (interrupts, threat) still win.
         // Only out of combat: a bot already in a fight (the player attacked first, a patrol joined)
-        // must not stand idle. In Settle, past the arrival wait, the brain says who still waits
-        // (PullOpening.h): damage dealers until the tank has threat on what came, healers also
-        // until the casters of a line of sight pull came.
+        // must not stand idle. In Settle, past the arrival wait, healers wait until the casters
+        // of a line of sight pull came (PullOpening.h); the wait for the tank's threat is the
+        // threat opening's (ThreatOpening.h, a constraint on every bot).
         if (me->IsInCombat() || !pull.HoldsWaiting(healer))
             return;
         // Resting is waiting too (RestBehavior decides when it gets up): a hold would stand it up.

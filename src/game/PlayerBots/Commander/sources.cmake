@@ -47,6 +47,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ThreatRoom.cpp
   ${COMMANDER_DIR}/Perception/LooseEnemy.h
   ${COMMANDER_DIR}/Perception/LooseEnemy.cpp
+  ${COMMANDER_DIR}/Perception/ThreatGap.h
+  ${COMMANDER_DIR}/Perception/ThreatGap.cpp
   ${COMMANDER_DIR}/Perception/AggroTurnCost.h
   ${COMMANDER_DIR}/Perception/AggroTurnCost.cpp
   ${COMMANDER_DIR}/Perception/AreaValue.h
@@ -111,6 +113,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/RescueAssigner.cpp
   ${COMMANDER_DIR}/Coordination/AreaPhase.h
   ${COMMANDER_DIR}/Coordination/AreaPhase.cpp
+  ${COMMANDER_DIR}/Coordination/ThreatOpening.h
+  ${COMMANDER_DIR}/Coordination/ThreatOpening.cpp
   ${COMMANDER_DIR}/Behaviors/RescueBehavior.h
   ${COMMANDER_DIR}/Behaviors/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/RescueValue.h

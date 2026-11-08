@@ -291,14 +291,11 @@ namespace Commander
         // (HealerStanceBehavior moves it when it loses the tank).
         std::vector<PullHider> losHiders;
 
-        // Opening holds, written by PullAssigner during Settle once the arrival wait is over
-        // (PullAssigner.h "Opening threat"). Out of combat bots wait while set (PullBehavior):
-        // damage dealers until the tank has threat on every pulled enemy next to it, healers
-        // also until the casters of a line of sight pull came (healing is the last to start:
-        // its threat lands on every enemy at once).
-        bool holdDamage = false;
+        // Healing hold of a line of sight pull, written by PullAssigner during Settle once the
+        // arrival wait is over (Coordination/PullOpening.h): out of combat healers wait until the
+        // casters came (a heal's threat lands on every enemy at once). Who waits for the tank's
+        // threat is the threat opening's (TeamPlan::threat, Coordination/ThreatOpening.h).
         bool holdHealing = false;
-        uint32 threatSinceMs = 0;           // first pulled enemy reached the tank, 0 = none yet
 
         // Where the tank will fight once the pack is on it, as planned, for the members to take
         // their places before (stance modules): a walk-in fought where the pack stands is fought
@@ -333,7 +330,8 @@ namespace Commander
         // Members other than the tank that are still out of combat wait while true (PullBehavior
         // holds them; healers and ranged first take their places for the planned fight,
         // PlannedFightSpot): the tank goes out or brings the pack back, the pack has not arrived
-        // yet, or the opening hold of their kind (damage / healing) is on.
+        // yet, or (healers) the casters of a line of sight pull have not come. The wait for the
+        // tank's threat is TeamPlan::threat (every bot, in combat or not).
         bool HoldsWaiting(bool healer) const
         {
             switch (phase)
@@ -342,7 +340,7 @@ namespace Commander
                 case PullPhase::Return:
                     return true;
                 case PullPhase::Settle:
-                    return awaitArrival || (healer ? holdHealing : holdDamage);
+                    return awaitArrival || (healer && holdHealing);
                 default:
                     return false;
             }
@@ -679,6 +677,60 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
+    // One enemy next to the tank it still lacks threat on (Perception/ThreatGap.h).
+    struct ThreatGapEntry
+    {
+        ObjectGuid enemy;
+        float gap = 0.0f;
+    };
+
+    // Threat opening ("群拉", Coordination/ThreatOpening.h, .kiro/docs/2026-11-08-threat-modes.md):
+    // after a pull and when new enemies reach the tank, the tank first gets enough threat on
+    // each enemy next to it to keep it through the healer's next heal; everyone else waits.
+    // A constraint while `active` (every cast of a held bot, its attacks: Behaviors/Constraints.h)
+    // and the tank's task (TankTargets, ThreatBehavior value filling `gaps`).
+    struct ThreatOpeningPlan
+    {
+        bool active = false;
+        ObjectGuid tank;
+        uint32 sinceMs = 0;
+        std::vector<ThreatGapEntry> gaps;       // enemies next to the tank still short, while active
+        // Enemies whose opening is over (their gap was filled once, or the opening gave up on
+        // them): later thin leads are the top-up's (TankTargets), not a new opening.
+        std::vector<ObjectGuid> settled;
+        float bestGap = 0.0f;                   // smallest total gap this opening (progress)
+        uint32 progressMs = 0;                  // last time the total gap shrank
+        // Points per second the waiting damage dealers lose / the tank's threat per second on
+        // the enemy it hits (ThreatGap::WaitCostPerSec, FillRate): what filling a gap is worth.
+        float waitPerSec = 0.0f;
+        float fillRate = 1.0f;
+        // Members a held bot may act for: someone about to die (SurvivalValue danger, or below
+        // PullBehavior::HOLD_HEAL_BELOW_PCT): healers heal, that member saves itself.
+        bool healAllowed = false;
+        std::vector<ObjectGuid> freed;          // held bots allowed to act anyway (in danger)
+
+        // `bot` waits for the tank (casts nothing, attacks nothing).
+        bool Holds(ObjectGuid bot, bool healer) const
+        {
+            if (!active || bot == tank)
+                return false;
+            if (healer && healAllowed)
+                return false;
+            return std::find(freed.begin(), freed.end(), bot) == freed.end();
+        }
+        float GapOf(ObjectGuid enemy) const
+        {
+            for (ThreatGapEntry const& g : gaps)
+                if (g.enemy == enemy)
+                    return g.gap;
+            return 0.0f;
+        }
+        bool Settled(ObjectGuid enemy) const
+        {
+            return std::find(settled.begin(), settled.end(), enemy) != settled.end();
+        }
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
@@ -709,6 +761,7 @@ namespace Commander
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
         AreaPlan area;
+        ThreatOpeningPlan threat;
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
         // by PartyCommander every refresh). Read through ForbidsRest.
         bool noRest = false;
