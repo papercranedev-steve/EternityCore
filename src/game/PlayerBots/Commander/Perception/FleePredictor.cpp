@@ -199,8 +199,8 @@ namespace Commander
         if (with.foes.size() == asIs.foes.size())
             return 0.0f;
         float const penalty = Value::DeathPenalty(*tank);
-        float const base = FightLoad::Loss(world, FightLoad::Simulate(asIs), penalty);
-        return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with), penalty) - base);
+        float const base = FightLoad::Loss(world, FightLoad::Simulate(asIs, "flee: as is"), penalty);
+        return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with, "flee: with the joiners"), penalty) - base);
     }
 
     void FleePredictor::Annotate(Map* map, WorldModel& world, uint32 nowMs)

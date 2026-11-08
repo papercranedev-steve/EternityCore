@@ -68,7 +68,7 @@ namespace SapValue
                 with.foes.push_back(f);
             }
             float const penalty = Value::DeathPenalty(*tank);
-            return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with), penalty) -
+            return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with, "sap: with"), penalty) -
                                   FightLoad::Loss(world, asIs, penalty));
         }
     }

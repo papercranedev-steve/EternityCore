@@ -26,6 +26,12 @@
 --           estimate={sec, incomingDps, partyDps, dpsSource, manaStart, manaLeft, tankLowPct},
 --           expected=[{g, name, aggro}], report=[lines the player was told]}   the pull as
 --           planned (u:pull), once per pull and again when its target or expected list changed
+--   trace   {type, t, id, parent, kind, label, data, in | inRef, pin}   one node of the Commander's
+--           calculation tree (u:trace): kind brain / assigner / bot / pull / patrolcheck /
+--           control / fight / foe / party / patrol; data = its values (JSON object); in = the
+--           full input of a pure calculation (FightLoad: fightload(json) re-runs it), inRef =
+--           id of an earlier trace line of this file with the same input; pin = "pull" /
+--           "pullcheck" for the planning sets (written when the pull line is). Whole trees only.
 --   end     {type, t, duration, result, stats={guid={...}}, names={guid=name},
 --           spells={id=name} (every spell in the ev lines), anomalies={kind=count}, dropped}
 --
@@ -38,6 +44,14 @@ rec.dir = rec.dir or "../logs/combat"
 rec.interval = rec.interval or 200
 rec.endAfterMs = rec.endAfterMs or 2000
 rec.offersInterval = rec.offersInterval or 1000
+-- Calculation trace (Commander/Trace/Trace.h, u:trace): kept here for rec.traceKeepMs, written
+-- for the trees that ended within rec.traceBeforeMs before .. rec.traceAfterMs after an anomaly
+-- (player marks included) and in the first rec.traceStartMs of the fight; the pull planning
+-- (pinned) when the pull line is written.
+rec.traceKeepMs = rec.traceKeepMs or 6000
+rec.traceBeforeMs = rec.traceBeforeMs or 4000
+rec.traceAfterMs = rec.traceAfterMs or 1000
+rec.traceStartMs = rec.traceStartMs or 2000
 
 local function ensureDir(dir)
     local win = dir:gsub("/", "\\")
@@ -93,6 +107,102 @@ local function account(w, e)
     end
 end
 
+---------------------------------------------------------------------------
+-- calculation trace
+---------------------------------------------------------------------------
+
+-- One trace line: the JSON texts of data and input go in as they are.
+local function writeTrace(w, r, pin)
+    if not w.file then return end
+    local head = { type = "trace", t = r.t, id = r.id, parent = r.parent, kind = r.kind, label = r.label, pin = pin }
+    local text = json(head)
+    local extra = {}
+    if r.data then extra[#extra + 1] = '"data":' .. r.data end
+    if r.input then
+        local ref = w.traceInputs[r.input]
+        if ref then
+            extra[#extra + 1] = '"inRef":' .. ref
+        else
+            w.traceInputs[r.input] = r.id
+            extra[#extra + 1] = '"in":' .. r.input
+        end
+    end
+    if #extra > 0 then text = text:sub(1, -2) .. "," .. table.concat(extra, ",") .. "}" end
+    w.file:write(text, "\n")
+end
+
+-- Poll the leader's trace (arms it) into w.traceBuf; trees by root id.
+local function pollTrace(w, leader)
+    if not leader.trace then return end
+    local recs, gap = leader:trace(w.traceSeq or 0)
+    if not recs then return end
+    if gap and w.file then write(w, { type = "gap", t = now(), what = "trace" }) end
+    local buf = w.traceBuf
+    for _, r in ipairs(recs) do
+        buf.byId[r.id] = r
+        buf.list[#buf.list + 1] = r
+        if r.id > (w.traceSeq or 0) then w.traceSeq = r.id end
+    end
+    local cutoff = now() - rec.traceKeepMs
+    local keep = {}
+    for _, r in ipairs(buf.list) do
+        if r.t >= cutoff then keep[#keep + 1] = r else buf.byId[r.id] = nil end
+    end
+    buf.list = keep
+end
+
+local function rootOf(buf, r)
+    local seen = 0
+    while r.parent and buf.byId[r.parent] and seen < 64 do
+        r = buf.byId[r.parent]
+        seen = seen + 1
+    end
+    return r
+end
+
+-- Every buffered tree whose root ended inside an open window, once.
+local function writeTraceWindows(w)
+    if not w.file or #w.traceWindows == 0 then return end
+    local t = now()
+    local open = {}
+    for _, win in ipairs(w.traceWindows) do if t <= win.to + rec.interval then open[#open + 1] = win end end
+    local buf = w.traceBuf
+    local roots = {}
+    for _, r in ipairs(buf.list) do
+        local root = rootOf(buf, r)
+        if not w.traceDone[root.id] then
+            for _, win in ipairs(open) do
+                if root.t >= win.from and root.t <= win.to then roots[root.id] = true break end
+            end
+        end
+    end
+    -- children before their parents, as added (buffer order)
+    for _, r in ipairs(buf.list) do
+        local root = rootOf(buf, r)
+        if roots[root.id] then writeTrace(w, r) end
+    end
+    for id in pairs(roots) do w.traceDone[id] = true end
+    local still = {}
+    for _, win in ipairs(open) do if t <= win.to then still[#still + 1] = win end end
+    w.traceWindows = still
+end
+
+local function openTraceWindow(w, from, to)
+    w.traceWindows[#w.traceWindows + 1] = { from = from, to = to }
+end
+
+-- The pinned planning sets ("pull", "pullcheck") when they changed since last written.
+local function writePinnedTrace(w, leader)
+    if not leader.tracepinned or not w.file then return end
+    for _, tag in ipairs({ "pull", "pullcheck" }) do
+        local recs, version = leader:tracepinned(tag, w.pinVersion[tag])
+        if recs then
+            for _, r in ipairs(recs) do writeTrace(w, r, tag) end
+        end
+        if version then w.pinVersion[tag] = version end
+    end
+end
+
 local function beginFight(w, members)
     ensureDir(rec.dir)
     local name = (w.label or "fight") .. "-" .. os.date("%Y%m%d-%H%M%S") .. ".jsonl"
@@ -114,6 +224,12 @@ local function beginFight(w, members)
     w.lastNote = w.fightStart - 3000
     w.lastPlan = nil
     w.lastPull = nil
+    w.traceInputs = {}
+    w.traceDone = {}
+    w.traceWindows = {}
+    w.pinVersion = {}
+    w.anomaliesSeen = 0
+    openTraceWindow(w, w.fightStart - 1000, w.fightStart + rec.traceStartMs)
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     review.begin(w, members)
     write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
@@ -165,6 +281,9 @@ local function tick(w)
         rec.watcher = nil
         return false
     end
+
+    -- (also before the fight: keeps the trace armed for the pull planning)
+    pollTrace(w, leader)
 
     local members = leader:group()
     local enemies = engaged(leader, 80)
@@ -226,6 +345,14 @@ local function tick(w)
     review.observe(w, { leader = leader, members = members, party = party, enemies = enemies,
                         enemyRows = enemyRows, evs = evs, decs = decs, plan = plan, pull = pull, now = now() })
 
+    -- anomalies found this tick (marks too): the calculations around them
+    local found = w.review and w.review.list or {}
+    for k = (w.anomaliesSeen or 0) + 1, #found do
+        local a = found[k]
+        openTraceWindow(w, a.t - rec.traceBeforeMs, a.t + rec.traceAfterMs)
+    end
+    w.anomaliesSeen = #found
+
     for _, g in ipairs(gaps) do write(w, { type = "gap", t = now(), bot = g, what = "dec" }) end
     for _, d in ipairs(decs) do write(w, d) end
 
@@ -265,8 +392,10 @@ local function tick(w)
             pull.t = now()
             write(w, pull)
             w.lastPull = key
+            writePinnedTrace(w, leader)
         end
     end
+    writeTraceWindows(w)
 
     for _, e in ipairs(evs) do
         e.type = "ev"
@@ -286,7 +415,8 @@ end
 -- Start following a party. label goes into the file name (scenario id).
 function rec.watch(leader, label)
     rec.stop()
-    local w = { leader = leader:guid(), label = label or "fight", pre = {} }
+    local w = { leader = leader:guid(), label = label or "fight", pre = {}, traceBuf = { list = {}, byId = {} },
+                traceWindows = {}, traceDone = {}, traceInputs = {}, pinVersion = {} }
     rec.watcher = w
     combatlog.enable(true)
     w.timer = every(rec.interval, function()

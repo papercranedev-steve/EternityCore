@@ -44,6 +44,9 @@ namespace Commander
         if (m_world.version && WorldTimer::getMSTimeDiff(m_world.refreshedAtMs, nowMs) < perceptionMs)
             return;
 
+        Trace::Use trace(&m_trace, nowMs);
+        Trace::Scope scope("brain");
+        scope.Label("refresh");
         Refresh(bot, nowMs);
         UpdateEncounter(bot);
         m_plan.noRest = m_activeEncounter && m_activeEncounter->ForbidsRest();
@@ -213,6 +216,8 @@ namespace Commander
             {
                 if (slot->module->GetStage() != stage)
                     continue;
+                Trace::Scope scope("assigner");
+                scope.Label("%s", slot->module->GetId());
                 if (slot->enabled.load(std::memory_order_relaxed))
                     slot->module->Assign(m_world, m_plan);
                 else
@@ -226,6 +231,8 @@ namespace Commander
         {
             if (slot->module->GetStage() != AssignStage::Duties)
                 continue;
+            Trace::Scope scope("assigner");
+            scope.Label("%s offer", slot->module->GetId());
             if (slot->enabled.load(std::memory_order_relaxed))
                 slot->module->Offer(m_world, m_plan, needs);
             else
@@ -235,7 +242,11 @@ namespace Commander
         m_plan.duties = DutyAllocator::Allocate(std::move(needs));
         for (auto const& slot : assigners)
             if (slot->module->GetStage() == AssignStage::Duties && slot->enabled.load(std::memory_order_relaxed))
+            {
+                Trace::Scope scope("assigner");
+                scope.Label("%s apply", slot->module->GetId());
                 slot->module->Apply(m_world, m_plan.duties, m_plan);
+            }
 
         ++m_plan.version;
     }
@@ -264,6 +275,9 @@ namespace Commander
 
     bool PartyCommander::RunCombat(PartyBotAI* bot, BehaviorList const& behaviors)
     {
+        Trace::Use trace(&m_trace, WorldTimer::getMSTime());
+        Trace::Scope scope("bot");
+        scope.Label("%s", bot->me->GetName());
         return Arbiter::Run(bot, m_world, m_plan, behaviors);
     }
 }

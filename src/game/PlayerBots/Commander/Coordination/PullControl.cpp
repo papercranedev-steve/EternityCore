@@ -161,7 +161,7 @@ namespace PullControl
         FightLoad::Input fight;
         if (!FightLoad::Build(world, map, pull.expected, fight))
             return;
-        FightLoad::Result const asIs = FightLoad::Simulate(fight);
+        FightLoad::Result const asIs = FightLoad::Simulate(fight, "pull control: as is");
         // Fought where the pack stands: the controlled one sleeps next to the fight.
         bool const elsewhere = pull.returnToSpot || pull.OpensFromAfar();
         uint32 const nearTarget = elsewhere ? 0 : uint32(pull.expected.size()) - 1;

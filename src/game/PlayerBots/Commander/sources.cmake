@@ -172,6 +172,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/HealCapacity.cpp
   ${COMMANDER_DIR}/Perception/FightLoad.h
   ${COMMANDER_DIR}/Perception/FightLoad.cpp
+  ${COMMANDER_DIR}/Trace/Trace.h
+  ${COMMANDER_DIR}/Trace/Trace.cpp
+  ${COMMANDER_DIR}/Trace/FightLoadJson.h
+  ${COMMANDER_DIR}/Trace/FightLoadJson.cpp
   ${COMMANDER_DIR}/Perception/ManaWorth.h
   ${COMMANDER_DIR}/Perception/ManaWorth.cpp
   ${COMMANDER_DIR}/Perception/RestValue.h

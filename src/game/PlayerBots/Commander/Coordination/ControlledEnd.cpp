@@ -82,7 +82,7 @@ namespace Commander
                 f.arriveSec = 0.0f;
                 f.sameFight = false;
             }
-            FightLoad::Result const r = FightLoad::Simulate(fight);
+            FightLoad::Result const r = FightLoad::Simulate(fight, "controlled end: the rest of the fight");
             planned.sec = r.fightSec;
             planned.incomingDps = r.damage / std::max(1.0f, r.fightSec);
         }

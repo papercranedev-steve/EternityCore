@@ -88,7 +88,7 @@ namespace Commander
             if (smallestPool <= 0.0f)
                 return PullPlanner::READY_MANA_PCT;
             input.tankHealth = input.tankMaxHealth;
-            FightLoad::Result const r = FightLoad::Simulate(input);
+            FightLoad::Result const r = FightLoad::Simulate(input, "healer mana needed (full mana, full tank)");
             if (!FightLoad::Bearable(r))
                 return PullPlanner::READY_FULL_MANA_PCT;
             float const spentEach = std::max(0.0f, r.manaStart - r.manaLeft) / float(input.healers.size());
@@ -209,6 +209,10 @@ namespace Commander
     bool PullPlanner::Plan(Player* leader, PartyCommander& commander, Creature* selected, bool skipReady,
                            std::vector<std::string>& report)
     {
+        // Everything the planning calculates, kept for the recorder until the next planning.
+        Trace::Use trace(&commander.GetTrace(), WorldTimer::getMSTime());
+        Trace::Scope scope("pull", "pull");
+        scope.Label("plan%s", selected ? Trace::Format(" (selected %s)", selected->GetName()).c_str() : "");
         WorldModel const& world = commander.GetWorld();
         Map* map = leader->GetMap();
 
@@ -354,7 +358,7 @@ namespace Commander
         bool const returnToSpot = place != PullPlace::Corner && distant && !fightThere && spotRisk.total < packRisk.total;
         FightLoad::Input load;
         bool const haveLoad = FightLoad::Build(world, map, best.expected, load);
-        FightLoad::Result const estimate = haveLoad ? FightLoad::Simulate(load) : FightLoad::Result();
+        FightLoad::Result const estimate = haveLoad ? FightLoad::Simulate(load, "estimate: hard fight?") : FightLoad::Result();
         bool const hard = haveLoad && IsHardFight(estimate);
         bool const corner = place == PullPlace::Corner || (hard && !returnToSpot);
 
@@ -504,7 +508,7 @@ namespace Commander
         // tank is about to go (RecheckBeforeApproach).
         FightLoad::Input fightLoad;
         if (FightLoad::Build(world, map, pull.expected, fightLoad))
-            report.push_back("Fight estimate: " + FightLoad::Describe(FightLoad::Simulate(fightLoad)) +
+            report.push_back("Fight estimate: " + FightLoad::Describe(FightLoad::Simulate(fightLoad, "estimate: report")) +
                 Format(", party damage %.0f/s (%s).", fightLoad.partyDps, Value::DealtDpsSource(world)));
         PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected,
                                                 PATROL_WAIT_MAX_MS / 1000.0f);
@@ -528,6 +532,8 @@ namespace Commander
     PullPlanner::RecheckResult PullPlanner::RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map,
                                                                   uint32 nowMs, std::string& why)
     {
+        Trace::Scope scope("pull", "pullcheck");
+        scope.Label("recheck before the tank goes");
         PullPlan& pull = plan.pull;
         ClearPlan const& clear = plan.clear;
         // ClearPlanner::Step runs this on every refresh while a pull is going (single pull and

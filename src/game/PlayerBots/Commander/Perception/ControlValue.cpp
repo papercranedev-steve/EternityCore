@@ -8,6 +8,7 @@
 #include "Commander/Perception/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
+#include "Commander/Trace/Trace.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -81,11 +82,32 @@ namespace ControlValue
         Worth w;
         if (targets.empty())
             return w;
+        Trace::Scope scope("control");
         for (EnemyFacts const* e : targets)
             w.sec = std::max(w.sec, ExpectedSec(world, a, *e));
 
         PartyMemberFacts const* tank = Tanks::Main(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
+        struct Record
+        {
+            Trace::Scope& scope;
+            Worth const& w;
+            float penalty;
+            ~Record()
+            {
+                if (scope.On())
+                    scope.Data(Trace::Format("{\"net\":%.2f,\"sec\":%.1f,\"penalty\":%.2f,\"terms\":\"%s\"}", w.Net(), w.sec,
+                        penalty, Describe(w).c_str()));
+            }
+        } const record{ scope, w, penalty };
+        if (scope.On())
+        {
+            std::string list;
+            for (EnemyFacts const* e : targets)
+                list += (list.empty() ? "" : ",") + Trace::Guid(e->guid);
+            scope.Label("bot %s spell %u on %s%s", Trace::Guid(member.guid).c_str(), a.spellId, list.c_str(),
+                a.holding.IsEmpty() ? "" : (" (holds " + Trace::Guid(a.holding) + ")").c_str());
+        }
 
         // Benefit: the same fight with the targets joining later.
         FightLoad::Input controlled = fight;
@@ -102,8 +124,8 @@ namespace ControlValue
                 }
             f.sameFight = true;
         }
-        FightLoad::Result const asIs = FightLoad::Simulate(fight);
-        FightLoad::Result const ctrl = FightLoad::Simulate(controlled);
+        FightLoad::Result const asIs = FightLoad::Simulate(fight, "as is");
+        FightLoad::Result const ctrl = FightLoad::Simulate(controlled, "controlled");
         w.damage = Value::Points(world, asIs.damage - ctrl.damage);
         w.danger = (Risk(asIs) - Risk(ctrl)) * penalty;
 
@@ -120,7 +142,7 @@ namespace ControlValue
                 }
             if (found)
             {
-                FightLoad::Result const back = FightLoad::Simulate(freed);
+                FightLoad::Result const back = FightLoad::Simulate(freed, "controlled, held one freed");
                 w.release = std::max(0.0f, Value::Points(world, back.damage - ctrl.damage) + (Risk(back) - Risk(ctrl)) * penalty);
                 w.released = a.holding;
             }
@@ -170,7 +192,7 @@ namespace ControlValue
                     FightLoad::Input withPack = controlled;
                     for (PackCreature const& c : risk.pack->members)
                         withPack.foes.push_back(FightLoad::FoeOf(c, *tank, ADD_ARRIVE_SEC));
-                    w.adds += risk.chance * std::max(0.0f, Loss(world, FightLoad::Simulate(withPack), penalty) - base);
+                    w.adds += risk.chance * std::max(0.0f, Loss(world, FightLoad::Simulate(withPack, "controlled, feared into a pack"), penalty) - base);
                 }
             }
             for (PartyMemberFacts const& m : world.party)
@@ -204,7 +226,7 @@ namespace ControlValue
                 f.arriveSec = std::max(f.arriveSec, w.sec);
                 f.sameFight = true;
             }
-        FightLoad::Result const ctrl = FightLoad::Simulate(controlled);
+        FightLoad::Result const ctrl = FightLoad::Simulate(controlled, "pull: controlled at the start");
         w.damage = Value::Points(world, asIs.damage - ctrl.damage);
         w.danger = (Risk(asIs) - Risk(ctrl)) * penalty;
 

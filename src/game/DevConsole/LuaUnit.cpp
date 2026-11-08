@@ -1017,6 +1017,87 @@ namespace DevConsole
         lua_setfield(L, -2, field);
     }
 
+    static void PushTraceRecord(lua_State* L, Commander::Trace::Record const& r)
+    {
+        lua_createtable(L, 0, 7);
+        SetField(L, "id", r.id);
+        if (r.parent)
+            SetField(L, "parent", r.parent);
+        SetField(L, "t", r.timeMs);
+        SetFieldS(L, "kind", r.kind.c_str());
+        if (!r.label.empty())
+            SetFieldS(L, "label", r.label.c_str());
+        // JSON text: the recorder writes it into the line as it is.
+        if (!r.data.empty())
+            SetFieldS(L, "data", r.data.c_str());
+        if (!r.input.empty())
+            SetFieldS(L, "input", r.input.c_str());
+    }
+
+    // u:trace([sinceId]): the calculation trace of the unit's party (Commander/Trace/Trace.h),
+    // records with id > sinceId, oldest first: [{id, parent, t, kind, label, data, input}]
+    // (data / input: JSON text). Second value: true when some newer than sinceId were already
+    // dropped. Every call arms the trace for Trace::ARM_MS: without polling nothing is recorded.
+    // nil without a Commander.
+    static int U_trace(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        uint32 const since = uint32(luaL_optinteger(L, 2, 0));
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        if (!commander)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        Commander::Trace::Sink& sink = commander->GetTrace();
+        sink.Arm(WorldTimer::getMSTime());
+        bool gap = false;
+        std::vector<Commander::Trace::Record const*> const records = sink.Since(since, gap);
+        lua_createtable(L, int(records.size()), 0);
+        int i = 0;
+        for (Commander::Trace::Record const* r : records)
+        {
+            PushTraceRecord(L, *r);
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_pushboolean(L, gap);
+        return 2;
+    }
+
+    // u:tracepinned(tag): the records last pinned with `tag` ("pull": the pull planning,
+    // "pullcheck": the recheck before the tank goes), same rows as u:trace, and the set's
+    // version (changes with every new set). nil when there is none. u:tracepinned(tag, version):
+    // nil, version when the set is still that version.
+    static int U_tracepinned(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        char const* tag = luaL_checkstring(L, 2);
+        std::shared_ptr<Commander::PartyCommander> commander = CommanderOf(u);
+        uint32 version = 0;
+        std::vector<Commander::Trace::Record> const* records =
+            commander ? commander->GetTrace().Pinned(tag, &version) : nullptr;
+        if (!records)
+        {
+            lua_pushnil(L);
+            return 1;
+        }
+        if (lua_isinteger(L, 3) && uint32(lua_tointeger(L, 3)) == version)
+        {
+            lua_pushnil(L);         // unchanged since the caller's version: no rows built
+            lua_pushinteger(L, version);
+            return 2;
+        }
+        lua_createtable(L, int(records->size()), 0);
+        int i = 0;
+        for (Commander::Trace::Record const& r : *records)
+        {
+            PushTraceRecord(L, r);
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_pushinteger(L, version);
+        return 2;
+    }
+
     // u:offers(): the brain's duty needs of the last refresh as offered, before the allocation
     // (TeamPlan::offers), with what the allocation made of them:
     // [{kind, target, points, now, reason, cands=[{bot, spell, rank, why}], rejected=[same, rank = net <= 0],
@@ -1663,7 +1744,7 @@ namespace DevConsole
             { "casting", U_casting }, { "auras", U_auras }, { "hasaura", U_hasaura }, { "ready", U_ready },
             { "cooldown", U_cooldown },
             { "group", U_group }, { "ai", U_ai }, { "decisions", U_decisions },
-            { "notes", U_notes }, { "plan", U_plan }, { "offers", U_offers }, { "pull", U_pull }, { "info", U_info },
+            { "notes", U_notes }, { "plan", U_plan }, { "offers", U_offers }, { "trace", U_trace }, { "tracepinned", U_tracepinned }, { "pull", U_pull }, { "info", U_info },
             { "sethp", U_sethp }, { "sethppct", U_sethppct }, { "setpower", U_setpower },
             { "setpowerpct", U_setpowerpct }, { "refill", U_refill }, { "kill", U_kill },
             { "revive", U_revive }, { "tp", U_tp }, { "cast", U_cast }, { "addaura", U_addaura },

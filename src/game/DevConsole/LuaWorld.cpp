@@ -9,6 +9,7 @@
  *   now()                          server ms clock
  *   log(text)                      write to Server.log
  *   json(value)                    encode as JSON string
+ *   fightload(inputJson)           re-run a traced FightLoad simulation step by step (JSON text)
  *   premades([classId])            premade gear/spec templates
  *   addbot(leader, class, role, level)  temporary party bot next to the leader
  *   account(player)                account name of a player
@@ -38,6 +39,7 @@
 #include "Timer.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
+#include "Commander/Trace/FightLoadJson.h"
 #include "Utilities/Random.h"
 
 #include <cstring>
@@ -185,6 +187,30 @@ namespace DevConsole
     {
         std::string out;
         LuaToJson(L, 1, out);
+        lua_pushlstring(L, out.data(), out.size());
+        return 1;
+    }
+
+    // fightload(inputJson): re-runs a FightLoad simulation recorded by the calculation trace
+    // (the `input` of a `trace` line of kind "fight") with the current code, step by step.
+    // Returns JSON text {"result":{...}, "steps":[{t, in, heal, tank, mana, hp=[...]}]}, or
+    // nil and an error.
+    static int W_fightload(lua_State* L)
+    {
+        size_t len = 0;
+        char const* text = luaL_checklstring(L, 1, &len);
+        Commander::FightLoad::Input input;
+        std::string error;
+        if (!Commander::FightLoadJson::ParseInput(std::string(text, len), input, error))
+        {
+            lua_pushnil(L);
+            lua_pushstring(L, error.c_str());
+            return 2;
+        }
+        std::vector<Commander::FightLoad::Step> steps;
+        Commander::FightLoad::Result const r = Commander::FightLoad::Run(input, &steps);
+        std::string const out = "{\"result\":" + Commander::FightLoadJson::ResultJson(r) +
+            ",\"steps\":" + Commander::FightLoadJson::StepsJson(steps) + "}";
         lua_pushlstring(L, out.data(), out.size());
         return 1;
     }
@@ -382,7 +408,7 @@ namespace DevConsole
     {
         static luaL_Reg const globals[] = {
             { "players", W_players }, { "player", W_player }, { "unit", W_unit }, { "cmd", W_cmd },
-            { "spell", W_spell }, { "now", W_now }, { "log", W_log }, { "json", W_json },
+            { "spell", W_spell }, { "now", W_now }, { "log", W_log }, { "json", W_json }, { "fightload", W_fightload },
             { "premades", W_premades }, { "addbot", W_addbot }, { "account", W_account },
         { "login", W_login }, { "logout", W_logout },
             { nullptr, nullptr }

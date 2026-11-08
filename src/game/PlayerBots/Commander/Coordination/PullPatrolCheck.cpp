@@ -51,6 +51,7 @@ namespace Commander
         FightLoad::Result SimulateStart(FightLoad::Input base, std::vector<PatrolArrival> const& patrols,
                                         float startSec, float fightSec)
         {
+            std::string const why = Trace::On() ? Trace::Format("start +%.1f s, patrols joining", startSec) : std::string();
             for (PatrolArrival const& p : patrols)
             {
                 float const arrive = p.ArriveAfter(startSec);
@@ -60,7 +61,7 @@ namespace Commander
                 f.arriveSec = arrive;
                 base.foes.push_back(f);
             }
-            return FightLoad::Simulate(base);
+            return FightLoad::Simulate(base, why.c_str());
         }
     }
 
@@ -80,6 +81,8 @@ namespace Commander
                                 Position3 const& spot, std::vector<ObjectGuid> const& expected, float waitBudgetSec)
         {
             PatrolStart out;
+            Trace::Scope scope("patrolcheck");
+            scope.Label("patrols around the pull of %s, wait budget %.0f s", target->GetName(), waitBudgetSec);
             PackCreature const* targetFacts = FindPackCreature(world, target->GetObjectGuid());
             bool const targetPatrols = targetFacts && targetFacts->patrol;
             CreatureGroup const* targetGroup = target->GetCreatureGroup();
@@ -125,7 +128,7 @@ namespace Commander
                 return out;
             }
             PartyMemberFacts const* tankFacts = Tanks::Main(world);
-            FightLoad::Result const alone = FightLoad::Simulate(input);
+            FightLoad::Result const alone = FightLoad::Simulate(input, "without the patrols");
             out.fightSec = std::min(PullPlanner::PATROL_HORIZON_MAX_SEC,
                 std::max(PullPlanner::PATROL_HORIZON_SEC, alone.fightSec + PullPlanner::PULL_LEAD_SEC));
 
@@ -148,6 +151,23 @@ namespace Commander
                     a.atSec.push_back(p.atSec);
                     a.inside.push_back(in);
                     any = any || in;
+                }
+                if (Trace::On())
+                {
+                    // When it is next to the pull: the windows of "inside" track points.
+                    std::string windows;
+                    for (size_t i = 0; i < a.inside.size(); ++i)
+                        if (a.inside[i] && (i == 0 || !a.inside[i - 1]))
+                        {
+                            size_t j = i;
+                            while (j + 1 < a.inside.size() && a.inside[j + 1])
+                                ++j;
+                            windows += Trace::Format("%s[%.1f,%.1f]", windows.empty() ? "" : ",", a.atSec[i], a.atSec[j]);
+                        }
+                    Trace::Emit("patrol", patrol->GetName(), Trace::Format(
+                        "{\"g\":\"%s\",\"source\":\"%s\",\"clearance\":%.1f,\"dps\":%.1f,\"hp\":%.0f,\"horizon\":%.1f,\"inside\":[%s]}",
+                        Trace::Guid(patrol->GetObjectGuid()).c_str(), PatrolTracker::SourceName(a.source), a.clearance,
+                        a.foe.dps, a.foe.health, out.fightSec + waitBudgetSec, windows.c_str()));
                 }
                 if (any)
                     out.patrols.push_back(std::move(a));

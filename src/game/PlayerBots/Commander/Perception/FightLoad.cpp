@@ -4,6 +4,8 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/ValueModel.h"
 #include "Commander/Perception/WorldModelBuilder.h"
+#include "Commander/Trace/FightLoadJson.h"
+#include "Commander/Trace/Trace.h"
 #include "Creature.h"
 #include "Map.h"
 #include "SharedDefines.h"
@@ -34,7 +36,15 @@ namespace FightLoad
         }
     }
 
-    Result Simulate(Input const& in)
+    Result Simulate(Input const& in, char const* why)
+    {
+        Result const r = Run(in, nullptr);
+        if (Trace::On())
+            Trace::Emit("fight", why ? why : "", FightLoadJson::ResultJson(r), FightLoadJson::InputJson(in));
+        return r;
+    }
+
+    Result Run(Input const& in, std::vector<Step>* steps)
     {
         Result r;
         float const maxHealth = std::max(1.0f, in.tankMaxHealth);
@@ -85,6 +95,7 @@ namespace FightLoad
             r.peakDps = std::max(r.peakDps, incoming);
             tank -= incoming * STEP_SEC;
             r.damage += incoming * STEP_SEC;
+            float const healedBefore = r.healed;
 
             float const deficit = maxHealth - tank;
             if (deficit > 0.0f && !in.healers.empty())
@@ -113,9 +124,23 @@ namespace FightLoad
                 mana[h] = std::min(in.healers[h].maxMana, mana[h] + in.healers[h].regenPerSec * STEP_SEC);
 
             r.lowestTankPct = std::min(r.lowestTankPct, std::max(0.0f, tank) / maxHealth * 100.0f);
+            Step* step = nullptr;
+            if (steps)
+            {
+                steps->emplace_back();
+                step = &steps->back();
+                step->t = t;
+                step->incoming = incoming;
+                step->healed = r.healed - healedBefore;
+                step->tank = tank;
+                for (float m : mana)
+                    step->mana += m;
+            }
             if (tank <= 0.0f)
             {
                 r.tankDies = true;
+                if (step)
+                    step->health = health;
                 break;
             }
 
@@ -134,6 +159,8 @@ namespace FightLoad
                 health[best] -= take;
                 budget -= take;
             }
+            if (step)
+                step->health = health;
         }
 
         r.fightSec = t;
@@ -209,10 +236,21 @@ namespace FightLoad
         if (creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL)
             melee *= 1.0f - Value::ArmorReduction(tank.armor, creature->GetLevel());
         float ranged = 0.0f;
+        uint32 rangedSpell = 0;
         if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(creature->GetEntry()))
             if (profile->mainRangedSpellId)
+            {
+                rangedSpell = profile->mainRangedSpellId;
                 ranged = WorldModelBuilder::RangedSpellDps(*profile, creature->GetLevel(), hit);
+            }
         f.dps = std::max(melee, ranged);
+        if (Trace::On())
+            Trace::Emit("foe", creature->GetName(), Trace::Format(
+                "{\"g\":\"%s\",\"level\":%u,\"hp\":%.0f,\"hit\":%.1f,\"attackMs\":%u,\"physical\":%s,\"armorCut\":%.3f,"
+                "\"melee\":%.1f,\"rangedSpell\":%u,\"ranged\":%.1f,\"dps\":%.1f}",
+                Trace::Guid(f.guid).c_str(), creature->GetLevel(), f.health, hit, attackMs,
+                creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL ? "true" : "false",
+                Value::ArmorReduction(tank.armor, creature->GetLevel()), melee, rangedSpell, ranged, f.dps));
         return f;
     }
 
@@ -295,6 +333,11 @@ namespace FightLoad
         PartyMemberFacts const* tank = nullptr;
         if (!StartInput(world, out, tank))
             return false;
+        if (Trace::On())
+            Trace::Emit("party", "fight input", Trace::Format(
+                "{\"partyDps\":%.1f,\"dpsSource\":\"%s\",\"tank\":\"%s\",\"tankHealth\":%u,\"tankMax\":%u,\"tankArmor\":%u}",
+                out.partyDps, Value::DealtDpsSource(world), Trace::Guid(tank->guid).c_str(), tank->health, tank->maxHealth,
+                uint32(tank->armor)));
         for (ObjectGuid g : creatures)
             if (Creature const* c = map->GetCreature(g))
                 if (c->IsAlive())

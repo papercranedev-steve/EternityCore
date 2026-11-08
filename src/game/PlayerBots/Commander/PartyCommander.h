@@ -15,6 +15,7 @@
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Trace/Trace.h"
 #include <deque>
 #include <string>
 
@@ -80,6 +81,11 @@ namespace Commander
         static constexpr size_t NOTE_LOG_SIZE = 50;
         std::deque<NoteRecord> const& GetNoteLog() const { return m_noteLog; }
 
+        // Calculation trace of this party (Trace/Trace.h): installed (Trace::Use) around the
+        // refresh, the bots' combat ticks and the pull planning; armed by the dev console
+        // (u:trace) in the world thread while maps are idle.
+        Trace::Sink& GetTrace() { return m_trace; }
+
     private:
         void Refresh(PartyBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
@@ -115,6 +121,7 @@ namespace Commander
         IEncounter* m_activeEncounter = nullptr;
 
         std::deque<NoteRecord> m_noteLog;
+        Trace::Sink m_trace;
     };
 }
 

@@ -86,7 +86,23 @@ namespace FightLoad
         float healthLeftPct = 0.0f; // share of the creatures' health left when it ended
     };
 
-    Result Simulate(Input const& in);
+    // One STEP_SEC step of Run, for the explanation of a recorded run (dev console fightload()).
+    struct Step
+    {
+        float t = 0.0f;
+        float incoming = 0.0f;      // per second, margin included
+        float healed = 0.0f;        // this step
+        float tank = 0.0f;          // health after the hits and the heals
+        float mana = 0.0f;          // all healers, after this step
+        std::vector<float> health;  // every foe, after the party's damage (same order as Input::foes)
+    };
+
+    // `why`: what this run is for ("as is", "controlled", "start +5 s"), for the calculation
+    // trace (Trace/Trace.h): with a trace on, the input and the result are recorded under the
+    // current scope. Otherwise the same as Run.
+    Result Simulate(Input const& in, char const* why = nullptr);
+    // The simulation itself, nothing recorded; `steps` (optional) gets every step.
+    Result Run(Input const& in, std::vector<Step>* steps);
     bool Bearable(Result const& r);
     // Higher is better: the tank's lowest health percent; a death or an unfinished fight:
     // minus the share of creature health left.
