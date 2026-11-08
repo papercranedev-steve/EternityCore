@@ -49,6 +49,9 @@ namespace Commander
         // Centred on the current victim (Blizzard) instead of around the caster (Arcane
         // Explosion, Cone of Cold: a cone, counted as a circle).
         bool onTarget = false;
+        // Speed its hits take off the enemies (0..1), from the caster's talents (Improved
+        // Blizzard): a melee enemy it pulls takes longer to get to the caster.
+        float slowPct = 0.0f;
     };
 
     // What a "keep someone alive" spell does (team rescue, Perception/SurvivalValue.h).

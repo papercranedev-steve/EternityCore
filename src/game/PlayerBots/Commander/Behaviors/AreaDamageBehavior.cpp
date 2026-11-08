@@ -2,6 +2,8 @@
 #include "Commander/Behaviors/ThreatBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/AggroTurnCost.h"
+#include "Commander/Perception/ManaWorth.h"
 #include "Commander/Perception/PackResolver.h"
 #include "Commander/Perception/SpellTags.h"
 #include "Commander/Perception/ThreatView.h"
@@ -18,6 +20,7 @@
 #include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -81,83 +84,188 @@ namespace Commander
             return ThreatOf(me, spell->m_spellInfo, DamageSpells::Estimate(me, enemy, spell->m_spellInfo));
         }
 
-        struct Judgement
+        // Speed of `unit` running at the caster once the area spell's slow (`slowPct`) is on it:
+        // a unit already slowed keeps its live speed (the chill is not counted twice).
+        float SpeedUnder(Unit const* unit, float slowPct)
         {
-            uint32 targets = 0;
-            uint32 safeTicks = 0;       // ticks before the first enemy would turn on the bot
-            float damage = 0.0f;        // over all targets for safeTicks ticks, each at most its health
+            float const live = unit->GetSpeed(MOVE_RUN);
+            if (slowPct <= 0.0f || unit->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED))
+                return live;
+            return live * (1.0f - slowPct);
+        }
+
+        // One enemy in the area, for the tick by tick plan (Plan below).
+        struct AreaTarget
+        {
+            EnemyFacts const* facts = nullptr;
+            float health = 0.0f;
+            bool free = false;              // hits the bot or nobody: no turn to fear
+            float myThreat = 0.0f;          // with the bot's bolt in the air
+            float holderThreat = 0.0f;
+            float holderRate = 0.0f;        // threat per second its holder gains on it
+            float factor = ThreatView::RANGED_AGGRO_FACTOR;     // 110% in its melee reach, else 130%
+            float speed = 0.0f;             // running at the bot under the spell's slow
+            PartyMemberFacts const* holder = nullptr;
         };
 
-        // The area spell centred on `centre`: who it hits and for how many ticks it is safe.
-        Judgement Judge(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, SpellEntry const* spell,
-                        Position3 const& centre, float perTarget, Ticks const& ticks)
+        // The channel tick by tick: damage over the targets (each at most its health) and the
+        // points lost to enemies turning to the bot (AggroTurnCost) after n ticks, n = 1..count.
+        // An enemy turns at the first tick k it survives (health > k ticks) with my threat +
+        // k x tick threat above (holder threat + rate x k x period) x factor; a tick that kills it
+        // turns nothing (strat-20261108-133706: a Berserker at 150 health stopped the Blizzard).
+        struct TickPlan
+        {
+            std::vector<float> damage;      // [n - 1]
+            std::vector<float> turnLoss;    // [n - 1]
+        };
+
+        TickPlan Plan(WorldModel const& world, PartyMemberFacts const& self, std::vector<AreaTarget> const& targets,
+                      float perTick, float tickThreat, Ticks const& ticks, uint32 count)
+        {
+            TickPlan plan;
+            plan.damage.assign(count, 0.0f);
+            plan.turnLoss.assign(count, 0.0f);
+            for (AreaTarget const& t : targets)
+            {
+                for (uint32 n = 1; n <= count; ++n)
+                    plan.damage[n - 1] += std::min(perTick * float(n), t.health);
+                if (t.free)
+                    continue;
+                for (uint32 k = 1; k <= count; ++k)
+                {
+                    if (t.health <= perTick * float(k))
+                        break;
+                    float const mine = t.myThreat + float(k) * tickThreat;
+                    float const holder = t.holderThreat + t.holderRate * float(k) * ticks.periodSec;
+                    if (mine <= holder * t.factor)
+                        continue;
+                    // The holder (a melee tank) then needs 110% of mine to take it back.
+                    float const gap = std::max(0.0f, mine * ThreatView::MELEE_AGGRO_FACTOR - holder);
+                    float const loss = t.holder
+                        ? AggroTurnCost::Of(world, *t.facts, self, *t.holder, t.speed, gap)
+                        : Value::HitLoss(world, *t.facts, self,
+                                         std::min(AggroTurnCost::HORIZON_SEC, Value::EnemyTimeToDie(world, *t.facts)));
+                    for (uint32 n = k; n <= count; ++n)
+                        plan.turnLoss[n - 1] += loss;
+                    break;
+                }
+            }
+            return plan;
+        }
+
+        // The enemies in the area of `spell` centred on `centre` (EnemyFacts + live threat of the
+        // map units). False: the spell must not touch this area at all (a control the plan keeps,
+        // an enemy the tank has not built threat on yet).
+        bool Targets(PartyBotAI const* bot, WorldModel const& world, TeamPlan const* plan, SpellEntry const* spell,
+                     Position3 const& centre, float slowPct, bool live, std::vector<AreaTarget>& out)
         {
             Player* me = bot->me;
+            Map* map = me->GetMap();
             ObjectGuid const self = me->GetObjectGuid();
             Position3 const here = PositionOf(me);
             float const radius = SpellTags::AreaRadius(spell);
-            float const perTick = perTarget / float(ticks.count);
-            float const tickThreat = ThreatOf(me, spell, perTick);
             uint32 const settleMs = uint32(ThreatBehavior::NEW_ENEMY_SETTLE_SEC * 1000.0f);
-
-            Judgement j;
-            j.safeTicks = ticks.count;
-            std::vector<float> healths;
+            out.clear();
             for (EnemyFacts const& e : world.enemies)
             {
-                if (!e.acting || PackResolver::Distance(centre, e.pos) - e.boundingRadius > radius)
+                Unit* unit = map->GetUnit(e.guid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+                Position3 const at = live ? PositionOf(unit) : e.pos;
+                if (!e.acting || PackResolver::Distance(centre, at) - e.boundingRadius > radius)
                     continue;
                 // Polymorph, sap, a stun that breaks on damage, or one the brain is about to put
                 // on it (TeamPlan::KeepsUnbroken): the area spell would wake it up.
-                if (plan.KeepsUnbroken(e))
-                {
-                    j.safeTicks = 0;
-                    continue;
-                }
+                if (plan && plan->KeepsUnbroken(e))
+                    return false;
                 // Feared, stunned for good: not woken, but not standing still either; not counted.
                 if (e.crowdControlled)
                     continue;
-                ++j.targets;
-                healths.push_back(float(e.health));
-                if (e.victim == self || e.victim.IsEmpty())
-                    continue;
-                // The tank has not built threat on a new enemy yet.
-                if (e.firstSeenMs && WorldTimer::getMSTimeDiff(e.firstSeenMs, world.refreshedAtMs) < settleMs)
+                AreaTarget t;
+                t.facts = &e;
+                t.health = float(live ? unit->GetHealth() : e.health);
+                Unit* holderUnit = live ? unit->GetVictim() : map->GetUnit(e.victim);
+                t.free = !holderUnit || holderUnit == me;
+                if (!t.free)
                 {
-                    j.safeTicks = 0;
-                    continue;
+                    // The tank has not built threat on a new enemy yet.
+                    if (!live && e.firstSeenMs && WorldTimer::getMSTimeDiff(e.firstSeenMs, world.refreshedAtMs) < settleMs)
+                        return false;
+                    if (live && unit->CanHaveThreatList())
+                    {
+                        ThreatManager& threat = unit->GetThreatManager();
+                        t.myThreat = threat.getThreat(me);
+                        t.holderThreat = threat.getThreat(holderUnit);
+                    }
+                    else
+                    {
+                        ThreatEntry const* mine = ThreatView::FindEntry(e, self);
+                        t.myThreat = mine ? mine->threat : 0.0f;
+                        t.holderThreat = e.victimThreat;
+                    }
+                    t.myThreat += InFlightThreat(me, unit);
+                    bool const melee = live ? unit->CanReachWithMeleeAutoAttack(me)
+                                            : PackResolver::Distance(here, e.pos) - e.boundingRadius <= AB::MELEE_REACH;
+                    t.factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
+                    t.holder = world.FindMember(holderUnit->GetObjectGuid());
+                    // A party holder hitting another enemy gains little here: its measured rate is a
+                    // jump of the last seconds (+200 at once, without hitting it), not what comes next
+                    // (strat-20261107-194655: tank on another Cadaver, Blizzard judged safe for 8 ticks).
+                    if (t.holder && t.holder->victim == e.guid)
+                        if (ThreatEntry const* h = ThreatView::FindEntry(e, t.holder->guid))
+                            t.holderRate = h->threatPerSec * AB::TANK_GAIN_SHARE;
+                    t.speed = SpeedUnder(unit, slowPct);
                 }
-                // Tick k is safe while my threat (with my bolt in the air) stays under its victim's
-                // threat x 110% (in its melee reach) / 130%, the victim gaining TANK_GAIN_SHARE of
-                // its measured rate if it is hitting this enemy.
-                ThreatEntry const* mine = ThreatView::FindEntry(e, self);
-                float myThreat = mine ? mine->threat : 0.0f;
-                if (Unit const* unit = me->GetMap()->GetUnit(e.guid))
-                    myThreat += InFlightThreat(me, unit);
-                bool const melee = PackResolver::Distance(here, e.pos) - e.boundingRadius <= AB::MELEE_REACH;
-                float const factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
-                // A party holder hitting another enemy gains little here: its measured rate is a
-                // jump of the last seconds (+200 at once, without hitting it), not what comes next
-                // (strat-20261107-194655: tank on another Cadaver, Blizzard judged safe for 8 ticks).
-                PartyMemberFacts const* holderFacts = world.FindMember(e.victim);
-                bool const holderHitsIt = !holderFacts || holderFacts->victim == e.guid;
-                float rate = 0.0f;
-                if (ThreatEntry const* holder = ThreatView::FindEntry(e, e.victim))
-                    if (holderHitsIt)
-                        rate = holder->threatPerSec * AB::TANK_GAIN_SHARE;
-                uint32 safe = 0;
-                while (safe < j.safeTicks)
-                {
-                    float const k = float(safe + 1);
-                    if (myThreat + k * tickThreat > (e.victimThreat + rate * k * ticks.periodSec) * factor)
-                        break;
-                    ++safe;
-                }
-                j.safeTicks = safe;
+                out.push_back(t);
             }
-            for (float health : healths)
-                j.damage += std::min(perTick * float(j.safeTicks), health);
-            return j;
+            return true;
+        }
+
+        struct Choice
+        {
+            uint32 ticks = 0;
+            float damage = 0.0f;
+            float net = 0.0f;
+            float benefit = 0.0f;
+            float cost = 0.0f;
+        };
+
+        // The best number of ticks (1..count): damage as seconds of the filler, against the time
+        // spent and the enemies turning; `alternativeMana` = what the filler would spend in the
+        // same time, in points (a channel already paid for: continuing costs no mana).
+        Choice Best(WorldModel const& world, PartyMemberFacts const& self, TickPlan const& plan, Ticks const& ticks,
+                    float fillerPerSec, float fillerManaPerSec)
+        {
+            Choice best;
+            for (uint32 n = 1; n <= plan.damage.size(); ++n)
+            {
+                float const sec = float(n) * ticks.periodSec;
+                float const benefit = Value::LostAction(world, self, plan.damage[n - 1] / fillerPerSec) +
+                                      (fillerManaPerSec > 0.0f ? ManaWorth::Points(world, self, fillerManaPerSec * sec) : 0.0f);
+                float const cost = Value::LostAction(world, self, sec) + plan.turnLoss[n - 1];
+                if (!best.ticks || benefit - cost > best.net)
+                {
+                    best.ticks = n;
+                    best.damage = plan.damage[n - 1];
+                    best.benefit = benefit;
+                    best.cost = cost;
+                    best.net = benefit - cost;
+                }
+            }
+            return best;
+        }
+
+        // ClassKit::AreaDamage entry of `spell` (any rank). False: not one of the bot's.
+        bool KitEntry(PartyBotAI const* bot, SpellEntry const* spell, AreaDamageSpell& entry)
+        {
+            uint32 const first = sSpellMgr.GetFirstSpellInChain(spell->Id);
+            for (AreaDamageSpell const& a : bot->Kit().AreaDamage())
+                if (a.spell && sSpellMgr.GetFirstSpellInChain(a.spell->Id) == first)
+                {
+                    entry = a;
+                    return true;
+                }
+            return false;
         }
     }
 
@@ -207,6 +315,7 @@ namespace Commander
             return;
 
         Map* map = me->GetMap();
+        std::vector<AreaTarget> targets;
         for (AreaDamageSpell const& area : bot->Kit().AreaDamage())
         {
             SpellEntry const* spell = area.spell;
@@ -216,6 +325,8 @@ namespace Commander
             if (ticks.count > 1 && me->IsMoving())
                 continue;
             float const perTarget = DamageSpells::Estimate(me, victim, spell);
+            float const perTick = perTarget / float(ticks.count);
+            float const tickThreat = ThreatOf(me, spell, perTick);
             float const mana = DamageSpells::ManaCost(me, spell);
 
             // Where: every enemy as the centre of a ground spell (Blizzard), else the bot.
@@ -231,46 +342,44 @@ namespace Commander
             else
                 centres.push_back(nullptr);
 
-            Judgement best;
+            Choice best;
             Unit* bestCentre = nullptr;
-            bool found = false;
             for (Unit* centre : centres)
             {
                 // Range, mana, cooldown, idle creatures in the area (PartyBotAI::PassesPartyCastChecks).
                 if (!bot->CanTryToCastSpell(centre ? centre : me, spell))
                     continue;
-                Judgement const j = Judge(bot, world, plan, spell, PositionOf(centre ? centre : me), perTarget, ticks);
-                if (j.safeTicks == 0 || j.targets == 0)
+                if (!Targets(bot, world, &plan, spell, PositionOf(centre ? centre : me), area.slowPct, false, targets) ||
+                    targets.empty())
                     continue;
-                if (!found || j.damage > best.damage)
+                TickPlan const tp = Plan(world, *self, targets, perTick, tickThreat, ticks, ticks.count);
+                Choice const c = Best(world, *self, tp, ticks, fillerPerSec, 0.0f);
+                if (!best.ticks || c.net > best.net)
                 {
-                    best = j;
+                    best = c;
                     bestCentre = centre;
-                    found = true;
                 }
             }
-            if (!found)
+            if (!best.ticks || best.net <= 0.0f)
                 continue;
 
-            // Not more damage per mana than the filler: no fight length guess needed (adds).
+            // Not more damage per mana than the filler, over the ticks it is expected to run:
+            // no fight length guess needed (adds).
             if (mana > 0.0f && fillerPerMana > 0.0f && best.damage / mana < fillerPerMana)
                 continue;
 
-            // Worth: the damage as seconds of the filler, against the seconds spent on it.
-            float const busySec = float(best.safeTicks) * ticks.periodSec;
             Proposal p;
             p.tier = ProposalTier::Assigned;
             p.source = "aoe";
-            p.reason = best.safeTicks < ticks.count ? "area damage, channel until it would pull aggro"
-                                                    : "area damage beats the filler";
+            p.reason = best.ticks < ticks.count ? "area damage, channel until an enemy turning costs more"
+                                                : "area damage beats the filler";
             p.action.type = BotActionType::Cast;
             p.action.spell = spell;
             // Ground spells on the chosen enemy; the others on the bot itself (a cone goes the
             // way the bot faces: its victim, the filler turned it there).
             if (bestCentre)
                 p.action.target = bestCentre->GetObjectGuid();
-            p.SetValue(Value::LostAction(world, *self, best.damage / fillerPerSec),
-                       Value::LostAction(world, *self, busySec));
+            p.SetValue(best.benefit, best.cost);
             out.push_back(p);
         }
     }
@@ -289,10 +398,16 @@ namespace Commander
         SpellEntry const* spell = channel->m_spellInfo;
         if (!Judges(bot, spell) || bot->IsInDuel())
             return false;
+        AreaDamageSpell area;
         std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(me);
-        if (!commander)
+        if (!commander || !KitEntry(bot, spell, area))
             return false;
         WorldModel const& world = commander->GetWorld();
+        PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+        Unit* victim = me->GetVictim();
+        SpellEntry const* filler = bot->Kit().Filler();
+        if (!self || !filler)
+            return false;
 
         Position3 centre = PositionOf(me);
         float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -303,31 +418,34 @@ namespace Commander
             centre.y = y;
             centre.z = z;
         }
-        float const radius = SpellTags::AreaRadius(spell);
         Ticks const ticks = TicksOf(me, spell);
+        uint32 const periodMs = std::max<uint32>(1, uint32(ticks.periodSec * 1000.0f));
+        uint32 const left = (channel->GetCastedTime() + periodMs - 1) / periodMs;
+        if (!left)
+            return false;
 
-        // Live threat: the next tick must not make an enemy in the area turn on the bot.
-        Map* map = me->GetMap();
-        for (EnemyFacts const& e : world.enemies)
-        {
-            Unit* unit = map->GetUnit(e.guid);
-            if (!unit || !unit->IsAlive() || !unit->CanHaveThreatList())
-                continue;
-            if (PackResolver::Distance(centre, PositionOf(unit)) - unit->GetObjectBoundingRadius() > radius)
-                continue;
-            Unit* holder = unit->GetVictim();
-            if (!holder || holder == me)
-                continue;
-            float const tick = ThreatOf(me, spell, DamageSpells::Estimate(me, unit, spell) / float(ticks.count));
-            float const factor = unit->CanReachWithMeleeAutoAttack(me) ? ThreatView::MELEE_AGGRO_FACTOR
-                                                                       : ThreatView::RANGED_AGGRO_FACTOR;
-            ThreatManager& threat = unit->GetThreatManager();
-            if (threat.getThreat(me) + InFlightThreat(me, unit) + tick > threat.getThreat(holder) * factor)
-            {
-                me->InterruptSpell(CURRENT_CHANNELED_SPELL, true);
-                return true;
-            }
-        }
-        return false;
+        std::vector<AreaTarget> targets;
+        if (!Targets(bot, world, nullptr, spell, centre, area.slowPct, true, targets) || targets.empty())
+            return false;
+        Unit const* probe = victim ? victim : me->GetMap()->GetUnit(targets.front().facts->guid);
+        if (!probe)
+            return false;
+        float const perTick = DamageSpells::Estimate(me, probe, spell) / float(ticks.count);
+        float const fillerDamage = DamageSpells::Estimate(me, probe, filler);
+        float const fillerBusy = DamageSpells::BusySec(me, filler);
+        float const fillerPerSec = fillerDamage / fillerBusy;
+        if (fillerPerSec <= 0.0f)
+            return false;
+
+        // Going on: the next ticks are paid for, the filler instead would cost its mana.
+        // Stop only when even the best number of further ticks loses points (an enemy turning
+        // costs more than the damage, user 2026-11-08: a slowed melee enemy is cheap, the tank
+        // takes it back before it gets there).
+        TickPlan const tp = Plan(world, *self, targets, perTick, ThreatOf(me, spell, perTick), ticks, left);
+        Choice const best = Best(world, *self, tp, ticks, fillerPerSec, DamageSpells::ManaCost(me, filler) / fillerBusy);
+        if (best.net >= 0.0f)
+            return false;
+        me->InterruptSpell(CURRENT_CHANNELED_SPELL, true);
+        return true;
     }
 }

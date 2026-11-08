@@ -47,6 +47,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/ThreatRoom.cpp
   ${COMMANDER_DIR}/Perception/LooseEnemy.h
   ${COMMANDER_DIR}/Perception/LooseEnemy.cpp
+  ${COMMANDER_DIR}/Perception/AggroTurnCost.h
+  ${COMMANDER_DIR}/Perception/AggroTurnCost.cpp
   ${COMMANDER_DIR}/Perception/RouteRisk.h
   ${COMMANDER_DIR}/Perception/RouteRisk.cpp
   ${COMMANDER_DIR}/Perception/SpellTags.h

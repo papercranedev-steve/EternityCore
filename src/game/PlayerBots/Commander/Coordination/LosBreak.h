@@ -18,13 +18,27 @@
  * MAX_PATHS): every watcher sees the point, the point sees every `sees` place, the mover gets
  * there by a path at most MAX_DETOUR times the straight line that passes no idle creature
  * (SafeRoute::PathIsSafe; a mover that is not a player: straight line of sight instead), and
- * the caller's `accepts` agrees. The first that passes is used.
+ * the caller's `accepts` agrees. Of those that pass, the best ranked is used (below).
  *
  * Before 2026-11-03: two rings (6 and 11 yd) x 6 directions, and the mover had to see the point
  * in a straight line (stand-in for a short walk). strat-20261103-010704: both Skeletal
  * Guardians saw all 12 points; the nearest corner hiding the tank from both was 14-18 yd away
  * (a straight line from the tank, but a ring point 60 degrees off), so the tank fought in place.
  * A corner the mover walks around is fine now: the path decides.
+ *
+ * Ranking (user 2026-11-08, strat-20261108-133706: the tank's point was the top of a crate,
+ * 2.7 yd above the floor around it and off the navmesh; nobody could hit it or be hit by it,
+ * the casters' way to it was a straight line). Uneven or off-mesh points and points the
+ * casters walk to in a straight line are kept, only tried last:
+ *   ground ok  flat (the ground FLAT_PROBE_YD around it in 4 directions within FLAT_TOLERANCE)
+ *              and on the mover's navmesh (its path ends within SafeRoute::PATH_END_TOLERANCE
+ *              and MESH_Z_TOLERANCE of it). A ray whose first hidden point is uneven goes on
+ *              to its first flat hidden point too.
+ *   corner     every caster's navmesh path to it bends: a vertex at least CORNER_MIN_BEND_YD
+ *              off the straight line (it has to walk round something; hidden behind a small
+ *              object, it walks straight at the tank and stops as soon as it sees it).
+ * Order: ground ok + corner, ground ok, uneven + corner, uneven; within one rank the nearest
+ * (flat candidates are path checked first). The search stops at the first of the best rank.
  */
 
 #ifndef MANGOS_COMMANDER_LOS_BREAK_H
@@ -51,8 +65,20 @@ namespace Commander
         float const MAX_HEIGHT_DIFF = 3.0f;
         // Worst case DIRECTIONS x 8 steps x 2 casters = 192; most rays stop at their first hidden point.
         uint32 const MAX_LOS_CHECKS = 160;
-        uint32 const MAX_PATHS = 4;
+        // Candidates checked for the walk (they are ranked now, so a few more than before).
+        uint32 const MAX_PATHS = 6;
         float const MAX_DETOUR = 1.6f;
+        float const FLAT_PROBE_YD = 1.0f;
+        float const FLAT_TOLERANCE = 1.0f;
+        float const MESH_Z_TOLERANCE = 1.0f;
+        float const CORNER_MIN_BEND_YD = 1.5f;
+
+        // How good the point FindPoint returned is (see "Ranking" above).
+        struct PointQuality
+        {
+            bool groundOk = true;
+            bool corner = true;
+        };
 
         struct Search
         {
@@ -70,8 +96,9 @@ namespace Commander
             std::function<bool(Position3 const&)> accepts;
         };
 
-        // True and `point` (with its ground height) when a usable point was found.
-        bool FindPoint(Map* map, Search const& search, Position3& point);
+        // True and `point` (with its ground height) when a usable point was found; `quality`,
+        // if given, says which rank it is.
+        bool FindPoint(Map* map, Search const& search, Position3& point, PointQuality* quality = nullptr);
 
         // Pure: the creature's profile has a main ranged spell (creature_spells
         // CF_MAIN_RANGED_SPELL): it stands back and casts instead of following its victim.

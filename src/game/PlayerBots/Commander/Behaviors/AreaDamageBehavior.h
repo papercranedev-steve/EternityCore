@@ -21,34 +21,44 @@
  *               (it is not counted as a target either);
  *             - one hitting the bot or nobody: no limit;
  *             - a new one (seen < ThreatBehavior::NEW_ENEMY_SETTLE_SEC): not at all;
- *             - else tick k is safe while my threat + my bolt still in the air towards it
- *               (cast finished, not landed) + k x tick threat stays under (its victim's
- *               threat + TANK_GAIN_SHARE x the victim's measured threat rate x k x period) x
- *               110% (bot in its melee reach) / 130% (ThreatView). The rate only counts when
- *               the victim is hitting this enemy (a party member hitting another one: 0).
- *               Both since 2026-11-07: a Frostbolt landing just after the decision and the
- *               tank's one-off threat jump on it made a Blizzard "safe" for 8 ticks that the channel
- *               watch cancelled after 1 (strat-20261107-194655).
+ *             - else it turns to the bot at the first tick k it survives (health > k ticks:
+ *               the tick that kills it turns nothing) where my threat + my bolt still in the
+ *               air towards it (cast finished, not landed) + k x tick threat passes (its
+ *               victim's threat + TANK_GAIN_SHARE x the victim's measured threat rate x k x
+ *               period) x 110% (bot in its melee reach) / 130% (ThreatView). The rate only
+ *               counts when the victim is hitting this enemy (a party member hitting another
+ *               one: 0). Bolt and rate rule since 2026-11-07 (strat-20261107-194655).
+ *               From tick k on, the turn costs Perception/AggroTurnCost (its holder takes it
+ *               back by threat or a taunt; a melee enemy hits only once it walked over, slowed
+ *               by ClassKit's AreaDamageSpell::slowPct, Improved Blizzard). A holder that is
+ *               not a party member: all its hits on the bot (Value::HitLoss).
  *             Tick threat = damage per tick x the spell's threat multiplier x the caster's
- *             threat modifiers. The channel is valued for the ticks before the first unsafe one.
- *   damage    sum over the targets of min(per tick x safe ticks, health); DamageSpells::Estimate
+ *             threat modifiers.
+ *   ticks     since 2026-11-08 (user: a Blizzard losing an enemy for a moment is fine, the
+ *             slow lets the tank take it back; strat-20261108-133706: cancelled after 1 tick
+ *             for a Berserker one tick from death): the number of ticks n with the best
+ *             net = LostAction(damage(n) / filler damage per second) - LostAction(n x period)
+ *             - the turns up to tick n. Before: the ticks before the first unsafe one.
+ *   damage    sum over the targets of min(per tick x n, health); DamageSpells::Estimate
  *             on the victim (spell power included).
- *   mana      the area spell must not do less damage per mana than the filler
- *             (ClassKit::Filler on the victim). No fight length guess (adds come unannounced).
- *   value     benefit = LostAction(damage / filler damage per second): the damage as seconds
- *             of the bot's own output; cost = LostAction(safe ticks x period). Proposed as a
- *             Cast, tier Assigned, when the benefit is higher.
+ *   mana      the area spell must not do less damage per mana than the filler over those n
+ *             ticks (ClassKit::Filler on the victim). No fight length guess (adds come
+ *             unannounced).
+ *   value     benefit = LostAction(damage(n) / filler damage per second); cost =
+ *             LostAction(n x period) + the turns. Proposed as a Cast, tier Assigned, when
+ *             the net is positive.
  *
  * Channel watch (WatchChannel, every frame from PartyBotAI::UpdateAI, at most every
- * CHANNEL_CHECK_MS): while one of these spells is channelled, live threat of every enemy in
- * the area at the channel's destination: when the next tick (plus a bolt still in the air
- * towards that enemy) would pass its victim's threat x
- * 110% / 130%, the channel is cancelled (the tank built less threat than predicted, an
- * enemy walked in). So a Blizzard can start once its first ticks are safe.
+ * CHANNEL_CHECK_MS): while one of these spells is channelled, the same tick plan over the
+ * ticks left, with live health, threat, positions and speeds of the enemies in the area at
+ * the channel's destination. The mana is paid already, so going on also saves the filler's
+ * mana for that time (ManaWorth). The channel is cancelled only when every number of further
+ * ticks loses points.
  *
  * Known limits: crits, resistances and target caps are not counted; the tank's threat rate
- * is the recent one; enemies walking into Blizzard later and Improved Blizzard's slow are not
- * counted; a cone is judged as a circle.
+ * is the recent one; enemies walking into Blizzard later are not counted; the tank's walk
+ * after an enemy that runs to the bot is from where it stands now; a cone is judged as a
+ * circle.
  */
 
 #ifndef MANGOS_COMMANDER_AREA_DAMAGE_BEHAVIOR_H

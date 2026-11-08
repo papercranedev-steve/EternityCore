@@ -95,9 +95,10 @@ namespace Commander
         // times the straight line (+2 yd), and every sampled point outside `idle`. Without a
         // navmesh path (PATHFIND_NOT_USING_PATH): straight line of sight instead. `length`, if
         // given: the path's length (the straight distance without a navmesh path), set whenever
-        // a path was found.
+        // a path was found. `end`, if given: where the navmesh path ends (`to` without a navmesh
+        // path), to tell a point on the mesh from one next to it (LosBreak: a crate top).
         bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour,
-                        float* length = nullptr);
+                        float* length = nullptr, Position3* end = nullptr);
 
         // The walk from `me` to `to` along the navmesh path (the straight line when there is no
         // complete path) is outside `idle`. No reachability or detour rule: for a walk that

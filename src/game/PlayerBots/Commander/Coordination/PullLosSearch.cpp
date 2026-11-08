@@ -215,7 +215,8 @@ namespace Commander
 
         Creature const* first = casters.front();
         Position3 point;
-        bool const found = LosBreak::FindPoint(map, search, point);
+        LosBreak::PointQuality quality;
+        bool const found = LosBreak::FindPoint(map, search, point, &quality);
         if (!found)
         {
             pull.losBreak = PullLosBreak::NoPoint;
@@ -230,11 +231,15 @@ namespace Commander
         pull.losCasters.clear();
         for (Creature const* c : casters)
             pull.losCasters.push_back(c->GetObjectGuid());
+        // Fallback ranks of the search (LosBreak.h, "Ranking"): said so the review shows them.
+        char const* fallback = !quality.groundOk && !quality.corner ? " (no corner, uneven ground: fallback)"
+                             : !quality.groundOk ? " (uneven ground: fallback)"
+                             : !quality.corner ? " (no corner, they walk straight to it: fallback)" : "";
         plan.notes.push_back(cornerFight
-            ? Format("Corner: %s steps out of %s's sight (%.0f yd) so the pack comes round to it.",
-                tank->GetName(), first->GetName(), PackResolver::Distance(tankAt, point))
-            : Format("%s stands back and casts: %s steps out of its sight (%.0f yd) so it comes closer.",
-                first->GetName(), tank->GetName(), PackResolver::Distance(tankAt, point)));
+            ? Format("Corner: %s steps out of %s's sight (%.0f yd) so the pack comes round to it%s.",
+                tank->GetName(), first->GetName(), PackResolver::Distance(tankAt, point), fallback)
+            : Format("%s stands back and casts: %s steps out of its sight (%.0f yd) so it comes closer%s.",
+                first->GetName(), tank->GetName(), PackResolver::Distance(tankAt, point), fallback));
 
         // Healer bots hide too, behind the tank as seen from the casters (LosHealerSpot.h).
         pull.losHiders.clear();

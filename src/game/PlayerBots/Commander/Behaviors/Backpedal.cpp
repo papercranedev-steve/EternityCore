@@ -121,6 +121,19 @@ namespace Backpedal
             MovementGeneratorType const type = me->GetMotionMaster()->GetCurrentMovementGeneratorType();
             return type != IDLE_MOTION_TYPE;
         }
+
+        // Another movement took over while walking backwards. Its spline was launched with
+        // MOVEFLAG_BACKWARD still set, so MoveSplineInit chose the run-back speed (4.5 yd/s)
+        // and the client showed a slow backwards shuffle; Unit::StopMoving keeps the flag on
+        // a player, so every later spline (the walk to the next shot spot) was slow too.
+        // Drop the flag and let the generator relaunch at its real speed.
+        void HandOver(Player* me)
+        {
+            if (!me->m_movementInfo.HasMovementFlag(MOVEFLAG_BACKWARD))
+                return;
+            me->m_movementInfo.RemoveMovementFlag(MOVEFLAG_BACKWARD);
+            me->PropagateSpeedChange();
+        }
     }
 
     float WalkSec(Player const* me, float distance)
@@ -214,6 +227,7 @@ namespace Backpedal
         {
             state.active = false;
             state.path.clear();
+            HandOver(me);
             return;
         }
         if (me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) || WorldTimer::getMSTimeDiff(state.orderMs, now) >= state.durationMs ||

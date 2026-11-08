@@ -159,9 +159,12 @@ namespace SafeRoute
         return gap <= OFF_MESH_STEP && map->isInLineOfSight(end.x, end.y, end.z + 2.0f, to.x, to.y, to.z + 2.0f);
     }
 
-    bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour, float* length)
+    bool PathIsSafe(Player* me, IdleCreatures const& idle, Position3 const& to, float maxDetour, float* length,
+                    Position3* end)
     {
         Position3 const here = PositionOf(me);
+        if (end)
+            *end = to;
         PathInfo path(me);
         path.calculate(to.x, to.y, to.z);
         uint32 const type = path.getPathType();
@@ -175,6 +178,12 @@ namespace SafeRoute
         }
         if (length)
             *length = path.Length();
+        if (end && !path.getPath().empty())
+        {
+            end->x = path.getPath().back().x;
+            end->y = path.getPath().back().y;
+            end->z = path.getPath().back().z;
+        }
         if (!PathReaches(me->GetMap(), path, to))
             return false;
 

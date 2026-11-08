@@ -1140,7 +1140,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         m_castWatch.spell = nullptr;
     else if (Commander::CastWatch::Update(this, m_castWatch))
         m_updateTimer.Reset(0);
-    // Same for an area channel (Blizzard): stop before the next tick pulls aggro.
+    // Same for an area channel (Blizzard): stop when the enemies its next ticks turn cost more than they deal.
     else if (Commander::AreaDamageBehavior::WatchChannel(this, m_areaChannelCheckMs))
         m_updateTimer.Reset(0);
     // Any cast or channel: stop it when an assigned interrupt or an area step cannot wait for it.

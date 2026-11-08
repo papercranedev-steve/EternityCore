@@ -55,7 +55,13 @@ namespace Commander
             std::vector<AreaDamageSpell> AreaDamage() const override
             {
                 auto const& s = m_bot.m_spells.mage;
-                return { { s.pBlizzard, true }, { s.pArcaneExplosion, false }, { s.pConeofCold, false },
+                // Improved Blizzard's chill (1.12: 30 / 50 / 65% slower). The talent is a class
+                // script override (UnitAuraProcHandler, scripts 836 / 988 / 989), so the slow is
+                // not readable from the Blizzard spell itself.
+                Player const* me = m_bot.me;
+                float const chill = me->HasSpell(12488) ? 0.65f : me->HasSpell(12487) ? 0.5f
+                                  : me->HasSpell(11185) ? 0.3f : 0.0f;
+                return { { s.pBlizzard, true, chill }, { s.pArcaneExplosion, false }, { s.pConeofCold, false },
                          { s.pBlastWave, false } };
             }
 
