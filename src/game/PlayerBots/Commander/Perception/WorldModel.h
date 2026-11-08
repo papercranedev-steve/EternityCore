@@ -69,6 +69,12 @@ namespace Commander
         bool fear = false;              // the target runs around (SPELL_AURA_MOD_FEAR)
         bool needsStealth = false;      // Sap
         bool peacefulOnly = false;      // target must not be in combat (Sap)
+        // One target per caster (SpellEntry::HasSingleTargetAura: Shackle Undead, Polymorph,
+        // Banish, Fear): casting it on another enemy frees `holding` (Unit::AddSpellAuraHolder).
+        bool oneTarget = false;
+        // oneTarget: the enemy this bot holds with it now (Unit::GetSingleCastSpellTargets), or
+        // the one its cast is on its way to (cast done, aura not on yet: that one is held next).
+        ObjectGuid holding;
         // Off cooldown, enough power, reagents, right form, can act and cast. Target checks
         // (creature type, immunity, range, line of sight) are the user's. A spell that needs
         // stealth (Sap) is also ready out of combat when the bot can go into stealth now
@@ -129,12 +135,16 @@ namespace Commander
         bool ready = false;             // off cooldown, enough power (stance swap counted), can act, a shield if needed
     };
 
-    // The control effect an enemy is under now (the one lasting longest).
+    // The control effect an enemy is under now (the one lasting longest). A party member's
+    // control cast that is done and on its way (Spell in SPELL_STATE_DELAYED: the server lands
+    // it a few hundred ms later) counts as on, at its full duration: seeing nothing there
+    // recast it (strat-20261108-140533, Shackle Undead cast twice in a row twice).
     struct ActiveControl
     {
         uint32 spellId = 0;             // 0 = none
         ObjectGuid caster;
         uint32 remainingMs = 0;
+        bool landing = false;           // the cast on its way, not on yet
         bool breaksOnDamage = false;
         bool fear = false;
     };

@@ -1,7 +1,7 @@
 -- Combat review: anomaly detectors run by the recorder (recorder.lua) on every tick of a recorded
 -- fight. A detector that fires writes two lines to the fight's file:
 --   anomaly {type, t, id, kind, sev, who, by, whoG, byG, cause, facts, links}
---           kind: aggro / death / healgap / stuck / idle / add / ccbreak / mark (review.labels);
+--           kind: aggro / death / healgap / stuck / idle / add / ccbreak / ccmove / mark (review.labels);
 --           sev: high / mid / low; who = the one it happened to, by = the one who caused it
 --           (names; guids in whoG / byG); cause = one line why; facts = numbers behind the cause;
 --           links = ids of earlier anomalies that led to this one (death <- aggro, healgap)
@@ -19,7 +19,7 @@ review = review or {}
 
 review.labels = {
     aggro = "仇恨丢失", death = "死亡", healgap = "治疗空窗", stuck = "施法卡住", idle = "发呆",
-    add = "意外加怪", ccbreak = "控制被打破", mark = "玩家标记",
+    add = "意外加怪", ccbreak = "控制被打破", ccmove = "换锁", mark = "玩家标记",
 }
 
 review.windowMs = 10000        -- events and decisions kept for the cause analysis
@@ -504,7 +504,28 @@ review.detectors[#review.detectors + 1] = { kind = "ccbreak", run = function(rs,
             if c then
                 rs.cc[key] = nil
                 local early = c.dur > 0 and e.t - c.t < c.dur - 1000
+                -- One target per caster (Shackle Undead, Polymorph, ...): the same caster putting
+                -- the same spell on another enemy frees this one in the same server tick.
+                local moved
                 if early and (e.extra or 0) == 0 then
+                    for _, n in ipairs(ctx.evs) do
+                        if n.ev == "aura+" and n.src == c.src and n.dst ~= e.dst and n.spell
+                            and math.abs(n.t - e.t) <= 100
+                            and review.spellName(rs.w, n.spell) == review.spellName(rs.w, e.spell) then
+                            moved = n
+                            break
+                        end
+                    end
+                end
+                if moved then
+                    emit(rs, "ccmove", { whoG = e.dst, byG = c.src, sev = "low",
+                        cause = string.format("%s 把 %s 从 %s 换到 %s（锁了 %.1f/%.0f 秒）", nameOf(rs, c.src) or "?",
+                            review.spellName(rs.w, e.spell), nameOf(rs, e.dst) or "?", nameOf(rs, moved.dst) or "?",
+                            (e.t - c.t) / 1000, c.dur / 1000),
+                        facts = { caster = nameOf(rs, c.src), to = nameOf(rs, moved.dst), heldMs = e.t - c.t,
+                                  durationMs = c.dur },
+                        links = {} })
+                elseif early and (e.extra or 0) == 0 then
                     local otherLoose = false
                     for _, row in ipairs(ctx.enemyRows) do
                         if row.guid ~= e.dst and row.alive and not row.cc then otherLoose = true end

@@ -18,7 +18,7 @@
 --   note    {type, t, text}   a Commander note sent to the leader (u:notes), from 3 s before the fight
 --   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
 --           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
---           intercepts; {} = nothing running
+--           intercepts, controls[{enemy, bot, spell, area}]; {} = nothing running
 --   pull    {type, t, planned, phase, target, targetName, ranged, returnToSpot,
 --           expected=[{g, name, aggro}], report=[lines the player was told]}   the pull as
 --           planned (u:pull), once per pull and again when its target or expected list changed

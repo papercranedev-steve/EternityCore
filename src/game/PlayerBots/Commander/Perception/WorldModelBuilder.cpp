@@ -272,6 +272,19 @@ namespace WorldModelBuilder
             return 0;
         }
 
+        // `caster`'s harmful control cast that is done and on its way to a unit (SPELL_STATE_DELAYED,
+        // spell batching or travel time), or nullptr.
+        Spell const* LandingControl(Unit const* caster)
+        {
+            Spell const* spell = caster->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (!spell || spell->getState() != SPELL_STATE_DELAYED || spell->m_targets.getUnitTargetGuid().IsEmpty())
+                return nullptr;
+            bool disables = false;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                disables = disables || SpellTags::IsDisableEffect(spell->m_spellInfo, i);
+            return disables && !spell->m_spellInfo->IsPositiveSpell() ? spell : nullptr;
+        }
+
         // The longest control effect on `creature` (EnemyFacts::control) and the longest periodic
         // damage a party member put on it (partyDotMs).
         void FillControlState(Creature const* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
@@ -311,6 +324,28 @@ namespace WorldModelBuilder
                     if (ours)
                         e.partyDotMs = std::max(e.partyDotMs, left);
                 }
+            }
+
+            // A party control on its way to it (ActiveControl): at its full duration.
+            for (Unit const* u : partyUnits)
+            {
+                Spell const* spell = LandingControl(u);
+                if (!spell || spell->m_targets.getUnitTargetGuid() != creature->GetObjectGuid())
+                    continue;
+                std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(spell->m_spellInfo->Id);
+                uint32 const full = profile ? profile->durationMs : 0;
+                if (full < e.control.remainingMs)
+                    continue;
+                e.control.spellId = spell->m_spellInfo->Id;
+                e.control.caster = u->GetObjectGuid();
+                e.control.remainingMs = full;
+                e.control.landing = true;
+                e.control.breaksOnDamage = spell->m_spellInfo->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS);
+                e.control.fear = false;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (SpellTags::IsDisableEffect(spell->m_spellInfo, i) &&
+                        spell->m_spellInfo->EffectApplyAuraName[i] == SPELL_AURA_MOD_FEAR)
+                        e.control.fear = true;
             }
         }
 
@@ -559,6 +594,17 @@ namespace WorldModelBuilder
                         a.fear = true;
                 a.needsStealth = (spell->Stances & (1u << (FORM_STEALTH - 1))) != 0;
                 a.peacefulOnly = spell->HasAttribute(SPELL_ATTR_EX_ONLY_PEACEFUL_TARGETS);
+                a.oneTarget = spell->HasSingleTargetAura();
+                if (a.oneTarget)
+                {
+                    for (auto const& held : me->GetSingleCastSpellTargets())
+                        if (Spells::IsSingleTargetSpells(held.first, spell))
+                            a.holding = held.second;
+                    // The one it is on its way to replaces it once it lands.
+                    if (Spell const* landing = LandingControl(me))
+                        if (Spells::IsSingleTargetSpells(landing->m_spellInfo, spell))
+                            a.holding = landing->m_targets.getUnitTargetGuid();
+                }
                 Powers const powerType = Powers(spell->powerType);
                 bool formOk = spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
                 // Sap: it goes into stealth on its way (ControlAbility::ready).

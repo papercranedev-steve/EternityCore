@@ -773,7 +773,7 @@ namespace DevConsole
 
     // u:plan(): compact state of the party's TeamPlan (what the recorder writes as `plan`
     // lines). Only plans that are running appear: focus, pull, clear, retreat, patrol,
-    // interrupts, intercepts. nil without a Commander.
+    // interrupts, intercepts, controls. nil without a Commander.
     static int U_plan(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -956,6 +956,24 @@ namespace DevConsole
                 lua_rawseti(L, -2, ++i);
             }
             lua_setfield(L, -2, "intercepts");
+        }
+        // Crowd control duties (CrowdControlAssigner). No points: they change every refresh
+        // and the recorder writes a plan line on each change.
+        if (!plan.controls.empty())
+        {
+            lua_createtable(L, int(plan.controls.size()), 0);
+            int i = 0;
+            for (Commander::ControlDuty const& d : plan.controls)
+            {
+                lua_createtable(L, 0, 4);
+                SetFieldG(L, "enemy", d.enemy);
+                SetFieldG(L, "bot", d.bot);
+                SetField(L, "spell", d.spellId);
+                if (d.area)
+                    SetFieldB(L, "area", true);
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "controls");
         }
         return 1;
     }

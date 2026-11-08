@@ -24,6 +24,13 @@
  *            a GCD: not there for a later emergency in this fight
  *   aoe      given by the caller (AreaLoss for a control that breaks on damage): area damage
  *            the party gives up to keep the targets unbroken
+ *   release  one target per caster (ControlAbility::oneTarget) and the bot holds another
+ *            enemy with it (ControlAbility::holding): that one is freed when this lands. The
+ *            controlled fight simulated once more with it back now instead of after what its
+ *            control still lasts: Points(damage) + Risk difference x penalty. Just controlled:
+ *            most of its duration is given up, near the end almost nothing (no stored time:
+ *            what is left is the measure). Mana and time already spent on it do not count.
+ *            (strat-20261108-140533: the priest moved its shackle three times in 9 s.)
  *
  * AreaLoss(x, sec): every damage dealer bot with an area spell (PartyMemberFacts::
  * areaDpsPerTarget): n = enemies within its radius of x, x included, that an area spell may hit
@@ -75,9 +82,11 @@ namespace ControlValue
         float aoe = 0.0f;
         float adds = 0.0f;
         float scatter = 0.0f;
+        float release = 0.0f;
+        ObjectGuid released;    // the enemy `release` is for (empty: none)
 
         float Benefit() const { return damage + danger + victims; }
-        float Cost() const { return action + reach + mana + cooldown + aoe + adds + scatter; }
+        float Cost() const { return action + reach + mana + cooldown + aoe + adds + scatter + release; }
         float Net() const { return Benefit() - Cost(); }
     };
 

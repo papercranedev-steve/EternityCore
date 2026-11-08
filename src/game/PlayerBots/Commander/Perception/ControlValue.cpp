@@ -106,6 +106,25 @@ namespace ControlValue
         w.damage = Value::Points(world, asIs.damage - ctrl.damage);
         w.danger = (Risk(asIs) - Risk(ctrl)) * penalty;
 
+        // The enemy this cast frees (header: release).
+        if (a.oneTarget && !a.holding.IsEmpty() && !IsTarget(targets, a.holding))
+        {
+            FightLoad::Input freed = controlled;
+            bool found = false;
+            for (FightLoad::Foe& f : freed.foes)
+                if (f.guid == a.holding && f.arriveSec > 0.0f)
+                {
+                    f.arriveSec = 0.0f;
+                    found = true;
+                }
+            if (found)
+            {
+                FightLoad::Result const back = FightLoad::Simulate(freed);
+                w.release = std::max(0.0f, Value::Points(world, back.damage - ctrl.damage) + (Risk(back) - Risk(ctrl)) * penalty);
+                w.released = a.holding;
+            }
+        }
+
         if (tank)
         {
             for (EnemyFacts const* e : targets)
@@ -244,10 +263,10 @@ namespace ControlValue
 
     std::string Describe(Worth const& w)
     {
-        char buf[300];
+        char buf[320];
         snprintf(buf, sizeof(buf),
-            "net %+.1f (%.0f s: damage %.1f danger %.1f victims %.1f | action %.1f reach %.1f mana %.1f cd %.1f aoe %.1f adds %.1f scatter %.1f)",
-            w.Net(), w.sec, w.damage, w.danger, w.victims, w.action, w.reach, w.mana, w.cooldown, w.aoe, w.adds, w.scatter);
+            "net %+.1f (%.0f s: damage %.1f danger %.1f victims %.1f | action %.1f reach %.1f mana %.1f cd %.1f aoe %.1f adds %.1f scatter %.1f release %.1f)",
+            w.Net(), w.sec, w.damage, w.danger, w.victims, w.action, w.reach, w.mana, w.cooldown, w.aoe, w.adds, w.scatter, w.release);
         return buf;
     }
 }

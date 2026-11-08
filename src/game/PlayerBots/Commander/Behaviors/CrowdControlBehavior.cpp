@@ -7,6 +7,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "Spell.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 
@@ -156,6 +157,12 @@ namespace Commander
         Unit* target = nullptr;
         if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY)
         {
+            // The duty can be a refresh old: its own cast already on its way there (done, aura
+            // not on yet; WorldModel ActiveControl::landing) is the duty done.
+            Spell const* landing = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (landing && landing->getState() == SPELL_STATE_DELAYED && landing->m_spellInfo->Id == spell->Id &&
+                landing->m_targets.getUnitTargetGuid() == duty->enemy)
+                return;
             target = me->GetMap()->GetUnit(duty->enemy);
             if (!target || !target->IsAlive() || (!duty->area && target->HasAura(spell->Id)) ||
                 !me->IsWithinLOSInMap(target) || !bot->CanTryToCastSpell(target, spell))

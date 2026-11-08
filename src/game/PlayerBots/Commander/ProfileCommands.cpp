@@ -307,8 +307,9 @@ namespace ProfileCommands
 
         for (EnemyFacts const& e : world.enemies)
             if (e.control.spellId)
-                handler->PSendSysMessage("  %s is controlled: spell %u by %s, %.1f s left%s%s", name(e.guid),
+                handler->PSendSysMessage("  %s is controlled: spell %u by %s, %.1f s left%s%s%s", name(e.guid),
                     e.control.spellId, name(e.control.caster), e.control.remainingMs / 1000.0f,
+                    e.control.landing ? " (on its way)" : "",
                     e.control.breaksOnDamage ? ", breaks on damage" : "", e.control.fear ? ", feared" : "");
 
         uint32 shown = 0;
@@ -319,10 +320,12 @@ namespace ProfileCommands
             for (ControlAbility const& a : m.controls)
             {
                 SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
-                handler->PSendSysMessage("%s: %s (%u)%s, %.0f s, %s%s%s", name(m.guid),
+                handler->PSendSysMessage("%s: %s (%u)%s, %.0f s, %s%s%s%s%s", name(m.guid),
                     spell ? spell->SpellName[0].c_str() : "?", a.spellId, a.ready ? "" : " not ready",
                     a.durationSec, a.radius > 0.0f ? "area" : "single target",
-                    a.breaksOnDamage ? ", breaks on damage" : "", a.fear ? ", fear" : "");
+                    a.breaksOnDamage ? ", breaks on damage" : "", a.fear ? ", fear" : "",
+                    a.oneTarget ? ", one at a time" : "",
+                    a.holding.IsEmpty() ? "" : (std::string(", holds ") + name(a.holding)).c_str());
                 // Sap needs a target out of combat: before a pull only (todo 10c).
                 if (!a.ready || !haveFight || a.peacefulOnly)
                     continue;
