@@ -54,7 +54,7 @@ namespace Commander
         float slowPct = 0.0f;
     };
 
-    // What a "keep someone alive" spell does (team rescue, Perception/SurvivalValue.h).
+    // What a "keep someone alive" spell does (team rescue, Perception/Values/SurvivalValue.h).
     enum class SurvivalEffect : uint8
     {
         Absorb,         // absorbs damage (Power Word: Shield; amount from the spell)
@@ -127,7 +127,7 @@ namespace Commander
         // (team rescue: RescueAssigner picks one per member, Takeover::Survival).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
         // Area damage spells the Commander casts on packs (the brain's area phase decides who,
-        // which, where and when, Coordination/AreaPhase.h; AreaDamageBehavior casts it; the
+        // which, where and when, Coordination/Doctrine/AreaPhase.h; AreaDamageBehavior casts it; the
         // rotations do not cast them).
         virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
         // The single target damage spell the rotation casts most: what an area spell is compared
@@ -153,7 +153,7 @@ namespace Commander
         // its way (CrowdControlBehavior, Takeover::Stealth); the rotation decides otherwise.
         virtual SpellEntry const* Stealth() const { return nullptr; }
         // An absorb the bot puts on itself before an area spell that may turn enemies to it
-        // (mage Ice Barrier). The area phase decides it (Coordination/AreaPhase.h).
+        // (mage Ice Barrier). The area phase decides it (Coordination/Doctrine/AreaPhase.h).
         virtual SpellEntry const* SelfShield() const { return nullptr; }
         // Turns its health into mana (warlock Life Tap): its mana is worth less (ManaWorth.h).
         virtual SpellEntry const* HealthToMana() const { return nullptr; }

@@ -12,76 +12,76 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/CommanderMgr.cpp
   ${COMMANDER_DIR}/PartyCommander.h
   ${COMMANDER_DIR}/PartyCommander.cpp
-  ${COMMANDER_DIR}/CommanderCommands.cpp
+  ${COMMANDER_DIR}/Commands/CommanderCommands.cpp
   ${COMMANDER_DIR}/ThreatFeed.h
   ${COMMANDER_DIR}/ThreatFeed.cpp
-  ${COMMANDER_DIR}/PlayerChat.h
-  ${COMMANDER_DIR}/PlayerChat.cpp
-  ${COMMANDER_DIR}/BotSpeech.h
-  ${COMMANDER_DIR}/BotSpeech.cpp
+  ${COMMANDER_DIR}/Commands/PlayerChat.h
+  ${COMMANDER_DIR}/Commands/PlayerChat.cpp
+  ${COMMANDER_DIR}/Commands/BotSpeech.h
+  ${COMMANDER_DIR}/Commands/BotSpeech.cpp
   ${COMMANDER_DIR}/Perception/WorldModel.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.cpp
-  ${COMMANDER_DIR}/Perception/ThreatView.h
-  ${COMMANDER_DIR}/Perception/ThreatView.cpp
-  ${COMMANDER_DIR}/Perception/PackResolver.h
-  ${COMMANDER_DIR}/Perception/PackResolver.cpp
-  ${COMMANDER_DIR}/Perception/ThreatHistory.h
-  ${COMMANDER_DIR}/Perception/ThreatHistory.cpp
-  ${COMMANDER_DIR}/Behaviors/ThreatBehavior.h
-  ${COMMANDER_DIR}/Behaviors/ThreatBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatView.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatView.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PackResolver.h
+  ${COMMANDER_DIR}/Perception/Spatial/PackResolver.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/ThreatBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/ThreatBehavior.cpp
   ${COMMANDER_DIR}/Coordination/TeamPlan.h
   ${COMMANDER_DIR}/Coordination/IAssigner.h
   ${COMMANDER_DIR}/Coordination/DutyAllocator.h
   ${COMMANDER_DIR}/Coordination/DutyAllocator.cpp
-  ${COMMANDER_DIR}/Coordination/DispelAssigner.h
-  ${COMMANDER_DIR}/Coordination/DispelAssigner.cpp
-  ${COMMANDER_DIR}/Perception/DispelValue.h
-  ${COMMANDER_DIR}/Perception/DispelValue.cpp
-  ${COMMANDER_DIR}/Coordination/InterruptAssigner.h
-  ${COMMANDER_DIR}/Coordination/InterruptAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/FocusAssigner.h
-  ${COMMANDER_DIR}/Coordination/FocusAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/TargetAssigner.h
-  ${COMMANDER_DIR}/Coordination/TargetAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/TargetRules.h
-  ${COMMANDER_DIR}/Coordination/TankTargets.cpp
-  ${COMMANDER_DIR}/Coordination/DamageTargets.cpp
-  ${COMMANDER_DIR}/Perception/ThreatRoom.h
-  ${COMMANDER_DIR}/Perception/ThreatRoom.cpp
-  ${COMMANDER_DIR}/Perception/LooseEnemy.h
-  ${COMMANDER_DIR}/Perception/LooseEnemy.cpp
-  ${COMMANDER_DIR}/Perception/ThreatGap.h
-  ${COMMANDER_DIR}/Perception/ThreatGap.cpp
-  ${COMMANDER_DIR}/Perception/AggroTurnCost.h
-  ${COMMANDER_DIR}/Perception/AggroTurnCost.cpp
-  ${COMMANDER_DIR}/Perception/AreaValue.h
-  ${COMMANDER_DIR}/Perception/AreaValue.cpp
-  ${COMMANDER_DIR}/Perception/RouteRisk.h
-  ${COMMANDER_DIR}/Perception/RouteRisk.cpp
-  ${COMMANDER_DIR}/Perception/SpellTags.h
-  ${COMMANDER_DIR}/Perception/SpellTags.cpp
-  ${COMMANDER_DIR}/Behaviors/InterruptBehavior.h
-  ${COMMANDER_DIR}/Behaviors/InterruptBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/TargetBehavior.h
-  ${COMMANDER_DIR}/Behaviors/TargetBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/PullBehavior.h
-  ${COMMANDER_DIR}/Behaviors/PullBehavior.cpp
-  ${COMMANDER_DIR}/Coordination/PullPlanner.h
-  ${COMMANDER_DIR}/Coordination/PullPlanner.cpp
-  ${COMMANDER_DIR}/Coordination/PullCommon.h
-  ${COMMANDER_DIR}/Coordination/PullCommon.cpp
-  ${COMMANDER_DIR}/Coordination/PullChoice.h
-  ${COMMANDER_DIR}/Coordination/PullChoice.cpp
-  ${COMMANDER_DIR}/Coordination/PullPatrolCheck.h
-  ${COMMANDER_DIR}/Coordination/PullPatrolCheck.cpp
-  ${COMMANDER_DIR}/Coordination/PullLosSearch.h
-  ${COMMANDER_DIR}/Coordination/PullLosSearch.cpp
-  ${COMMANDER_DIR}/Coordination/PullAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/ClearPlanner.h
-  ${COMMANDER_DIR}/Coordination/ClearPlanner.cpp
-  ${COMMANDER_DIR}/Perception/AssistPredictor.h
-  ${COMMANDER_DIR}/Perception/AssistPredictor.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/DispelAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/DispelAssigner.cpp
+  ${COMMANDER_DIR}/Perception/Values/DispelValue.h
+  ${COMMANDER_DIR}/Perception/Values/DispelValue.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/InterruptAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/InterruptAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/FocusAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/FocusAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/TargetAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/TargetAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/TargetRules.h
+  ${COMMANDER_DIR}/Coordination/Duties/TankTargets.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/DamageTargets.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatRoom.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatRoom.cpp
+  ${COMMANDER_DIR}/Perception/Values/LooseEnemy.h
+  ${COMMANDER_DIR}/Perception/Values/LooseEnemy.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.cpp
+  ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.h
+  ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.cpp
+  ${COMMANDER_DIR}/Perception/Values/AreaValue.h
+  ${COMMANDER_DIR}/Perception/Values/AreaValue.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/RouteRisk.h
+  ${COMMANDER_DIR}/Perception/Spatial/RouteRisk.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/SpellTags.h
+  ${COMMANDER_DIR}/Perception/Profiles/SpellTags.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/InterruptBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/InterruptBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/TargetBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/TargetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/PullBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/PullBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullCommon.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullCommon.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullChoice.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullChoice.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPatrolCheck.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPatrolCheck.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullLosSearch.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullLosSearch.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.h
+  ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.h
   ${COMMANDER_DIR}/Behaviors/Arbiter.cpp
@@ -89,50 +89,50 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Constraints.cpp
   ${COMMANDER_DIR}/Behaviors/CurrentAction.h
   ${COMMANDER_DIR}/Behaviors/CurrentAction.cpp
-  ${COMMANDER_DIR}/Perception/SpellProfile.h
-  ${COMMANDER_DIR}/Perception/SpellProfile.cpp
-  ${COMMANDER_DIR}/Perception/CreatureProfile.h
-  ${COMMANDER_DIR}/Perception/CreatureProfile.cpp
-  ${COMMANDER_DIR}/Perception/ProfileStore.h
-  ${COMMANDER_DIR}/Perception/ProfileStore.cpp
-  ${COMMANDER_DIR}/Perception/CombatRates.h
-  ${COMMANDER_DIR}/Perception/CombatRates.cpp
-  ${COMMANDER_DIR}/Perception/DamageIntake.h
-  ${COMMANDER_DIR}/Perception/DamageIntake.cpp
-  ${COMMANDER_DIR}/Perception/ValueModel.h
-  ${COMMANDER_DIR}/Perception/ValueModel.cpp
-  ${COMMANDER_DIR}/Perception/SwitchCost.h
-  ${COMMANDER_DIR}/Perception/SwitchCost.cpp
-  ${COMMANDER_DIR}/Perception/CastValue.h
-  ${COMMANDER_DIR}/Perception/CastValue.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/SpellProfile.h
+  ${COMMANDER_DIR}/Perception/Profiles/SpellProfile.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/CreatureProfile.h
+  ${COMMANDER_DIR}/Perception/Profiles/CreatureProfile.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/ProfileStore.h
+  ${COMMANDER_DIR}/Perception/Profiles/ProfileStore.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/CombatRates.h
+  ${COMMANDER_DIR}/Perception/Forecast/CombatRates.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.h
+  ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.cpp
+  ${COMMANDER_DIR}/Perception/Values/ValueModel.h
+  ${COMMANDER_DIR}/Perception/Values/ValueModel.cpp
+  ${COMMANDER_DIR}/Perception/Values/SwitchCost.h
+  ${COMMANDER_DIR}/Perception/Values/SwitchCost.cpp
+  ${COMMANDER_DIR}/Perception/Values/CastValue.h
+  ${COMMANDER_DIR}/Perception/Values/CastValue.cpp
   ${COMMANDER_DIR}/VetoChecks.h
   ${COMMANDER_DIR}/VetoChecks.cpp
-  ${COMMANDER_DIR}/Behaviors/DispelBehavior.h
-  ${COMMANDER_DIR}/Behaviors/DispelBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/CrowdControlBehavior.h
-  ${COMMANDER_DIR}/Behaviors/CrowdControlBehavior.cpp
-  ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.h
-  ${COMMANDER_DIR}/Coordination/CrowdControlAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/RescueAssigner.h
-  ${COMMANDER_DIR}/Coordination/RescueAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/AreaPhase.h
-  ${COMMANDER_DIR}/Coordination/AreaPhase.cpp
-  ${COMMANDER_DIR}/Coordination/ThreatOpening.h
-  ${COMMANDER_DIR}/Coordination/ThreatOpening.cpp
-  ${COMMANDER_DIR}/Behaviors/RescueBehavior.h
-  ${COMMANDER_DIR}/Behaviors/RescueBehavior.cpp
-  ${COMMANDER_DIR}/Perception/RescueValue.h
-  ${COMMANDER_DIR}/Perception/RescueValue.cpp
-  ${COMMANDER_DIR}/Perception/SurvivalValue.h
-  ${COMMANDER_DIR}/Perception/SurvivalValue.cpp
-  ${COMMANDER_DIR}/Perception/PetTaunt.h
-  ${COMMANDER_DIR}/Perception/PetTaunt.cpp
-  ${COMMANDER_DIR}/Coordination/PullControl.h
-  ${COMMANDER_DIR}/Coordination/PullControl.cpp
-  ${COMMANDER_DIR}/Coordination/ControlledEnd.h
-  ${COMMANDER_DIR}/Coordination/ControlledEnd.cpp
-  ${COMMANDER_DIR}/ProfileCommands.h
-  ${COMMANDER_DIR}/ProfileCommands.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/DispelBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/DispelBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/CrowdControlBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/CrowdControlBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/CrowdControlAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/CrowdControlAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/RescueAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/RescueAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaPhase.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaPhase.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Values/RescueValue.h
+  ${COMMANDER_DIR}/Perception/Values/RescueValue.cpp
+  ${COMMANDER_DIR}/Perception/Values/SurvivalValue.h
+  ${COMMANDER_DIR}/Perception/Values/SurvivalValue.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.h
+  ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/ControlledEnd.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/ControlledEnd.cpp
+  ${COMMANDER_DIR}/Commands/ProfileCommands.h
+  ${COMMANDER_DIR}/Commands/ProfileCommands.cpp
   ${COMMANDER_DIR}/Encounters/IEncounter.h
   ${COMMANDER_DIR}/Encounters/EncounterRegistry.h
   ${COMMANDER_DIR}/Encounters/EncounterRegistry.cpp
@@ -150,86 +150,86 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.h
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.cpp
-  ${COMMANDER_DIR}/Perception/HazardZones.h
-  ${COMMANDER_DIR}/Perception/HazardZones.cpp
-  ${COMMANDER_DIR}/Behaviors/PositioningBehavior.h
-  ${COMMANDER_DIR}/Behaviors/PositioningBehavior.cpp
-  ${COMMANDER_DIR}/Perception/PatrolTracker.h
-  ${COMMANDER_DIR}/Perception/PatrolTracker.cpp
-  ${COMMANDER_DIR}/Coordination/RetreatPlanner.h
-  ${COMMANDER_DIR}/Coordination/RetreatPlanner.cpp
-  ${COMMANDER_DIR}/Behaviors/RetreatBehavior.h
-  ${COMMANDER_DIR}/Behaviors/RetreatBehavior.cpp
-  ${COMMANDER_DIR}/Perception/ManaBudget.h
-  ${COMMANDER_DIR}/Perception/ManaBudget.cpp
-  ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.h
-  ${COMMANDER_DIR}/Behaviors/ManaBudgetBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/HealPlan.h
-  ${COMMANDER_DIR}/Behaviors/HealPlan.cpp
-  ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.h
-  ${COMMANDER_DIR}/Behaviors/HealPlanBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/CastWatch.h
-  ${COMMANDER_DIR}/Behaviors/CastWatch.cpp
-  ${COMMANDER_DIR}/Behaviors/CastBreak.h
-  ${COMMANDER_DIR}/Behaviors/CastBreak.cpp
-  ${COMMANDER_DIR}/Behaviors/Backpedal.h
-  ${COMMANDER_DIR}/Behaviors/Backpedal.cpp
-  ${COMMANDER_DIR}/Perception/PullOdds.h
-  ${COMMANDER_DIR}/Perception/PullOdds.cpp
-  ${COMMANDER_DIR}/Perception/HealCapacity.h
-  ${COMMANDER_DIR}/Perception/HealCapacity.cpp
-  ${COMMANDER_DIR}/Perception/FightLoad.h
-  ${COMMANDER_DIR}/Perception/FightLoad.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/HazardZones.h
+  ${COMMANDER_DIR}/Perception/Spatial/HazardZones.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/PositioningBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/PositioningBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PatrolTracker.h
+  ${COMMANDER_DIR}/Perception/Spatial/PatrolTracker.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.h
+  ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/HealPlan.h
+  ${COMMANDER_DIR}/Behaviors/Support/HealPlan.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/CastWatch.h
+  ${COMMANDER_DIR}/Behaviors/Combat/CastWatch.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/CastBreak.h
+  ${COMMANDER_DIR}/Behaviors/Combat/CastBreak.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/Backpedal.h
+  ${COMMANDER_DIR}/Behaviors/Movement/Backpedal.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/PullOdds.h
+  ${COMMANDER_DIR}/Perception/Forecast/PullOdds.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/HealCapacity.h
+  ${COMMANDER_DIR}/Perception/Forecast/HealCapacity.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/FightLoad.h
+  ${COMMANDER_DIR}/Perception/Forecast/FightLoad.cpp
   ${COMMANDER_DIR}/Trace/Trace.h
   ${COMMANDER_DIR}/Trace/Trace.cpp
   ${COMMANDER_DIR}/Trace/FightLoadJson.h
   ${COMMANDER_DIR}/Trace/FightLoadJson.cpp
-  ${COMMANDER_DIR}/Perception/ManaWorth.h
-  ${COMMANDER_DIR}/Perception/ManaWorth.cpp
-  ${COMMANDER_DIR}/Perception/RestValue.h
-  ${COMMANDER_DIR}/Perception/RestValue.cpp
-  ${COMMANDER_DIR}/Perception/FearRisk.h
-  ${COMMANDER_DIR}/Perception/FearRisk.cpp
-  ${COMMANDER_DIR}/Perception/ControlValue.h
-  ${COMMANDER_DIR}/Perception/ControlValue.cpp
-  ${COMMANDER_DIR}/Behaviors/FleePoint.h
-  ${COMMANDER_DIR}/Behaviors/FleePoint.cpp
-  ${COMMANDER_DIR}/Perception/SafeRoute.h
-  ${COMMANDER_DIR}/Perception/SafeRoute.cpp
-  ${COMMANDER_DIR}/Perception/MeleeRoutes.h
-  ${COMMANDER_DIR}/Perception/MeleeRoutes.cpp
-  ${COMMANDER_DIR}/Perception/FleePredictor.h
-  ${COMMANDER_DIR}/Perception/FleePredictor.cpp
-  ${COMMANDER_DIR}/Perception/FleeStopValue.h
-  ${COMMANDER_DIR}/Perception/FleeStopValue.cpp
-  ${COMMANDER_DIR}/Coordination/FleeStopAssigner.h
-  ${COMMANDER_DIR}/Coordination/FleeStopAssigner.cpp
-  ${COMMANDER_DIR}/Behaviors/FleeStopBehavior.h
-  ${COMMANDER_DIR}/Behaviors/FleeStopBehavior.cpp
-  ${COMMANDER_DIR}/Perception/AggroRange.h
-  ${COMMANDER_DIR}/Perception/AggroRange.cpp
-  ${COMMANDER_DIR}/Perception/ShotSpot.h
-  ${COMMANDER_DIR}/Perception/ShotSpot.cpp
-  ${COMMANDER_DIR}/Perception/StealthDetect.h
-  ${COMMANDER_DIR}/Perception/StealthDetect.cpp
-  ${COMMANDER_DIR}/Perception/SapSpot.h
-  ${COMMANDER_DIR}/Perception/SapSpot.cpp
-  ${COMMANDER_DIR}/Perception/SapValue.h
-  ${COMMANDER_DIR}/Perception/SapValue.cpp
-  ${COMMANDER_DIR}/Behaviors/FollowSpot.h
-  ${COMMANDER_DIR}/Behaviors/FollowSpot.cpp
-  ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.h
-  ${COMMANDER_DIR}/Behaviors/HealerStanceBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.h
-  ${COMMANDER_DIR}/Behaviors/RangedStanceBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/MeleeStanceBehavior.h
-  ${COMMANDER_DIR}/Behaviors/MeleeStanceBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/RestBehavior.h
-  ${COMMANDER_DIR}/Behaviors/RestBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/EscapeBehavior.h
-  ${COMMANDER_DIR}/Behaviors/EscapeBehavior.cpp
-  ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.h
-  ${COMMANDER_DIR}/Behaviors/AreaDamageBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Values/ManaWorth.h
+  ${COMMANDER_DIR}/Perception/Values/ManaWorth.cpp
+  ${COMMANDER_DIR}/Perception/Values/RestValue.h
+  ${COMMANDER_DIR}/Perception/Values/RestValue.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/FearRisk.h
+  ${COMMANDER_DIR}/Perception/Forecast/FearRisk.cpp
+  ${COMMANDER_DIR}/Perception/Values/ControlValue.h
+  ${COMMANDER_DIR}/Perception/Values/ControlValue.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/FleePoint.h
+  ${COMMANDER_DIR}/Behaviors/Movement/FleePoint.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/SafeRoute.h
+  ${COMMANDER_DIR}/Perception/Spatial/SafeRoute.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/MeleeRoutes.h
+  ${COMMANDER_DIR}/Perception/Spatial/MeleeRoutes.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.h
+  ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.cpp
+  ${COMMANDER_DIR}/Perception/Values/FleeStopValue.h
+  ${COMMANDER_DIR}/Perception/Values/FleeStopValue.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/FleeStopAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/FleeStopAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/FleeStopBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/FleeStopBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/AggroRange.h
+  ${COMMANDER_DIR}/Perception/Spatial/AggroRange.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/ShotSpot.h
+  ${COMMANDER_DIR}/Perception/Spatial/ShotSpot.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/StealthDetect.h
+  ${COMMANDER_DIR}/Perception/Spatial/StealthDetect.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/SapSpot.h
+  ${COMMANDER_DIR}/Perception/Spatial/SapSpot.cpp
+  ${COMMANDER_DIR}/Perception/Values/SapValue.h
+  ${COMMANDER_DIR}/Perception/Values/SapValue.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/FollowSpot.h
+  ${COMMANDER_DIR}/Behaviors/Movement/FollowSpot.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/HealerStanceBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/HealerStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/RestBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/RestBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp
@@ -243,22 +243,22 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Classes/Hunter.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
-  ${COMMANDER_DIR}/Coordination/RoleAssigner.h
-  ${COMMANDER_DIR}/Coordination/RoleAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/PatrolAssigner.h
-  ${COMMANDER_DIR}/Coordination/PatrolAssigner.cpp
-  ${COMMANDER_DIR}/Coordination/PatrolPlanner.h
-  ${COMMANDER_DIR}/Coordination/PatrolPlanner.cpp
-  ${COMMANDER_DIR}/Coordination/LosBreak.h
-  ${COMMANDER_DIR}/Coordination/LosBreak.cpp
-  ${COMMANDER_DIR}/Coordination/PullOpening.h
-  ${COMMANDER_DIR}/Coordination/PullOpening.cpp
-  ${COMMANDER_DIR}/Coordination/LosHealerSpot.h
-  ${COMMANDER_DIR}/Coordination/LosHealerSpot.cpp
-  ${COMMANDER_DIR}/Coordination/PullMethod.h
-  ${COMMANDER_DIR}/Coordination/PullPlace.h
-  ${COMMANDER_DIR}/Behaviors/PatrolBehavior.h
-  ${COMMANDER_DIR}/Behaviors/PatrolBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolPlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Los/LosBreak.h
+  ${COMMANDER_DIR}/Coordination/Situation/Los/LosBreak.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullOpening.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullOpening.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Los/LosHealerSpot.h
+  ${COMMANDER_DIR}/Coordination/Situation/Los/LosHealerSpot.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullMethod.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlace.h
+  ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

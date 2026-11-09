@@ -11,7 +11,7 @@
 --           snap lines don't have: casts with targets, control, AI last decision, healer -> member
 --           distance / line of sight, tank -> enemy distance, named threat tables
 -- and says one line ("[复盘] #2 13.8s 仇恨丢失 ...") in party chat as the bot it happened to
--- (bot speech on, Commander/BotSpeech.h), else tells it the leader. dev.ps1 review and the addon's
+-- (bot speech on, Commander/Commands/BotSpeech.h), else tells it the leader. dev.ps1 review and the addon's
 -- fight log window (recview.lua) read them.
 --
 -- Adding a detector: append { kind = "...", run = function(rs, ctx) ... emit(rs, ctx, kind, a) end }

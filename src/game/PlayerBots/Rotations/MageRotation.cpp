@@ -13,7 +13,7 @@
  *   3. Without the Commander escape module: the old Blink / Frost Nova / run away block.
  *   4. Counterspell (behind the interrupt veto), Polymorph on a second attacker.
  *   5. No area spells (user, 2026-11-02): the Commander area damage module decides when, which
- *      and where (Commander/Behaviors/AreaDamageBehavior.h); without it the mage casts the filler.
+ *      and where (Commander/Behaviors/Combat/AreaDamageBehavior.h); without it the mage casts the filler.
  *   6. Burst of other builds (Combustion, Arcane Power, Presence of Mind + Pyroblast).
  *   7. Fire Blast to finish the victim (it dies from it), or while moving above half mana.
  *   8. The filler (ClassKit::Filler: Frostbolt, Fireball for a fire build).

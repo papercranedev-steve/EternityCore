@@ -12,7 +12,7 @@
 #ifndef MANGOS_COMMANDER_FIGHT_LOAD_JSON_H
 #define MANGOS_COMMANDER_FIGHT_LOAD_JSON_H
 
-#include "Commander/Perception/FightLoad.h"
+#include "Commander/Perception/Forecast/FightLoad.h"
 #include <string>
 
 namespace Commander

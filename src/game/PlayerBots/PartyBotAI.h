@@ -20,10 +20,10 @@
 #include "CombatBotBaseAI.h"
 #include "Group.h"
 #include "ObjectAccessor.h"
-#include "Commander/Behaviors/CastWatch.h"
-#include "Commander/Behaviors/CastBreak.h"
-#include "Commander/Behaviors/Backpedal.h"
-#include "Commander/Behaviors/FollowSpot.h"
+#include "Commander/Behaviors/Combat/CastWatch.h"
+#include "Commander/Behaviors/Combat/CastBreak.h"
+#include "Commander/Behaviors/Movement/Backpedal.h"
+#include "Commander/Behaviors/Movement/FollowSpot.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -189,7 +189,7 @@ public:
     // PlayerBotMgr.cpp) call this: the player's order wins over a Commander movement hold left
     // from before. A Commander module may hold again on its next decision.
     void ClearMovementHold();
-    // Walk backwards to `to` facing the enemies (Commander/Behaviors/Backpedal.h), order valid
+    // Walk backwards to `to` facing the enemies (Commander/Behaviors/Movement/Backpedal.h), order valid
     // for `durationMs`. False when it cannot walk there.
     bool OrderBackpedal(Commander::Position3 const& to, ObjectGuid face, uint32 durationMs);
     bool IsBackpedaling() const { return m_backpedal.active; }
@@ -235,7 +235,7 @@ public:
     bool IsResting() const;     // the food or the drink is on
     // Health or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
     bool NeedsRest() const;
-    // Commander rest (BotActionType::Rest, Behaviors/RestBehavior.h; the original eat and drink
+    // Commander rest (BotActionType::Rest, Behaviors/Support/RestBehavior.h; the original eat and drink
     // is gone): eat when health is missing, drink when mana is, or keep sitting. False in
     // combat, while buffing, with a victim, or with nothing missing. More than 100 yd from the
     // leader: full at once (it is about to be teleported), false. The Commander decides when a
@@ -262,7 +262,7 @@ public:
     // takeover may start in the hook's tick).
     void StopTakenOverMovement();
     // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
-    // idle creatures' aggro range (Commander/Behaviors/FollowSpot.h).
+    // idle creatures' aggro range (Commander/Behaviors/Movement/FollowSpot.h).
     void StartFollowing(Unit* pLeader);
     // While following: re-check the follow point after the leader moved or turned enough.
     void KeepFollowSpotSafe(Unit* pLeader);
@@ -295,7 +295,7 @@ public:
     // Commander sent to wake the last controlled enemy may attack it (IsAssignedToBreakControl).
     bool IsValidHostileTarget(Unit const* pTarget) const;
     // In combat: the Commander plan sends this bot to wake `pTarget`, the first of the
-    // controlled enemies that are all that is left (Commander/Coordination/ControlledEnd.h).
+    // controlled enemies that are all that is left (Commander/Coordination/Doctrine/ControlledEnd.h).
     bool IsAssignedToBreakControl(Unit const* pTarget) const;
 
     std::vector<RaidTargetIcon> m_marksToCC;
@@ -323,7 +323,7 @@ public:
     static constexpr uint32 PB_RESURRECT_BACKOFF_MS = 60 * IN_MILLISECONDS;
     ObjectGuid m_resurrectTryGuid;
     uint32 m_resurrectTryMs = 0;
-    // Commander position module (Commander/Behaviors/PositioningBehavior.cpp): the area a melee
+    // Commander position module (Commander/Behaviors/Movement/PositioningBehavior.cpp): the area a melee
     // bot last stepped out of without its victim in reach. After that one step it fights inside
     // the area until it leaves it or the area is gone. Mutable: behaviors get a const bot.
     struct HazardGiveUp
@@ -346,13 +346,13 @@ public:
     // chase (BeginChasing, const).
     mutable ObjectGuid m_chaseVictim;
     float m_chaseAngle = 0.0f;
-    // Commander mid-cast heal check (Commander/Behaviors/CastWatch.h), every frame in UpdateAI.
+    // Commander mid-cast heal check (Commander/Behaviors/Combat/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;
-    // Last area channel check (Commander/Behaviors/AreaDamageBehavior.h WatchChannel).
+    // Last area channel check (Commander/Behaviors/Combat/AreaDamageBehavior.h WatchChannel).
     uint32 m_areaChannelCheckMs = 0;
-    // Commander stop of the bot's own cast (Commander/Behaviors/CastBreak.h), every frame in UpdateAI.
+    // Commander stop of the bot's own cast (Commander/Behaviors/Combat/CastBreak.h), every frame in UpdateAI.
     Commander::CastBreakState m_castBreak;
-    // Commander walk backwards (Commander/Behaviors/Backpedal.h), every frame in UpdateAI.
+    // Commander walk backwards (Commander/Behaviors/Movement/Backpedal.h), every frame in UpdateAI.
     Commander::BackpedalState m_backpedal;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).

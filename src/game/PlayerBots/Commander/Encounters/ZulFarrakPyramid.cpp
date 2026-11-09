@@ -29,10 +29,10 @@
 
 #include "Commander/Encounters/ZulFarrakPyramid.h"
 #include "Commander/Encounters/EncounterHelpers.h"
-#include "Commander/Coordination/FocusAssigner.h"
+#include "Commander/Coordination/Duties/FocusAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Commander/Perception/PackResolver.h"
-#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "InstanceData.h"

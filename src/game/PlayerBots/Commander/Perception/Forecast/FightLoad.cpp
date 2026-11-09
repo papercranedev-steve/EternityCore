@@ -1,0 +1,349 @@
+#include "Commander/Perception/Forecast/FightLoad.h"
+#include "Commander/Perception/Forecast/ManaBudget.h"
+#include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/WorldModelBuilder.h"
+#include "Commander/Trace/FightLoadJson.h"
+#include "Commander/Trace/Trace.h"
+#include "Creature.h"
+#include "Map.h"
+#include "SharedDefines.h"
+#include <algorithm>
+#include <cstdio>
+
+namespace Commander
+{
+namespace FightLoad
+{
+    namespace
+    {
+        // The cheapest heal that keeps up with `want` per second, else the fastest one.
+        HealRate const* PickRate(std::vector<HealRate> const& rates, float want)
+        {
+            HealRate const* cheapest = nullptr;
+            HealRate const* fastest = nullptr;
+            for (HealRate const& r : rates)
+            {
+                if (r.hps <= 0.0f || r.perMana <= 0.0f)
+                    continue;
+                if (!fastest || r.hps > fastest->hps)
+                    fastest = &r;
+                if (r.hps >= want && (!cheapest || r.perMana > cheapest->perMana))
+                    cheapest = &r;
+            }
+            return cheapest ? cheapest : fastest;
+        }
+    }
+
+    Result Simulate(Input const& in, char const* why)
+    {
+        Result const r = Run(in, nullptr);
+        if (Trace::On())
+            Trace::Emit("fight", why ? why : "", FightLoadJson::ResultJson(r), FightLoadJson::InputJson(in));
+        return r;
+    }
+
+    Result Run(Input const& in, std::vector<Step>* steps)
+    {
+        Result r;
+        float const maxHealth = std::max(1.0f, in.tankMaxHealth);
+        float tank = std::min(maxHealth, std::max(0.0f, in.tankHealth));
+        r.lowestTankPct = tank / maxHealth * 100.0f;
+
+        std::vector<float> health;
+        float totalHealth = 0.0f;
+        for (Foe const& f : in.foes)
+        {
+            health.push_back(std::max(0.0f, f.health));
+            totalHealth += std::max(0.0f, f.health);
+        }
+        std::vector<float> mana;
+        for (Healer const& h : in.healers)
+        {
+            mana.push_back(h.mana);
+            r.manaStart += h.mana;
+        }
+        float const partyDps = std::max(1.0f, in.partyDps);
+        float const waste = 1.0f - ManaBudget::OVERHEAL;
+
+        float t = 0.0f;
+        for (; t < MAX_SEC; t += STEP_SEC)
+        {
+            auto present = [&](size_t i) { return health[i] > 0.0f && in.foes[i].arriveSec <= t; };
+
+            float incoming = 0.0f;
+            bool anyPresent = false;
+            for (size_t i = 0; i < in.foes.size(); ++i)
+            {
+                if (!present(i))
+                    continue;
+                anyPresent = true;
+                incoming += in.foes[i].dps * DAMAGE_MARGIN;
+            }
+            if (!anyPresent)
+            {
+                // The rest comes after this fight: another fight. Unless it is still this one
+                // (a controlled enemy waking up): the time passes, healers top up and regenerate.
+                bool waiting = false;
+                for (size_t i = 0; i < in.foes.size(); ++i)
+                    if (health[i] > 0.0f && in.foes[i].sameFight)
+                        waiting = true;
+                if (!waiting)
+                    break;
+            }
+            r.peakDps = std::max(r.peakDps, incoming);
+            tank -= incoming * STEP_SEC;
+            r.damage += incoming * STEP_SEC;
+            float const healedBefore = r.healed;
+
+            float const deficit = maxHealth - tank;
+            if (deficit > 0.0f && !in.healers.empty())
+            {
+                float const want = std::min(deficit / STEP_SEC, incoming + deficit / TOP_UP_SEC) /
+                                   float(in.healers.size());
+                for (size_t h = 0; h < in.healers.size(); ++h)
+                {
+                    HealRate const* rate = PickRate(in.healers[h].rates, want);
+                    if (!rate || mana[h] <= 0.0f)
+                        continue;
+                    float heal = std::min(want, rate->hps) * STEP_SEC;
+                    float cost = heal / (rate->perMana * waste);
+                    if (cost > mana[h])
+                    {
+                        heal *= mana[h] / cost;
+                        cost = mana[h];
+                    }
+                    mana[h] -= cost;
+                    tank += heal;
+                    r.healed += heal;
+                }
+                tank = std::min(maxHealth, tank);
+            }
+            for (size_t h = 0; h < in.healers.size(); ++h)
+                mana[h] = std::min(in.healers[h].maxMana, mana[h] + in.healers[h].regenPerSec * STEP_SEC);
+
+            r.lowestTankPct = std::min(r.lowestTankPct, std::max(0.0f, tank) / maxHealth * 100.0f);
+            Step* step = nullptr;
+            if (steps)
+            {
+                steps->emplace_back();
+                step = &steps->back();
+                step->t = t;
+                step->incoming = incoming;
+                step->healed = r.healed - healedBefore;
+                step->tank = tank;
+                for (float m : mana)
+                    step->mana += m;
+            }
+            if (tank <= 0.0f)
+            {
+                r.tankDies = true;
+                if (step)
+                    step->health = health;
+                break;
+            }
+
+            // The party's damage: most damage per remaining health first (it keeps the target
+            // it started on, whose ratio only grows).
+            float budget = partyDps * STEP_SEC;
+            while (budget > 0.0f)
+            {
+                int best = -1;
+                for (size_t i = 0; i < in.foes.size(); ++i)
+                    if (present(i) && (best < 0 || in.foes[i].dps / health[i] > in.foes[best].dps / health[best]))
+                        best = int(i);
+                if (best < 0)
+                    break;
+                float const take = std::min(budget, health[best]);
+                health[best] -= take;
+                budget -= take;
+            }
+            if (step)
+                step->health = health;
+        }
+
+        r.fightSec = t;
+        float left = 0.0f;
+        bool presentLeft = false;
+        for (size_t i = 0; i < in.foes.size(); ++i)
+        {
+            if (health[i] > 0.0f && in.foes[i].arriveSec <= t)
+            {
+                left += health[i];
+                presentLeft = true;
+            }
+        }
+        r.unfinished = !r.tankDies && presentLeft;
+        r.healthLeftPct = totalHealth > 0.0f ? left / totalHealth * 100.0f : 0.0f;
+        for (float m : mana)
+            r.manaLeft += m;
+        return r;
+    }
+
+    bool Bearable(Result const& r)
+    {
+        return !r.tankDies && !r.unfinished && r.lowestTankPct >= TANK_FLOOR_PCT;
+    }
+
+    float Score(Result const& r)
+    {
+        if (r.tankDies || r.unfinished)
+            return -r.healthLeftPct;
+        return r.lowestTankPct;
+    }
+
+    float Risk(Result const& r)
+    {
+        if (r.tankDies || r.unfinished)
+            return 1.0f;
+        return std::min(1.0f, std::max(0.0f, (TANK_FLOOR_PCT - r.lowestTankPct) / TANK_FLOOR_PCT));
+    }
+
+    float Loss(WorldModel const& world, Result const& r, float penalty)
+    {
+        return Value::Points(world, r.damage) + Risk(r) * penalty;
+    }
+
+    std::string Describe(Result const& r)
+    {
+        char buf[200];
+        if (r.tankDies)
+            snprintf(buf, sizeof(buf), "the tank dies after ~%.0f s with %.0f%% of their health left, incoming up to %.0f/s",
+                r.fightSec, r.healthLeftPct, r.peakDps);
+        else
+            snprintf(buf, sizeof(buf), "fight ~%.0f s, tank down to %.0f%%, incoming up to %.0f/s",
+                r.fightSec, r.lowestTankPct, r.peakDps);
+        std::string text = buf;
+        if (r.manaStart > 0.0f)
+        {
+            snprintf(buf, sizeof(buf), ", healer mana %.0f -> %.0f", r.manaStart, r.manaLeft);
+            text += buf;
+        }
+        else
+            text += ", no healer bot";
+        return text;
+    }
+
+    Foe FoeOf(Creature const* creature, PartyMemberFacts const& tank)
+    {
+        Foe f;
+        f.guid = creature->GetObjectGuid();
+        f.health = float(creature->GetHealth());
+        float const hit = (creature->GetFloatValue(UNIT_FIELD_MINDAMAGE) + creature->GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2.0f;
+        uint32 const attackMs = creature->GetAttackTime(BASE_ATTACK);
+        float melee = attackMs ? hit / (attackMs / 1000.0f) : 0.0f;
+        if (creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL)
+            melee *= 1.0f - Value::ArmorReduction(tank.armor, creature->GetLevel());
+        float ranged = 0.0f;
+        uint32 rangedSpell = 0;
+        if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(creature->GetEntry()))
+            if (profile->mainRangedSpellId)
+            {
+                rangedSpell = profile->mainRangedSpellId;
+                ranged = WorldModelBuilder::RangedSpellDps(*profile, creature->GetLevel(), hit);
+            }
+        f.dps = std::max(melee, ranged);
+        if (Trace::On())
+            Trace::Emit("foe", creature->GetName(), Trace::Format(
+                "{\"g\":\"%s\",\"level\":%u,\"hp\":%.0f,\"hit\":%.1f,\"attackMs\":%u,\"physical\":%s,\"armorCut\":%.3f,"
+                "\"melee\":%.1f,\"rangedSpell\":%u,\"ranged\":%.1f,\"dps\":%.1f}",
+                Trace::Guid(f.guid).c_str(), creature->GetLevel(), f.health, hit, attackMs,
+                creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL ? "true" : "false",
+                Value::ArmorReduction(tank.armor, creature->GetLevel()), melee, rangedSpell, ranged, f.dps));
+        return f;
+    }
+
+    Foe FoeOf(EnemyFacts const& enemy, PartyMemberFacts const& tank)
+    {
+        Foe f;
+        f.guid = enemy.guid;
+        f.health = float(enemy.health);
+        float melee = enemy.meleeDps;
+        if (enemy.meleePhysical)
+            melee *= 1.0f - Value::ArmorReduction(tank.armor, enemy.level);
+        f.dps = std::max(melee, enemy.rangedDps);
+        return f;
+    }
+
+    Foe FoeOf(PackCreature const& creature, PartyMemberFacts const& tank, float arriveSec)
+    {
+        Foe f;
+        f.guid = creature.guid;
+        f.health = float(creature.health);
+        f.dps = creature.meleeDps * (1.0f - Value::ArmorReduction(tank.armor, creature.level));
+        f.arriveSec = arriveSec;
+        f.sameFight = true;
+        return f;
+    }
+
+    namespace
+    {
+        bool StartInput(WorldModel const& world, Input& out, PartyMemberFacts const*& tank)
+        {
+            tank = Tanks::Main(world);
+            if (!tank || !tank->alive)
+                return false;
+            out = Input();
+            out.tankHealth = float(tank->health);
+            out.tankMaxHealth = float(std::max(1u, tank->maxHealth));
+            out.partyDps = Value::DealtDps(world);
+            return true;
+        }
+
+        void AddHealers(WorldModel const& world, Input& out)
+        {
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || m.role != ROLE_HEALER || !m.CanAct() || m.healRates.empty())
+                    continue;
+                Healer h;
+                h.rates = m.healRates;
+                h.mana = float(m.mana);
+                h.maxMana = float(m.maxMana);
+                h.regenPerSec = m.manaRegenCasting;
+                out.healers.push_back(std::move(h));
+            }
+        }
+    }
+
+    bool FromWorld(WorldModel const& world, Input& out)
+    {
+        PartyMemberFacts const* tank = nullptr;
+        if (!StartInput(world, out, tank))
+            return false;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (e.onAllyOnly || !e.acting || !e.health)
+                continue;
+            Foe f = FoeOf(e, *tank);
+            if (e.control.spellId)
+            {
+                f.arriveSec = e.control.remainingMs / 1000.0f;
+                f.sameFight = true;
+            }
+            out.foes.push_back(f);
+        }
+        AddHealers(world, out);
+        return true;
+    }
+
+    bool Build(WorldModel const& world, Map* map, std::vector<ObjectGuid> const& creatures, Input& out)
+    {
+        PartyMemberFacts const* tank = nullptr;
+        if (!StartInput(world, out, tank))
+            return false;
+        if (Trace::On())
+            Trace::Emit("party", "fight input", Trace::Format(
+                "{\"partyDps\":%.1f,\"dpsSource\":\"%s\",\"tank\":\"%s\",\"tankHealth\":%u,\"tankMax\":%u,\"tankArmor\":%u}",
+                out.partyDps, Value::DealtDpsSource(world), Trace::Guid(tank->guid).c_str(), tank->health, tank->maxHealth,
+                uint32(tank->armor)));
+        for (ObjectGuid g : creatures)
+            if (Creature const* c = map->GetCreature(g))
+                if (c->IsAlive())
+                    out.foes.push_back(FoeOf(c, *tank));
+        AddHealers(world, out);
+        return true;
+    }
+}
+}

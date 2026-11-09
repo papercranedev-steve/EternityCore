@@ -34,7 +34,7 @@ namespace Commander
         // == Proposal::source) and release the hold; fails when the walk is somebody else's.
         // The rotation still runs in the same tick (casts right where it stopped).
         StopMove,
-        // Walk backwards to x/y/z facing the way it came (Behaviors/Backpedal.h), order valid
+        // Walk backwards to x/y/z facing the way it came (Behaviors/Movement/Backpedal.h), order valid
         // for holdMs (propose it again every tick to keep it); `target` is faced at the end.
         // The original rotation still runs in the same tick (instant abilities while walking).
         Backpedal,

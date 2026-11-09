@@ -17,11 +17,11 @@
 
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
 #include "Commander/Encounters/EncounterHelpers.h"
-#include "Commander/Behaviors/ThreatBehavior.h"
+#include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
-#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "InstanceData.h"

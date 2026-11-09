@@ -307,7 +307,7 @@ class ChatHandler
         bool HandlePartyBotCharsCommand(char * args);
         Player* ExtractPartyBotTarget(char** args, std::string& name);
         bool HandlePartyBotRemoveCommand(char * args);
-        bool HandlePartyBotAiCommand(char * args);      // PlayerBots/Commander/CommanderCommands.cpp
+        bool HandlePartyBotAiCommand(char * args);      // PlayerBots/Commander/Commands/CommanderCommands.cpp
         bool HandlePopBotCommand(char* args);           // PlayerBots/Population/PopulationCommands.cpp
         bool HandleLuaCommand(char* args);              // DevConsole/DevConsoleCommands.cpp
         bool HandleScenarioCommand(char* args);         // DevConsole/DevConsoleCommands.cpp

@@ -33,11 +33,11 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Commander/BotDirectives.h"
-#include "Commander/BotSpeech.h"
+#include "Commander/Commands/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/PlayerChat.h"
-#include "Commander/Perception/AggroRange.h"
+#include "Commander/Commands/PlayerChat.h"
+#include "Commander/Perception/Spatial/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
 #include "Packets/Spell.h"
@@ -979,7 +979,7 @@ namespace DevConsole
             }
             lua_setfield(L, -2, "controls");
         }
-        // Threat opening (Coordination/ThreatOpening.h): the tank and the enemies still short
+        // Threat opening (Coordination/Doctrine/ThreatOpening.h): the tank and the enemies still short
         // (no gap sizes: they change every refresh and the recorder writes a plan line on each change).
         if (plan.threat.active)
         {
@@ -992,7 +992,7 @@ namespace DevConsole
             lua_setfield(L, -2, "short");
             lua_setfield(L, -2, "threat");
         }
-        // Area phase (Coordination/AreaPhase.h). No points (they change every refresh).
+        // Area phase (Coordination/Doctrine/AreaPhase.h). No points (they change every refresh).
         if (plan.area.active)
         {
             Commander::AreaPlan const& a = plan.area;
@@ -1450,7 +1450,7 @@ namespace DevConsole
         return 0;
     }
     // u:partysay(text): the character says it in party chat when bot speech is on
-    // (Commander/BotSpeech.h). Returns false when off or not in a group.
+    // (Commander/Commands/BotSpeech.h). Returns false when off or not in a group.
     static int U_partysay(lua_State* L)
     {
         Player* p = CheckPlayer(L, 1);

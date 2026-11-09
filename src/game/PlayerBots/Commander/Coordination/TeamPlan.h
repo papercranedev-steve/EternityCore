@@ -10,7 +10,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
-#include "Commander/Perception/ManaWorth.h"
+#include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -156,8 +156,8 @@ namespace Commander
         ObjectGuid tank;
         std::vector<ObjectGuid> expected;   // AssistPredictor result, target included
         Position3 spot;                     // where the party fights (leader position at command time)
-        // The tank walks the pack back to `spot` (backwards, facing it: Behaviors/Backpedal.h),
-        // decided by PullPlanner::Plan from the party's edge and the add risk (Perception/PullOdds.h).
+        // The tank walks the pack back to `spot` (backwards, facing it: Behaviors/Movement/Backpedal.h),
+        // decided by PullPlanner::Plan from the party's edge and the add risk (Perception/Forecast/PullOdds.h).
         bool returnToSpot = false;
         uint32 returnTimeoutMs = 0;         // Return ends by then; set when Return starts (walk length)
         uint32 phaseSinceMs = 0;
@@ -227,7 +227,7 @@ namespace Commander
         // ranged pull did not start the fight in time (tank walks in instead).
         uint32 rangedPullSpell = 0;
         float rangedPullRange = 0.0f;
-        // Where the tank shoots from (Perception/ShotSpot: target in sight, outside every idle
+        // Where the tank shoots from (Perception/Spatial/ShotSpot: target in sight, outside every idle
         // creature's aggro range, safe walk). Found by PullPlanner::Plan, looked for again
         // before the tank goes and when the tank reports the spot failed (rangedShot.spotFailed).
         Position3 rangedSpot;
@@ -245,7 +245,7 @@ namespace Commander
         mutable PullShotState rangedShot;
 
         // Face pull (PullMethod::Face, or chosen by Auto): the tank walks to faceSpot, inside the
-        // target's aggro range and in its sight (Perception/ShotSpot.h FindFace), and does
+        // target's aggro range and in its sight (Perception/Spatial/ShotSpot.h FindFace), and does
         // nothing there: the target sees it and comes. Not noticed within
         // PullBehavior::FACE_WAIT_MS: walks in.
         bool facePull = false;
@@ -259,7 +259,7 @@ namespace Commander
         // from the pulled enemies standing away from it, not only from casters standing back.
         bool corner = false;
 
-        // Opening control (Coordination/PullControl.h): one pulled creature controlled as the
+        // Opening control (Coordination/Situation/Pull/PullControl.h): one pulled creature controlled as the
         // tank opens, the controller standing ready before. Decided when the tank is about to go.
         PullControlPlan control;
 
@@ -292,9 +292,9 @@ namespace Commander
         std::vector<PullHider> losHiders;
 
         // Healing hold of a line of sight pull, written by PullAssigner during Settle once the
-        // arrival wait is over (Coordination/PullOpening.h): out of combat healers wait until the
+        // arrival wait is over (Coordination/Situation/Pull/PullOpening.h): out of combat healers wait until the
         // casters came (a heal's threat lands on every enemy at once). Who waits for the tank's
-        // threat is the threat opening's (TeamPlan::threat, Coordination/ThreatOpening.h).
+        // threat is the threat opening's (TeamPlan::threat, Coordination/Doctrine/ThreatOpening.h).
         bool holdHealing = false;
 
         // Where the tank will fight once the pack is on it, as planned, for the members to take
@@ -517,7 +517,7 @@ namespace Commander
         uint32 auraSpellId = 0;      // the debuff
         ObjectGuid bot;
         uint32 spellId = 0;          // the dispel it casts
-        float points = 0.0f;         // what removing it is worth (Perception/DispelValue.h)
+        float points = 0.0f;         // what removing it is worth (Perception/Values/DispelValue.h)
         bool control = false;        // the member cannot act: urgent
     };
 
@@ -527,7 +527,7 @@ namespace Commander
         ObjectGuid enemy;            // the target; an area spell (radius around the caster): the first enemy it takes
         ObjectGuid bot;
         uint32 spellId = 0;
-        float points = 0.0f;         // net worth (Perception/ControlValue.h)
+        float points = 0.0f;         // net worth (Perception/Values/ControlValue.h)
         bool area = false;
         bool breaksOnDamage = false;
     };
@@ -548,7 +548,7 @@ namespace Commander
         ObjectGuid bot;
         RescueWay way = RescueWay::Threat;
         uint32 spellId = 0;          // Taunt, ThreatDrop
-        float points = 0.0f;         // net worth (Perception/RescueValue.h)
+        float points = 0.0f;         // net worth (Perception/Values/RescueValue.h)
         bool urgent = false;         // the victim dies within the horizon: Urgent tier
     };
 
@@ -560,7 +560,7 @@ namespace Commander
         ObjectGuid enemy;
         ObjectGuid bot;
         uint32 spellId = 0;
-        float points = 0.0f;         // net worth (Perception/FleeStopValue.h)
+        float points = 0.0f;         // net worth (Perception/Values/FleeStopValue.h)
         bool hold = false;           // stun / root: cast when the party kills it within holdSec
         float holdSec = 0.0f;
         bool needsCombo = false;     // a finisher: its other finishers are held too
@@ -585,7 +585,7 @@ namespace Commander
         }
     };
 
-    // The area phase (Coordination/AreaPhase.h, .kiro/docs/2026-11-08-aoe-phase.md): one area
+    // The area phase (Coordination/Doctrine/AreaPhase.h, .kiro/docs/2026-11-08-aoe-phase.md): one area
     // damage spell the party goes for now, who casts it, where from, and what is done first.
     // A reservation for the caster: AreaDamageBehavior walks, shields and casts in that order.
     enum class AreaStep : uint8
@@ -639,7 +639,7 @@ namespace Commander
         ObjectGuid bot;
         ObjectGuid enemy;
         // Switching from the bot's current target to `enemy` is worth `benefit` and costs `cost`
-        // (points, Perception/SwitchCost.h). 0 / 0 when `enemy` already is its target.
+        // (points, Perception/Values/SwitchCost.h). 0 / 0 when `enemy` already is its target.
         float benefit = 0.0f;
         float cost = 0.0f;
         bool urgent = false;         // Urgent tier (intercept, a loose enemy about to kill someone)
@@ -677,14 +677,14 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
-    // One enemy next to the tank it still lacks threat on (Perception/ThreatGap.h).
+    // One enemy next to the tank it still lacks threat on (Perception/Forecast/ThreatGap.h).
     struct ThreatGapEntry
     {
         ObjectGuid enemy;
         float gap = 0.0f;
     };
 
-    // Threat opening ("群拉", Coordination/ThreatOpening.h, .kiro/docs/2026-11-08-threat-modes.md):
+    // Threat opening ("群拉", Coordination/Doctrine/ThreatOpening.h, .kiro/docs/2026-11-08-threat-modes.md):
     // after a pull and when new enemies reach the tank, the tank first gets enough threat on
     // each enemy next to it to keep it through the healer's next heal; everyone else waits.
     // A constraint while `active` (every cast of a held bot, its attacks: Behaviors/Constraints.h)

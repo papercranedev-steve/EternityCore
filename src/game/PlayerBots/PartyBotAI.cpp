@@ -34,14 +34,14 @@
 #include "Rotations/ClassRotation.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Behaviors/FleePoint.h"
-#include "Commander/Behaviors/AreaDamageBehavior.h"
+#include "Commander/Behaviors/Movement/FleePoint.h"
+#include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
-#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "Commander/Perception/RestValue.h"
-#include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/Values/RestValue.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
 
@@ -391,7 +391,7 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
 {
     // Fix: following kept a random offset around the leader without looking at idle creatures;
     // the tank walked 4 yd to the leader's right front into the aggro range of the next cell's
-    // prisoner (Stockade, stockade-20261101-174235). See Commander/Behaviors/FollowSpot.h.
+    // prisoner (Stockade, stockade-20261101-174235). See Commander/Behaviors/Movement/FollowSpot.h.
     if (!UsesSafeFollow() || me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
     {
         m_followChecked = false;
@@ -490,7 +490,7 @@ bool PartyBotAI::FindAndPreHealTarget()
 
 bool PartyBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPercent)
 {
-    // The Commander heal module decides target and rank (Behaviors/HealPlanBehavior.h).
+    // The Commander heal module decides target and rank (Behaviors/Support/HealPlanBehavior.h).
     // No order = rest: nobody needs a heal yet. Out of combat the order is cast after the
     // Commander hook (UpdateAI): the out of combat AI runs before the hook sets it.
     if (IsHealingControlled())
@@ -534,7 +534,7 @@ bool PartyBotAI::SkipsReflexInterrupt(Unit const* pVictim) const
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 {
     // The bot the Commander sent to wake the last controlled enemy may attack it
-    // (Coordination/ControlledEnd.h); everyone else leaves a breakable control alone.
+    // (Coordination/Doctrine/ControlledEnd.h); everyone else leaves a breakable control alone.
     bool const valid = CombatBotBaseAI::IsValidHostileTarget(pTarget) ||
                       (CombatBotBaseAI::IsValidHostileTargetIgnoringControl(pTarget) && IsAssignedToBreakControl(pTarget));
     return valid && !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget);
@@ -629,7 +629,7 @@ Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
 
 bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
 {
-    // The Commander escape module runs to the tank instead (Commander/Behaviors/EscapeBehavior.h).
+    // The Commander escape module runs to the tank instead (Commander/Behaviors/Movement/EscapeBehavior.h).
     if (IsMovementHeld() || IsEscapeControlled())
         return false;
 
@@ -848,7 +848,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 {
     if (!PassesServerCastChecks(pTarget, pSpellEntry))
         return false;
-    // Threat opening (Commander/Coordination/ThreatOpening.h): everyone but the tank waits,
+    // Threat opening (Commander/Coordination/Doctrine/ThreatOpening.h): everyone but the tank waits,
     // no cast at all (user 2026-11-08; strat-20261108-200046: a Counterspell and self buffs
     // turned enemies the tank had 0 threat on).
     if (IsHeldByThreatOpening())
@@ -1039,7 +1039,7 @@ Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const
 
 // Was SelectAttackTarget (focus marks, the leader's victim, own attackers, the first attacker of
 // any member within 50 yd, the pet's attacker) and SelectPartyAttackTarget. Outside duels the
-// Commander chooses every target since 2026-11-07 (Coordination/TargetAssigner.h).
+// Commander chooses every target since 2026-11-07 (Coordination/Duties/TargetAssigner.h).
 Unit* PartyBotAI::SelectDuelTarget() const
 {
     if (me->m_duel && me->m_duel->opponent && IsValidHostileTarget(me->m_duel->opponent))

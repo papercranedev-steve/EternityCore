@@ -52,7 +52,7 @@ namespace Commander
     };
 
     // A crowd control spell a bot has learned (ClassKit::Controls): what it can take out of the
-    // fight and for how long. Read from the spell data (Perception/ControlValue.h values it).
+    // fight and for how long. Read from the spell data (Perception/Values/ControlValue.h values it).
     struct ControlAbility
     {
         uint32 spellId = 0;
@@ -83,7 +83,7 @@ namespace Commander
     };
 
     // A taunt a tank bot has learned (CombatBotBaseAI::m_spellListTaunt, one entry per spell):
-    // what team rescue can give it (Perception/RescueValue.h).
+    // what team rescue can give it (Perception/Values/RescueValue.h).
     struct TauntAbility
     {
         uint32 spellId = 0;
@@ -176,7 +176,7 @@ namespace Commander
         float dps = 0.0f;               // on the main tank, after armor (FightLoad::Foe)
     };
 
-    // Running away at low health (Perception/FleePredictor.h fills it; EnemyFacts::flee).
+    // Running away at low health (Perception/Forecast/FleePredictor.h fills it; EnemyFacts::flee).
     struct FleeFacts
     {
         float atPct = 0.0f;             // flees at this health percent (CreatureProfile), 0 = never
@@ -216,7 +216,7 @@ namespace Commander
         float reapplySec = 0.0f;
     };
 
-    // One direct heal of a healer bot, chain cast (Perception/HealCapacity.h).
+    // One direct heal of a healer bot, chain cast (Perception/Forecast/HealCapacity.h).
     struct HealRate
     {
         float hps = 0.0f;           // healing per second: heal (crits included) / max(cast, GCD)
@@ -225,7 +225,7 @@ namespace Commander
     };
 
     // One ClassKit::AreaDamage spell of a damage dealer bot, with its numbers on the bot's
-    // victim (out of combat: on itself). Perception/AreaValue.h values it.
+    // victim (out of combat: on itself). Perception/Values/AreaValue.h values it.
     struct AreaSpellFacts
     {
         uint32 spellId = 0;
@@ -242,7 +242,7 @@ namespace Commander
         bool ready = false;         // off cooldown, the mana, can act and cast
     };
 
-    // The bot's own area channel running now (Perception/AreaValue.h continues it).
+    // The bot's own area channel running now (Perception/Values/AreaValue.h continues it).
     struct AreaChannelFacts
     {
         uint32 spellId = 0;         // 0 = none
@@ -321,7 +321,7 @@ namespace Commander
         bool immuneMagic = false;
         uint32 immuneMechanics = 0;
         // Pets: casts a taunt by itself (Growl, Torment, Suffering on autocast). An enemy on it
-        // is growled back, so the tank does not take it (Perception/PetTaunt.h).
+        // is growled back, so the tank does not take it (Perception/Profiles/PetTaunt.h).
         bool tauntsItself = false;
         // Damage dealer bots with ClassKit::AreaDamage spells, on their victim (out of combat:
         // on itself): the best area
@@ -332,7 +332,7 @@ namespace Commander
         float areaDpsPerTarget = 0.0f;
         float areaRadius = 0.0f;
         float fillerDps = 0.0f;
-        // Area phase (Perception/AreaValue.h, Coordination/AreaPhase.h): the bot's area spells,
+        // Area phase (Perception/Values/AreaValue.h, Coordination/Doctrine/AreaPhase.h): the bot's area spells,
         // its own area channel running now, its bolt in the air (cast done, not landed: its
         // threat is not on the list yet) and the shield it can put up first.
         std::vector<AreaSpellFacts> areaSpells;
@@ -353,20 +353,20 @@ namespace Commander
         // a fight of this party was measured. 0 = unknown (pets, healer bots).
         float soloDps = 0.0f;
         // Bots: threat per point of physical damage (Unit::ApplyTotalThreatModifier: stance,
-        // Defiance, Righteous Fury...). Perception/ThreatGap.h (a tank's rate before it was measured).
+        // Defiance, Righteous Fury...). Perception/Forecast/ThreatGap.h (a tank's rate before it was measured).
         float threatMod = 1.0f;
         // Healer-role bots: threat their biggest direct heal adds, before it is split over the
         // enemies fighting the one healed (heal x 0.5, paladins 0.25, x its threat modifiers:
         // Spell::DoAllEffectOnTarget heal -> HostileRefManager::threatAssist). Full heal, no
-        // overheal: the worst case. Perception/ThreatGap.h.
+        // overheal: the worst case. Perception/Forecast/ThreatGap.h.
         float healThreat = 0.0f;
         // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
-        // on top of manaRegen. Perception/RestValue.h.
+        // on top of manaRegen. Perception/Values/RestValue.h.
         float drinkManaPerSec = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
         std::vector<DebuffFacts> debuffs;           // players only
-        // Damage actually taken (Perception/DamageIntake.h): per second over the last few
+        // Damage actually taken (Perception/Forecast/DamageIntake.h): per second over the last few
         // seconds, and the biggest spike within a short window. Value::TakenDps combines the
         // rate with the prediction from enemy melee.
         float takenDps = 0.0f;
@@ -377,7 +377,7 @@ namespace Commander
         float manaRegenCasting = 0.0f;
         uint32 fiveSecondRuleMs = 0;
         // Healer-role bots: their direct heals with their real numbers (+healing gear,
-        // talents, crit), valued on themselves (Perception/HealCapacity.h). Empty otherwise.
+        // talents, crit), valued on themselves (Perception/Forecast/HealCapacity.h). Empty otherwise.
         std::vector<HealRate> healRates;
 
         bool CanAct() const { return alive && !controlled; }
@@ -558,7 +558,7 @@ namespace Commander
     struct PatrolFacts : PackCreature
     {
         // Filled only while the party fights (HasPartyEnemy), for the fight-time patrol check
-        // (Coordination/PatrolAssigner.h): where it will be every trackStepSec from the refresh
+        // (Coordination/Situation/Patrol/PatrolAssigner.h): where it will be every trackStepSec from the refresh
         // (PatrolTracker::Predict, PATROL_FIGHT_HORIZON_SEC ahead; track[0] = now).
         float trackStepSec = 0.0f;
         std::vector<Position3> track;
@@ -575,7 +575,7 @@ namespace Commander
         uint32 maxLevel = 0;
     };
 
-    // The walk of a melee or tank bot to an enemy (Perception/MeleeRoutes.h).
+    // The walk of a melee or tank bot to an enemy (Perception/Spatial/MeleeRoutes.h).
     struct RouteFact
     {
         ObjectGuid bot;
@@ -589,7 +589,7 @@ namespace Commander
     };
 
     // Fight-wide rates for the common value unit (value-scoring doc section 3).
-    // Filled by CombatRates (Perception/CombatRates.h) on every refresh.
+    // Filled by CombatRates (Perception/Forecast/CombatRates.h) on every refresh.
     struct RateFacts
     {
         float partyMaxHealth = 0.0f;    // sum over alive and dead members, pets excluded; 1 point = 1% of it
@@ -645,7 +645,7 @@ namespace Commander
         std::vector<PatrolFacts> patrols;
         RateFacts rates;
         // Walks of melee and tank bots to the enemies they could be sent to, along the navmesh
-        // path (Perception/MeleeRoutes.h). A pair missing here was not checked yet.
+        // path (Perception/Spatial/MeleeRoutes.h). A pair missing here was not checked yet.
         std::vector<RouteFact> routes;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;

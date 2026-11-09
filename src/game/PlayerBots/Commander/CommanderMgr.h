@@ -14,8 +14,8 @@
 #include "ObjectGuid.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
-#include "Commander/Coordination/PullMethod.h"
-#include "Commander/Coordination/PullPlace.h"
+#include "Commander/Coordination/Situation/Pull/PullMethod.h"
+#include "Commander/Coordination/Situation/Pull/PullPlace.h"
 #include <atomic>
 #include <chrono>
 #include <map>

@@ -2,7 +2,7 @@
 #include "Commander/Behaviors/IBehavior.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/CommanderMgr.h"
-#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Spell.h"

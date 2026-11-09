@@ -1,5 +1,5 @@
 #include "Commander/Perception/Tanks.h"
-#include "Commander/Perception/PackResolver.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include <algorithm>
 
 namespace Commander

@@ -1,14 +1,14 @@
 #include "Commander/Perception/WorldModelBuilder.h"
-#include "Commander/Perception/PackResolver.h"
-#include "Commander/Perception/SpellTags.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
-#include "Commander/Perception/DamageIntake.h"
-#include "Commander/Perception/PatrolTracker.h"
-#include "Commander/Perception/CreatureProfile.h"
-#include "Commander/Perception/HealCapacity.h"
-#include "Commander/Perception/PetTaunt.h"
-#include "Commander/Perception/RescueValue.h"
-#include "Commander/Perception/ValueModel.h"
+#include "Commander/Perception/Forecast/DamageIntake.h"
+#include "Commander/Perception/Spatial/PatrolTracker.h"
+#include "Commander/Perception/Profiles/CreatureProfile.h"
+#include "Commander/Perception/Forecast/HealCapacity.h"
+#include "Commander/Perception/Profiles/PetTaunt.h"
+#include "Commander/Perception/Values/RescueValue.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "DamageSpells.h"
@@ -22,7 +22,7 @@
 #include "Pet.h"
 #include "TemporarySummon.h"
 #include "Player.h"
-#include "Commander/Perception/ProfileStore.h"
+#include "Commander/Perception/Profiles/ProfileStore.h"
 #include "SpellMgr.h"
 #include "Spell.h"
 #include "SpellAuras.h"
@@ -111,7 +111,7 @@ namespace WorldModelBuilder
             f.tankStance = form == FORM_DEFENSIVESTANCE || form == FORM_BEAR || form == FORM_DIREBEAR ||
                            (f.classId == CLASS_PALADIN && unit->HasAura(SPELL_RIGHTEOUS_FURY));
 
-            // Team rescue (Perception/SurvivalValue.h): what still protects it.
+            // Team rescue (Perception/Values/SurvivalValue.h): what still protects it.
             for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
                 f.absorb += std::max(0.0f, aura->GetModifier()->m_amount);
             for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_MANA_SHIELD))
@@ -697,7 +697,7 @@ namespace WorldModelBuilder
             }
         }
 
-        // Team rescue (Perception/RescueValue.h): a tank bot's taunts, one entry per spell.
+        // Team rescue (Perception/Values/RescueValue.h): a tank bot's taunts, one entry per spell.
         void FillTaunts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             if (ai->GetRole() != ROLE_TANK)
@@ -852,7 +852,7 @@ namespace WorldModelBuilder
         }
 
         // Area phase facts (PartyMemberFacts::areaSpells, areaChannel, boltTarget, selfShield,
-        // tapManaPerHealth): what Perception/AreaValue.h needs without the live units.
+        // tapManaPerHealth): what Perception/Values/AreaValue.h needs without the live units.
         void FillAreaPhase(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;

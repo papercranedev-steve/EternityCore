@@ -60,7 +60,7 @@
 #include "Errors.h"
 #include "Utilities/Random.h"
 #include "DevConsole/CombatEvents.h"
-#include "PlayerBots/Commander/Perception/DamageIntake.h"
+#include "PlayerBots/Commander/Perception/Forecast/DamageIntake.h"
 
 #include <limits>
 

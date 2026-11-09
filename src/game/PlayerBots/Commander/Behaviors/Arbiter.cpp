@@ -2,7 +2,7 @@
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/BotDirectives.h"
-#include "Commander/BotSpeech.h"
+#include "Commander/Commands/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
 #include "PartyBotAI.h"
 #include "GameObject.h"
