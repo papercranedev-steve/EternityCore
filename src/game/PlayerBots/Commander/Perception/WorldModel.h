@@ -53,6 +53,16 @@ namespace Commander
 
     // A crowd control spell a bot has learned (ClassKit::Controls): what it can take out of the
     // fight and for how long. Read from the spell data (Perception/Values/ControlValue.h values it).
+    // Control kinds for the doctrine (doc .kiro/docs/2026-11-09-doctrine 3.4):
+    //   Mez   breaks on damage (polymorph, shackle, sap, sleep): no area spell near it
+    //   Fear  runs around (Psychic Scream, Fear): scatters a pile
+    //   Hold  damage does not end it (stun, banish): a pile under it can still be hit
+    enum class ControlKind : uint8 { Mez, Fear, Hold };
+    inline ControlKind KindOfControl(bool breaksOnDamage, bool fear)
+    {
+        return fear ? ControlKind::Fear : breaksOnDamage ? ControlKind::Mez : ControlKind::Hold;
+    }
+
     struct ControlAbility
     {
         uint32 spellId = 0;
@@ -80,6 +90,9 @@ namespace Commander
         // stealth (Sap) is also ready out of combat when the bot can go into stealth now
         // (ClassKit::Stealth): the Sap controller stealths on its way (CrowdControlBehavior).
         bool ready = false;
+
+        // Doctrine doc .kiro/docs/2026-11-09-doctrine 3.4.
+        ControlKind Kind() const { return KindOfControl(breaksOnDamage, fear); }
     };
 
     // A taunt a tank bot has learned (CombatBotBaseAI::m_spellListTaunt, one entry per spell):

@@ -46,6 +46,7 @@
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
+#include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Commands/ProfileCommands.h"
 #include "Creature.h"
 #include <algorithm>
@@ -329,6 +330,17 @@ namespace
             for (ObjectGuid const& g : plan.patrolMove.avoid)
                 handler->PSendSysMessage("Constraint: nobody engages |cffffcc00%s|r (in a patrol's path, except its interceptor)",
                     NameOf(map, g).c_str());
+        // Doctrine (TacticalDoctrine): how this fight is fought, the stamps the duties read.
+        if (plan.doctrine.phase != Commander::FightPhase::None)
+        {
+            Commander::DoctrinePlan const& d = plan.doctrine;
+            handler->PSendSysMessage("Doctrine: %s, %s for %.1fs (%s)", Commander::TacticalDoctrine::Name(d.phase),
+                Commander::TacticalDoctrine::Name(d.tactic),
+                d.sinceMs ? WorldTimer::getMSTimeDiffToNow(d.sinceMs) / 1000.0f : 0.0f, d.why.c_str());
+            for (Commander::DoctrineEnemy const& x : d.enemies)
+                handler->PSendSysMessage("    |cffffcc00%s|r: %s", NameOf(map, x.guid).c_str(),
+                    Commander::TacticalDoctrine::Describe(x).c_str());
+        }
         for (ObjectGuid const& g : plan.protectedEnemies)
             handler->PSendSysMessage("Constraint: no damage on |cffffcc00%s|r (control coming)", NameOf(map, g).c_str());
         for (Commander::EnemyFacts const& e : world.enemies)

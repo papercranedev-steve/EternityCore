@@ -245,7 +245,7 @@ namespace Commander
                     continue;
                 if (!haveFight && !(haveFight = FightLoad::FromWorld(world, fight)))
                     return false;
-                ControlValue::Worth const w = ControlValue::Of(world, fight, self, a, targets, 0.0f);
+                ControlValue::Worth const w = ControlValue::Of(world, fight, self, a, targets);
                 if (found && w.Net() <= p.score)
                     continue;
                 p = MakeProposal(ProposalTier::Urgent, "dangerous hits: fear them off");

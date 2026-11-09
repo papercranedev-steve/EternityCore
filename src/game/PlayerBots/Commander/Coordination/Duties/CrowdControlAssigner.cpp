@@ -4,7 +4,9 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Trace/Trace.h"
 #include <algorithm>
+#include <string>
 
 namespace Commander
 {
@@ -38,6 +40,27 @@ namespace Commander
                     if (a.spellId == spellId)
                         return &a;
             return nullptr;
+        }
+
+        // The doctrine stamped `enemy` NoMez and `a` breaks on damage or fears
+        // (TacticalDoctrine.h). A stun or banish is still allowed.
+        bool DoctrineForbids(TeamPlan const& plan, ControlAbility const& a, ObjectGuid enemy)
+        {
+            return a.Kind() != ControlKind::Hold && plan.doctrine.Has(enemy, STAMP_NO_MEZ);
+        }
+
+        // `a` holds a committed enemy (TacticalDoctrine.h): only that one, renewed.
+        ObjectGuid CommittedTo(TeamPlan const& plan, ControlAbility const& a)
+        {
+            if (a.oneTarget && !a.holding.IsEmpty() && plan.doctrine.Has(a.holding, STAMP_COMMITTED))
+                return a.holding;
+            return ObjectGuid();
+        }
+
+        std::string NoMezWhy(TeamPlan const& plan, ObjectGuid enemy)
+        {
+            DoctrineEnemy const* d = plan.doctrine.Find(enemy);
+            return "doctrine: no mez (" + (d ? d->noMezWhy : std::string("?")) + ")";
         }
     }
 
@@ -83,10 +106,13 @@ namespace Commander
         {
             EnemyFacts const* e = world.FindEnemy(opening.target);
             PartyMemberFacts const* b = world.FindMember(opening.bot);
-            if (e && e->acting && !e->control.spellId && b && b->CanAct())
+            ControlAbility const* a = b ? FindAbility(world, b->guid, opening.spellId) : nullptr;
+            // The doctrine left its target to area spells (no fallback offer for it either).
+            if (e && a && DoctrineForbids(plan, *a, e->guid))
+                openingTarget = e->guid;
+            else if (e && e->acting && !e->control.spellId && b && b->CanAct())
             {
                 openingTarget = e->guid;
-                ControlAbility const* a = FindAbility(world, b->guid, opening.spellId);
                 DutyNeed need;
                 need.kind = DutyKind::CrowdControl;
                 need.target = e->guid;
@@ -118,7 +144,11 @@ namespace Commander
                     if (targets.empty() || std::all_of(targets.begin(), targets.end(),
                             [&a](EnemyFacts const* e) { return HeldLongEnough(*e, a); }))
                         continue;
-                    ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets, 0.0f);
+                    // Any of them left to area spells (or fodder, cleanup...): not this spell.
+                    if (std::any_of(targets.begin(), targets.end(),
+                            [&](EnemyFacts const* e) { return DoctrineForbids(plan, a, e->guid); }))
+                        continue;
+                    ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets);
                     if (w.Net() <= 0.0f)
                         continue;   // (area spells: no per-enemy need to note it on)
                     // The nearest one: the target of a shout that needs one (Intimidating Shout).
@@ -151,9 +181,21 @@ namespace Commander
                         continue;
                     if (PackResolver::Distance(b.pos, e.pos) - e.boundingRadius > a.maxRange + REACH_SLACK_YD)
                         continue;
+                    // The doctrine's stamps first: no valuation for what it rules out.
+                    ObjectGuid const committed = CommittedTo(plan, a);
+                    if (DoctrineForbids(plan, a, e.guid) || (!committed.IsEmpty() && committed != e.guid))
+                    {
+                        DutyCandidate c;
+                        c.bot = b.guid;
+                        c.spellId = a.spellId;
+                        c.why = !committed.IsEmpty() && committed != e.guid
+                            ? "doctrine: holds " + Trace::Guid(committed) + ", renews only that"
+                            : NoMezWhy(plan, e.guid);
+                        needFor(e.guid).rejected.push_back(std::move(c));     // the log only
+                        continue;
+                    }
                     std::vector<EnemyFacts const*> const targets = { &e };
-                    float const aoe = a.breaksOnDamage ? ControlValue::AreaLoss(world, e, ControlValue::ExpectedSec(world, a, e)) : 0.0f;
-                    ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets, aoe);
+                    ControlValue::Worth const w = ControlValue::Of(world, fight, b, a, targets);
                     DutyNeed& need = needFor(e.guid);
                     DutyCandidate c;
                     c.bot = b.guid;

@@ -119,6 +119,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaPhase.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.h
   ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/Tags.h
+  ${COMMANDER_DIR}/Perception/Profiles/Tags.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/RescueValue.h

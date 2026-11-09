@@ -7,18 +7,23 @@
  *   single target spell, per enemy of ours that acts and the spell affects (ControlValue::
  *   Affects), within its range + REACH_SLACK_YD of the bot, not under a control lasting
  *   longer than the spell's cast + RECAST_LEAD_SEC (re-control comes in time, not earlier):
- *     worth = ControlValue::Of, aoe cost = ControlValue::AreaLoss for one that breaks on
- *     damage (a party with a mage's Blizzard does not sheep the pack it could blast).
- *     Candidate when worth.Net() > 0, rank = net (+ STICKY_POINTS for the bot that controls
+ *     the doctrine's stamps first (Coordination/Doctrine/TacticalDoctrine.h, doc
+ *     .kiro/docs/2026-11-09-doctrine 5): an enemy stamped NoMez gets no control that breaks
+ *     on damage and no fear (a stun is fine); a oneTarget spell holding a Committed enemy is
+ *     offered on that enemy only (renewed, never moved). Ruled out ones are logged as rejected.
+ *     worth = ControlValue::Of (whether the pile is left to area spells is the doctrine's,
+ *     not a cost here since 2026-11-09). Candidate when worth.Net() > 0, rank = net (+ STICKY_POINTS for the bot that controls
  *     it now or was given it last refresh). One need per enemy, points = best net, now = true.
  *   area spell (Psychic Scream, Intimidating Shout, Howl of Terror): the enemies within its
- *     radius of the bot; one need per bot and spell (target = the first enemy, detail AREA).
+ *     radius of the bot, none of them NoMez; one need per bot and spell (target = the first
+ *     enemy, detail AREA).
  *     Fears do not break on damage: no aoe cost; their add risk and scatter are in the worth.
  *   Sap (target out of combat) is never offered here: before a pull only (PullControl.h,
  *     CrowdControlBehavior casts it there).
  *   opening control of the pull (PullPlan::control, PullControl.h) cast in the fight: once
  *     its target is in the fight and under no control, one need with the planned controller
- *     only and the planned points; that enemy gets no other offer meanwhile.
+ *     only and the planned points; that enemy gets no other offer meanwhile. Not when the
+ *     doctrine stamped it NoMez (known limit: the controller walked to its spot for nothing).
  * Apply: plan.controls from the results; a single target duty on an enemy an assigned area
  * spell also takes is dropped. plan.protectedEnemies = targets of duties that break on damage
  * (TeamPlan::KeepsUnbroken: area spells leave them alone from this refresh on).

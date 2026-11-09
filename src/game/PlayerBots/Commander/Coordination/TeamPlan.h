@@ -632,6 +632,68 @@ namespace Commander
         }
     };
 
+    // ---- Doctrine (brain layer 2, Coordination/Doctrine/TacticalDoctrine.h; doc
+    // .kiro/docs/2026-11-09-doctrine section 4): how this fight is fought, and the stamps on
+    // the enemies the duties read.
+    enum class FightPhase : uint8
+    {
+        None,       // no fight of ours
+        Gathering,  // the pull or the threat opening still runs: groups change every refresh
+        Clash,
+        Cleanup,    // at most CLEANUP_FREE enemies not under a control
+    };
+
+    enum class PileTactic : uint8
+    {
+        None,       // not chosen (no fight, no main tank, a retreat)
+        Area,       // the pile around the tank is left to area spells: no control that breaks on damage there
+        Pick,       // the pile may be controlled, killed one by one
+    };
+
+    // Bits of DoctrineEnemy::stamps.
+    enum DoctrineStamp : uint16
+    {
+        STAMP_IN_CLUSTER    = 1 << 0,   // the pile around the main tank (or a melee enemy on its way there)
+        STAMP_OUTLIER       = 1 << 1,   // stands back away from the pile (casters)
+        STAMP_SPECIAL       = 1 << 2,   // a heavy enemy not at the pile yet (a patrol walking in)
+        STAMP_NO_MEZ        = 1 << 3,   // no control that breaks on damage, no fear (CrowdControlAssigner)
+        STAMP_COMMITTED     = 1 << 4,   // held by a bot's control: that bot renews it, does not move it
+        STAMP_PLAYER_TARGET = 1 << 5,   // a player hits it
+    };
+
+    struct DoctrineEnemy
+    {
+        ObjectGuid guid;
+        uint16 stamps = 0;
+        uint8 engage = 0;           // Engage (Perception/Profiles/Tags.h)
+        uint8 tier = 0;             // Tier
+        std::string noMezWhy;       // why STAMP_NO_MEZ ("area pile", "fodder", "cleanup", "player hits it")
+    };
+
+    struct DoctrinePlan
+    {
+        FightPhase phase = FightPhase::None;
+        PileTactic tactic = PileTactic::None;
+        uint32 sinceMs = 0;                 // tactic chosen at
+        std::string why;                    // why this tactic, and why it was (re)chosen
+        uint32 areaDealers = 0;             // TeamLedger::areaDealers when chosen
+        std::vector<ObjectGuid> known;      // the enemies of the fight when chosen: one not in it is an add
+        std::vector<DoctrineEnemy> enemies;
+
+        DoctrineEnemy const* Find(ObjectGuid enemy) const
+        {
+            for (DoctrineEnemy const& d : enemies)
+                if (d.guid == enemy)
+                    return &d;
+            return nullptr;
+        }
+        bool Has(ObjectGuid enemy, uint16 stamp) const
+        {
+            DoctrineEnemy const* d = Find(enemy);
+            return d && (d->stamps & stamp) != 0;
+        }
+    };
+
     // The enemy one bot attacks (TargetAssigner, executed by TargetBehavior). A bot without an
     // entry attacks nothing new: healers, bots held by a pull, bots with no safe enemy.
     struct TargetDuty
@@ -762,6 +824,7 @@ namespace Commander
         PatrolMovePlan patrolMove;
         AreaPlan area;
         ThreatOpeningPlan threat;
+        DoctrinePlan doctrine;
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
         // by PartyCommander every refresh). Read through ForbidsRest.
         bool noRest = false;

@@ -30,8 +30,11 @@
  *   mana     ManaWorth::Points(mana cost)
  *   cooldown COOLDOWN_POINTS_PER_MIN x min(cooldown, fight left) / 60 for cooldowns longer than
  *            a GCD: not there for a later emergency in this fight
- *   aoe      given by the caller (AreaLoss for a control that breaks on damage): area damage
- *            the party gives up to keep the targets unbroken
+ *   aoe      before a pull only (OfPull). In combat whether a pile is left to area spells is
+ *            the doctrine's (Coordination/Doctrine/TacticalDoctrine.h, NoMez); AreaLoss was
+ *            removed 2026-11-09 (doc .kiro/docs/2026-11-09-doctrine 1: it compared the control
+ *            with the area spell of this moment only, so the control won while the pull
+ *            still gathered and the pile then got no Blizzard)
  *   release  one target per caster (ControlAbility::oneTarget) and the bot holds another
  *            enemy with it (ControlAbility::holding): that one is freed when this lands. The
  *            controlled fight simulated once more with it back now instead of after what its
@@ -40,14 +43,6 @@
  *            what is left is the measure). Mana and time already spent on it do not count.
  *            (strat-20261108-140533: the priest moved its shackle three times in 9 s.)
  *
- * AreaLoss(x, sec): while x must stay unbroken its cluster gets no area spell. Every damage
- * dealer bot with a ready area spell that reaches x (ground spell: x within its range; around
- * the caster: x within its radius): the best Perception/Values/AreaValue net of one cast on it now
- * (whole spell, threat, turning enemies, mana, the caster's safety; enemies already under a
- * breakable control other than x forbid it; new enemies do not), 0 when none pays; summed over
- * the bots. One cast, not one for the whole control: since 2026-11-08 the same valuation as
- * the area phase (strat-20261108-161025: the old "area damage for 40 s" said 97 points where
- * the mage's own judgement gave 3). Pre-pull (OfPull) still uses areaDpsPerTarget.
  *   fears only:
  *   adds     for each pack FearRisk::Of returns: chance x (Loss(controlled + the pack joining
  *            ADD_ARRIVE_SEC in) - Loss(controlled)), Loss = Points(damage) + Risk x penalty
@@ -113,10 +108,7 @@ namespace ControlValue
 
     // `fight`: FightLoad::FromWorld(world) (built once per refresh by the caller).
     Worth Of(WorldModel const& world, FightLoad::Input const& fight, PartyMemberFacts const& member,
-             ControlAbility const& a, std::vector<EnemyFacts const*> const& targets, float aoeLoss);
-
-    // Area damage given up while `enemy` must not be hit for `sec` (header).
-    float AreaLoss(WorldModel const& world, EnemyFacts const& enemy, float sec);
+             ControlAbility const& a, std::vector<EnemyFacts const*> const& targets);
 
     // Before a pull (Coordination/Situation/Pull/PullControl.h): `target` controlled as the fight starts.
     // `fight` = FightLoad::Build of the expected creatures, `asIs` its Simulate. Same benefit

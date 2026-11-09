@@ -817,7 +817,7 @@ namespace WorldModelBuilder
                 if (!a.spell || !me->IsSpellReady(a.spell))
                     continue;
                 // A mage out of mana gives up no Blizzard when a pack member is sheeped or
-                // shackled (ControlValue::AreaLoss charged it at 30 mana, strat-20261108-141921).
+                // shackled (ControlValue::OfPull's aoe; strat-20261108-141921: charged at 30 mana).
                 if (DamageSpells::ManaCost(me, a.spell) > float(me->GetPower(POWER_MANA)))
                     continue;
                 float const dps = DamageSpells::Estimate(me, victim, a.spell) / std::max(0.1f, DamageSpells::BusySec(me, a.spell));

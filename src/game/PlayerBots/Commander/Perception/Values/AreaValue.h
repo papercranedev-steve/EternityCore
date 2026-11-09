@@ -3,7 +3,8 @@
  * (AoE phase, .kiro/docs/2026-11-08-aoe-phase.md). The one valuation of area damage: the
  * brain's area phase (Coordination/Doctrine/AreaPhase.h) starts it with it, AreaDamageBehavior's channel
  * watch goes on or stops with it, ending the channel costs its value (Behaviors/CurrentAction.h),
- * and a crowd control that keeps an area spell off a pack gives it up (ControlValue::AreaLoss).
+ * and (until 2026-11-09, ControlValue::AreaLoss) a crowd control that kept an area spell off a
+ * pack gave it up; that choice is now the doctrine's (Coordination/Doctrine/TacticalDoctrine.h).
  * Before 2026-11-08 the control side had its own guess (full area damage for the whole control,
  * no threat, no mana): 97 points where the area module saw 3 (strat-20261108-161025).
  *
