@@ -14,6 +14,31 @@ namespace Commander
     {
         using CE = ControlledEndAssigner;
 
+        // Area pile (header): the pile enemy held by a bot's control that breaks on damage,
+        // nearest the main tank; null when none or no tank that can act.
+        EnemyFacts const* PileToWake(WorldModel const& world, TeamPlan const& plan)
+        {
+            DoctrinePlan const& d = plan.doctrine;
+            PartyMemberFacts const* tank = Tanks::Main(world);
+            if (d.tactic != PileTactic::Area || d.phase != FightPhase::Clash || !tank || !tank->CanAct())
+                return nullptr;
+            EnemyFacts const* best = nullptr;
+            for (DoctrineEnemy const& x : d.enemies)
+            {
+                if (!(x.stamps & STAMP_IN_CLUSTER))
+                    continue;
+                EnemyFacts const* e = world.FindEnemy(x.guid);
+                if (!e || !e->control.spellId || !e->control.breaksOnDamage)
+                    continue;
+                PartyMemberFacts const* caster = world.FindMember(e->control.caster);
+                if (!caster || !caster->isBot)
+                    continue;   // a player's sheep is the player's choice
+                if (!best || PackResolver::Distance(tank->pos, e->pos) < PackResolver::Distance(tank->pos, best->pos))
+                    best = e;
+            }
+            return best;
+        }
+
         // An idle patrol walks next to `at` within `sec` (PatrolFacts::track, filled in fights).
         bool PatrolComes(WorldModel const& world, Position3 const& at, float sec)
         {
@@ -37,6 +62,24 @@ namespace Commander
     void ControlledEndAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
         ControlEndPlan& end = plan.controlEnd;
+
+        // The doctrine's area pile (header: "Area pile").
+        if (EnemyFacts const* held = PileToWake(world, plan))
+        {
+            PartyMemberFacts const* tank = Tanks::Main(world);
+            if (end.active && end.enemy == held->guid && end.breaker == tank->guid)
+                return;
+            end = ControlEndPlan();
+            end.active = true;
+            end.enemy = held->guid;
+            end.breaker = tank->guid;
+            end.breakAtMs = world.refreshedAtMs;
+            end.why = "area pile: wake the controlled one";
+            plan.notes.push_back("Area pile: the tank wakes the controlled enemy in it, so the area spell takes it too.");
+            end.noted = true;
+            return;
+        }
+
         EnemyFacts const* first = nullptr;
         bool any = false;
         for (EnemyFacts const& e : world.enemies)

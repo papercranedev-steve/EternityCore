@@ -136,11 +136,23 @@ namespace Commander
                 return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid);
             };
 
+            // Doctrine (TacticalDoctrine.h): the pile is left to area spells, so the focus is an
+            // enemy outside it (a caster standing back) while there is one.
+            bool const outliersFirst = plan.doctrine.tactic == PileTactic::Area &&
+                std::any_of(world.enemies.begin(), world.enemies.end(), [&](EnemyFacts const& e)
+                {
+                    return plan.doctrine.Has(e.guid, STAMP_OUTLIER) && eligible(e);
+                });
+            auto const allowed = [&](EnemyFacts const& e)
+            {
+                return eligible(e) && (!outliersFirst || plan.doctrine.Has(e.guid, STAMP_OUTLIER));
+            };
+
             EnemyFacts const* best = nullptr;
             FocusScore bestScore;
             for (EnemyFacts const& e : world.enemies)
             {
-                if (!eligible(e))
+                if (!allowed(e))
                     continue;
                 FocusScore s = FocusAssigner::Evaluate(world, e);
                 if (s.score <= 0.0f)
@@ -163,7 +175,7 @@ namespace Commander
             if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != best->guid)
             {
                 EnemyFacts const* previous = world.FindEnemy(plan.focus.enemy);
-                if (previous && eligible(*previous))
+                if (previous && allowed(*previous))
                 {
                     FocusScore const kept = FocusAssigner::Evaluate(world, *previous);
                     if (kept.score >= FocusAssigner::STICKY_SHARE * bestScore.score)
@@ -184,6 +196,8 @@ namespace Commander
             plan.focus.harmRate = bestScore.harmRate;
             plan.focus.killSec = bestScore.killSec;
             plan.focus.reason = std::move(bestScore.reason);
+            if (outliersFirst)
+                plan.focus.reason += ", doctrine: outside the area pile first";
         }
 
         // Nobody gets a target (TargetAssigner.h).
@@ -258,7 +272,7 @@ namespace Commander
             if (plan.controlEnd.Breaks(m.guid, plan.controlEnd.enemy, ctx.world.refreshedAtMs))
                 if (EnemyFacts const* e = ctx.Find(plan.controlEnd.enemy))
                     if (ctx.Hittable(*e, m))
-                        return Forced(e, "only controlled enemies left: wake one");
+                        return Forced(e, plan.controlEnd.why);
             if (EnemyFacts const* e = ctx.Find(m.focusMarkEnemy))
                 if (ctx.Hittable(*e, m))
                     return Forced(e, "player focus mark");

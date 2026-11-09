@@ -40,7 +40,10 @@
 #define MANGOS_COMMANDER_TACTICAL_DOCTRINE_H
 
 #include "Commander/Coordination/IAssigner.h"
+#include "ObjectGuid.h"
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Commander
 {
@@ -60,6 +63,20 @@ namespace Commander
         AssignStage GetStage() const override { return AssignStage::Situation; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
+
+        // A creature expected in a pull (PullControl, before the fight: no live facts yet).
+        struct PullCreature
+        {
+            ObjectGuid guid;
+            uint32 entry = 0;
+            bool elite = false;
+            uint32 maxHealth = 0;
+        };
+        // Before a pull: the expected creatures the doctrine will stamp NoMez once the fight
+        // starts, by the same rules: the pile they make (melee ones that are not heavy) when it
+        // is Area (area dealers and at least AREA_MIN of them), and fodder. `why` per guid.
+        static std::vector<std::pair<ObjectGuid, char const*>> PullNoMez(WorldModel const& world,
+            std::vector<PullCreature> const& expected);
 
         static char const* Name(FightPhase phase);
         static char const* Name(PileTactic tactic);

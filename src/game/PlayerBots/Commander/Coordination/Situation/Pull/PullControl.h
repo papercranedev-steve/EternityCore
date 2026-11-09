@@ -7,7 +7,10 @@
  *   the fight against the expected creatures (FightLoad::Build) with and without one of them
  *   controlled from the start, for every pulled creature but the pull target (it must come to
  *   the tank) and every bot but the tank with a ready single target control that affects it
- *   (ControlValue::Affects; no fears). nearTarget = the other expected creatures when the
+ *   (ControlValue::Affects; no fears), except a control that breaks on damage on a creature
+ *   the doctrine will leave to area spells or call fodder (TacticalDoctrine::PullNoMez, since
+ *   2026-11-09: the same rule as in the fight, so the opening control and the fight agree;
+ *   a note names them). nearTarget = the other expected creatures when the
  *   fight is where they stand (walk-in, corner), 0 when it is elsewhere (brought back, opened
  *   from range or by a face pull: the controlled one stays at its place).
  *   Sorted by the net without a spot (ControlValue::OfPull; Sap: SapValue::Optimistic), net > 0;

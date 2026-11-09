@@ -30,7 +30,8 @@
  *  ThreatRoom::Enter room to switch onto, ThreatRoom::Stop to stay on (ThreatBehavior stops
  *  hitting below Stop: same rule, hysteresis between the two). An enemy nobody is fighting yet
  *  is the tank's first when there is a tank bot (else the player's: he holds it).
- *  Reach: melee within MELEE_SWITCH_YD of its edge (JOIN_FIGHT_YD with no target), no idle
+ *  Reach: melee within MELEE_SWITCH_YD of its edge (OUTLIER_MELEE_YD for the party focus when
+ *  it is an outlier under the doctrine's Area tactic; JOIN_FIGHT_YD with no target), no idle
  *  creature on the walk (RouteRisk::Blocked, as for the tank); a melee bot's current target
  *  it cannot walk to counts as no target (the melee stance module stops that chase);
  *  ranged within RANGED_SWITCH_YD (JOIN_FIGHT_YD; the ranged
@@ -116,6 +117,9 @@ namespace Commander
     {
         static constexpr float MELEE_SWITCH_YD = 10.0f;
         static constexpr float RANGED_SWITCH_YD = 30.0f;
+        // Doctrine Area tactic: a melee bot goes this far for the party focus when it stands
+        // outside the pile (an outlier caster); the route check still applies.
+        static constexpr float OUTLIER_MELEE_YD = 30.0f;
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float RANGED_REACH = 30.0f;
 

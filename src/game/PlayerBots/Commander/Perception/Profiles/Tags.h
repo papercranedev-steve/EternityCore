@@ -28,6 +28,7 @@
 #define MANGOS_COMMANDER_TAGS_H
 
 #include "Commander/Perception/WorldModel.h"
+#include <vector>
 
 namespace Commander
 {
@@ -46,10 +47,14 @@ namespace Commander
         static constexpr float HEAVY_HEALTH_MULT = 2.0f;
 
         Engage EngageOf(EnemyFacts const& e);
+        // Before a fight (no live melee flag): the profile only.
+        Engage EngageOfEntry(uint32 entry);
 
         // The elites' median max health of this fight, for TierOf (0 = no elite).
         float EliteMedianHealth(WorldModel const& world);
+        float MedianHealth(std::vector<uint32> eliteMaxHealth);
         Tier TierOf(WorldModel const& world, EnemyFacts const& e, float eliteMedianHealth);
+        Tier TierOf(WorldModel const& world, bool elite, uint32 maxHealth, float eliteMedianHealth);
 
         TeamLedger LedgerOf(WorldModel const& world);
 

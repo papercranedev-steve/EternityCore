@@ -81,7 +81,11 @@ namespace DamageTargets
                 continue;
             }
             float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
-            if (distance > range)
+            // Doctrine Area tactic (TargetRules.h): the pile is the area spells', a melee bot may
+            // go to the focus outside it (scratchpad 剧本1 方法2; the route check below is 方法3).
+            bool const outlierFocus = melee && e->guid == ctx.plan.focus.enemy &&
+                ctx.plan.doctrine.tactic == PileTactic::Area && ctx.plan.doctrine.Has(e->guid, STAMP_OUTLIER);
+            if (distance > (outlierFocus ? std::max(range, OUTLIER_MELEE_YD) : range))
             {
                 skip(*e, Trace::On() ? Trace::Format("%.0f yd away", distance) : std::string());
                 continue;

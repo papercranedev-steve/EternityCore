@@ -22,7 +22,13 @@
  * gain > cost: wake it W seconds from now, else now. Decided once per enemy (kept while it
  * sleeps); notes tell the leader. The crowd control assigner gives nobody a control on it
  * meanwhile (no recast while waiting to wake it).
- * Execution: CrowdControlBehavior has the tank attack it once breakAtMs passed;
+ * Area pile (since 2026-11-09, doctrine doc .kiro/docs/2026-11-09-doctrine 9): the doctrine
+ * (TacticalDoctrine.h, registered before this module; a refresh late would do) chose Area for
+ * the pile and is in Clash, and a pile enemy is held by a bot's control that breaks on damage
+ * (a shackle from before the pull): the area spell avoids it as long as it sleeps. The main tank
+ * wakes it now (the one nearest the tank first), no waiting. Taken before the case above.
+ * A player's control is left alone.
+ * Execution: TargetAssigner gives the tank the enemy (forced, ControlEndPlan::why);
  * PartyBotAI::IsAssignedToBreakControl lets the tank (only the tank, only that enemy) pick it.
  */
 

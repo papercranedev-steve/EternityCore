@@ -578,6 +578,9 @@ namespace Commander
         float waitGain = 0.0f;       // points of mana regained while waiting
         float waitCost = 0.0f;       // points of time and risk
         bool noted = false;          // the leader was told
+        // Why (the tank's target reason): only controlled enemies left, or the doctrine's area
+        // pile has one of ours held by a bot's control (ControlledEnd.h).
+        char const* why = "only controlled enemies left: wake one";
 
         bool Breaks(ObjectGuid bot, ObjectGuid target, uint32 nowMs) const
         {

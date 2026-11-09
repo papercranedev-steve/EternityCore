@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Situation/Pull/PullControl.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
@@ -166,9 +167,26 @@ namespace PullControl
         bool const elsewhere = pull.returnToSpot || pull.OpensFromAfar();
         uint32 const nearTarget = elsewhere ? 0 : uint32(pull.expected.size()) - 1;
 
+        // What the doctrine will leave to area spells once the fight starts (TacticalDoctrine::
+        // PullNoMez): no control that breaks on damage on those, here either.
+        std::vector<TacticalDoctrine::PullCreature> pulled;
+        for (ObjectGuid guid : pull.expected)
+            if (Creature* c = map->GetCreature(guid))
+                if (c->IsAlive())
+                    pulled.push_back({ guid, c->GetEntry(), c->IsElite(), c->GetMaxHealth() });
+        std::vector<std::pair<ObjectGuid, char const*>> const noMez = TacticalDoctrine::PullNoMez(world, pulled);
+        auto const noMezWhy = [&noMez](ObjectGuid guid) -> char const*
+        {
+            for (auto const& n : noMez)
+                if (n.first == guid)
+                    return n.second;
+            return nullptr;
+        };
+
         std::vector<Option> options;
         // Every option judged, for the note below (which enemy was worth it and which was not).
         std::vector<std::pair<float, std::string>> considered;
+        std::string leftAlone;      // names the doctrine rules out, for the note
         for (ObjectGuid guid : pull.expected)
         {
             if (guid == pull.target)
@@ -176,6 +194,9 @@ namespace PullControl
             Creature* c = map->GetCreature(guid);
             if (!c || !c->IsAlive() || c->IsInCombat())
                 continue;
+            char const* const noMezHere = noMezWhy(guid);
+            if (noMezHere)
+                leftAlone += (leftAlone.empty() ? "" : ", ") + std::string(c->GetName()) + " (" + noMezHere + ")";
             for (PartyMemberFacts const& m : world.party)
             {
                 if (!m.isBot || m.isPet || !m.CanAct() || m.guid == pull.tank)
@@ -184,6 +205,8 @@ namespace PullControl
                 {
                     if (!a.ready || a.fear || a.radius > 0.0f ||
                         !ControlValue::Affects(a, c->GetEntry(), c->GetCreatureTypeMask()))
+                        continue;
+                    if (noMezHere && a.Kind() == ControlKind::Mez)
                         continue;
                     Option o;
                     o.bot = &m;
@@ -208,6 +231,8 @@ namespace PullControl
         {
             return a.optimistic > b.optimistic;
         });
+        if (!leftAlone.empty())
+            plan.notes.push_back("Opening control: the doctrine allows no sheep / shackle on " + leftAlone + ".");
         if (!considered.empty())
         {
             std::stable_sort(considered.begin(), considered.end(),

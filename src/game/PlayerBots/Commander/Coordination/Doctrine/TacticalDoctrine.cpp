@@ -195,6 +195,31 @@ namespace Commander
         }
     }
 
+    std::vector<std::pair<ObjectGuid, char const*>> TacticalDoctrine::PullNoMez(WorldModel const& world,
+        std::vector<PullCreature> const& expected)
+    {
+        std::vector<uint32> eliteHealth;
+        for (PullCreature const& c : expected)
+            if (c.elite && c.maxHealth)
+                eliteHealth.push_back(c.maxHealth);
+        float const median = Tags::MedianHealth(std::move(eliteHealth));
+
+        std::vector<std::pair<ObjectGuid, char const*>> out;
+        std::vector<ObjectGuid> pile;
+        for (PullCreature const& c : expected)
+        {
+            Tier const tier = Tags::TierOf(world, c.elite, c.maxHealth, median);
+            if (tier == Tier::Fodder)
+                out.push_back({ c.guid, "fodder" });
+            else if (tier != Tier::Heavy && Tags::EngageOfEntry(c.entry) == Engage::Melee)
+                pile.push_back(c.guid);
+        }
+        if (Tags::LedgerOf(world).areaDealers > 0 && pile.size() >= AREA_MIN)
+            for (ObjectGuid g : pile)
+                out.push_back({ g, "area pile" });
+        return out;
+    }
+
     char const* TacticalDoctrine::Name(FightPhase phase)
     {
         switch (phase)
