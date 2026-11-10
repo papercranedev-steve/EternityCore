@@ -47,7 +47,7 @@ namespace Commander
         {
             Position3 pos;
             float walk = 0.0f;
-            float score = 0.0f;
+            float loss = 0.0f;      // points (SpotLoss), lower first
             bool taken = false;     // FieldSpots::Spot::taken
         };
 
@@ -122,8 +122,59 @@ namespace Commander
         // Field cells `minR`..`maxR` from the anchor passing the cheap checks, best first. The
         // field drops cells off the ground, under an idle creature, on a patrol's way before the
         // fight ends and cells the healer cannot walk to (FieldSpots::Collect).
+        // Points lost standing at a spot (header "Order"): the walk there, the walks to members
+        // it does not reach weighted by their share of the damage taken, enemies close enough
+        // to reach the healer before the tank takes them back.
+        struct Weights
+        {
+            float speed = 7.0f;
+            float walkFactor = 1.0f;            // IDLE_COST_FACTOR while nobody is injured
+            // Other members (not the anchor, which every band reaches): share of the heals.
+            std::vector<std::pair<PartyMemberFacts const*, float>> shares;
+        };
+
+        Weights MakeWeights(Context const& ctx, WorldModel const& world, bool anyInjured)
+        {
+            Weights w;
+            w.speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
+            w.walkFactor = anyInjured ? 1.0f : HS::IDLE_COST_FACTOR;
+            float total = 0.0f;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (m.isPet || !m.alive || m.guid == ctx.self->guid || m.guid == ctx.anchorGuid)
+                    continue;
+                float const taken = Value::TakenDps(world, m.guid);
+                w.shares.emplace_back(&m, taken);
+                total += taken;
+            }
+            for (auto& s : w.shares)
+                s.second = total > 0.0f ? s.second / total : 1.0f / float(w.shares.size());
+            return w;
+        }
+
+        float SpotLoss(Context const& ctx, WorldModel const& world, Weights const& w, Position3 const& p, float walkYd)
+        {
+            PartyMemberFacts const& self = *ctx.self;
+            float loss = w.walkFactor * Value::LostAction(world, self, walkYd / w.speed);
+            for (auto const& s : w.shares)
+            {
+                float const out = Distance2d(p, s.first->pos) - HS::HEAL_RANGE;
+                if (out > 0.0f)
+                    loss += s.second * Value::LostAction(world, self, out * HS::PATH_FACTOR / w.speed);
+            }
+            for (EnemyFacts const* e : ctx.enemies)
+            {
+                float const gap = std::max(0.0f, Distance2d(p, e->pos) - e->boundingRadius);
+                float const exposed = HS::MAX_GAIN_SEC - gap / HS::ENEMY_RUN_SPEED;
+                if (exposed > 0.0f)
+                    loss += HS::TURN_CHANCE * (Value::HitLoss(world, *e, self, exposed) + Value::LostAction(world, self, exposed));
+            }
+            return loss;
+        }
+
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                                     std::vector<FieldSpots::Spot> const& cells, float minR, float maxR, float minGap)
+                                     Weights const& w, std::vector<FieldSpots::Spot> const& cells, float minR, float maxR,
+                                     float minGap)
         {
             std::vector<Spot> spots;
             for (FieldSpots::Spot const& c : cells)
@@ -133,24 +184,19 @@ namespace Commander
                     continue;
                 Spot s;
                 s.pos = c.pos;
-                float const gap = MinGap(ctx, s.pos);
-                if (gap < minGap)
+                if (MinGap(ctx, s.pos) < minGap)
                     continue;
                 if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos))
                     continue;
-                // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
-                float covered = 0.0f;
-                for (PartyMemberFacts const& m : world.party)
-                    if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchorGuid &&
-                        Distance2d(s.pos, m.pos) <= HS::HEAL_RANGE)
-                        covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
                 s.walk = c.WalkEstimate(HS::PATH_FACTOR);
-                s.score = -s.walk + HS::COVER_WEIGHT * covered + HS::GAP_WEIGHT * std::min(gap, HS::GAP_CAP);
+                s.loss = SpotLoss(ctx, world, w, s.pos, s.walk);
                 s.taken = c.taken;
                 spots.push_back(s);
             }
-            std::sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.score > y.score; });
-            FieldSpots::PreferFree(spots, [](Spot const& s) { return -s.score; }, [](Spot const& s) { return s.taken; });
+            std::sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.loss < y.loss; });
+            // Equally good: within one cell of walk.
+            float const tie = w.walkFactor * Value::LostAction(world, *ctx.self, PositionField::CELL_YD * HS::PATH_FACTOR / w.speed);
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.loss; }, [](Spot const& s) { return s.taken; }, tie);
             return spots;
         }
 
@@ -353,6 +399,7 @@ namespace Commander
             cells = FieldSpots::Collect(world, *ctx.self, q);
         }
 
+        Weights const weights = MakeWeights(ctx, world, anyInjured);
         uint32 checks = 0;
         // Before the fight a third pass at the edge of heal range: a walk-in fought where the
         // pack stands has the idle pack itself as the anchor, the inner cells lie in its aggro range.
@@ -360,10 +407,10 @@ namespace Commander
         for (uint32 pass = 0; pass < passes; ++pass)
         {
             std::vector<Spot> spots = pass == 0
-                ? Candidates(ctx, world, zones, cells, STRICT_MIN_YD, STRICT_MAX_YD, MIN_ENEMY_GAP)
+                ? Candidates(ctx, world, zones, weights, cells, STRICT_MIN_YD, STRICT_MAX_YD, MIN_ENEMY_GAP)
                 : pass == 1
-                ? Candidates(ctx, world, zones, cells, RELAXED_MIN_YD, RELAXED_MAX_YD, RELAXED_ENEMY_GAP)
-                : Candidates(ctx, world, zones, cells, RELAXED_MAX_YD, PREPARE_MAX_YD, RELAXED_ENEMY_GAP);
+                ? Candidates(ctx, world, zones, weights, cells, RELAXED_MIN_YD, RELAXED_MAX_YD, RELAXED_ENEMY_GAP)
+                : Candidates(ctx, world, zones, weights, cells, RELAXED_MAX_YD, PREPARE_MAX_YD, RELAXED_ENEMY_GAP);
             for (Spot const& s : spots)
             {
                 if (checks >= MAX_GEOMETRY_CHECKS)

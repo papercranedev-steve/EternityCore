@@ -59,17 +59,18 @@ namespace Commander
         std::vector<Spot> Collect(WorldModel const& world, PartyMemberFacts const& member, Query const& q);
 
         // `spots` sorted best first by `key` (lower is better). A spot nobody holds goes before
-        // a taken one whose key it is within TIE of: equally good places are shared out, a
+        // a taken one whose key it is within `tie` of: equally good places are shared out, a
         // clearly better one is still taken by two (standing together costs nothing; mechanics
-        // that punish it are hazard facts, position field doc section 6).
+        // that punish it are hazard facts, position field doc section 6). `tie`: TIE for keys in
+        // yards of walk; keys in points pass the points of one cell of walk.
         template <class T, class Key, class Taken>
-        void PreferFree(std::vector<T>& spots, Key key, Taken taken)
+        void PreferFree(std::vector<T>& spots, Key key, Taken taken, float tie = TIE)
         {
             for (size_t i = 0; i < spots.size(); ++i)
             {
                 if (!taken(spots[i]))
                     continue;
-                float const limit = key(spots[i]) + TIE;
+                float const limit = key(spots[i]) + tie;
                 for (size_t j = i + 1; j < spots.size() && key(spots[j]) <= limit; ++j)
                 {
                     if (taken(spots[j]))

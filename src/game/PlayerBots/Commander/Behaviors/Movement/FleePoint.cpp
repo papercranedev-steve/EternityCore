@@ -84,6 +84,13 @@ namespace FleePoint
         else
             centre = here;
 
+        // Points (header "Order"); without the facts of the bot and the enemy: tanks first, then gap.
+        PartyMemberFacts const* self = world ? world->FindMember(me->GetObjectGuid()) : nullptr;
+        EnemyFacts const* foeFacts = world ? world->FindEnemy(enemy->GetObjectGuid()) : nullptr;
+        bool const valued = self && foeFacts;
+        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+        float const enemySpeed = foeFacts && foeFacts->speed > 0.0f ? foeFacts->speed : ENEMY_RUN_SPEED;
+
         std::vector<Candidate> candidates;
         auto const score = [&](Position3 const& p, bool toTank, Candidate& c) -> bool
         {
@@ -91,7 +98,14 @@ namespace FleePoint
             if (!toTank && (gap < MIN_ENEMY_GAP || gap < nowGap + MIN_GAIN))
                 return false;
             c.pos = p;
-            c.score = std::min(gap, ENEMY_DISTANCE_CAP) - CENTRE_WEIGHT * Distance2d(p, centre) + (toTank ? TANK_BONUS : 0.0f);
+            if (!valued)
+            {
+                c.score = (toTank ? 1000.0f : 0.0f) + gap;
+                return true;
+            }
+            float const freeSec = toTank ? TANK_HOLD_SEC : std::min(gap / enemySpeed, MAX_FREE_SEC);
+            float const back = std::max(0.0f, Distance2d(p, centre) - REJOIN_YD) * PATH_FACTOR / speed;
+            c.score = Value::HitLoss(*world, *foeFacts, *self, freeSec) - Value::LostAction(*world, *self, back);
             return true;
         };
 
@@ -111,7 +125,6 @@ namespace FleePoint
         // Cells of the position field around the bot (ground, idle creatures, patrols, a grid
         // walk there: Perception/Spatial/FieldSpots.h).
         PositionField const* field = world ? world->field.get() : nullptr;
-        PartyMemberFacts const* self = world ? world->FindMember(me->GetObjectGuid()) : nullptr;
         if (field && self)
         {
             FieldSpots::Query q;
@@ -131,8 +144,10 @@ namespace FleePoint
         std::sort(candidates.begin(), candidates.end(),
                   [](Candidate const& a, Candidate const& b) { return a.score > b.score; });
         // (party members' own spots are where they stand: running to them is the point)
+        float const tie = valued ? Value::LostAction(*world, *self, PositionField::CELL_YD * PATH_FACTOR / speed)
+                                 : FieldSpots::TIE;
         FieldSpots::PreferFree(candidates, [](Candidate const& c) { return -c.score; },
-                               [](Candidate const& c) { return c.taken; });
+                               [](Candidate const& c) { return c.taken; }, tie);
 
         uint32 checks = 0;
         for (Candidate const& c : candidates)

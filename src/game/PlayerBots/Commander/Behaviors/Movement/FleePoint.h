@@ -17,7 +17,8 @@
  *    a height check against the bot's own. No field (no world model): party members only;
  *  - rejected: not farther from the enemy, the end point or any point of the path inside an
  *    idle hostile creature's aggro range plus a margin (this bot's own scan, best first);
- *  - preferred: the tank (it picks the enemy up), the party's centre, distance from the enemy.
+ *  - preferred: the tank (it picks the enemy up), distance from the enemy, staying in casting
+ *    range of the party's centre (in points, see "Order" below).
  * False = nowhere safe: the caller stays and fights instead of pulling another pack.
  *
  * Map thread of the bot (reads creatures and pathfinds). Only called when a bot decides to
@@ -55,11 +56,20 @@ namespace Commander
         // Pathfinding is the expensive check: only the best this many candidates are tried
         // (candidates this bot's own idle scan rejects at the end do not count).
         uint32 const MAX_PATH_CHECKS = 6;
-        // Scoring (yards): enemy distance counts up to ENEMY_DISTANCE_CAP; running to the tank
-        // is worth TANK_BONUS; every yard away from the party's centre costs CENTRE_WEIGHT.
-        float const ENEMY_DISTANCE_CAP = 20.0f;
-        float const TANK_BONUS = 15.0f;
-        float const CENTRE_WEIGHT = 0.5f;
+        // Order (points, since 2026-11-10, position field step E; best first):
+        //   + Value::HitLoss(enemy, bot, free seconds): hits not taken. Free seconds = gap /
+        //     the enemy's run speed, at most MAX_FREE_SEC (a rooted enemy that comes after the
+        //     root; 20 yd at 7 yd/s); running to a tank: TANK_HOLD_SEC (it takes the enemy over).
+        //   - Value::LostAction(bot, walk back): the walk from the spot back to within REJOIN_YD
+        //     of the party's centre (casting range) at PATH_FACTOR.
+        // Ties (one cell of walk) are shared out (FieldSpots::PreferFree). Without the facts of
+        // the bot or the enemy (no world model): tanks first, then the gap.
+        // Before: yards (gap up to 20, tank +15, -0.5 per yd from the centre).
+        float const MAX_FREE_SEC = 3.0f;
+        float const TANK_HOLD_SEC = 4.0f;
+        float const REJOIN_YD = 28.0f;
+        float const ENEMY_RUN_SPEED = 7.0f;     // enemy without facts or speed
+        float const PATH_FACTOR = 1.2f;
 
         // `world`: the party's world model (who the tanks are, Perception/Tanks.h); may be null.
         bool Find(Player* me, Unit* enemy, WorldModel const* world, float& x, float& y, float& z);

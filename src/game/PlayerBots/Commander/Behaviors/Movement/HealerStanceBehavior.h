@@ -58,8 +58,18 @@
  *  - every enemy not hitting the healer is at least MIN_ENEMY_GAP away (second pass:
  *    RELAXED_ENEMY_GAP);
  *  - outside every area dangerous to healers (HazardZones, same as the "position" module).
- * Order: grid walk (-1 per yd), other members within heal range of the point
- * (+COVER_WEIGHT each), enemy distance (+GAP_WEIGHT per yd up to GAP_CAP). Live checks on at
+ * Order (points, since 2026-11-10 step E; lowest loss first, ties shared out by
+ * FieldSpots::PreferFree within one cell of walk):
+ *   walk     IDLE_COST_FACTOR (nobody injured) or 1 x LostAction(healer, grid walk / run speed)
+ *   reach    for every other member (not the anchor) farther than HEAL_RANGE from the spot:
+ *            its share of the party's damage taken (Value::TakenDps; equal shares while nobody
+ *            takes any) x LostAction(healer, walk to reach it = (distance - HEAL_RANGE) x
+ *            PATH_FACTOR / run speed). Another tank takes most damage and counts the most.
+ *   enemies  for every enemy not hitting the healer: TURN_CHANCE x (HitLoss + LostAction)
+ *            over max(0, MAX_GAIN_SEC - gap / ENEMY_RUN_SPEED): the seconds an enemy that turns
+ *            to the healer gets before the tank takes it back (same terms as the move's value).
+ * Before: yards with made-up weights (-1 per yd walk, +4 per member in range, tanks x3,
+ * +0.5 per yd of enemy gap up to 20). Live checks on at
  * most MAX_GEOMETRY_CHECKS cells per tick: this healer's own idle scan, line of sight to the
  * anchor, SafeRoute::PathIsSafe. (The rings started straight behind the anchor; that only
  * broke ties of the order and is gone.)
@@ -106,11 +116,6 @@ namespace Commander
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
-
-        static constexpr float COVER_WEIGHT = 4.0f;
-        static constexpr float TANK_COVER_MULT = 3.0f;      // another tank in range counts this many members
-        static constexpr float GAP_WEIGHT = 0.5f;
-        static constexpr float GAP_CAP = 20.0f;
 
         static constexpr float HORIZON_SEC = 8.0f;
         static constexpr float TURN_CHANCE = 0.5f;          // an enemy turns to the healer within H
