@@ -9,8 +9,9 @@
  *  - with `patrolBeforeSec` > 0: no patrol reaches the cell before then (pass the fight's
  *    remaining time, Value::FightRemainingSec);
  *  - when the member's own cell is standable: reachable by a grid walk around idle creatures
- *    (walkYd). When it is not (on a crate, a cell not flooded yet), walkYd is -1 and every cell
- *    that passes the rest is returned: the caller's path check decides.
+ *    (walkYd). When it is not (on a crate, a cell not flooded yet), or the grid walk reaches
+ *    none of the band (a member far off, the field between not covered), walkYd is -1 and
+ *    every cell that passes the rest is returned: the caller's path check decides.
  * Facts only; the caller filters for its purpose, sorts and runs its live checks (line of
  * sight, SafeRoute::PathIsSafe) on the best few.
  */

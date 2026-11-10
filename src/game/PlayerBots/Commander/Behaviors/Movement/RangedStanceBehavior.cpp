@@ -3,7 +3,8 @@
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"     // InPath: pure, facts only
+#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/FieldSpots.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include <algorithm>
@@ -15,13 +16,6 @@ namespace Commander
     {
         using RS = RangedStanceBehavior;
         using SafeRoute::Distance2d;
-
-        // Distances from the victim's edge, the old chase distance first.
-        float const RADII[] = { 25.0f, 20.0f, 15.0f };
-        // Before the fight (planned fight spot): one more ring at the edge of cast range, for a
-        // walk-in fought where the pack stands (the anchor is the idle pack, inner rings lie in
-        // its aggro range).
-        float const PREPARE_RADII[] = { 28.0f, 25.0f, 20.0f, 15.0f };
 
         Position3 PositionOf(WorldObject const* obj)
         {
@@ -37,65 +31,46 @@ namespace Commander
             return map->isInLineOfSight(a.x, a.y, a.z + RS::LOS_EYE_HEIGHT, b.x, b.y, b.z + RS::LOS_EYE_HEIGHT);
         }
 
-        bool InPatrolPath(WorldModel const& world, Position3 const& p)
-        {
-            float const remaining = Value::FightRemainingSec(world);
-            for (PatrolFacts const& patrol : world.patrols)
-                if (patrol.aggressive && !patrol.noAggro && !patrol.tappedByOther &&
-                    PatrolAssigner::InPath(patrol, p, remaining))
-                    return true;
-            return false;
-        }
-
         struct Spot
         {
             Position3 pos;
             float walk = 0.0f;
         };
 
-        // Ring points passing the cheap checks (no map queries), nearest walk first.
-        std::vector<Spot> Candidates(WorldModel const& world, SafeRoute::IdleCreatures const& idle,
-                                     std::vector<HazardZone> const& zones, Position3 const& here,
-                                     Position3 const& victim, float victimReach, bool prepare)
+        // Field cells MIN_RADIUS..MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the
+        // victim's edge, outside areas dangerous to ranged; shortest walk first. The field drops
+        // cells off the ground, under an idle creature, on a patrol's way before the fight ends,
+        // and cells the bot cannot walk to.
+        std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
+                                     std::vector<HazardZone> const& zones, Position3 const& victim,
+                                     float victimReach, bool prepare)
         {
             std::vector<Spot> spots;
-            float const start = std::atan2(here.y - victim.y, here.x - victim.x);
-            float const* radii = prepare ? PREPARE_RADII : RADII;
-            size_t const radiusCount = prepare ? sizeof(PREPARE_RADII) / sizeof(float) : sizeof(RADII) / sizeof(float);
-            for (size_t i = 0; i < radiusCount; ++i)
+            FieldSpots::Query q;
+            q.center = victim;
+            q.minYd = RS::MIN_RADIUS + victimReach;
+            q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
+            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            for (FieldSpots::Spot const& c : FieldSpots::Collect(*world.field, self, q))
             {
-                float const r = radii[i];
-                for (uint32 k = 0; k < RS::RING_POINTS; ++k)
-                {
-                    // 0, +1, -1, +2, -2 ... steps away from the bot's side.
-                    int32 const step = int32((k + 1) / 2) * ((k % 2) ? 1 : -1);
-                    float const angle = start + 2.0f * float(M_PI) * step / RS::RING_POINTS;
-                    Spot s;
-                    s.pos.x = victim.x + (r + victimReach) * std::cos(angle);
-                    s.pos.y = victim.y + (r + victimReach) * std::sin(angle);
-                    s.pos.z = victim.z;
-                    if (HazardZones::IsInside(zones, HAZARD_RANGED, s.pos) || InPatrolPath(world, s.pos) || idle.Near(s.pos))
-                        continue;
-                    s.walk = Distance2d(here, s.pos);
-                    spots.push_back(s);
-                }
+                if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
+                    continue;
+                Spot s;
+                s.pos = c.pos;
+                s.walk = c.WalkEstimate(RS::PATH_FACTOR);
+                spots.push_back(s);
             }
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.walk < b.walk; });
+            std::sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.walk < b.walk; });
             return spots;
         }
 
-        // Map checks: ground near the victim's height, out of idle reach there, line of sight
-        // to the victim, safe path. `pathIdle`: `idle`, or its LeavingFrom(here) copy when the
-        // bot stands in reach now.
+        // Live checks: not in this bot's own idle scan's reach, line of sight to the victim,
+        // safe path. `pathIdle`: `idle`, or its LeavingFrom(here) copy when the bot stands in
+        // reach now.
         bool GeometryOk(Player* me, SafeRoute::IdleCreatures const& idle, SafeRoute::IdleCreatures const& pathIdle,
-                        Position3 const& victim, Spot& s)
+                        Position3 const& victim, Spot const& s)
         {
-            Map* map = me->GetMap();
-            float const ground = map->GetHeight(s.pos.x, s.pos.y, victim.z + 3.0f);
-            if (ground <= INVALID_HEIGHT || std::fabs(ground - victim.z) > RS::MAX_STEP_Z)
-                return false;
-            s.pos.z = ground;
-            if (idle.Near(s.pos) || !Los(map, s.pos, victim))
+            if (idle.Near(s.pos) || !Los(me->GetMap(), s.pos, victim))
                 return false;
             return SafeRoute::PathIsSafe(me, pathIdle, s.pos, RS::MAX_PATH_DETOUR);
         }
@@ -192,12 +167,14 @@ namespace Commander
         if (!unsafe && inReach)
             return;
 
+        if (!world.field)
+            return;     // built while the party fights or a pull runs (PositionFieldBuilder)
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        std::vector<Spot> spots = Candidates(world, idle, zones, here, at, atReach, prepare);
+        std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare);
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;
-        for (Spot& s : spots)
+        for (Spot const& s : spots)
         {
             if (checks >= MAX_GEOMETRY_CHECKS)
                 break;
@@ -206,7 +183,7 @@ namespace Commander
                 continue;
 
             float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
-            float const walkSec = Distance2d(here, s.pos) * PATH_FACTOR / speed;
+            float const walkSec = s.walk / speed;
             float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
             Proposal p;
             p.source = "rangedstance";

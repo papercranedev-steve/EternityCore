@@ -2,6 +2,8 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Perception/Spatial/RouteRisk.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -23,8 +25,6 @@ namespace Commander
         // From the victim's facing: behind first (the original chase), then to the sides.
         float const ANGLES[] = { float(M_PI), float(M_PI) * 0.75f, float(M_PI) * 1.25f,
                                  float(M_PI) * 0.5f, float(M_PI) * 1.5f };
-        // Around the tank while waiting for an enemy it can walk to.
-        float const WAIT_RADII[] = { 6.0f, 10.0f };
         // Idle creatures around the victim this far are checked for the melee spots.
         float const SPOT_SCAN_YD = 40.0f;
 
@@ -164,48 +164,35 @@ namespace Commander
             SafeRoute::IdleCreatures const idle(me, mid, distance * 0.5f + SafeRoute::SCAN_RADIUS * 0.5f);
             SafeRoute::IdleCreatures const pathIdle = idle.Near(here) ? idle.LeavingFrom(here) : idle;
 
-            struct Spot
+            if (!world.field)
+                return;     // built while the party fights (PositionFieldBuilder)
+            // Field cells WAIT_MIN_YD..WAIT_MAX_YD from the anchor (ground linked to the party,
+            // no idle creature, no patrol before the fight ends, a grid walk there), shortest walk first.
+            FieldSpots::Query q;
+            q.center = a;
+            q.minYd = MS::WAIT_MIN_YD;
+            q.maxYd = MS::WAIT_MAX_YD;
+            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            std::vector<FieldSpots::Spot> spots = FieldSpots::Collect(*world.field, self, q);
+            std::sort(spots.begin(), spots.end(), [](FieldSpots::Spot const& x, FieldSpots::Spot const& y)
             {
-                Position3 pos;
-                float walk = 0.0f;
-            };
-            std::vector<Spot> spots;
-            float const start = std::atan2(here.y - a.y, here.x - a.x);
-            for (float r : WAIT_RADII)
-            {
-                for (uint32 k = 0; k < MS::RING_POINTS; ++k)
-                {
-                    // 0, +1, -1, +2, -2 ... steps away from the bot's side.
-                    int32 const step = int32((k + 1) / 2) * ((k % 2) ? 1 : -1);
-                    float const angle = start + 2.0f * float(M_PI) * step / MS::RING_POINTS;
-                    Spot s;
-                    s.pos.x = a.x + r * std::cos(angle);
-                    s.pos.y = a.y + r * std::sin(angle);
-                    s.pos.z = a.z;
-                    if (idle.Near(s.pos) || InPatrolPath(world, s.pos))
-                        continue;
-                    s.walk = Distance2d(here, s.pos);
-                    spots.push_back(s);
-                }
-            }
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.walk < y.walk; });
+                return x.WalkEstimate(MS::PATH_FACTOR) < y.WalkEstimate(MS::PATH_FACTOR);
+            });
 
-            Map* map = me->GetMap();
             uint32 checks = 0;
-            for (Spot& s : spots)
+            for (FieldSpots::Spot const& s : spots)
             {
                 if (checks >= MS::MAX_GEOMETRY_CHECKS)
                     break;
-                ++checks;
-                float const ground = map->GetHeight(s.pos.x, s.pos.y, a.z + 3.0f);
-                if (ground <= INVALID_HEIGHT || std::fabs(ground - a.z) > MS::MAX_STEP_Z)
+                // This bot's own idle scan at the end (the field uses the party's farthest reach).
+                if (idle.Near(s.pos))
                     continue;
-                s.pos.z = ground;
+                ++checks;
                 if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MS::MAX_PATH_DETOUR))
                     continue;
 
                 float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
-                float const walkSec = s.walk * MS::PATH_FACTOR / speed;
+                float const walkSec = s.WalkEstimate(MS::PATH_FACTOR) / speed;
                 Proposal p = Make(ProposalTier::Assigned, BotActionType::MoveTo,
                                   "no enemy it can walk to: wait near the tank");
                 p.action.x = s.pos.x;

@@ -9,6 +9,7 @@ namespace FieldSpots
     std::vector<Spot> Collect(PositionField const& field, PartyMemberFacts const& member, Query const& q)
     {
         std::vector<Spot> out;
+        std::vector<Spot> unreached;    // cells the grid walk does not get to
         FieldCell const* own = field.At(member.pos);
         bool const walks = own && own->standable;
 
@@ -34,11 +35,18 @@ namespace FieldSpots
                 {
                     s.walkYd = field.WalkYd(member, s.pos);
                     if (s.walkYd < 0.0f)
+                    {
+                        unreached.push_back(s);
                         continue;
+                    }
                 }
                 out.push_back(s);
             }
         }
+        // The walk reaches none of the band (the member is far off, past the field's covered
+        // part): all of them, the caller's path check decides.
+        if (out.empty())
+            out.swap(unreached);
         return out;
     }
 }

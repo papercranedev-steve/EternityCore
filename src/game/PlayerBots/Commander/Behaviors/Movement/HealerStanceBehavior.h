@@ -48,20 +48,21 @@
  * (then Hold so the rotation's first cast does not stop the walk; tier Urgent while still in
  * an idle creature's reach).
  *
- * Where: rings around the anchor (STRICT_RADII), starting straight behind it as seen from the
- * enemies near it, then turning both ways. A point is kept when:
+ * Where (since 2026-11-10, position field step C): cells of the position field
+ * (FieldSpots::Collect) in distance bands around the anchor: 12-20 yd first, then 10-24 yd
+ * (before the fight also 24-27 yd). The field drops cells off the ground or cut off from the
+ * party (a slope is fine; the rings before compared heights with the anchor's), under an idle
+ * creature, where an idle patrol's predicted walk comes within its aggro range + margin before
+ * the fight should end (added 2026-11-03 for the line of sight pull), and cells the healer
+ * cannot walk to around idle creatures. A cell is kept when:
  *  - every enemy not hitting the healer is at least MIN_ENEMY_GAP away (second pass:
- *    RELAXED_ENEMY_GAP on RELAXED_RADII);
- *  - outside every area dangerous to healers (HazardZones, same as the "position" module);
- *  - neither the point nor the path there is within an idle creature's aggro range (SafeRoute);
- *  - no idle patrol's predicted walk comes within its aggro range + PatrolAssigner::ZONE_MARGIN
- *    of the point before the fight should end (PatrolAssigner::InPath on WorldModel::patrols;
- *    added 2026-11-03 for the line of sight pull, where the tank hides around a corner and the
- *    healer follows it out of sight on its own instead of the pull asking healers to see it);
- *  - ground within MAX_STEP_Z of the anchor, line of sight to the anchor.
- * Order: walk distance (-1 per yd), other members within heal range of the point
- * (+COVER_WEIGHT each), enemy distance (+GAP_WEIGHT per yd up to GAP_CAP). The map checks
- * (height, line of sight, pathfinding) run for at most MAX_GEOMETRY_CHECKS points per tick.
+ *    RELAXED_ENEMY_GAP);
+ *  - outside every area dangerous to healers (HazardZones, same as the "position" module).
+ * Order: grid walk (-1 per yd), other members within heal range of the point
+ * (+COVER_WEIGHT each), enemy distance (+GAP_WEIGHT per yd up to GAP_CAP). Live checks on at
+ * most MAX_GEOMETRY_CHECKS cells per tick: this healer's own idle scan, line of sight to the
+ * anchor, SafeRoute::PathIsSafe. (The rings started straight behind the anchor; that only
+ * broke ties of the order and is gone.)
  * Nothing found and the anchor out of reach, or the healer in an idle creature's reach: walk
  * to the anchor itself if it stands outside every idle reach and that path is safe.
  *
@@ -102,12 +103,9 @@ namespace Commander
         static constexpr float TRIGGER_ENEMY_GAP = 12.0f;
         static constexpr float MIN_ENEMY_GAP = 14.0f;       // new spot, first pass
         static constexpr float RELAXED_ENEMY_GAP = TRIGGER_ENEMY_GAP;  // new spot, second pass (not inside the trigger line)
-        static constexpr uint32 RING_POINTS = 12;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // GetHeight + LOS + pathfinding each
-        static constexpr float MAX_STEP_Z = 4.0f;
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
-        static constexpr float ENEMY_SCAN = 30.0f;          // enemies this close to the anchor set "behind"
 
         static constexpr float COVER_WEIGHT = 4.0f;
         static constexpr float TANK_COVER_MULT = 3.0f;      // another tank in range counts this many members

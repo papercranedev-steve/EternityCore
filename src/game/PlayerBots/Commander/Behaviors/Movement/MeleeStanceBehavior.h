@@ -25,10 +25,12 @@
  *    spot of its angle became unsafe. Value: out of reach Value::LostAction(HORIZON_SEC), in
  *    reach LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.
  * No enemy it can walk to: wait near the tank (Tanks::Main, else the leader). Farther than
- * WAIT_NEAR_YD: walk to a point WAIT_RADII from it, nearest first, outside every idle
- * creature's reach and patrol path, ground within MAX_STEP_Z, safe path (SafeRoute::
- * PathIsSafe); value LostAction(walk seconds) as the walk saved later, cost 0. Nothing found:
- * it stays.
+ * WAIT_NEAR_YD: walk to a position field cell WAIT_MIN_YD..WAIT_MAX_YD from it (since
+ * 2026-11-10, step C; FieldSpots::Collect: ground linked to the party, no idle creature, no
+ * patrol before the fight ends, a grid walk there), shortest walk first, then this bot's own
+ * idle scan and a safe path (SafeRoute::PathIsSafe); value LostAction(walk seconds) as the
+ * walk saved later, cost 0. Nothing found, or no field: it stays. The chase spots above are
+ * exact points at the victim's reach, not field cells.
  *
  * Not while: the retreat runs, rooted, the bot cannot act, out of combat and told to wait by
  * the pull (PullPlan::HoldsWaiting), or a movement hold is on (a MoveTo of the position module
@@ -53,9 +55,10 @@ namespace Commander
         static constexpr float MELEE_REACH = 5.0f;          // DamageTargets::MELEE_REACH
         static constexpr float SPOT_GAP = 1.0f;             // MoveChase distance
         static constexpr float WAIT_NEAR_YD = 15.0f;
-        static constexpr uint32 RING_POINTS = 12;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 4;    // GetHeight + pathfinding each
-        static constexpr float MAX_STEP_Z = 4.0f;
+        // Band of position field cells around the tank while waiting (the rings before: 6 and 10).
+        static constexpr float WAIT_MIN_YD = 5.0f;
+        static constexpr float WAIT_MAX_YD = 11.0f;
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 4;    // pathfinding each
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
         static constexpr float KEEP_SEC = 1.0f;

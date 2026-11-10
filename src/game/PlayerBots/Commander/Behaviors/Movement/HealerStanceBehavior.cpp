@@ -4,7 +4,8 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"     // InPath: pure, facts only
+#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/FieldSpots.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include <algorithm>
@@ -17,11 +18,14 @@ namespace Commander
         using HS = HealerStanceBehavior;
         using SafeRoute::Distance2d;
 
-        float const STRICT_RADII[] = { 16.0f, 20.0f, 12.0f };
+        // Distance bands from the anchor (the rings before: 16, 20, 12; then 14, 24, 10; 27, 26).
+        float const STRICT_MIN_YD = 12.0f;
+        float const STRICT_MAX_YD = 20.0f;
         // Second pass: closer, or further out (still inside HEAL_RANGE), with the smaller gap.
-        float const RELAXED_RADII[] = { 14.0f, 24.0f, 10.0f };
+        float const RELAXED_MIN_YD = 10.0f;
+        float const RELAXED_MAX_YD = 24.0f;
         // Before the fight only (Context::prepare), last: just inside HEAL_RANGE.
-        float const PREPARE_OUTER_RADII[] = { 27.0f, 26.0f };
+        float const PREPARE_MAX_YD = 27.0f;
 
         struct Context
         {
@@ -31,9 +35,8 @@ namespace Commander
             // Who to stay with (FindAnchor), or the planned fight spot (anchorGuid empty).
             Position3 anchor;
             ObjectGuid anchorGuid;
-            // Before the fight (PullPlan::PlannedFightSpot): the enemies come from comeFrom.
+            // Before the fight (PullPlan::PlannedFightSpot).
             bool prepare = false;
-            Position3 comeFrom;
             float expectedIncomingDps = 0.0f;   // PullPlan::expectedIncomingDps
             Position3 here;
             // Enemies that can act and are not hitting the healer.
@@ -115,93 +118,45 @@ namespace Commander
             return gap;
         }
 
-        // An idle patrol's predicted walk (WorldModel::patrols, filled while the party fights)
-        // comes within its aggro range + margin of `p` before the fight should end.
-        bool InPatrolPath(WorldModel const& world, Position3 const& p)
-        {
-            float const remaining = Value::FightRemainingSec(world);
-            for (PatrolFacts const& patrol : world.patrols)
-                if (patrol.aggressive && !patrol.noAggro && !patrol.tappedByOther &&
-                    PatrolAssigner::InPath(patrol, p, remaining))
-                    return true;
-            return false;
-        }
-
-        // Straight behind the anchor as seen from the enemies near it; no enemies: towards the healer.
-        float BehindAngle(Context const& ctx)
-        {
-            Position3 const& a = ctx.anchor;
-            // Before the fight: away from where the enemies come from; when they are fought
-            // where they stand (the anchor is the pack), towards the healer (the party's side).
-            if (ctx.prepare && Distance2d(a, ctx.comeFrom) >= 1.0f)
-                return std::atan2(a.y - ctx.comeFrom.y, a.x - ctx.comeFrom.x);
-            if (ctx.prepare)
-                return std::atan2(ctx.here.y - a.y, ctx.here.x - a.x);
-            float sx = 0.0f, sy = 0.0f;
-            uint32 n = 0;
-            for (EnemyFacts const* e : ctx.enemies)
-            {
-                if (Distance2d(a, e->pos) > HS::ENEMY_SCAN)
-                    continue;
-                sx += e->pos.x;
-                sy += e->pos.y;
-                ++n;
-            }
-            if (n)
-                return std::atan2(a.y - sy / n, a.x - sx / n);
-            return std::atan2(ctx.here.y - a.y, ctx.here.x - a.x);
-        }
-
-        // Ring candidates passing the cheap checks (no ground or path yet), best first.
+        // Field cells `minR`..`maxR` from the anchor passing the cheap checks, best first. The
+        // field drops cells off the ground, under an idle creature, on a patrol's way before the
+        // fight ends and cells the healer cannot walk to (FieldSpots::Collect).
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                                     SafeRoute::IdleCreatures const& idle, float const* radii, size_t radiusCount,
-                                     float minGap)
+                                     std::vector<FieldSpots::Spot> const& cells, float minR, float maxR, float minGap)
         {
             std::vector<Spot> spots;
-            Position3 const& a = ctx.anchor;
-            float const behind = BehindAngle(ctx);
-            for (size_t r = 0; r < radiusCount; ++r)
+            for (FieldSpots::Spot const& c : cells)
             {
-                for (uint32 k = 0; k < HS::RING_POINTS; ++k)
-                {
-                    // 0, +1, -1, +2, -2 ... steps away from straight behind.
-                    int32 const step = int32((k + 1) / 2) * ((k % 2) ? 1 : -1);
-                    float const angle = behind + 2.0f * float(M_PI) * step / HS::RING_POINTS;
-                    Spot s;
-                    s.pos.x = a.x + radii[r] * std::cos(angle);
-                    s.pos.y = a.y + radii[r] * std::sin(angle);
-                    s.pos.z = a.z;
-                    float const gap = MinGap(ctx, s.pos);
-                    if (gap < minGap)
-                        continue;
-                    if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos) || idle.Near(s.pos) ||
-                        InPatrolPath(world, s.pos))
-                        continue;
-                    // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
-                    float covered = 0.0f;
-                    for (PartyMemberFacts const& m : world.party)
-                        if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchorGuid &&
-                            Distance2d(s.pos, m.pos) <= HS::HEAL_RANGE)
-                            covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
-                    s.walk = Distance2d(ctx.here, s.pos);
-                    s.score = -s.walk + HS::COVER_WEIGHT * covered + HS::GAP_WEIGHT * std::min(gap, HS::GAP_CAP);
-                    spots.push_back(s);
-                }
+                float const r = Distance2d(c.pos, ctx.anchor);
+                if (r < minR || r > maxR)
+                    continue;
+                Spot s;
+                s.pos = c.pos;
+                float const gap = MinGap(ctx, s.pos);
+                if (gap < minGap)
+                    continue;
+                if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos))
+                    continue;
+                // Other members in heal range of the point; other tanks count TANK_COVER_MULT times.
+                float covered = 0.0f;
+                for (PartyMemberFacts const& m : world.party)
+                    if (!m.isPet && m.alive && m.guid != ctx.self->guid && m.guid != ctx.anchorGuid &&
+                        Distance2d(s.pos, m.pos) <= HS::HEAL_RANGE)
+                        covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
+                s.walk = c.WalkEstimate(HS::PATH_FACTOR);
+                s.score = -s.walk + HS::COVER_WEIGHT * covered + HS::GAP_WEIGHT * std::min(gap, HS::GAP_CAP);
+                spots.push_back(s);
             }
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.score > y.score; });
+            std::sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.score > y.score; });
             return spots;
         }
 
-        // Map checks: ground near the anchor's height, line of sight to the anchor, safe path.
+        // Live checks: this healer's own idle scan, line of sight to the anchor, safe path.
         // `pathIdle`: `idle`, or its LeavingFrom(here) copy when the healer stands in reach now.
         bool GeometryOk(Context const& ctx, SafeRoute::IdleCreatures const& idle,
-                        SafeRoute::IdleCreatures const& pathIdle, Spot& s)
+                        SafeRoute::IdleCreatures const& pathIdle, Spot const& s)
         {
             Position3 const& a = ctx.anchor;
-            float const ground = ctx.map->GetHeight(s.pos.x, s.pos.y, a.z + 3.0f);
-            if (ground <= INVALID_HEIGHT || std::fabs(ground - a.z) > HS::MAX_STEP_Z)
-                return false;
-            s.pos.z = ground;
             if (idle.Near(s.pos) || !Los(ctx.map, s.pos, a))
                 return false;
             return SafeRoute::PathIsSafe(ctx.me, pathIdle, s.pos, HS::MAX_PATH_DETOUR);
@@ -343,7 +298,6 @@ namespace Commander
         {
             ctx.prepare = true;
             ctx.anchor = planned;
-            ctx.comeFrom = plan.pull.packAt;
             ctx.expectedIncomingDps = plan.pull.expectedIncomingDps;
         }
         else
@@ -384,19 +338,30 @@ namespace Commander
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
 
+        // Cells of the position field around the anchor, once for all passes.
+        std::vector<FieldSpots::Spot> cells;
+        if (world.field)
+        {
+            FieldSpots::Query q;
+            q.center = ctx.anchor;
+            q.minYd = RELAXED_MIN_YD;
+            q.maxYd = ctx.prepare ? PREPARE_MAX_YD : RELAXED_MAX_YD;
+            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            cells = FieldSpots::Collect(*world.field, *ctx.self, q);
+        }
+
         uint32 checks = 0;
         // Before the fight a third pass at the edge of heal range: a walk-in fought where the
-        // pack stands has the idle pack itself as the anchor, the inner rings lie in its aggro range.
+        // pack stands has the idle pack itself as the anchor, the inner cells lie in its aggro range.
         uint32 const passes = ctx.prepare ? 3 : 2;
         for (uint32 pass = 0; pass < passes; ++pass)
         {
             std::vector<Spot> spots = pass == 0
-                ? Candidates(ctx, world, zones, idle, STRICT_RADII, sizeof(STRICT_RADII) / sizeof(float), MIN_ENEMY_GAP)
+                ? Candidates(ctx, world, zones, cells, STRICT_MIN_YD, STRICT_MAX_YD, MIN_ENEMY_GAP)
                 : pass == 1
-                ? Candidates(ctx, world, zones, idle, RELAXED_RADII, sizeof(RELAXED_RADII) / sizeof(float), RELAXED_ENEMY_GAP)
-                : Candidates(ctx, world, zones, idle, PREPARE_OUTER_RADII, sizeof(PREPARE_OUTER_RADII) / sizeof(float),
-                             RELAXED_ENEMY_GAP);
-            for (Spot& s : spots)
+                ? Candidates(ctx, world, zones, cells, RELAXED_MIN_YD, RELAXED_MAX_YD, RELAXED_ENEMY_GAP)
+                : Candidates(ctx, world, zones, cells, RELAXED_MAX_YD, PREPARE_MAX_YD, RELAXED_ENEMY_GAP);
+            for (Spot const& s : spots)
             {
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;

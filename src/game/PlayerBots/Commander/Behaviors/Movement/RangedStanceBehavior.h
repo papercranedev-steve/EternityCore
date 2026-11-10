@@ -30,14 +30,17 @@
  * escape module's job), or a MoveTo is under way (then Hold so the rotation's first cast does
  * not stop the walk).
  *
- * Where: rings RADII around the victim (plus its combat reach), RING_POINTS directions
- * starting from the bot's side, nearest walk first. A point is kept when it is outside every
- * idle creature's reach, outside areas dangerous to ranged (HazardZones), not where an idle
- * patrol walks before the fight should end (PatrolAssigner::InPath), its ground within
- * MAX_STEP_Z of the victim's, in line of sight of the victim, and the path there is safe
- * (SafeRoute::PathIsSafe). At most MAX_GEOMETRY_CHECKS points per tick.
- * Nothing found: the bot stays (no chase into a pack).
- * Cost = Value::LostAction(bot, walk seconds). holdMs = walk seconds x 1000 + HOLD_EXTRA_MS.
+ * Where (since 2026-11-10, position field step C): cells of the position field
+ * (FieldSpots::Collect) MIN_RADIUS..MAX_RADIUS from the victim's edge (before the fight out to
+ * PREPARE_MAX_RADIUS: a walk-in fought where the pack stands has the idle pack as the anchor,
+ * the near cells lie in its aggro range). The field drops cells off the ground or cut off from
+ * the party (a slope is fine; the rings before compared heights with the victim's), under an
+ * idle creature, on a patrol's way before the fight ends, and cells the bot cannot walk to.
+ * Kept: outside areas dangerous to ranged (HazardZones). Shortest grid walk first. Live checks
+ * on at most MAX_GEOMETRY_CHECKS cells per tick: this bot's own idle scan, line of sight to the
+ * victim, SafeRoute::PathIsSafe. Nothing found, or no field: the bot stays (no chase into a pack).
+ * Cost = Value::LostAction(bot, walk seconds), walk = the grid walk. holdMs = walk seconds x
+ * 1000 + HOLD_EXTRA_MS.
  */
 
 #ifndef MANGOS_COMMANDER_RANGED_STANCE_BEHAVIOR_H
@@ -52,9 +55,11 @@ namespace Commander
     public:
         // Trigger: the victim farther than this from its edge (spells and wands reach 30).
         static constexpr float CAST_RANGE = 29.0f;
-        static constexpr uint32 RING_POINTS = 12;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // GetHeight + LOS + pathfinding each
-        static constexpr float MAX_STEP_Z = 4.0f;
+        // Distances from the victim's edge (the rings before: 25, 20, 15; 28 before the fight).
+        static constexpr float MIN_RADIUS = 14.0f;
+        static constexpr float MAX_RADIUS = 26.0f;
+        static constexpr float PREPARE_MAX_RADIUS = 28.0f;
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
