@@ -20,8 +20,11 @@
  *     would take for RECLAIM_SEC (LooseEnemy::Loss) x FRAGILE_WEIGHT (chance the thin lead
  *     breaks), cost = SwitchCost. (Until 2026-11-08: lead / threat below 15% while the
  *     current target's was above 30%.)
- *  4. Keep the current target.
- *  5. No target yet: the pull target, else what the leader attacks, else what another member
+ *  4. Doctrine TankJob::Focus (Pick, main tank only; todo 12): the party focus when it is within
+ *     TacticalDoctrine::CLUSTER_YD of the tank, the walk is safe and the switch pays (Smith's
+ *     rule exchange x Share against SwitchCost). Under Area (HoldPile) the tank keeps its own.
+ *  5. Keep the current target.
+ *  6. No target yet: the pull target, else what the leader attacks, else what another member
  *     attacks (WorldModel::targeted first), else the nearest enemy hitting the tank, else the
  *     nearest one, all within JOIN_FIGHT_YD. benefit = its harm over its kill time x the tank's share of
  *     the party's damage (the exchange below against no target).

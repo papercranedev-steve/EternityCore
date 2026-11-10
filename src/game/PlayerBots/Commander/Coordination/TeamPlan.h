@@ -677,6 +677,17 @@ namespace Commander
         STAMP_LURE          = 1 << 6,
     };
 
+    // The main tank's job under the tactic (TacticalDoctrine; todo 12, user 2026-11-10). Which
+    // enemy and which ability stay the duties' and the cerebellum's (points).
+    enum class TankJob : uint8
+    {
+        None,       // gathering (the threat opening's task), no tactic
+        Focus,      // Pick: the tank hits the party focus too (TankTargets) when it is at the pile
+        HoldPile,   // Area: the tank keeps the pile (top-up) and protects the area caster: a rescue
+                    // of an enemy on it is Urgent (RescueAssigner), so is a group threat on two or
+                    // more of them (ThreatBehavior: Challenging Shout)
+    };
+
     // What the party does about the enemies away from the tank (casters standing back, the far
     // ones of a corner fight): Coordination/Doctrine/FightPlace.h, chosen by TacticalDoctrine.
     enum class OutlierTactic : uint8
@@ -703,6 +714,7 @@ namespace Commander
         std::string why;                    // why this tactic, and why it was (re)chosen
         uint32 areaDealers = 0;             // TeamLedger::areaDealers when chosen
         std::vector<ObjectGuid> known;      // the enemies of the fight when chosen: one not in it is an add
+        TankJob tankJob = TankJob::None;
         OutlierTactic outliers = OutlierTactic::None;
         std::string outliersWhy;
         bool lureCorner = false;            // Lure for a corner fight (not casters standing back)

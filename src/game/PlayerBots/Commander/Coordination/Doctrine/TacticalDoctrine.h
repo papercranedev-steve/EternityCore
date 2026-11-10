@@ -32,6 +32,10 @@
  *              found): the party focus is among the outliers first (TargetAssigner, DamageTargets).
  *   None       otherwise.
  *   Where the pull fights (here, brought back, corner) is chosen before it: FightPlace::Choose.
+ * The main tank's job (DoctrinePlan::tankJob, todo 12, user 2026-11-10): none while gathering;
+ *   Pick: Focus (TankTargets: the party focus when it is at the pile and the switch pays);
+ *   Area: HoldPile (keeps its targets and top-ups; an enemy on the area caster is an Urgent
+ *   rescue, two or more of them make a group threat Urgent: Challenging Shout).
  * Stamps:
  *   NoMez      Area tactic and InCluster; Tier Fodder; Cleanup (every enemy); a player hits it.
  *   Committed  not NoMez, held by a bot's control that breaks on damage or takes one target at a
@@ -59,6 +63,7 @@ namespace Commander
     enum class FightPhase : uint8;
     enum class PileTactic : uint8;
     enum class OutlierTactic : uint8;
+    enum class TankJob : uint8;
 
     class TacticalDoctrine : public IAssigner
     {
@@ -90,6 +95,7 @@ namespace Commander
         static char const* Name(FightPhase phase);
         static char const* Name(PileTactic tactic);
         static char const* Name(OutlierTactic tactic);
+        static char const* Name(TankJob job);
         // "in pile, no mez (area pile)"
         static std::string Describe(DoctrineEnemy const& d);
     };

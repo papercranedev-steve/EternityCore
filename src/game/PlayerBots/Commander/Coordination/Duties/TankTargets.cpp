@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Duties/TargetRules.h"
 #include "Commander/Coordination/Duties/RescueAssigner.h"
+#include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -136,7 +137,40 @@ namespace TankTargets
             return p.benefit > p.cost ? p : TargetPick();
         }
 
-        // 4. No target yet.
+        // 4. The doctrine's job Focus (Pick tactic, TankJob): the main tank hits the party focus
+        // too, when it is at the pile (TacticalDoctrine::CLUSTER_YD, so the tank does not leave
+        // the enemies on it) and the switch pays: Smith's rule exchange as for the damage dealers
+        // (DamageTargets), the tank's share of it, against SwitchCost.
+        TargetPick Focus(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
+        {
+            WorldModel const& world = ctx.world;
+            if (ctx.plan.doctrine.tankJob != TankJob::Focus)
+                return TargetPick();
+            PartyMemberFacts const* main = Tanks::Main(world);
+            if (!main || main->guid != tank.guid)
+                return TargetPick();
+            EnemyFacts const* f = ctx.Find(ctx.plan.focus.enemy);
+            if (!f || f == current || !ctx.Hittable(*f, tank) ||
+                PackResolver::Distance(tank.pos, f->pos) - f->boundingRadius > TacticalDoctrine::CLUSTER_YD ||
+                RouteRisk::Blocked(world, tank, *f))
+                return TargetPick();
+            TargetPick p;
+            p.enemy = f;
+            p.cost = SwitchCost::Of(world, tank, *f, MELEE_REACH);
+            FocusScore const& fs = ctx.Score(*f);
+            if (current)
+            {
+                FocusScore const& cs = ctx.Score(*current);
+                p.benefit = (fs.harmRate * cs.killSec - cs.harmRate * fs.killSec) * ctx.Share();
+            }
+            else
+                p.benefit = std::max(fs.harmRate * fs.killSec * ctx.Share(),
+                                     Value::ContributionPerSec(world, tank) * Value::GCD_SEC);
+            p.reason = "doctrine: the tank hits the focus (pick)";
+            return p.benefit > p.cost ? p : TargetPick();
+        }
+
+        // 5. No target yet.
         TargetPick First(TargetContext const& ctx, PartyMemberFacts const& tank)
         {
             WorldModel const& world = ctx.world;
@@ -205,6 +239,9 @@ namespace TankTargets
         TargetPick const topUp = TopUp(ctx, tank, current);
         if (topUp.enemy)
             return topUp;
+        TargetPick const focus = Focus(ctx, tank, current);
+        if (focus.enemy)
+            return focus;
         if (current)
         {
             TargetPick keep;

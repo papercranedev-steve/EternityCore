@@ -340,6 +340,8 @@ namespace
             handler->PSendSysMessage("Doctrine: %s, %s for %.1fs (%s)", Commander::TacticalDoctrine::Name(d.phase),
                 Commander::TacticalDoctrine::Name(d.tactic),
                 d.sinceMs ? WorldTimer::getMSTimeDiffToNow(d.sinceMs) / 1000.0f : 0.0f, d.why.c_str());
+            if (d.tankJob != Commander::TankJob::None)
+                handler->PSendSysMessage("    main tank: %s", Commander::TacticalDoctrine::Name(d.tankJob));
             if (d.outliers != Commander::OutlierTactic::None)
                 handler->PSendSysMessage("    away from the tank: %s (%s)", Commander::TacticalDoctrine::Name(d.outliers),
                     d.outliersWhy.c_str());

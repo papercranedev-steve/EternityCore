@@ -202,8 +202,8 @@ namespace Commander
         // radius: where the spell lands and its area, SpellTags::AreaRadius).
         template <typename ValueFn>
         void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, float tankRate,
-                                float switchCost, float stanceCost, float enemyMelee, ValueFn valueOf,
-                                std::vector<Proposal>& out)
+                                float switchCost, float stanceCost, float enemyMelee, bool protectsCaster,
+                                ValueFn valueOf, std::vector<Proposal>& out)
         {
             Unit* victim = bot->me->GetVictim();
             // Damage breaks crowd control (Polymorph, Sap, Shackle) on enemies around the tank:
@@ -240,11 +240,13 @@ namespace Commander
                 float cost = switchCost;
                 if (bot->StanceSwapFor(o.spell) && !bot->CanTryToCastSpell(castTarget, o.spell))
                     cost += stanceCost;
-                if (o.taunt)    // long cooldown: kept for a real emergency
+                // Long cooldown: kept for a real emergency. Several enemies turned onto the area
+                // caster the doctrine has the tank protect (HoldPile) is that emergency: no reserve.
+                if (o.taunt && !protectsCaster)
                     cost += Value::Points(world, enemyMelee * ThreatBehavior::TAUNT_RESERVE_SEC) *
                             ThreatBehavior::GROUP_TAUNT_RESERVE_MULT;
 
-                Proposal p = MakeProposal(value.second ? ProposalTier::Urgent : ProposalTier::Assigned,
+                Proposal p = MakeProposal(value.second || protectsCaster ? ProposalTier::Urgent : ProposalTier::Assigned,
                                           BotActionType::Cast, o.onTarget ? victim->GetObjectGuid() : ObjectGuid(), o.spell);
                 p.reason = o.taunt ? "group taunt loose enemies" :
                            cost > switchCost ? "area threat on loose enemies (stance swap)" : "area threat on loose enemies";
@@ -386,6 +388,12 @@ namespace Commander
                 loose.push_back({ &e, victim, v.gap, v.horizon, mult, v.deadly });
         }
 
+        // Doctrine HoldPile (Area tactic, TankJob): two or more enemies turned onto the area caster
+        // make the group threat (Challenging Shout) Urgent; its worth is still the points below.
+        bool const protects = plan.doctrine.tankJob == TankJob::HoldPile && plan.area.active &&
+            std::count_if(loose.begin(), loose.end(),
+                [&plan](LooseEntry const& l) { return l.victim->guid == plan.area.caster; }) >= 2;
+
         // 1b. The threat opening's task (Coordination/Doctrine/ThreatOpening.h): the enemies next to the
         // tank it still lacks threat on. Before 2026-11-08 these were the "fragile" enemies here,
         // valued by what one would do on the runner-up for 2 s x 0.5: a Demoralizing Shout came
@@ -399,7 +407,7 @@ namespace Commander
         // ability (Thunder Clap, Demoralizing Shout, Consecration, Challenging Roar) instead of
         // one switch per enemy per tick (combat scenarios 6 and 9).
         if (opens || loose.size() >= GROUP_THREAT_MIN_ENEMIES)
-            ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee,
+            ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee, protects,
                 [&](float threatAdded, float holdSec, Position3 const& centre, float radius) -> std::pair<float, bool>
                 {
                     float benefit = 0.0f;

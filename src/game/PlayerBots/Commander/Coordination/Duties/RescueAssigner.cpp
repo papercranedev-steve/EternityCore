@@ -46,6 +46,16 @@ namespace Commander
             need.blockedBy = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::Saved, victim->guid } };
             need.marks = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::LooseTaken, victim->guid } };
             need.reason = "loose enemy";
+            // Doctrine HoldPile (Area tactic, TankJob): the tank protects the area caster (the
+            // area phase of this refresh's situation step). Which way (taunt, threat, its own
+            // threat drop) is still the points'; that it is done first is the doctrine's: Urgent.
+            bool const protects = plan.doctrine.tankJob == TankJob::HoldPile && plan.area.active &&
+                                  plan.area.caster == victim->guid;
+            if (protects)
+            {
+                need.detail |= DETAIL_URGENT;
+                need.reason = "loose enemy on the area caster (doctrine: protect it)";
+            }
             // The area phase counts on the tanks' taunts for the enemies it turns (AreaPhase,
             // this refresh's situation step): a taunt spent outside its area pays that.
             float const areaReserve = plan.area.active && !plan.area.Targets(e.guid) ? plan.area.tauntReserve : 0.0f;

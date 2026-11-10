@@ -155,6 +155,10 @@ namespace Commander
             }
         }
 
+        // The main tank's job (TankJob): none while gathering (the threat opening's task).
+        d.tankJob = d.phase == FightPhase::Gathering || d.tactic == PileTactic::None ? TankJob::None
+                  : d.tactic == PileTactic::Area ? TankJob::HoldPile : TankJob::Focus;
+
         // The enemies away from the tank (FightPlace.h). The pull's line of sight break as its map
         // step (PullPlanner::SearchLosBreak, after the assigners) left it last refresh; it reads
         // this refresh's lure stamps.
@@ -226,7 +230,7 @@ namespace Commander
 
         if (scope.On())
         {
-            scope.Label("%s, %s, outliers %s", Name(d.phase), Name(d.tactic), Name(d.outliers));
+            scope.Label("%s, %s, tank %s, outliers %s", Name(d.phase), Name(d.tactic), Name(d.tankJob), Name(d.outliers));
             std::string list;
             for (DoctrineEnemy const& x : d.enemies)
                 list += Trace::Format("%s{\"guid\":\"%s\",\"stamps\":%u,\"engage\":%u,\"tier\":%u}",
@@ -280,6 +284,17 @@ namespace Commander
             case PileTactic::None: return "no tactic";
             case PileTactic::Area: return "area pile";
             case PileTactic::Pick: return "pick";
+        }
+        return "?";
+    }
+
+    char const* TacticalDoctrine::Name(TankJob job)
+    {
+        switch (job)
+        {
+            case TankJob::None:     return "no job";
+            case TankJob::Focus:    return "hits the focus";
+            case TankJob::HoldPile: return "holds the pile, protects the area caster";
         }
         return "?";
     }
