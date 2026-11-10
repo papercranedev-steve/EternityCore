@@ -6,8 +6,13 @@ namespace Commander
 {
 namespace FieldSpots
 {
-    std::vector<Spot> Collect(PositionField const& field, PartyMemberFacts const& member, Query const& q)
+    std::vector<Spot> Collect(WorldModel const& world, PartyMemberFacts const& member, Query const& q)
     {
+        PositionField const& field = *world.field;
+        std::vector<Position3> held;
+        for (PartyMemberFacts const& m : world.party)
+            if (!m.isPet && m.alive && m.guid != member.guid)
+                held.push_back(m.standAt);
         std::vector<Spot> out;
         std::vector<Spot> unreached;    // cells the grid walk does not get to
         FieldCell const* own = field.At(member.pos);
@@ -31,6 +36,9 @@ namespace FieldSpots
                     continue;
                 s.straightYd = SafeRoute::Distance2d(s.pos, member.pos);
                 s.patrolSec = c->patrolSec;
+                for (Position3 const& h : held)
+                    if (SafeRoute::Distance2d(s.pos, h) <= TAKEN_YD)
+                        s.taken = true;
                 if (walks)
                 {
                     s.walkYd = field.WalkYd(member, s.pos);

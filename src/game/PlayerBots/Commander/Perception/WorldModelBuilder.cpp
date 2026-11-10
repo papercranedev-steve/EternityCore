@@ -32,6 +32,7 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include "Timer.h"
+#include "MoveSpline.h"
 #include <algorithm>
 #include <limits>
 
@@ -88,6 +89,14 @@ namespace WorldModelBuilder
             f.mana = unit->GetPower(POWER_MANA);
             f.maxMana = unit->GetMaxPower(POWER_MANA);
             f.pos = PositionOf(unit);
+            f.standAt = f.pos;
+            if (unit->IsMoving() && unit->movespline && !unit->movespline->Finalized())
+            {
+                Vector3 const end = unit->movespline->FinalDestination();
+                f.standAt.x = end.x;
+                f.standAt.y = end.y;
+                f.standAt.z = end.z;
+            }
             if (Unit const* victim = unit->GetVictim())
                 f.victim = victim->GetObjectGuid();
             f.casting = unit->IsNonMeleeSpellCasted(false, false, true);

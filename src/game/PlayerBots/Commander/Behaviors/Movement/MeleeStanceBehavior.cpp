@@ -173,11 +173,13 @@ namespace Commander
             q.minYd = MS::WAIT_MIN_YD;
             q.maxYd = MS::WAIT_MAX_YD;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
-            std::vector<FieldSpots::Spot> spots = FieldSpots::Collect(*world.field, self, q);
-            std::sort(spots.begin(), spots.end(), [](FieldSpots::Spot const& x, FieldSpots::Spot const& y)
+            std::vector<FieldSpots::Spot> spots = FieldSpots::Collect(world, self, q);
+            auto const walk = [](FieldSpots::Spot const& s) { return s.WalkEstimate(MS::PATH_FACTOR); };
+            std::sort(spots.begin(), spots.end(), [&walk](FieldSpots::Spot const& x, FieldSpots::Spot const& y)
             {
-                return x.WalkEstimate(MS::PATH_FACTOR) < y.WalkEstimate(MS::PATH_FACTOR);
+                return walk(x) < walk(y);
             });
+            FieldSpots::PreferFree(spots, walk, [](FieldSpots::Spot const& s) { return s.taken; });
 
             uint32 checks = 0;
             for (FieldSpots::Spot const& s : spots)

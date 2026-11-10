@@ -35,6 +35,7 @@ namespace Commander
         {
             Position3 pos;
             float walk = 0.0f;
+            bool taken = false;     // FieldSpots::Spot::taken
         };
 
         // Field cells MIN_RADIUS..MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the
@@ -51,16 +52,18 @@ namespace Commander
             q.minYd = RS::MIN_RADIUS + victimReach;
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
-            for (FieldSpots::Spot const& c : FieldSpots::Collect(*world.field, self, q))
+            for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
                     continue;
                 Spot s;
                 s.pos = c.pos;
                 s.walk = c.WalkEstimate(RS::PATH_FACTOR);
+                s.taken = c.taken;
                 spots.push_back(s);
             }
             std::sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.walk < b.walk; });
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.walk; }, [](Spot const& s) { return s.taken; });
             return spots;
         }
 

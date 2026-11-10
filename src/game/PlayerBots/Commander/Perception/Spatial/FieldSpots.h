@@ -35,9 +35,17 @@ namespace Commander
             float walkYd = -1.0f;       // grid walk from the member, -1 = not known
             float patrolSec = -1.0f;    // FieldCell::patrolSec
 
+            // Another member (not a pet) stands there or walks there (PartyMemberFacts::standAt
+            // within TAKEN_YD of the cell centre).
+            bool taken = false;
+
             // Walk estimate in yards: the grid walk, else the straight line times `pathFactor`.
             float WalkEstimate(float pathFactor) const { return walkYd >= 0.0f ? walkYd : straightYd * pathFactor; }
         };
+
+        float const TAKEN_YD = 1.5f;
+        // Two spots whose order keys differ by at most this count as equally good (one cell of walk).
+        float const TIE = 2.0f;
 
         struct Query
         {
@@ -47,7 +55,32 @@ namespace Commander
             float patrolBeforeSec = 0.0f;
         };
 
-        std::vector<Spot> Collect(PositionField const& field, PartyMemberFacts const& member, Query const& q);
+        // From world.field (must be set).
+        std::vector<Spot> Collect(WorldModel const& world, PartyMemberFacts const& member, Query const& q);
+
+        // `spots` sorted best first by `key` (lower is better). A spot nobody holds goes before
+        // a taken one whose key it is within TIE of: equally good places are shared out, a
+        // clearly better one is still taken by two (standing together costs nothing; mechanics
+        // that punish it are hazard facts, position field doc section 6).
+        template <class T, class Key, class Taken>
+        void PreferFree(std::vector<T>& spots, Key key, Taken taken)
+        {
+            for (size_t i = 0; i < spots.size(); ++i)
+            {
+                if (!taken(spots[i]))
+                    continue;
+                float const limit = key(spots[i]) + TIE;
+                for (size_t j = i + 1; j < spots.size() && key(spots[j]) <= limit; ++j)
+                {
+                    if (taken(spots[j]))
+                        continue;
+                    T moved = spots[j];
+                    spots.erase(spots.begin() + j);
+                    spots.insert(spots.begin() + i, moved);
+                    break;
+                }
+            }
+        }
     }
 }
 

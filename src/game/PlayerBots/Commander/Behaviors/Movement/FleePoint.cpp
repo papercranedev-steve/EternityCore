@@ -31,6 +31,7 @@ namespace Commander
         {
             Position3 pos;
             float score = 0.0f;
+            bool taken = false;     // field cell another member holds (FieldSpots::Spot::taken)
         };
 
         // Perception/Tanks.h when the party's world model is there; else a tank-role bot.
@@ -118,9 +119,10 @@ namespace FleePoint
             q.minYd = CELL_MIN_DISTANCE;
             q.maxYd = CELL_MAX_DISTANCE;
             q.patrolBeforeSec = Value::FightRemainingSec(*world);
-            for (FieldSpots::Spot const& s : FieldSpots::Collect(*field, *self, q))
+            for (FieldSpots::Spot const& s : FieldSpots::Collect(*world, *self, q))
             {
                 Candidate c;
+                c.taken = s.taken;
                 if (score(s.pos, false, c))
                     candidates.push_back(c);
             }
@@ -128,6 +130,9 @@ namespace FleePoint
 
         std::sort(candidates.begin(), candidates.end(),
                   [](Candidate const& a, Candidate const& b) { return a.score > b.score; });
+        // (party members' own spots are where they stand: running to them is the point)
+        FieldSpots::PreferFree(candidates, [](Candidate const& c) { return -c.score; },
+                               [](Candidate const& c) { return c.taken; });
 
         uint32 checks = 0;
         for (Candidate const& c : candidates)

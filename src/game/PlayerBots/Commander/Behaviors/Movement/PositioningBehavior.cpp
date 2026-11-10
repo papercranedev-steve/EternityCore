@@ -47,6 +47,7 @@ namespace Commander
             Position3 pos;
             float dist = 0.0f;          // walk, yards (FieldSpots::Spot::WalkEstimate)
             bool keepsReach = false;    // melee: victim still in melee reach from here
+            bool taken = false;         // FieldSpots::Spot::taken
         };
 
         bool Contains(HazardZone const& z, Position3 const& p, float margin = 0.0f)
@@ -176,7 +177,7 @@ namespace Commander
             q.maxYd = zone.radius + PB::RING_EXTRA + PB::SEARCH_BAND_YD;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
             std::vector<Spot> spots;
-            for (FieldSpots::Spot const& c : FieldSpots::Collect(*ctx.field, *ctx.self, q))
+            for (FieldSpots::Spot const& c : FieldSpots::Collect(world, *ctx.self, q))
             {
                 if (!CheapOk(ctx, world, zones, c.pos, allowRange))
                     continue;
@@ -184,6 +185,7 @@ namespace Commander
                 s.pos = c.pos;
                 s.dist = c.WalkEstimate(PB::PATH_FACTOR);
                 s.keepsReach = KeepsReach(ctx, s.pos);
+                s.taken = c.taken;
                 spots.push_back(s);
             }
             // Melee: points that keep the victim in reach first. Then nearest.
@@ -193,6 +195,9 @@ namespace Commander
                     return a.keepsReach;
                 return a.dist < b.dist;
             });
+            // Never across the keeps-reach line (the key jumps by far more than FieldSpots::TIE).
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.dist + (s.keepsReach ? 0.0f : 10000.0f); },
+                                   [](Spot const& s) { return s.taken; });
             for (Spot& s : spots)
             {
                 if (checks >= PB::MAX_GEOMETRY_CHECKS)

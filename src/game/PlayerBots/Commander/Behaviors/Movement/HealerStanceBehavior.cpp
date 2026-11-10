@@ -48,6 +48,7 @@ namespace Commander
             Position3 pos;
             float walk = 0.0f;
             float score = 0.0f;
+            bool taken = false;     // FieldSpots::Spot::taken
         };
 
         bool Los(Map* map, Position3 const& a, Position3 const& b)
@@ -145,9 +146,11 @@ namespace Commander
                         covered += Tanks::IsTank(m) ? HS::TANK_COVER_MULT : 1.0f;
                 s.walk = c.WalkEstimate(HS::PATH_FACTOR);
                 s.score = -s.walk + HS::COVER_WEIGHT * covered + HS::GAP_WEIGHT * std::min(gap, HS::GAP_CAP);
+                s.taken = c.taken;
                 spots.push_back(s);
             }
             std::sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.score > y.score; });
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return -s.score; }, [](Spot const& s) { return s.taken; });
             return spots;
         }
 
@@ -347,7 +350,7 @@ namespace Commander
             q.minYd = RELAXED_MIN_YD;
             q.maxYd = ctx.prepare ? PREPARE_MAX_YD : RELAXED_MAX_YD;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
-            cells = FieldSpots::Collect(*world.field, *ctx.self, q);
+            cells = FieldSpots::Collect(world, *ctx.self, q);
         }
 
         uint32 checks = 0;

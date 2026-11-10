@@ -299,6 +299,10 @@ namespace Commander
         uint32 mana = 0;
         uint32 maxMana = 0;
         Position3 pos;
+        // Where it will stand: the end of the walk it is on (its movement spline), else `pos`.
+        // The spot it holds for the others (FieldSpots: a cell another member stands on or walks
+        // to is taken last among equally good ones, position field doc section 6).
+        Position3 standAt;
         ObjectGuid victim;          // who this member is attacking
         // Bots: the first live enemy carrying one of the raid marks the player told this bot to
         // focus (`.partybot focusmark`, PartyBotAI::m_marksToFocus). Empty = none. A player
