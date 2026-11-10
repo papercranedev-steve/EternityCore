@@ -434,8 +434,10 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
         float const dx = pLeader->GetPositionX() - m_followCheckX;
         float const dy = pLeader->GetPositionY() - m_followCheckY;
         float const recheck = Commander::FollowSpot::FOLLOW_RECHECK_DIST;
+        // (a leader standing still: a patrol may still come to the follow point)
         if (dx * dx + dy * dy < recheck * recheck &&
-            Commander::FollowSpot::AngleGap(pLeader->GetOrientation(), m_followCheckO) < Commander::FollowSpot::FOLLOW_RECHECK_TURN)
+            Commander::FollowSpot::AngleGap(pLeader->GetOrientation(), m_followCheckO) < Commander::FollowSpot::FOLLOW_RECHECK_TURN &&
+            !Commander::FollowSpot::NeedsRecheck(me, pLeader, m_followOffset))
             return;
     }
 

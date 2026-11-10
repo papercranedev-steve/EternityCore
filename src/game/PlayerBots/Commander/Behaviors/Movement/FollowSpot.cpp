@@ -1,4 +1,8 @@
 #include "Commander/Behaviors/Movement/FollowSpot.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
+#include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Map.h"
 #include "MoveSpline.h"
@@ -72,16 +76,108 @@ namespace FollowSpot
             return true;
         }
 
+        // The party's position field, while one is built (PositionFieldBuilder: also while
+        // travelling near creatures that could attack us), and how long we stay.
+        struct FieldView
+        {
+            std::shared_ptr<PartyCommander> commander;     // keeps the field alive
+            PositionField const* field = nullptr;
+            float staySec = 0.0f;
+        };
+
+        FieldView ViewOf(Player const* me)
+        {
+            FieldView v;
+            // (the commander of the bot's own map: this map thread)
+            v.commander = sCommanderMgr.FindCommander(me);
+            if (!v.commander)
+                return v;
+            WorldModel const& world = v.commander->GetWorld();
+            v.field = world.field.get();
+            v.staySec = RouteGuard::StaySec(world, v.commander->GetPlan());
+            return v;
+        }
+
+        // The field's facts at `p`: no idle creature covers its cell and no patrol comes there
+        // before we leave. Outside the field (or none): true, the exact checks decide.
+        bool FieldClear(FieldView const& v, Position3 const& p)
+        {
+            if (!v.field)
+                return true;
+            FieldCell const* c = v.field->At(p);
+            if (!c || !c->standable)
+                return true;
+            if (c->idle)
+                return false;
+            return c->patrolSec < 0.0f || c->patrolSec >= v.staySec;
+        }
+
         // Where the bot stops (leader now) and the follow points ahead on the leader track.
         bool PointsAreSafe(Player const* me, Unit const* leader, std::vector<LeaderAt> const& track,
-                           SafeRoute::IdleCreatures const& idle, Offset const& o)
+                           SafeRoute::IdleCreatures const& idle, FieldView const& view, Offset const& o)
         {
-            if (!SpotIsSafe(idle, PointAt(me, leader, track.front(), o)))
+            Position3 const stop = PointAt(me, leader, track.front(), o);
+            if (!FieldClear(view, stop) || !SpotIsSafe(idle, stop))
                 return false;
             for (size_t i = 1; i < track.size(); ++i)
-                if (idle.Near(PointAt(me, leader, track[i], o)))
+            {
+                Position3 const p = PointAt(me, leader, track[i], o);
+                if (!FieldClear(view, p) || idle.Near(p))
                     return false;
+            }
             return true;
+        }
+
+        // Offsets to try when the current one is not safe, best first. With a field: its
+        // cells CELL_MIN_DIST..CELL_MAX_DIST from the leader that are clear (FieldClear,
+        // standable), closest to straight behind first. Without: the fixed CANDIDATE_STEPS x
+        // CANDIDATE_DISTS behind the leader.
+        std::vector<Offset> Candidates(Player const* me, Unit const* leader, FieldView const& view)
+        {
+            std::vector<Offset> out;
+            float const lx = leader->GetPositionX(), ly = leader->GetPositionY(), lo = leader->GetOrientation();
+            if (view.field)
+            {
+                struct Cell
+                {
+                    Offset o;
+                    float gap;
+                };
+                std::vector<Cell> cells;
+                float const radii = leader->GetObjectBoundingRadius() + me->GetObjectBoundingRadius();
+                int32 const cx0 = PositionField::CellOf(lx - CELL_MAX_DIST), cx1 = PositionField::CellOf(lx + CELL_MAX_DIST);
+                int32 const cy0 = PositionField::CellOf(ly - CELL_MAX_DIST), cy1 = PositionField::CellOf(ly + CELL_MAX_DIST);
+                for (int32 cx = cx0; cx <= cx1; ++cx)
+                    for (int32 cy = cy0; cy <= cy1; ++cy)
+                    {
+                        FieldCell const* c = view.field->At(cx, cy);
+                        if (!c || !c->standable)
+                            continue;
+                        Position3 const p = view.field->CenterOf(cx, cy);
+                        if (!FieldClear(view, p))
+                            continue;
+                        float const dx = p.x - lx, dy = p.y - ly;
+                        float const d = std::sqrt(dx * dx + dy * dy);
+                        if (d < CELL_MIN_DIST || d > CELL_MAX_DIST)
+                            continue;
+                        Cell k;
+                        k.o.dist = std::max(0.0f, d - radii);
+                        k.o.angle = std::atan2(dy, dx) - lo;
+                        k.gap = AngleGap(k.o.angle, float(M_PI));
+                        cells.push_back(k);
+                    }
+                std::sort(cells.begin(), cells.end(), [](Cell const& a, Cell const& b)
+                {
+                    return a.gap != b.gap ? a.gap < b.gap : a.o.dist < b.o.dist;
+                });
+                for (Cell const& k : cells)
+                    out.push_back(k.o);
+                return out;
+            }
+            for (float step : CANDIDATE_STEPS)
+                for (float dist : CANDIDATE_DISTS)
+                    out.push_back(Offset{ dist, float(M_PI) + step });
+            return out;
         }
 
         // The walk from the bot to the current follow point: a straight line when short, else
@@ -115,30 +211,35 @@ namespace FollowSpot
 
     Offset Choose(Player* me, Unit const* leader, Offset const& current, float lookaheadSec)
     {
+        FieldView const view = ViewOf(me);
         SafeRoute::IdleCreatures const idle(me, leader, FOLLOW_MARGIN);
-        if (idle.Empty())
+        // (a patrol far off is not an idle creature near us yet, but its route may be)
+        if (idle.Empty() && !view.field)
             return current;
         std::vector<LeaderAt> const track = LeaderTrack(leader, lookaheadSec);
         uint32 pathChecks = 0;
-        if (PointsAreSafe(me, leader, track, idle, current) &&
+        if (PointsAreSafe(me, leader, track, idle, view, current) &&
             WalkIsSafe(me, leader, track, idle, current, pathChecks))
             return current;
 
-        // Behind the leader only, straight behind first, then nearer the leader: the leader has
-        // just walked there, ahead nobody has looked yet.
-        std::vector<Offset> candidates;
-        for (float step : CANDIDATE_STEPS)
-            for (float dist : CANDIDATE_DISTS)
-                candidates.push_back(Offset{ dist, float(M_PI) + step });
-
-        for (Offset const& o : candidates)
+        // Behind the leader first, then turning to the sides: the leader has just walked
+        // there, ahead nobody has looked yet.
+        uint32 tried = 0;
+        for (Offset const& o : Candidates(me, leader, view))
         {
-            if (pathChecks >= MAX_PATH_CHECKS)
+            if (pathChecks >= MAX_PATH_CHECKS || tried >= MAX_CANDIDATES)
                 break;
-            if (PointsAreSafe(me, leader, track, idle, o) && WalkIsSafe(me, leader, track, idle, o, pathChecks))
+            ++tried;
+            if (PointsAreSafe(me, leader, track, idle, view, o) && WalkIsSafe(me, leader, track, idle, o, pathChecks))
                 return o;
         }
         return Offset{ FALLBACK_DIST, float(M_PI) };
+    }
+
+    bool NeedsRecheck(Player const* me, Unit const* leader, Offset const& current)
+    {
+        FieldView const view = ViewOf(me);
+        return view.field && !FieldClear(view, PointOf(me, leader, current));
     }
 }
 }
