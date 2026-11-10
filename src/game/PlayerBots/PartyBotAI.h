@@ -207,6 +207,11 @@ public:
     // Takeover::Survival): the rotations' health threshold Divine Shield, Blessing of
     // Protection, Lay on Hands, Feign Death, Vanish, Ice Block, Shield Wall, Last Stand stand down.
     bool IsSurvivalControlled() const;
+    // Stunned, feared, polymorphed: break out with a trinket, Blink or a shapeshift (CombatBotBaseAI::
+    // BreakCrowdControlEffects). Divine Shield / Ice Block only as the team rescue's duty
+    // (CastRescueWhileControlled); in a duel the original reflex.
+    void BreakControl();
+    bool CastRescueWhileControlled();
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;

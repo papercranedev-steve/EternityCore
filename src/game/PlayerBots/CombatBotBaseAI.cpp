@@ -3298,7 +3298,9 @@ bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
             {
                 if (me->IsSpellReady(pSpellEntry, pProto))
                 {
-                    if (onlyToBreakCC && !pSpellEntry->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
+                    // A trinket that breaks crowd control (PvP insignia) is kept for that:
+                    // used on the first victim, it was on cooldown when the bot got stunned.
+                    if (onlyToBreakCC != pSpellEntry->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
                         continue;
 
                     if (pSpellEntry->IsPositiveSpell())
@@ -3312,7 +3314,7 @@ bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
     return false;
 }
 
-void CombatBotBaseAI::BreakCrowdControlEffects()
+void CombatBotBaseAI::BreakCrowdControlEffects(bool emergencyCooldowns)
 {
     if (UseTrinketEffects(true))
         return;
@@ -3321,7 +3323,7 @@ void CombatBotBaseAI::BreakCrowdControlEffects()
     {
         case CLASS_PALADIN:
         {
-            if (m_spells.paladin.pDivineShield &&
+            if (emergencyCooldowns && m_spells.paladin.pDivineShield &&
                 CanTryToCastSpell(me, m_spells.paladin.pDivineShield))
             {
                 if (DoCastSpell(me, m_spells.paladin.pDivineShield) == SPELL_CAST_OK)
@@ -3364,7 +3366,7 @@ void CombatBotBaseAI::BreakCrowdControlEffects()
                 if (DoCastSpell(me, m_spells.mage.pBlink) == SPELL_CAST_OK)
                     return;
             }
-            if (m_spells.mage.pIceBlock &&
+            if (emergencyCooldowns && m_spells.mage.pIceBlock &&
                 CanTryToCastSpell(me, m_spells.mage.pIceBlock))
             {
                 if (DoCastSpell(me, m_spells.mage.pIceBlock) == SPELL_CAST_OK)

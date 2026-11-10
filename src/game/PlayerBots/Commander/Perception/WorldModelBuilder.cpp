@@ -814,7 +814,10 @@ namespace WorldModelBuilder
                 a.notOnTank = s.notOnTank;
                 a.casterStops = s.casterStops;
                 a.targetStops = s.targetStops;
-                a.ready = f.CanAct() && ai->IsReadyWithStance(spell) &&
+                // Divine Shield, Ice Block: castable while stunned or feared, they lift it
+                // (Spell::CheckCasterAuras; PartyBotAI::CastRescueWhileControlled casts them).
+                bool const liftsControl = spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT);
+                a.ready = (f.CanAct() || (f.alive && liftsControl)) && ai->IsReadyWithStance(spell) &&
                           !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
                           (!s.needsShield || ai->IsWearingShield(me));
                 f.survival.push_back(a);

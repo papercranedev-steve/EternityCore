@@ -182,7 +182,9 @@ public:
     SpellCastResult CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot);
     bool UseTrinketEffects(bool onlyToBreakCC = false);
     bool UseItemEffect(Item* pItem, bool onlyToBreakCC = false);
-    void BreakCrowdControlEffects();
+    // `emergencyCooldowns`: Divine Shield and Ice Block may be spent on it. A PartyBot outside a
+    // duel passes false: its team rescue decides them (PartyBotAI::BreakControl).
+    void BreakCrowdControlEffects(bool emergencyCooldowns = true);
 
     virtual void UpdateInCombatAI() = 0;
     virtual void UpdateOutOfCombatAI() = 0;

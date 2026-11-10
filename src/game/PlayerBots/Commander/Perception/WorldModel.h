@@ -147,7 +147,9 @@ namespace Commander
         bool notOnTank = false;
         bool casterStops = false;
         bool targetStops = false;
-        bool ready = false;             // off cooldown, enough power (stance swap counted), can act, a shield if needed
+        // Off cooldown, enough power (stance swap counted), can act (or controlled and the spell
+        // lifts it: Divine Shield, Ice Block), a shield if needed.
+        bool ready = false;
     };
 
     // The control effect an enemy is under now (the one lasting longest). A party member's

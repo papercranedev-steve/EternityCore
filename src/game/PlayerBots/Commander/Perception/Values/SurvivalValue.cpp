@@ -105,7 +105,8 @@ namespace SurvivalValue
                              PartyMemberFacts const& caster, SurvivalAbility const& a)
     {
         RescueValue::Option o;
-        if (!a.ready || !caster.CanAct())
+        // `ready` covers the caster being able to act (a controlled one only for a spell that lifts it).
+        if (!a.ready)
             return o;
         bool const self = caster.guid == member.guid;
         if (a.selfOnly && !self)

@@ -299,6 +299,37 @@ bool PartyBotAI::IsSurvivalControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Survival, WorldTimer::getMSTime());
 }
 
+void PartyBotAI::BreakControl()
+{
+    // Divine Shield / Ice Block lift a stun too, but they are the bot's emergency cooldowns: the
+    // team rescue decides them (RescueAssigner gives one when this bot is about to die), not the
+    // stun. The arbiter does not run while the bot is controlled, so its duty is cast here.
+    // Duels are not the Commander's: there the original reflex spends them on any control.
+    if (!IsInDuel() && CastRescueWhileControlled())
+        return;
+    BreakCrowdControlEffects(IsInDuel());
+}
+
+bool PartyBotAI::CastRescueWhileControlled()
+{
+    // Same map as the bot, so the commander belongs to this map thread.
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (!commander)
+        return false;
+    Commander::RescueDuty const* duty = commander->GetPlan().FindRescueFor(me->GetObjectGuid());
+    if (!duty || duty->way != Commander::RescueWay::Save)
+        return false;
+    // Only a spell the server lets a controlled caster cast (Spell::CheckCasterAuras).
+    SpellEntry const* spell = sSpellMgr.GetSpellEntry(duty->spellId);
+    if (!spell || !spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
+        return false;
+    Unit* target = me->GetMap()->GetUnit(duty->victim);
+    if (!target || !target->IsAlive() || (target != me && !me->IsWithinLOSInMap(target)) ||
+        !CanTryToCastSpell(target, spell))
+        return false;
+    return DoCastSpell(target, spell) == SPELL_CAST_OK;
+}
+
 bool PartyBotAI::IsThreatDropControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
@@ -1399,7 +1430,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
     {
-        BreakCrowdControlEffects();
+        BreakControl();
         return;
     }
 
