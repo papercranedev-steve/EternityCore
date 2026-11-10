@@ -24,6 +24,14 @@
  *   Gathering: chosen again every refresh (the groups still change). Afterwards kept until an
  *   event: an add (an enemy not in `known`), the area dealers going to none or back, the Area
  *   pile thinning below AREA_KEEP, or the end of a retreat (none while retreating).
+ * Enemies away from the tank (DoctrinePlan::outliers, FightPlace.h; todo 7, user 2026-11-10):
+ *   Lure       the pull settles and its line of sight break was not searched yet: the enemies
+ *              FightPlace::LureTargets picks (casters standing back; a corner fight's far ones)
+ *              get STAMP_LURE, the pull's map step looks for the point; Active: its casters.
+ *   KillFirst  otherwise, under the Area tactic with an Outlier left (also when no point was
+ *              found): the party focus is among the outliers first (TargetAssigner, DamageTargets).
+ *   None       otherwise.
+ *   Where the pull fights (here, brought back, corner) is chosen before it: FightPlace::Choose.
  * Stamps:
  *   NoMez      Area tactic and InCluster; Tier Fodder; Cleanup (every enemy); a player hits it.
  *   Committed  not NoMez, held by a bot's control that breaks on damage or takes one target at a
@@ -50,6 +58,7 @@ namespace Commander
     struct DoctrineEnemy;
     enum class FightPhase : uint8;
     enum class PileTactic : uint8;
+    enum class OutlierTactic : uint8;
 
     class TacticalDoctrine : public IAssigner
     {
@@ -80,6 +89,7 @@ namespace Commander
 
         static char const* Name(FightPhase phase);
         static char const* Name(PileTactic tactic);
+        static char const* Name(OutlierTactic tactic);
         // "in pile, no mez (area pile)"
         static std::string Describe(DoctrineEnemy const& d);
     };

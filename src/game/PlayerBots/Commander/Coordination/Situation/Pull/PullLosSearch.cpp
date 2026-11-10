@@ -46,73 +46,6 @@ namespace Commander
 
     namespace
     {
-        // Line of sight pull: pulled enemies standing back casting at the tank (map thread).
-        // "Standing back": melee off (a CF_MAIN_RANGED_SPELL cast turns it off, scripts may too),
-        // or a main ranged spell in its profile and not moving (between two casts).
-        std::vector<Creature*> CastersStandingBack(WorldModel const& world, PullPlan const& pull, Map* map,
-                                                   Position3 const& tankAt)
-        {
-            std::vector<Creature*> casters;
-            for (EnemyFacts const& e : world.enemies)
-            {
-                if (e.onAllyOnly || !e.acting || e.crowdControlled || e.victim != pull.tank || IsUnexpected(e, pull))
-                    continue;
-                if (PackResolver::Distance(e.pos, tankAt) <= PullPlanner::LOS_CASTER_MIN_DISTANCE)
-                    continue;
-                Creature* c = map->GetCreature(e.guid);
-                if (!c || !c->IsAlive())
-                    continue;
-                if (e.meleeEnabled && !(IsRangedCaster(c) && !c->IsMoving()))
-                    continue;
-                casters.push_back(c);
-                if (casters.size() >= PullPlanner::LOS_MAX_CASTERS)
-                    break;
-            }
-            return casters;
-        }
-
-        // Corner (PullPlan::corner): the pulled enemies coming for the tank that are not next
-        // to it yet, the ones that stand back and cast first, then the farthest. The point hides
-        // the tank from them, so they walk round the corner (a caster stops casting and comes,
-        // the others bunch up there).
-        std::vector<Creature*> CornerTargets(WorldModel const& world, PullPlan const& pull, Map* map,
-                                             Position3 const& tankAt)
-        {
-            struct Candidate
-            {
-                Creature* creature;
-                bool caster;
-                float distance;
-            };
-            std::vector<Candidate> found;
-            for (EnemyFacts const& e : world.enemies)
-            {
-                if (e.onAllyOnly || !e.acting || e.crowdControlled || e.victim != pull.tank || IsUnexpected(e, pull))
-                    continue;
-                float const d = PackResolver::Distance(e.pos, tankAt);
-                if (d <= PullPlanner::LOS_CASTER_MIN_DISTANCE)
-                    continue;
-                Creature* c = map->GetCreature(e.guid);
-                if (!c || !c->IsAlive())
-                    continue;
-                found.push_back({ c, IsRangedCaster(c), d });
-            }
-            std::sort(found.begin(), found.end(), [](Candidate const& a, Candidate const& b)
-            {
-                if (a.caster != b.caster)
-                    return a.caster;
-                return a.distance > b.distance;
-            });
-            std::vector<Creature*> out;
-            for (Candidate const& c : found)
-            {
-                out.push_back(c.creature);
-                if (out.size() >= PullPlanner::LOS_MAX_CASTERS)
-                    break;
-            }
-            return out;
-        }
-
         // Moving there takes the tank towards an idle hostile creature that is not in the pull.
         bool TowardsOtherCreature(WorldModel const& world, PullPlan const& pull, Position3 const& point,
                                   Position3 const& center)
@@ -189,13 +122,19 @@ namespace Commander
             return;
         Position3 const tankAt = PositionOf(tank);
 
-        // No caster standing back yet: looked at again next refresh while Settle lasts. Facts
-        // only, no line of sight checks until there is one. A corner fight (PullPlan::corner)
-        // hides from the pulled enemies away from the tank from the start.
-        std::vector<Creature*> casters = CastersStandingBack(world, pull, map, tankAt);
-        bool const cornerFight = casters.empty() && pull.corner;
-        if (cornerFight)
-            casters = CornerTargets(world, pull, map, tankAt);
+        // Who to hide from is the doctrine's (TacticalDoctrine this refresh, FightPlace::LureTargets:
+        // casters standing back, or a corner fight's far ones). Nothing to lure yet: looked at
+        // again next refresh while Settle lasts, no line of sight checks until then.
+        DoctrinePlan const& doctrine = plan.doctrine;
+        if (doctrine.outliers != OutlierTactic::Lure)
+            return;
+        std::vector<Creature*> casters;
+        for (DoctrineEnemy const& x : doctrine.enemies)
+            if (x.stamps & STAMP_LURE)
+                if (Creature* c = map->GetCreature(x.guid))
+                    if (c->IsAlive())
+                        casters.push_back(c);
+        bool const cornerFight = doctrine.lureCorner;
         if (casters.empty())
             return;
 

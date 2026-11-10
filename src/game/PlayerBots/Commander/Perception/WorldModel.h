@@ -455,6 +455,7 @@ namespace Commander
         // time-to-die shares, taunts and heal-threat losses.
         bool acting = true;
         bool meleeEnabled = true;       // AI melee on (walking bombs, casters standing back turn it off)
+        bool moving = false;            // Unit::IsMoving (a caster between two casts stands still)
         bool meleePhysical = true;      // false: melee is fire/frost/... (armor does not reduce it)
         // Main ranged spell damage per second (CreatureProfile::mainRangedSpellId), counted
         // while it stands back casting (melee off). Before resistances.

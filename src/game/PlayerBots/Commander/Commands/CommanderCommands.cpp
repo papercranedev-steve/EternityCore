@@ -284,7 +284,10 @@ namespace
                 plan.pull.awaitArrival ? "tank waiting for the pack" : PullPhaseName(plan.pull.phase),
                 NameOf(map, plan.pull.tank).c_str(), NameOf(map, plan.pull.target).c_str(),
                 uint32(plan.pull.expected.size()), WorldTimer::getMSTimeDiffToNow(plan.pull.phaseSinceMs) / 1000.0f);
-        else
+        if (plan.pull.phase != Commander::PullPhase::None && !plan.pull.placeWhy.empty())
+            handler->PSendSysMessage("    fight place: %s (%s)",
+                plan.pull.returnToSpot ? "bring back" : plan.pull.corner ? "corner" : "here", plan.pull.placeWhy.c_str());
+        if (plan.pull.phase == Commander::PullPhase::None)
             handler->SendSysMessage("Pull: none");
         if (plan.clear.active)
             handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
@@ -337,6 +340,9 @@ namespace
             handler->PSendSysMessage("Doctrine: %s, %s for %.1fs (%s)", Commander::TacticalDoctrine::Name(d.phase),
                 Commander::TacticalDoctrine::Name(d.tactic),
                 d.sinceMs ? WorldTimer::getMSTimeDiffToNow(d.sinceMs) / 1000.0f : 0.0f, d.why.c_str());
+            if (d.outliers != Commander::OutlierTactic::None)
+                handler->PSendSysMessage("    away from the tank: %s (%s)", Commander::TacticalDoctrine::Name(d.outliers),
+                    d.outliersWhy.c_str());
             for (Commander::DoctrineEnemy const& x : d.enemies)
                 handler->PSendSysMessage("    |cffffcc00%s|r: %s", NameOf(map, x.guid).c_str(),
                     Commander::TacticalDoctrine::Describe(x).c_str());

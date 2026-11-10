@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
+#include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -154,6 +155,46 @@ namespace Commander
             }
         }
 
+        // The enemies away from the tank (FightPlace.h). The pull's line of sight break as its map
+        // step (PullPlanner::SearchLosBreak, after the assigners) left it last refresh; it reads
+        // this refresh's lure stamps.
+        if (tank && !plan.retreat.active)
+        {
+            PullPlan const& pull = plan.pull;
+            PartyMemberFacts const* pullTank = world.FindMember(pull.tank);
+            std::vector<ObjectGuid> lure;
+            if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::Active)
+            {
+                lure = pull.losCasters;
+                d.lureCorner = prev.lureCorner;
+                d.outliersWhy = "the tank is out of their sight, they walk to it";
+            }
+            else if (pull.phase == PullPhase::Settle && pull.losBreak == PullLosBreak::None && pullTank && pullTank->alive)
+            {
+                FightPlace::Lure const l = FightPlace::LureTargets(world, pull, *pullTank);
+                lure = l.targets;
+                d.lureCorner = l.corner;
+                d.outliersWhy = l.corner ? "corner fight: the tank hides from the far ones"
+                                         : "they stand back and cast: the tank hides from them";
+            }
+            bool const anyOutlier = std::any_of(d.enemies.begin(), d.enemies.end(),
+                [](DoctrineEnemy const& x) { return (x.stamps & STAMP_OUTLIER) != 0; });
+            if (!lure.empty())
+            {
+                d.outliers = OutlierTactic::Lure;
+                for (DoctrineEnemy& x : d.enemies)
+                    if (std::find(lure.begin(), lure.end(), x.guid) != lure.end())
+                        x.stamps |= STAMP_LURE;
+            }
+            else if (d.tactic == PileTactic::Area && anyOutlier)
+            {
+                d.outliers = OutlierTactic::KillFirst;
+                d.outliersWhy = pull.losBreak == PullLosBreak::NoPoint
+                    ? "no spot out of their sight: kill them first, the pile is the area spells'"
+                    : "the pile is the area spells': kill them first";
+            }
+        }
+
         // Stamps.
         for (DoctrineEnemy& x : d.enemies)
         {
@@ -185,13 +226,13 @@ namespace Commander
 
         if (scope.On())
         {
-            scope.Label("%s, %s", Name(d.phase), Name(d.tactic));
+            scope.Label("%s, %s, outliers %s", Name(d.phase), Name(d.tactic), Name(d.outliers));
             std::string list;
             for (DoctrineEnemy const& x : d.enemies)
                 list += Trace::Format("%s{\"guid\":\"%s\",\"stamps\":%u,\"engage\":%u,\"tier\":%u}",
                     list.empty() ? "" : ",", Trace::Guid(x.guid).c_str(), x.stamps, x.engage, x.tier);
-            scope.Data(Trace::Format("{\"why\":\"%s\",\"freePile\":%u,\"areaDealers\":%u,\"enemies\":[%s]}",
-                d.why.c_str(), freePile, ledger.areaDealers, list.c_str()));
+            scope.Data(Trace::Format("{\"why\":\"%s\",\"freePile\":%u,\"areaDealers\":%u,\"outliers\":\"%s\",\"outliersWhy\":\"%s\",\"enemies\":[%s]}",
+                d.why.c_str(), freePile, ledger.areaDealers, Name(d.outliers), d.outliersWhy.c_str(), list.c_str()));
         }
     }
 
@@ -243,6 +284,17 @@ namespace Commander
         return "?";
     }
 
+    char const* TacticalDoctrine::Name(OutlierTactic tactic)
+    {
+        switch (tactic)
+        {
+            case OutlierTactic::None:      return "none";
+            case OutlierTactic::Lure:      return "lure by line of sight";
+            case OutlierTactic::KillFirst: return "kill first";
+        }
+        return "?";
+    }
+
     std::string TacticalDoctrine::Describe(DoctrineEnemy const& d)
     {
         std::string s = std::string(Tags::Name(Engage(d.engage))) + ", " + Tags::Name(Tier(d.tier));
@@ -252,6 +304,7 @@ namespace Commander
         if (d.stamps & STAMP_NO_MEZ)        s += ", no mez (" + d.noMezWhy + ")";
         if (d.stamps & STAMP_COMMITTED)     s += ", committed";
         if (d.stamps & STAMP_PLAYER_TARGET) s += ", player's target";
+        if (d.stamps & STAMP_LURE)          s += ", lured";
         return s;
     }
 }

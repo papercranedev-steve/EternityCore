@@ -10,8 +10,8 @@
  *  2. party focus (ChooseFocus): Smith's rule from FocusAssigner::Evaluate, sticky at
  *     FocusAssigner::STICKY_SHARE, never an intercepted enemy, one about to be controlled
  *     (a CrowdControl primary this allocation), one in a patrol's path, a fresh enemy
- *     (FocusAssigner::IsEligible). Doctrine Area tactic (Coordination/Doctrine/TacticalDoctrine.h,
- *     since 2026-11-09): only Outlier enemies while one is eligible (the pile is the area
+ *     (FocusAssigner::IsEligible). Doctrine KillFirst (Coordination/Doctrine/TacticalDoctrine.h,
+ *     the Area tactic without a lure, since 2026-11-09/10): only Outlier enemies while one is eligible (the pile is the area
  *     spells'; user: "远程的法师由其他dps解决"). Melee bots that cannot reach the focus keep
  *     fighting the pile (DamageTargets switch range);
  *  3. Distribute: one target per bot. Also called again when a boss module moves the focus

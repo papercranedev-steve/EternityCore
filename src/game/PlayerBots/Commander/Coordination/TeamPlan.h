@@ -254,10 +254,13 @@ namespace Commander
         // opened (awaitArrival).
         bool OpensFromAfar() const { return rangedPullSpell || facePull; }
 
-        // Fight at a corner (PullPlace.h): planned by PullPlanner::Plan (the player chose it, or
-        // the fight estimate is hard). Once the fight started, SearchLosBreak hides the tank
-        // from the pulled enemies standing away from it, not only from casters standing back.
+        // Fight at a corner (PullPlace.h). Where the party fights (here, brought back: returnToSpot,
+        // corner) is the doctrine's choice (Coordination/Doctrine/FightPlace.h, FightPlace::Choose),
+        // PullPlanner::Plan carries it out. Once the fight started, the doctrine has the tank hide
+        // from the pulled enemies standing away from it (STAMP_LURE), not only from casters
+        // standing back; SearchLosBreak looks for the point.
         bool corner = false;
+        std::string placeWhy;               // why this place (FightPlace::Choice::why)
 
         // Opening control (Coordination/Situation/Pull/PullControl.h): one pulled creature controlled as the
         // tank opens, the controller standing ready before. Decided when the tank is about to go.
@@ -354,6 +357,13 @@ namespace Commander
                 if (h.bot == bot)
                     return &h;
             return nullptr;
+        }
+
+        // The pull predicted `e` (or `e` was summoned by a creature it predicted).
+        bool Expects(EnemyFacts const& e) const
+        {
+            auto const has = [this](ObjectGuid g) { return std::find(expected.begin(), expected.end(), g) != expected.end(); };
+            return has(e.guid) || (e.summoned && has(e.summoner));
         }
     };
     enum class RetreatOutcome : uint8
@@ -662,6 +672,18 @@ namespace Commander
         STAMP_NO_MEZ        = 1 << 3,   // no control that breaks on damage, no fear (CrowdControlAssigner)
         STAMP_COMMITTED     = 1 << 4,   // held by a bot's control: that bot renews it, does not move it
         STAMP_PLAYER_TARGET = 1 << 5,   // a player hits it
+        // The tank steps out of its sight so it walks to the tank (OutlierTactic::Lure; the pull's
+        // map step SearchLosBreak looks for the point).
+        STAMP_LURE          = 1 << 6,
+    };
+
+    // What the party does about the enemies away from the tank (casters standing back, the far
+    // ones of a corner fight): Coordination/Doctrine/FightPlace.h, chosen by TacticalDoctrine.
+    enum class OutlierTactic : uint8
+    {
+        None,
+        Lure,       // the tank hides from them (line of sight) so they walk into the pile
+        KillFirst,  // no luring: under the Area tactic the focus is among them first (melee go when the walk is safe)
     };
 
     struct DoctrineEnemy
@@ -681,6 +703,9 @@ namespace Commander
         std::string why;                    // why this tactic, and why it was (re)chosen
         uint32 areaDealers = 0;             // TeamLedger::areaDealers when chosen
         std::vector<ObjectGuid> known;      // the enemies of the fight when chosen: one not in it is an add
+        OutlierTactic outliers = OutlierTactic::None;
+        std::string outliersWhy;
+        bool lureCorner = false;            // Lure for a corner fight (not casters standing back)
         std::vector<DoctrineEnemy> enemies;
 
         DoctrineEnemy const* Find(ObjectGuid enemy) const

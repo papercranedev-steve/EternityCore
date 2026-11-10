@@ -31,7 +31,7 @@
  *  hitting below Stop: same rule, hysteresis between the two). An enemy nobody is fighting yet
  *  is the tank's first when there is a tank bot (else the player's: he holds it).
  *  Reach: melee within MELEE_SWITCH_YD of its edge (OUTLIER_MELEE_YD for the party focus when
- *  it is an outlier under the doctrine's Area tactic; JOIN_FIGHT_YD with no target), no idle
+ *  it is an outlier under the doctrine's KillFirst; JOIN_FIGHT_YD with no target), no idle
  *  creature on the walk (RouteRisk::Blocked, as for the tank); a melee bot's current target
  *  it cannot walk to counts as no target (the melee stance module stops that chase);
  *  ranged within RANGED_SWITCH_YD (JOIN_FIGHT_YD; the ranged

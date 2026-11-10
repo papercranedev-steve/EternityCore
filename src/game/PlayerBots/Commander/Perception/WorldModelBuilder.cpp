@@ -394,6 +394,7 @@ namespace WorldModelBuilder
             FillControlState(creature, partyUnits, e);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
             e.meleeEnabled = !creature->AI() || creature->AI()->IsMeleeAttackEnabled();
+            e.moving = creature->IsMoving();
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
             if (!e.meleeEnabled)
                 e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count

@@ -136,9 +136,10 @@ namespace Commander
                 return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid);
             };
 
-            // Doctrine (TacticalDoctrine.h): the pile is left to area spells, so the focus is an
-            // enemy outside it (a caster standing back) while there is one.
-            bool const outliersFirst = plan.doctrine.tactic == PileTactic::Area &&
+            // Doctrine (TacticalDoctrine.h, OutlierTactic::KillFirst): the pile is left to area
+            // spells, so the focus is an enemy outside it (a caster standing back) while there is
+            // one. Not while they are lured to the pile (Lure).
+            bool const outliersFirst = plan.doctrine.outliers == OutlierTactic::KillFirst &&
                 std::any_of(world.enemies.begin(), world.enemies.end(), [&](EnemyFacts const& e)
                 {
                     return plan.doctrine.Has(e.guid, STAMP_OUTLIER) && eligible(e);

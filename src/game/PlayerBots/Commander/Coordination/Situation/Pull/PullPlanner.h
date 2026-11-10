@@ -81,8 +81,8 @@ namespace Commander
                                             std::string& why);
 
         // Line of sight pull, map thread, Settle only, once per pull (PullPlan::losBreak).
-        // A pulled caster standing back casting at the tank more than LOS_CASTER_MIN_DISTANCE
-        // away: look for a point (LosBreak::FindPoint) around the fight
+        // The doctrine chose to lure (OutlierTactic::Lure: the enemies stamped STAMP_LURE this
+        // refresh, FightPlace::LureTargets): look for a point (LosBreak::FindPoint) around the fight
         // spot (around the tank when the pack was not brought back) that the casters cannot
         // see and the tank reaches by a short safe walk (around a corner is fine), not where an
         // idle patrol walks before the fight ends (PatrolAssigner::InPath). Healer bots get a
@@ -176,19 +176,12 @@ namespace Commander
         // Melee stand point: target combat reach plus this.
         float const MELEE_STAND_EXTRA = 1.5f;
 
-        // Line of sight pull (SearchLosBreak). Casters closer than this to the tank are left alone.
-        float const LOS_CASTER_MIN_DISTANCE = 10.0f;
-        // Candidate rays, ground, walk and check budget: LosBreak.h (shared with the patrol guard).
+        // Line of sight pull (SearchLosBreak). Who to hide from and the fight place Auto rules:
+        // the doctrine's (Coordination/Doctrine/FightPlace.h). Candidate rays, ground, walk and
+        // check budget: LosBreak.h (shared with the patrol guard).
         // A candidate this close to an idle hostile creature not in the pull, and closer to it
         // than the spot is, is skipped.
         float const LOS_OTHER_CREATURE_CLEARANCE = 20.0f;
-        uint32 const LOS_MAX_CASTERS = 2;     // the point must hide from each of them
-
-        // Fight place Auto (PullPlace.h): a corner when the fight estimate (FightLoad) has the
-        // tank below this, or the healer bots ending with less than this share of their mana,
-        // or the fight is not bearable. Not when the pack is brought back.
-        float const CORNER_TANK_PCT = 50.0f;
-        float const CORNER_MANA_LEFT_SHARE = 0.25f;
 
         // Pure: who is not ready. Players count too (the leader's own health matters).
         // healerManaPct applies to healer bots only; everyone else with mana needs READY_MANA_PCT.

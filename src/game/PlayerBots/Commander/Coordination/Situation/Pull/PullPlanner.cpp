@@ -11,6 +11,7 @@
 #include "Commander/Coordination/Situation/Pull/PullOpening.h"
 #include "Commander/Coordination/Situation/Pull/PullControl.h"
 #include "Commander/Coordination/Situation/Pull/PullPlace.h"
+#include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Forecast/AssistPredictor.h"
@@ -58,15 +59,6 @@ namespace Commander
             PartyMemberFacts const* tank = Tanks::Main(world, true);
             Player* player = tank ? map->GetPlayer(tank->guid) : nullptr;
             return (player && player->IsAlive()) ? player : nullptr;
-        }
-
-        // Auto fight place: a corner when the estimate says the tank drops low or the healers
-        // run dry (PullPlanner::CORNER_*), or it is not bearable at all.
-        bool IsHardFight(FightLoad::Result const& r)
-        {
-            if (!FightLoad::Bearable(r) || r.lowestTankPct < PullPlanner::CORNER_TANK_PCT)
-                return true;
-            return r.manaStart > 0.0f && r.manaLeft < r.manaStart * PullPlanner::CORNER_MANA_LEFT_SHARE;
         }
 
         // Healer mana the planned fight needs before the tank goes (PullPlan::healerManaPct): the
@@ -352,15 +344,21 @@ namespace Commander
         PullOdds::AddRisk const packRisk = PullOdds::NearbyAdds(world, PositionOf(best.pullTarget), best.expected);
         PullOdds::AddRisk const spotRisk = PullOdds::NearbyAdds(world, spot, best.expected);
         bool const fightThere = PullOdds::FightThere(edge, packRisk);
-        // Fight place (PullPlace.h): the player may want the corner whatever the odds; else a
-        // corner when the fight estimate is hard and the pack is not brought back.
-        PullPlace const place = sCommanderMgr.GetPullPlace(leader->GetObjectGuid());
-        bool const returnToSpot = place != PullPlace::Corner && distant && !fightThere && spotRisk.total < packRisk.total;
         FightLoad::Input load;
         bool const haveLoad = FightLoad::Build(world, map, best.expected, load);
         FightLoad::Result const estimate = haveLoad ? FightLoad::Simulate(load, "estimate: hard fight?") : FightLoad::Result();
-        bool const hard = haveLoad && IsHardFight(estimate);
-        bool const corner = place == PullPlace::Corner || (hard && !returnToSpot);
+        // Where to fight is the doctrine's (Coordination/Doctrine/FightPlace.h); this carries it out.
+        FightPlace::Input placeIn;
+        placeIn.wanted = sCommanderMgr.GetPullPlace(leader->GetObjectGuid());
+        placeIn.distant = distant;
+        placeIn.fightThere = fightThere;
+        placeIn.packRisk = packRisk.total;
+        placeIn.spotRisk = spotRisk.total;
+        placeIn.haveEstimate = haveLoad;
+        placeIn.estimate = estimate;
+        FightPlace::Choice const place = FightPlace::Choose(placeIn);
+        bool const returnToSpot = place.place == FightPlace::Kind::BringBack;
+        bool const corner = place.place == FightPlace::Kind::Corner;
 
         // Bringing them back: open from range when the tank can (and that brings no more).
         ShotSpot::Spot returnSpot;
@@ -427,6 +425,7 @@ namespace Commander
             pull.faceSpot = best.spot.at;
         }
         pull.corner = corner;
+        pull.placeWhy = place.why;
         for (PartyMemberFacts const& m : world.party)
         {
             if (m.isPet)
@@ -483,8 +482,7 @@ namespace Commander
                 odds.c_str(), spotRisk.total));
         if (pull.corner)
             report.push_back(Format("Corner: once they come, %s steps out of their sight so they walk round to it (%s).",
-                tank->GetName(), place == PullPlace::Corner ? "you chose corner fights"
-                    : ("the fight looks hard: " + FightLoad::Describe(estimate)).c_str()));
+                tank->GetName(), place.why.c_str()));
         report.insert(report.end(), notes.begin(), notes.end());
 
         // Fight spot too close to a creature that is not part of the pull.

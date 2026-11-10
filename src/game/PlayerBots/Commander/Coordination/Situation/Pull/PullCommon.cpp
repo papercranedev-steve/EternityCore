@@ -227,9 +227,7 @@ namespace Commander
         // creature belong to the pull.
         bool IsUnexpected(EnemyFacts const& e, PullPlan const& pull)
         {
-            if (Contains(pull.expected, e.guid))
-                return false;
-            return !(e.summoned && Contains(pull.expected, e.summoner));
+            return !pull.Expects(e);
         }
 
         bool IsStealthedPackCreature(WorldModel const& world, ObjectGuid guid)
