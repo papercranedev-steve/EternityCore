@@ -35,9 +35,9 @@ namespace Commander
 {
     enum class Engage : uint8 { Melee, StandBack };
     enum class Tier : uint8 { Fodder, Normal, Elite, Heavy };
-    // Where it came from (3.1 "source", todo 9): SpawnSources.h, else summoned or not. (A patrol
-    // is known only before it fights: WorldModel::patrols.)
-    enum class Source : uint8 { Static, Summoned, Trap, DeathSpawn, Called };
+    // Where it came from (3.1 "source", todo 9): SpawnSources.h, else summoned, an ambusher
+    // (stealth in its template), a patrol (waypoint default movement), or standing there.
+    enum class Source : uint8 { Static, Summoned, Trap, DeathSpawn, Called, Patrol, Ambush };
 
     // Tactical roles (3.1, todo 9), bits of Tags::RolesOf. The recognitions the modules used to
     // do each for themselves, in one place (static data, the creature's profile and spells).
@@ -51,6 +51,8 @@ namespace Commander
         TAG_TOTEM         = 1 << 5,     // creature type totem (a ward, a totem)
         TAG_FLEES         = 1 << 6,     // runs for help at low health (CreatureProfile::fleeAtHealthPct)
         TAG_TAUNT_IMMUNE  = 1 << 7,     // CREATURE_IMMUNITY_TAUNT, or the override table's tauntMult 0
+        TAG_CHARMER       = 1 << 8,     // mind control (charm / possess aura: Dominate Mind)
+        TAG_RESURRECTS    = 1 << 9,     // brings the dead back (resurrect effect, Raise Dead)
     };
 
     // A self-destruct on the way: where, when (doctrine and the blast module).
@@ -94,6 +96,9 @@ namespace Commander
         // Its self-destruct, timed from when it joined the fight (EnemyFacts::firstSeenMs: the
         // EventAI combat timer starts about then).
         BlastFacts BlastOf(EnemyFacts const& e);
+        // A neutral (yellow) creature within `radius` of `at` (its centre): never to be touched
+        // (user 2026-11-10). From WorldModel::packs (PackCreature::aggressive false).
+        PackCreature const* NeutralNear(WorldModel const& world, Position3 const& at, float radius);
 
         char const* Name(Engage engage);
         char const* Name(Tier tier);

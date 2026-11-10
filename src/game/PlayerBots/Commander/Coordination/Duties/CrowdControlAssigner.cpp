@@ -1,6 +1,8 @@
 #include "Commander/Coordination/Duties/CrowdControlAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ControlValue.h"
+#include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/WorldModel.h"
@@ -227,6 +229,64 @@ namespace Commander
         }
         for (DutyNeed& n : perEnemy)
             out.push_back(std::move(n));
+        OfferCharmedAllies(world, plan, out);
+    }
+
+    // A mind controlled party member the doctrine holds (AllyCharm.h, `hold`): a single target
+    // control that works on a humanoid player, until the charmer dies. Worth what the ally does
+    // to us and what we lose of it over min(control, the charmer's kill time, the charm's time
+    // left): 2 x its contribution per second; costs the global cooldown (or the cast) and mana.
+    void CrowdControlAssigner::OfferCharmedAllies(WorldModel const& world, TeamPlan const& plan,
+                                                  std::vector<DutyNeed>& out) const
+    {
+        for (CharmedAlly const& c : plan.doctrine.charmed)
+        {
+            if (!c.hold)
+                continue;
+            PartyMemberFacts const* ally = world.FindMember(c.ally);
+            if (!ally || !ally->alive)
+                continue;
+            DutyNeed need;
+            need.kind = DutyKind::CrowdControl;
+            need.target = ally->guid;
+            need.now = true;
+            need.reason = "hold the mind controlled ally";
+            need.blockedBy.push_back({ DutyKeyKind::EnemyHandled, ally->guid });
+            need.marks.push_back({ DutyKeyKind::EnemyHandled, ally->guid });
+            float const leftSec = c.charmLeftMs ? c.charmLeftMs / 1000.0f : c.killSec;
+            for (PartyMemberFacts const& b : world.party)
+            {
+                if (!b.isBot || b.isPet || !b.CanAct() || b.guid == ally->guid)
+                    continue;
+                for (ControlAbility const& a : b.controls)
+                {
+                    if (!a.ready || a.peacefulOnly || a.radius > 0.0f || !ControlValue::Affects(a, 0, HUMANOID_TYPE_MASK) ||
+                        PackResolver::Distance(b.pos, ally->pos) > a.maxRange + REACH_SLACK_YD)
+                        continue;
+                    float const holdSec = std::min({ a.durationSec, c.killSec, leftSec });
+                    float const benefit = 2.0f * Value::ContributionPerSec(world, *ally) * holdSec;
+                    float const cost = Value::LostAction(world, b, std::max(Value::GCD_SEC, a.castMs / 1000.0f)) +
+                                       ManaWorth::Points(world, b, float(a.manaCost));
+                    DutyCandidate cand;
+                    cand.bot = b.guid;
+                    cand.spellId = a.spellId;
+                    cand.rank = benefit - cost;
+                    cand.why = Trace::Format("hold %.1fs, worth %.1f, cost %.1f", holdSec, benefit, cost);
+                    if (cand.rank <= 0.0f)
+                    {
+                        need.rejected.push_back(std::move(cand));
+                        continue;
+                    }
+                    if (WasGiven(plan, b.guid, ally->guid))
+                        cand.rank += STICKY_POINTS;
+                    need.points = std::max(need.points, benefit - cost);
+                    need.detail = Detail(a);
+                    need.candidates.push_back(std::move(cand));
+                }
+            }
+            if (!need.candidates.empty() || !need.rejected.empty())
+                out.push_back(std::move(need));
+        }
     }
 
     void CrowdControlAssigner::Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const

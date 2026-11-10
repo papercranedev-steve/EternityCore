@@ -312,6 +312,12 @@ namespace CreatureProfiles
 
         AddSpellList(p, info->spell_list_id);
         AddOnHitProcs(p, info->auras);
+        if (info->auras)
+            for (uint32 const* aura = info->auras; *aura; ++aura)
+                if (SpellEntry const* s = sSpellMgr.GetSpellEntry(*aura))
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                        if (s->EffectApplyAuraName[i] == SPELL_AURA_MOD_STEALTH)
+                            p.stealthy = true;
         // EventAI rows exist for many scripted creatures but only run with ai_name = EventAI
         // (CreatureAISelector); reading them for a C++ boss shows timers that never happen.
         if (!p.scripted && info->ai_name == "EventAI")

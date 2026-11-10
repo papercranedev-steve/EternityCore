@@ -102,7 +102,9 @@ namespace DamageTargets
             }
             // Doctrine KillNow (RoleStamps.h): the self-destruct focus is a task: no threat rule
             // (it is dead or blown up before threat matters), no exchange.
-            bool const killNow = e->guid == ctx.plan.focus.enemy && ctx.plan.doctrine.Has(e->guid, STAMP_KILL_NOW);
+            // Same for the charmer of a party member (AllyCharm.h).
+            bool const killNow = e->guid == ctx.plan.focus.enemy &&
+                                 ctx.plan.doctrine.Has(e->guid, STAMP_KILL_NOW | STAMP_FREE_ALLY);
             if (!killNow && !ThreatAllows(ctx, bot, *e, false))
             {
                 skip(*e, "threat room");
@@ -117,7 +119,8 @@ namespace DamageTargets
             if (killNow)
             {
                 p.forced = true;
-                p.reason = "doctrine: kill it before it blows up";
+                p.reason = ctx.plan.doctrine.Has(e->guid, STAMP_FREE_ALLY) ? "doctrine: kill it to free the ally"
+                                                                           : "doctrine: kill it before it blows up";
                 focus = p;
                 continue;
             }

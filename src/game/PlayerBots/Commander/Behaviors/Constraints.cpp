@@ -2,6 +2,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -12,6 +13,8 @@ namespace Commander
 {
     namespace
     {
+        Position3 PositionOf(WorldModel const& world, Unit const* unit);
+
         // Damage on `enemy` would wake a control the plan keeps (not when this bot is sent to wake it).
         bool WakesKept(TeamPlan const& plan, ObjectGuid self, EnemyFacts const& enemy, uint32 nowMs)
         {
@@ -61,12 +64,47 @@ namespace Commander
             Unit const* target = action.target.IsEmpty() ? me : me->GetMap()->GetUnit(action.target);
             if (!target)
                 return nullptr;
-            return Constraints::WakesControl(bot, world, plan, target, spell, nowMs);
+            return Constraints::CastForbidden(bot, world, plan, target, spell, nowMs);
+        }
+
+        // A neutral (yellow) creature within `radius` of `centre` (user 2026-11-10: never touch one).
+        bool NeutralIn(WorldModel const& world, Position3 const& centre, float radius)
+        {
+            return Tags::NeutralNear(world, centre, radius) != nullptr;
         }
     }
 
     namespace Constraints
     {
+        char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                  Unit const* target, SpellEntry const* spell, uint32 nowMs)
+        {
+            if (!spell || !target)
+                return nullptr;
+            Player* me = bot->me;
+            // Never a neutral creature, not even at the edge of an area spell or a chained hit.
+            if (float const splash = SpellTags::MeleeSplashRadius(spell))
+            {
+                Unit const* victim = me->GetVictim();
+                if (victim && NeutralIn(world, PositionOf(world, victim), splash))
+                    return "never a neutral creature (melee splash)";
+            }
+            else if (SpellTags::DealsDamage(spell))
+            {
+                if (target->IsCreature() && !me->IsHostileTo(target) && me->IsValidAttackTarget(target))
+                    return "never a neutral creature";
+                Position3 const centre = PositionOf(world, target);
+                if (spell->IsAreaOfEffectSpell() && NeutralIn(world, centre, SpellTags::AreaRadius(spell)))
+                    return "never a neutral creature (area)";
+                if (SpellTags::ChainsToNearby(spell) && NeutralIn(world, centre, SpellTags::CHAIN_JUMP_YD))
+                    return "never a neutral creature (chained hit)";
+                // Its damage shield / reflection is up (RoleStamps.h HoldFire).
+                if (plan.doctrine.Has(target->GetObjectGuid(), STAMP_HOLD_FIRE))
+                    return "it reflects damage: hands off";
+            }
+            return WakesControl(bot, world, plan, target, spell, nowMs);
+        }
+
         char const* WakesControl(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                  Unit const* target, SpellEntry const* spell, uint32 nowMs)
         {

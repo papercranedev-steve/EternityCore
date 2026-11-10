@@ -55,6 +55,15 @@ namespace Commander
         void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
         void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
+
+        // Creature type mask of a player (CREATURE_TYPE_HUMANOID 7): controls that take a
+        // mind controlled party member.
+        static constexpr uint32 HUMANOID_TYPE_MASK = 1u << (7 - 1);
+
+    private:
+        // Mind controlled party members the doctrine holds (Coordination/Doctrine/AllyCharm.h):
+        // one need per ally, any single target control that works on a player.
+        void OfferCharmedAllies(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const;
     };
 }
 

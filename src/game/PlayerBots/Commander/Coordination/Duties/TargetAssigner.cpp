@@ -146,11 +146,16 @@ namespace Commander
                 });
             // Doctrine KillNow (RoleStamps.h): a self-destruct the party kills before it blows is
             // the focus before anything else, fresh or not (it is fresh: it just spawned).
-            auto const killNow = [&](EnemyFacts const& e)
+            // Above that, the charmer of a party member (AllyCharm.h): killing it frees the ally.
+            auto const stamped = [&](EnemyFacts const& e, uint16 stamp)
             {
-                return plan.doctrine.Has(e.guid, STAMP_KILL_NOW) && e.acting && e.health && !excluded(e.guid) &&
+                return plan.doctrine.Has(e.guid, stamp) && e.acting && e.health && !excluded(e.guid) &&
                        plan.MayEngage(ObjectGuid(), e.guid);
             };
+            bool const anyFreeAlly = std::any_of(world.enemies.begin(), world.enemies.end(),
+                [&](EnemyFacts const& e) { return stamped(e, STAMP_FREE_ALLY); });
+            uint16 const urgentStamp = anyFreeAlly ? uint16(STAMP_FREE_ALLY) : uint16(STAMP_KILL_NOW);
+            auto const killNow = [&](EnemyFacts const& e) { return stamped(e, urgentStamp); };
             bool const anyKillNow = std::any_of(world.enemies.begin(), world.enemies.end(), killNow);
             // Doctrine kill order (RoleStamps.h, user 2026-11-10): healers, summoners and totems
             // first while one is eligible; the points pick among them.
@@ -216,7 +221,9 @@ namespace Commander
             plan.focus.harmRate = bestScore.harmRate;
             plan.focus.killSec = bestScore.killSec;
             plan.focus.reason = std::move(bestScore.reason);
-            if (anyKillNow)
+            if (anyFreeAlly)
+                plan.focus.reason += ", doctrine: kill it to free the mind controlled ally";
+            else if (anyKillNow)
                 plan.focus.reason += ", doctrine: kill it before it blows up";
             else if (killOrder)
                 plan.focus.reason += ", doctrine: kill order (healer, summoner, totem first)";

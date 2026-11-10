@@ -682,7 +682,19 @@ namespace Commander
         STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no control, no threat opening, the area spells'
         STAMP_ALARM         = 1 << 11,  // brings more as it aggroes: display (its summons are in FightLoad)
         STAMP_NO_TAUNT      = 1 << 12,  // no single target taunt (swarm, self-destruct, taunt immune, totem): RescueAssigner
-        STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem): the party focus is among these (TargetAssigner)
+        STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem, mana drain, resurrects): the focus is among these
+        STAMP_HOLD_FIRE     = 1 << 14,  // a damage shield / spell reflection is on it: nobody hits it (EngageBlock, Constraints)
+        STAMP_FREE_ALLY     = 1 << 15,  // it mind controls a party member: the focus, killed at once (TargetAssigner)
+    };
+
+    // A party member an enemy mind controls (Coordination/Doctrine/AllyCharm.h).
+    struct CharmedAlly
+    {
+        ObjectGuid ally;
+        ObjectGuid charmer;
+        bool hold = false;          // a bot controls the ally until the charmer dies (CrowdControlAssigner)
+        float killSec = 0.0f;       // the charmer's kill time (health / party damage)
+        uint32 charmLeftMs = 0;
     };
 
     // The main tank's job under the tactic (TacticalDoctrine; todo 12, user 2026-11-10). Which
@@ -728,6 +740,7 @@ namespace Commander
         OutlierTactic outliers = OutlierTactic::None;
         std::string outliersWhy;
         bool lureCorner = false;            // Lure for a corner fight (not casters standing back)
+        std::vector<CharmedAlly> charmed;
         std::vector<DoctrineEnemy> enemies;
 
         DoctrineEnemy const* Find(ObjectGuid enemy) const
@@ -962,6 +975,9 @@ namespace Commander
         {
             if (orders.LeavesAlone(enemy))
                 return "player: leave it alone";
+            // Doctrine (RoleStamps.h, user 2026-11-10): it hurts or reflects whoever hits it, everyone.
+            if (doctrine.Has(enemy, STAMP_HOLD_FIRE))
+                return "it reflects damage: hands off";
             // Standing in a patrol's path (PatrolAssigner.h): the party stays off it.
             if (patrolMove.Avoids(enemy) && !AssignedToKill(bot, enemy))
                 return "in a patrol's path";

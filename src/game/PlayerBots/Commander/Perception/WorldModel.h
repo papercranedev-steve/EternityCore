@@ -319,6 +319,8 @@ namespace Commander
         // Assigners skip such members; rates do not count them as healers or damage dealers.
         bool controlled = false;
         bool charmed = false;       // mind controlled by an enemy: hostile to us, do not attack, dispel
+        ObjectGuid charmer;         // who controls it (charmed)
+        uint32 charmLeftMs = 0;     // the charm aura's time left (0 = unknown / permanent)
         bool silenced = false;      // can still melee, cannot cast
         // Set up to tank right now: warrior in Defensive Stance, druid in (Dire) Bear Form,
         // paladin with Righteous Fury. A state, not who the tanks are (that is `role`, Tanks.h).
@@ -462,6 +464,11 @@ namespace Commander
         bool acting = true;
         bool meleeEnabled = true;       // AI melee on (walking bombs, casters standing back turn it off)
         bool moving = false;            // Unit::IsMoving (a caster between two casts stands still)
+        bool patrol = false;            // walks a waypoint path out of combat (default movement)
+        // A temporary aura that hurts or turns back whoever hits it (damage shield: Inferno Shell,
+        // Shadow Shield; spell reflection): its time left, 0 = none. Permanent ones are not counted.
+        uint32 reflectMs = 0;
+        uint32 reflectSpellId = 0;
         bool meleePhysical = true;      // false: melee is fire/frost/... (armor does not reduce it)
         // Main ranged spell damage per second (CreatureProfile::mainRangedSpellId), counted
         // while it stands back casting (melee off). Before resistances.

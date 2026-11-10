@@ -303,6 +303,20 @@ namespace Commander
             return;
         }
 
+        // Doctrine HoldFire (RoleStamps.h): its damage shield / reflection is up; every role stops
+        // hitting it (TargetAssigner gives another target when there is one).
+        // Another target given: TargetBehavior switches to it, no need to stop first.
+        Unit const* victim = bot->me->GetVictim();
+        TargetDuty const* next = plan.FindTargetFor(bot->me->GetObjectGuid());
+        bool const switching = victim && next && !next->enemy.IsEmpty() && next->enemy != victim->GetObjectGuid();
+        if (victim && !switching && plan.doctrine.Has(victim->GetObjectGuid(), STAMP_HOLD_FIRE))
+        {
+            Proposal p = MakeProposal(ProposalTier::Urgent, BotActionType::HoldFire);
+            p.reason = "it reflects damage: hands off";
+            p.score = 1.0f;
+            out.push_back(p);
+        }
+
         switch (bot->GetRole())
         {
             case ROLE_TANK:

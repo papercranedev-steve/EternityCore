@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/AreaValue.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
@@ -214,6 +215,10 @@ namespace Commander
                         }
                     }
                     if (!c.value.valid)
+                        continue;
+                    // Never a neutral (yellow) creature in the area (user 2026-11-10; the cast
+                    // gate Constraints::CastForbidden would refuse it anyway).
+                    if (Tags::NeutralNear(world, c.request.centre, spell.radius))
                         continue;
 
                     // Its own shield first.

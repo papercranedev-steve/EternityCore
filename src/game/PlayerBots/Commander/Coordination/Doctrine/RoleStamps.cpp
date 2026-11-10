@@ -22,9 +22,23 @@ namespace RoleStamps
             x.stamps |= STAMP_ALARM;
         if (roles & (TAG_TAUNT_IMMUNE | TAG_TOTEM))
             x.stamps |= STAMP_NO_TAUNT;
-        // Kill order (user 2026-11-10, "治疗怪、召唤怪先杀"): healers, summoners, totems first.
-        if (roles & (TAG_HEALER | TAG_SUMMONER | TAG_TOTEM))
+        // Kill order (user 2026-11-10, "治疗怪、召唤怪先杀"; mana drainers "非常讨厌"; resurrectors):
+        // the points pick among them (a fragile one first).
+        if (roles & (TAG_HEALER | TAG_SUMMONER | TAG_TOTEM | TAG_MANA_DRAIN | TAG_RESURRECTS))
             x.stamps |= STAMP_KILL_ORDER;
+
+        // A damage shield / spell reflection on it (user 2026-11-10: everyone stops, melee too):
+        // nobody hits it while it lasts. Alone in the fight with a long one (Thorns Aura 60 s):
+        // fought through, else it could never be killed.
+        if (e.reflectMs)
+        {
+            bool const otherFree = std::any_of(world.enemies.begin(), world.enemies.end(), [&e](EnemyFacts const& o)
+            {
+                return o.guid != e.guid && o.acting && o.health && !o.onAllyOnly && !o.crowdControlled && !o.reflectMs;
+            });
+            if (otherFree || e.reflectMs <= REFLECT_ALONE_MAX_MS)
+                x.stamps |= STAMP_HOLD_FIRE;
+        }
 
         // A timed blast (Broken Cadaver). A walking bomb (no timer, it blows when it reaches
         // someone) is the intercept's (FocusAssigner).

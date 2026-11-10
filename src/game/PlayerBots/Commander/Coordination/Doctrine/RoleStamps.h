@@ -18,6 +18,11 @@
  *   KillOrder     TAG_HEALER, TAG_SUMMONER, TAG_TOTEM (user 2026-11-10: healers and summoners
  *                 first): the party focus is chosen among them while one is eligible
  *                 (TargetAssigner; after KillNow, before the outliers of KillFirst).
+ *   HoldFire      EnemyFacts::reflectMs (a temporary damage shield or spell reflection): nobody
+ *                 attacks, chases or casts damage at it while it lasts, every role alike
+ *                 (TeamPlan::EngageBlock, Constraints); when it is the only enemy left, only
+ *                 for one lasting at most REFLECT_ALONE_MAX_MS (else it is never killed).
+ *   (mana drain and resurrects are KillOrder too.)
  *   Alarm         TAG_ALARM (summons as it aggroes): display; the summons are in the fight
  *                 estimate (FightLoad). Combat timer summons: TAG_SUMMONER (and FocusAssigner's
  *                 preventable summon); running for help: TAG_FLEES (FleePredictor).
@@ -38,6 +43,7 @@ namespace Commander
     namespace RoleStamps
     {
         static constexpr float KILL_MARGIN_SEC = 0.5f;
+        static constexpr uint32 REFLECT_ALONE_MAX_MS = 15 * 1000;
 
         // Source and roles on `x` (also for the display), then the stamps above.
         void Apply(WorldModel const& world, EnemyFacts const& e, DoctrineEnemy& x);

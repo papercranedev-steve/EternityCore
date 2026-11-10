@@ -3,6 +3,7 @@
 #include "Commander/Perception/Profiles/SpawnSources.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "ObjectMgr.h"
 #include "SharedDefines.h"
 #include "SpellEntry.h"
@@ -94,7 +95,12 @@ namespace Tags
             return Source::DeathSpawn;
         if (s & SpawnSources::FROM_AGGRO)
             return Source::Called;
-        return e.summoned ? Source::Summoned : Source::Static;
+        if (e.summoned)
+            return Source::Summoned;
+        if (std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry))
+            if (p->stealthy)
+                return Source::Ambush;
+        return e.patrol ? Source::Patrol : Source::Static;
     }
 
     uint16 RolesOf(uint32 entry)
@@ -122,8 +128,22 @@ namespace Tags
                 continue;
             if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(ref.spellId))
                 for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                {
                     if (spell->Effect[i] == SPELL_EFFECT_INSTAKILL && spell->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER)
                         roles |= TAG_SELF_DESTRUCT;
+                    if (spell->Effect[i] == SPELL_EFFECT_RESURRECT || spell->Effect[i] == SPELL_EFFECT_RESURRECT_NEW)
+                        roles |= TAG_RESURRECTS;
+                    uint32 const aura = spell->EffectApplyAuraName[i];
+                    if (aura == SPELL_AURA_MOD_CHARM || aura == SPELL_AURA_MOD_POSSESS)
+                        roles |= TAG_CHARMER;
+                    // Raise Dead: a periodic trigger whose spell summons (the dead as skeletons).
+                    if (aura == SPELL_AURA_PERIODIC_TRIGGER_SPELL && spell->EffectTriggerSpell[i])
+                    {
+                        uint32 entry = 0, lifeMs = 0;
+                        if (CreatureProfiles::SpellSummonCount(spell->EffectTriggerSpell[i], entry, lifeMs))
+                            roles |= TAG_SUMMONER;
+                    }
+                }
             std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(ref.spellId);
             if (!sp)
                 continue;
@@ -143,7 +163,8 @@ namespace Tags
         static struct { uint16 bit; char const* name; } const names[] = {
             { TAG_SELF_DESTRUCT, "self-destructs" }, { TAG_ALARM, "alarm" }, { TAG_HEALER, "healer" },
             { TAG_SUMMONER, "summoner" }, { TAG_MANA_DRAIN, "mana drain" }, { TAG_TOTEM, "totem" },
-            { TAG_FLEES, "flees" }, { TAG_TAUNT_IMMUNE, "taunt immune" } };
+            { TAG_FLEES, "flees" }, { TAG_TAUNT_IMMUNE, "taunt immune" }, { TAG_CHARMER, "mind control" },
+            { TAG_RESURRECTS, "resurrects" } };
         std::string out;
         for (auto const& n : names)
             if (roles & n.bit)
@@ -170,6 +191,15 @@ namespace Tags
         return b;
     }
 
+    PackCreature const* NeutralNear(WorldModel const& world, Position3 const& at, float radius)
+    {
+        for (PackFacts const& p : world.packs)
+            for (PackCreature const& c : p.members)
+                if (!c.aggressive && PackResolver::Distance(at, c.pos) <= radius)
+                    return &c;
+        return nullptr;
+    }
+
     char const* Name(Source source)
     {
         switch (source)
@@ -179,6 +209,8 @@ namespace Tags
             case Source::Trap:       return "trap";
             case Source::DeathSpawn: return "death spawn";
             case Source::Called:     return "called";
+            case Source::Patrol:     return "patrol";
+            case Source::Ambush:     return "ambush";
         }
         return "?";
     }

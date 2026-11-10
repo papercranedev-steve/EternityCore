@@ -121,6 +121,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.h
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.h
   ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/FightPlace.h

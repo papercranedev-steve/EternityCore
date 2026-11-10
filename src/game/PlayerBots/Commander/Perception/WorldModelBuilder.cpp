@@ -114,6 +114,14 @@ namespace WorldModelBuilder
             f.inCombat = unit->IsInCombat();
             // Charmed by a creature (mind control): hostile to the party, acts for the enemy.
             f.charmed = unit->IsCharmed() && !unit->GetCharmerGuid().IsPlayer();
+            if (f.charmed)
+            {
+                f.charmer = unit->GetCharmerGuid();
+                for (AuraType type : { SPELL_AURA_MOD_CHARM, SPELL_AURA_MOD_POSSESS })
+                    for (Aura const* aura : unit->GetAurasByType(type))
+                        if (aura->GetAuraDuration() > 0)
+                            f.charmLeftMs = std::max(f.charmLeftMs, uint32(aura->GetAuraDuration()));
+            }
             f.controlled = f.charmed || unit->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             f.silenced = unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
             ShapeshiftForm const form = unit->GetShapeshiftForm();
@@ -404,6 +412,15 @@ namespace WorldModelBuilder
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
             e.meleeEnabled = !creature->AI() || creature->AI()->IsMeleeAttackEnabled();
             e.moving = creature->IsMoving();
+            e.patrol = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
+            // Temporary damage shields and spell reflection (doctrine HoldFire, RoleStamps.h).
+            for (AuraType type : { SPELL_AURA_DAMAGE_SHIELD, SPELL_AURA_REFLECT_SPELLS, SPELL_AURA_REFLECT_SPELLS_SCHOOL })
+                for (Aura const* aura : creature->GetAurasByType(type))
+                    if (aura->GetAuraDuration() > 0 && uint32(aura->GetAuraDuration()) > e.reflectMs)
+                    {
+                        e.reflectMs = uint32(aura->GetAuraDuration());
+                        e.reflectSpellId = aura->GetId();
+                    }
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
             if (!e.meleeEnabled)
                 e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count

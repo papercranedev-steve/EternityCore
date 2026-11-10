@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/Doctrine/RoleStamps.h"
+#include "Commander/Coordination/Doctrine/AllyCharm.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -230,6 +231,8 @@ namespace Commander
                 x.stamps |= STAMP_COMMITTED;
         }
 
+        AllyCharm::Apply(world, d);
+
         if (scope.On())
         {
             scope.Label("%s, %s, tank %s, outliers %s", Name(d.phase), Name(d.tactic), Name(d.tankJob), Name(d.outliers));
@@ -332,6 +335,8 @@ namespace Commander
         if (d.stamps & STAMP_SWARM)         s += ", swarm";
         if (d.stamps & STAMP_NO_TAUNT)      s += ", no taunt";
         if (d.stamps & STAMP_KILL_ORDER)    s += ", kill first";
+        if (d.stamps & STAMP_HOLD_FIRE)     s += ", hands off (reflects)";
+        if (d.stamps & STAMP_FREE_ALLY)     s += ", kill it to free the ally";
         return s;
     }
 }

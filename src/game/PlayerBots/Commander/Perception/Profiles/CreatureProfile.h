@@ -118,6 +118,7 @@ namespace Commander
         std::vector<SpawnOn> aggroSpawns;
         SelfDestruct selfDestruct;
         float healthMultiplier = 1.0f;  // creature_template.health_multiplier (CreatureProfiles::EstimateHealth)
+        bool stealthy = false;          // a stealth aura in creature_template.auras (lies in ambush)
         bool hasOverride = false;
         CreatureOverride override;
 

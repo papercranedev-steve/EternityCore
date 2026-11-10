@@ -938,7 +938,7 @@ bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSp
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    return commander && Commander::Constraints::WakesControl(this, commander->GetWorld(), commander->GetPlan(),
+    return commander && Commander::Constraints::CastForbidden(this, commander->GetWorld(), commander->GetPlan(),
                                                              pTarget, pSpellEntry, WorldTimer::getMSTime());
 }
 
@@ -959,7 +959,7 @@ void PartyBotAI::CancelSplashNearKeptControl()
             commander = sCommanderMgr.FindCommander(me);
         if (!commander)
             return;
-        if (Commander::Constraints::WakesControl(this, commander->GetWorld(), commander->GetPlan(), pVictim, pSpell,
+        if (Commander::Constraints::CastForbidden(this, commander->GetWorld(), commander->GetPlan(), pVictim, pSpell,
                                                  WorldTimer::getMSTime()))
             me->RemoveAurasDueToSpell(spellId);
     }
