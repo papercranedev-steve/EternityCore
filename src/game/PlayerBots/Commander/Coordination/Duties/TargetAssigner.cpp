@@ -152,10 +152,19 @@ namespace Commander
                        plan.MayEngage(ObjectGuid(), e.guid);
             };
             bool const anyKillNow = std::any_of(world.enemies.begin(), world.enemies.end(), killNow);
+            // Doctrine kill order (RoleStamps.h, user 2026-11-10): healers, summoners and totems
+            // first while one is eligible; the points pick among them.
+            bool const killOrder = !anyKillNow &&
+                std::any_of(world.enemies.begin(), world.enemies.end(), [&](EnemyFacts const& e)
+                {
+                    return plan.doctrine.Has(e.guid, STAMP_KILL_ORDER) && eligible(e);
+                });
             auto const allowed = [&](EnemyFacts const& e)
             {
                 if (anyKillNow)
                     return killNow(e);
+                if (killOrder)
+                    return eligible(e) && plan.doctrine.Has(e.guid, STAMP_KILL_ORDER);
                 return eligible(e) && (!outliersFirst || plan.doctrine.Has(e.guid, STAMP_OUTLIER));
             };
 
@@ -209,6 +218,8 @@ namespace Commander
             plan.focus.reason = std::move(bestScore.reason);
             if (anyKillNow)
                 plan.focus.reason += ", doctrine: kill it before it blows up";
+            else if (killOrder)
+                plan.focus.reason += ", doctrine: kill order (healer, summoner, totem first)";
             else if (outliersFirst)
                 plan.focus.reason += ", doctrine: outside the area pile first";
         }

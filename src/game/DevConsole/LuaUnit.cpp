@@ -37,6 +37,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Commands/PlayerChat.h"
+#include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
@@ -1008,6 +1009,31 @@ namespace DevConsole
             if (!a.allyShieldBot.IsEmpty())
                 SetFieldG(L, "allyShield", a.allyShieldBot);
             lua_setfield(L, -2, "area");
+        }
+        // Doctrine (Coordination/Doctrine/TacticalDoctrine.h): how the fight is fought and every
+        // enemy's tags and stamps as text (TacticalDoctrine::Describe), so the review shows each
+        // enemy's role. A plan line is written when any of it changes.
+        if (plan.doctrine.phase != Commander::FightPhase::None)
+        {
+            Commander::DoctrinePlan const& d = plan.doctrine;
+            lua_createtable(L, 0, 6);
+            SetFieldS(L, "phase", Commander::TacticalDoctrine::Name(d.phase));
+            SetFieldS(L, "tactic", Commander::TacticalDoctrine::Name(d.tactic));
+            SetFieldS(L, "tank", Commander::TacticalDoctrine::Name(d.tankJob));
+            SetFieldS(L, "outliers", Commander::TacticalDoctrine::Name(d.outliers));
+            SetFieldS(L, "why", d.why.c_str());
+            lua_createtable(L, int(d.enemies.size()), 0);
+            int i = 0;
+            for (Commander::DoctrineEnemy const& x : d.enemies)
+            {
+                lua_createtable(L, 0, 2);
+                SetFieldG(L, "g", x.guid);
+                std::string const tags = Commander::TacticalDoctrine::Describe(x);
+                SetFieldS(L, "tags", tags.c_str());
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "enemies");
+            lua_setfield(L, -2, "doctrine");
         }
         return 1;
     }

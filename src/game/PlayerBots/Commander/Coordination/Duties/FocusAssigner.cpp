@@ -62,23 +62,6 @@ namespace Commander
             return 0;
         }
 
-        bool HasHealSpell(CreatureProfile const* profile)
-        {
-            if (!profile)
-                return false;
-            for (CreatureSpellRef const& ref : profile->spells)
-                if (std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(ref.spellId))
-                    if (sp->category == CastCategory::Heal)
-                        return true;
-            return false;
-        }
-
-        bool IsTotem(uint32 entry)
-        {
-            CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-            return info && info->type == CREATURE_TYPE_TOTEM;
-        }
-
         // The next summon of an EventAI combat timer the party can still prevent by killing `e`
         // within killSec (earliest side of the timer). Points of the summoned creatures and
         // seconds left until it fires; points 0 when nothing can be prevented.
@@ -340,11 +323,8 @@ namespace Commander
             oneOff += e.flee.FocusSaves();
             AddReason(s.reason, "focus saves flee %.1f", e.flee.FocusSaves());
         }
-        if (e.summoned && (IsTotem(e.entry) || HasHealSpell(profile.get())))
-        {
-            oneOff += SUPPORT_SUMMON_POINTS;
-            AddReason(s.reason, "support summon %.0f", SUPPORT_SUMMON_POINTS);
-        }
+        // Summoned totems and healers (Healing Ward, scenario 11) used to get a one-off bonus
+        // here; since 2026-11-10 they are the doctrine's kill order (STAMP_KILL_ORDER).
         if (e.summoned && float(e.health) <= dealt * QUICK_KILL_SEC)
         {
             oneOff += QUICK_KILL_POINTS;

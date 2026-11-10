@@ -60,8 +60,6 @@ namespace Commander
         // joiners minus a focused kill's, Perception/Forecast/FleePredictor.h). Nothing to call: no
         // bonus. Since 2026-11-08; before that a flat 10 points. A runner stays eligible
         // (EnemyFacts::HitWhileControlled).
-        // Summon that supports its side (totem, or has a heal spell: Healing Ward, scenario 11).
-        static constexpr float SUPPORT_SUMMON_POINTS = 8.0f;
         // Summon the party kills within this many seconds ("a few hits").
         static constexpr float QUICK_KILL_SEC = 2.0f;
         static constexpr float QUICK_KILL_POINTS = 3.0f;

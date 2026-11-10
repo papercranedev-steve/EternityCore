@@ -1,7 +1,12 @@
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/SpawnSources.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "ObjectMgr.h"
+#include "SharedDefines.h"
+#include "SpellEntry.h"
+#include "SpellMgr.h"
 #include <algorithm>
 #include <vector>
 
@@ -92,17 +97,58 @@ namespace Tags
         return e.summoned ? Source::Summoned : Source::Static;
     }
 
-    uint8 RolesOf(uint32 entry)
+    uint16 RolesOf(uint32 entry)
     {
         std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(entry);
         if (!p)
             return 0;
-        uint8 roles = 0;
+        uint16 roles = 0;
         if (p->selfDestruct.spellId)
             roles |= TAG_SELF_DESTRUCT;
-        if (!p->aggroSpawns.empty() || !p->summonTimers.empty() || p->fleeAtHealthPct > 0.0f)
+        if (!p->aggroSpawns.empty())
             roles |= TAG_ALARM;
+        if (!p->summonTimers.empty())
+            roles |= TAG_SUMMONER;
+        if (p->fleeAtHealthPct > 0.0f)
+            roles |= TAG_FLEES;
+        if (p->tauntImmune || (p->hasOverride && p->override.tauntMult <= 0.0f))
+            roles |= TAG_TAUNT_IMMUNE;
+        if (CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry))
+            if (info->type == CREATURE_TYPE_TOTEM)
+                roles |= TAG_TOTEM;
+        for (CreatureSpellRef const& ref : p->spells)
+        {
+            if (ref.source == SpellSource::OnHit)
+                continue;
+            if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(ref.spellId))
+                for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                    if (spell->Effect[i] == SPELL_EFFECT_INSTAKILL && spell->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER)
+                        roles |= TAG_SELF_DESTRUCT;
+            std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(ref.spellId);
+            if (!sp)
+                continue;
+            switch (sp->category)
+            {
+                case CastCategory::Heal:      roles |= TAG_HEALER; break;
+                case CastCategory::Summon:    roles |= TAG_SUMMONER; break;
+                case CastCategory::ManaDrain: roles |= TAG_MANA_DRAIN; break;
+                default: break;
+            }
+        }
         return roles;
+    }
+
+    std::string RoleNames(uint16 roles)
+    {
+        static struct { uint16 bit; char const* name; } const names[] = {
+            { TAG_SELF_DESTRUCT, "self-destructs" }, { TAG_ALARM, "alarm" }, { TAG_HEALER, "healer" },
+            { TAG_SUMMONER, "summoner" }, { TAG_MANA_DRAIN, "mana drain" }, { TAG_TOTEM, "totem" },
+            { TAG_FLEES, "flees" }, { TAG_TAUNT_IMMUNE, "taunt immune" } };
+        std::string out;
+        for (auto const& n : names)
+            if (roles & n.bit)
+                out += (out.empty() ? "" : ", ") + std::string(n.name);
+        return out;
     }
 
     BlastFacts BlastOf(EnemyFacts const& e)

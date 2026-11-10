@@ -323,12 +323,15 @@ namespace Commander
         if (d.stamps & STAMP_PLAYER_TARGET) s += ", player's target";
         if (d.stamps & STAMP_LURE)          s += ", lured";
         if (Source(d.source) != Source::Static)
-            s += std::string(", ") + Tags::Name(Source(d.source));
-        if (d.stamps & STAMP_SELF_DESTRUCT) s += ", self-destructs";
-        if (d.stamps & STAMP_KILL_NOW)      s += " (kill it before it blows)";
-        if (d.stamps & STAMP_STAND_CLEAR)   s += " (stand clear)";
+            s += std::string(", from ") + Tags::Name(Source(d.source));
+        std::string const roles = Tags::RoleNames(d.roles);
+        if (!roles.empty())
+            s += ", roles: " + roles;
+        if (d.stamps & STAMP_KILL_NOW)      s += ", kill it before it blows";
+        if (d.stamps & STAMP_STAND_CLEAR)   s += ", stand clear of its blast";
         if (d.stamps & STAMP_SWARM)         s += ", swarm";
-        if (d.stamps & STAMP_ALARM)         s += ", alarm";
+        if (d.stamps & STAMP_NO_TAUNT)      s += ", no taunt";
+        if (d.stamps & STAMP_KILL_ORDER)    s += ", kill first";
         return s;
     }
 }

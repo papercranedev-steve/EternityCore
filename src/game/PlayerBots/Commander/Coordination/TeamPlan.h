@@ -679,8 +679,10 @@ namespace Commander
         STAMP_SELF_DESTRUCT = 1 << 7,   // blows itself up (Broken Cadaver): no taunt, no rescue, no control
         STAMP_KILL_NOW      = 1 << 8,   // a self-destruct the party kills before its earliest blast: the focus
         STAMP_STAND_CLEAR   = 1 << 9,   // a self-destruct that will blow first: everyone but its victim steps out
-        STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no single taunt, no control, the area spells'
-        STAMP_ALARM         = 1 << 11,  // brings more (aggro summons, combat timer, runs for help): display
+        STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no control, no threat opening, the area spells'
+        STAMP_ALARM         = 1 << 11,  // brings more as it aggroes: display (its summons are in FightLoad)
+        STAMP_NO_TAUNT      = 1 << 12,  // no single target taunt (swarm, self-destruct, taunt immune, totem): RescueAssigner
+        STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem): the party focus is among these (TargetAssigner)
     };
 
     // The main tank's job under the tactic (TacticalDoctrine; todo 12, user 2026-11-10). Which
@@ -710,7 +712,7 @@ namespace Commander
         uint8 engage = 0;           // Engage (Perception/Profiles/Tags.h)
         uint8 tier = 0;             // Tier
         uint8 source = 0;           // Tags::Source
-        uint8 roles = 0;            // Tags::RolesOf bits
+        uint16 roles = 0;           // Tags::RolesOf bits
         std::string noMezWhy;       // why STAMP_NO_MEZ ("area pile", "fodder", "cleanup", "player hits it")
     };
 

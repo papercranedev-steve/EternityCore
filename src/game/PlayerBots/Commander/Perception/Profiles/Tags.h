@@ -28,6 +28,7 @@
 #define MANGOS_COMMANDER_TAGS_H
 
 #include "Commander/Perception/WorldModel.h"
+#include <string>
 #include <vector>
 
 namespace Commander
@@ -38,11 +39,18 @@ namespace Commander
     // is known only before it fights: WorldModel::patrols.)
     enum class Source : uint8 { Static, Summoned, Trap, DeathSpawn, Called };
 
-    // Tactical roles (3.1, todo 9), bits of Tags::RolesOf.
-    enum : uint8
+    // Tactical roles (3.1, todo 9), bits of Tags::RolesOf. The recognitions the modules used to
+    // do each for themselves, in one place (static data, the creature's profile and spells).
+    enum : uint16
     {
-        TAG_SELF_DESTRUCT = 1 << 0,     // CreatureProfile::selfDestruct
-        TAG_ALARM         = 1 << 1,     // brings more: on aggro, on a combat timer, or runs for help
+        TAG_SELF_DESTRUCT = 1 << 0,     // a spell that kills its caster (Exploding Cadaver, Walking Bomb Effect)
+        TAG_ALARM         = 1 << 1,     // brings more as it aggroes (CreatureProfile::aggroSpawns: Eye of Naxxramas)
+        TAG_HEALER        = 1 << 2,     // a heal spell (SpellProfile CastCategory::Heal)
+        TAG_SUMMONER      = 1 << 3,     // summons on a combat timer or with a summon spell
+        TAG_MANA_DRAIN    = 1 << 4,     // mana burn / drain
+        TAG_TOTEM         = 1 << 5,     // creature type totem (a ward, a totem)
+        TAG_FLEES         = 1 << 6,     // runs for help at low health (CreatureProfile::fleeAtHealthPct)
+        TAG_TAUNT_IMMUNE  = 1 << 7,     // CREATURE_IMMUNITY_TAUNT, or the override table's tauntMult 0
     };
 
     // A self-destruct on the way: where, when (doctrine and the blast module).
@@ -80,7 +88,9 @@ namespace Commander
         TeamLedger LedgerOf(WorldModel const& world);
 
         Source SourceOf(EnemyFacts const& e);
-        uint8 RolesOf(uint32 entry);
+        uint16 RolesOf(uint32 entry);
+        // "healer, summoner" (empty = none).
+        std::string RoleNames(uint16 roles);
         // Its self-destruct, timed from when it joined the fight (EnemyFacts::firstSeenMs: the
         // EventAI combat timer starts about then).
         BlastFacts BlastOf(EnemyFacts const& e);

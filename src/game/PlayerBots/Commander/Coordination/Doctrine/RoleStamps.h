@@ -11,12 +11,18 @@
  *     StandClear  otherwise: every bot but its victim within its blast radius steps out until
  *                 the latest blast (Behaviors/Movement/BlastBehavior).
  *                 User 2026-11-10: kill it when the party can, step out when it cannot.
- *   Swarm         Tags::SourceOf Trap (Stratholme crate insects): no single target taunt
- *                 (RescueAssigner; area threat still), no control of any kind
- *                 (CrowdControlAssigner), left out of the threat opening (ThreatOpening).
- *   Alarm         TAG_ALARM (aggro summons, a summon combat timer, runs for help): display; the
- *                 summons are in the fight estimate (FightLoad), the timers in FocusAssigner,
- *                 the run in FleePredictor.
+ *   Swarm         Tags::SourceOf Trap (Stratholme crate insects): no control of any kind
+ *                 (CrowdControlAssigner), left out of the threat opening (ThreatOpening); NoTaunt.
+ *   NoTaunt       a swarm, a timed self-destruct, TAG_TAUNT_IMMUNE, TAG_TOTEM: no single target
+ *                 taunt (RescueAssigner; winning it back with threat, area threat: still).
+ *   KillOrder     TAG_HEALER, TAG_SUMMONER, TAG_TOTEM (user 2026-11-10: healers and summoners
+ *                 first): the party focus is chosen among them while one is eligible
+ *                 (TargetAssigner; after KillNow, before the outliers of KillFirst).
+ *   Alarm         TAG_ALARM (summons as it aggroes): display; the summons are in the fight
+ *                 estimate (FightLoad). Combat timer summons: TAG_SUMMONER (and FocusAssigner's
+ *                 preventable summon); running for help: TAG_FLEES (FleePredictor).
+ *   Only a timed blast is a SelfDestruct stamp: a walking bomb (blows when it reaches someone)
+ *   is the intercept's (FocusAssigner).
  */
 
 #ifndef MANGOS_COMMANDER_ROLE_STAMPS_H

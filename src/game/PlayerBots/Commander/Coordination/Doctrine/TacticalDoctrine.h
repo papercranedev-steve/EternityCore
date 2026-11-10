@@ -96,7 +96,8 @@ namespace Commander
         static char const* Name(PileTactic tactic);
         static char const* Name(OutlierTactic tactic);
         static char const* Name(TankJob job);
-        // "in pile, no mez (area pile)"
+        // "melee, elite, in pile, no mez (area pile), from death spawn, roles: healer, kill first"
+        // (also the combat recording's plan line, u:plan().doctrine)
         static std::string Describe(DoctrineEnemy const& d);
     };
 }

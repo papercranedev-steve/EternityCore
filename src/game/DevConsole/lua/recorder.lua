@@ -18,7 +18,8 @@
 --   note    {type, t, text}   a Commander note sent to the leader (u:notes), from 3 s before the fight
 --   plan    {type, t, plan}   TeamPlan state (u:plan) when it changed since the last plan line:
 --           focus, pull, clear, retreat, patrol{phase, followers, avoid, lures, kill}, interrupts,
---           intercepts, controls[{enemy, bot, spell, area}]; {} = nothing running
+--           intercepts, controls[{enemy, bot, spell, area}], threat, area,
+--           doctrine{phase, tactic, tank, outliers, why, enemies=[{g, tags}]}; {} = nothing running
 --   offers  {type, t, offers=[{kind, target, points, now, reason, cands=[{bot, spell, rank, why}],
 --           rejected=[same: judged not worth it], primary, backup}]}   the brain's duty needs as
 --           offered (u:offers), at most every rec.offersInterval ms, when changed
