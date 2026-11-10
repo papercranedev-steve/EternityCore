@@ -675,6 +675,12 @@ namespace Commander
         // The tank steps out of its sight so it walks to the tank (OutlierTactic::Lure; the pull's
         // map step SearchLosBreak looks for the point).
         STAMP_LURE          = 1 << 6,
+        // Roles and sources (todo 9, .kiro/docs/2026-11-09-doctrine/2026-11-10-roles-sources.md):
+        STAMP_SELF_DESTRUCT = 1 << 7,   // blows itself up (Broken Cadaver): no taunt, no rescue, no control
+        STAMP_KILL_NOW      = 1 << 8,   // a self-destruct the party kills before its earliest blast: the focus
+        STAMP_STAND_CLEAR   = 1 << 9,   // a self-destruct that will blow first: everyone but its victim steps out
+        STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no single taunt, no control, the area spells'
+        STAMP_ALARM         = 1 << 11,  // brings more (aggro summons, combat timer, runs for help): display
     };
 
     // The main tank's job under the tactic (TacticalDoctrine; todo 12, user 2026-11-10). Which
@@ -703,6 +709,8 @@ namespace Commander
         uint16 stamps = 0;
         uint8 engage = 0;           // Engage (Perception/Profiles/Tags.h)
         uint8 tier = 0;             // Tier
+        uint8 source = 0;           // Tags::Source
+        uint8 roles = 0;            // Tags::RolesOf bits
         std::string noMezWhy;       // why STAMP_NO_MEZ ("area pile", "fodder", "cleanup", "player hits it")
     };
 

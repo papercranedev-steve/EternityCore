@@ -37,6 +37,11 @@ namespace Commander
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
             if (!victim || !plan.MayEngage(ObjectGuid(), e.guid))
                 continue;
+            // Doctrine (RoleStamps.h): a self-destruct dies anyway, nobody takes it; a trap swarm
+            // gets no single target taunt (winning it back with threat, area threat: still).
+            if (plan.doctrine.Has(e.guid, STAMP_SELF_DESTRUCT))
+                continue;
+            bool const swarm = plan.doctrine.Has(e.guid, STAMP_SWARM);
             float const enemyDps = RescueValue::NextTauntDps(world, e.guid);
 
             DutyNeed need;
@@ -87,6 +92,8 @@ namespace Commander
                     add(tank->guid, 0, RescueValue::Threat(world, e, *victim, *tank, tankRate, distance));
                 for (TauntAbility const& t : tank->taunts)
                 {
+                    if (swarm)
+                        break;
                     if (walkBlocked && distance - e.boundingRadius > t.maxRange)
                         continue;
                     add(tank->guid, t.spellId, RescueValue::Taunt(world, e, *victim, *tank, t, tankRate, distance, enemyDps));

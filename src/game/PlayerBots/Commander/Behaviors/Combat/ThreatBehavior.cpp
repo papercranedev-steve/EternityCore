@@ -358,7 +358,7 @@ namespace Commander
             // it back (Perception/Values/RescueValue.h, shared with the brain's rescue). Enemies on
             // pets are loose too: with a tank around, the pet's taunt autocast is off.
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
-            if (!victim)
+            if (!victim || plan.doctrine.Has(e.guid, STAMP_SELF_DESTRUCT))   // dies anyway (RoleStamps.h)
                 continue;
             // Only this fight: an enemy in another room hitting a teleported member (Gandling's
             // Shadow Portal) or far away is not ours to run after (combat scenario 10).

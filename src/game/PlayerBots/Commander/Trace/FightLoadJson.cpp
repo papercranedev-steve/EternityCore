@@ -29,7 +29,8 @@ namespace FightLoadJson
         Json foes = Json::array();
         for (FightLoad::Foe const& f : in.foes)
             foes.push_back({ { "g", Trace::Guid(f.guid) }, { "hp", f.health }, { "dps", f.dps }, { "at", f.arriveSec },
-                             { "same", f.sameFight } });
+                             { "same", f.sameFight }, { "after", Trace::Guid(f.parent) }, { "life", f.lifeSec },
+                             { "burst", f.burst } });
         j["foes"] = std::move(foes);
         Json healers = Json::array();
         for (FightLoad::Healer const& h : in.healers)

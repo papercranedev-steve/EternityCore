@@ -1,6 +1,7 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Forecast/ManaBudget.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModelBuilder.h"
@@ -67,10 +68,31 @@ namespace FightLoad
         float const partyDps = std::max(1.0f, in.partyDps);
         float const waste = 1.0f - ManaBudget::OVERHEAL;
 
+        // When each foe comes: death spawns only once their parent died (NEVER until then).
+        float const NEVER = MAX_SEC * 2.0f;
+        std::vector<float> arrival;
+        std::vector<int> parent;
+        for (Foe const& f : in.foes)
+        {
+            int p = -1;
+            if (!f.parent.IsEmpty())
+                for (size_t j = 0; j < in.foes.size(); ++j)
+                    if (in.foes[j].guid == f.parent)
+                        p = int(j);
+            parent.push_back(p);
+            arrival.push_back(f.parent.IsEmpty() ? f.arriveSec : NEVER);
+        }
+        // Killed this priority first: its damage, and a blast still to come spread over its life.
+        auto const harm = [&in](size_t i)
+        {
+            Foe const& f = in.foes[i];
+            return f.dps + (f.lifeSec > 0.0f ? f.burst / f.lifeSec : 0.0f);
+        };
+
         float t = 0.0f;
         for (; t < MAX_SEC; t += STEP_SEC)
         {
-            auto present = [&](size_t i) { return health[i] > 0.0f && in.foes[i].arriveSec <= t; };
+            auto present = [&](size_t i) { return health[i] > 0.0f && arrival[i] <= t; };
 
             float incoming = 0.0f;
             bool anyPresent = false;
@@ -78,8 +100,17 @@ namespace FightLoad
             {
                 if (!present(i))
                     continue;
+                Foe const& f = in.foes[i];
+                // A self-destruct at the end of its life: the blast, and it is gone.
+                if (f.lifeSec > 0.0f && t >= arrival[i] + f.lifeSec)
+                {
+                    incoming += f.burst / STEP_SEC;
+                    health[i] = 0.0f;
+                    anyPresent = true;
+                    continue;
+                }
                 anyPresent = true;
-                incoming += in.foes[i].dps * DAMAGE_MARGIN;
+                incoming += f.dps * DAMAGE_MARGIN;
             }
             if (!anyPresent)
             {
@@ -87,7 +118,7 @@ namespace FightLoad
                 // (a controlled enemy waking up): the time passes, healers top up and regenerate.
                 bool waiting = false;
                 for (size_t i = 0; i < in.foes.size(); ++i)
-                    if (health[i] > 0.0f && in.foes[i].sameFight)
+                    if (health[i] > 0.0f && in.foes[i].sameFight && arrival[i] < NEVER)
                         waiting = true;
                 if (!waiting)
                     break;
@@ -151,13 +182,20 @@ namespace FightLoad
             {
                 int best = -1;
                 for (size_t i = 0; i < in.foes.size(); ++i)
-                    if (present(i) && (best < 0 || in.foes[i].dps / health[i] > in.foes[best].dps / health[best]))
+                    if (present(i) && (best < 0 || harm(i) / health[i] > harm(best) / health[best]))
                         best = int(i);
                 if (best < 0)
                     break;
                 float const take = std::min(budget, health[best]);
                 health[best] -= take;
                 budget -= take;
+            }
+            // Death spawns of the foes that died this step come from the next one.
+            for (size_t i = 0; i < in.foes.size(); ++i)
+            {
+                int const p = parent[i];
+                if (p >= 0 && arrival[i] >= NEVER && health[p] <= 0.0f && arrival[p] <= t)
+                    arrival[i] = t + STEP_SEC + in.foes[i].arriveSec;
             }
             if (step)
                 step->health = health;
@@ -168,7 +206,7 @@ namespace FightLoad
         bool presentLeft = false;
         for (size_t i = 0; i < in.foes.size(); ++i)
         {
-            if (health[i] > 0.0f && in.foes[i].arriveSec <= t)
+            if (health[i] > 0.0f && arrival[i] <= t)
             {
                 left += health[i];
                 presentLeft = true;
@@ -279,6 +317,54 @@ namespace FightLoad
 
     namespace
     {
+        // A creature that is not there yet, from its template (a death spawn, an aggro summon).
+        Foe FoeOfEntry(uint32 entry, PartyMemberFacts const& tank)
+        {
+            Foe f;
+            std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(entry);
+            if (!p)
+                return f;
+            uint32 const level = (p->levelMin + std::max(p->levelMin, p->levelMax)) / 2;
+            f.health = CreatureProfiles::EstimateHealth(*p, level);
+            f.dps = CreatureProfiles::EstimateMeleeDps(*p, level) * (1.0f - Value::ArmorReduction(tank.armor, level));
+            f.sameFight = true;
+            if (p->selfDestruct.spellId && p->selfDestruct.afterMaxMs)
+            {
+                f.lifeSec = (p->selfDestruct.afterMinMs + p->selfDestruct.afterMaxMs) / 2000.0f;
+                f.burst = p->selfDestruct.damage *
+                          (p->selfDestruct.physical ? 1.0f - Value::ArmorReduction(tank.armor, level) : 1.0f);
+            }
+            return f;
+        }
+
+        // The foe at `index` (entry `entry`) brings its death spawns when it dies and its aggro
+        // summons with it (`aggro`: it has not aggroed yet, a pull).
+        void AddSpawns(Input& out, ObjectGuid parentGuid, uint32 entry, bool aggro, PartyMemberFacts const& tank)
+        {
+            std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(entry);
+            if (!p)
+                return;
+            for (SpawnOn const& s : p->deathSpawns)
+                for (uint32 n = 0; n < s.count; ++n)
+                {
+                    Foe f = FoeOfEntry(s.creatureEntry, tank);
+                    if (f.health <= 0.0f)
+                        break;
+                    f.parent = parentGuid;
+                    out.foes.push_back(f);
+                }
+            if (!aggro)
+                return;
+            for (SpawnOn const& s : p->aggroSpawns)
+                for (uint32 n = 0; n < s.count; ++n)
+                {
+                    Foe f = FoeOfEntry(s.creatureEntry, tank);
+                    if (f.health <= 0.0f)
+                        break;
+                    out.foes.push_back(f);
+                }
+        }
+
         bool StartInput(WorldModel const& world, Input& out, PartyMemberFacts const*& tank)
         {
             tank = Tanks::Main(world);
@@ -322,7 +408,16 @@ namespace FightLoad
                 f.arriveSec = e.control.remainingMs / 1000.0f;
                 f.sameFight = true;
             }
+            // A self-destruct on the way: the rest of its life, then the blast.
+            BlastFacts const blast = Tags::BlastOf(e);
+            if (blast.valid && blast.latestMs)
+            {
+                uint32 const at = blast.earliestMs + (blast.latestMs - blast.earliestMs) / 2;
+                f.lifeSec = std::max(STEP_SEC, int32(at - world.refreshedAtMs) / 1000.0f);
+                f.burst = blast.damage * (blast.physical ? 1.0f - Value::ArmorReduction(tank->armor, e.level) : 1.0f);
+            }
             out.foes.push_back(f);
+            AddSpawns(out, e.guid, e.entry, false, *tank);
         }
         AddHealers(world, out);
         return true;
@@ -341,7 +436,10 @@ namespace FightLoad
         for (ObjectGuid g : creatures)
             if (Creature const* c = map->GetCreature(g))
                 if (c->IsAlive())
+                {
                     out.foes.push_back(FoeOf(c, *tank));
+                    AddSpawns(out, c->GetObjectGuid(), c->GetEntry(), !c->IsInCombat(), *tank);
+                }
         AddHealers(world, out);
         return true;
     }

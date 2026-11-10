@@ -144,8 +144,18 @@ namespace Commander
                 {
                     return plan.doctrine.Has(e.guid, STAMP_OUTLIER) && eligible(e);
                 });
+            // Doctrine KillNow (RoleStamps.h): a self-destruct the party kills before it blows is
+            // the focus before anything else, fresh or not (it is fresh: it just spawned).
+            auto const killNow = [&](EnemyFacts const& e)
+            {
+                return plan.doctrine.Has(e.guid, STAMP_KILL_NOW) && e.acting && e.health && !excluded(e.guid) &&
+                       plan.MayEngage(ObjectGuid(), e.guid);
+            };
+            bool const anyKillNow = std::any_of(world.enemies.begin(), world.enemies.end(), killNow);
             auto const allowed = [&](EnemyFacts const& e)
             {
+                if (anyKillNow)
+                    return killNow(e);
                 return eligible(e) && (!outliersFirst || plan.doctrine.Has(e.guid, STAMP_OUTLIER));
             };
 
@@ -156,7 +166,7 @@ namespace Commander
                 if (!allowed(e))
                     continue;
                 FocusScore s = FocusAssigner::Evaluate(world, e);
-                if (s.score <= 0.0f)
+                if (s.score <= 0.0f && !anyKillNow)
                     continue;
                 if (!best || s.score > bestScore.score)
                 {
@@ -197,7 +207,9 @@ namespace Commander
             plan.focus.harmRate = bestScore.harmRate;
             plan.focus.killSec = bestScore.killSec;
             plan.focus.reason = std::move(bestScore.reason);
-            if (outliersFirst)
+            if (anyKillNow)
+                plan.focus.reason += ", doctrine: kill it before it blows up";
+            else if (outliersFirst)
                 plan.focus.reason += ", doctrine: outside the area pile first";
         }
 

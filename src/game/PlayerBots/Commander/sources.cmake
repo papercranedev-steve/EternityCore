@@ -121,10 +121,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.h
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/FightPlace.h
   ${COMMANDER_DIR}/Coordination/Doctrine/FightPlace.cpp
   ${COMMANDER_DIR}/Perception/Profiles/Tags.h
   ${COMMANDER_DIR}/Perception/Profiles/Tags.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/SpawnSources.h
+  ${COMMANDER_DIR}/Perception/Profiles/SpawnSources.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/RescueValue.h
@@ -166,6 +170,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.h
   ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.cpp
   ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.h

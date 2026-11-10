@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/ThreatOpening.h"
 #include "Commander/Coordination/Situation/Pull/PullOpening.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Tanks.h"
@@ -23,6 +24,10 @@ namespace Commander
         bool NextToTank(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& tank)
         {
             if (!e.acting || !e.health || e.crowdControlled || e.onAllyOnly || !world.FindMember(e.victim))
+                return false;
+            // Not worth holding the party for (RoleStamps.h, tags read here directly: this runs
+            // before the doctrine): a self-destruct dies anyway, a trap swarm is the area spells'.
+            if ((Tags::RolesOf(e.entry) & TAG_SELF_DESTRUCT) || Tags::SourceOf(e) == Source::Trap)
                 return false;
             return PackResolver::Distance(e.pos, tank.pos) - e.boundingRadius <= ThreatOpeningAssigner::REACH_YD;
         }

@@ -5,6 +5,7 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
+#include "DBCStores.h"
 #include <algorithm>
 
 namespace Commander
@@ -89,8 +90,10 @@ namespace CreatureProfiles
             }
         }
 
-        // Creatures one cast of the spell summons (summon effects only), and the first entry.
-        uint32 SpellSummonCount(uint32 spellId, uint32& entry, uint32& lifeMs)
+    }
+
+    uint32 SpellSummonCount(uint32 spellId, uint32& entry, uint32& lifeMs)
+    {
         {
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
             if (!spell)
@@ -115,6 +118,62 @@ namespace CreatureProfiles
                 }
             }
             return count;
+        }
+    }
+
+    SpawnOn SpawnsOf(CreatureEventAI_Event const& ev)
+    {
+        {
+            SpawnOn s;
+            for (uint32 a = 0; a < MAX_ACTIONS; ++a)
+            {
+                ScriptMap const* actions = ev.action[a];
+                if (!actions)
+                    continue;
+                for (auto const& step : *actions)
+                {
+                    ScriptInfo const& info = step.second;
+                    if (info.command == SCRIPT_COMMAND_TEMP_SUMMON_CREATURE)
+                    {
+                        if (!s.creatureEntry)
+                            s.creatureEntry = info.summonCreature.creatureEntry;
+                        if (!s.lifeMs)
+                            s.lifeMs = info.summonCreature.despawnDelay;
+                        ++s.count;
+                    }
+                    else if (info.command == SCRIPT_COMMAND_CAST_SPELL)
+                        s.count += SpellSummonCount(info.castSpell.spellId, s.creatureEntry, s.lifeMs);
+                }
+            }
+            return s;
+        }
+    }
+
+    namespace
+    {
+        // Kills its caster and damages around it (SelfDestruct). Average damage and radius.
+        bool IsSelfDestruct(uint32 spellId, float& radius, float& damage, bool& physical)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            if (!spell)
+                return false;
+            bool killsSelf = false;
+            damage = 0.0f;
+            radius = 0.0f;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                if (spell->Effect[i] == SPELL_EFFECT_INSTAKILL && spell->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER)
+                    killsSelf = true;
+                else if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE && spell->EffectRadiusIndex[i])
+                {
+                    damage += float(spell->CalculateSimpleValue(SpellEffectIndex(i))) +
+                              float(std::max(0, spell->EffectDieSides[i] - 1)) / 2.0f;
+                    if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                        radius = std::max(radius, r->Radius);
+                }
+            }
+            physical = spell->School == SPELL_SCHOOL_NORMAL;
+            return killsSelf && damage > 0.0f && radius > 0.0f;
         }
 
         void AddSummonTimer(CreatureProfile& p, CreatureEventAI_Event const& ev)
@@ -163,6 +222,13 @@ namespace CreatureProfiles
             {
                 if (ev.event_type == EVENT_T_TIMER_IN_COMBAT)
                     AddSummonTimer(p, ev);
+                // On death / on aggro, unconditional only (see SpawnOn).
+                if ((ev.event_type == EVENT_T_DEATH || ev.event_type == EVENT_T_AGGRO) && !ev.condition_id)
+                {
+                    SpawnOn const s = SpawnsOf(ev);
+                    if (s.count && s.creatureEntry)
+                        (ev.event_type == EVENT_T_DEATH ? p.deathSpawns : p.aggroSpawns).push_back(s);
+                }
 
                 for (uint32 a = 0; a < MAX_ACTIONS; ++a)
                 {
@@ -185,6 +251,20 @@ namespace CreatureProfiles
                         ref.source = SpellSource::EventAI;
                         if (ev.event_type == EVENT_T_HP)
                             ref.healthPct = float(ev.percent_range.percentMax);
+                        if (!p.selfDestruct.spellId)
+                        {
+                            SelfDestruct sd;
+                            if (IsSelfDestruct(ref.spellId, sd.radius, sd.damage, sd.physical))
+                            {
+                                sd.spellId = ref.spellId;
+                                if (ev.event_type == EVENT_T_TIMER_IN_COMBAT)
+                                {
+                                    sd.afterMinMs = ev.timer.initialMin;
+                                    sd.afterMaxMs = std::max(ev.timer.initialMin, ev.timer.initialMax);
+                                }
+                                p.selfDestruct = sd;
+                            }
+                        }
                         if (ev.event_type == EVENT_T_TIMER_IN_COMBAT)
                         {
                             ref.repeatMinMs = ev.timer.repeatMin;
@@ -219,6 +299,7 @@ namespace CreatureProfiles
         p.levelMax = info->level_max;
         p.unitClass = info->unit_class;
         p.damageMultiplier = info->damage_multiplier;
+        p.healthMultiplier = info->health_multiplier;
         p.baseAttackTimeMs = info->base_attack_time ? info->base_attack_time : 2000;
         p.tauntImmune = (info->immunity_flags & CREATURE_IMMUNITY_TAUNT) != 0;
         p.mechanicImmuneMask = info->mechanic_immune_mask;
@@ -246,6 +327,15 @@ namespace CreatureProfiles
     float EstimateMeleeDps(CreatureProfile const& profile, uint32 level)
     {
         return MeleeAverage(profile, level) / (profile.baseAttackTimeMs / 1000.0f);
+    }
+
+    float EstimateHealth(CreatureProfile const& profile, uint32 level)
+    {
+        CreatureClassLevelStats const* cls = sObjectMgr.GetCreatureClassLevelStats(profile.unitClass ? profile.unitClass : 1,
+                                                                                    std::max(1u, level));
+        if (!cls)
+            return 1.0f;
+        return std::max(1.0f, Creature::_GetHealthMod(int32(profile.rank)) * float(cls->health) * profile.healthMultiplier);
     }
 
     char const* SourceName(SpellSource source)

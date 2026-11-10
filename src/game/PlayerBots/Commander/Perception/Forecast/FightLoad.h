@@ -15,6 +15,10 @@
  *            each with the cheapest heal that keeps up (else its fastest), paying mana for the
  *            heal plus ManaBudget::OVERHEAL waste, regenerating at its in-combat rate.
  *            Player healers are not counted (their spells are not known).
+ *   spawns   (todo 9) a creature's death spawns come when it dies, its aggro summons with it
+ *            (Build, FromWorld; CreatureProfile::deathSpawns / aggroSpawns, health and melee
+ *            from the template); a self-destruct blows up on the tank lifeSec after it came
+ *            unless the party killed it first (Broken Cadaver).
  * The fight ends when no present creature is left; one that arrives after that is another
  * fight, unless it is marked sameFight (a controlled enemy waking up: the gap passes with
  * healing and regeneration, no eating). Bearable: the tank survives and never drops below
@@ -53,6 +57,13 @@ namespace FightLoad
         // Part of this fight even if it arrives after the others died: a controlled enemy that
         // wakes later (the party is still in combat: no eating or drinking in between).
         bool sameFight = false;
+        // A death spawn (CreatureProfile::deathSpawns, todo 9): it comes arriveSec after the foe
+        // with this guid dies (never, if that one lives or is not in the input). Empty = none.
+        ObjectGuid parent;
+        // A self-destruct (CreatureProfile::selfDestruct): this long after it came it blows up,
+        // `burst` on the tank (after armor), and is gone. 0 = lives until killed.
+        float lifeSec = 0.0f;
+        float burst = 0.0f;
     };
 
     struct Healer

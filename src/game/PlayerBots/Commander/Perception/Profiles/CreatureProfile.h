@@ -12,6 +12,7 @@
 #include <vector>
 
 struct CreatureInfo;
+struct CreatureEventAI_Event;
 
 namespace Commander
 {
@@ -53,6 +54,29 @@ namespace Commander
         uint32 lifeMs = 0;              // despawn delay / spell duration, 0 = unknown
     };
 
+    // Creatures an EventAI event brings (doctrine todo 9, .kiro/docs/2026-11-09-doctrine/2026-11-10-roles-sources.md):
+    // on death (Ravaged Cadaver -> Broken Cadaver) or on aggro (Eye of Naxxramas -> Rockwing
+    // Gargoyles). Events with a condition are left out (Crimson Initiate's "group dead" waves
+    // depend on the rest of the room).
+    struct SpawnOn
+    {
+        uint32 creatureEntry = 0;
+        uint32 count = 0;
+        uint32 lifeMs = 0;              // despawn delay / spell duration, 0 = unknown
+    };
+
+    // Blows itself up (a spell that kills its caster and hurts everything around it: Broken
+    // Cadaver's Exploding Cadaver, 765-1035 within 10 yd, 4-8 s into its fight).
+    struct SelfDestruct
+    {
+        uint32 spellId = 0;             // 0 = does not
+        float radius = 0.0f;
+        float damage = 0.0f;            // average, before armor / resistances
+        bool physical = false;          // school normal: armor reduces it
+        uint32 afterMinMs = 0;          // first cast after the fight starts (combat timer)
+        uint32 afterMaxMs = 0;
+    };
+
     // custom_partybot_creature_override row. Defaults = no change.
     struct CreatureOverride
     {
@@ -90,6 +114,10 @@ namespace Commander
         // Kilrogg a Netherwalker after 12 s and every 20 s. Killing it before the timer fires
         // prevents them. Summons on aggro are not listed (nothing can stop them).
         std::vector<SummonTimer> summonTimers;
+        std::vector<SpawnOn> deathSpawns;
+        std::vector<SpawnOn> aggroSpawns;
+        SelfDestruct selfDestruct;
+        float healthMultiplier = 1.0f;  // creature_template.health_multiplier (CreatureProfiles::EstimateHealth)
         bool hasOverride = false;
         CreatureOverride override;
 
@@ -117,6 +145,14 @@ namespace Commander
         // (same formula as Creature::SelectLevel, rate config included).
         float EstimateMeleeDps(CreatureProfile const& profile, uint32 level);
         float EstimateMeleeHit(CreatureProfile const& profile, uint32 level);
+        // Max health at this level (same formula as Creature::SelectLevel): a creature that is
+        // not there yet (a death spawn, an aggro summon).
+        float EstimateHealth(CreatureProfile const& profile, uint32 level);
+        // Creatures one cast of the spell summons (summon effects only); `entry` and `lifeMs`
+        // are filled when still 0.
+        uint32 SpellSummonCount(uint32 spellId, uint32& entry, uint32& lifeMs);
+        // Creatures an EventAI event's actions bring (summon command or summon spell).
+        SpawnOn SpawnsOf(CreatureEventAI_Event const& ev);
 
         char const* SourceName(SpellSource source);
     }

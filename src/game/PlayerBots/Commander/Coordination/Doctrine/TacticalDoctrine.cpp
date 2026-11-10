@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
+#include "Commander/Coordination/Doctrine/RoleStamps.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -223,6 +224,7 @@ namespace Commander
                     x.stamps |= STAMP_PLAYER_TARGET;
                     noMez("player hits it");
                 }
+            RoleStamps::Apply(world, *e, x);
             uint32 const othersFree = free - (IsFree(*e) ? 1 : 0);
             if (!(x.stamps & STAMP_NO_MEZ) && othersFree > 0 && HeldByBot(world, *e))
                 x.stamps |= STAMP_COMMITTED;
@@ -320,6 +322,13 @@ namespace Commander
         if (d.stamps & STAMP_COMMITTED)     s += ", committed";
         if (d.stamps & STAMP_PLAYER_TARGET) s += ", player's target";
         if (d.stamps & STAMP_LURE)          s += ", lured";
+        if (Source(d.source) != Source::Static)
+            s += std::string(", ") + Tags::Name(Source(d.source));
+        if (d.stamps & STAMP_SELF_DESTRUCT) s += ", self-destructs";
+        if (d.stamps & STAMP_KILL_NOW)      s += " (kill it before it blows)";
+        if (d.stamps & STAMP_STAND_CLEAR)   s += " (stand clear)";
+        if (d.stamps & STAMP_SWARM)         s += ", swarm";
+        if (d.stamps & STAMP_ALARM)         s += ", alarm";
         return s;
     }
 }

@@ -100,7 +100,10 @@ namespace DamageTargets
                 }
                 continue;
             }
-            if (!ThreatAllows(ctx, bot, *e, false))
+            // Doctrine KillNow (RoleStamps.h): the self-destruct focus is a task: no threat rule
+            // (it is dead or blown up before threat matters), no exchange.
+            bool const killNow = e->guid == ctx.plan.focus.enemy && ctx.plan.doctrine.Has(e->guid, STAMP_KILL_NOW);
+            if (!killNow && !ThreatAllows(ctx, bot, *e, false))
             {
                 skip(*e, "threat room");
                 continue;
@@ -111,6 +114,13 @@ namespace DamageTargets
             TargetPick p;
             p.enemy = e;
             float rank;
+            if (killNow)
+            {
+                p.forced = true;
+                p.reason = "doctrine: kill it before it blows up";
+                focus = p;
+                continue;
+            }
             if (c)
             {
                 // Smith's rule exchange (FocusAssigner.h), this bot's share of it.

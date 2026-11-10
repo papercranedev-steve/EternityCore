@@ -1,5 +1,6 @@
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Profiles/SpawnSources.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
 #include <vector>
@@ -77,6 +78,63 @@ namespace Tags
                     l.mezTypes |= a.creatureTypeMask ? a.creatureTypeMask : ~0u;
         }
         return l;
+    }
+
+    Source SourceOf(EnemyFacts const& e)
+    {
+        uint8 const s = SpawnSources::Of(e.entry);
+        if (s & SpawnSources::FROM_TRAP)
+            return Source::Trap;
+        if (s & SpawnSources::FROM_DEATH)
+            return Source::DeathSpawn;
+        if (s & SpawnSources::FROM_AGGRO)
+            return Source::Called;
+        return e.summoned ? Source::Summoned : Source::Static;
+    }
+
+    uint8 RolesOf(uint32 entry)
+    {
+        std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(entry);
+        if (!p)
+            return 0;
+        uint8 roles = 0;
+        if (p->selfDestruct.spellId)
+            roles |= TAG_SELF_DESTRUCT;
+        if (!p->aggroSpawns.empty() || !p->summonTimers.empty() || p->fleeAtHealthPct > 0.0f)
+            roles |= TAG_ALARM;
+        return roles;
+    }
+
+    BlastFacts BlastOf(EnemyFacts const& e)
+    {
+        BlastFacts b;
+        std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
+        if (!p || !p->selfDestruct.spellId)
+            return b;
+        SelfDestruct const& sd = p->selfDestruct;
+        b.valid = true;
+        b.radius = sd.radius;
+        b.damage = sd.damage;
+        b.physical = sd.physical;
+        if (sd.afterMaxMs && e.firstSeenMs)
+        {
+            b.earliestMs = e.firstSeenMs + sd.afterMinMs;
+            b.latestMs = e.firstSeenMs + sd.afterMaxMs;
+        }
+        return b;
+    }
+
+    char const* Name(Source source)
+    {
+        switch (source)
+        {
+            case Source::Static:     return "static";
+            case Source::Summoned:   return "summoned";
+            case Source::Trap:       return "trap";
+            case Source::DeathSpawn: return "death spawn";
+            case Source::Called:     return "called";
+        }
+        return "?";
     }
 
     char const* Name(Engage engage)

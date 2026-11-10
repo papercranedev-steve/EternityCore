@@ -46,6 +46,9 @@ namespace Commander
         // (TacticalDoctrine.h). A stun or banish is still allowed.
         bool DoctrineForbids(TeamPlan const& plan, ControlAbility const& a, ObjectGuid enemy)
         {
+            // No control of any kind on a trap swarm or a self-destruct (RoleStamps.h).
+            if (plan.doctrine.Has(enemy, STAMP_SWARM | STAMP_SELF_DESTRUCT))
+                return true;
             return a.Kind() != ControlKind::Hold && plan.doctrine.Has(enemy, STAMP_NO_MEZ);
         }
 
@@ -60,6 +63,10 @@ namespace Commander
         std::string NoMezWhy(TeamPlan const& plan, ObjectGuid enemy)
         {
             DoctrineEnemy const* d = plan.doctrine.Find(enemy);
+            if (d && (d->stamps & STAMP_SELF_DESTRUCT))
+                return "doctrine: no control (self-destructs)";
+            if (d && (d->stamps & STAMP_SWARM))
+                return "doctrine: no control (trap swarm)";
             return "doctrine: no mez (" + (d ? d->noMezWhy : std::string("?")) + ")";
         }
     }

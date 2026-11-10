@@ -34,6 +34,27 @@ namespace Commander
 {
     enum class Engage : uint8 { Melee, StandBack };
     enum class Tier : uint8 { Fodder, Normal, Elite, Heavy };
+    // Where it came from (3.1 "source", todo 9): SpawnSources.h, else summoned or not. (A patrol
+    // is known only before it fights: WorldModel::patrols.)
+    enum class Source : uint8 { Static, Summoned, Trap, DeathSpawn, Called };
+
+    // Tactical roles (3.1, todo 9), bits of Tags::RolesOf.
+    enum : uint8
+    {
+        TAG_SELF_DESTRUCT = 1 << 0,     // CreatureProfile::selfDestruct
+        TAG_ALARM         = 1 << 1,     // brings more: on aggro, on a combat timer, or runs for help
+    };
+
+    // A self-destruct on the way: where, when (doctrine and the blast module).
+    struct BlastFacts
+    {
+        bool valid = false;
+        float radius = 0.0f;
+        float damage = 0.0f;            // average, before armor
+        bool physical = false;
+        uint32 earliestMs = 0;          // WorldTimer ms (0 = unknown: no timer)
+        uint32 latestMs = 0;
+    };
 
     struct TeamLedger
     {
@@ -58,8 +79,15 @@ namespace Commander
 
         TeamLedger LedgerOf(WorldModel const& world);
 
+        Source SourceOf(EnemyFacts const& e);
+        uint8 RolesOf(uint32 entry);
+        // Its self-destruct, timed from when it joined the fight (EnemyFacts::firstSeenMs: the
+        // EventAI combat timer starts about then).
+        BlastFacts BlastOf(EnemyFacts const& e);
+
         char const* Name(Engage engage);
         char const* Name(Tier tier);
+        char const* Name(Source source);
     }
 }
 
