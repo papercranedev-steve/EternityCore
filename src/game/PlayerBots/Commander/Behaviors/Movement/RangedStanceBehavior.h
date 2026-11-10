@@ -16,7 +16,14 @@
  *  - the bot stands where an idle creature would attack it, also once a wanderer walked to the
  *    edge of its circle (SafeRoute::IdleCreatures::Near): a constraint, tier Urgent;
  *  - the victim is farther than CAST_RANGE (to its edge) or out of line of sight: tier
- *    Assigned, benefit = the bot's lost action over HORIZON_SEC (it cannot do its job).
+ *    Assigned, benefit = the bot's lost action over HORIZON_SEC (it cannot do its job);
+ *  - (2026-11-10, user: squishy casters stand well back) an enemy that fights someone else is
+ *    within TRIGGER_ENEMY_GAP: tier Assigned, benefit = Exposure::LossAt(here) - LossAt(there)
+ *    (Perception/Values/Exposure.h, the healer stance's term); within DANGER_ENEMY_GAP: tier
+ *    Urgent, score -walk seconds. The new cell is at least MIN_ENEMY_GAP from those enemies.
+ *    Not before the fight, not for the area phase's caster (it picked where it casts from).
+ * Order of the cells (every case): LostAction of the walk + Exposure::LossAt, lowest first, so
+ * among cells in range the one farther from the enemies wins when the walk costs about the same.
  * Before the fight (2026-11-07): out of combat while the pull runs, the brain's planned fight
  * spot (PullPlan::PlannedFightSpot; the idle pack itself for a walk-in fought where it stands)
  * instead of a victim, same checks, rings PREPARE_RADII (one more at 28 yd); value
@@ -59,6 +66,12 @@ namespace Commander
         static constexpr float MIN_RADIUS = 14.0f;
         static constexpr float MAX_RADIUS = 26.0f;
         static constexpr float PREPARE_MAX_RADIUS = 28.0f;
+        // Too close (2026-11-10): an enemy fighting someone else nearer than this to its edge:
+        // move (Assigned, valued); the new cell at least MIN_ENEMY_GAP from every such enemy.
+        // Nearer than DANGER_ENEMY_GAP: a constraint, Urgent. Same lines as the healer stance.
+        static constexpr float TRIGGER_ENEMY_GAP = 12.0f;
+        static constexpr float MIN_ENEMY_GAP = 14.0f;
+        static constexpr float DANGER_ENEMY_GAP = 8.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;

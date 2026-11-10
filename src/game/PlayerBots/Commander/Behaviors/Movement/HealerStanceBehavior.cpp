@@ -2,6 +2,7 @@
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/Exposure.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
@@ -163,14 +164,7 @@ namespace Commander
                 if (out > 0.0f)
                     loss += s.second * Value::LostAction(world, self, out * HS::PATH_FACTOR / w.speed);
             }
-            for (EnemyFacts const* e : ctx.enemies)
-            {
-                float const gap = std::max(0.0f, Distance2d(p, e->pos) - e->boundingRadius);
-                float const exposed = HS::MAX_GAIN_SEC - gap / HS::ENEMY_RUN_SPEED;
-                if (exposed > 0.0f)
-                    loss += HS::TURN_CHANCE * (Value::HitLoss(world, *e, self, exposed) + Value::LostAction(world, self, exposed));
-            }
-            return loss;
+            return loss + Exposure::LossAt(world, self, ctx.enemies, p);
         }
 
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
@@ -212,16 +206,16 @@ namespace Commander
             return SafeRoute::PathIsSafe(ctx.me, pathIdle, s.pos, HS::MAX_PATH_DETOUR);
         }
 
-        // Standing where an idle creature would attack: a constraint, not a trade (same as the
-        // "rangedstance" module). Urgent beats the routine heal orders (Assigned), an emergency
-        // heal order (Urgent, score > 0) still goes first.
-        void MakeUnsafeProposal(Context const& ctx, Position3 const& to, Proposal& p)
+        // Standing where an idle creature would attack, or in the enemies' melee (DANGER_ENEMY_GAP):
+        // a constraint, not a trade (same as the "rangedstance" module). Urgent beats the
+        // routine heal orders (Assigned), an emergency heal order (Urgent, score > 0) still goes first.
+        void MakeUnsafeProposal(Context const& ctx, Position3 const& to, char const* reason, Proposal& p)
         {
             float const speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
             float const walkSec = Distance2d(ctx.here, to) * HS::PATH_FACTOR / speed;
             p.tier = ProposalTier::Urgent;
             p.source = "stance";
-            p.reason = "an idle creature would attack here";
+            p.reason = reason;
             p.action.type = BotActionType::MoveTo;
             p.action.x = to.x;
             p.action.y = to.y;
@@ -255,17 +249,9 @@ namespace Commander
             float const horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
 
             float benefit = anchorOk ? 0.0f : Value::LostAction(world, self, horizon);
-            for (EnemyFacts const* e : ctx.enemies)
-            {
-                float const gapNow = std::max(0.0f, Distance2d(ctx.here, e->pos) - e->boundingRadius);
-                if (gapNow >= HS::MIN_ENEMY_GAP)
-                    continue;
-                float const gapThere = std::max(0.0f, Distance2d(to, e->pos) - e->boundingRadius);
-                float const gain = std::min(HS::MAX_GAIN_SEC, std::max(0.0f, gapThere - gapNow) / HS::ENEMY_RUN_SPEED);
-                if (gain <= 0.0f)
-                    continue;
-                benefit += HS::TURN_CHANCE * (Value::HitLoss(world, *e, self, gain) + Value::LostAction(world, self, gain));
-            }
+            // The enemies' exposure saved (Perception/Values/Exposure.h, the same term as the order).
+            benefit += std::max(0.0f, Exposure::LossAt(world, self, ctx.enemies, ctx.here) -
+                                      Exposure::LossAt(world, self, ctx.enemies, to));
             float cost = Value::LostAction(world, self, walkSec);
             if (!anyInjured)
                 cost *= HS::IDLE_COST_FACTOR;
@@ -325,12 +311,18 @@ namespace Commander
         // the walk out there.
         if (bot->IsMovementHeld() && me->IsMoving())
         {
+            // Still in the enemies' melee (DANGER_ENEMY_GAP): Urgent too.
+            bool inMelee = false;
+            for (EnemyFacts const* e : Exposure::Turnable(world, me->GetObjectGuid()))
+                if (Exposure::Gap(*e, here) < DANGER_ENEMY_GAP)
+                    inMelee = true;
             Proposal hold;
-            hold.tier = unsafe ? ProposalTier::Urgent : ProposalTier::Assigned;
+            hold.tier = unsafe || inMelee ? ProposalTier::Urgent : ProposalTier::Assigned;
             hold.score = 0.0f;
             hold.source = "stance";
             hold.reason = unsafe ? "walking out of an idle creature's reach, keep walking"
-                                 : "walking to a healing spot, keep walking";
+                                 : inMelee ? "walking out of the enemies' melee, keep walking"
+                                           : "walking to a healing spot, keep walking";
             hold.action.type = BotActionType::Hold;
             out.push_back(hold);
             return;
@@ -359,9 +351,7 @@ namespace Commander
             ctx.anchorGuid = anchor->guid;
         }
         ctx.here = here;
-        for (EnemyFacts const& e : world.enemies)
-            if (e.acting && !e.onAllyOnly && e.victim != ctx.self->guid)
-                ctx.enemies.push_back(&e);
+        ctx.enemies = Exposure::Turnable(world, ctx.self->guid);
 
         // Someone is about to die and can be healed from here: heal first. Not when standing in
         // an idle creature's reach: the arbiter weighs the emergency heal order against the walk.
@@ -378,11 +368,26 @@ namespace Commander
         }
 
         bool const anchorOk = Distance2d(ctx.here, ctx.anchor) <= HEAL_RANGE && Los(ctx.map, ctx.here, ctx.anchor);
-        bool const crowded = MinGap(ctx, ctx.here) < TRIGGER_ENEMY_GAP;
+        float const gapHere = MinGap(ctx, ctx.here);
+        bool const crowded = gapHere < TRIGGER_ENEMY_GAP;
         if (anchorOk && !crowded && !unsafe)
             return;
+        // In the enemies' melee (their cleaves and area spells, an instant hit when one turns):
+        // a constraint like the idle reach, not a trade against the heal orders.
+        bool const danger = !ctx.prepare && gapHere < DANGER_ENEMY_GAP;
         char const* const reason = ctx.prepare ? "take a place for the planned fight" :
                                    anchorOk ? "too close to the enemies" : "tank out of reach";
+        auto const propose = [&](Position3 const& to)
+        {
+            Proposal p;
+            if (unsafe)
+                MakeUnsafeProposal(ctx, to, "an idle creature would attack here", p);
+            else if (danger)
+                MakeUnsafeProposal(ctx, to, "standing in the enemies' melee", p);
+            else
+                MakeProposal(ctx, world, to, anchorOk, anyInjured, reason, p);
+            out.push_back(p);
+        };
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
         // The walk out of an idle creature's reach starts inside it.
@@ -420,12 +425,27 @@ namespace Commander
                 ++checks;
                 if (!GeometryOk(ctx, idle, pathIdle, s))
                     continue;
-                Proposal p;
-                if (unsafe)
-                    MakeUnsafeProposal(ctx, s.pos, p);
-                else
-                    MakeProposal(ctx, world, s.pos, anchorOk, anyInjured, reason, p);
-                out.push_back(p);
+                propose(s.pos);
+                return;
+            }
+        }
+
+        // Too close with the tank in reach and no cell past the gap lines passed: any cell
+        // farther from the enemies than here by IMPROVE_MIN_YD, best order first, own budget
+        // (before: the healer stayed in the pile, 2026-11-10).
+        if (crowded && anchorOk && !ctx.prepare)
+        {
+            std::vector<Spot> spots = Candidates(ctx, world, zones, weights, cells, RELAXED_MIN_YD, RELAXED_MAX_YD,
+                                                 gapHere + IMPROVE_MIN_YD);
+            uint32 tries = 0;
+            for (Spot const& s : spots)
+            {
+                if (tries >= FALLBACK_GEOMETRY_CHECKS)
+                    break;
+                ++tries;
+                if (!GeometryOk(ctx, idle, pathIdle, s))
+                    continue;
+                propose(s.pos);
                 return;
             }
         }
@@ -438,7 +458,7 @@ namespace Commander
         {
             Proposal p;
             if (unsafe)
-                MakeUnsafeProposal(ctx, ctx.anchor, p);
+                MakeUnsafeProposal(ctx, ctx.anchor, "an idle creature would attack here", p);
             else
                 MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured,
                              ctx.prepare ? "planned fight spot, no free spot around it: go there"

@@ -65,9 +65,9 @@
  *            its share of the party's damage taken (Value::TakenDps; equal shares while nobody
  *            takes any) x LostAction(healer, walk to reach it = (distance - HEAL_RANGE) x
  *            PATH_FACTOR / run speed). Another tank takes most damage and counts the most.
- *   enemies  for every enemy not hitting the healer: TURN_CHANCE x (HitLoss + LostAction)
- *            over max(0, MAX_GAIN_SEC - gap / ENEMY_RUN_SPEED): the seconds an enemy that turns
- *            to the healer gets before the tank takes it back (same terms as the move's value).
+ *   enemies  Exposure::LossAt (Perception/Values/Exposure.h, shared with the ranged stance):
+ *            for every enemy not hitting the healer TURN_CHANCE x (HitLoss + LostAction) over
+ *            the seconds an enemy that turns to the healer gets before the tank takes it back.
  * Before: yards with made-up weights (-1 per yd walk, +4 per member in range, tanks x3,
  * +0.5 per yd of enemy gap up to 20). Live checks on at
  * most MAX_GEOMETRY_CHECKS cells per tick: this healer's own idle scan, line of sight to the
@@ -78,11 +78,12 @@
  *
  * Value (points): benefit - cost, horizon H = min(HORIZON_SEC, fight remaining), at least 1 s.
  *  benefit = Value::LostAction(healer, H) when the anchor is out of reach (the healer cannot do
- *            its job), plus for every enemy closer than MIN_ENEMY_GAP that does not hit the
- *            healer: TURN_CHANCE x (HitLoss(enemy, healer, gain) + LostAction(healer, gain)),
- *            gain = extra distance / ENEMY_RUN_SPEED (at most MAX_GAIN_SEC): the seconds an enemy
- *            that turns to the healer needs to reach it, i.e. hits and cast pushback it does not
- *            get before the tank takes it back.
+ *            its job), plus Exposure::LossAt(here) - Exposure::LossAt(there): the enemies'
+ *            exposure the walk saves (the order's term).
+ * Within DANGER_ENEMY_GAP of an enemy's edge (2026-11-10, the priest stood in the pile next to
+ * the tank and died when one turned): tier Urgent, score -walk seconds, like the idle reach.
+ * Too close with the tank in reach and no cell past the gap lines passed the live checks: one
+ * more pass over cells IMPROVE_MIN_YD farther from the enemies than here (own budget).
  *  cost    = Value::LostAction(healer, walk seconds), x IDLE_COST_FACTOR when no member is
  *            below INJURED_PCT (walking costs little while nothing needs a heal).
  * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS. After that the healer stays where it is.
@@ -117,10 +118,15 @@ namespace Commander
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
 
+        // Closer than this to an enemy's edge (in its melee, cleave and most area spells):
+        // the move is a constraint, tier Urgent (2026-11-10).
+        static constexpr float DANGER_ENEMY_GAP = 8.0f;
+        // Last pass when too close and nothing past the gap lines passed: a cell this much
+        // farther from the enemies than here, own budget of FALLBACK_GEOMETRY_CHECKS.
+        static constexpr float IMPROVE_MIN_YD = 3.0f;
+        static constexpr uint32 FALLBACK_GEOMETRY_CHECKS = 3;
+
         static constexpr float HORIZON_SEC = 8.0f;
-        static constexpr float TURN_CHANCE = 0.5f;          // an enemy turns to the healer within H
-        static constexpr float ENEMY_RUN_SPEED = 7.0f;
-        static constexpr float MAX_GAIN_SEC = 3.0f;
         static constexpr float URGENT_HEALTH_PCT = 35.0f;
         static constexpr float INJURED_PCT = 80.0f;
         static constexpr float IDLE_COST_FACTOR = 0.25f;
