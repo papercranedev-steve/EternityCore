@@ -5,7 +5,8 @@
  * Steps of a build:
  *  1. Blocks: every BLOCK_YD block within COVER_YD of a participant, at most MAX_BLOCKS
  *     (nearest to a participant first). Built while the party has an enemy, a pull runs or a
- *     member is in combat (an ally's fight: WorldModel::InFight); otherwise no field.
+ *     member is in combat (an ally's fight: WorldModel::InFight), and while travelling when an
+ *     idle creature or a patrol's walk could reach us (ThreatNear); otherwise no field.
  *  2. Ground: flood from the participants' cells. A cell not known yet gets its ground near the
  *     height of the cell it was reached from (navmesh nearest polygon within
  *     SEARCH_HALF_HEIGHT), a pair of neighbours not known yet gets a navmesh raycast. Ground and
@@ -19,7 +20,8 @@
  *     while its home stays within IDLE_MOVED_YD and its reach the same; at most
  *     MAX_SIGHT_CHECKS line of sight checks per build, cells over the budget count as covered
  *     by distance and height (safe side) and are checked again next build.
- *  4. Patrol layer: PatrolFacts::track of aggressive patrols (filled while the party fights).
+ *  4. Patrol layer: PatrolFacts::track of aggressive patrols (one lap), seconds from this
+ *     build (the tracks are from the last pack refresh).
  *
  * Map thread of the party (PartyCommander::Refresh, after the facts and the version step):
  * reads creatures and the navmesh of that thread.
@@ -87,7 +89,10 @@ namespace Commander
         void FloodGround(Map* map, PositionField& field, std::vector<Position3> const& seeds, uint32 nowMs);
         void BuildIdle(Map* map, WorldModel const& world, PositionField& field, Position3 const& center,
                        float radius, uint32 nowMs);
-        void BuildPatrols(WorldModel const& world, PositionField& field);
+        void BuildPatrols(WorldModel const& world, PositionField& field, uint32 nowMs);
+        // Travelling: an aggressive idle creature or a patrol's walk comes within COVER_YD of a
+        // member's reach (pack and patrol facts; the field is not built otherwise).
+        static bool ThreatNear(WorldModel const& world);
         void Forget(uint32 nowMs);
 
         std::unordered_map<uint64, GroundBlock> m_ground;

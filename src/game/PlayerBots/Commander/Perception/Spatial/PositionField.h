@@ -3,7 +3,8 @@
  * spatial facts every spot choice needs (doc .kiro/docs/2026-11-10-position-field.md).
  *
  * Built by PositionFieldBuilder on every perception refresh while the party fights or a pull
- * runs (WorldModel::field, null otherwise). Pure data once built: modules only read it.
+ * runs, and while travelling near creatures that could attack us (WorldModel::field, null
+ * otherwise). Pure data once built: modules only read it.
  *
  * Area. The world is cut into fixed BLOCK_YD squares aligned to world coordinates, each holding
  * BLOCK_CELLS x BLOCK_CELLS cells of CELL_YD. The field holds every block within COVER_YD of a
@@ -23,8 +24,9 @@
  *  - idle: bit i = idle()[i] would attack a member standing here (AggroRange: aggro range of the
  *    member it reaches farthest + SafeRoute::IDLE_MARGIN, wander circle, height, line of sight;
  *    moving creatures without a wander circle by distance and height only).
- *  - patrolSec: earliest second (from the refresh) a patrol's zone (aggro range +
- *    PATROL_MARGIN) covers the cell, from PatrolFacts::track; NO_PATROL if not within the track.
+ *  - patrolSec: earliest second (from the build) a patrol's zone (aggro range +
+ *    PATROL_MARGIN) covers the cell, from PatrolFacts::track (one lap of its path);
+ *    NO_PATROL if its walk never comes there.
  * Hazard zones are not stored: HazardZones::IsInside is plain math over a few zones.
  *
  * Walking distance (WalkYd): shortest walk over linked standable cells from a member's cell

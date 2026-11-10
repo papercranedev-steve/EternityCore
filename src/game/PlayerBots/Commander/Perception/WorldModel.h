@@ -584,9 +584,10 @@ namespace Commander
     // A creature walking a waypoint path, not in combat (WorldModel::patrols).
     struct PatrolFacts : PackCreature
     {
-        // Filled only while the party fights (HasPartyEnemy), for the fight-time patrol check
-        // (Coordination/Situation/Patrol/PatrolAssigner.h): where it will be every trackStepSec from the refresh
-        // (PatrolTracker::Predict, PATROL_FIGHT_HORIZON_SEC ahead; track[0] = now).
+        // Where it will be every trackStepSec from the pack refresh (PatrolTracker::Predict,
+        // one lap ahead within WorldModelBuilder PATROL_TRACK_MIN_SEC..PATROL_TRACK_MAX_SEC;
+        // track[0] = now). Always filled (travel, pull and fight: the position field's patrol
+        // layer, PatrolAssigner, the pull's checks).
         float trackStepSec = 0.0f;
         std::vector<Position3> track;
     };

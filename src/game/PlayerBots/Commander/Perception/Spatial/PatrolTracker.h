@@ -59,6 +59,11 @@ namespace PatrolTracker
 
     Track Predict(Creature* creature, float horizonSec, float stepSec = SAMPLE_STEP_SEC);
 
+    // Seconds of one lap of the waypoint path the creature walks (its own, or its formation
+    // leader's), walks at the current speed plus node delays. 0 = no known path (Spline or
+    // Standing tracks). A track of this length from now covers the whole loop once.
+    float LapSec(Creature* creature);
+
     // Closest approach of a track to a point, and how long it stays within `radius`.
     struct Approach
     {

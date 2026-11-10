@@ -39,7 +39,7 @@ namespace Commander
             return best;
         }
 
-        // An idle patrol walks next to `at` within `sec` (PatrolFacts::track, filled in fights).
+        // An idle patrol walks next to `at` within `sec` (PatrolFacts::track).
         bool PatrolComes(WorldModel const& world, Position3 const& at, float sec)
         {
             for (PatrolFacts const& p : world.patrols)

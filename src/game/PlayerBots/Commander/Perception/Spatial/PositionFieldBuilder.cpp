@@ -91,7 +91,10 @@ namespace Commander
         // A member in combat counts too (WorldModel::InFight of a bot that joined an ally's fight).
         bool const anyInCombat = std::any_of(world.party.begin(), world.party.end(),
             [](PartyMemberFacts const& m) { return m.inCombat && m.alive; });
-        if (!map || (!world.HasPartyEnemy() && !pulling && !anyInCombat))
+        // Travelling (no fight, no pull): only while something near could attack us, for the
+        // follow spot and the patrol checks of the brain.
+        bool const travelling = !world.HasPartyEnemy() && !pulling && !anyInCombat;
+        if (!map || (travelling && !ThreatNear(world)))
         {
             world.field.reset();
             m_field.reset();
@@ -175,7 +178,7 @@ namespace Commander
         float const radius = 0.5f * std::sqrt((hi.x - lo.x) * (hi.x - lo.x) + (hi.y - lo.y) * (hi.y - lo.y)) +
                              PositionField::COVER_YD;
         BuildIdle(map, world, field, center, radius, nowMs);
-        BuildPatrols(world, field);
+        BuildPatrols(world, field, nowMs);
         Forget(nowMs);
 
         FieldStats& s = field.stats;
@@ -564,8 +567,51 @@ namespace Commander
         field.stats.sightChecks = checks;
     }
 
-    void PositionFieldBuilder::BuildPatrols(WorldModel const& world, PositionField& field)
+    bool PositionFieldBuilder::ThreatNear(WorldModel const& world)
     {
+        auto const nearMember = [&world](Position3 const& at, float reach)
+        {
+            float const range = PositionField::COVER_YD + reach + SafeRoute::IDLE_MARGIN;
+            for (PartyMemberFacts const& m : world.party)
+                if (!m.isPet && m.alive && SafeRoute::Distance2d(m.pos, at) <= range)
+                    return true;
+            return false;
+        };
+        for (PackFacts const& pack : world.packs)
+            for (PackCreature const& c : pack.members)
+                if (c.aggressive && !c.noAggro && !c.tappedByOther && nearMember(c.pos, c.reach))
+                    return true;
+        for (PatrolFacts const& p : world.patrols)
+        {
+            if (!p.aggressive || p.noAggro || p.tappedByOther)
+                continue;
+            if (nearMember(p.pos, p.reach))
+                return true;
+            for (Position3 const& at : p.track)
+                if (nearMember(at, p.reach))
+                    return true;
+        }
+        return false;
+    }
+
+    void PositionFieldBuilder::BuildPatrols(WorldModel const& world, PositionField& field, uint32 nowMs)
+    {
+        if (field.m_blocks.empty())
+            return;
+        // The field's bounds: track points farther off than a patrol's zone mark nothing (a
+        // lap is up to PATROL_TRACK_MAX_SEC points, most of them far from us).
+        int32 bx0 = field.m_blocks[0].bx, bx1 = bx0, by0 = field.m_blocks[0].by, by1 = by0;
+        for (PositionField::Block const& b : field.m_blocks)
+        {
+            bx0 = std::min(bx0, b.bx); bx1 = std::max(bx1, b.bx);
+            by0 = std::min(by0, b.by); by1 = std::max(by1, b.by);
+        }
+        float const minX = bx0 * PositionField::BLOCK_YD, maxX = (bx1 + 1) * PositionField::BLOCK_YD;
+        float const minY = by0 * PositionField::BLOCK_YD, maxY = (by1 + 1) * PositionField::BLOCK_YD;
+        // The tracks start at the pack refresh (WorldModel::packsRefreshedAtMs, every
+        // PACK_REFRESH_MS), the field is rebuilt more often: times from now.
+        float const ageSec = WorldTimer::getMSTimeDiff(world.packsRefreshedAtMs, nowMs) / 1000.0f;
+
         for (PatrolFacts const& p : world.patrols)
         {
             if (!p.aggressive || p.noAggro || p.tappedByOther || p.track.empty())
@@ -576,7 +622,9 @@ namespace Commander
                 Position3 const& at = p.track[t];
                 if (t > 0 && PackResolver::Distance(at, p.track[t - 1]) < 0.5f)
                     continue;   // standing: the earlier point already marked it
-                float const sec = float(t) * p.trackStepSec;
+                if (at.x + radius < minX || at.x - radius > maxX || at.y + radius < minY || at.y - radius > maxY)
+                    continue;
+                float const sec = std::max(0.0f, float(t) * p.trackStepSec - ageSec);
                 int32 const cx0 = PositionField::CellOf(at.x - radius), cx1 = PositionField::CellOf(at.x + radius);
                 int32 const cy0 = PositionField::CellOf(at.y - radius), cy1 = PositionField::CellOf(at.y + radius);
                 for (int32 cx = cx0; cx <= cx1; ++cx)

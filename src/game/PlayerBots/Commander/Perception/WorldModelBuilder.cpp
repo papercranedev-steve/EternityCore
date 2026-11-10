@@ -1289,8 +1289,10 @@ namespace WorldModelBuilder
     {
         void FillPatrolTrack(Creature* creature, PatrolFacts& pf)
         {
-            PatrolTracker::Track const track = PatrolTracker::Predict(creature, PATROL_FIGHT_HORIZON_SEC, PATROL_FIGHT_STEP_SEC);
-            pf.trackStepSec = PATROL_FIGHT_STEP_SEC;
+            float const horizon = std::min(PATROL_TRACK_MAX_SEC,
+                                           std::max(PATROL_TRACK_MIN_SEC, PatrolTracker::LapSec(creature)));
+            PatrolTracker::Track const track = PatrolTracker::Predict(creature, horizon, PATROL_TRACK_STEP_SEC);
+            pf.trackStepSec = PATROL_TRACK_STEP_SEC;
             pf.track.reserve(track.points.size());
             for (PatrolTracker::TrackPoint const& p : track.points)
                 pf.track.push_back(p.pos);
@@ -1313,8 +1315,7 @@ namespace WorldModelBuilder
 
         std::vector<PackCreature> creatures;
         world.patrols.clear();
-        // Patrol tracks only matter while we fight (PatrolAssigner); the pull planner predicts
-        // its own. Aggro range against the main tank: the fight is where the tank stands.
+        // Aggro range against the main tank while fighting: the fight is where the tank stands.
         bool const fighting = world.HasPartyEnemy();
         Unit const* reachAgainst = me;
         if (fighting)
@@ -1370,8 +1371,7 @@ namespace WorldModelBuilder
             {
                 PatrolFacts pf;
                 static_cast<PackCreature&>(pf) = c;
-                if (fighting)
-                    FillPatrolTrack(creature, pf);
+                FillPatrolTrack(creature, pf);
                 world.patrols.push_back(std::move(pf));
             }
             if (inPackRange)

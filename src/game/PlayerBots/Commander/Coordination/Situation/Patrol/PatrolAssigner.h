@@ -11,8 +11,8 @@
  *   benefit    = its melee on the tank (after armor) from arrival until the end of the fight
  *                plus its own kill time, + Value::FightExtension(its kill time)
  *   spots      = rings of SPOT_DISTANCES around the tank where the zone of the party, moved
- *                along with the tank, is never entered by the predicted walk (as far as the
- *                track goes), nearest first, at most MAX_SPOTS
+ *                along with the tank, is not entered by the predicted walk within
+ *                SPOT_TRACK_SEC, nearest first, at most MAX_SPOTS
  *   cost       = Value::FightExtension(walk time to the nearest spot) + the area phase's
  *                endCost (TeamPlan::area, last refresh: a channel losing its tank): the fight lasts longer
  *                while the tank walks and the enemies follow
@@ -45,7 +45,7 @@
  * The plan ends at once when no spot passed the live checks, the patrol joined the fight or
  * left the scan, the tank changed, or the retreat or a pull took over.
  *
- * Known limits: the track covers at most WorldModelBuilder::PATROL_FIGHT_HORIZON_SEC; the spot
+ * Known limits: the track covers at most WorldModelBuilder::PATROL_TRACK_MAX_SEC; the spot
  * geometry (ground, idle creatures, path) is only checked by the behavior; facts have no
  * "moving" flag, so a caster already walking over may get a lure it does not need.
  */
@@ -67,6 +67,9 @@ namespace Commander
     public:
         static constexpr float ZONE_MARGIN = 5.0f;
         static constexpr float SPOT_DISTANCES[] = { 15.0f, 25.0f, 35.0f };
+        // A spot must stay clear of the patrol's walk this long (the track length before it
+        // became a full lap).
+        static constexpr float SPOT_TRACK_SEC = 60.0f;
         static constexpr uint32 SPOT_ANGLES = 12;
         static constexpr uint32 MAX_SPOTS = 8;
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;

@@ -9,6 +9,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -35,10 +36,11 @@ namespace Commander
         }
 
         // First time (seconds from the refresh) the patrol's predicted walk comes within
-        // `radius` of any of `members`, -1 = not within the track.
-        float FirstTouch(PatrolFacts const& p, std::vector<Position3> const& members, float radius)
+        // `radius` of any of `members`, -1 = not within the track (or not within `withinSec`).
+        float FirstTouch(PatrolFacts const& p, std::vector<Position3> const& members, float radius,
+                         float withinSec = FLT_MAX)
         {
-            for (size_t i = 0; i < p.track.size(); ++i)
+            for (size_t i = 0; i < p.track.size() && float(i) * p.trackStepSec <= withinSec; ++i)
                 for (Position3 const& m : members)
                     if (PackResolver::Distance(p.track[i], m) <= radius)
                         return float(i) * p.trackStepSec;
@@ -101,7 +103,10 @@ namespace Commander
                     s.x = tank.x + d * std::cos(angle);
                     s.y = tank.y + d * std::sin(angle);
                     s.z = tank.z;
-                    if (FirstTouch(p, Members(world, s.x - tank.x, s.y - tank.y), radius) < 0.0f)
+                    // (the first SPOT_TRACK_SEC of the track: the tracks became a full lap long,
+                    // a spot clear of the whole loop is rarely found and not needed)
+                    if (FirstTouch(p, Members(world, s.x - tank.x, s.y - tank.y), radius,
+                                   PatrolAssigner::SPOT_TRACK_SEC) < 0.0f)
                         spots.push_back(s);
                 }
             }

@@ -9,6 +9,7 @@
 #include "WaypointMovementGenerator.h"
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace Commander
 {
@@ -175,6 +176,25 @@ namespace PatrolTracker
             return true;
         }
 
+        // One lap of the creature's own running waypoint path, 0 = none.
+        float PathLapSec(Creature* creature)
+        {
+            WaypointPath const* path = nullptr;
+            if (!WaypointGenerator(creature, path))
+                return 0.0f;
+            float const speed = SpeedOf(creature);
+            float sec = 0.0f;
+            for (auto it = path->begin(); it != path->end(); ++it)
+            {
+                auto next = std::next(it);
+                if (next == path->end())
+                    next = path->begin();
+                sec += PackResolver::Distance(NodePosition(it->second), NodePosition(next->second)) / speed;
+                sec += it->second.delay / 1000.0f;
+            }
+            return sec;
+        }
+
         bool SplineLegs(Creature* creature, std::vector<Leg>& legs)
         {
             if (creature->movespline->Finalized() || !creature->movespline->Initialized())
@@ -226,6 +246,22 @@ namespace PatrolTracker
         if (!track.points.empty())
             track.points.front().pos = here;
         return track;
+    }
+
+    float LapSec(Creature* creature)
+    {
+        if (!creature)
+            return 0.0f;
+        if (float const own = PathLapSec(creature))
+            return own;
+        // Formation member: the leader's lap (Predict follows the leader the same way).
+        if (CreatureGroup* group = creature->GetCreatureGroup())
+        {
+            Creature* leader = creature->GetMap()->GetCreature(group->GetLeaderGuid());
+            if (leader && leader != creature && leader->IsAlive())
+                return PathLapSec(leader);
+        }
+        return 0.0f;
     }
 
     Approach ClosestApproach(Track const& track, Position3 const& point, float radius)

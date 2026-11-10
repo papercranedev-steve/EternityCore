@@ -707,7 +707,7 @@ namespace
         Commander::PositionField const* field = world.field.get();
         if (!field)
         {
-            handler->SendSysMessage("No position field: the party is not fighting and no pull runs.");
+            handler->SendSysMessage("No position field: no fight, no pull and no idle creature or patrol near the party.");
             return true;
         }
         Commander::FieldStats const& s = field->stats;
