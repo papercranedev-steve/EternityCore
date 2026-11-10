@@ -12,10 +12,12 @@
 #include "ObjectGuid.h"
 #include "RoleCapability.h"
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 namespace Commander
 {
+    class PositionField;
     struct Position3
     {
         float x = 0.0f;
@@ -661,6 +663,9 @@ namespace Commander
         // Walks of melee and tank bots to the enemies they could be sent to, along the navmesh
         // path (Perception/Spatial/MeleeRoutes.h). A pair missing here was not checked yet.
         std::vector<RouteFact> routes;
+        // Grid over the fight area with ground, links, idle creatures and patrols
+        // (Perception/Spatial/PositionField.h). Null while the party neither fights nor pulls.
+        std::shared_ptr<PositionField const> field;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
         RouteFact const* FindRoute(ObjectGuid bot, ObjectGuid enemy) const

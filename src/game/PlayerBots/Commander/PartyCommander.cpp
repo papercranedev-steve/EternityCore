@@ -275,6 +275,9 @@ namespace Commander
 
         ++m_world.version;
         m_world.refreshedAtMs = nowMs;
+        // (after the version step, so the field is tagged with this refresh. m_plan is the
+        // previous refresh's: the pull's planned fight spot, the assigners run after this.)
+        m_positionField.Build(bot->me->GetMap(), m_world, m_plan, nowMs);
     }
 
     bool PartyCommander::RunCombat(PartyBotAI* bot, BehaviorList const& behaviors)

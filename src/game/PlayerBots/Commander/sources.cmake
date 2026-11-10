@@ -204,6 +204,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/SafeRoute.cpp
   ${COMMANDER_DIR}/Perception/Spatial/MeleeRoutes.h
   ${COMMANDER_DIR}/Perception/Spatial/MeleeRoutes.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PositionField.h
+  ${COMMANDER_DIR}/Perception/Spatial/PositionField.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PositionFieldBuilder.h
+  ${COMMANDER_DIR}/Perception/Spatial/PositionFieldBuilder.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.h
   ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.cpp
   ${COMMANDER_DIR}/Perception/Values/FleeStopValue.h

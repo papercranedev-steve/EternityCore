@@ -11,6 +11,7 @@
 #include "Commander/Perception/Forecast/ThreatHistory.h"
 #include "Commander/Perception/Forecast/CombatRates.h"
 #include "Commander/Perception/Spatial/MeleeRoutes.h"
+#include "Commander/Perception/Spatial/PositionFieldBuilder.h"
 #include "Commander/Perception/Forecast/FleePredictor.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
@@ -114,6 +115,7 @@ namespace Commander
         ThreatHistory m_threatHistory;
         CombatRates m_combatRates;
         MeleeRoutes m_meleeRoutes;
+        PositionFieldBuilder m_positionField;
         FleePredictor m_fleePredictor;
         ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh

@@ -19,6 +19,8 @@
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai threat watch [off|target|all]   addon threat meter feed (ThreatFeed.h)
  *   .partybot ai packs               out-of-combat packs within 50 yards
+ *   .partybot ai field               position field (PositionField.h): size, build cost, the
+ *                                    cell you stand on and each member's grid walk to it
  *   .partybot ai plan                team plan: pull state, focus and intercepts, interrupt abilities and duties
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
  *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
@@ -48,6 +50,7 @@
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Commands/ProfileCommands.h"
+#include "Commander/Perception/Spatial/PositionField.h"
 #include "Creature.h"
 #include <algorithm>
 #include <cstdlib>
@@ -691,6 +694,70 @@ namespace
         return true;
     }
 
+    // .partybot ai field
+    bool ShowField(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        Commander::WorldModel const& world = commander->GetWorld();
+        Map* map = player->GetMap();
+        ShowAge(handler, world);
+        Commander::PositionField const* field = world.field.get();
+        if (!field)
+        {
+            handler->SendSysMessage("No position field: the party is not fighting and no pull runs.");
+            return true;
+        }
+        Commander::FieldStats const& s = field->stats;
+        handler->PSendSysMessage("Field v%u: %u blocks, %u standable cells, %u covered by %u idle creatures, %u on a patrol's way",
+            field->worldVersion, s.blocks, s.standable, s.idleCells, uint32(field->Idle().size()), s.patrolCells);
+        handler->PSendSysMessage("Build %u us (max %u), %u new cells, %u navmesh queries, %u sight checks%s%s",
+            s.buildMicros, s.maxBuildMicros, s.newCells, s.navQueries, s.sightChecks,
+            s.navmesh ? "" : ", no navmesh (heights only)", s.budgetHit ? ", budget hit (rest next refresh)" : "");
+
+        Commander::Position3 here;
+        here.x = player->GetPositionX();
+        here.y = player->GetPositionY();
+        here.z = player->GetPositionZ();
+        int32 const cx = Commander::PositionField::CellOf(here.x), cy = Commander::PositionField::CellOf(here.y);
+        Commander::FieldCell const* cell = field->At(cx, cy);
+        if (!cell)
+        {
+            handler->SendSysMessage("You stand outside the field.");
+            return true;
+        }
+        static char const* const DIRS[Commander::FIELD_DIRS] = { "E", "NE", "N", "NW", "W", "SW", "S", "SE" };
+        std::string links;
+        for (uint8 d = 0; d < Commander::FIELD_DIRS; ++d)
+            if (cell->links & (1 << d))
+                links += std::string(links.empty() ? "" : " ") + DIRS[d];
+        std::string idle;
+        for (uint32 i = 0; i < field->Idle().size(); ++i)
+            if (cell->idle & (uint64(1) << i))
+                idle += (idle.empty() ? "" : ", ") + NameOf(map, field->Idle()[i].guid) +
+                        (field->Idle()[i].sightChecked ? "" : " (distance only)");
+        handler->PSendSysMessage("Your cell (%d, %d): %s, ground %.1f (you %.1f), links [%s]",
+            cx, cy, cell->standable ? "standable" : "not standable", cell->z, here.z, links.c_str());
+        handler->PSendSysMessage("  idle: %s; patrol: %s", idle.empty() ? "none" : idle.c_str(),
+            cell->patrolSec < 0.0f ? "none" : (std::to_string(int32(cell->patrolSec)) + " s").c_str());
+        for (Commander::PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet || m.guid == player->GetObjectGuid())
+                continue;
+            float const walk = field->WalkYd(m, here);
+            float const dx = m.pos.x - here.x, dy = m.pos.y - here.y;
+            if (walk < 0.0f)
+                handler->PSendSysMessage("  %s: no grid walk here (straight %.1f yd)", NameOf(map, m.guid).c_str(),
+                    std::sqrt(dx * dx + dy * dy));
+            else
+                handler->PSendSysMessage("  %s: grid walk %.1f yd (straight %.1f yd)", NameOf(map, m.guid).c_str(),
+                    walk, std::sqrt(dx * dx + dy * dy));
+        }
+        return true;
+    }
+
     // .partybot ai healsim <amount> [healer]   heal target = your selection, or yourself
     bool HealSim(ChatHandler* handler, Player* player, uint32 amount, char const* healerName, Unit* target)
     {
@@ -975,11 +1042,13 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
-        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace"))
+        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
-        if (!strcmp(sub, "pullmethod"))
+        if (!strcmp(sub, "field"))
+            ok = ShowField(this, player);
+        else if (!strcmp(sub, "pullmethod"))
             ok = SetPullMethod(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "pullplace"))
             ok = SetPullPlace(this, player, ExtractLiteralArg(&args));
@@ -1022,7 +1091,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }
