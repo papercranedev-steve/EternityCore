@@ -2900,7 +2900,8 @@ bool CombatBotBaseAI::CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const*
     {
         float const dist = me->GetCombatDistance(pTarget);
 
-        if (dist > srange->maxRange)
+        // Fix: with the caster's range talents (Arctic Reach: Frostbolt 36 yd), as Spell::CheckRange.
+        if (dist > SpellMaxRange(me, pSpellEntry))
             return false;
         if (srange->minRange && dist < srange->minRange)
             return false;
@@ -2986,6 +2987,16 @@ uint32 CombatBotBaseAI::GetRequiredAmmoSubClass(Player const* player)
         default:
             return 0;
     }
+}
+
+float CombatBotBaseAI::SpellMaxRange(Unit const* caster, SpellEntry const* spell)
+{
+    SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spell->rangeIndex);
+    float range = Spells::GetSpellMaxRange(srange);
+    if (caster)
+        if (Player* modOwner = caster->GetSpellModOwner())
+            modOwner->ApplySpellMod(spell->Id, SPELLMOD_RANGE, range, nullptr, false);
+    return range;
 }
 
 bool CombatBotBaseAI::HasAmmoEquipped(Player const* player)

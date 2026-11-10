@@ -65,13 +65,13 @@ namespace WorldModelBuilder
         }
 
         // An ability's reach (centre distance minus the target's bounding radius): COMBAT_RANGE
-        // for combat range spells, else the DBC range, at least `floor`.
-        float AbilityRange(SpellEntry const* spell, float floor)
+        // for combat range spells, else the DBC range with the caster's range talents
+        // (CombatBotBaseAI::SpellMaxRange), at least `floor`.
+        float AbilityRange(Unit const* caster, SpellEntry const* spell, float floor)
         {
             if (spell->rangeIndex == SPELL_RANGE_IDX_COMBAT)
                 return COMBAT_RANGE;
-            SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-            return std::max(range ? range->maxRange : 0.0f, floor);
+            return std::max(CombatBotBaseAI::SpellMaxRange(caster, spell), floor);
         }
 
         void FillUnitFacts(Unit const* unit, PartyMemberFacts& f)
@@ -248,7 +248,7 @@ namespace WorldModelBuilder
 
             InterruptAbility a;
             a.spellId = spell->Id;
-            a.maxRange = AbilityRange(spell, 5.0f);
+            a.maxRange = AbilityRange(me, spell, 5.0f);
             a.cooldownMs = spell->GetRecoveryTime();
             a.lockoutMs = LockoutMs(spell);
             a.mechanicMask = SpellTags::StopMechanicMask(spell);
@@ -593,8 +593,7 @@ namespace WorldModelBuilder
                 }
                 if (!a.dispelMask)
                     continue;
-                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-                a.maxRange = range ? range->maxRange : 30.0f;
+                a.maxRange = sSpellRangeStore.LookupEntry(spell->rangeIndex) ? CombatBotBaseAI::SpellMaxRange(me, spell) : 30.0f;
                 a.ready = !f.controlled && !f.silenced && me->IsSpellReady(spell) &&
                           me->GetPower(Powers(spell->powerType)) >= Spell::CalculatePowerCost(spell, me) &&
                           spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
@@ -625,7 +624,7 @@ namespace WorldModelBuilder
                 a.creatureTypeMask = spell->TargetCreatureType;
                 a.mechanicMask = SpellTags::StopMechanicMask(spell);
                 a.school = uint8(spell->School);
-                a.maxRange = AbilityRange(spell, 5.0f);
+                a.maxRange = AbilityRange(me, spell, 5.0f);
                 // Area around the caster (Psychic Scream, Howl of Terror; Intimidating Shout
                 // fears everyone around, its target only cowers): a radius on a control effect.
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -709,7 +708,7 @@ namespace WorldModelBuilder
                     continue;
                 if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY)
                     a.radius = 0.0f;
-                a.maxRange = AbilityRange(spell, 5.0f);
+                a.maxRange = AbilityRange(me, spell, 5.0f);
                 a.castMs = spell->GetCastTime(me);
                 a.cooldownMs = spell->GetRecoveryTime();
                 Powers const powerType = Powers(spell->powerType);
@@ -736,7 +735,7 @@ namespace WorldModelBuilder
                     continue;
                 TauntAbility t;
                 t.spellId = spell->Id;
-                t.maxRange = AbilityRange(spell, 5.0f);
+                t.maxRange = AbilityRange(ai->me, spell, 5.0f);
                 // Taunt 355: RecoveryTime 0, CategoryRecoveryTime 10 s.
                 t.cooldownMs = spell->GetRecoveryTime();
                 t.holdSec = RescueValue::TemporaryTauntSec(spell);
@@ -804,8 +803,7 @@ namespace WorldModelBuilder
                     default:
                         break;
                 }
-                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-                a.maxRange = s.selfOnly ? 0.0f : std::max(range ? range->maxRange : 0.0f, 5.0f);
+                a.maxRange = s.selfOnly ? 0.0f : std::max(CombatBotBaseAI::SpellMaxRange(me, spell), 5.0f);
                 a.cooldownMs = spell->GetRecoveryTime();
                 if (s.allMana)
                     a.manaCost = me->GetPower(POWER_MANA);
@@ -903,8 +901,7 @@ namespace WorldModelBuilder
                     a.mana = DamageSpells::ManaCost(me, spell);
                     a.radius = SpellTags::AreaRadius(spell);
                     if (k.onTarget)
-                        if (SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(spell->rangeIndex))
-                            a.range = range->maxRange;
+                        a.range = CombatBotBaseAI::SpellMaxRange(me, spell);    // Arctic Reach: Blizzard 36 yd
                     a.ready = f.CanAct() && !f.silenced && me->IsSpellReady(spell) &&
                               a.mana <= float(me->GetPower(POWER_MANA));
                     f.areaSpells.push_back(a);

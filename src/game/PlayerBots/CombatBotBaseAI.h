@@ -164,6 +164,9 @@ public:
     static uint32 GetRequiredAmmoSubClass(Player const* player);
     // The ammo slot holds ammo that is still in the bags (needed by Shoot Bow/Gun/Crossbow, Auto Shot).
     static bool HasAmmoEquipped(Player const* player);
+    // The spell's DBC max range with the caster's range modifiers (Arctic Reach, Flame
+    // Throwing, Hawk Eye...), as Spell::CheckRange applies them; without the server's leeway.
+    static float SpellMaxRange(Unit const* caster, SpellEntry const* spell);
     // Out of combat: ranged weapon needs ammo and none is equipped -> put the best usable ammo
     // already in the bags into the ammo slot. Never creates items (bots are the user's own
     // characters; AddHunterAmmo is the hunter-only fallback in combat). True = slot set.

@@ -134,8 +134,7 @@ namespace Commander
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
         if (!spell)
             return 0;
-        SpellRangeEntry const* srange = sSpellRangeStore.LookupEntry(spell->rangeIndex);
-        float const maxRange = srange ? srange->maxRange : 0.0f;
+        float const maxRange = CombatBotBaseAI::SpellMaxRange(tank, spell);  // Hawk Eye etc.
         if (maxRange < 10.0f)
             return 0;
         range = std::min(PULL_RANGE, maxRange);
