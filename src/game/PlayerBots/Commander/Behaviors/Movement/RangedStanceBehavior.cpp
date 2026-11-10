@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "PartyBotAI.h"
@@ -40,18 +41,18 @@ namespace Commander
 
         // Field cells MIN_RADIUS..MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the
         // victim's edge, outside areas dangerous to ranged; shortest walk first. The field drops
-        // cells off the ground, under an idle creature, on a patrol's way before the fight ends,
+        // cells off the ground, under an idle creature, on a patrol's way before `staySec`,
         // and cells the bot cannot walk to.
         std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
                                      std::vector<HazardZone> const& zones, Position3 const& victim,
-                                     float victimReach, bool prepare)
+                                     float victimReach, bool prepare, float staySec)
         {
             std::vector<Spot> spots;
             FieldSpots::Query q;
             q.center = victim;
             q.minYd = RS::MIN_RADIUS + victimReach;
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
-            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            q.patrolBeforeSec = staySec;
             for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
@@ -173,7 +174,8 @@ namespace Commander
         if (!world.field)
             return;     // built while the party fights or a pull runs (PositionFieldBuilder)
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare);
+        // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
+        std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, RouteGuard::StaySec(world, plan));
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;

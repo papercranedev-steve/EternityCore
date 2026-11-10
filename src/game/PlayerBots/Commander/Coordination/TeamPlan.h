@@ -488,6 +488,31 @@ namespace Commander
         }
     };
 
+    // A member stands (or walks to) where an idle patrol comes before we leave
+    // (RouteGuardAssigner): it walks off the route now (OffRouteBehavior, Urgent).
+    struct OffRouteTask
+    {
+        ObjectGuid bot;
+        ObjectGuid patrol;          // the first patrol to come there
+        float arriveSec = 0.0f;     // it comes in this many seconds (from the refresh)
+        float leaveSec = -1.0f;     // grid walk to the nearest cell off the route, -1 = none found
+        float points = 0.0f;        // what the patrol joining costs (RouteGuard.h)
+    };
+
+    struct RouteGuardPlan
+    {
+        float staySec = 0.0f;       // RouteGuard::StaySec of this refresh (for the logs)
+        std::vector<OffRouteTask> tasks;
+
+        OffRouteTask const* Find(ObjectGuid bot) const
+        {
+            for (OffRouteTask const& t : tasks)
+                if (t.bot == bot)
+                    return &t;
+            return nullptr;
+        }
+    };
+
     // Who stops casts of one enemy. Backup acts when the primary cannot (see InterruptBehavior).
     struct InterruptDuty
     {
@@ -885,6 +910,7 @@ namespace Commander
         ClearPlan clear;
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
+        RouteGuardPlan routeGuard;
         AreaPlan area;
         ThreatOpeningPlan threat;
         DoctrinePlan doctrine;

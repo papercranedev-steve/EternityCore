@@ -279,6 +279,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlace.h
   ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.h
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

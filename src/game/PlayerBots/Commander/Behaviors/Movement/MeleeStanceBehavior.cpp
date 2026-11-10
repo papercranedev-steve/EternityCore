@@ -8,6 +8,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"     // InPath: pure, facts only
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"         // StaySec: pure
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "Timer.h"
@@ -141,8 +142,8 @@ namespace Commander
         }
 
         // No enemy it can walk to: wait near the tank (the leader without one).
-        void ProposeWait(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
-                         std::vector<Proposal>& out)
+        void ProposeWait(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                         PartyMemberFacts const& self, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             PartyMemberFacts const* anchor = Tanks::Main(world);
@@ -172,7 +173,7 @@ namespace Commander
             q.center = a;
             q.minYd = MS::WAIT_MIN_YD;
             q.maxYd = MS::WAIT_MAX_YD;
-            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
             std::vector<FieldSpots::Spot> spots = FieldSpots::Collect(world, self, q);
             auto const walk = [](FieldSpots::Spot const& s) { return s.WalkEstimate(MS::PATH_FACTOR); };
             std::sort(spots.begin(), spots.end(), [&walk](FieldSpots::Spot const& x, FieldSpots::Spot const& y)
@@ -265,6 +266,6 @@ namespace Commander
         if (enemy && enemy->IsAlive() && bot->IsValidHostileTarget(enemy) &&
             ProposeChase(bot, world, plan, *self, enemy, out))
             return;
-        ProposeWait(bot, world, *self, out);
+        ProposeWait(bot, world, plan, *self, out);
     }
 }

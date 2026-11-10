@@ -4,6 +4,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "PartyBotAI.h"
@@ -395,7 +396,8 @@ namespace Commander
             q.center = ctx.anchor;
             q.minYd = RELAXED_MIN_YD;
             q.maxYd = ctx.prepare ? PREPARE_MAX_YD : RELAXED_MAX_YD;
-            q.patrolBeforeSec = Value::FightRemainingSec(world);
+            // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
+            q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
             cells = FieldSpots::Collect(world, *ctx.self, q);
         }
 
