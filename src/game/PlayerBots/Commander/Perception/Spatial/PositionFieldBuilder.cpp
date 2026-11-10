@@ -88,7 +88,10 @@ namespace Commander
     {
         auto const started = std::chrono::steady_clock::now();
         bool const pulling = plan.pull.phase != PullPhase::None;
-        if (!map || (!world.HasPartyEnemy() && !pulling))
+        // A member in combat counts too (WorldModel::InFight of a bot that joined an ally's fight).
+        bool const anyInCombat = std::any_of(world.party.begin(), world.party.end(),
+            [](PartyMemberFacts const& m) { return m.inCombat && m.alive; });
+        if (!map || (!world.HasPartyEnemy() && !pulling && !anyInCombat))
         {
             world.field.reset();
             m_field.reset();
@@ -102,8 +105,7 @@ namespace Commander
             if (!m.isPet && m.alive)
                 seeds.push_back(m.pos);
         for (EnemyFacts const& e : world.enemies)
-            if (!e.onAllyOnly)
-                seeds.push_back(e.pos);
+            seeds.push_back(e.pos);
         if (pulling)
         {
             Position3 spot;

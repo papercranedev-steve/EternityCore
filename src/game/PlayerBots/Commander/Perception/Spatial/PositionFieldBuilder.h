@@ -4,7 +4,8 @@
  *
  * Steps of a build:
  *  1. Blocks: every BLOCK_YD block within COVER_YD of a participant, at most MAX_BLOCKS
- *     (nearest to a participant first). No participant fighting and no pull: no field.
+ *     (nearest to a participant first). Built while the party has an enemy, a pull runs or a
+ *     member is in combat (an ally's fight: WorldModel::InFight); otherwise no field.
  *  2. Ground: flood from the participants' cells. A cell not known yet gets its ground near the
  *     height of the cell it was reached from (navmesh nearest polygon within
  *     SEARCH_HALF_HEIGHT), a pair of neighbours not known yet gets a navmesh raycast. Ground and

@@ -1,5 +1,8 @@
 #include "Commander/Behaviors/Movement/FleePoint.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/FieldSpots.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Group.h"
@@ -81,34 +84,45 @@ namespace FleePoint
             centre = here;
 
         std::vector<Candidate> candidates;
-        auto consider = [&](Position3 p, bool toTank)
+        auto const score = [&](Position3 const& p, bool toTank, Candidate& c) -> bool
         {
-            float const ground = map->GetHeight(p.x, p.y, here.z + MAX_HEIGHT_DIFFERENCE, true, 2.0f * MAX_HEIGHT_DIFFERENCE);
-            if (ground <= INVALID_HEIGHT || std::fabs(ground - here.z) > MAX_HEIGHT_DIFFERENCE)
-                return;
-            p.z = ground;
             float const gap = Distance2d(p, foe);
             if (!toTank && (gap < MIN_ENEMY_GAP || gap < nowGap + MIN_GAIN))
-                return;
-            if (idle.Near(p))
-                return;
-            Candidate c;
+                return false;
             c.pos = p;
             c.score = std::min(gap, ENEMY_DISTANCE_CAP) - CENTRE_WEIGHT * Distance2d(p, centre) + (toTank ? TANK_BONUS : 0.0f);
-            candidates.push_back(c);
+            return true;
         };
 
+        // Party members: ground near the bot's height.
         for (auto const& ally : allies)
-            consider(ally.first, ally.second);
-        for (float distance : RING_DISTANCES)
         {
-            for (uint32 i = 0; i < RING_ANGLES; ++i)
+            Position3 p = ally.first;
+            float const ground = map->GetHeight(p.x, p.y, here.z + MAX_HEIGHT_DIFFERENCE, true, 2.0f * MAX_HEIGHT_DIFFERENCE);
+            if (ground <= INVALID_HEIGHT || std::fabs(ground - here.z) > MAX_HEIGHT_DIFFERENCE)
+                continue;
+            p.z = ground;
+            Candidate c;
+            if (score(p, ally.second, c))
+                candidates.push_back(c);
+        }
+
+        // Cells of the position field around the bot (ground, idle creatures, patrols, a grid
+        // walk there: Perception/Spatial/FieldSpots.h).
+        PositionField const* field = world ? world->field.get() : nullptr;
+        PartyMemberFacts const* self = world ? world->FindMember(me->GetObjectGuid()) : nullptr;
+        if (field && self)
+        {
+            FieldSpots::Query q;
+            q.center = here;
+            q.minYd = CELL_MIN_DISTANCE;
+            q.maxYd = CELL_MAX_DISTANCE;
+            q.patrolBeforeSec = Value::FightRemainingSec(*world);
+            for (FieldSpots::Spot const& s : FieldSpots::Collect(*field, *self, q))
             {
-                float const angle = 2.0f * float(M_PI) * i / RING_ANGLES;
-                Position3 p;
-                p.x = here.x + std::cos(angle) * distance;
-                p.y = here.y + std::sin(angle) * distance;
-                consider(p, false);
+                Candidate c;
+                if (score(s.pos, false, c))
+                    candidates.push_back(c);
             }
         }
 
@@ -118,8 +132,12 @@ namespace FleePoint
         uint32 checks = 0;
         for (Candidate const& c : candidates)
         {
-            if (checks++ >= MAX_PATH_CHECKS)
+            if (checks >= MAX_PATH_CHECKS)
                 break;
+            // This bot's own idle scan at the end (the field uses the farthest reach of the party).
+            if (idle.Near(c.pos))
+                continue;
+            ++checks;
             // The way there must not pass an idle pack either.
             if (!SafeRoute::PathIsSafe(me, idle, c.pos, MAX_PATH_DETOUR))
                 continue;

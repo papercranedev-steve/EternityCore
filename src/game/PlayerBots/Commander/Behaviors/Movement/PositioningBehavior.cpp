@@ -2,6 +2,8 @@
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -31,6 +33,7 @@ namespace Commander
             Position3 victimPos;
             float speed = 7.0f;
             SafeRoute::IdleCreatures const* idle = nullptr;    // creatures not fighting yet, around the bot
+            PositionField const* field = nullptr;               // WorldModel::field: where the spots come from
         };
 
         struct Loss
@@ -42,7 +45,7 @@ namespace Commander
         struct Spot
         {
             Position3 pos;
-            float dist = 0.0f;
+            float dist = 0.0f;          // walk, yards (FieldSpots::Spot::WalkEstimate)
             bool keepsReach = false;    // melee: victim still in melee reach from here
         };
 
@@ -123,11 +126,8 @@ namespace Commander
                 if (Contains(z, p))
                     return false;
             }
-            // Not where an idle creature would attack the bot (SafeRoute: scanned around the
-            // bot itself). Fix: world.packs only covers PACK_SCAN_RADIUS around the leader; a
-            // mage 110 yd away stepped into the next pack (strat-20261101-224637).
-            if (ctx.idle && ctx.idle->Near(p))
-                return false;
+            // (Idle creatures: the field's idle layer drops covered cells, GeometryOk checks the
+            // chosen one against this bot's own scan.)
             if (ctx.roleBit == HAZARD_HEALER && ctx.hasHolder && PackResolver::Distance(p, ctx.holder) > PB::HEAL_RANGE)
                 return false;
             if (ctx.roleBit == HAZARD_RANGED && ctx.victim && PackResolver::Distance(p, ctx.victimPos) > PB::RANGED_RANGE)
@@ -153,51 +153,38 @@ namespace Commander
                    ctx.me->CanReachWithMeleeAutoAttackAtPosition(ctx.victim, p.x, p.y, p.z, -0.5f);
         }
 
-        // Map queries: ground, distance checks again at the real height, line of sight.
-        bool GeometryOk(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                        Spot& s, bool allowRange)
+        // Live checks: not where an idle creature attacks this bot, the one it heals / hits in
+        // sight, a safe path (out of an idle creature's circle it stands in: LeavingFrom).
+        bool GeometryOk(Context const& ctx, Spot const& s)
         {
-            float const ground = ctx.map->GetHeight(s.pos.x, s.pos.y, ctx.here.z + 3.0f);
-            if (ground <= INVALID_HEIGHT || std::fabs(ground - ctx.here.z) > PB::MAX_STEP_Z)
-                return false;
-            s.pos.z = ground;
-            if (!CheapOk(ctx, world, zones, s.pos, allowRange))
-                return false;
-            if (!Los(ctx.map, ctx.here, s.pos))
-                return false;
-            // The straight walk there (line of sight above) must not pass an idle creature either.
-            if (ctx.idle && !SafeRoute::SegmentIsSafe(*ctx.idle, ctx.here, s.pos))
+            if (ctx.idle->Near(s.pos))
                 return false;
             if (ctx.roleBit == HAZARD_HEALER && ctx.hasHolder && !Los(ctx.map, s.pos, ctx.holder))
                 return false;
             if (ctx.roleBit == HAZARD_RANGED && ctx.victim && !Los(ctx.map, s.pos, ctx.victimPos))
                 return false;
-            s.keepsReach = KeepsReach(ctx, s.pos);
-            return true;
+            return SafeRoute::PathIsSafe(ctx.me, ctx.idle->LeavingFrom(ctx.here), s.pos, PB::MAX_PATH_DETOUR);
         }
 
         bool FindSpot(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
                       HazardZone const& zone, bool allowRange, uint32& checks, Spot& out)
         {
+            // Field cells in a band just outside the zone (PositionField.h, FieldSpots.h).
+            FieldSpots::Query q;
+            q.center = zone.center;
+            q.minYd = zone.radius + (ctx.roleBit == HAZARD_MELEE ? PB::MELEE_RING_EXTRA : PB::RING_EXTRA);
+            q.maxYd = zone.radius + PB::RING_EXTRA + PB::SEARCH_BAND_YD;
+            q.patrolBeforeSec = Value::FightRemainingSec(world);
             std::vector<Spot> spots;
-            float radii[2] = { zone.radius + PB::RING_EXTRA, zone.radius + PB::MELEE_RING_EXTRA };
-            uint32 const rings = ctx.roleBit == HAZARD_MELEE ? 2 : 1;
-            float const start = std::atan2(ctx.here.y - zone.center.y, ctx.here.x - zone.center.x);
-            for (uint32 r = 0; r < rings; ++r)
+            for (FieldSpots::Spot const& c : FieldSpots::Collect(*ctx.field, *ctx.self, q))
             {
-                for (uint32 k = 0; k < PB::RING_POINTS; ++k)
-                {
-                    float const a = start + 2.0f * M_PI_F * float(k) / float(PB::RING_POINTS);
-                    Spot s;
-                    s.pos.x = zone.center.x + radii[r] * std::cos(a);
-                    s.pos.y = zone.center.y + radii[r] * std::sin(a);
-                    s.pos.z = ctx.here.z;
-                    if (!CheapOk(ctx, world, zones, s.pos, allowRange))
-                        continue;
-                    s.dist = PackResolver::Distance(ctx.here, s.pos);
-                    s.keepsReach = KeepsReach(ctx, s.pos);
-                    spots.push_back(s);
-                }
+                if (!CheapOk(ctx, world, zones, c.pos, allowRange))
+                    continue;
+                Spot s;
+                s.pos = c.pos;
+                s.dist = c.WalkEstimate(PB::PATH_FACTOR);
+                s.keepsReach = KeepsReach(ctx, s.pos);
+                spots.push_back(s);
             }
             // Melee: points that keep the victim in reach first. Then nearest.
             std::sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b)
@@ -211,7 +198,7 @@ namespace Commander
                 if (checks >= PB::MAX_GEOMETRY_CHECKS)
                     return false;
                 ++checks;
-                if (GeometryOk(ctx, world, zones, s, allowRange))
+                if (GeometryOk(ctx, s))
                 {
                     out = s;
                     return true;
@@ -280,7 +267,7 @@ namespace Commander
         {
             outOfReach = false;
             PartyMemberFacts const& self = *ctx.self;
-            float const walkSec = spot.dist * PB::PATH_FACTOR / ctx.speed;
+            float const walkSec = spot.dist / ctx.speed;      // dist: grid walk (or straight x PATH_FACTOR)
 
             Loss saved, added;
             float awaySec = 0.0f;       // melee: time out of reach (no dodge)
@@ -506,6 +493,10 @@ namespace Commander
             return a->hitChance * HazardZones::HitPoints(world, *a, *ctx.self) / a->intervalSec >
                    b->hitChance * HazardZones::HitPoints(world, *b, *ctx.self) / b->intervalSec;
         });
+
+        ctx.field = world.field.get();
+        if (!ctx.field)
+            return;     // built whenever the party fights (PositionFieldBuilder)
 
         // Scanned only once the bot is in a zone (a grid visit; a few ticks per area).
         SafeRoute::IdleCreatures const idle(me);

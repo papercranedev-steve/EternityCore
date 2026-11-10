@@ -10,18 +10,20 @@
  * Approach / Return phases, out of combat, rooted, or while already walking under a movement
  * hold (a MoveTo of this or another module in progress).
  *
- * Where: RING_POINTS points on a circle around the zone centre, radius = zone radius (spell
- * radius + 1) + RING_EXTRA (melee also + MELEE_RING_EXTRA, to stay in reach of a large target).
- * A point is kept when:
+ * Where (since 2026-11-10, position field step B): cells of the position field
+ * (WorldModel::field, FieldSpots::Collect) in a band around the zone centre from zone radius
+ * (spell radius + 1) + RING_EXTRA (melee: + MELEE_RING_EXTRA, to stay in reach of a large
+ * target) out to zone radius + RING_EXTRA + SEARCH_BAND_YD. The field already drops cells off
+ * the ground or cut off from the party, cells an idle creature covers, cells a patrol reaches
+ * before the fight ends and cells the bot cannot walk to around idle creatures; a long slope
+ * stays usable (the ring before compared heights with the bot's own). A cell is kept when:
  *  - it is outside every zone dangerous to this role (second pass: Range zones may stay);
- *  - no creature that is not fighting yet would attack the bot there, nor along the straight
- *    walk there (SafeRoute::IdleCreatures scanned around the bot: aggro range + margin, LOS);
- *  - healer: the holder (tank bot, or whoever most enemies are hitting) is within HEAL_RANGE
- *    and in line of sight; ranged: the current victim is within RANGED_RANGE and in sight;
- *  - ground found within MAX_STEP_Z of the bot (Map::GetHeight), and line of sight from the
- *    bot to the point (stand-in for "reachable"; MovePoint then path-finds).
- * Nearest first (melee: points that keep melee reach first). The map queries run for at most
- * MAX_GEOMETRY_CHECKS points per tick.
+ *  - healer: the holder (tank bot, or whoever most enemies are hitting) is within HEAL_RANGE;
+ *    ranged: the current victim is within RANGED_RANGE.
+ * Shortest grid walk first (melee: cells that keep melee reach first). Live checks on at most
+ * MAX_GEOMETRY_CHECKS cells per tick: no idle creature attacks this bot there (its own scan),
+ * the holder / victim in line of sight, SafeRoute::PathIsSafe (detour MAX_PATH_DETOUR, out of
+ * an idle circle the bot stands in: LeavingFrom). No field: nothing is proposed.
  *
  * Value (points, value-scoring doc): benefit - cost.
  *  hits(zone) over H = min(max(HORIZON_SEC, repeat delay), MAX_HORIZON_SEC, fight remaining):
@@ -59,12 +61,10 @@
  * Timing: a refresh that sees the bot inside such a zone wakes it (WantsTickNow); a bot busy
  * with its own cast stops it when staying until the cast ends costs more (CastBreakBenefit).
  *
- * Known limits: stand-in reachability (line of sight, not a path: corridors, stairs and
- * ledges can still fail, MovePoint then walks around, and the idle creature check covers the
- * straight walk, not that detour); zones are
+ * Known limits: cells are 2 yd (the spot is a cell centre); zones are
  * from the last refresh (moving casters); the chase (ranged at 25 yd, melee) may still walk
  * the bot back in after the hold, the next tick then moves it out again; spell immunities and
- * resistances are not checked; only one ring around one zone at a time (overlapping zones
+ * resistances are not checked; only one band around one zone at a time (overlapping zones
  * from different enemies can leave no candidate, then nothing is proposed); the melee record
  * holds one area (two areas stepped out of in turn re-arm each other).
  */
@@ -82,13 +82,13 @@ namespace Commander
         static constexpr float ENTER_MARGIN = 0.5f;         // yd inside the zone before moving
         static constexpr float RING_EXTRA = 3.0f;           // yd outside the zone radius
         static constexpr float MELEE_RING_EXTRA = 0.5f;     // inner ring for melee
-        static constexpr uint32 RING_POINTS = 12;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 4;    // GetHeight + up to 2 LOS each
+        static constexpr float SEARCH_BAND_YD = 6.0f;       // width of the band of cells looked at
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 4;    // a path and up to 2 LOS each
+        static constexpr float MAX_PATH_DETOUR = 2.0f;
         static constexpr uint32 MAX_ZONES_TRIED = 3;
 
         static constexpr float HEAL_RANGE = 28.0f;          // healer to holder (heals are 40, 30 for some)
         static constexpr float RANGED_RANGE = 30.0f;        // conservative spell / shot range
-        static constexpr float MAX_STEP_Z = 4.0f;           // ground height change accepted
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
 
         static constexpr float HORIZON_SEC = 6.0f;
