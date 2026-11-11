@@ -12,18 +12,22 @@
  * UsesCasterChase) and moves the bot itself. Bots that fight in melee (no mana, no ranged
  * weapon, a form) keep the original chase.
  *
- * When to move (checked every tick):
- *  - the bot stands where an idle creature would attack it, also once a wanderer walked to the
- *    edge of its circle (SafeRoute::IdleCreatures::Near): a constraint, tier Urgent;
- *  - the victim is farther than CAST_RANGE (to its edge) or out of line of sight: tier
- *    Assigned, benefit = the bot's lost action over HORIZON_SEC (it cannot do its job);
- *  - (2026-11-10, user: squishy casters stand well back) an enemy that fights someone else is
- *    within TRIGGER_ENEMY_GAP: tier Assigned, benefit = Exposure::LossAt(here) - LossAt(there)
- *    (Perception/Values/Exposure.h, the healer stance's term); within DANGER_ENEMY_GAP: tier
- *    Urgent, score -walk seconds. The new cell is at least MIN_ENEMY_GAP from those enemies.
- *    Not before the fight, not for the area phase's caster (it picked where it casts from).
- * Order of the cells (every case): LostAction of the walk + Exposure::LossAt, lowest first, so
- * among cells in range the one farther from the enemies wins when the walk costs about the same.
+ * When to move (checked every tick; since 2026-11-11 the current spot against the best cell,
+ * doc .kiro/docs/2026-11-11-spot-scoring.md step 2):
+ *  - the spot here is no longer valid: an idle creature would attack it, also once a wanderer
+ *    walked to the edge of its circle (SafeRoute::IdleCreatures::Near; tier Urgent), or the
+ *    victim is farther than CAST_RANGE (to its edge) or out of line of sight (tier Assigned,
+ *    benefit = the bot's lost action over HORIZON_SEC: it cannot do its job). Then the best
+ *    cell that passes the live checks.
+ *  - otherwise: loss here = Exposure::LossAt(here) (Perception/Values/Exposure.h, the enemies
+ *    that fight someone else turning to the bot; the walk here is 0). A cell is taken when its
+ *    loss (SpotCost::Walk + Exposure::LossAt) is lower by more than SpotCost::Walk(
+ *    MOVE_MARGIN_SEC): tier Assigned, benefit = the exposure saved, cost = the walk. So the bot
+ *    stands back as far as the walk is worth it, with no distance lines (the 12 / 14 yd lines
+ *    of 2026-11-10 are gone). Still within DANGER_ENEMY_GAP of such an enemy's edge: tier
+ *    Urgent, score -walk seconds (the tier rule stays, doc section 5.6).
+ *    No exposure before the fight and for the area phase's caster (it picked where it casts
+ *    from): there the walk alone orders the cells, and a valid spot is kept.
  * Before the fight (2026-11-07): out of combat while the pull runs, the brain's planned fight
  * spot (PullPlan::PlannedFightSpot; the idle pack itself for a walk-in fought where it stands)
  * instead of a victim, same checks, rings PREPARE_RADII (one more at 28 yd); value
@@ -38,7 +42,9 @@
  * not stop the walk).
  *
  * Where (since 2026-11-10, position field step C): cells of the position field
- * (FieldSpots::Collect) MIN_RADIUS..MAX_RADIUS from the victim's edge (before the fight out to
+ * (FieldSpots::Collect) up to MAX_RADIUS from the victim's edge (no inner limit since
+ * 2026-11-11: near cells lose on exposure; MAX_RADIUS < CAST_RANGE leaves room for the victim
+ * to move before the spot is out of range) (before the fight out to
  * PREPARE_MAX_RADIUS: a walk-in fought where the pack stands has the idle pack as the anchor,
  * the near cells lie in its aggro range). The field drops cells off the ground or cut off from
  * the party (a slope is fine; the rings before compared heights with the victim's), under an
@@ -46,8 +52,10 @@
  * Kept: outside areas dangerous to ranged (HazardZones). Shortest grid walk first. Live checks
  * on at most MAX_GEOMETRY_CHECKS cells per tick: this bot's own idle scan, line of sight to the
  * victim, SafeRoute::PathIsSafe. Nothing found, or no field: the bot stays (no chase into a pack).
- * Cost = Value::LostAction(bot, walk seconds), walk = the grid walk. holdMs = walk seconds x
- * 1000 + HOLD_EXTRA_MS.
+ * Cost = SpotCost::Walk(bot, walk seconds), walk = the grid walk at the bot's run speed.
+ * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS.
+ * Hazard zones stay an exclusion here (PositioningBehavior owns leaving them); they become a
+ * SpotCost::Hazard term once that module moves to the same scoring.
  */
 
 #ifndef MANGOS_COMMANDER_RANGED_STANCE_BEHAVIOR_H
@@ -62,16 +70,15 @@ namespace Commander
     public:
         // Trigger: the victim farther than this from its edge (spells and wands reach 30).
         static constexpr float CAST_RANGE = 29.0f;
-        // Distances from the victim's edge (the rings before: 25, 20, 15; 28 before the fight).
-        static constexpr float MIN_RADIUS = 14.0f;
+        // Farthest candidate cell from the victim's edge (28 before the fight).
         static constexpr float MAX_RADIUS = 26.0f;
         static constexpr float PREPARE_MAX_RADIUS = 28.0f;
-        // Too close (2026-11-10): an enemy fighting someone else nearer than this to its edge:
-        // move (Assigned, valued); the new cell at least MIN_ENEMY_GAP from every such enemy.
-        // Nearer than DANGER_ENEMY_GAP: a constraint, Urgent. Same lines as the healer stance.
-        static constexpr float TRIGGER_ENEMY_GAP = 12.0f;
-        static constexpr float MIN_ENEMY_GAP = 14.0f;
+        // Nearer than this to the edge of an enemy fighting someone else: the move is Urgent
+        // (same line as the healer stance; the tier only, not where to go).
         static constexpr float DANGER_ENEMY_GAP = 8.0f;
+        // A valid spot is left only for a cell that saves more than this many seconds of the
+        // bot's action (doc 2026-11-11-spot-scoring.md section 5.3; noise, the walk is in the loss).
+        static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;

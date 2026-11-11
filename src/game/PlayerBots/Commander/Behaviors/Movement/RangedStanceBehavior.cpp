@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/Exposure.h"
+#include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
@@ -36,45 +37,42 @@ namespace Commander
         struct Spot
         {
             Position3 pos;
-            float walk = 0.0f;
-            float loss = 0.0f;      // points: the walk + the enemies' exposure there, lower first
+            float walkSec = 0.0f;
+            float exposure = 0.0f;  // points: Exposure::LossAt there
+            float loss = 0.0f;      // points: SpotCost::Walk + exposure, lower first
             bool taken = false;     // FieldSpots::Spot::taken
         };
 
-        // Field cells MIN_RADIUS..MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the
-        // victim's edge, outside areas dangerous to ranged, at least `minGap` from every enemy of
-        // `turnable`; lowest loss first (LostAction of the walk + Exposure::LossAt). The field
+        // Field cells up to MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the victim's
+        // edge, outside areas dangerous to ranged; lowest loss first (header "Where"). The field
         // drops cells off the ground, under an idle creature, on a patrol's way before `staySec`,
-        // and cells the bot cannot walk to.
+        // and cells the bot cannot walk to. `turnable` empty: the walk alone.
         std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
                                      std::vector<HazardZone> const& zones, Position3 const& victim,
-                                     float victimReach, bool prepare, float staySec,
-                                     std::vector<EnemyFacts const*> const& turnable, float minGap)
+                                     float victimReach, bool prepare, float staySec, float speed,
+                                     std::vector<EnemyFacts const*> const& turnable)
         {
-            float const speed = 7.0f;   // LostAction of the walk: the order only, the proposal uses the bot's speed
             std::vector<Spot> spots;
             FieldSpots::Query q;
             q.center = victim;
-            q.minYd = RS::MIN_RADIUS + victimReach;
+            q.minYd = 0.0f;
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
             q.patrolBeforeSec = staySec;
             for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
                     continue;
-                if (minGap > 0.0f && std::any_of(turnable.begin(), turnable.end(),
-                        [&c, minGap](EnemyFacts const* e) { return Exposure::Gap(*e, c.pos) < minGap; }))
-                    continue;
                 Spot s;
                 s.pos = c.pos;
-                s.walk = c.WalkEstimate(RS::PATH_FACTOR);
-                s.loss = Value::LostAction(world, self, s.walk / speed) + Exposure::LossAt(world, self, turnable, c.pos);
+                s.walkSec = c.WalkEstimate(RS::PATH_FACTOR) / speed;
+                s.exposure = Exposure::LossAt(world, self, turnable, c.pos);
+                s.loss = SpotCost::Walk(world, self, s.walkSec) + s.exposure;
                 s.taken = c.taken;
                 spots.push_back(s);
             }
             std::sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.loss < b.loss; });
             // Equally good: within one cell of walk.
-            float const tie = Value::LostAction(world, self, PositionField::CELL_YD * RS::PATH_FACTOR / speed);
+            float const tie = SpotCost::Walk(world, self, PositionField::CELL_YD * RS::PATH_FACTOR / speed);
             FieldSpots::PreferFree(spots, [](Spot const& s) { return s.loss; }, [](Spot const& s) { return s.taken; }, tie);
             return spots;
         }
@@ -179,37 +177,45 @@ namespace Commander
 
         SafeRoute::IdleCreatures const idle(me);
         bool const unsafe = idle.Near(here);
-        // Too close to enemies fighting someone else (2026-11-10, user: squishy casters stand
-        // well back; Perception/Values/Exposure.h). Not the area caster: the area phase picked
-        // where it casts from.
-        std::vector<EnemyFacts const*> const turnable = Exposure::Turnable(world, self->guid);
+        // The enemies' exposure (2026-11-10, user: squishy casters stand well back;
+        // Perception/Values/Exposure.h). Not before the fight, not for the area caster: the
+        // area phase picked where it casts from.
+        bool const useExposure = !prepare && !plan.area.CastBy(self->guid);
+        std::vector<EnemyFacts const*> const turnable =
+            useExposure ? Exposure::Turnable(world, self->guid) : std::vector<EnemyFacts const*>();
         float gapHere = 1000.0f;
         for (EnemyFacts const* e : turnable)
             gapHere = std::min(gapHere, Exposure::Gap(*e, here));
-        bool const tooClose = !prepare && !plan.area.CastBy(self->guid) && gapHere < TRIGGER_ENEMY_GAP;
-        bool const danger = tooClose && gapHere < DANGER_ENEMY_GAP;
-        if (!unsafe && inReach && !tooClose)
+        bool const danger = gapHere < DANGER_ENEMY_GAP;
+        float const exposureHere = Exposure::LossAt(world, *self, turnable, here);
+        // The spot here is still good (header "When"): a cell must save more than the margin.
+        bool const hereValid = !unsafe && inReach;
+        float const margin = SpotCost::Walk(world, *self, MOVE_MARGIN_SEC);
+        if (hereValid && exposureHere <= margin)
             return;
 
         if (!world.field)
             return;     // built while the party fights or a pull runs (PositionFieldBuilder)
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
+        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
         // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
         std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, RouteGuard::StaySec(world, plan),
-                                             turnable, tooClose ? MIN_ENEMY_GAP : 0.0f);
+                                             speed, turnable);
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
         uint32 checks = 0;
         for (Spot const& s : spots)
         {
+            // Sorted: no cell further down saves more than this one.
+            if (hereValid && exposureHere - s.loss <= margin)
+                return;
             if (checks >= MAX_GEOMETRY_CHECKS)
                 break;
             ++checks;
             if (!GeometryOk(me, idle, pathIdle, at, s))
                 continue;
 
-            float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
-            float const walkSec = s.walk / speed;
+            float const walkSec = s.walkSec;
             float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
             Proposal p;
             p.source = "rangedstance";
@@ -239,11 +245,10 @@ namespace Commander
             {
                 p.tier = ProposalTier::Assigned;
                 p.reason = inReach ? "too close to the enemies" : "victim out of range or sight";
-                // Out of reach: it cannot do its job. Too close: the exposure the walk saves.
+                // Out of reach: it cannot do its job. Plus the exposure the walk saves.
                 float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
-                benefit += std::max(0.0f, Exposure::LossAt(world, *self, turnable, here) -
-                                          Exposure::LossAt(world, *self, turnable, s.pos));
-                p.SetValue(benefit, Value::LostAction(world, *self, walkSec));
+                benefit += std::max(0.0f, exposureHere - s.exposure);
+                p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
             }
             out.push_back(p);
             return;
