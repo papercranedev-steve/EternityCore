@@ -25,11 +25,12 @@
  * the holder / victim in line of sight, SafeRoute::PathIsSafe (detour MAX_PATH_DETOUR, out of
  * an idle circle the bot stands in: LeavingFrom). No field: nothing is proposed.
  *
- * Value (points, value-scoring doc): benefit - cost.
+ * Value (points, value-scoring doc): benefit - cost. Hits and their points are
+ * Perception/Values/SpotCost.h (ZoneHits, Dodges, AddZoneLoss); the horizon below is this module's.
  *  hits(zone) over H = min(max(HORIZON_SEC, repeat delay), MAX_HORIZON_SEC, fight remaining):
  *    Pulse        H / period
  *    Burst/Range  H / repeat delay; while the enemy casts it: 1 + (H - remaining) / repeat
- *                 when the bot gets out before the cast ends (walk + DODGE_SLACK_SEC <= remaining),
+ *                 when the bot gets out before the cast ends (walk + SpotCost::DODGE_SLACK_SEC <= remaining),
  *                 else the current cast lands anyway and only later casts are saved.
  *  benefit = sum over zones left of hits x hitChance x HazardZones::HitPoints
  *            - the same for zones newly entered (second pass only)
@@ -93,7 +94,6 @@ namespace Commander
 
         static constexpr float HORIZON_SEC = 6.0f;
         static constexpr float MAX_HORIZON_SEC = 20.0f;
-        static constexpr float DODGE_SLACK_SEC = 0.3f;      // out this long before the cast ends
         static constexpr float PATH_FACTOR = 1.2f;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
         static constexpr float MELEE_AWAY_MAX_SEC = 4.0f;   // melee out of reach (no dodge): longest hold

@@ -5,6 +5,7 @@
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "PartyBotAI.h"
@@ -36,11 +37,7 @@ namespace Commander
             PositionField const* field = nullptr;               // WorldModel::field: where the spots come from
         };
 
-        struct Loss
-        {
-            float points = 0.0f;
-            float damage = 0.0f;        // health, for the death check
-        };
+        using Loss = SpotCost::HazardLoss;
 
         struct Spot
         {
@@ -67,26 +64,19 @@ namespace Commander
 
         bool Escapes(HazardZone const& z, float walkSec)
         {
-            return z.casting && walkSec + PB::DODGE_SLACK_SEC <= z.castRemainingSec;
+            return SpotCost::Dodges(z, walkSec);
         }
 
-        // Hits of `z` within its horizon. walkSec < 0: standing in it. Otherwise: hits saved by
-        // leaving with that walk (the cast in progress only if the bot is out before it ends).
+        // Hits of `z` within its horizon (SpotCost::ZoneHits). walkSec < 0: standing in it.
+        // Otherwise: hits saved by leaving with that walk.
         float Hits(WorldModel const& world, HazardZone const& z, float walkSec)
         {
-            float const h = HorizonSec(world, z);
-            if (!z.casting)
-                return h / z.intervalSec;
-            float const later = std::max(0.0f, h - z.castRemainingSec) / z.intervalSec;
-            bool const current = walkSec < 0.0f || Escapes(z, walkSec);
-            return later + (current ? 1.0f : 0.0f);
+            return SpotCost::ZoneHits(z, HorizonSec(world, z), walkSec);
         }
 
         void AddLoss(WorldModel const& world, HazardZone const& z, PartyMemberFacts const& self, float hits, Loss& loss)
         {
-            float const n = hits * z.hitChance;
-            loss.points += n * HazardZones::HitPoints(world, z, self);
-            loss.damage += n * z.damage;
+            SpotCost::AddZoneLoss(world, z, self, hits, loss);
         }
 
         // Healer: the member most enemies are hitting; a tank bot wins ties and counts even
@@ -309,7 +299,7 @@ namespace Commander
 
             float holdSec = walkSec + PB::HOLD_EXTRA_MS / 1000.0f;
             if (dodgeUntil > 0.0f)
-                holdSec = std::max(holdSec, dodgeUntil + PB::DODGE_SLACK_SEC);
+                holdSec = std::max(holdSec, dodgeUntil + SpotCost::DODGE_SLACK_SEC);
             float cost;
             if (ctx.roleBit == HAZARD_MELEE && !spot.keepsReach)
             {
