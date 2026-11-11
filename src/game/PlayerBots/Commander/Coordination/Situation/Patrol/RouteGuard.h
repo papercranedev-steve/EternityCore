@@ -16,11 +16,11 @@
  * The stance modules pass the same to FieldSpots (patrolBeforeSec), so they never pick a spot
  * on the route either.
  *
- * Assign, every refresh with a position field: for each bot member whose cell (where it stands
- * or walks to: PartyMemberFacts::standAt; while it walks, also where it is now) has a patrol
- * coming (FieldCell::patrolSec) before StaySec, an OffRouteTask:
- *   patrol  = the first patrol whose track comes within its zone (aggro reach +
- *             PositionField::PATROL_MARGIN) of the spot;
+ * Assign, every refresh with a position field: for each bot member a patrol comes to
+ * (PatrolZone::ArriveSec; where it stands or walks to: PartyMemberFacts::standAt; while it
+ * walks, also where it is now) before StaySec, an OffRouteTask:
+ *   patrol  = the first patrol to come to the spot (Perception/Spatial/PatrolZone.h, the rule
+ *             every patrol check uses);
  *   points  = Value::Points(its melee x (StaySec - arrival)) + Value::FightExtension(its kill
  *             time): what it costs when it joins (as PatrolAssigner's benefit);
  *   leaveSec= grid walk to the nearest cell off the route within LEAVE_SEARCH_YD, at

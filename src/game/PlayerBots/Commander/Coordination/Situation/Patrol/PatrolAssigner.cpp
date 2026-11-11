@@ -3,6 +3,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -35,16 +36,18 @@ namespace Commander
             return out;
         }
 
-        // First time (seconds from the refresh) the patrol's predicted walk comes within
-        // `radius` of any of `members`, -1 = not within the track (or not within `withinSec`).
-        float FirstTouch(PatrolFacts const& p, std::vector<Position3> const& members, float radius,
-                         float withinSec = FLT_MAX)
+        // First time (seconds from the refresh) the patrol comes to any of `members`
+        // (PatrolZone::ArriveSec), -1 = never within its track.
+        float FirstArrive(WorldModel const& world, PatrolFacts const& p, std::vector<Position3> const& members)
         {
-            for (size_t i = 0; i < p.track.size() && float(i) * p.trackStepSec <= withinSec; ++i)
-                for (Position3 const& m : members)
-                    if (PackResolver::Distance(p.track[i], m) <= radius)
-                        return float(i) * p.trackStepSec;
-            return -1.0f;
+            float best = -1.0f;
+            for (Position3 const& m : members)
+            {
+                float const t = PatrolZone::ArriveSec(world, p, m);
+                if (t >= 0.0f && (best < 0.0f || t < best))
+                    best = t;
+            }
+            return best;
         }
 
         std::string NameOf(uint32 entry, char const* fallback = "patrol")
@@ -88,7 +91,7 @@ namespace Commander
         // along with the tank, nearest ring first; within a ring, farthest from where the
         // patrol arrives first.
         std::vector<Position3> Spots(WorldModel const& world, PatrolFacts const& p, Position3 const& tank,
-                                     Position3 const& arrivesAt, float radius)
+                                     Position3 const& arrivesAt)
         {
             std::vector<Position3> spots;
             float const away = std::atan2(tank.y - arrivesAt.y, tank.x - arrivesAt.x);
@@ -105,8 +108,9 @@ namespace Commander
                     s.z = tank.z;
                     // (the first SPOT_TRACK_SEC of the track: the tracks became a full lap long,
                     // a spot clear of the whole loop is rarely found and not needed)
-                    if (FirstTouch(p, Members(world, s.x - tank.x, s.y - tank.y), radius,
-                                   PatrolAssigner::SPOT_TRACK_SEC) < 0.0f)
+                    std::vector<Position3> const moved = Members(world, s.x - tank.x, s.y - tank.y);
+                    if (std::none_of(moved.begin(), moved.end(), [&](Position3 const& at)
+                        { return PatrolZone::Comes(world, p, at, PatrolAssigner::SPOT_TRACK_SEC); }))
                         spots.push_back(s);
                 }
             }
@@ -255,17 +259,6 @@ namespace Commander
         }
     }
 
-    float PatrolAssigner::ZoneRadius(PatrolFacts const& p)
-    {
-        return p.reach + ZONE_MARGIN;
-    }
-
-    bool PatrolAssigner::InPath(PatrolFacts const& p, Position3 const& pos, float withinSec)
-    {
-        float const t = FirstTouch(p, { pos }, ZoneRadius(p));
-        return t >= 0.0f && t < withinSec;
-    }
-
     PatrolFacts const* PatrolAssigner::FindPatrol(WorldModel const& world, PatrolMovePlan const& m)
     {
         for (PatrolFacts const& p : world.patrols)
@@ -294,7 +287,7 @@ namespace Commander
 
         m.avoid.clear();
         for (EnemyFacts const& e : world.enemies)
-            if (e.health && InPath(*patrol, e.pos, remaining))
+            if (e.health && PatrolZone::Comes(world, *patrol, e.pos, remaining))
                 m.avoid.push_back(e.guid);
 
         if (m.phase == PatrolPhase::Move)
@@ -326,7 +319,7 @@ namespace Commander
 
         // Guard until the patrol walked past: the old fight spot is clear of its walk for the
         // rest of the fight and no enemy stands in it.
-        if ((!InPath(*patrol, m.tankStart, remaining) && m.avoid.empty()) ||
+        if ((!PatrolZone::Comes(world, *patrol, m.tankStart, remaining) && m.avoid.empty()) ||
             WorldTimer::getMSTimeDiff(m.guardSinceMs, world.refreshedAtMs) > GUARD_TIMEOUT_MS)
         {
             End(m);
@@ -382,10 +375,9 @@ namespace Commander
         std::vector<Position3> const members = Members(world, 0.0f, 0.0f);
         for (PatrolFacts const& p : world.patrols)
         {
-            if (!p.aggressive || p.noAggro || p.tappedByOther || p.track.empty() || Contains(m.judged, p.guid))
+            if (!PatrolZone::Counts(p) || Contains(m.judged, p.guid))
                 continue;
-            float const radius = ZoneRadius(p);
-            float const arrive = FirstTouch(p, members, radius);
+            float const arrive = FirstArrive(world, p, members);
             if (arrive < 0.0f || arrive >= remaining)
                 continue;
             if (pullPlacing && arrive > PULL_PLACING_DEFER_SEC)
@@ -400,8 +392,8 @@ namespace Commander
             float const benefit = Value::Points(world, hit * (remaining - arrive + killSec)) +
                                   Value::FightExtension(world, killSec);
 
-            Position3 const arrivesAt = p.track[std::min(p.track.size() - 1, size_t(arrive / p.trackStepSec))];
-            std::vector<Position3> spots = Spots(world, p, tank->pos, arrivesAt, radius);
+            Position3 const arrivesAt = PatrolZone::PositionAt(world, p, arrive);
+            std::vector<Position3> spots = Spots(world, p, tank->pos, arrivesAt);
             if (spots.empty())
             {
                 plan.notes.push_back(Format("%s reaches the fight in about %.0f s (fight about %.0f s left); "

@@ -4,8 +4,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
-#include "Commander/Perception/Spatial/PackResolver.h"
-#include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
 
@@ -13,40 +12,12 @@ namespace Commander
 {
     namespace
     {
-        // A patrol comes to the cell of `at` before `staySec`; its arrival in `arriveSec`.
-        bool OnRoute(PositionField const& field, Position3 const& at, float staySec, float& arriveSec)
+        // A patrol comes to `at` before `staySec` (PatrolZone): which one and when.
+        PatrolFacts const* OnRoute(WorldModel const& world, Position3 const& at, float staySec, float& arriveSec)
         {
-            FieldCell const* c = field.At(at);
-            if (!c || c->patrolSec < 0.0f || c->patrolSec >= staySec)
-                return false;
-            arriveSec = c->patrolSec;
-            return true;
-        }
-
-        // The first patrol whose walk comes within its zone of `at`, and when (-1: none).
-        PatrolFacts const* FirstPatrol(WorldModel const& world, Position3 const& at, float& sec)
-        {
-            PatrolFacts const* best = nullptr;
-            sec = -1.0f;
-            for (PatrolFacts const& p : world.patrols)
-            {
-                if (!p.aggressive || p.noAggro || p.tappedByOther || p.track.empty())
-                    continue;
-                float const radius = p.reach + PositionField::PATROL_MARGIN;
-                for (size_t i = 0; i < p.track.size(); ++i)
-                {
-                    float const t = float(i) * p.trackStepSec;
-                    if (best && t >= sec)
-                        break;
-                    if (PackResolver::Distance(p.track[i], at) <= radius)
-                    {
-                        best = &p;
-                        sec = t;
-                        break;
-                    }
-                }
-            }
-            return best;
+            PatrolFacts const* p = nullptr;
+            arriveSec = PatrolZone::ArriveSec(world, at, &p);
+            return arriveSec >= 0.0f && arriveSec < staySec ? p : nullptr;
         }
 
         bool Exempt(TeamPlan const& plan, PartyMemberFacts const& m)
@@ -97,14 +68,13 @@ namespace Commander
         g.staySec = RouteGuard::StaySec(world, plan);
         if (!world.field || plan.retreat.active || g.staySec <= 0.0f)
             return;
-        PositionField const& field = *world.field;
 
         // A whole fight on the route is PatrolAssigner's (header).
         if (world.HasPartyEnemy())
         {
             float tankArrive = 0.0f;
             if (PartyMemberFacts const* tank = Tanks::Main(world))
-                if (OnRoute(field, tank->pos, g.staySec, tankArrive))
+                if (OnRoute(world, tank->pos, g.staySec, tankArrive))
                     return;
         }
 
@@ -114,26 +84,20 @@ namespace Commander
             if (Exempt(plan, m))
                 continue;
             float arrive = 0.0f;
-            Position3 at = m.standAt;
-            if (!OnRoute(field, at, g.staySec, arrive))
-            {
-                // Walking off already: keep the task until it is off (OffRouteBehavior holds the walk).
-                at = m.pos;
-                if (!OnRoute(field, at, g.staySec, arrive))
-                    continue;
-            }
+            PatrolFacts const* p = OnRoute(world, m.standAt, g.staySec, arrive);
+            // Walking off already: keep the task until it is off (OffRouteBehavior holds the walk).
+            if (!p)
+                p = OnRoute(world, m.pos, g.staySec, arrive);
+            if (!p)
+                continue;
 
             OffRouteTask t;
             t.bot = m.guid;
             t.arriveSec = arrive;
-            float sec = -1.0f;
-            if (PatrolFacts const* p = FirstPatrol(world, at, sec))
-            {
-                t.patrol = p->guid;
-                float const killSec = float(p->health) / dealt;
-                t.points = Value::Points(world, p->meleeDps * std::max(0.0f, g.staySec - arrive)) +
-                           Value::FightExtension(world, killSec);
-            }
+            t.patrol = p->guid;
+            float const killSec = float(p->health) / dealt;
+            t.points = Value::Points(world, p->meleeDps * std::max(0.0f, g.staySec - arrive)) +
+                       Value::FightExtension(world, killSec);
 
             FieldSpots::Query q;
             q.center = m.pos;

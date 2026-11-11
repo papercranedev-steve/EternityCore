@@ -24,9 +24,9 @@
  *  - idle: bit i = idle()[i] would attack a member standing here (AggroRange: aggro range of the
  *    member it reaches farthest + SafeRoute::IDLE_MARGIN, wander circle, height, line of sight;
  *    moving creatures without a wander circle by distance and height only).
- *  - patrolSec: earliest second (from the build) a patrol's zone (aggro range +
- *    PATROL_MARGIN) covers the cell, from PatrolFacts::track (one lap of its path);
- *    NO_PATROL if its walk never comes there.
+ *  - patrolSec: earliest second (from the build) a patrol's zone covers the cell centre, from
+ *    PatrolFacts::track (one lap of its path); NO_PATROL if its walk never comes there. The
+ *    rule is PatrolZone.h (this is its cache): ask PatrolZone for any point.
  * Hazard zones are not stored: HazardZones::IsInside is plain math over a few zones.
  *
  * Walking distance (WalkYd): shortest walk over linked standable cells from a member's cell
@@ -99,7 +99,6 @@ namespace Commander
         static constexpr float BLOCK_YD = CELL_YD * BLOCK_CELLS;
         static constexpr float COVER_YD = 36.0f;
         static constexpr uint32 MAX_IDLE = 64;          // bits of FieldCell::idle
-        static constexpr float PATROL_MARGIN = 5.0f;    // PatrolAssigner::ZONE_MARGIN
 
         static int32 CellOf(float v);
         static int32 BlockOf(int32 cell);

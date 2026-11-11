@@ -1,6 +1,7 @@
 #include "Commander/Perception/Spatial/PositionFieldBuilder.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Trace/Trace.h"
@@ -178,7 +179,7 @@ namespace Commander
         float const radius = 0.5f * std::sqrt((hi.x - lo.x) * (hi.x - lo.x) + (hi.y - lo.y) * (hi.y - lo.y)) +
                              PositionField::COVER_YD;
         BuildIdle(map, world, field, center, radius, nowMs);
-        BuildPatrols(world, field, nowMs);
+        BuildPatrols(world, field);
         Forget(nowMs);
 
         FieldStats& s = field.stats;
@@ -594,7 +595,7 @@ namespace Commander
         return false;
     }
 
-    void PositionFieldBuilder::BuildPatrols(WorldModel const& world, PositionField& field, uint32 nowMs)
+    void PositionFieldBuilder::BuildPatrols(WorldModel const& world, PositionField& field)
     {
         if (field.m_blocks.empty())
             return;
@@ -608,23 +609,22 @@ namespace Commander
         }
         float const minX = bx0 * PositionField::BLOCK_YD, maxX = (bx1 + 1) * PositionField::BLOCK_YD;
         float const minY = by0 * PositionField::BLOCK_YD, maxY = (by1 + 1) * PositionField::BLOCK_YD;
-        // The tracks start at the pack refresh (WorldModel::packsRefreshedAtMs, every
-        // PACK_REFRESH_MS), the field is rebuilt more often: times from now.
-        float const ageSec = WorldTimer::getMSTimeDiff(world.packsRefreshedAtMs, nowMs) / 1000.0f;
+        // The rule of PatrolZone.h, stamped cell by cell (the cell's value = PatrolZone::ArriveSec
+        // at its centre). The tracks start at the pack refresh (WorldModel::packsRefreshedAtMs,
+        // every PACK_REFRESH_MS), the field is rebuilt more often: times from this refresh.
+        float const ageSec = PatrolZone::TrackAgeSec(world);
 
         for (PatrolFacts const& p : world.patrols)
         {
-            if (!p.aggressive || p.noAggro || p.tappedByOther || p.track.empty())
+            if (!PatrolZone::Counts(p))
                 continue;
-            float const radius = p.reach + PositionField::PATROL_MARGIN;
+            float const radius = PatrolZone::Radius(p);
             for (size_t t = 0; t < p.track.size(); ++t)
             {
                 Position3 const& at = p.track[t];
-                if (t > 0 && PackResolver::Distance(at, p.track[t - 1]) < 0.5f)
-                    continue;   // standing: the earlier point already marked it
                 if (at.x + radius < minX || at.x - radius > maxX || at.y + radius < minY || at.y - radius > maxY)
                     continue;
-                float const sec = std::max(0.0f, float(t) * p.trackStepSec - ageSec);
+                float const sec = PatrolZone::SecOf(p, t, ageSec);
                 int32 const cx0 = PositionField::CellOf(at.x - radius), cx1 = PositionField::CellOf(at.x + radius);
                 int32 const cy0 = PositionField::CellOf(at.y - radius), cy1 = PositionField::CellOf(at.y + radius);
                 for (int32 cx = cx0; cx <= cx1; ++cx)

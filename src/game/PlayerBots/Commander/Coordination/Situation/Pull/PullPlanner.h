@@ -85,7 +85,7 @@ namespace Commander
         // refresh, FightPlace::LureTargets): look for a point (LosBreak::FindPoint) around the fight
         // spot (around the tank when the pack was not brought back) that the casters cannot
         // see and the tank reaches by a short safe walk (around a corner is fine), not where an
-        // idle patrol walks before the fight ends (PatrolAssigner::InPath). Healer bots get a
+        // idle patrol comes before the fight ends (PatrolZone.h). Healer bots get a
         // hiding point behind the tank (PullPlan::losHiders, LosHealerSpot.h); one without a
         // point stays and moves itself if it loses the tank (HealerStanceBehavior).
         // Found: losBreak = Active, the tank goes

@@ -2,6 +2,7 @@
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/WorldModel.h"
@@ -22,10 +23,11 @@ namespace Commander
             return p;
         }
 
-        bool Clear(PositionField const& field, Position3 const& at, float staySec)
+        // The walk's end: ground of the field no patrol comes to before we leave (PatrolZone).
+        bool Clear(WorldModel const& world, PositionField const& field, Position3 const& at, float staySec)
         {
             FieldCell const* c = field.At(at);
-            return c && c->standable && (c->patrolSec < 0.0f || c->patrolSec >= staySec);
+            return c && c->standable && !PatrolZone::Comes(world, at, staySec);
         }
 
         // Seconds left until the patrol of `t` comes, from now.
@@ -73,7 +75,7 @@ namespace Commander
         float const staySec = plan.routeGuard.staySec;
 
         // Walking off already (the walk's end is clear): keep walking.
-        if (bot->IsMovementHeld() && me->IsMoving() && Clear(field, self->standAt, staySec))
+        if (bot->IsMovementHeld() && me->IsMoving() && Clear(world, field, self->standAt, staySec))
         {
             Proposal hold;
             hold.tier = ProposalTier::Urgent;

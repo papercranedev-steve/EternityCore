@@ -89,7 +89,7 @@ namespace Commander
         void FloodGround(Map* map, PositionField& field, std::vector<Position3> const& seeds, uint32 nowMs);
         void BuildIdle(Map* map, WorldModel const& world, PositionField& field, Position3 const& center,
                        float radius, uint32 nowMs);
-        void BuildPatrols(WorldModel const& world, PositionField& field, uint32 nowMs);
+        void BuildPatrols(WorldModel const& world, PositionField& field);
         // Travelling: an aggressive idle creature or a patrol's walk comes within COVER_YD of a
         // member's reach (pack and patrol facts; the field is not built otherwise).
         static bool ThreatNear(WorldModel const& world);

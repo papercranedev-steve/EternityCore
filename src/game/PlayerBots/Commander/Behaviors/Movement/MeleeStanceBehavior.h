@@ -20,7 +20,7 @@
  *    at the chosen angle). Angle: the victim hits this bot: 0 (in front, no circling); else
  *    the first of ANGLES (behind first, then turning to the sides) whose melee spot is outside
  *    every idle creature's reach and not where an idle patrol walks before the fight should end
- *    (PatrolAssigner::InPath); none: behind (PI). Areas are the position module's.
+ *    (Perception/Spatial/PatrolZone.h); none: behind (PI). Areas are the position module's.
  *    Proposed only when the bot does not run that chase yet (PartyBotAI::GetChaseAngle) or the
  *    spot of its angle became unsafe. Value: out of reach Value::LostAction(HORIZON_SEC), in
  *    reach LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.

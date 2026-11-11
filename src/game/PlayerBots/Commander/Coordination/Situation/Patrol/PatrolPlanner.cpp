@@ -3,6 +3,7 @@
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Creature.h"
@@ -93,7 +94,7 @@ namespace Commander
             search.watchers = Watchers(world, map, l.hider);
             search.rejects = [&](Position3 const& p)
             {
-                return PatrolAssigner::InPath(*patrol, p, remaining) || TowardsIdleCreature(world, p, from);
+                return PatrolZone::Comes(world, *patrol, p, remaining) || TowardsIdleCreature(world, p, from);
             };
 
             char buf[256];

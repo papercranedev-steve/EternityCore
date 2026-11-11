@@ -3,6 +3,7 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/WorldModel.h"
 #include <algorithm>
@@ -39,19 +40,6 @@ namespace Commander
             return best;
         }
 
-        // An idle patrol walks next to `at` within `sec` (PatrolFacts::track).
-        bool PatrolComes(WorldModel const& world, Position3 const& at, float sec)
-        {
-            for (PatrolFacts const& p : world.patrols)
-            {
-                if (p.trackStepSec <= 0.0f || !p.aggressive || p.noAggro)
-                    continue;
-                for (size_t i = 0; i < p.track.size() && float(i) * p.trackStepSec <= sec; ++i)
-                    if (PackResolver::Distance(p.track[i], at) <= p.reach + CE::PATROL_MARGIN_YD)
-                        return true;
-            }
-            return false;
-        }
     }
 
     void ControlledEndAssigner::Clear(TeamPlan& plan) const
@@ -140,7 +128,7 @@ namespace Commander
                 end.waitGain += ManaWorth::Points(world, m, regained, planned);
         }
         end.waitCost = WAIT_POINTS_PER_SEC * waitSec;
-        bool const patrol = waitSec > 0.0f && PatrolComes(world, first->pos, waitSec + planned.sec);
+        bool const patrol = waitSec > 0.0f && PatrolZone::Comes(world, first->pos, waitSec + planned.sec);
         bool const wait = waitSec > 0.0f && !patrol && end.waitGain > end.waitCost;
         end.breakAtMs = world.refreshedAtMs + (wait ? uint32(waitSec * 1000.0f) : 0);
 

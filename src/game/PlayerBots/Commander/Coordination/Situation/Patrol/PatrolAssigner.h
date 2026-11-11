@@ -4,15 +4,15 @@
  * fight spot 28 s into a 7-elite pull and the party wiped.
  *
  * Pure (facts and plan only). Per refresh while the party fights and no move is running:
- *   zone       = patrol aggro range against the tank (PatrolFacts::reach) + ZONE_MARGIN
- *                around every living member
- *   arrive     = first point of the patrol's predicted walk (PatrolFacts::track) inside the
- *                zone; ignored when the fight should end first (Value::FightRemainingSec)
+ *   arrive     = first time the patrol comes to a living member (Perception/Spatial/PatrolZone.h,
+ *                the rule every patrol check uses: aggro range against the tank + its margin
+ *                around the predicted walk); ignored when the fight should end first
+ *                (Value::FightRemainingSec)
  *   benefit    = its melee on the tank (after armor) from arrival until the end of the fight
  *                plus its own kill time, + Value::FightExtension(its kill time)
- *   spots      = rings of SPOT_DISTANCES around the tank where the zone of the party, moved
- *                along with the tank, is not entered by the predicted walk within
- *                SPOT_TRACK_SEC, nearest first, at most MAX_SPOTS
+ *   spots      = rings of SPOT_DISTANCES around the tank where the party, moved along with the
+ *                tank, is not come to (PatrolZone) within SPOT_TRACK_SEC, nearest first, at
+ *                most MAX_SPOTS
  *   cost       = Value::FightExtension(walk time to the nearest spot) + the area phase's
  *                endCost (TeamPlan::area, last refresh: a channel losing its tank): the fight lasts longer
  *                while the tank walks and the enemies follow
@@ -28,7 +28,7 @@
  * Move phase ends when the tank and the followers arrived or after MOVE_TIMEOUT_MS; then
  * Guard (strat-20261102-225354: after the move the tank walked back to win two casters back
  * that stood at the old spot with the rogue, and the patrol joined there):
- *   avoid  = every refresh while active, enemies the patrol's walk reaches (InPath) before the
+ *   avoid  = every refresh while active, enemies the patrol comes to (PatrolZone) before the
  *            fight ends. Nobody chases or walks over to them, they are not the focus; in
  *            Guard bots switch off them (TeamPlan.h, PatrolMovePlan::avoid).
  *   lures  = Guard only. A caster of `avoid` standing back (melee off, or a main ranged
@@ -65,7 +65,6 @@ namespace Commander
     class PatrolAssigner : public IAssigner
     {
     public:
-        static constexpr float ZONE_MARGIN = 5.0f;
         static constexpr float SPOT_DISTANCES[] = { 15.0f, 25.0f, 35.0f };
         // A spot must stay clear of the patrol's walk this long (the track length before it
         // became a full lap).
@@ -91,10 +90,6 @@ namespace Commander
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
 
-        // Zone radius around the patrol's walk: its aggro range against the tank + ZONE_MARGIN.
-        static float ZoneRadius(PatrolFacts const& p);
-        // The patrol's predicted walk comes within ZoneRadius of `pos` in less than `withinSec`.
-        static bool InPath(PatrolFacts const& p, Position3 const& pos, float withinSec);
         // The plan's patrol among the facts, null when it joined the fight or left the scan.
         static PatrolFacts const* FindPatrol(WorldModel const& world, PatrolMovePlan const& m);
 

@@ -1,8 +1,8 @@
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
-#include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"     // InPath: pure, facts only
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Values/AreaValue.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -47,12 +47,7 @@ namespace Commander
 
         bool InPatrolPath(WorldModel const& world, Position3 const& p)
         {
-            float const remaining = Value::FightRemainingSec(world);
-            for (PatrolFacts const& patrol : world.patrols)
-                if (patrol.aggressive && !patrol.noAggro && !patrol.tappedByOther &&
-                    PatrolAssigner::InPath(patrol, p, remaining))
-                    return true;
-            return false;
+            return PatrolZone::Comes(world, p, Value::FightRemainingSec(world));
         }
 
         // Map checks of the plan's spot (header: Move). `spot` gets its ground height.

@@ -7,7 +7,6 @@
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/Los/LosBreak.h"
 #include "Commander/Coordination/Situation/Los/LosHealerSpot.h"
-#include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
 #include "Commander/Coordination/Situation/Pull/PullMethod.h"
 #include "Commander/Coordination/Situation/Pull/PullOpening.h"
 #include "Commander/Coordination/Situation/Pull/PullControl.h"
@@ -18,6 +17,7 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolTracker.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Forecast/PullOdds.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
 #include "Commander/Perception/Tanks.h"
@@ -64,19 +64,14 @@ namespace Commander
             return false;
         }
 
-        // An aggressive idle patrol walks past `point` before the fight should end
-        // (PatrolAssigner::InPath): a hiding point there brings the patrol in, and the patrol
-        // module would only move the fight away again (strat-20261107-143623: the tank walked
-        // to the hiding point, then 15 yd off the patrol's path, then to the patrol guard's
-        // hiding point, in sight of the casters most of the time).
+        // An idle patrol comes to `point` before the fight should end (PatrolZone): a hiding
+        // point there brings the patrol in, and the patrol module would only move the fight
+        // away again (strat-20261107-143623: the tank walked to the hiding point, then 15 yd
+        // off the patrol's path, then to the patrol guard's hiding point, in sight of the
+        // casters most of the time).
         bool InPatrolPath(WorldModel const& world, Position3 const& point)
         {
-            float const remaining = Value::FightRemainingSec(world);
-            for (PatrolFacts const& p : world.patrols)
-                if (p.aggressive && !p.noAggro && !p.tappedByOther && !p.track.empty() &&
-                    PatrolAssigner::InPath(p, point, remaining))
-                    return true;
-            return false;
+            return PatrolZone::Comes(world, point, Value::FightRemainingSec(world));
         }
     }
 

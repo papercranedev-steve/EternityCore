@@ -2,6 +2,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Map.h"
@@ -81,6 +82,7 @@ namespace FollowSpot
         struct FieldView
         {
             std::shared_ptr<PartyCommander> commander;     // keeps the field alive
+            WorldModel const* world = nullptr;
             PositionField const* field = nullptr;
             float staySec = 0.0f;
         };
@@ -93,13 +95,14 @@ namespace FollowSpot
             if (!v.commander)
                 return v;
             WorldModel const& world = v.commander->GetWorld();
+            v.world = &world;
             v.field = world.field.get();
             v.staySec = RouteGuard::StaySec(world, v.commander->GetPlan());
             return v;
         }
 
         // The field's facts at `p`: no idle creature covers its cell and no patrol comes there
-        // before we leave. Outside the field (or none): true, the exact checks decide.
+        // before we leave (PatrolZone). Outside the field (or none): true, the exact checks decide.
         bool FieldClear(FieldView const& v, Position3 const& p)
         {
             if (!v.field)
@@ -109,7 +112,7 @@ namespace FollowSpot
                 return true;
             if (c->idle)
                 return false;
-            return c->patrolSec < 0.0f || c->patrolSec >= v.staySec;
+            return !PatrolZone::Comes(*v.world, p, v.staySec);
         }
 
         // Where the bot stops (leader now) and the follow points ahead on the leader track.

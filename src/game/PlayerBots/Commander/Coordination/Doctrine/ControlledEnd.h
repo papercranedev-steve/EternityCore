@@ -17,8 +17,8 @@
  *             gets the same mana back faster than standing in combat, so only mana that fight
  *             would lack counts (strat-20261108-232105: the party waited 34 s for 1.8 points next
  *             to a polymorphed insect of 784 health)
- *   cost    = WAIT_POINTS_PER_SEC x W; waiting is off when an idle patrol's walk comes within
- *             its reach + PATROL_MARGIN_YD of the enemy within W + that fight
+ *   cost    = WAIT_POINTS_PER_SEC x W; waiting is off when an idle patrol comes to the enemy
+ *             (Perception/Spatial/PatrolZone.h) within W + that fight
  * gain > cost: wake it W seconds from now, else now. Decided once per enemy (kept while it
  * sleeps); notes tell the leader. The crowd control assigner gives nobody a control on it
  * meanwhile (no recast while waiting to wake it).
@@ -45,7 +45,6 @@ namespace Commander
         static constexpr float BREAK_LEAD_SEC = 2.0f;
         static constexpr float RUN_YD_PER_SEC = 7.0f;
         static constexpr float WAIT_POINTS_PER_SEC = 0.05f;    // untested guess
-        static constexpr float PATROL_MARGIN_YD = 5.0f;
 
         // Same id as the crowd control modules: `.partybot ai module cc off` switches all.
         char const* GetId() const override { return "cc"; }

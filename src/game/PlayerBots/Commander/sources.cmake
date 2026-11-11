@@ -220,6 +220,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/PositionFieldBuilder.cpp
   ${COMMANDER_DIR}/Perception/Spatial/FieldSpots.h
   ${COMMANDER_DIR}/Perception/Spatial/FieldSpots.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PatrolZone.h
+  ${COMMANDER_DIR}/Perception/Spatial/PatrolZone.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.h
   ${COMMANDER_DIR}/Perception/Forecast/FleePredictor.cpp
   ${COMMANDER_DIR}/Perception/Values/FleeStopValue.h
