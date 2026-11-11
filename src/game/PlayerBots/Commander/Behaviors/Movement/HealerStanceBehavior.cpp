@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/Exposure.h"
+#include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
@@ -20,14 +21,6 @@ namespace Commander
         using HS = HealerStanceBehavior;
         using SafeRoute::Distance2d;
 
-        // Distance bands from the anchor (the rings before: 16, 20, 12; then 14, 24, 10; 27, 26).
-        float const STRICT_MIN_YD = 12.0f;
-        float const STRICT_MAX_YD = 20.0f;
-        // Second pass: closer, or further out (still inside HEAL_RANGE), with the smaller gap.
-        float const RELAXED_MIN_YD = 10.0f;
-        float const RELAXED_MAX_YD = 24.0f;
-        // Before the fight only (Context::prepare), last: just inside HEAL_RANGE.
-        float const PREPARE_MAX_YD = 27.0f;
 
         struct Context
         {
@@ -48,8 +41,9 @@ namespace Commander
         struct Spot
         {
             Position3 pos;
-            float walk = 0.0f;
-            float loss = 0.0f;      // points (SpotLoss), lower first
+            float walkSec = 0.0f;
+            float stay = 0.0f;      // points of standing there (StayLoss)
+            float loss = 0.0f;      // points: the walk + stay, lower first
             bool taken = false;     // FieldSpots::Spot::taken
         };
 
@@ -117,21 +111,19 @@ namespace Commander
         {
             float gap = 1000.0f;
             for (EnemyFacts const* e : ctx.enemies)
-                gap = std::min(gap, std::max(0.0f, Distance2d(p, e->pos) - e->boundingRadius));
+                gap = std::min(gap, Exposure::Gap(*e, p));
             return gap;
         }
 
-        // Field cells `minR`..`maxR` from the anchor passing the cheap checks, best first. The
-        // field drops cells off the ground, under an idle creature, on a patrol's way before the
-        // fight ends and cells the healer cannot walk to (FieldSpots::Collect).
-        // Points lost standing at a spot (header "Order"): the walk there, the walks to members
-        // it does not reach weighted by their share of the damage taken, enemies close enough
-        // to reach the healer before the tank takes them back.
+        // What a spot costs (header "Order"): the walk there, and standing there: the walks to
+        // members it does not reach weighted by their share of the damage taken, enemies close
+        // enough to reach the healer before the tank takes them back.
         struct Weights
         {
             float speed = 7.0f;
             float walkFactor = 1.0f;            // IDLE_COST_FACTOR while nobody is injured
-            // Other members (not the anchor, which every band reaches): share of the heals.
+            float horizon = 1.0f;               // H (doc 2026-11-11-spot-scoring.md 5.2)
+            // Other members (not the anchor, which every candidate reaches): share of the heals.
             std::vector<std::pair<PartyMemberFacts const*, float>> shares;
         };
 
@@ -140,6 +132,7 @@ namespace Commander
             Weights w;
             w.speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
             w.walkFactor = anyInjured ? 1.0f : HS::IDLE_COST_FACTOR;
+            w.horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
             float total = 0.0f;
             for (PartyMemberFacts const& m : world.party)
             {
@@ -154,43 +147,40 @@ namespace Commander
             return w;
         }
 
-        float SpotLoss(Context const& ctx, WorldModel const& world, Weights const& w, Position3 const& p, float walkYd)
+        // Points of standing at `p` (the walk there not included): members out of heal range
+        // (SpotCost::TargetReach, the walk to reach them) by their share, and the exposure.
+        float StayLoss(Context const& ctx, WorldModel const& world, Weights const& w, Position3 const& p)
         {
             PartyMemberFacts const& self = *ctx.self;
-            float loss = w.walkFactor * Value::LostAction(world, self, walkYd / w.speed);
+            float loss = 0.0f;
             for (auto const& s : w.shares)
-            {
-                float const out = Distance2d(p, s.first->pos) - HS::HEAL_RANGE;
-                if (out > 0.0f)
-                    loss += s.second * Value::LostAction(world, self, out * HS::PATH_FACTOR / w.speed);
-            }
+                loss += s.second * SpotCost::TargetReach(world, self, p, s.first->pos, 0.0f, HS::HEAL_RANGE, true,
+                                                         w.speed / HS::PATH_FACTOR, w.horizon);
             return loss + Exposure::LossAt(world, self, ctx.enemies, p);
         }
 
+        // Field cells passing the cheap checks (outside areas dangerous to healers), lowest
+        // loss first. The field already dropped cells off the ground, under an idle creature,
+        // on a patrol's way before the stay ends and cells the healer cannot walk to.
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                                     Weights const& w, std::vector<FieldSpots::Spot> const& cells, float minR, float maxR,
-                                     float minGap)
+                                     Weights const& w, std::vector<FieldSpots::Spot> const& cells)
         {
             std::vector<Spot> spots;
             for (FieldSpots::Spot const& c : cells)
             {
-                float const r = Distance2d(c.pos, ctx.anchor);
-                if (r < minR || r > maxR)
+                if (HazardZones::IsInside(zones, HAZARD_HEALER, c.pos))
                     continue;
                 Spot s;
                 s.pos = c.pos;
-                if (MinGap(ctx, s.pos) < minGap)
-                    continue;
-                if (HazardZones::IsInside(zones, HAZARD_HEALER, s.pos))
-                    continue;
-                s.walk = c.WalkEstimate(HS::PATH_FACTOR);
-                s.loss = SpotLoss(ctx, world, w, s.pos, s.walk);
+                s.walkSec = c.WalkEstimate(HS::PATH_FACTOR) / w.speed;
+                s.stay = StayLoss(ctx, world, w, s.pos);
+                s.loss = w.walkFactor * SpotCost::Walk(world, *ctx.self, s.walkSec) + s.stay;
                 s.taken = c.taken;
                 spots.push_back(s);
             }
             std::sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.loss < y.loss; });
             // Equally good: within one cell of walk.
-            float const tie = w.walkFactor * Value::LostAction(world, *ctx.self, PositionField::CELL_YD * HS::PATH_FACTOR / w.speed);
+            float const tie = w.walkFactor * SpotCost::Walk(world, *ctx.self, PositionField::CELL_YD * HS::PATH_FACTOR / w.speed);
             FieldSpots::PreferFree(spots, [](Spot const& s) { return s.loss; }, [](Spot const& s) { return s.taken; }, tie);
             return spots;
         }
@@ -224,8 +214,9 @@ namespace Commander
             p.score = -walkSec;
         }
 
+        // `staySaved`: StayLoss here - there (the order's term), 0 for the walk to the anchor.
         void MakeProposal(Context const& ctx, WorldModel const& world, Position3 const& to, bool anchorOk,
-                          bool anyInjured, char const* reason, Proposal& p)
+                          bool anyInjured, float staySaved, char const* reason, Proposal& p)
         {
             PartyMemberFacts const& self = *ctx.self;
             float const speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
@@ -249,10 +240,9 @@ namespace Commander
             float const horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
 
             float benefit = anchorOk ? 0.0f : Value::LostAction(world, self, horizon);
-            // The enemies' exposure saved (Perception/Values/Exposure.h, the same term as the order).
-            benefit += std::max(0.0f, Exposure::LossAt(world, self, ctx.enemies, ctx.here) -
-                                      Exposure::LossAt(world, self, ctx.enemies, to));
-            float cost = Value::LostAction(world, self, walkSec);
+            // Members in reach and the enemies' exposure (the same terms as the order).
+            benefit += std::max(0.0f, staySaved);
+            float cost = SpotCost::Walk(world, self, walkSec);
             if (!anyInjured)
                 cost *= HS::IDLE_COST_FACTOR;
             p.SetValue(benefit, cost);
@@ -368,16 +358,21 @@ namespace Commander
         }
 
         bool const anchorOk = Distance2d(ctx.here, ctx.anchor) <= HEAL_RANGE && Los(ctx.map, ctx.here, ctx.anchor);
-        float const gapHere = MinGap(ctx, ctx.here);
-        bool const crowded = gapHere < TRIGGER_ENEMY_GAP;
-        if (anchorOk && !crowded && !unsafe)
+        // The spot here is still good (header "When"): a cell must save more than the margin.
+        bool const hereValid = anchorOk && !unsafe;
+        Weights const weights = MakeWeights(ctx, world, anyInjured);
+        float const stayHere = StayLoss(ctx, world, weights, ctx.here);
+        float const margin = SpotCost::Walk(world, *ctx.self, MOVE_MARGIN_SEC);
+        // Before the fight a valid spot is kept: the others are still walking to their places.
+        bool const keepValid = hereValid && (ctx.prepare || stayHere <= margin);
+        if (keepValid)
             return;
         // In the enemies' melee (their cleaves and area spells, an instant hit when one turns):
-        // a constraint like the idle reach, not a trade against the heal orders.
-        bool const danger = !ctx.prepare && gapHere < DANGER_ENEMY_GAP;
+        // the move is Urgent like the idle reach, not a trade against the heal orders.
+        bool const danger = !ctx.prepare && MinGap(ctx, ctx.here) < DANGER_ENEMY_GAP;
         char const* const reason = ctx.prepare ? "take a place for the planned fight" :
-                                   anchorOk ? "too close to the enemies" : "tank out of reach";
-        auto const propose = [&](Position3 const& to)
+                                   anchorOk ? "a better healing spot (enemies, members in reach)" : "tank out of reach";
+        auto const propose = [&](Position3 const& to, float staySaved)
         {
             Proposal p;
             if (unsafe)
@@ -385,7 +380,7 @@ namespace Commander
             else if (danger)
                 MakeUnsafeProposal(ctx, to, "standing in the enemies' melee", p);
             else
-                MakeProposal(ctx, world, to, anchorOk, anyInjured, reason, p);
+                MakeProposal(ctx, world, to, anchorOk, anyInjured, staySaved, reason, p);
             out.push_back(p);
         };
 
@@ -393,61 +388,34 @@ namespace Commander
         // The walk out of an idle creature's reach starts inside it.
         SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
 
-        // Cells of the position field around the anchor, once for all passes.
-        std::vector<FieldSpots::Spot> cells;
+        // Cells of the position field within MAX_YD of the anchor (PREPARE_MAX_YD before the
+        // fight: a walk-in fought where the pack stands has the idle pack itself as the anchor,
+        // the inner cells lie in its aggro range and the field drops them).
+        std::vector<Spot> spots;
         if (world.field)
         {
             FieldSpots::Query q;
             q.center = ctx.anchor;
-            q.minYd = RELAXED_MIN_YD;
-            q.maxYd = ctx.prepare ? PREPARE_MAX_YD : RELAXED_MAX_YD;
+            q.minYd = 0.0f;
+            q.maxYd = ctx.prepare ? PREPARE_MAX_YD : MAX_YD;
             // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
             q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
-            cells = FieldSpots::Collect(world, *ctx.self, q);
+            spots = Candidates(ctx, world, zones, weights, FieldSpots::Collect(world, *ctx.self, q));
         }
 
-        Weights const weights = MakeWeights(ctx, world, anyInjured);
         uint32 checks = 0;
-        // Before the fight a third pass at the edge of heal range: a walk-in fought where the
-        // pack stands has the idle pack itself as the anchor, the inner cells lie in its aggro range.
-        uint32 const passes = ctx.prepare ? 3 : 2;
-        for (uint32 pass = 0; pass < passes; ++pass)
+        for (Spot const& s : spots)
         {
-            std::vector<Spot> spots = pass == 0
-                ? Candidates(ctx, world, zones, weights, cells, STRICT_MIN_YD, STRICT_MAX_YD, MIN_ENEMY_GAP)
-                : pass == 1
-                ? Candidates(ctx, world, zones, weights, cells, RELAXED_MIN_YD, RELAXED_MAX_YD, RELAXED_ENEMY_GAP)
-                : Candidates(ctx, world, zones, weights, cells, RELAXED_MAX_YD, PREPARE_MAX_YD, RELAXED_ENEMY_GAP);
-            for (Spot const& s : spots)
-            {
-                if (checks >= MAX_GEOMETRY_CHECKS)
-                    break;
-                ++checks;
-                if (!GeometryOk(ctx, idle, pathIdle, s))
-                    continue;
-                propose(s.pos);
+            // Sorted: no cell further down saves more than this one.
+            if (hereValid && stayHere - s.loss <= margin)
                 return;
-            }
-        }
-
-        // Too close with the tank in reach and no cell past the gap lines passed: any cell
-        // farther from the enemies than here by IMPROVE_MIN_YD, best order first, own budget
-        // (before: the healer stayed in the pile, 2026-11-10).
-        if (crowded && anchorOk && !ctx.prepare)
-        {
-            std::vector<Spot> spots = Candidates(ctx, world, zones, weights, cells, RELAXED_MIN_YD, RELAXED_MAX_YD,
-                                                 gapHere + IMPROVE_MIN_YD);
-            uint32 tries = 0;
-            for (Spot const& s : spots)
-            {
-                if (tries >= FALLBACK_GEOMETRY_CHECKS)
-                    break;
-                ++tries;
-                if (!GeometryOk(ctx, idle, pathIdle, s))
-                    continue;
-                propose(s.pos);
-                return;
-            }
+            if (checks >= MAX_GEOMETRY_CHECKS)
+                break;
+            ++checks;
+            if (!GeometryOk(ctx, idle, pathIdle, s))
+                continue;
+            propose(s.pos, stayHere - s.stay);
+            return;
         }
 
         // No spot: walk to the anchor itself while it is out of reach (what following did) or
@@ -460,7 +428,7 @@ namespace Commander
             if (unsafe)
                 MakeUnsafeProposal(ctx, ctx.anchor, "an idle creature would attack here", p);
             else
-                MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured,
+                MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured, 0.0f,
                              ctx.prepare ? "planned fight spot, no free spot around it: go there"
                                          : "tank out of reach, no free spot: go to the tank", p);
             out.push_back(p);

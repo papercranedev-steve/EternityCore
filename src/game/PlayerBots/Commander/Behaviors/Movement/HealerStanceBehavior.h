@@ -29,7 +29,9 @@
  * most enemies hit); else the member most enemies are hitting; else the party leader. Other
  * tanks within heal range of a spot count TANK_COVER_MULT members in its order.
  *
- * When to move (checked every tick, nothing otherwise):
+ * When to move (checked every tick; since 2026-11-11 the current spot against the best cell,
+ * doc .kiro/docs/2026-11-11-spot-scoring.md step 3). The spot here is no longer valid, so the
+ * best cell is taken whatever it saves, when:
  *  - the healer stands where an idle creature would attack it, also once a wanderer walked to
  *    the edge of its circle (SafeRoute::IdleCreatures::Near; added 2026-11-07,
  *    strat-20261107-164236: the priest stood 17.8 yd from a wandering Ravaged Cadaver's home,
@@ -38,10 +40,16 @@
  *    over the routine heal orders (Assigned) and an emergency heal order (Urgent, score > 0)
  *    still goes first. The walk out may pass inside the circles that cover the start, no
  *    closer to their homes (IdleCreatures::LeavingFrom); the new spot must be outside all;
- *  - the anchor is farther than HEAL_RANGE or out of line of sight ("tank out of reach"), or
- *  - an enemy that is not hitting the healer stands within TRIGGER_ENEMY_GAP ("too close").
- *    Enemies hitting the healer are left to the rotation (Fade) and the escape module (run
- *    to the tank: EscapeBehavior.h).
+ *  - the anchor is farther than HEAL_RANGE or out of line of sight ("tank out of reach").
+ * Otherwise the spot here costs StayLoss (the "reach" and "enemies" terms of the order below,
+ * the walk is 0) and a cell is taken when its loss is lower by more than SpotCost::Walk(
+ * MOVE_MARGIN_SEC) (the margin is not scaled by IDLE_COST_FACTOR: it is noise, not a walk).
+ * So the healer stands back from the enemies and towards members out of reach as far as the
+ * walk is worth it, with no distance lines (the 12 / 14 yd lines, the relaxed pass and the
+ * "3 yd farther" fallback pass of 2026-11-10 are gone). Before the fight a valid spot is kept
+ * (the others are still walking to their places).
+ * Enemies hitting the healer do not count (Exposure::Turnable): they are left to the rotation
+ * (Fade) and the escape module (run to the tank: EscapeBehavior.h).
  * Not while: the retreat runs, the pull is in Approach / Return, rooted, casting (the heal
  * finishes first), a member below URGENT_HEALTH_PCT is healable from here (heal first; not
  * when standing in an idle creature's reach, see above), or a MoveTo is already under way
@@ -49,22 +57,22 @@
  * an idle creature's reach).
  *
  * Where (since 2026-11-10, position field step C): cells of the position field
- * (FieldSpots::Collect) in distance bands around the anchor: 12-20 yd first, then 10-24 yd
- * (before the fight also 24-27 yd). The field drops cells off the ground or cut off from the
+ * (FieldSpots::Collect) within MAX_YD of the anchor (PREPARE_MAX_YD before the fight); no inner
+ * limit and no bands since 2026-11-11 (near cells lose on the enemies' term; MAX_YD below
+ * HEAL_RANGE leaves room for the anchor to move). The field drops cells off the ground or cut off from the
  * party (a slope is fine; the rings before compared heights with the anchor's), under an idle
  * creature, where an idle patrol's predicted walk comes within its aggro range + margin before
  * the fight should end (added 2026-11-03 for the line of sight pull), and cells the healer
- * cannot walk to around idle creatures. A cell is kept when:
- *  - every enemy not hitting the healer is at least MIN_ENEMY_GAP away (second pass:
- *    RELAXED_ENEMY_GAP);
- *  - outside every area dangerous to healers (HazardZones, same as the "position" module).
+ * cannot walk to around idle creatures. A cell is kept when it is outside every area dangerous
+ * to healers (HazardZones; an exclusion until PositioningBehavior uses the same scoring).
  * Order (points, since 2026-11-10 step E; lowest loss first, ties shared out by
  * FieldSpots::PreferFree within one cell of walk):
  *   walk     IDLE_COST_FACTOR (nobody injured) or 1 x LostAction(healer, grid walk / run speed)
  *   reach    for every other member (not the anchor) farther than HEAL_RANGE from the spot:
  *            its share of the party's damage taken (Value::TakenDps; equal shares while nobody
- *            takes any) x LostAction(healer, walk to reach it = (distance - HEAL_RANGE) x
- *            PATH_FACTOR / run speed). Another tank takes most damage and counts the most.
+ *            takes any) x SpotCost::TargetReach (LostAction of the walk to reach it =
+ *            (distance - HEAL_RANGE) x PATH_FACTOR / run speed, at most H). Another tank takes
+ *            most damage and counts the most.
  *   enemies  Exposure::LossAt (Perception/Values/Exposure.h, shared with the ranged stance):
  *            for every enemy not hitting the healer TURN_CHANCE x (HitLoss + LostAction) over
  *            the seconds an enemy that turns to the healer gets before the tank takes it back.
@@ -78,19 +86,16 @@
  *
  * Value (points): benefit - cost, horizon H = min(HORIZON_SEC, fight remaining), at least 1 s.
  *  benefit = Value::LostAction(healer, H) when the anchor is out of reach (the healer cannot do
- *            its job), plus Exposure::LossAt(here) - Exposure::LossAt(there): the enemies'
- *            exposure the walk saves (the order's term).
+ *            its job), plus StayLoss(here) - StayLoss(there) (the order's terms).
  * Within DANGER_ENEMY_GAP of an enemy's edge (2026-11-10, the priest stood in the pile next to
- * the tank and died when one turned): tier Urgent, score -walk seconds, like the idle reach.
- * Too close with the tank in reach and no cell past the gap lines passed the live checks: one
- * more pass over cells IMPROVE_MIN_YD farther from the enemies than here (own budget).
- *  cost    = Value::LostAction(healer, walk seconds), x IDLE_COST_FACTOR when no member is
+ * the tank and died when one turned): tier Urgent, score -walk seconds, like the idle reach
+ * (the tier only; where to go is the same order).
+ *  cost    = SpotCost::Walk(healer, walk seconds), x IDLE_COST_FACTOR when no member is
  *            below INJURED_PCT (walking costs little while nothing needs a heal).
  * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS. After that the healer stays where it is.
  *
- * Jitter: moves only past the trigger lines, the targets are inside them (gap 12 -> 14, second
- * pass 12; reach 28 -> in range with line of sight). Gaps are measured to the enemy's edge
- * (EnemyFacts::boundingRadius).
+ * Jitter: the margin above, and cells within MAX_YD (24) while the anchor counts as in reach up
+ * to HEAL_RANGE (28). Gaps are measured to the enemy's edge (EnemyFacts::boundingRadius).
  *
  * Known limits: anchor and enemy positions are from the last refresh; other heal targets only
  * add to the order (a member out of range or sight is not a reason to move yet); one healer
@@ -108,23 +113,19 @@ namespace Commander
     {
     public:
         static constexpr float HEAL_RANGE = 28.0f;          // same as PositioningBehavior::HEAL_RANGE
-        // Closer than this to an enemy's edge: move. Until step 24 (2026-11-01) 8 yd: the priest
-        // stood 8.9 yd from Magistrate Barthilas, inside Crowd Pummel (10 yd, interrupt = 5 s
-        // holy lockout; strat-20261101-214026). Most melee-range area spells are 8-10 yd.
-        static constexpr float TRIGGER_ENEMY_GAP = 12.0f;
-        static constexpr float MIN_ENEMY_GAP = 14.0f;       // new spot, first pass
-        static constexpr float RELAXED_ENEMY_GAP = TRIGGER_ENEMY_GAP;  // new spot, second pass (not inside the trigger line)
+        // Farthest candidate cell from the anchor (before the fight: just inside HEAL_RANGE).
+        static constexpr float MAX_YD = 24.0f;
+        static constexpr float PREPARE_MAX_YD = 27.0f;
+        // A valid spot is left only for a cell that saves more than this many seconds of the
+        // healer's action (doc 2026-11-11-spot-scoring.md section 5.3).
+        static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // LOS + pathfinding each
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
 
         // Closer than this to an enemy's edge (in its melee, cleave and most area spells):
-        // the move is a constraint, tier Urgent (2026-11-10).
+        // the move is Urgent (2026-11-10; the tier only, not where to go).
         static constexpr float DANGER_ENEMY_GAP = 8.0f;
-        // Last pass when too close and nothing past the gap lines passed: a cell this much
-        // farther from the enemies than here, own budget of FALLBACK_GEOMETRY_CHECKS.
-        static constexpr float IMPROVE_MIN_YD = 3.0f;
-        static constexpr uint32 FALLBACK_GEOMETRY_CHECKS = 3;
 
         static constexpr float HORIZON_SEC = 8.0f;
         static constexpr float URGENT_HEALTH_PCT = 35.0f;
