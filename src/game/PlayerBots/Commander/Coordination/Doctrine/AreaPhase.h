@@ -26,6 +26,19 @@
  *      shield its own shield first (SelfShield, Ice Barrier) when net with the absorb - net
  *             without > LostAction(GCD) + ManaWorth(its mana).
  *    The best positive net wins; the one of the last refresh gets STICKY_POINTS.
+ * 3. Or it waits (2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.3 / 4.4; AreaPlan::wait,
+ *    the phase is not active): when starting later is worth more than now, a wait of `sec`
+ *    costing net(later) x sec / the spell's length:
+ *      Tank    every enemy it would turn is on the main tank: later nobody turns (net + turn
+ *              loss), sec = their ThreatRunway shortfalls through the spell / ThreatGap::
+ *              FillRate (the tank's top-up goes for them: TankTargets reads the same runway).
+ *              Not when their total did not shrink for ThreatOpeningAssigner::STALL_MS.
+ *      Shield  its shield is on cooldown: later with it (as the shield step), sec = the cooldown.
+ * While the pull or the opening holds the party (the "not while" above, not a retreat): under
+ * the Area tactic the caster it counts on (DoctrinePlan::areaThreat) puts its shield up now
+ * (AreaPlan::prep*) when the spell on the pile around the main tank, valued as the threat
+ * stands, gains more with it than its mana (no GCD: it waits anyway; the opening's hold lets
+ * that cast through, TeamPlan::HoldsCast).
  * Both: a healer bot's Power Word: Shield (SurvivalAbility Absorb, not self only, ready, in
  *   range, the caster without Weakened Soul) when net with it - net without > LostAction(healer,
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).

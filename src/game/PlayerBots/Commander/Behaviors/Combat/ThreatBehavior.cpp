@@ -10,6 +10,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Profiles/PetTaunt.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
@@ -417,10 +418,35 @@ namespace Commander
         ThreatOpeningPlan const& opening = plan.threat;
         bool const opens = opening.active && opening.tank == self && !opening.gaps.empty();
 
-        // Several loose enemies (summoned adds, a wave arriving) or the opening: one area threat
-        // ability (Thunder Clap, Demoralizing Shout, Consecration, Challenging Roar) instead of
-        // one switch per enemy per tick (combat scenarios 6 and 9).
-        if (opens || loose.size() >= GROUP_THREAT_MIN_ENEMIES)
+        // 1c. Enemies still on the tank whose threat runway (ThreatRunway, with the area spell
+        // the doctrine counts on) ends within the doctrine's horizon (2026-11-12, doc
+        // .kiro/docs/2026-11-11-aoe-threat.md 4.3): the threat a cast adds lengthens each; worth
+        // LooseEnemy::ThinLoss before - after, the top-up's own value (TankTargets). Before, only
+        // enemies already loose counted, and the area threat came after they had turned.
+        struct ThinEntry
+        {
+            EnemyFacts const* enemy;
+            PartyMemberFacts const* taker;
+            float runwaySec;
+        };
+        std::vector<ThinEntry> thin;
+        float const horizon = plan.doctrine.RunwayHorizon();
+        if (!opens)
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.victim != self || !e.acting || e.crowdControlled ||
+                    PackResolver::Distance(myFacts->pos, e.pos) - e.boundingRadius > GROUP_THREAT_RADIUS)
+                    continue;
+                ThreatRunway::Result const r = ThreatRunway::Of(world, e, self, plan.doctrine.AreaThreatOn(e.guid), horizon);
+                PartyMemberFacts const* taker = r.taker.IsEmpty() ? nullptr : world.FindMember(r.taker);
+                if (r.sec < horizon && taker && !taker->isPet)
+                    thin.push_back({ &e, taker, r.sec });
+            }
+
+        // Several loose enemies (summoned adds, a wave arriving), several thin leads or the
+        // opening: one area threat ability (Thunder Clap, Demoralizing Shout, Consecration,
+        // Challenging Roar) instead of one switch per enemy per tick (combat scenarios 6 and 9).
+        if (opens || loose.size() >= GROUP_THREAT_MIN_ENEMIES || thin.size() >= GROUP_THREAT_MIN_ENEMIES)
             ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee, protects,
                 [&](float threatAdded, float holdSec, Position3 const& centre, float radius) -> std::pair<float, bool>
                 {
@@ -435,6 +461,16 @@ namespace Commander
                                     filled += std::min(g.gap, threatAdded);
                         benefit += opening.waitPerSec * filled / opening.fillRate;
                     }
+                    if (threatAdded > 0.0f)
+                        for (ThinEntry const& t : thin)
+                        {
+                            if (PackResolver::Distance(centre, t.enemy->pos) - t.enemy->boundingRadius > radius)
+                                continue;
+                            float const after = ThreatRunway::Of(world, *t.enemy, self, plan.doctrine.AreaThreatOn(t.enemy->guid),
+                                                                 horizon, threatAdded).sec;
+                            benefit += std::max(0.0f, LooseEnemy::ThinLoss(world, *t.enemy, *t.taker, *myFacts, t.runwaySec, horizon) -
+                                                      LooseEnemy::ThinLoss(world, *t.enemy, *t.taker, *myFacts, after, horizon));
+                        }
                     // Loose enemies: without the ability the tank wins them back with threat one
                     // after another (LooseEnemy::SequentialRecovery); with it each lacks
                     // `threatAdded` less (an area taunt: back on the victim when it fades). The

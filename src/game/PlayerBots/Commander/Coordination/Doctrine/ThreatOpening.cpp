@@ -6,6 +6,7 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/ThreatGap.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Timer.h"
 #include <algorithm>
@@ -67,6 +68,7 @@ namespace Commander
                     t.settled.push_back(g.enemy);
             t.active = false;
             t.gaps.clear();
+            t.filled.clear();
             t.freed.clear();
             t.healAllowed = false;
             notes.push_back(std::move(note));
@@ -96,16 +98,39 @@ namespace Commander
             return;
         }
 
+        // The bar: the healer's next heal, under the Area tactic also the whole area spell
+        // (the doctrine's of the last refresh: it runs after this module).
+        DoctrinePlan const& doctrine = plan.doctrine;
         std::vector<ThreatGapEntry> gaps;
+        std::vector<ObjectGuid> back;       // filled ones short again
+        float backGap = 0.0f;
+        if (!t.active)
+            t.filled.clear();
         for (EnemyFacts const& e : world.enemies)
         {
-            if (t.Settled(e.guid) || !NextToTank(world, e, *tank))
+            // Filled earlier in this opening: checked again while it runs (not the enemies of
+            // an earlier opening: those are the top-up's).
+            bool const filled = t.active && Contains(t.filled, e.guid);
+            if ((t.Settled(e.guid) && !filled) || !NextToTank(world, e, *tank))
                 continue;
-            float const gap = ThreatGap::Of(world, e, tank->guid);
+            float const gap = ThreatRunway::Of(world, e, tank->guid, doctrine.areaThreat, doctrine.areaSec).shortfall;
             if (gap <= 0.0f)
-                t.settled.push_back(e.guid);
-            else
-                gaps.push_back({ e.guid, gap });
+            {
+                if (!filled)
+                {
+                    t.settled.push_back(e.guid);
+                    t.filled.push_back(e.guid);
+                }
+                continue;
+            }
+            if (filled)
+            {
+                t.settled.erase(std::remove(t.settled.begin(), t.settled.end(), e.guid), t.settled.end());
+                t.filled.erase(std::remove(t.filled.begin(), t.filled.end(), e.guid), t.filled.end());
+                back.push_back(e.guid);
+                backGap += gap;
+            }
+            gaps.push_back({ e.guid, gap });
         }
         bool const coming = PullComing(world, plan.pull, *tank, now);
 
@@ -119,8 +144,10 @@ namespace Commander
         float const total = Total(gaps);
         bool newEnemy = !t.active || t.tank != tank->guid;
         for (ThreatGapEntry const& g : gaps)
-            newEnemy = newEnemy || !std::any_of(t.gaps.begin(), t.gaps.end(),
-                [&g](ThreatGapEntry const& o) { return o.enemy == g.enemy; });
+            newEnemy = newEnemy || (!Contains(back, g.enemy) && !std::any_of(t.gaps.begin(), t.gaps.end(),
+                [&g](ThreatGapEntry const& o) { return o.enemy == g.enemy; }));
+        // One filled before and short again: the progress is counted from the bigger total.
+        t.bestGap += backGap;
         if (!t.active)
         {
             t.active = true;

@@ -93,7 +93,6 @@ namespace Commander
         // many loose or thinly held enemies are within GROUP_THREAT_RADIUS of the tank.
         static constexpr size_t GROUP_THREAT_MIN_ENEMIES = 2;
         static constexpr float GROUP_THREAT_RADIUS = 8.0f;
-        static constexpr float FRAGILE_WEIGHT = 0.5f;          // chance-like weight of a thin lead breaking
         static constexpr float GROUP_TAUNT_RESERVE_MULT = 3.0f; // area taunt cooldown (10 min) is worth more
         // A warrior cast that needs another stance (Thunder Clap from Defensive Stance, Taunt from
         // Battle Stance; PartyBotAI::DoCastWithStance) also costs this long of the tank's action:

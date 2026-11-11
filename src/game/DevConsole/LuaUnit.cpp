@@ -1010,6 +1010,24 @@ namespace DevConsole
                 SetFieldG(L, "allyShield", a.allyShieldBot);
             lua_setfield(L, -2, "area");
         }
+        // Not started yet: the phase waits (AreaPlan::wait), or the caster's shield goes up
+        // while the party holds (AreaPlan::prep*).
+        else if (plan.area.wait != Commander::AreaWait::None || !plan.area.prepCaster.IsEmpty())
+        {
+            Commander::AreaPlan const& a = plan.area;
+            lua_createtable(L, 0, 3);
+            if (a.wait != Commander::AreaWait::None)
+            {
+                SetFieldS(L, "wait", a.wait == Commander::AreaWait::Tank ? "tank" : "shield");
+                SetFieldG(L, "caster", a.waitCaster);
+            }
+            if (!a.prepCaster.IsEmpty())
+            {
+                SetFieldG(L, "prep", a.prepCaster);
+                SetField(L, "shield", a.prepSpellId);
+            }
+            lua_setfield(L, -2, "areaWait");
+        }
         // Doctrine (Coordination/Doctrine/TacticalDoctrine.h): how the fight is fought and every
         // enemy's tags and stamps as text (TacticalDoctrine::Describe), so the review shows each
         // enemy's role. A plan line is written when any of it changes.

@@ -14,12 +14,14 @@
  *     task. The current target while it is still short (TeamPlan::threat gaps), else the enemy
  *     short the most: benefit = waitPerSec x its gap / fillRate (the waiting party's time),
  *     cost = SwitchCost.
- *  3. Top up: the current target while its lead does not hold through the healer's next heal
- *     (Perception/Forecast/ThreatGap.h: stays on it until it does); else the enemy on the tank short
- *     the most. benefit = what the runner-up (the closest on its list, else a healer bot)
- *     would take for RECLAIM_SEC (LooseEnemy::Loss) x FRAGILE_WEIGHT (chance the thin lead
- *     breaks), cost = SwitchCost. (Until 2026-11-08: lead / threat below 15% while the
- *     current target's was above 30%.)
+ *  3. Top up (2026-11-12): threat runways (Perception/Forecast/ThreatRunway.h, with the area
+ *     spell the doctrine counts on) within DoctrinePlan::RunwayHorizon. The current target
+ *     while its runway is short and the shortest; else the enemy on the tank within
+ *     TacticalDoctrine::CLUSTER_YD whose runway ends first. benefit = LooseEnemy::ThinLoss
+ *     (what its taker, else a healer bot, would take for 2 s x 0.5 x (1 - runway / horizon)),
+ *     cost = SwitchCost; a switch that does not pay keeps a short current
+ *     one. (Until 2026-11-12: only a lead that did not hold through the healer's next heal;
+ *     until 2026-11-08: lead / threat below 15% while the current target's was above 30%.)
  *  4. Doctrine TankJob::Focus (Pick, main tank only; todo 12): the party focus when it is within
  *     TacticalDoctrine::CLUSTER_YD of the tank, the walk is safe and the switch pays (Smith's
  *     rule exchange x Share against SwitchCost). Under Area (HoldPile) the tank keeps its own.
@@ -108,8 +110,6 @@ namespace Commander
 
     namespace TankTargets
     {
-        static constexpr float RECLAIM_SEC = 2.0f;
-        static constexpr float FRAGILE_WEIGHT = 0.5f;
         static constexpr float MELEE_REACH = 5.0f;
 
         // `current`: the bot's target if it is a candidate it may hit, else null.

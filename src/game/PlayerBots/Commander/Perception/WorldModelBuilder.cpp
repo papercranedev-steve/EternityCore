@@ -962,6 +962,8 @@ namespace WorldModelBuilder
                         s.manaCost = uint32(Spell::CalculatePowerCost(shield, me));
                     s.up = me->HasAura(shield->Id);
                     s.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, shield);
+                    int32 const left = me->GetSpellCooldownLeft(shield);
+                    s.cooldownSec = left < 0 ? -1.0f : float(left) / 1000.0f;
                 }
             }
 

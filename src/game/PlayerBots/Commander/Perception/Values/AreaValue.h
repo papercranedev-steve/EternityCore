@@ -20,12 +20,18 @@
  *   - one hitting the caster or nobody: free (no turn to fear).
  * Tick plan (as AreaDamageBehavior before, now on facts): damage after n ticks = sum of
  * min(perTick x n, health). An enemy turns at the first tick k it survives where my threat (+
- * my bolt in the air at it) + k x tickThreat passes (its holder's threat + TANK_GAIN_SHARE x
- * the holder's threat rate on it x k x period) x 110% (caster within its melee reach from
+ * my bolt in the air at it) + k x tickThreat passes (its holder's threat + the holder's rate on
+ * it, ThreatRunway::HolderRate, x k x period) x 110% (caster within its melee reach from
  * `from`) / 130%. A holder hitting another enemy gains nothing here. Turn loss after n ticks
  * = AggroTurnCost::OfGroup over every enemy turned by then (with the shield, `from`, the busy
  * tanks; the caster dying under all of them is in there). A holder that is not a party member:
  * all its hits (Value::HitLoss).
+ * Pushback (a channel, 2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.4): the enemies
+ * turned by then (from their tick + walk) and those on the caster already swing at it until
+ * the end (the tank taking them back sooner is not counted); each hit the caster's absorbs (+
+ * the shield put up first) do not take whole cuts the channel's end (Spell::DelayedChannel).
+ * The share of the n ticks lost x (benefit - time cost) is added to the turn loss. This is
+ * what Ice Barrier keeps ("While the shield holds, spells will not be interrupted").
  * Value of n ticks: benefit = LostAction(damage(n) / filler damage per second) [+ paid: the
  * filler's mana for that time, ManaWorth], cost = LostAction(n x period) + turn loss(n).
  *   not paid  the whole spell is judged (user 2026-11-08: a Blizzard is paid in full at the
@@ -48,7 +54,6 @@ namespace Commander
 {
     namespace AreaValue
     {
-        static constexpr float TANK_GAIN_SHARE = 0.5f;
         static constexpr float MELEE_REACH = 5.0f;
 
         struct Request

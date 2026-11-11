@@ -39,6 +39,15 @@ namespace Commander
         // Points lost while `enemy` hits `victim` instead of `holder` for `seconds`.
         float Loss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
                    PartyMemberFacts const& holder, float seconds);
+
+        // An enemy still on `holder` whose threat runway (ThreatRunway) ends in `runwaySec`,
+        // `taker` takes it then: Loss over THIN_RECLAIM_SEC x THIN_WEIGHT x (1 - runway /
+        // horizon), 0 beyond the horizon (the top-up, TankTargets, and the tank's area threat,
+        // ThreatBehavior, value a thin lead with it; 2026-11-12).
+        static constexpr float THIN_RECLAIM_SEC = 2.0f;     // until the tank has it back
+        static constexpr float THIN_WEIGHT = 0.5f;          // chance-like weight of a thin lead breaking
+        float ThinLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& taker,
+                       PartyMemberFacts const& holder, float runwaySec, float horizonSec);
         // Best threat per second `tank` was measured adding to any enemy (0 = none yet).
         float TankRate(WorldModel const& world, ObjectGuid tank);
         // `distance` = tank to enemy (yards).

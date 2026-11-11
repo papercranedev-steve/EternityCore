@@ -11,6 +11,7 @@
 #include "ObjectGuid.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -634,6 +635,13 @@ namespace Commander
         Channel,    // running: the brain only keeps its value (endCost, the priest's shield)
     };
 
+    enum class AreaWait : uint8
+    {
+        None,
+        Tank,       // the tank tops up the enemies the spell would turn
+        Shield,     // the caster's shield comes off cooldown
+    };
+
     struct AreaPlan
     {
         bool active = false;
@@ -662,6 +670,25 @@ namespace Commander
         float tauntReserve = 0.0f;
         std::vector<ObjectGuid> targets;
         uint32 sinceMs = 0;
+
+        // Not started (active false): the best spell is worth more a little later (AreaPhase
+        // step 3): the tank first gives the enemies it would turn a runway through it, or the
+        // caster's shield is off cooldown first. waitGain = later - now (points).
+        AreaWait wait = AreaWait::None;
+        ObjectGuid waitCaster;
+        float waitSec = 0.0f;
+        float waitGain = 0.0f;
+        float waitShortfall = 0.0f;  // Tank: the threat the tank lacks on them in total
+        uint32 waitSinceMs = 0;
+        uint32 waitProgressMs = 0;   // Tank: last time waitShortfall shrank (ThreatOpeningAssigner::STALL_MS)
+
+        // While the pull or the threat opening holds the party (no phase yet): the caster the
+        // Area tactic counts on puts its shield up now, in points by the opening's estimate
+        // (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md 4.4). The opening's hold lets
+        // this one cast through (TeamPlan::HoldsCast).
+        ObjectGuid prepCaster;
+        uint32 prepSpellId = 0;
+        float prepGain = 0.0f;
 
         bool CastBy(ObjectGuid bot) const { return active && caster == bot; }
         bool Targets(ObjectGuid enemy) const
@@ -767,6 +794,12 @@ namespace Commander
         bool lureCorner = false;            // Lure for a corner fight (not casters standing back)
         std::vector<CharmedAlly> charmed;
         std::vector<DoctrineEnemy> enemies;
+        // The area spell the Area tactic counts on (Coordination/Doctrine/AreaIntent.h): each
+        // area dealer bot's threat per second with it, on the pile, and the spell's length. The
+        // tank's threat runway is judged with it (ThreatRunway; the opening, the top-up, the
+        // tank's area threat). Empty / 0 under another tactic.
+        std::vector<PlannedThreat> areaThreat;
+        float areaSec = 0.0f;
 
         DoctrineEnemy const* Find(ObjectGuid enemy) const
         {
@@ -780,6 +813,15 @@ namespace Commander
             DoctrineEnemy const* d = Find(enemy);
             return d && (d->stamps & stamp) != 0;
         }
+        // The planned area output on `enemy`: `areaThreat` on the pile, nothing elsewhere.
+        std::vector<PlannedThreat> const& AreaThreatOn(ObjectGuid enemy) const
+        {
+            static std::vector<PlannedThreat> const none;
+            return Has(enemy, STAMP_IN_CLUSTER) ? areaThreat : none;
+        }
+        // How far ahead the tank's runway is judged outside the opening: the area spell, else
+        // ThreatRunway::HORIZON_SEC.
+        float RunwayHorizon() const { return areaSec > 0.0f ? areaSec : ThreatRunway::HORIZON_SEC; }
     };
 
     // The enemy one bot attacks (TargetAssigner, executed by TargetBehavior). A bot without an
@@ -827,7 +869,7 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
-    // One enemy next to the tank it still lacks threat on (Perception/Forecast/ThreatGap.h).
+    // One enemy next to the tank it still lacks threat on (ThreatRunway::Result::shortfall).
     struct ThreatGapEntry
     {
         ObjectGuid enemy;
@@ -836,7 +878,8 @@ namespace Commander
 
     // Threat opening ("群拉", Coordination/Doctrine/ThreatOpening.h, .kiro/docs/2026-11-08-threat-modes.md):
     // after a pull and when new enemies reach the tank, the tank first gets enough threat on
-    // each enemy next to it to keep it through the healer's next heal; everyone else waits.
+    // each enemy next to it to keep it through the healer's next heal and, under the Area
+    // tactic, through the whole area spell (ThreatRunway); everyone else waits.
     // A constraint while `active` (every cast of a held bot, its attacks: Behaviors/Constraints.h)
     // and the tank's task (TankTargets, ThreatBehavior value filling `gaps`).
     struct ThreatOpeningPlan
@@ -848,6 +891,9 @@ namespace Commander
         // Enemies whose opening is over (their gap was filled once, or the opening gave up on
         // them): later thin leads are the top-up's (TankTargets), not a new opening.
         std::vector<ObjectGuid> settled;
+        // Settled while this opening runs (their gap was filled): checked again until it ends,
+        // back in `gaps` when short again (the tank left them for the others).
+        std::vector<ObjectGuid> filled;
         float bestGap = 0.0f;                   // smallest total gap this opening (progress)
         uint32 progressMs = 0;                  // last time the total gap shrank
         // Points per second the waiting damage dealers lose / the tank's threat per second on
@@ -965,6 +1011,15 @@ namespace Commander
                 if (d.bot == bot)
                     return &d;
             return nullptr;
+        }
+
+        // The threat opening holds `bot` for a cast of `spellId`: every cast but the shield the
+        // area phase has the caster put up first (AreaPlan::prepSpellId: no threat on anyone).
+        bool HoldsCast(ObjectGuid bot, bool healer, uint32 spellId) const
+        {
+            if (!threat.Holds(bot, healer))
+                return false;
+            return !(spellId && area.prepCaster == bot && area.prepSpellId == spellId);
         }
 
         // An area spell must leave `e` alone: it is under a control that breaks on damage

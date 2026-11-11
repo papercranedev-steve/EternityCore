@@ -9,7 +9,11 @@
  *
  * Starts when an enemy is next to the main tank bot (within REACH_YD of its edge), acting, not
  * controlled, fighting the party, not settled yet, and the tank lacks threat on it
- * (Perception/Forecast/ThreatGap.h: enough to keep it through the healer's next heal). Also on while
+ * (ThreatRunway shortfall: enough to keep it through the healer's next heal; under the Area
+ * tactic also through the whole area spell the doctrine counts on, DoctrinePlan::areaThreat /
+ * areaSec, user 2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.3. The doctrine runs
+ * after this module: the last refresh's. Every enemy next to the tank counts as in the pile:
+ * a new one has no stamp yet). Also on while
  * the pulled enemies still walk to the tank (pull Settle past the arrival wait, an expected
  * enemy on the tank with melee on, further than REACH_YD; at most PullOpening::HOLD_MAX_MS of
  * Settle): the first hit of a damage dealer would take them.
@@ -23,6 +27,8 @@
  * shrink for STALL_MS: no rage, no ability reaches, someone keeps adding threat); or the tank
  * cannot act (dead, controlled). No fixed timeout (user 2026-11-08). Enemies it gave up on are
  * settled too: from then on the top-up and the rescue handle them (TankTargets, RescueAssigner).
+ * While the opening runs, a settled enemy short again (the tank left it for the others) is back
+ * in `gaps`; it does not count as a new enemy for the stall check.
  * Each start and end is a note.
  * Pure (facts and plan).
  */

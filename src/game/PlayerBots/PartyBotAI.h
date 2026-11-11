@@ -113,8 +113,9 @@ public:
     // as the arbiter's (Constraints::WakesControl). Every cast of the bot passes here
     // (PassesPartyCastChecks): rotations too.
     bool WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
-    // The brain's threat opening holds this bot (TeamPlan::threat.Holds): no cast at all.
-    bool IsHeldByThreatOpening() const;
+    // The brain's threat opening holds this bot for this cast (TeamPlan::HoldsCast): no cast
+    // but the area caster's shield put up first.
+    bool IsHeldByThreatOpening(SpellEntry const* pSpellEntry) const;
     // Every bot tick in combat: a melee splash buff on the bot while an enemy the plan keeps
     // controlled stands next to its victim is cancelled (Blade Flurry broke a Shackle,
     // strat-20261108-141921). The cast itself is refused by WouldWakeKeptControl.

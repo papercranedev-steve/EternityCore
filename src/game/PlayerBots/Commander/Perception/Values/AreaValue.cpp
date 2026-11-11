@@ -2,6 +2,7 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "SpellMgr.h"
@@ -32,6 +33,62 @@ namespace AreaValue
             if (slowPct <= 0.0f || e.slowed)
                 return e.speed;
             return e.speed * (1.0f - slowPct);
+        }
+
+        // An enemy hitting the caster in melee from `fromSec` after the start on.
+        struct Hitter
+        {
+            EnemyFacts const* facts = nullptr;
+            float fromSec = 0.0f;
+        };
+
+        // Seconds from `at` until `e` (running at `speed`) is in melee reach of it.
+        float WalkSec(EnemyFacts const& e, Position3 const& at, float speed)
+        {
+            float const yards = std::max(0.0f, PackResolver::Distance(at, e.pos) - e.boundingRadius - MELEE_REACH);
+            return yards / (speed > 0.1f ? speed : AggroTurnCost::RUN_YARDS_PER_SEC);
+        }
+
+        // Seconds of a channel lost to its hits (Unit::DealDamage -> Spell::DelayedChannel: a hit
+        // the absorbs do not take whole takes 1.0, 0.8, 0.6, 0.4, 0.2 s and then 0.2 s each off
+        // what is left, Spell::GetNextDelayAtDamageMsTime). `absorb`: the caster's absorbs and a
+        // shield put up first; armor is not counted (a hit uses up more of the shield than it
+        // does). Melee swings only (meleeHit every meleeHit / meleeDps).
+        float PushbackSec(std::vector<Hitter> const& hitters, float channelSec, float absorb)
+        {
+            struct Hit
+            {
+                float at;
+                float damage;
+            };
+            std::vector<Hit> hits;
+            for (Hitter const& h : hitters)
+            {
+                EnemyFacts const& e = *h.facts;
+                if (!e.meleeEnabled || e.meleeHit <= 0.0f || e.meleeDps <= 0.0f)
+                    continue;
+                float const swing = std::max(0.5f, e.meleeHit / e.meleeDps);
+                for (float t = h.fromSec; t < channelSec; t += swing)
+                    hits.push_back({ t, e.meleeHit });
+            }
+            std::sort(hits.begin(), hits.end(), [](Hit const& a, Hit const& b) { return a.at < b.at; });
+            float end = channelSec;
+            uint32 delays = 0;
+            for (Hit const& hit : hits)
+            {
+                if (hit.at >= end)
+                    break;
+                if (absorb >= hit.damage)
+                {
+                    absorb -= hit.damage;
+                    continue;
+                }
+                absorb = 0.0f;
+                float const delay = delays < 5 ? 1.0f - 0.2f * float(delays) : 0.2f;
+                ++delays;
+                end = std::max(hit.at, end - delay);
+            }
+            return channelSec - end;
         }
     }
 
@@ -81,10 +138,10 @@ namespace AreaValue
                 t.factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
                 t.holder = world.FindMember(e.victim);
                 // A holder hitting another enemy gains little here: its measured rate is a jump
-                // of the last seconds, not what comes next (strat-20261107-194655).
-                if (t.holder && t.holder->victim == e.guid)
-                    if (ThreatEntry const* h = ThreatView::FindEntry(e, t.holder->guid))
-                        t.holderRate = h->threatPerSec * TANK_GAIN_SHARE;
+                // of the last seconds, not what comes next (strat-20261107-194655). The same
+                // rate as the tank's threat runway.
+                if (t.holder)
+                    t.holderRate = ThreatRunway::HolderRate(world, e, *t.holder);
                 t.speed = SpeedUnder(e, spell.slowPct);
             }
             targets.push_back(t);
@@ -101,6 +158,7 @@ namespace AreaValue
             AggroTurnCost::Turn turn;
             float hitLoss = 0.0f;
             ObjectGuid guid;
+            float arriveSec = 0.0f;     // in melee reach of the caster (from the start)
         };
         std::vector<Turning> turning;
         for (Target const& t : targets)
@@ -121,6 +179,7 @@ namespace AreaValue
                 Turning x;
                 x.tick = k;
                 x.guid = t.facts->guid;
+                x.arriveSec = float(k) * spell.periodSec + WalkSec(*t.facts, r.from, t.speed);
                 if (t.holder)
                 {
                     // The holder (a melee tank) then needs 110% of mine to take it back.
@@ -137,14 +196,23 @@ namespace AreaValue
             }
         }
 
+        // Enemies on the caster already hit it from their walk on (a channel only: pushback).
+        std::vector<Hitter> onMe;
+        if (spell.channel)
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && !e.crowdControlled && e.health && e.victim == self.guid)
+                    onMe.push_back({ &e, WalkSec(e, r.from, e.speed) });
+
         AggroTurnCost::Options options = r.turn;
         options.at = &r.from;
         float const fillerPerSec = self.fillerDps;
         float const fillerManaPerSec = r.paid ? self.fillerManaPerSec : 0.0f;
         std::vector<AggroTurnCost::Turn> group;
+        std::vector<Hitter> hitters;
         auto const valueOf = [&](uint32 n, float& benefit, float& cost, float& turnLoss)
         {
             group.clear();
+            hitters = onMe;
             turnLoss = 0.0f;
             for (Turning const& x : turning)
             {
@@ -154,13 +222,24 @@ namespace AreaValue
                     group.push_back(x.turn);
                 else
                     turnLoss += x.hitLoss;
+                if (spell.channel)
+                    if (EnemyFacts const* e = world.FindEnemy(x.guid))
+                        hitters.push_back({ e, x.arriveSec });
             }
             if (!group.empty())
                 turnLoss += AggroTurnCost::OfGroup(world, group, self, options);
             float const sec = float(n) * spell.periodSec;
             benefit = Value::LostAction(world, self, damage[n - 1] / fillerPerSec) +
                       (fillerManaPerSec > 0.0f ? ManaWorth::Points(world, self, fillerManaPerSec * sec) : 0.0f);
-            cost = Value::LostAction(world, self, sec) + turnLoss;
+            float const timeCost = Value::LostAction(world, self, sec);
+            // The ticks the hits push off the end (a shield that holds keeps them: Ice Barrier,
+            // "spells will not be interrupted"): that share of the spell's worth beyond its time.
+            if (!hitters.empty() && sec > 0.0f)
+            {
+                float const lost = PushbackSec(hitters, sec, self.absorb + options.extraAbsorb);
+                turnLoss += std::max(0.0f, benefit - timeCost) * lost / sec;
+            }
+            cost = timeCost + turnLoss;
         };
 
         auto const finish = [&](uint32 n, float benefit, float cost, float turnLoss)

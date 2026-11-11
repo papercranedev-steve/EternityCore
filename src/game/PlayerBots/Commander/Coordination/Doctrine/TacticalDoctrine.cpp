@@ -2,6 +2,7 @@
 #include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/Doctrine/RoleStamps.h"
 #include "Commander/Coordination/Doctrine/AllyCharm.h"
+#include "Commander/Coordination/Doctrine/AreaIntent.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -160,6 +161,9 @@ namespace Commander
         // The main tank's job (TankJob): none while gathering (the threat opening's task).
         d.tankJob = d.phase == FightPhase::Gathering || d.tactic == PileTactic::None ? TankJob::None
                   : d.tactic == PileTactic::Area ? TankJob::HoldPile : TankJob::Focus;
+        // The area spell the tactic counts on: the tank's runway is judged with it (AreaIntent.h).
+        if (d.tactic == PileTactic::Area)
+            AreaIntent::Fill(world, d);
 
         // The enemies away from the tank (FightPlace.h). The pull's line of sight break as its map
         // step (PullPlanner::SearchLosBreak, after the assigners) left it last refresh; it reads

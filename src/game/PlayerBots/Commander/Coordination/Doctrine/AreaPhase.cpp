@@ -1,5 +1,8 @@
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
+#include "Commander/Coordination/Doctrine/ThreatOpening.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Forecast/ThreatGap.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Values/AreaValue.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Values/ManaWorth.h"
@@ -7,8 +10,11 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Timer.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace Commander
 {
@@ -100,6 +106,180 @@ namespace Commander
             float shieldGain = 0.0f;
             ObjectGuid centre;
         };
+
+        std::string Text(char const* fmt, float a, float b = 0.0f)
+        {
+            char buf[200];
+            snprintf(buf, sizeof(buf), fmt, a, b);
+            return buf;
+        }
+
+        // While the pull or the opening holds the party: the shield of a caster the Area tactic
+        // counts on (DoctrinePlan::areaThreat), worth the area spell with it - without it on the
+        // pile around the main tank as the threat stands now (the opening's estimate), minus
+        // its mana. No GCD: the caster waits anyway.
+        void PrepShield(WorldModel const& world, TeamPlan const& plan, AreaPlan& a)
+        {
+            DoctrinePlan const& d = plan.doctrine;
+            if (d.tactic != PileTactic::Area || plan.retreat.active)
+                return;
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            if (!tank)
+                return;
+            EnemyFacts const* centre = nullptr;
+            float nearest = 0.0f;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (!e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim != tank->guid)
+                    continue;
+                float const distance = PackResolver::Distance(tank->pos, e.pos);
+                if (!centre || distance < nearest)
+                {
+                    centre = &e;
+                    nearest = distance;
+                }
+            }
+            if (!centre)
+                return;
+            for (PlannedThreat const& p : d.areaThreat)
+            {
+                PartyMemberFacts const* m = world.FindMember(p.member);
+                if (!m || !m->CanAct())
+                    continue;
+                SelfShieldFacts const& sh = m->selfShield;
+                if (!sh.spellId || !sh.ready || sh.up)
+                    continue;
+                for (AreaSpellFacts const& spell : m->areaSpells)
+                {
+                    if (!spell.ready)
+                        continue;
+                    AreaValue::Request r;
+                    r.caster = m;
+                    r.spell = &spell;
+                    r.centre = spell.onTarget ? centre->pos : m->pos;
+                    r.from = m->pos;
+                    r.settle = false;
+                    r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+                    AreaValue::Result const without = AreaValue::Evaluate(world, r);
+                    AreaValue::Request with = r;
+                    with.turn.extraAbsorb += sh.absorb;
+                    AreaValue::Result const shielded = AreaValue::Evaluate(world, with);
+                    if (!without.valid || !shielded.valid)
+                        continue;
+                    float const gain = shielded.net - without.net - ManaWorth::Points(world, *m, float(sh.manaCost));
+                    if (gain > a.prepGain)
+                    {
+                        a.prepGain = gain;
+                        a.prepCaster = m->guid;
+                        a.prepSpellId = sh.spellId;
+                    }
+                }
+            }
+        }
+
+        // Seconds the main tank needs to give every enemy `c` turns a runway through the whole
+        // spell (ThreatRunway shortfalls with the spell's threat, one after another at
+        // ThreatGap::FillRate), and their total. False: no main tank, or one is not on it.
+        bool TankFill(WorldModel const& world, Candidate const& c, float& sec, float& total)
+        {
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            AreaSpellFacts const& s = *c.request.spell;
+            if (!tank || !tank->CanAct() || c.value.turning.empty() || s.periodSec <= 0.0f)
+                return false;
+            std::vector<PlannedThreat> const planned{ { c.request.caster->guid, s.tickThreat / s.periodSec } };
+            float const spellSec = float(s.ticks) * s.periodSec;
+            total = 0.0f;
+            for (ObjectGuid g : c.value.turning)
+            {
+                EnemyFacts const* e = world.FindEnemy(g);
+                if (!e || e->victim != tank->guid)
+                    return false;
+                total += ThreatRunway::Of(world, *e, tank->guid, planned, spellSec).shortfall;
+            }
+            sec = total / ThreatGap::FillRate(world, *tank);
+            return true;
+        }
+
+        // Step 3: the best spell is worth more a little later (doc .kiro/docs/2026-11-11-aoe-threat.md
+        // 4.3, 4.4). A wait of `sec` costs the share of the later net the spell would have
+        // made by then (net x sec / its length). Later:
+        //   Tank    nobody turns (net + turn loss) once the tank has filled their shortfalls;
+        //           not when the total did not shrink for ThreatOpeningAssigner::STALL_MS.
+        //   Shield  the caster's shield (on cooldown now) first, as in step 2.
+        // Writes the wait into `a` (active stays false); a note when it starts.
+        bool Waits(WorldModel const& world, Candidate const& c, AreaPlan const& prev, AreaPlan& a,
+                   std::vector<std::string>& notes)
+        {
+            AreaSpellFacts const& s = *c.request.spell;
+            PartyMemberFacts const& m = *c.request.caster;
+            float const spellSec = float(s.ticks) * s.periodSec;
+            if (spellSec <= 0.0f || c.value.turnLoss <= 0.0f)
+                return false;
+            float const now = c.value.net + c.shieldGain;
+            uint32 const nowMs = world.refreshedAtMs;
+            bool const waitedTank = prev.wait == AreaWait::Tank && prev.waitCaster == m.guid;
+
+            AreaWait wait = AreaWait::None;
+            float gain = 0.0f;
+            float sec = 0.0f;
+            float fillSec = 0.0f;
+            float total = 0.0f;
+            if (TankFill(world, c, fillSec, total))
+            {
+                bool const stalled = waitedTank && total >= prev.waitShortfall - ThreatOpeningAssigner::PROGRESS_MIN &&
+                                     WorldTimer::getMSTimeDiff(prev.waitProgressMs, nowMs) > ThreatOpeningAssigner::STALL_MS;
+                float const later = c.value.net + c.value.turnLoss;
+                float const g = later - std::max(0.0f, later) * fillSec / spellSec - now;
+                if (!stalled && g > gain)
+                {
+                    wait = AreaWait::Tank;
+                    gain = g;
+                    sec = fillSec;
+                }
+            }
+            SelfShieldFacts const& sh = m.selfShield;
+            if (sh.spellId && !sh.up && !sh.ready && sh.cooldownSec > 0.0f)
+            {
+                AreaValue::Request with = c.request;
+                with.turn.extraAbsorb += sh.absorb;
+                AreaValue::Result const v = AreaValue::Evaluate(world, with);
+                if (v.valid)
+                {
+                    float const later = v.net - (c.move ? c.moveCost : 0.0f) -
+                                        Value::LostAction(world, m, Value::GCD_SEC) -
+                                        ManaWorth::Points(world, m, float(sh.manaCost));
+                    float const g = later - std::max(0.0f, later) * sh.cooldownSec / spellSec - now;
+                    if (g > gain)
+                    {
+                        wait = AreaWait::Shield;
+                        gain = g;
+                        sec = sh.cooldownSec;
+                    }
+                }
+            }
+            if (wait == AreaWait::None)
+                return false;
+
+            bool const same = prev.wait == wait && prev.waitCaster == m.guid;
+            a.wait = wait;
+            a.waitCaster = m.guid;
+            a.waitSec = sec;
+            a.waitGain = gain;
+            a.waitSinceMs = same ? prev.waitSinceMs : nowMs;
+            if (wait == AreaWait::Tank)
+            {
+                // Progress as the opening's: the smallest total so far and when it shrank.
+                bool const progress = !waitedTank || total < prev.waitShortfall - ThreatOpeningAssigner::PROGRESS_MIN;
+                a.waitShortfall = progress ? total : prev.waitShortfall;
+                a.waitProgressMs = progress ? nowMs : prev.waitProgressMs;
+            }
+            if (!same)
+                notes.push_back(wait == AreaWait::Tank
+                    ? Text("Area spell waits ~%.0f s: the tank first gives the %.0f enemies it would turn a runway through it.",
+                           sec, float(c.value.turning.size()))
+                    : Text("Area spell waits %.0f s for the caster's shield (%.1f points better).", sec, gain));
+            return true;
+        }
     }
 
     void AreaPhaseAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
@@ -107,8 +287,13 @@ namespace Commander
         AreaPlan const prev = plan.area;
         AreaPlan& a = plan.area;
         a = AreaPlan();
-        if (!world.HasPartyEnemy() || PartyHolds(plan))
+        if (!world.HasPartyEnemy())
             return;
+        if (PartyHolds(plan))
+        {
+            PrepShield(world, plan, a);
+            return;
+        }
 
         std::vector<ObjectGuid> const tanks = AllTanks(world);
         // Tanks walking off a patrol's path (PatrolAssigner, this refresh or the last one).
@@ -253,6 +438,10 @@ namespace Commander
             }
         }
         if (!found)
+            return;
+
+        // 3. Or a little later.
+        if (Waits(world, best, prev, a, plan.notes))
             return;
 
         PartyMemberFacts const& m = *best.request.caster;

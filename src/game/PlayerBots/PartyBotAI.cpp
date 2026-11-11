@@ -884,7 +884,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     // Threat opening (Commander/Coordination/Doctrine/ThreatOpening.h): everyone but the tank waits,
     // no cast at all (user 2026-11-08; strat-20261108-200046: a Counterspell and self buffs
     // turned enemies the tank had 0 threat on).
-    if (IsHeldByThreatOpening())
+    if (IsHeldByThreatOpening(pSpellEntry))
         return false;
     // The pull brings the pack back: charging in would put the tank in the middle of it.
     if (IsGapCloserForbidden(pSpellEntry))
@@ -953,13 +953,14 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     return true;
 }
 
-bool PartyBotAI::IsHeldByThreatOpening() const
+bool PartyBotAI::IsHeldByThreatOpening(SpellEntry const* pSpellEntry) const
 {
     if (IsInDuel() || !m_directives)
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    return commander && commander->GetPlan().threat.Holds(me->GetObjectGuid(), GetRole() == ROLE_HEALER);
+    return commander && commander->GetPlan().HoldsCast(me->GetObjectGuid(), GetRole() == ROLE_HEALER,
+                                                       pSpellEntry ? pSpellEntry->Id : 0);
 }
 
 bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const

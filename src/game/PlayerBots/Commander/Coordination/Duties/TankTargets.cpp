@@ -7,7 +7,7 @@
 #include "Commander/Perception/Spatial/RouteRisk.h"
 #include "Commander/Perception/Values/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
-#include "Commander/Perception/Forecast/ThreatGap.h"
+#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
@@ -89,36 +89,49 @@ namespace TankTargets
             return p;
         }
 
-        // 3. An enemy on the tank whose lead does not survive the healer's next heal
-        // (Perception/Forecast/ThreatGap.h; fresh adds, VanCleef's guards in scenario 6). The tank stays
-        // on it until it does (user 2026-11-08: "多打一会"), then the current target rules.
-        // Before 2026-11-08: lead / threat below 15% while the current one was above 30%.
+        // 3. Top up (user 2026-11-08: "多打一会", 2026-11-12: by the runway): the enemy on the
+        // tank, at the pile, whose threat runway (Perception/Forecast/ThreatRunway.h, with the
+        // area spell the doctrine counts on) ends soonest within the doctrine's horizon. The tank
+        // stays on the current one while its runway is short and the shortest; a long runway on
+        // the current one makes a switch cheap (round robin with satiation, doc
+        // .kiro/docs/2026-11-11-aoe-threat.md 4.2). Before 2026-11-12: only an enemy whose lead
+        // did not survive the healer's next heal, so the tank sat on one enemy far ahead while
+        // the others thinned out; before 2026-11-08: lead / threat below 15%.
         TargetPick TopUp(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
         {
             WorldModel const& world = ctx.world;
-            if (current && current->victim == tank.guid && ThreatGap::Of(world, *current, tank.guid) > 0.0f)
-                return Keep(current, "top up: until it holds through the next heal");
+            DoctrinePlan const& doctrine = ctx.plan.doctrine;
+            float const horizon = doctrine.RunwayHorizon();
+            auto const runway = [&](EnemyFacts const& e)
+            {
+                return ThreatRunway::Of(world, e, tank.guid, doctrine.AreaThreatOn(e.guid), horizon);
+            };
+
+            float currentSec = horizon;
+            if (current && current->victim == tank.guid)
+                currentSec = std::min(horizon, runway(*current).sec);
 
             EnemyFacts const* weakest = nullptr;
-            float weakestGap = 0.0f;
+            ThreatRunway::Result weakestRunway;
+            weakestRunway.sec = horizon;
             for (EnemyFacts const* e : ctx.candidates)
             {
-                if (e == current || e->victim != tank.guid || !ctx.Hittable(*e, tank))
+                if (e == current || e->victim != tank.guid || !ctx.Hittable(*e, tank) ||
+                    PackResolver::Distance(tank.pos, e->pos) - e->boundingRadius > TacticalDoctrine::CLUSTER_YD)
                     continue;
-                float const gap = ThreatGap::Of(world, *e, tank.guid);
-                if (gap > weakestGap)
+                ThreatRunway::Result const r = runway(*e);
+                if (r.sec < weakestRunway.sec)
                 {
-                    weakestGap = gap;
+                    weakestRunway = r;
                     weakest = e;
                 }
             }
+            if (currentSec < horizon && (!weakest || currentSec <= weakestRunway.sec))
+                return Keep(current, "top up: its runway is the shortest");
             if (!weakest)
                 return TargetPick();
-            // Who takes it when the lead breaks: the closest on its list, else a healer bot (the
-            // next heal puts it there).
-            ObjectGuid closest;
-            ThreatView::VictimLead(*weakest, &closest);
-            PartyMemberFacts const* runner = closest.IsEmpty() ? nullptr : world.FindMember(closest);
+            // Who takes it when the runway ends, else a healer bot (the next heal puts it there).
+            PartyMemberFacts const* runner = weakestRunway.taker.IsEmpty() ? nullptr : world.FindMember(weakestRunway.taker);
             if (!runner)
                 for (PartyMemberFacts const& m : world.party)
                     if (m.isBot && !m.isPet && m.alive && m.role == ROLE_HEALER)
@@ -127,14 +140,16 @@ namespace TankTargets
                         break;
                     }
             if (!runner || runner->isPet)
-                return TargetPick();
+                return currentSec < horizon ? Keep(current, "top up: its runway is short") : TargetPick();
 
             TargetPick p;
             p.enemy = weakest;
-            p.benefit = LooseEnemy::Loss(world, *weakest, *runner, tank, RECLAIM_SEC) * FRAGILE_WEIGHT;
+            p.benefit = LooseEnemy::ThinLoss(world, *weakest, *runner, tank, weakestRunway.sec, horizon);
             p.cost = SwitchCost::Of(world, tank, *weakest, MELEE_REACH);
-            p.reason = "top up: lead does not hold through the next heal";
-            return p.benefit > p.cost ? p : TargetPick();
+            p.reason = "top up: the shortest threat runway";
+            if (p.benefit > p.cost)
+                return p;
+            return currentSec < horizon ? Keep(current, "top up: its runway is short") : TargetPick();
         }
 
         // 4. The doctrine's job Focus (Pick tactic, TankJob): the main tank hits the party focus

@@ -9,6 +9,8 @@
  * (Coordination/Doctrine/AreaPhase.h, TeamPlan::area) and the values come from one place
  * (Perception/Values/AreaValue.h). Design: .kiro/docs/2026-11-08-aoe-phase.md.
  *
+ * Before the phase (TeamPlan::area prepCaster, in combat or not): its shield while the party
+ *   holds for the pull or the opening, tier Assigned, net prepGain (2026-11-12).
  * Propose (TeamPlan::area, in combat):
  *   the healer named for it (allyShieldBot): its shield on the caster when not on it yet,
  *     tier Assigned, net allyShieldGain.
@@ -17,7 +19,8 @@
  *             checks (ground within MAX_STEP_Z of the caster, outside idle creatures' reach, out
  *             of hazards and patrol paths, line of sight to the centre, a safe path); not usable:
  *             cast from where it stands if netHere > 0. Value moveBenefit / moveCost.
- *     Shield  its own shield (Ice Barrier) when its aura is not on. Value shieldGain.
+ *     Shield  its own shield (Ice Barrier) when its aura is not on. Value shieldGain. Not
+ *             castable this moment (GCD): nothing, the spell waits for it.
  *     Cast    the spell on the centre enemy (ground spell) or itself, when CanTryToCastSpell
  *             passes (range, mana, PartyBotAI::PassesPartyCastChecks). Value benefit / cost of
  *             the whole spell.

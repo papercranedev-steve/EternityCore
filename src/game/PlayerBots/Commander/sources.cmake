@@ -53,6 +53,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/LooseEnemy.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.cpp
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.h
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.cpp
   ${COMMANDER_DIR}/Perception/Values/AreaValue.h
@@ -125,6 +127,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.h
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.h
   ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.h

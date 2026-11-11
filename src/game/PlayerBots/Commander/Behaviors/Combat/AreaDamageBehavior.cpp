@@ -132,6 +132,25 @@ namespace Commander
             p.SetValue(a.allyShieldGain + cost, cost);
             out.push_back(p);
         }
+
+        // The brain's prep step (AreaPlan::prepSpellId): the shield before the phase, while the
+        // party holds. Its gain is net of the mana; nothing else is lost (the caster waits).
+        void ProposePrepShield(PartyBotAI const* bot, AreaPlan const& a, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.prepSpellId);
+            if (!shield || me->HasAura(shield->Id) || !bot->CanTryToCastSpell(me, shield))
+                return;
+            Proposal p;
+            p.tier = ProposalTier::Assigned;
+            p.source = "aoe";
+            p.reason = "area phase prep: shield before the pull ends";
+            p.action.type = BotActionType::Cast;
+            p.action.spell = shield;
+            p.action.target = me->GetObjectGuid();
+            p.SetValue(a.prepGain, 0.0f);
+            out.push_back(p);
+        }
     }
 
     bool AreaDamageBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -161,9 +180,16 @@ namespace Commander
     {
         Player* me = bot->me;
         AreaPlan const& a = plan.area;
+        ObjectGuid const guid = me->GetObjectGuid();
+        // 0. Before the phase: its shield up while the party holds (AreaPhase prep; the
+        // caster need not be in combat yet).
+        if (a.prepCaster == guid && a.prepSpellId)
+        {
+            ProposePrepShield(bot, a, out);
+            return;
+        }
         if (!a.active || !me->IsInCombat())
             return;
-        ObjectGuid const guid = me->GetObjectGuid();
         PartyMemberFacts const* self = world.FindMember(guid);
         if (!self || !self->CanAct())
             return;
@@ -213,8 +239,13 @@ namespace Commander
         if (a.shieldSpellId)
         {
             SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.shieldSpellId);
-            if (shield && !me->HasAura(shield->Id) && bot->CanTryToCastSpell(me, shield))
+            if (shield && !me->HasAura(shield->Id))
             {
+                // Not castable this moment (the GCD, a cast running): the shield still comes
+                // first; the brain plans it again next refresh (before 2026-11-12 the spell
+                // went out without it).
+                if (!bot->CanTryToCastSpell(me, shield))
+                    return;
                 Proposal p;
                 p.tier = ProposalTier::Assigned;
                 p.source = "aoe";

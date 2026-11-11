@@ -275,6 +275,9 @@ namespace Commander
         uint32 manaCost = 0;
         bool ready = false;
         bool up = false;            // its aura is on
+        // Seconds until its cooldown ends (SpellCaster::GetSpellCooldownLeft; 0 = off cooldown,
+        // negative = held until an event): the area phase may wait for it.
+        float cooldownSec = 0.0f;
     };
 
     // A party member or a party member's pet on this map.

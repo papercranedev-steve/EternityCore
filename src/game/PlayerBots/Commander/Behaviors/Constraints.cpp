@@ -153,7 +153,7 @@ namespace Commander
                         return "wait for the tank's threat";
                     return plan.EngageBlock(self, p.action.target);
                 case BotActionType::Cast:
-                    if (held)
+                    if (plan.HoldsCast(self, bot->GetRole() == ROLE_HEALER, p.action.spell ? p.action.spell->Id : 0))
                         return "wait for the tank's threat";
                     return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:
