@@ -85,6 +85,9 @@ namespace Commander
         // Cast: at the ground point x/y/z (a ground area spell: Blizzard, Rain of Fire), not at
         // a unit; `target` is not used (doc .kiro/docs/2026-11-12-mage-hold.md 3.2).
         bool atPoint = false;
+        // Cast: turn to this orientation (radians) first, the spell goes the way the bot faces
+        // (Blink); < 0 = no turn.
+        float facing = -1.0f;
     };
 
     // Replace: do this action this tick instead of the original rotation.

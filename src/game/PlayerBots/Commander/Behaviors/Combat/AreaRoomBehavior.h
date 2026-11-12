@@ -21,12 +21,19 @@
  * worth(at its end) when now is the best moment (CastBreak stops it when that beats what the
  * rest of it is worth; the death penalty when the hits until then kill it).
  * How (3.4, fixed order, not points):
- *   1. Frost Nova ready and a runner within its radius: Frost Nova (all of them in: the area
- *      phase then places the next Blizzard on all of them from farther away, AreaSpot);
- *   2. (Blink: next step)
- *   3. otherwise, and right after a Frost Nova that left some free: to the tank (RunToTank).
+ *   1. Frost Nova ready and every runner within its radius: Frost Nova (the area phase then
+ *      places the next Blizzard on all of them from farther away, AreaSpot);
+ *   2. Blink ready (ClassKit::Leap): turn, Blink (BotAction::facing). Landing: LeapSpots
+ *      away from the runners; first one from which its ground channel still reaches the first
+ *      runner (range - REACH_MARGIN_YD), then nearest the main tank (none: farthest from the
+ *      runners). The area phase then puts the Blizzard ahead of the first runner (AreaPlace).
+ *      Also while rooted (Blink frees it).
+ *   3. Frost Nova ready and a runner within its radius: Frost Nova what it can; then, and
+ *      when nothing else is left: to the tank (RunToTank).
  * Tier Urgent. While its own walk is under way: hold it; nobody running at it: stop it.
- * Values: Frost Nova benefit held(now), cost LostAction(GCD) + ManaWorth(its mana).
+ * Values: Frost Nova benefit held(now); Blink the runners' hits and harassment while they
+ * walk its distance again; cost LostAction(GCD) + ManaWorth(its mana).
+ * Not yet: Cone of Cold on the one or two in the face before the Blink (doc 3.4 step 2, 3.5).
  */
 
 #ifndef MANGOS_COMMANDER_AREA_ROOM_BEHAVIOR_H
@@ -42,6 +49,7 @@ namespace Commander
         static constexpr float ACT_SEC = 0.3f;          // a bot tick and a refresh: "now"
         static constexpr float HORIZON_SEC = 8.0f;      // a Blizzard's length
         static constexpr float RADIUS_MARGIN_YD = 0.5f; // inside the Frost Nova's edge by this much
+        static constexpr float REACH_MARGIN_YD = 3.0f;  // a Blink landing keeps the first runner this far inside the Blizzard's range
 
         char const* GetId() const override { return "aoe-room"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

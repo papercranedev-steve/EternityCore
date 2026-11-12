@@ -157,6 +157,9 @@ namespace Commander
         virtual SpellEntry const* SelfShield() const { return nullptr; }
         // Turns its health into mana (warlock Life Tap): its mana is worth less (ManaWorth.h).
         virtual SpellEntry const* HealthToMana() const { return nullptr; }
+        // A jump forward the way it faces (mage Blink): the area caster gets room from what
+        // runs at it (AreaRoomBehavior, doc .kiro/docs/2026-11-12-mage-hold.md 3.4).
+        virtual SpellEntry const* Leap() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

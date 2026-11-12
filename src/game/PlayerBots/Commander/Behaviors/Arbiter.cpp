@@ -117,6 +117,9 @@ namespace Commander
                     SpellEntry const* spell = act.action.spell;
                     if (!spell || CurrentAction::NeedsStandingStill(bot, spell) || spell->IsAutoRepeatRangedSpell())
                         return false;
+                    // Turned first (Blink): the walk would turn it back.
+                    if (act.action.facing >= 0.0f)
+                        return false;
                     if (act.action.target.IsEmpty() || act.action.target == me->GetObjectGuid() || !spell->IsNeedFaceTarget())
                         return true;
                     Unit const* target = me->GetMap()->GetUnit(act.action.target);
@@ -515,6 +518,8 @@ namespace Commander
                     return false;
                 if (action.atPoint)
                     return bot->DoCastAt(action.x, action.y, action.z, action.spell) == SPELL_CAST_OK;
+                if (action.facing >= 0.0f)
+                    return bot->DoCastFacing(action.facing, action.spell) == SPELL_CAST_OK;
                 Unit* pCastTarget = pTarget ? pTarget : me;
                 // A warrior swaps stance first when needed (Thunder Clap or Mocking Blow from
                 // Defensive Stance): PartyBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.

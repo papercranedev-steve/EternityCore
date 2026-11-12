@@ -109,6 +109,8 @@ public:
     bool CanTryToCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry) const;
     // StandStillFor, then CombatBotBaseAI::DoCastSpellAt.
     SpellCastResult DoCastAt(float x, float y, float z, SpellEntry const* pSpellEntry);
+    // Ends a module's walk (its movement hold), then CombatBotBaseAI::DoCastFacing.
+    SpellCastResult DoCastFacing(float orientation, SpellEntry const* pSpellEntry);
     // Execution: a point walk (a Commander MoveTo) does not pause for a cast the way chase and
     // follow do (TargetedMovementGenerator stops while IsNoMovementSpellCasted), so a channel
     // started on the way broke at once (Evocation, strat-20261108-141921). Stops it and ends

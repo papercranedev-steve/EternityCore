@@ -3094,6 +3094,17 @@ SpellCastResult PartyBotAI::DoCastAt(float x, float y, float z, SpellEntry const
     return DoCastSpellAt(x, y, z, pSpellEntry);
 }
 
+SpellCastResult PartyBotAI::DoCastFacing(float orientation, SpellEntry const* pSpellEntry)
+{
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE)
+    {
+        ClearMovementHold();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
+    return CombatBotBaseAI::DoCastFacing(orientation, pSpellEntry);
+}
+
 SpellCastResult PartyBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry)
 {
     if (CanTryToCastSpell(pTarget, pSpellEntry))

@@ -85,6 +85,11 @@ namespace Commander
                 return m_bot.m_spells.mage.pIceBarrier;
             }
 
+            SpellEntry const* Leap() const override
+            {
+                return m_bot.m_spells.mage.pBlink;
+            }
+
             // Ice Block: immune, but the mage does nothing while it lasts.
             std::vector<SurvivalSpell> Survival() const override
             {

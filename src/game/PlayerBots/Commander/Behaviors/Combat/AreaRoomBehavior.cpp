@@ -5,6 +5,9 @@
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/Runners.h"
+#include "Commander/Perception/Spatial/LeapSpots.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/AreaValue.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -144,6 +147,81 @@ namespace Commander
             return true;
         }
 
+        // Header "How" 2: Blink away (LeapSpots), the landing from which its ground channel
+        // still reaches the first runner first, then nearest a tank (none: farthest from the
+        // runners). False: not ready or nowhere to land.
+        bool ProposeBlink(PartyBotAI const* bot, WorldModel const& world, Line const& line, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            SpellEntry const* blink = bot->Kit().Leap();
+            if (!blink || !bot->CanTryToCastSpell(me, blink))
+                return false;
+            float distance = 0.0f;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(blink->EffectRadiusIndex[i]))
+                    distance = std::max(distance, r->Radius);
+            if (distance <= 0.0f)
+                return false;
+
+            Position3 centroid;
+            for (Runner const& r : line.runners)
+            {
+                centroid.x += r.facts->pos.x / float(line.runners.size());
+                centroid.y += r.facts->pos.y / float(line.runners.size());
+            }
+            std::vector<LeapSpots::Spot> const spots = LeapSpots::Find(me, world, distance, centroid);
+            if (spots.empty())
+                return false;
+
+            float reach = 0.0f;
+            for (AreaSpellFacts const& a : line.self->areaSpells)
+                if (a.onTarget && a.channel)
+                    reach = std::max(reach, a.range - RB::REACH_MARGIN_YD);
+            Position3 const& lead = line.runners.front().facts->pos;
+            PartyMemberFacts const* tank = Tanks::Main(world);
+            auto const gap = [&](Position3 const& p)
+            {
+                float g = 1e9f;
+                for (Runner const& r : line.runners)
+                    g = std::min(g, PackResolver::Distance(p, r.facts->pos));
+                return g;
+            };
+            LeapSpots::Spot const* best = nullptr;
+            bool bestReaches = false;
+            float bestScore = 0.0f;
+            for (LeapSpots::Spot const& s : spots)
+            {
+                bool const reaches = reach > 0.0f && PackResolver::Distance(s.landing, lead) <= reach;
+                float const score = tank ? -PackResolver::Distance(s.landing, tank->pos) : gap(s.landing);
+                if (!best || (reaches && !bestReaches) || (reaches == bestReaches && score > bestScore))
+                {
+                    best = &s;
+                    bestReaches = reaches;
+                    bestScore = score;
+                }
+            }
+
+            // Worth: the hits of the runners while they walk the distance again.
+            float saved = 0.0f;
+            for (Runner const& r : line.runners)
+            {
+                float const sec = distance / std::max(1.0f, r.facts->speed);
+                saved += Value::HitLoss(world, *r.facts, *line.self, sec) + Value::HarassLoss(world, *r.facts, *line.self, sec);
+            }
+            Proposal p;
+            p.tier = ProposalTier::Urgent;
+            p.source = SOURCE;
+            p.reason = "they are here, Frost Nova cannot hold them all: Blink away";
+            p.action.type = BotActionType::Cast;
+            p.action.spell = blink;
+            p.action.facing = best->orientation;
+            float const mana = DamageSpells::ManaCost(me, blink);
+            p.SetValue(saved, Value::LostAction(world, *line.self, Value::GCD_SEC) +
+                              (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
+            out.push_back(p);
+            return true;
+        }
+
         // Enemies rooted next to the bot that hit it (its own Frost Nova just now).
         bool RootedOnMe(WorldModel const& world, ObjectGuid self)
         {
@@ -199,13 +277,13 @@ namespace Commander
             out.push_back(hold);
             return;
         }
-        if (me->HasUnitState(UNIT_STATE_ROOT))
-            return;
+        bool const rooted = me->HasUnitState(UNIT_STATE_ROOT);
 
         // Right after a Frost Nova that left some free: to the tank now (doc 3.4 step 3).
         if (!line.novaReady && RootedOnMe(world, line.self->guid))
         {
-            ProposeToTank(bot, world, line, "Frost Nova did not hold them all: to the tank", out);
+            if (!rooted)
+                ProposeToTank(bot, world, line, "Frost Nova did not hold them all: to the tank", out);
             return;
         }
 
@@ -213,36 +291,48 @@ namespace Commander
         if (line.Best(world, HORIZON_SEC, worth) > ACT_SEC)
             return;     // a better moment comes: go on (header "When")
 
-        // 1. Frost Nova what is within its radius now.
-        if (line.novaReady && nova)
-        {
-            float held = 0.0f;
-            bool any = false;
-            for (Runner const& r : line.runners)
-                if (r.inRadiusSec <= ACT_SEC)
-                {
-                    any = true;
-                    held += Value::HitLoss(world, *r.facts, *line.self, line.holdSec) +
-                            Value::HarassLoss(world, *r.facts, *line.self, line.holdSec);
-                }
-            if (any)
+        // Within the Frost Nova's radius now, and what holding them is worth.
+        float held = 0.0f;
+        uint32 within = 0;
+        for (Runner const& r : line.runners)
+            if (r.inRadiusSec <= ACT_SEC)
             {
-                Proposal p;
-                p.tier = ProposalTier::Urgent;
-                p.source = SOURCE;
-                p.reason = "they are here: Frost Nova";
-                p.action.type = BotActionType::Cast;
-                p.action.spell = nova;
-                float const mana = DamageSpells::ManaCost(me, nova);
-                p.SetValue(held, Value::LostAction(world, *line.self, Value::GCD_SEC) +
-                                 (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
-                out.push_back(p);
-                return;
+                ++within;
+                held += Value::HitLoss(world, *r.facts, *line.self, line.holdSec) +
+                        Value::HarassLoss(world, *r.facts, *line.self, line.holdSec);
             }
-        }
+        auto const proposeNova = [&](char const* reason)
+        {
+            Proposal p;
+            p.tier = ProposalTier::Urgent;
+            p.source = SOURCE;
+            p.reason = reason;
+            p.action.type = BotActionType::Cast;
+            p.action.spell = nova;
+            float const mana = DamageSpells::ManaCost(me, nova);
+            p.SetValue(held, Value::LostAction(world, *line.self, Value::GCD_SEC) +
+                             (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
+            out.push_back(p);
+        };
+        bool const novaNow = line.novaReady && nova && within > 0;
 
-        // 3. Otherwise to the tank.
-        ProposeToTank(bot, world, line, "they are here, no Frost Nova: to the tank", out);
+        // 1. Frost Nova holds all of them.
+        if (novaNow && within == line.runners.size())
+        {
+            proposeNova("they are here, all within reach: Frost Nova");
+            return;
+        }
+        // 2. It cannot: Blink away (its Blizzard goes ahead of the first one again, AreaPlace).
+        if (ProposeBlink(bot, world, line, out))
+            return;
+        // 3. Frost Nova what it can, then to the tank.
+        if (novaNow)
+        {
+            proposeNova("they are here, no Blink: Frost Nova what it can");
+            return;
+        }
+        if (!rooted)
+            ProposeToTank(bot, world, line, "they are here, no Frost Nova: to the tank", out);
     }
 
     float AreaRoomBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
@@ -260,8 +350,7 @@ namespace Commander
             return 0.0f;
         bool alive = true, dies = false;
         float const atEnd = line.Worth(world, leftSec, alive, dies);
-        reason = line.novaReady ? "they are here: Frost Nova now, not after the cast"
-                                : "they are here: to the tank now, not after the cast";
+        reason = "they are here: get room now, not after the cast";
         return std::max(0.0f, now - atEnd) + (dies ? Value::DeathPenalty(*line.self) : 0.0f);
     }
 }

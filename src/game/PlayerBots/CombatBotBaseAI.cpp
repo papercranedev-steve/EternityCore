@@ -2928,6 +2928,21 @@ SpellCastResult CombatBotBaseAI::DoCastSpellAt(float x, float y, float z, SpellE
     return me->CastSpell(x, y, z, pSpellEntry, false);
 }
 
+SpellCastResult CombatBotBaseAI::DoCastFacing(float orientation, SpellEntry const* pSpellEntry)
+{
+    if (m_preventCasting)
+        return SPELL_FAILED_DONT_REPORT;
+    if (!me->IsStopped())
+        me->StopMoving();
+    // Unit::SetFacingTo turns through a facing spline, on the next movement update: too late
+    // for a spell cast now. Set it first, then tell the observers.
+    me->SetOrientation(orientation);
+    me->SetFacingTo(orientation);
+    if (me->IsMounted())
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+    return me->CastSpell(me, pSpellEntry, false);
+}
+
 SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry)
 {
     if (m_preventCasting)
