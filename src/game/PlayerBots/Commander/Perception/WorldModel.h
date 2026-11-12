@@ -444,6 +444,7 @@ namespace Commander
         float boundingRadius = 0.0f;
         float speed = 0.0f;             // run speed now, yards per second (slows included)
         bool slowed = false;            // a speed decrease is on it
+        bool rooted = false;            // UNIT_STATE_ROOT (Frost Nova): stands, still hits what is in reach
 
         ObjectGuid victim;              // threat manager's current victim (who it is hitting)
         float victimThreat = 0.0f;

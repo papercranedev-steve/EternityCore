@@ -59,6 +59,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.cpp
   ${COMMANDER_DIR}/Perception/Values/AreaValue.h
   ${COMMANDER_DIR}/Perception/Values/AreaValue.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/Runners.h
+  ${COMMANDER_DIR}/Perception/Forecast/Runners.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/AreaCentre.h
+  ${COMMANDER_DIR}/Perception/Spatial/AreaCentre.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaPlace.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaPlace.cpp
   ${COMMANDER_DIR}/Perception/Spatial/RouteRisk.h
   ${COMMANDER_DIR}/Perception/Spatial/RouteRisk.cpp
   ${COMMANDER_DIR}/Perception/Profiles/SpellTags.h

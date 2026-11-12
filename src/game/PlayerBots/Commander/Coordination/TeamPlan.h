@@ -648,8 +648,10 @@ namespace Commander
         AreaStep step = AreaStep::Cast;
         ObjectGuid caster;
         uint32 spellId = 0;
-        ObjectGuid centre;           // ground spell: the enemy it is centred on; empty = around the caster
-        Position3 centrePos;
+        // Ground spell: the enemy the centre is placed by (AreaPlace.h: the pile's anchor or the
+        // first runner); empty = around the caster.
+        ObjectGuid centre;
+        Position3 centrePos;         // ground spell: the point it is cast at (BotAction::atPoint)
         Position3 spot;              // Move: where to cast from (spots[0])
         // Move: the best cells first (AreaSpot.h); the cerebellum takes the first that passes
         // its sight and path checks.

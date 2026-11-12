@@ -1,5 +1,7 @@
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
 #include "Commander/Coordination/Doctrine/AreaIntent.h"
+#include "Commander/Coordination/Doctrine/AreaPlace.h"
+#include "Commander/Perception/Forecast/Runners.h"
 #include "Commander/Coordination/Doctrine/AreaSpot.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/ThreatOpening.h"
@@ -385,12 +387,17 @@ namespace Commander
             if (!m.isBot || m.isPet || !m.CanAct() || m.areaSpells.empty() ||
                 (m.role != ROLE_RANGE_DPS && m.role != ROLE_MELEE_DPS))
                 continue;
+            // Enemies running at it: a ground channel goes ahead of the first (AreaPlace.h).
+            std::vector<Runners::Runner> const runners = Runners::Of(world, m.guid, m.pos);
             for (AreaSpellFacts const& spell : m.areaSpells)
             {
                 if (!spell.ready)
                     continue;
+                bool const ground = spell.onTarget && spell.channel;
                 std::vector<EnemyFacts const*> centres;
-                if (spell.onTarget)
+                if (ground && !runners.empty())
+                    centres.push_back(runners.front().facts);
+                else if (spell.onTarget)
                 {
                     for (EnemyFacts const& e : world.enemies)
                         if (e.acting && !e.crowdControlled && !e.onAllyOnly && e.health)
@@ -409,18 +416,20 @@ namespace Commander
                     c.request.turn.busyTanks = busy;
                     c.request.forbidden = forbidden;
                     c.centre = e ? e->guid : ObjectGuid();
-                    if (e && spell.channel)
+                    if (e && ground)
                     {
-                        // A ground channel: from the best place (AreaSpot.h).
-                        AreaSpot::Choice const ch = AreaSpot::Pick(world, plan, c.request, true,
-                            PrevSpot(prev, m.guid, c.request.centre, c.centre, spell.spellId));
-                        c.netHere = ch.hereValid ? ch.hereNet : 0.0f;
-                        c.value = ch.value;
+                        // A ground channel: the user's placement rules (AreaPlace.h).
+                        AreaPlace::Choice const ch = runners.empty()
+                            ? AreaPlace::OnPile(world, plan, c.request, *e,
+                                                PrevSpot(prev, m.guid, e->pos, c.centre, spell.spellId))
+                            : AreaPlace::OnLead(world, c.request, *e);
                         if (!ch.valid)
                             continue;
+                        c.request = ch.request;
+                        c.netHere = ch.netHere;
+                        c.value = ch.value;
                         if (ch.move)
                         {
-                            c.request.from = ch.spots.front();
                             c.spots = ch.spots;
                             c.move = true;
                             c.moveBenefit = std::max(0.0f, ch.gain + ch.walkCost);

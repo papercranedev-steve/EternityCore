@@ -405,6 +405,7 @@ namespace WorldModelBuilder
             e.boundingRadius = creature->GetObjectBoundingRadius();
             e.speed = creature->GetSpeed(MOVE_RUN);
             e.slowed = creature->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED);
+            e.rooted = creature->HasUnitState(UNIT_STATE_ROOT);
             FillCast(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.creatureTypeMask = creature->GetCreatureTypeMask();

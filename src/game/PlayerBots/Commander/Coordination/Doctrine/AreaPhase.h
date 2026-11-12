@@ -18,10 +18,13 @@
  *    (ground spell: each acting enemy within range; else around the caster), valued by
  *    AreaValue for the whole spell (never "start and stop after a few ticks"):
  *      here   cast from where it stands (in range);
- *      spot   ground channels: the best place of the position field (AreaSpot.h, 2026-11-12;
- *             until then one point on the line centre -> caster at range - 3 yd); its net -
- *             the walk. The cerebellum checks sight and path to AreaPlan::spots in order and
- *             casts from where it stands when none is usable (netHere);
+ *      spot   ground channels: AreaPlace.h (doc .kiro/docs/2026-11-12-mage-hold.md 3.2). Nothing
+ *             runs at the caster: the best place of the position field (AreaSpot.h) and the
+ *             centre moved to the near side of what it covers; its net - the walk. Enemies
+ *             run at it: one candidate, ahead of the first of them, from here, only when the
+ *             ticks before it arrives pay. The cerebellum checks sight and path to
+ *             AreaPlan::spots in order and casts from where it stands when none is usable
+ *             (netHere); the spell goes to the ground point AreaPlan::centrePos;
  *      shield its own shield first (SelfShield, Ice Barrier) whenever it is ready and not up
  *             (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md 3.6: on cooldown
  *             before every area spell); the value is with the absorb, the score adds
