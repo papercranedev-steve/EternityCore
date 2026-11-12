@@ -133,12 +133,79 @@ namespace Commander
             out.push_back(p);
         }
 
-        // The brain's prep step (AreaPlan::prepSpellId): the shield before the phase, while the
-        // party holds. Its gain is net of the mana; nothing else is lost (the caster waits).
+        // Within SPOT_REACHED_YD of one of `spots`.
+        bool AtSpot(Position3 const& here, std::vector<Position3> const& spots)
+        {
+            for (Position3 const& s : spots)
+                if (PackResolver::Distance(here, s) <= AB::SPOT_REACHED_YD)
+                    return true;
+            return false;
+        }
+
+        // A walk to the first of `spots` (best first, AreaSpot.h) that passes the live checks.
+        // False: none does.
+        bool ProposeWalk(Player* me, WorldModel const& world, Position3 const& centre, std::vector<Position3> const& spots,
+                         float benefit, float cost, char const* reason, std::vector<Proposal>& out)
+        {
+            Position3 const here = PositionOf(me);
+            for (Position3 const& s : spots)
+            {
+                Position3 spot = s;
+                if (!UsableSpot(me, world, centre, spot))
+                    continue;
+                float const walkSec = PackResolver::Distance(here, spot) / AB::RUN_YD_PER_SEC;
+                Proposal p;
+                p.tier = ProposalTier::Assigned;
+                p.source = "aoe";
+                p.reason = reason;
+                p.action.type = BotActionType::MoveTo;
+                p.action.x = spot.x;
+                p.action.y = spot.y;
+                p.action.z = spot.z;
+                p.action.holdMs = uint32(walkSec * 1000.0f) + AB::HOLD_EXTRA_MS;
+                p.SetValue(benefit, cost);
+                out.push_back(p);
+                return true;
+            }
+            return false;
+        }
+
+        void ProposePrepShield(PartyBotAI const* bot, AreaPlan const& a, std::vector<Proposal>& out);
+
+        // The brain's prep step (AreaPlan::prep*): before the phase, while the party holds or
+        // the phase waits, walk to the cast spot, then put the shield up. The shield's gain is
+        // net of the mana; nothing else is lost (the caster waits). Out of combat the walk costs
+        // nothing either (as the stance modules' places before the fight).
+        void ProposePrep(PartyBotAI const* bot, WorldModel const& world, AreaPlan const& a, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            if (!a.prepSpots.empty() && !AtSpot(PositionOf(me), a.prepSpots) &&
+                !me->HasUnitState(UNIT_STATE_ROOT) && !me->IsNonMeleeSpellCasted(false, false, true))
+            {
+                if (bot->IsMovementHeld() && me->IsMoving())
+                {
+                    Proposal hold;
+                    hold.tier = ProposalTier::Assigned;
+                    hold.source = "aoe";
+                    hold.reason = "area phase prep: walking to the cast spot";
+                    hold.action.type = BotActionType::Hold;
+                    hold.SetValue(a.prepMoveGain, 0.0f);
+                    out.push_back(hold);
+                    return;
+                }
+                float const cost = me->IsInCombat() ? a.prepMoveCost : 0.0f;
+                if (ProposeWalk(me, world, a.prepCentre, a.prepSpots, a.prepMoveGain, cost,
+                                "area phase prep: stand at the cast spot first", out))
+                    return;
+            }
+            if (a.prepShieldId)
+                ProposePrepShield(bot, a, out);
+        }
+
         void ProposePrepShield(PartyBotAI const* bot, AreaPlan const& a, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
-            SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.prepSpellId);
+            SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.prepShieldId);
             if (!shield || me->HasAura(shield->Id) || !bot->CanTryToCastSpell(me, shield))
                 return;
             Proposal p;
@@ -181,11 +248,12 @@ namespace Commander
         Player* me = bot->me;
         AreaPlan const& a = plan.area;
         ObjectGuid const guid = me->GetObjectGuid();
-        // 0. Before the phase: its shield up while the party holds (AreaPhase prep; the
-        // caster need not be in combat yet).
-        if (a.prepCaster == guid && a.prepSpellId)
+        // 0. Before the phase: to its spot, its shield up (AreaPhase prep; the caster need not
+        // be in combat yet).
+        if (a.prepCaster == guid && !a.active)
         {
-            ProposePrepShield(bot, a, out);
+            if (!bot->IsInDuel() && !me->GetTransport())
+                ProposePrep(bot, world, a, out);
             return;
         }
         if (!a.active || !me->IsInCombat())
@@ -204,30 +272,12 @@ namespace Commander
 
         // 1. Walk to the spot.
         bool fromHere = true;
-        if (a.step == AreaStep::Move)
+        if (a.step == AreaStep::Move && !AtSpot(PositionOf(me), a.spots))
         {
-            Position3 const here = PositionOf(me);
-            if (PackResolver::Distance(here, a.spot) > SPOT_REACHED_YD)
-            {
-                Position3 spot = a.spot;
-                if (UsableSpot(me, world, a.centrePos, spot))
-                {
-                    float const walkSec = PackResolver::Distance(here, spot) / RUN_YD_PER_SEC;
-                    Proposal p;
-                    p.tier = ProposalTier::Assigned;
-                    p.source = "aoe";
-                    p.reason = "area phase: cast from farther back";
-                    p.action.type = BotActionType::MoveTo;
-                    p.action.x = spot.x;
-                    p.action.y = spot.y;
-                    p.action.z = spot.z;
-                    p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
-                    p.SetValue(a.moveBenefit, a.moveCost);
-                    out.push_back(p);
-                    return;
-                }
-                fromHere = a.netHere > 0.0f;
-            }
+            if (ProposeWalk(me, world, a.centrePos, a.spots, a.moveBenefit, a.moveCost,
+                            "area phase: cast from a better place", out))
+                return;
+            fromHere = a.netHere > 0.0f;
         }
         if (!fromHere)
             return;

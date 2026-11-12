@@ -129,6 +129,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.h
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaSpot.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/AreaSpot.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.h
   ${COMMANDER_DIR}/Coordination/Doctrine/AllyCharm.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.h

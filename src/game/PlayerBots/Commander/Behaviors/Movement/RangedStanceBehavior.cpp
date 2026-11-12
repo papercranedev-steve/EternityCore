@@ -147,6 +147,12 @@ namespace Commander
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())
             return;
+        // The area phase places its caster (AreaSpot.h, 2026-11-12): before the fight nothing
+        // here; in the fight only an idle creature's reach moves it (Urgent), not its victim
+        // out of range (the spell's centre is the area phase's choice).
+        bool const placed = plan.area.PlacesCaster(self->guid);
+        if (placed && prepare)
+            return;
         Position3 const here = PositionOf(me);
         Position3 at;               // what the bot must reach: its victim, or the planned fight spot
         float atReach = 0.0f;
@@ -180,7 +186,7 @@ namespace Commander
         // The enemies' exposure (2026-11-10, user: squishy casters stand well back;
         // Perception/Values/Exposure.h). Not before the fight, not for the area caster: the
         // area phase picked where it casts from.
-        bool const useExposure = !prepare && !plan.area.CastBy(self->guid);
+        bool const useExposure = !prepare && !placed;
         std::vector<EnemyFacts const*> const turnable =
             useExposure ? Exposure::Turnable(world, self->guid) : std::vector<EnemyFacts const*>();
         float gapHere = 1000.0f;
@@ -189,7 +195,7 @@ namespace Commander
         bool const danger = gapHere < DANGER_ENEMY_GAP;
         float const exposureHere = Exposure::LossAt(world, *self, turnable, here);
         // The spot here is still good (header "When"): a cell must save more than the margin.
-        bool const hereValid = !unsafe && inReach;
+        bool const hereValid = !unsafe && (inReach || placed);
         float const margin = SpotCost::Walk(world, *self, MOVE_MARGIN_SEC);
         if (hereValid && exposureHere <= margin)
             return;

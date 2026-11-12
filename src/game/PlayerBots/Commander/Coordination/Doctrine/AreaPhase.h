@@ -17,12 +17,11 @@
  * 2. Otherwise every damage dealer bot, every ready area spell (AreaSpellFacts), every centre
  *    (ground spell: each acting enemy within range; else around the caster), valued by
  *    AreaValue for the whole spell (never "start and stop after a few ticks"):
- *      here   cast from where it stands;
- *      spot   ground channels only: the point on the line from the centre through the caster
- *             at range - SPOT_MARGIN_YD, when that is SPOT_MIN_GAIN_YD farther (user
- *             2026-11-08: Blizzard from as far as it reaches, the slowed enemies take longer
- *             to come); its net - LostAction(walk at RUN_YD_PER_SEC). The cerebellum checks
- *             the ground there and casts from where it stands when it is not usable (netHere);
+ *      here   cast from where it stands (in range);
+ *      spot   ground channels: the best place of the position field (AreaSpot.h, 2026-11-12;
+ *             until then one point on the line centre -> caster at range - 3 yd); its net -
+ *             the walk. The cerebellum checks sight and path to AreaPlan::spots in order and
+ *             casts from where it stands when none is usable (netHere);
  *      shield its own shield first (SelfShield, Ice Barrier) when net with the absorb - net
  *             without > LostAction(GCD) + ManaWorth(its mana).
  *    The best positive net wins; the one of the last refresh gets STICKY_POINTS.
@@ -34,11 +33,19 @@
  *              FillRate (the tank's top-up goes for them: TankTargets reads the same runway).
  *              Not when their total did not shrink for ThreatOpeningAssigner::STALL_MS.
  *      Shield  its shield is on cooldown: later with it (as the shield step), sec = the cooldown.
- * While the pull or the opening holds the party (the "not while" above, not a retreat): under
- * the Area tactic the caster it counts on (DoctrinePlan::areaThreat) puts its shield up now
- * (AreaPlan::prep*) when the spell on the pile around the main tank, valued as the threat
- * stands, gains more with it than its mana (no GCD: it waits anyway; the opening's hold lets
- * that cast through, TeamPlan::HoldsCast).
+ *    Meanwhile its spot is the prep spot below (it walks there while it waits).
+ * While the pull or the opening holds the party (the "not while" above, not a retreat), the
+ * caster gets ready (AreaPlan::prep*; doc 4.4, 4.5, 8, user 2026-11-12: stand there first, a
+ * turn predicted is too late):
+ *   who     under the Area tactic the caster it counts on (DoctrinePlan::areaThreat); before
+ *           the fight (no tactic yet) the area dealers when the pull expects at least
+ *           TacticalDoctrine::AREA_MIN enemies; the most threat per second (AreaIntent);
+ *   centre  the enemy on the main tank nearest it, else the planned fight spot (PullPlan::
+ *           PlannedFightSpot);
+ *   spot    AreaSpot for that centre (AreaValue only with enemies there);
+ *   shield  with enemies on the tank: the spell, valued as the threat stands, gains more with
+ *           it than its mana (no GCD: it waits anyway; the opening's hold lets that cast
+ *           through, TeamPlan::HoldsCast).
  * Both: a healer bot's Power Word: Shield (SurvivalAbility Absorb, not self only, ready, in
  *   range, the caster without Weakened Soul) when net with it - net without > LostAction(healer,
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).
@@ -58,9 +65,6 @@ namespace Commander
     class AreaPhaseAssigner : public IAssigner
     {
     public:
-        static constexpr float SPOT_MARGIN_YD = 3.0f;
-        static constexpr float SPOT_MIN_GAIN_YD = 4.0f;
-        static constexpr float RUN_YD_PER_SEC = 7.0f;
         static constexpr float STICKY_POINTS = 1.0f;
 
         // Same id as AreaDamageBehavior: `.partybot ai module aoe off` switches both.

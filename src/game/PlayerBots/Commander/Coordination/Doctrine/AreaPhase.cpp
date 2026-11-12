@@ -1,5 +1,9 @@
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
+#include "Commander/Coordination/Doctrine/AreaIntent.h"
+#include "Commander/Coordination/Doctrine/AreaSpot.h"
+#include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/ThreatOpening.h"
+#include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/ThreatGap.h"
 #include "Commander/Perception/Forecast/ThreatRunway.h"
@@ -105,6 +109,7 @@ namespace Commander
             float moveCost = 0.0f;
             float shieldGain = 0.0f;
             ObjectGuid centre;
+            std::vector<Position3> spots;   // move: AreaSpot's cells, best first
         };
 
         std::string Text(char const* fmt, float a, float b = 0.0f)
@@ -114,23 +119,60 @@ namespace Commander
             return buf;
         }
 
-        // While the pull or the opening holds the party: the shield of a caster the Area tactic
-        // counts on (DoctrinePlan::areaThreat), worth the area spell with it - without it on the
-        // pile around the main tank as the threat stands now (the opening's estimate), minus
-        // its mana. No GCD: the caster waits anyway.
-        void PrepShield(WorldModel const& world, TeamPlan const& plan, AreaPlan& a)
+        // The last refresh's spot of `m` for `centre` (the area plan's Move, or its prep spot).
+        Position3 const* PrevSpot(AreaPlan const& prev, ObjectGuid m, Position3 const& centre, ObjectGuid centreGuid,
+                                  uint32 spellId)
         {
+            if (prev.active && prev.caster == m && prev.step == AreaStep::Move && prev.spellId == spellId &&
+                prev.centre == centreGuid)
+                return &prev.spot;
+            if (prev.prepCaster == m && !prev.prepSpots.empty() &&
+                PackResolver::Distance(centre, prev.prepCentre) <= 2.0f * PositionField::CELL_YD)
+                return &prev.prepSpots.front();
+            return nullptr;
+        }
+
+        void SetPrepSpot(AreaPlan& a, ObjectGuid caster, Position3 const& centre, AreaSpot::Choice const& ch)
+        {
+            a.prepCaster = caster;
+            a.prepCentre = centre;
+            a.prepSpots = ch.spots;
+            a.prepMoveGain = std::max(0.0f, ch.gain + ch.walkCost);
+            a.prepMoveCost = ch.walkCost;
+        }
+
+        // While the pull or the opening holds the party (not a retreat): the caster the Area
+        // tactic counts on gets ready (header "While the pull or the opening holds").
+        void Prepare(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan& a)
+        {
+            if (plan.retreat.active)
+                return;
             DoctrinePlan const& d = plan.doctrine;
-            if (d.tactic != PileTactic::Area || plan.retreat.active)
+            PullPlan const& pull = plan.pull;
+            // Who: before the fight there is no tactic yet; a pull of AREA_MIN or more counts as Area.
+            std::vector<PlannedThreat> const casters = d.tactic == PileTactic::Area ? d.areaThreat
+                : (pull.phase != PullPhase::None && pull.expected.size() >= TacticalDoctrine::AREA_MIN)
+                    ? AreaIntent::Of(world, nullptr) : std::vector<PlannedThreat>();
+            PartyMemberFacts const* m = nullptr;
+            float bestRate = 0.0f;
+            for (PlannedThreat const& p : casters)
+                if (PartyMemberFacts const* f = world.FindMember(p.member))
+                    if (f->CanAct() && p.perSec > bestRate)
+                    {
+                        m = f;
+                        bestRate = p.perSec;
+                    }
+            AreaSpellFacts const* spell = m ? AreaIntent::BestSpell(*m) : nullptr;
+            if (!spell)
                 return;
+
+            // Where the spell will go: the enemy on the main tank nearest it, else the planned spot.
             PartyMemberFacts const* tank = Tanks::Main(world, true);
-            if (!tank)
-                return;
             EnemyFacts const* centre = nullptr;
             float nearest = 0.0f;
             for (EnemyFacts const& e : world.enemies)
             {
-                if (!e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim != tank->guid)
+                if (!tank || !e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim != tank->guid)
                     continue;
                 float const distance = PackResolver::Distance(tank->pos, e.pos);
                 if (!centre || distance < nearest)
@@ -139,44 +181,49 @@ namespace Commander
                     nearest = distance;
                 }
             }
-            if (!centre)
+            Position3 at;
+            if (centre)
+                at = centre->pos;
+            else if (!pull.PlannedFightSpot(at))
                 return;
-            for (PlannedThreat const& p : d.areaThreat)
+
+            AreaValue::Request r;
+            r.caster = m;
+            r.spell = spell;
+            r.centre = spell->onTarget ? at : m->pos;
+            r.from = m->pos;
+            r.settle = false;
+            r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+
+            // Its spot (a ground channel).
+            if (spell->onTarget && spell->channel)
             {
-                PartyMemberFacts const* m = world.FindMember(p.member);
-                if (!m || !m->CanAct())
-                    continue;
-                SelfShieldFacts const& sh = m->selfShield;
-                if (!sh.spellId || !sh.ready || sh.up)
-                    continue;
-                for (AreaSpellFacts const& spell : m->areaSpells)
+                AreaSpot::Choice const ch = AreaSpot::Pick(world, plan, r, centre != nullptr,
+                    PrevSpot(prev, m->guid, r.centre, centre ? centre->guid : ObjectGuid(), spell->spellId));
+                if (ch.move)
                 {
-                    if (!spell.ready)
-                        continue;
-                    AreaValue::Request r;
-                    r.caster = m;
-                    r.spell = &spell;
-                    r.centre = spell.onTarget ? centre->pos : m->pos;
-                    r.from = m->pos;
-                    r.settle = false;
-                    r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
-                    AreaValue::Result const without = AreaValue::Evaluate(world, r);
-                    AreaValue::Request with = r;
-                    with.turn.extraAbsorb += sh.absorb;
-                    AreaValue::Result const shielded = AreaValue::Evaluate(world, with);
-                    if (!without.valid || !shielded.valid)
-                        continue;
-                    float const gain = shielded.net - without.net - ManaWorth::Points(world, *m, float(sh.manaCost));
-                    if (gain > a.prepGain)
-                    {
-                        a.prepGain = gain;
-                        a.prepCaster = m->guid;
-                        a.prepSpellId = sh.spellId;
-                    }
+                    SetPrepSpot(a, m->guid, r.centre, ch);
+                    r.from = ch.spots.front();
                 }
             }
-        }
 
+            // Its shield (enemies on the tank: the spell can be valued).
+            SelfShieldFacts const& sh = m->selfShield;
+            if (!centre || !sh.spellId || !sh.ready || sh.up)
+                return;
+            AreaValue::Result const without = AreaValue::Evaluate(world, r);
+            AreaValue::Request with = r;
+            with.turn.extraAbsorb += sh.absorb;
+            AreaValue::Result const shielded = AreaValue::Evaluate(world, with);
+            if (!without.valid || !shielded.valid)
+                return;
+            float const gain = shielded.net - without.net - ManaWorth::Points(world, *m, float(sh.manaCost));
+            if (gain <= 0.0f)
+                return;
+            a.prepCaster = m->guid;
+            a.prepShieldId = sh.spellId;
+            a.prepGain = gain;
+        }
         // Seconds the main tank needs to give every enemy `c` turns a runway through the whole
         // spell (ThreatRunway shortfalls with the spell's threat, one after another at
         // ThreatGap::FillRate), and their total. False: no main tank, or one is not on it.
@@ -291,7 +338,7 @@ namespace Commander
             return;
         if (PartyHolds(plan))
         {
-            PrepShield(world, plan, a);
+            Prepare(world, plan, prev, a);
             return;
         }
 
@@ -368,36 +415,30 @@ namespace Commander
                     c.request.turn.busyTanks = busy;
                     c.request.forbidden = forbidden;
                     c.centre = e ? e->guid : ObjectGuid();
-                    float const dist = e ? PackResolver::Distance(m.pos, e->pos) : 0.0f;
-                    bool const inRange = !e || dist <= spell.range;
-
-                    AreaValue::Result here;
-                    if (inRange)
-                        here = AreaValue::Evaluate(world, c.request);
-                    c.netHere = here.valid ? here.net : 0.0f;
-                    c.value = here;
-
-                    // Farther back: a ground channel from as far as it reaches.
-                    float const want = spell.range - SPOT_MARGIN_YD;
-                    if (e && spell.channel && dist > 0.1f && want - dist >= SPOT_MIN_GAIN_YD)
+                    if (e && spell.channel)
                     {
-                        AreaValue::Request back = c.request;
-                        float const k = want / dist;
-                        back.from.x = e->pos.x + (m.pos.x - e->pos.x) * k;
-                        back.from.y = e->pos.y + (m.pos.y - e->pos.y) * k;
-                        back.from.z = m.pos.z;
-                        AreaValue::Result const v = AreaValue::Evaluate(world, back);
-                        float const walkCost = Value::LostAction(world, m, (want - dist) / RUN_YD_PER_SEC);
-                        if (v.valid && (!here.valid || v.net - walkCost > here.net))
+                        // A ground channel: from the best place (AreaSpot.h).
+                        AreaSpot::Choice const ch = AreaSpot::Pick(world, plan, c.request, true,
+                            PrevSpot(prev, m.guid, c.request.centre, c.centre, spell.spellId));
+                        c.netHere = ch.hereValid ? ch.hereNet : 0.0f;
+                        c.value = ch.value;
+                        if (!ch.valid)
+                            continue;
+                        if (ch.move)
                         {
-                            c.request = back;
-                            c.value = v;
+                            c.request.from = ch.spots.front();
+                            c.spots = ch.spots;
                             c.move = true;
-                            c.moveBenefit = here.valid ? std::max(0.0f, here.turnLoss - v.turnLoss) : v.net;
-                            c.moveCost = walkCost;
-                            c.value.cost += walkCost;
-                            c.value.net -= walkCost;
+                            c.moveBenefit = std::max(0.0f, ch.gain + ch.walkCost);
+                            c.moveCost = ch.walkCost;
+                            c.value.cost += ch.walkCost;
+                            c.value.net -= ch.walkCost;
                         }
+                    }
+                    else if (!e || PackResolver::Distance(m.pos, e->pos) <= spell.range)
+                    {
+                        c.value = AreaValue::Evaluate(world, c.request);
+                        c.netHere = c.value.valid ? c.value.net : 0.0f;
                     }
                     if (!c.value.valid)
                         continue;
@@ -442,7 +483,18 @@ namespace Commander
 
         // 3. Or a little later.
         if (Waits(world, best, prev, a, plan.notes))
+        {
+            // Meanwhile it walks to where it will cast from.
+            if (best.move)
+            {
+                AreaSpot::Choice ch;
+                ch.spots = best.spots;
+                ch.walkCost = best.moveCost;
+                ch.gain = best.moveBenefit - best.moveCost;
+                SetPrepSpot(a, best.request.caster->guid, best.request.centre, ch);
+            }
             return;
+        }
 
         PartyMemberFacts const& m = *best.request.caster;
         a.active = true;
@@ -451,6 +503,7 @@ namespace Commander
         a.centre = best.centre;
         a.centrePos = best.request.centre;
         a.spot = best.request.from;
+        a.spots = best.spots;
         a.moveBenefit = best.moveBenefit;
         a.moveCost = best.moveCost;
         a.netHere = best.netHere;

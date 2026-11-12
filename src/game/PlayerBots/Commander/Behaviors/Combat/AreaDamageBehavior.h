@@ -9,13 +9,16 @@
  * (Coordination/Doctrine/AreaPhase.h, TeamPlan::area) and the values come from one place
  * (Perception/Values/AreaValue.h). Design: .kiro/docs/2026-11-08-aoe-phase.md.
  *
- * Before the phase (TeamPlan::area prepCaster, in combat or not): its shield while the party
- *   holds for the pull or the opening, tier Assigned, net prepGain (2026-11-12).
+ * Before the phase (TeamPlan::area prepCaster, in combat or not; 2026-11-12): while the party
+ *   holds for the pull or the opening, or the phase waits: walk to the first of prepSpots that
+ *   passes the map checks below (value prepMoveGain; cost prepMoveCost in combat, 0 before;
+ *   Hold while walking), then its shield (prepShieldId, net prepGain). Tier Assigned.
  * Propose (TeamPlan::area, in combat):
  *   the healer named for it (allyShieldBot): its shield on the caster when not on it yet,
  *     tier Assigned, net allyShieldGain.
  *   the caster, in the plan's order:
- *     Move    walk to `spot` while farther than SPOT_REACHED_YD, when the spot passes the map
+ *     Move    walk to the first of `spots` (AreaSpot.h, best first) while farther than
+ *             SPOT_REACHED_YD from all of them, when the spot passes the map
  *             checks (ground within MAX_STEP_Z of the caster, outside idle creatures' reach, out
  *             of hazards and patrol paths, line of sight to the centre, a safe path); not usable:
  *             cast from where it stands if netHere > 0. Value moveBenefit / moveCost.

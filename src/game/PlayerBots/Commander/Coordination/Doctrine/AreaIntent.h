@@ -13,13 +13,24 @@
 #ifndef MANGOS_COMMANDER_AREA_INTENT_H
 #define MANGOS_COMMANDER_AREA_INTENT_H
 
+#include "Commander/Perception/Forecast/ThreatRunway.h"
+#include <vector>
+
 namespace Commander
 {
     struct WorldModel;
     struct DoctrinePlan;
+    struct PartyMemberFacts;
+    struct AreaSpellFacts;
 
     namespace AreaIntent
     {
+        // The list (header); `sec`: the longest spell's length (may be null).
+        std::vector<PlannedThreat> Of(WorldModel const& world, float* sec);
+
+        // A member's area spell with the most threat per second it can cast now (or channels).
+        AreaSpellFacts const* BestSpell(PartyMemberFacts const& m);
+
         // Fills d.areaThreat and d.areaSec (d.tactic is Area).
         void Fill(WorldModel const& world, DoctrinePlan& d);
     }

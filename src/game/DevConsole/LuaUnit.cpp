@@ -1024,7 +1024,10 @@ namespace DevConsole
             if (!a.prepCaster.IsEmpty())
             {
                 SetFieldG(L, "prep", a.prepCaster);
-                SetField(L, "shield", a.prepSpellId);
+                if (a.prepShieldId)
+                    SetField(L, "shield", a.prepShieldId);
+                if (!a.prepSpots.empty())
+                    SetFieldB(L, "spot", true);
             }
             lua_setfield(L, -2, "areaWait");
         }

@@ -26,8 +26,10 @@
  *    stands back as far as the walk is worth it, with no distance lines (the 12 / 14 yd lines
  *    of 2026-11-10 are gone). Still within DANGER_ENEMY_GAP of such an enemy's edge: tier
  *    Urgent, score -walk seconds (the tier rule stays, doc section 5.6).
- *    No exposure before the fight and for the area phase's caster (it picked where it casts
- *    from): there the walk alone orders the cells, and a valid spot is kept.
+ *    No exposure before the fight.
+ *  - The area phase's caster (TeamPlan::area PlacesCaster: the phase, or its prep spot;
+ *    AreaSpot.h, 2026-11-12): the area phase places it. Before the fight nothing here; in the
+ *    fight only an idle creature's reach (Urgent), not the victim out of range or sight.
  * Before the fight (2026-11-07): out of combat while the pull runs, the brain's planned fight
  * spot (PullPlan::PlannedFightSpot; the idle pack itself for a walk-in fought where it stands)
  * instead of a victim, same checks, rings PREPARE_RADII (one more at 28 yd); value

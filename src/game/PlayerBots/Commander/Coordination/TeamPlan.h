@@ -650,8 +650,11 @@ namespace Commander
         uint32 spellId = 0;
         ObjectGuid centre;           // ground spell: the enemy it is centred on; empty = around the caster
         Position3 centrePos;
-        Position3 spot;              // Move: where to cast from
-        float moveBenefit = 0.0f;    // turn loss saved there
+        Position3 spot;              // Move: where to cast from (spots[0])
+        // Move: the best cells first (AreaSpot.h); the cerebellum takes the first that passes
+        // its sight and path checks.
+        std::vector<Position3> spots;
+        float moveBenefit = 0.0f;    // what casting there gains over here (before the walk)
         float moveCost = 0.0f;       // the walk
         float netHere = 0.0f;        // the whole spell cast from where the caster stands (Move: the fallback)
         uint32 shieldSpellId = 0;    // Shield
@@ -682,13 +685,24 @@ namespace Commander
         uint32 waitSinceMs = 0;
         uint32 waitProgressMs = 0;   // Tank: last time waitShortfall shrank (ThreatOpeningAssigner::STALL_MS)
 
-        // While the pull or the threat opening holds the party (no phase yet): the caster the
-        // Area tactic counts on puts its shield up now, in points by the opening's estimate
-        // (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md 4.4). The opening's hold lets
-        // this one cast through (TeamPlan::HoldsCast).
+        // No phase yet (the pull or the threat opening holds the party, or the phase waits): the
+        // caster the Area tactic counts on gets ready (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md
+        // 4.4, 4.5, 8): it walks to its cast spot (prepSpots, best first; centre prepCentre) and
+        // puts its shield up (prepShieldId, by the opening's estimate). The opening's hold lets
+        // the shield cast through (TeamPlan::HoldsCast); the ranged stance leaves it alone.
         ObjectGuid prepCaster;
-        uint32 prepSpellId = 0;
-        float prepGain = 0.0f;
+        uint32 prepShieldId = 0;
+        float prepGain = 0.0f;       // the shield's, net of its mana
+        std::vector<Position3> prepSpots;
+        Position3 prepCentre;
+        float prepMoveGain = 0.0f;   // the spot's over here, before the walk
+        float prepMoveCost = 0.0f;   // the walk (in combat; nothing is lost before the fight)
+
+        // The stance modules leave `bot`'s place to the area phase (AreaSpot.h).
+        bool PlacesCaster(ObjectGuid bot) const
+        {
+            return CastBy(bot) || (prepCaster == bot && !prepSpots.empty());
+        }
 
         bool CastBy(ObjectGuid bot) const { return active && caster == bot; }
         bool Targets(ObjectGuid enemy) const
@@ -1014,12 +1028,12 @@ namespace Commander
         }
 
         // The threat opening holds `bot` for a cast of `spellId`: every cast but the shield the
-        // area phase has the caster put up first (AreaPlan::prepSpellId: no threat on anyone).
+        // area phase has the caster put up first (AreaPlan::prepShieldId: no threat on anyone).
         bool HoldsCast(ObjectGuid bot, bool healer, uint32 spellId) const
         {
             if (!threat.Holds(bot, healer))
                 return false;
-            return !(spellId && area.prepCaster == bot && area.prepSpellId == spellId);
+            return !(spellId && area.prepCaster == bot && area.prepShieldId == spellId);
         }
 
         // An area spell must leave `e` alone: it is under a control that breaks on damage
