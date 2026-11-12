@@ -3247,7 +3247,8 @@ AHBuyer.MaxMarkup = 50
 #    PartyBot.Commander.BotUpdateMs
 #        How often each party bot runs its AI (100 - 5000). Lower = faster reactions, more CPU.
 #        Can be changed in game with .partybot ai interval <ms>
-#        Default: 1000
+#        Below MapUpdateInterval (100) gains nothing: the AI runs in the map update.
+#        Default: 200 (same as PerceptionMs, so the party's facts are refreshed on time)
 #
 #    PartyBot.Commander.PerceptionMs
 #        Minimum time between two refreshes of a party's combat facts (50 - 2000).
@@ -3336,7 +3337,7 @@ PartyBot.SkipChecks = 0
 PartyBot.AutoEquip = 1
 PartyBot.RandomGearLevelDifference = 10
 PartyBot.Commander.Enable = 1
-PartyBot.Commander.BotUpdateMs = 1000
+PartyBot.Commander.BotUpdateMs = 200
 PartyBot.Commander.PerceptionMs = 200
 PartyBot.Commander.DisabledModules = ""
 PopBot.Enable = 0
