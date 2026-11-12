@@ -82,6 +82,9 @@ namespace Commander
         // Cast: after a successful cast, stop attacking `target` if it is the bot's victim
         // (a control that breaks on damage: the bot's own next swing or shot would end it).
         bool dropTarget = false;
+        // Cast: at the ground point x/y/z (a ground area spell: Blizzard, Rain of Fire), not at
+        // a unit; `target` is not used (doc .kiro/docs/2026-11-12-mage-hold.md 3.2).
+        bool atPoint = false;
     };
 
     // Replace: do this action this tick instead of the original rotation.

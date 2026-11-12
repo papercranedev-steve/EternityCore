@@ -2910,6 +2910,24 @@ bool CombatBotBaseAI::CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const*
     return true;
 }
 
+SpellCastResult CombatBotBaseAI::DoCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry)
+{
+    if (m_preventCasting)
+        return SPELL_FAILED_DONT_REPORT;
+
+    // A cast time or a channel needs the bot standing; then it faces the point, as a player does.
+    bool const standing = pSpellEntry->GetCastTime(me) > 0 || pSpellEntry->IsChanneledSpell();
+    if (standing && !me->IsStopped())
+        me->StopMoving();
+    if (me->IsStopped())
+        me->SetFacingTo(me->GetAngle(x, y));
+
+    if (me->IsMounted())
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+
+    return me->CastSpell(x, y, z, pSpellEntry, false);
+}
+
 SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry)
 {
     if (m_preventCasting)

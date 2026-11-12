@@ -8,13 +8,16 @@
  * patrol before RouteGuard::StaySec, reachable) with the centre within range - SPOT_MARGIN_YD,
  * out of ranged hazard zones; and where the caster stands, when the centre is in range and
  * its cell is clear of idle creatures. Score of a cell:
- *   net    AreaValue's net of the whole spell cast from it (`evaluate`; before the fight: 0)
- *   slip   Exposure::ChannelLoss of the enemy most likely to turn (in case it slips): of the
- *          spell's targets on a party member, the one with the shortest threat runway with
- *          this spell's threat (ThreatRunway); none: an enemy at the centre. Its speed under
- *          the spell's slow.
+ *   net    AreaValue's net of the whole spell cast from it (`evaluate`; before the fight: 0).
+ *          AreaValue plays the worst case (the tank cannot hold: every enemy whose runway is
+ *          shorter turns), so a far spot is worth its turn loss and pushback saved.
+ *   slip   before the fight only (not `evaluate`): Exposure::ChannelLoss of an enemy at the
+ *          centre turning at once, its speed under the spell's slow. Until 2026-11-12 also
+ *          with enemies, for the one most likely to turn ("万一失手"); AreaValue's worst case
+ *          replaced it (doc .kiro/docs/2026-11-12-mage-hold.md 3.1).
  *   walk   SpotCost::Walk (grid walk x PATH_FACTOR at RUN_YD_PER_SEC)
- *   score  = net - slip - walk; a cell within one cell of the previous spot + MOVE_MARGIN.
+ *   score  = net - walk (before the fight: - slip - walk); a cell within one cell of the
+ *          previous spot + MOVE_MARGIN.
  * The cells are ranked by slip + walk first; AreaValue values the best MAX_EVALUATED. The
  * caster moves when the best cell beats standing here by more than SpotCost::Walk(MOVE_MARGIN_SEC).
  * The best MAX_SPOTS cells are handed on: the cerebellum checks sight and path (live) in that order.

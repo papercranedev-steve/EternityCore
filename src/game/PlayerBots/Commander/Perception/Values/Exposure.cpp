@@ -30,15 +30,13 @@ namespace Exposure
         return loss;
     }
 
-    float ChannelLoss(WorldModel const& world, PartyMemberFacts const& member, EnemyFacts const* e,
-                      float gapYd, float speed, float channelSec)
+    float ChannelLoss(WorldModel const& world, PartyMemberFacts const& member, float gapYd, float speed, float channelSec)
     {
         float const arrival = std::max(0.0f, gapYd) / std::max(0.1f, speed);
         float const exposed = std::min(channelSec, arrival + MAX_GAIN_SEC) - arrival;
         if (exposed <= 0.0f)
             return 0.0f;
-        return TURN_CHANCE * ((e ? Value::HitLoss(world, *e, member, exposed) : 0.0f) +
-                              Value::LostAction(world, member, exposed));
+        return TURN_CHANCE * Value::LostAction(world, member, exposed);
     }
 
     std::vector<EnemyFacts const*> Turnable(WorldModel const& world, ObjectGuid member)

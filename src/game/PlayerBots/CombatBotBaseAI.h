@@ -143,6 +143,9 @@ public:
     bool AreOthersOnSameTarget(ObjectGuid guid, bool checkMelee = true, bool checkSpells = true) const;
 
     SpellCastResult DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry);
+    // A ground area spell (Blizzard, Rain of Fire) at the point x/y/z, as a player clicks the
+    // ground: turns to it when standing, stops for a cast time or a channel.
+    SpellCastResult DoCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry);
     virtual bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // The checks of CanTryToCastSpell as if the bot were in shapeshift form `form` with `power`
     // of the spell's power type (warrior: right after a stance swap, PartyBotAI::CanCastWithStance).

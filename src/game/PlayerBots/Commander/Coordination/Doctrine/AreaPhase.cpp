@@ -107,6 +107,7 @@ namespace Commander
             bool move = false;
             float moveBenefit = 0.0f;
             float moveCost = 0.0f;
+            bool shield = false;            // its own shield first
             float shieldGain = 0.0f;
             ObjectGuid centre;
             std::vector<Position3> spots;   // move: AreaSpot's cells, best first
@@ -207,22 +208,15 @@ namespace Commander
                 }
             }
 
-            // Its shield (enemies on the tank: the spell can be valued).
+            // Its shield, whenever it is ready (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md
+            // 3.6: on cooldown in the area tactic; until then only when the spell valued with
+            // it gained more than its mana). Worth the health it takes.
             SelfShieldFacts const& sh = m->selfShield;
-            if (!centre || !sh.spellId || !sh.ready || sh.up)
-                return;
-            AreaValue::Result const without = AreaValue::Evaluate(world, r);
-            AreaValue::Request with = r;
-            with.turn.extraAbsorb += sh.absorb;
-            AreaValue::Result const shielded = AreaValue::Evaluate(world, with);
-            if (!without.valid || !shielded.valid)
-                return;
-            float const gain = shielded.net - without.net - ManaWorth::Points(world, *m, float(sh.manaCost));
-            if (gain <= 0.0f)
+            if (!sh.spellId || !sh.ready || sh.up)
                 return;
             a.prepCaster = m->guid;
             a.prepShieldId = sh.spellId;
-            a.prepGain = gain;
+            a.prepGain = Value::Points(world, sh.absorb);
         }
         // Seconds the main tank needs to give every enemy `c` turns a runway through the whole
         // spell (ThreatRunway shortfalls with the spell's threat, one after another at
@@ -447,9 +441,12 @@ namespace Commander
                     if (Tags::NeutralNear(world, c.request.centre, spell.radius))
                         continue;
 
-                    // Its own shield first.
+                    // Its own shield first, whenever it is ready (user 2026-11-12, doc
+                    // .kiro/docs/2026-11-12-mage-hold.md 3.6: on cooldown before every area
+                    // spell; until then only when it gained more than its GCD and mana). Its
+                    // gain only counts for the score when positive.
                     SelfShieldFacts const& sh = m.selfShield;
-                    if (sh.spellId && sh.ready && !sh.up && c.value.turnLoss > 0.0f)
+                    if (sh.spellId && sh.ready && !sh.up)
                     {
                         AreaValue::Request with = c.request;
                         with.turn.extraAbsorb += sh.absorb;
@@ -459,11 +456,9 @@ namespace Commander
                             float const gain = (v.net - (c.move ? c.moveCost : 0.0f)) - c.value.net -
                                                Value::LostAction(world, m, Value::GCD_SEC) -
                                                ManaWorth::Points(world, m, float(sh.manaCost));
-                            if (gain > 0.0f)
-                            {
-                                c.shieldGain = gain;
-                                c.request = with;
-                            }
+                            c.shield = true;
+                            c.shieldGain = std::max(0.0f, gain);
+                            c.request = with;
                         }
                     }
 
@@ -511,12 +506,12 @@ namespace Commander
         a.cost = best.value.cost;
         a.net = best.value.net + best.shieldGain;
         a.targets = best.value.targets;
-        if (best.shieldGain > 0.0f)
+        if (best.shield)
         {
             a.shieldSpellId = m.selfShield.spellId;
             a.shieldGain = best.shieldGain;
         }
-        a.step = best.move ? AreaStep::Move : best.shieldGain > 0.0f ? AreaStep::Shield : AreaStep::Cast;
+        a.step = best.move ? AreaStep::Move : best.shield ? AreaStep::Shield : AreaStep::Cast;
         a.sinceMs = (prev.active && prev.caster == m.guid && prev.spellId == a.spellId) ? prev.sinceMs : world.refreshedAtMs;
         Reserves(world, best.request, best.value, best.moveCost, tanks, a);
         AllyShield(world, best.request, best.value, a);

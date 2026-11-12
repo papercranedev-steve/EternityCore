@@ -102,6 +102,13 @@ public:
     // that must be cast standing (cast time, a channel moving ends) stops a module's walk first
     // (StandStillFor).
     SpellCastResult DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry);
+    // A ground area spell at the point x/y/z (BotAction::atPoint): the bot's own checks
+    // (ready, power, form: CanTryToCastSpellAs on itself), the spell's range (talents
+    // included) and line of sight to the point, the party's checks without a unit target
+    // (opening hold, kept spells, Constraints::CastAtForbidden on the area).
+    bool CanTryToCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry) const;
+    // StandStillFor, then CombatBotBaseAI::DoCastSpellAt.
+    SpellCastResult DoCastAt(float x, float y, float z, SpellEntry const* pSpellEntry);
     // Execution: a point walk (a Commander MoveTo) does not pause for a cast the way chase and
     // follow do (TargetedMovementGenerator stops while IsNoMovementSpellCasted), so a channel
     // started on the way broke at once (Evocation, strat-20261108-141921). Stops it and ends

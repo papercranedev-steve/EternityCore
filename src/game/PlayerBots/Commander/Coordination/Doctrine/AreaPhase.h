@@ -22,8 +22,10 @@
  *             until then one point on the line centre -> caster at range - 3 yd); its net -
  *             the walk. The cerebellum checks sight and path to AreaPlan::spots in order and
  *             casts from where it stands when none is usable (netHere);
- *      shield its own shield first (SelfShield, Ice Barrier) when net with the absorb - net
- *             without > LostAction(GCD) + ManaWorth(its mana).
+ *      shield its own shield first (SelfShield, Ice Barrier) whenever it is ready and not up
+ *             (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md 3.6: on cooldown
+ *             before every area spell); the value is with the absorb, the score adds
+ *             max(0, net with - net without - LostAction(GCD) - ManaWorth(its mana)).
  *    The best positive net wins; the one of the last refresh gets STICKY_POINTS.
  * 3. Or it waits (2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.3 / 4.4; AreaPlan::wait,
  *    the phase is not active): when starting later is worth more than now, a wait of `sec`
@@ -43,9 +45,8 @@
  *   centre  the enemy on the main tank nearest it, else the planned fight spot (PullPlan::
  *           PlannedFightSpot);
  *   spot    AreaSpot for that centre (AreaValue only with enemies there);
- *   shield  with enemies on the tank: the spell, valued as the threat stands, gains more with
- *           it than its mana (no GCD: it waits anyway; the opening's hold lets that cast
- *           through, TeamPlan::HoldsCast).
+ *   shield  whenever it is ready and not up (doc mage-hold 3.6), worth the health it takes
+ *           (the opening's hold lets that cast through, Constraints::OpeningForbids).
  * Both: a healer bot's Power Word: Shield (SurvivalAbility Absorb, not self only, ready, in
  *   range, the caster without Weakened Soul) when net with it - net without > LostAction(healer,
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).

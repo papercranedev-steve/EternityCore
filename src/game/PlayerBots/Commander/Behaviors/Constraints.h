@@ -43,6 +43,7 @@ namespace Commander
 {
     struct WorldModel;
     struct TeamPlan;
+    struct Position3;
 
     namespace Constraints
     {
@@ -70,6 +71,11 @@ namespace Commander
         // shield / reflection, RoleStamps.h); then WakesControl.
         char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                   Unit const* target, SpellEntry const* spell, uint32 nowMs);
+
+        // CastForbidden for a ground area spell cast at the point `centre` (BotAction::atPoint):
+        // no neutral creature and no kept control within its radius of `centre`.
+        char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                    Position3 const& centre, SpellEntry const* spell, uint32 nowMs);
 
         // The threat opening's rule for one cast (user 2026-11-12; before: no cast at all, user
         // 2026-11-08, strat-20261108-200046): a bot the opening holds (TeamPlan::threat.Holds)

@@ -62,6 +62,8 @@ namespace Commander
             if (strcmp(source, "fleestop") && plan.HoldsSpell(self, spell->Id, spell->NeedsComboPoints()))
                 return "kept for a flee stop";
 
+            if (action.atPoint)
+                return Constraints::CastAtForbidden(bot, world, plan, Position3{ action.x, action.y, action.z }, spell, nowMs);
             Unit const* target = action.target.IsEmpty() ? me : me->GetMap()->GetUnit(action.target);
             if (!target)
                 return nullptr;
@@ -126,6 +128,19 @@ namespace Commander
                     return "it reflects damage: hands off";
             }
             return WakesControl(bot, world, plan, target, spell, nowMs);
+        }
+
+        char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                    Position3 const& centre, SpellEntry const* spell, uint32 nowMs)
+        {
+            if (!spell || !SpellTags::DealsDamage(spell))
+                return nullptr;
+            float const radius = SpellTags::AreaRadius(spell);
+            if (NeutralIn(world, centre, radius))
+                return "never a neutral creature (area)";
+            if (KeptNear(world, plan, bot->me->GetObjectGuid(), centre, radius, ObjectGuid(), nowMs))
+                return "keep the control unbroken (area)";
+            return nullptr;
         }
 
         char const* WakesControl(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,

@@ -303,25 +303,40 @@ namespace Commander
                 p.action.type = BotActionType::Cast;
                 p.action.spell = shield;
                 p.action.target = guid;
+                // A step of the phase (the shield is up before every area spell, AreaPhase.h):
+                // worth the spell that follows it.
                 float const cost = Value::LostAction(world, *self, Value::GCD_SEC);
-                p.SetValue(a.shieldGain + cost, cost);
+                p.SetValue(std::max(a.net, a.shieldGain) + cost, cost);
                 out.push_back(p);
                 return;
             }
         }
 
-        // 3. The area spell.
-        Unit* centre = a.centre.IsEmpty() ? me : me->GetMap()->GetUnit(a.centre);
-        if (!centre || !centre->IsAlive() || !bot->CanTryToCastSpell(centre, spell))
-            return;
+        // 3. The area spell: a ground spell at the plan's point (AreaCentre.h), else around the caster.
         Proposal p;
         p.tier = ProposalTier::Assigned;
         p.source = "aoe";
         p.reason = "area phase: the whole spell pays";
         p.action.type = BotActionType::Cast;
         p.action.spell = spell;
-        if (!a.centre.IsEmpty())
-            p.action.target = a.centre;
+        if (a.centre.IsEmpty())
+        {
+            if (!bot->CanTryToCastSpell(me, spell))
+                return;
+        }
+        else
+        {
+            Position3 at = a.centrePos;
+            float const ground = me->GetMap()->GetHeight(at.x, at.y, at.z + 3.0f);
+            if (ground > INVALID_HEIGHT && std::fabs(ground - at.z) <= AB::MAX_STEP_Z)
+                at.z = ground;
+            if (!bot->CanTryToCastSpellAt(at.x, at.y, at.z, spell))
+                return;
+            p.action.atPoint = true;
+            p.action.x = at.x;
+            p.action.y = at.y;
+            p.action.z = at.z;
+        }
         p.SetValue(a.benefit, a.cost);
         out.push_back(p);
     }

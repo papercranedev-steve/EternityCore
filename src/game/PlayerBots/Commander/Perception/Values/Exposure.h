@@ -37,14 +37,13 @@ namespace Exposure
 
     // A channel caster (cannot step away, 2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 8):
     // an enemy at `gapYd` that turns to it as the channel starts comes at `speed` (the spell's
-    // slow included) and hits it from gap / speed on until the tank has it back (MAX_GAIN_SEC
-    // later) or the channel of `channelSec` ends, whichever is first:
+    // slow included) and pushes it back from gap / speed on until the tank has it back
+    // (MAX_GAIN_SEC later) or the channel of `channelSec` ends, whichever is first:
     //   exposed = max(0, min(channelSec, arrival + MAX_GAIN_SEC) - arrival)
-    //   Loss = TURN_CHANCE x (HitLoss(e, member, exposed) [no `e`: 0] + LostAction(member, exposed))
-    // (the hits push the channel back). The area phase prices cast spots with it even when
-    // nobody is predicted to turn ("万一失手").
-    float ChannelLoss(WorldModel const& world, PartyMemberFacts const& member, EnemyFacts const* e,
-                      float gapYd, float speed, float channelSec);
+    //   Loss = TURN_CHANCE x LostAction(member, exposed)
+    // Only for cast spots before the fight, with no enemy to value (AreaSpot); once enemies are
+    // there AreaValue's worst case prices the spot (doc .kiro/docs/2026-11-12-mage-hold.md 3.1).
+    float ChannelLoss(WorldModel const& world, PartyMemberFacts const& member, float gapYd, float speed, float channelSec);
 
     // Enemies that can act, fight us (not only an ally) and do not hit `member`: the ones that
     // may turn to it. (Those hitting it already are the escape module's.)

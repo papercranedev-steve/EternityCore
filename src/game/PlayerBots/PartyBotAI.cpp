@@ -3067,6 +3067,33 @@ void PartyBotAI::StandStillFor(SpellEntry const* pSpellEntry)
     me->GetMotionMaster()->MoveIdle();
 }
 
+bool PartyBotAI::CanTryToCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry) const
+{
+    if (!pSpellEntry)
+        return false;
+    uint32 const power = pSpellEntry->powerType == POWER_HEALTH ? 0 : me->GetPower(Powers(pSpellEntry->powerType));
+    if (!CanTryToCastSpellAs(me, pSpellEntry, me->GetShapeshiftForm(), power))
+        return false;
+    if (me->GetDistance(x, y, z, SizeFactor::None) > SpellMaxRange(me, pSpellEntry))
+        return false;
+    if (!me->IsWithinLOS(x, y, z))
+        return false;
+    if (IsHeldByThreatOpening(me, pSpellEntry) || IsSpellHeld(pSpellEntry))
+        return false;
+    if (IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+        return true;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    Commander::Position3 const at{ x, y, z };
+    return !commander || !Commander::Constraints::CastAtForbidden(this, commander->GetWorld(), commander->GetPlan(),
+                                                                  at, pSpellEntry, WorldTimer::getMSTime());
+}
+
+SpellCastResult PartyBotAI::DoCastAt(float x, float y, float z, SpellEntry const* pSpellEntry)
+{
+    StandStillFor(pSpellEntry);
+    return DoCastSpellAt(x, y, z, pSpellEntry);
+}
+
 SpellCastResult PartyBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSpellEntry)
 {
     if (CanTryToCastSpell(pTarget, pSpellEntry))

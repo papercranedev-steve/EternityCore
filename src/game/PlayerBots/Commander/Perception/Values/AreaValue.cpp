@@ -2,7 +2,6 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
-#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "SpellMgr.h"
@@ -21,7 +20,6 @@ namespace AreaValue
             bool free = false;
             float myThreat = 0.0f;
             float holderThreat = 0.0f;
-            float holderRate = 0.0f;
             float factor = ThreatView::RANGED_AGGRO_FACTOR;
             float speed = 0.0f;
             PartyMemberFacts const* holder = nullptr;
@@ -170,11 +168,6 @@ namespace AreaValue
                 bool const melee = PackResolver::Distance(r.from, e.pos) - e.boundingRadius <= MELEE_REACH;
                 t.factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
                 t.holder = world.FindMember(e.victim);
-                // A holder hitting another enemy gains little here: its measured rate is a jump
-                // of the last seconds, not what comes next (strat-20261107-194655). The same
-                // rate as the tank's threat runway.
-                if (t.holder)
-                    t.holderRate = ThreatRunway::HolderRate(world, e, *t.holder);
                 t.speed = SpeedTo(e, spell, r.centre, r.from);
             }
             targets.push_back(t);
@@ -206,7 +199,9 @@ namespace AreaValue
                 if (health <= spell.perTick * float(k))
                     break;      // the tick that kills it turns nothing
                 float const mine = t.myThreat + float(k) * spell.tickThreat;
-                float const holder = t.holderThreat + t.holderRate * float(k) * spell.periodSec;
+                // The holder adds nothing during the spell: the tank cannot hold (header; until
+                // 2026-11-12 half its measured rate, ThreatRunway::HolderRate).
+                float const holder = t.holderThreat;
                 if (mine <= holder * t.factor)
                     continue;
                 Turning x;
@@ -234,7 +229,7 @@ namespace AreaValue
         if (spell.channel)
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && e.health && e.victim == self.guid)
-                    onMe.push_back({ &e, WalkSec(e, r.from, e.speed) });
+                    onMe.push_back({ &e, WalkSec(e, r.from, SpeedTo(e, spell, r.centre, r.from)) });
 
         AggroTurnCost::Options options = r.turn;
         options.at = &r.from;

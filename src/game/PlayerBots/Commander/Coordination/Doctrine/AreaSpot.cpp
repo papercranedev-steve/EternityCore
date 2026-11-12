@@ -1,7 +1,6 @@
 #include "Commander/Coordination/Doctrine/AreaSpot.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -22,31 +21,6 @@ namespace AreaSpot
         {
             float const dx = a.x - b.x, dy = a.y - b.y;
             return std::sqrt(dx * dx + dy * dy);
-        }
-
-        // The enemy most likely to turn to the caster (header "slip"), null: none on a member.
-        EnemyFacts const* SlipEnemy(WorldModel const& world, AreaValue::Request const& r, AreaValue::Result const& v)
-        {
-            AreaSpellFacts const& s = *r.spell;
-            if (s.periodSec <= 0.0f)
-                return nullptr;
-            std::vector<PlannedThreat> const planned{ { r.caster->guid, s.tickThreat / s.periodSec } };
-            float const spellSec = float(s.ticks) * s.periodSec;
-            EnemyFacts const* best = nullptr;
-            float bestSec = 0.0f;
-            for (ObjectGuid g : v.targets)
-            {
-                EnemyFacts const* e = world.FindEnemy(g);
-                if (!e || e->victim.IsEmpty() || e->victim == r.caster->guid || !world.FindMember(e->victim))
-                    continue;
-                float const sec = ThreatRunway::Of(world, *e, e->victim, planned, spellSec).sec;
-                if (!best || sec < bestSec)
-                {
-                    best = e;
-                    bestSec = sec;
-                }
-            }
-            return best;
         }
 
         struct Cell
@@ -74,26 +48,16 @@ namespace AreaSpot
         if (evaluate)
             hereValue = AreaValue::Evaluate(world, here);
 
-        // In case it slips: who, how fast.
-        EnemyFacts const* slipEnemy = evaluate && hereValue.valid ? SlipEnemy(world, here, hereValue) : nullptr;
-        // Slowed inside the area only (AreaValue::WalkSecUnder): the average speed of its walk to `p`.
+        // An enemy at the centre that turns at once (header "slip"); slowed inside the area only
+        // (AreaValue::WalkSecUnder). It ranks the cells to value; it is in the score only
+        // without enemies to value (before the fight): valued, the worst case is in AreaValue.
         auto const slipAt = [&](Position3 const& p)
         {
-            float gap = 0.0f;
-            float speed = 0.0f;
-            if (slipEnemy)
-            {
-                gap = Exposure::Gap(*slipEnemy, p);
-                speed = AreaValue::SpeedTo(*slipEnemy, spell, base.centre, p);
-            }
-            else
-            {
-                gap = Distance2d(p, base.centre);
-                float const sec = AreaValue::WalkSecUnder(base.centre, AggroTurnCost::RUN_YARDS_PER_SEC, spell.slowPct,
-                                                          base.centre, spell.radius, p, 0.0f);
-                speed = sec > 0.0f ? gap / sec : AggroTurnCost::RUN_YARDS_PER_SEC;
-            }
-            return Exposure::ChannelLoss(world, m, slipEnemy, gap, speed, channelSec);
+            float const gap = Distance2d(p, base.centre);
+            float const sec = AreaValue::WalkSecUnder(base.centre, AggroTurnCost::RUN_YARDS_PER_SEC, spell.slowPct,
+                                                      base.centre, spell.radius, p, 0.0f);
+            float const speed = sec > 0.0f ? gap / sec : AggroTurnCost::RUN_YARDS_PER_SEC;
+            return Exposure::ChannelLoss(world, m, gap, speed, channelSec);
         };
 
         // Here.
@@ -101,7 +65,7 @@ namespace AreaSpot
         out.hereValid = PackResolver::Distance(m.pos, base.centre) <= spell.range && !idleHere &&
                         (!evaluate || hereValue.valid);
         out.hereNet = hereValue.valid ? hereValue.net : 0.0f;
-        float const hereScore = out.hereNet - slipAt(m.pos);
+        float const hereScore = out.hereNet - (evaluate ? 0.0f : slipAt(m.pos));
         out.value = hereValue;
         out.valid = out.hereValid;
 
@@ -152,7 +116,7 @@ namespace AreaSpot
                 if (!c.value.valid)
                     continue;
             }
-            c.score = (evaluate ? c.value.net : 0.0f) - c.slip - c.walkCost + sticky(c);
+            c.score = (evaluate ? c.value.net : -c.slip) - c.walkCost + sticky(c);
             valued.push_back(c);
         }
         if (valued.empty())

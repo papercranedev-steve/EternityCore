@@ -20,9 +20,10 @@
  *   - one hitting the caster or nobody: free (no turn to fear).
  * Tick plan (as AreaDamageBehavior before, now on facts): damage after n ticks = sum of
  * min(perTick x n, health). An enemy turns at the first tick k it survives where my threat (+
- * my bolt in the air at it) + k x tickThreat passes (its holder's threat + the holder's rate on
- * it, ThreatRunway::HolderRate, x k x period) x 110% (caster within its melee reach from
- * `from`) / 130%. A holder hitting another enemy gains nothing here. Turn loss after n ticks
+ * my bolt in the air at it) + k x tickThreat passes its holder's threat now x 110% (caster
+ * within its melee reach from `from`) / 130%: the holder is counted as adding nothing during
+ * the spell, the tank cannot hold (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md
+ * 3.1: the mage plays the worst case, a tank that holds is a gain). Turn loss after n ticks
  * = AggroTurnCost::OfGroup over every enemy turned by then (with the shield, `from`, the busy
  * tanks; the caster dying under all of them is in there). A holder that is not a party member:
  * all its hits (Value::HitLoss).
