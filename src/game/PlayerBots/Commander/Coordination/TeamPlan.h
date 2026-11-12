@@ -268,7 +268,7 @@ namespace Commander
         PullControlPlan control;
 
         // Enemies that were not expected and joined after the opener went out (openedAtMs).
-        // Added to `expected` too: the opening holds and the line of sight pull count them.
+        // Added to `expected` too: the pack-coming wait and the line of sight pull count them.
         std::vector<ObjectGuid> extra;
 
         // Ranged pull fought where the pack stands (not brought back): Settle starts with the
@@ -782,7 +782,7 @@ namespace Commander
         // Gathering, no tactic, Pick (the tank follows the threat risk, TankTargets; until
         // 2026-11-13 Pick had Focus: the tank hit the party focus too).
         None,
-        HoldPile,   // Area: the tank keeps the pile (top-up) and protects the area caster: a rescue
+        HoldPile,   // Area: the tank keeps the pile (threat risk) and protects the area caster: a rescue
                     // of an enemy on it is Urgent (RescueAssigner), so is a group threat on two or
                     // more of them (ThreatBehavior: Challenging Shout)
     };
@@ -896,64 +896,6 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
-    // One enemy next to the tank it still lacks threat on (ThreatRunway::Result::shortfall).
-    struct ThreatGapEntry
-    {
-        ObjectGuid enemy;
-        float gap = 0.0f;
-    };
-
-    // Threat opening ("群拉", Coordination/Doctrine/ThreatOpening.h, .kiro/docs/2026-11-08-threat-modes.md):
-    // after a pull and when new enemies reach the tank, the tank first gets enough threat on
-    // each enemy next to it to keep it through the healer's next heal and, under the Area
-    // tactic, through the whole area spell (ThreatRunway); everyone else waits.
-    // A constraint while `active` (every cast of a held bot, its attacks: Behaviors/Constraints.h)
-    // and the tank's task (TankTargets, ThreatBehavior value filling `gaps`).
-    struct ThreatOpeningPlan
-    {
-        bool active = false;
-        ObjectGuid tank;
-        uint32 sinceMs = 0;
-        std::vector<ThreatGapEntry> gaps;       // enemies next to the tank still short, while active
-        // Enemies whose opening is over (their gap was filled once, or the opening gave up on
-        // them): later thin leads are the top-up's (TankTargets), not a new opening.
-        std::vector<ObjectGuid> settled;
-        // Settled while this opening runs (their gap was filled): checked again until it ends,
-        // back in `gaps` when short again (the tank left them for the others).
-        std::vector<ObjectGuid> filled;
-        float bestGap = 0.0f;                   // smallest total gap this opening (progress)
-        uint32 progressMs = 0;                  // last time the total gap shrank
-        // Points per second the waiting damage dealers lose / the tank's threat per second on
-        // the enemy it hits (ThreatGap::WaitCostPerSec, FillRate): what filling a gap is worth.
-        float waitPerSec = 0.0f;
-        float fillRate = 1.0f;
-        // Members a held bot may act for: someone about to die (SurvivalValue danger, or below
-        // PullBehavior::HOLD_HEAL_BELOW_PCT): healers heal, that member saves itself.
-        bool healAllowed = false;
-        std::vector<ObjectGuid> freed;          // held bots allowed to act anyway (in danger)
-
-        // `bot` waits for the tank (casts nothing, attacks nothing).
-        bool Holds(ObjectGuid bot, bool healer) const
-        {
-            if (!active || bot == tank)
-                return false;
-            if (healer && healAllowed)
-                return false;
-            return std::find(freed.begin(), freed.end(), bot) == freed.end();
-        }
-        float GapOf(ObjectGuid enemy) const
-        {
-            for (ThreatGapEntry const& g : gaps)
-                if (g.enemy == enemy)
-                    return g.gap;
-            return 0.0f;
-        }
-        bool Settled(ObjectGuid enemy) const
-        {
-            return std::find(settled.begin(), settled.end(), enemy) != settled.end();
-        }
-    };
-
     struct TeamPlan
     {
         uint32 version = 0;
@@ -985,7 +927,6 @@ namespace Commander
         PatrolMovePlan patrolMove;
         RouteGuardPlan routeGuard;
         AreaPlan area;
-        ThreatOpeningPlan threat;
         DoctrinePlan doctrine;
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
         // by PartyCommander every refresh). Read through ForbidsRest.

@@ -19,9 +19,6 @@ namespace Commander
         // threatMod). At least 1.
         float FillRate(WorldModel const& world, PartyMemberFacts const& tank);
 
-        // Points per second the party loses while its damage dealer bots (not tanks, not
-        // healers) wait for the tank: their Value::ContributionPerSec.
-        float WaitCostPerSec(WorldModel const& world, ObjectGuid tank);
     }
 }
 

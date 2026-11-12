@@ -16,14 +16,5 @@ namespace ThreatGap
             return measured;
         return std::max(1.0f, tank.soloDps * tank.threatMod);
     }
-
-    float WaitCostPerSec(WorldModel const& world, ObjectGuid tank)
-    {
-        float cost = 0.0f;
-        for (PartyMemberFacts const& m : world.party)
-            if (m.isBot && !m.isPet && m.CanAct() && m.guid != tank && m.role != ROLE_HEALER && !Tanks::IsTank(m))
-                cost += Value::ContributionPerSec(world, m);
-        return cost;
-    }
 }
 }

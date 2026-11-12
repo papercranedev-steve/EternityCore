@@ -363,11 +363,10 @@ namespace Commander
         // left it, this refresh or the last one (one refresh late at worst either way).
         bool const pullPlacing = plan.pull.phase == PullPhase::Settle &&
             (plan.pull.awaitArrival || plan.pull.losBreak == PullLosBreak::Active);
-        // The tank first holds the fight: during the threat opening (this refresh's,
-        // ThreatOpening runs before this module) or with most enemies on someone else, moving
-        // leaves them hitting their victims (strat-20261108-200046: the move began with one of
-        // six enemies on the tank). Patrols are judged again once it holds them (not marked judged).
-        if (plan.threat.active || !HoldsMost(world, tank->guid))
+        // The tank first holds the fight: with most enemies on someone else, moving leaves them
+        // hitting their victims (strat-20261108-200046: the move began with one of six enemies
+        // on the tank). Patrols are judged again once it holds them (not marked judged).
+        if (!HoldsMost(world, tank->guid))
             return;
 
         float const remaining = Value::FightRemainingSec(world);

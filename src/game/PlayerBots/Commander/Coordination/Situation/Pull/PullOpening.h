@@ -12,7 +12,7 @@
  * Until 2026-11-08 this also held the damage dealers until the tank had threat > 0 on every
  * pulled enemy next to it, at most 4 s after the first one reached it. Nothing made the tank
  * build that threat: strat-20261108-200046, no shout, the hold ran out, five of six enemies
- * at 0 threat. That wait is the threat opening now (Coordination/Doctrine/ThreatOpening.h): enough
+ * at 0 threat. That wait became the threat opening (2026-11-08..13; since 2026-11-13 the tank's threat risk, ThreatRisk.h, and each damage dealer's room, ThreatRoom.h): enough
  * threat to keep each enemy through the next heal, for new enemies mid-fight too, no fixed
  * timeout.
  */

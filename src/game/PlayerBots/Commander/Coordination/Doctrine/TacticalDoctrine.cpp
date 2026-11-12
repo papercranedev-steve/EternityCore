@@ -80,7 +80,7 @@ namespace Commander
         TeamLedger const ledger = Tags::LedgerOf(world);
         float const median = Tags::EliteMedianHealth(world);
 
-        d.phase = InPull(plan) || plan.threat.active ? FightPhase::Gathering
+        d.phase = InPull(plan) ? FightPhase::Gathering
                 : free <= CLEANUP_FREE ? FightPhase::Cleanup : FightPhase::Clash;
 
         // Groups.
@@ -158,9 +158,9 @@ namespace Commander
             }
         }
 
-        // The main tank's job (TankJob): none while gathering (the threat opening's task).
-        d.tankJob = d.phase == FightPhase::Gathering || d.tactic == PileTactic::None ? TankJob::None
-                  : d.tactic == PileTactic::Area ? TankJob::HoldPile : TankJob::Focus;
+        // The main tank's job (TankJob): HoldPile under Area, else none (the tank follows the
+        // threat risk, TankTargets).
+        d.tankJob = d.phase != FightPhase::Gathering && d.tactic == PileTactic::Area ? TankJob::HoldPile : TankJob::None;
         // The area spell the tactic counts on: the tank's runway is judged with it (AreaIntent.h).
         if (d.tactic == PileTactic::Area)
             AreaIntent::Fill(world, d);
@@ -302,7 +302,6 @@ namespace Commander
         switch (job)
         {
             case TankJob::None:     return "no job";
-            case TankJob::Focus:    return "hits the focus";
             case TankJob::HoldPile: return "holds the pile, protects the area caster";
         }
         return "?";

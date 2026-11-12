@@ -55,6 +55,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.cpp
+  ${COMMANDER_DIR}/Perception/Values/ThreatRisk.h
+  ${COMMANDER_DIR}/Perception/Values/ThreatRisk.cpp
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.h
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.cpp
   ${COMMANDER_DIR}/Perception/Values/AreaValue.h
@@ -133,8 +135,6 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Duties/RescueAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaPhase.h
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaPhase.cpp
-  ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.h
-  ${COMMANDER_DIR}/Coordination/Doctrine/ThreatOpening.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.h
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticalDoctrine.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.h

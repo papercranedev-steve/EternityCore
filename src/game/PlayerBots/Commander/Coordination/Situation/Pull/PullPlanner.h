@@ -26,9 +26,9 @@
  *                      end it as Cancelled. Settle waits for an
  *                      active line of sight pull (casters walked in, turned to someone else,
  *                      or the timeout), after a ranged pull fought in place for the pack to
- *                      reach the tank, and for the opening holds (PullOpening.h: damage
- *                      dealers until the tank has threat on what came, healers also until the
- *                      casters came). Settle lasts at least SETTLE_MS.
+ *                      reach the tank, while the pulled enemies are still on their way to the
+ *                      tank (PullPlan::packComing), and for the healers' hold (PullOpening.h:
+ *                      until the casters came). Settle lasts at least SETTLE_MS.
  *
  * Files (split by step, todo item 14):
  *   PullPlanner.cpp      Plan, CheckReady, RecheckBeforeApproach, FindRangedPullSpell

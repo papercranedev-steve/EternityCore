@@ -66,7 +66,7 @@ namespace ThreatView
                            SpellEntry const* spell, std::vector<EnemyThreatDelta>& out);
 
     // Map thread only: threat one cast of `spell` by `caster` on `target` (null: itself) puts
-    // on each creature (2026-11-12, the threat opening's rule, Coordination/Doctrine/ThreatOpening.h):
+    // on each creature (2026-11-12, written for the threat opening's cast rule, removed 2026-11-13):
     //   helpful  its flat spell_threat + healing x 0.5 (paladins 0.25, PredictHealThreat), split
     //            over the creatures that have the target on their list (HostileRefManager::
     //            threatAssist); none on it: no threat (Ice Barrier before anything fights the mage);

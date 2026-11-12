@@ -35,11 +35,11 @@
  *    costing net(later) x sec / the spell's length:
  *      Tank    every enemy it would turn is on the main tank: later nobody turns (net + turn
  *              loss), sec = their ThreatRunway shortfalls through the spell / ThreatGap::
- *              FillRate (the tank's top-up goes for them: TankTargets reads the same runway).
- *              Not when their total did not shrink for ThreatOpeningAssigner::STALL_MS.
+ *              FillRate (the tank goes for them: TankTargets values the same runways, ThreatRisk).
+ *              Not when their total did not shrink for TANK_STALL_MS.
  *      Shield  its shield is on cooldown: later with it (as the shield step), sec = the cooldown.
  *    Meanwhile its spot is the prep spot below (it walks there while it waits).
- * While the pull or the opening holds the party (the "not while" above, not a retreat), the
+ * While the pull holds the party (the "not while" above, not a retreat), the
  * caster gets ready (AreaPlan::prep*; doc 4.4, 4.5, 8, user 2026-11-12: stand there first, a
  * turn predicted is too late):
  *   who     under the Area tactic the caster it counts on (DoctrinePlan::areaThreat); before
@@ -49,7 +49,7 @@
  *           PlannedFightSpot);
  *   spot    AreaSpot for that centre (AreaValue only with enemies there);
  *   shield  whenever it is ready and not up (doc mage-hold 3.6), worth the health it takes
- *           (the opening's hold lets that cast through, Constraints::OpeningForbids).
+ *           (before the fight too).
  * Both: a healer bot's Power Word: Shield (SurvivalAbility Absorb, not self only, ready, in
  *   range, the caster without Weakened Soul) when net with it - net without > LostAction(healer,
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).
@@ -77,6 +77,10 @@ namespace Commander
     {
     public:
         static constexpr float STICKY_POINTS = 1.0f;
+        // The Tank wait gives up when the total shortfall did not shrink by TANK_PROGRESS_MIN
+        // threat for TANK_STALL_MS (no rage, nothing reaches, someone keeps adding threat).
+        static constexpr uint32 TANK_STALL_MS = 3000;
+        static constexpr float TANK_PROGRESS_MIN = 1.0f;
 
         // Same id as AreaDamageBehavior: `.partybot ai module aoe off` switches both.
         char const* GetId() const override { return "aoe"; }

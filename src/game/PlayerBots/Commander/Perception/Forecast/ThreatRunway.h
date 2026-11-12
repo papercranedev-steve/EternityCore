@@ -57,6 +57,17 @@ namespace Commander
         Result Of(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank,
                   std::vector<PlannedThreat> const& planned, float horizonSec, float addTank = 0.0f);
 
+        // One rival m of the tank on `e`: the seconds until m takes it (runway as above, for m
+        // alone). Of's runway is the smallest of these.
+        struct Rival
+        {
+            ObjectGuid member;
+            float sec = 0.0f;
+        };
+        // Every rival with a finite runway (someone gaining on the tank, or a lead already gone).
+        std::vector<Rival> Rivals(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank,
+                                  std::vector<PlannedThreat> const& planned, float addTank = 0.0f);
+
         // Threat per second `holder` adds to `e` from now: HOLDER_RATE_SHARE x its measured rate
         // while it hits `e`, else 0.
         float HolderRate(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& holder);

@@ -10,23 +10,15 @@
  *     cost = SwitchCost; Urgent when the victim dies within the horizon. Already the tank's
  *     target: kept. Which tank, and taunt or threat or the victim's Fade, is the rescue's
  *     choice (Coordination/Duties/RescueAssigner.h); the loose rule is RescueValue::LooseVictim.
- *  2. Threat opening (Coordination/Doctrine/ThreatOpening.h, this refresh's situation step): the tank's
- *     task. The current target while it is still short (TeamPlan::threat gaps), else the enemy
- *     short the most: benefit = waitPerSec x its gap / fillRate (the waiting party's time),
- *     cost = SwitchCost.
- *  3. Top up (2026-11-12): threat runways (Perception/Forecast/ThreatRunway.h, with the area
- *     spell the doctrine counts on) within DoctrinePlan::RunwayHorizon. The current target
- *     while its runway is short and the shortest; else the enemy on the tank within
- *     TacticalDoctrine::CLUSTER_YD whose runway ends first. benefit = LooseEnemy::ThinLoss
- *     (what its taker, else a healer bot, would take for 2 s x 0.5 x (1 - runway / horizon)),
- *     cost = SwitchCost; a switch that does not pay keeps a short current
- *     one. (Until 2026-11-12: only a lead that did not hold through the healer's next heal;
- *     until 2026-11-08: lead / threat below 15% while the current target's was above 30%.)
- *  4. Doctrine TankJob::Focus (Pick, main tank only; todo 12): the party focus when it is within
- *     TacticalDoctrine::CLUSTER_YD of the tank, the walk is safe and the switch pays (Smith's
- *     rule exchange x Share against SwitchCost). Under Area (HoldPile) the tank keeps its own.
- *  5. Keep the current target.
- *  6. No target yet: the pull target, else what the leader attacks, else what another member
+ *  2. Threat (user 2026-11-13, doc .kiro/docs/2026-11-13-tank-threat-priority.md 4): over the
+ *     enemies on the tank within TacticalDoctrine::CLUSTER_YD (ThreatRisk::Counts), the one
+ *     where one global cooldown of the tank's threat (ThreatGap::FillRate x GCD) takes off the
+ *     most risk (Perception/Values/ThreatRisk.h, with the area spell the doctrine counts on,
+ *     over DoctrinePlan::RunwayHorizon), net of SwitchCost; the current target pays none. No
+ *     risk anywhere: the current target. (Until 2026-11-13: the threat opening's "fill the one
+ *     short the most", the top-up by the shortest runway, the Pick tactic's focus step and a
+ *     plain "keep".)
+ *  3. No target yet: the pull target, else what the leader attacks, else what another member
  *     attacks (WorldModel::targeted first), else the nearest enemy hitting the tank, else the
  *     nearest one, all within JOIN_FIGHT_YD. benefit = its harm over its kill time x the tank's share of
  *     the party's damage (the exchange below against no target).

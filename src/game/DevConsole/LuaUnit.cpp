@@ -836,7 +836,7 @@ namespace DevConsole
                 SetFieldB(L, "awaitArrival", true);
             if (plan.pull.phase == Commander::PullPhase::Settle)
             {
-                SetFieldB(L, "holdDamage", plan.threat.active);
+                SetFieldB(L, "packComing", plan.pull.packComing);
                 SetFieldB(L, "holdHealing", plan.pull.holdHealing);
             }
             if (plan.pull.losBreak != Commander::PullLosBreak::None)
@@ -979,19 +979,6 @@ namespace DevConsole
                 lua_rawseti(L, -2, ++i);
             }
             lua_setfield(L, -2, "controls");
-        }
-        // Threat opening (Coordination/Doctrine/ThreatOpening.h): the tank and the enemies still short
-        // (no gap sizes: they change every refresh and the recorder writes a plan line on each change).
-        if (plan.threat.active)
-        {
-            lua_createtable(L, 0, 2);
-            SetFieldG(L, "tank", plan.threat.tank);
-            std::vector<ObjectGuid> short_;
-            for (Commander::ThreatGapEntry const& g : plan.threat.gaps)
-                short_.push_back(g.enemy);
-            PushGuidList(L, short_);
-            lua_setfield(L, -2, "short");
-            lua_setfield(L, -2, "threat");
         }
         // Area phase (Coordination/Doctrine/AreaPhase.h). No points (they change every refresh).
         if (plan.area.active)

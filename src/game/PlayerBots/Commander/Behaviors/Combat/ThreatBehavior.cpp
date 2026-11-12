@@ -10,7 +10,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
-#include "Commander/Perception/Forecast/ThreatRunway.h"
+#include "Commander/Perception/Values/ThreatRisk.h"
 #include "Commander/Perception/Profiles/PetTaunt.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
@@ -290,20 +290,6 @@ namespace Commander
         if (world.enemies.empty())
             return;
 
-        // Threat opening (Coordination/Doctrine/ThreatOpening.h): a held bot stops hitting what it hits
-        // (its casts and new attacks are forbidden: Behaviors/Constraints.h).
-        if (plan.threat.Holds(bot->me->GetObjectGuid(), bot->GetRole() == ROLE_HEALER))
-        {
-            if (bot->me->GetVictim() || bot->me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
-            {
-                Proposal p = MakeProposal(ProposalTier::Urgent, BotActionType::HoldFire);
-                p.reason = "wait for the tank's threat (opening)";
-                p.score = 1.0f;
-                out.push_back(p);
-            }
-            return;
-        }
-
         // Doctrine HoldFire (RoleStamps.h): its damage shield / reflection is up; every role stops
         // hitting it (TargetAssigner gives another target when there is one).
         // Another target given: TargetBehavior switches to it, no need to stop first.
@@ -409,67 +395,47 @@ namespace Commander
             std::count_if(loose.begin(), loose.end(),
                 [&plan](LooseEntry const& l) { return l.victim->guid == plan.area.caster; }) >= 2;
 
-        // 1b. The threat opening's task (Coordination/Doctrine/ThreatOpening.h): the enemies next to the
-        // tank it still lacks threat on. Before 2026-11-08 these were the "fragile" enemies here,
-        // valued by what one would do on the runner-up for 2 s x 0.5: a Demoralizing Shout came
-        // out at 0.06 against 0.67 and was never cast (strat-20261108-200046). Now the threat
-        // a cast adds on them is worth the time the waiting party saves: waitPerSec x the
-        // threat filled / the tank's single target rate.
-        ThreatOpeningPlan const& opening = plan.threat;
-        bool const opens = opening.active && opening.tank == self && !opening.gaps.empty();
-
-        // 1c. Enemies still on the tank whose threat runway (ThreatRunway, with the area spell
-        // the doctrine counts on) ends within the doctrine's horizon (2026-11-12, doc
-        // .kiro/docs/2026-11-11-aoe-threat.md 4.3): the threat a cast adds lengthens each; worth
-        // LooseEnemy::ThinLoss before - after, the top-up's own value (TankTargets). Before, only
-        // enemies already loose counted, and the area threat came after they had turned.
-        struct ThinEntry
+        // 1b. Enemies still on the tank at risk of being taken off it (Perception/Values/ThreatRisk.h,
+        // with the area spell the doctrine counts on; user 2026-11-13, doc
+        // .kiro/docs/2026-11-13-tank-threat-priority.md 5): the threat a cast adds on each is
+        // worth the risk it takes off, the tank's single target value too (TankTargets). Covers
+        // the start of a fight (every enemy at 0 tank threat, a healer's next heal) without a
+        // separate opening (until 2026-11-13: the threat opening's gaps x the waiting party's
+        // time, and thin runways x ThinLoss).
+        struct RiskEntry
         {
             EnemyFacts const* enemy;
-            PartyMemberFacts const* taker;
-            float runwaySec;
+            float risk;
         };
-        std::vector<ThinEntry> thin;
+        std::vector<RiskEntry> risky;
         float const horizon = plan.doctrine.RunwayHorizon();
-        if (!opens)
-            for (EnemyFacts const& e : world.enemies)
-            {
-                if (e.victim != self || !e.acting || e.crowdControlled ||
-                    PackResolver::Distance(myFacts->pos, e.pos) - e.boundingRadius > GROUP_THREAT_RADIUS)
-                    continue;
-                ThreatRunway::Result const r = ThreatRunway::Of(world, e, self, plan.doctrine.AreaThreatOn(e.guid), horizon);
-                PartyMemberFacts const* taker = r.taker.IsEmpty() ? nullptr : world.FindMember(r.taker);
-                if (r.sec < horizon && taker && !taker->isPet)
-                    thin.push_back({ &e, taker, r.sec });
-            }
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (!ThreatRisk::Counts(e, self) ||
+                PackResolver::Distance(myFacts->pos, e.pos) - e.boundingRadius > GROUP_THREAT_RADIUS)
+                continue;
+            float const risk = ThreatRisk::Of(world, e, self, plan.doctrine.AreaThreatOn(e.guid), horizon);
+            if (risk > 0.0f)
+                risky.push_back({ &e, risk });
+        }
 
-        // Several loose enemies (summoned adds, a wave arriving), several thin leads or the
-        // opening: one area threat ability (Thunder Clap, Demoralizing Shout, Consecration,
-        // Challenging Roar) instead of one switch per enemy per tick (combat scenarios 6 and 9).
-        if (opens || loose.size() >= GROUP_THREAT_MIN_ENEMIES || thin.size() >= GROUP_THREAT_MIN_ENEMIES)
+        // Several loose enemies (summoned adds, a wave arriving) or several at risk: one area
+        // threat ability (Thunder Clap, Demoralizing Shout, Consecration, Challenging Roar)
+        // instead of one switch per enemy per tick (combat scenarios 6 and 9).
+        if (loose.size() >= GROUP_THREAT_MIN_ENEMIES || risky.size() >= GROUP_THREAT_MIN_ENEMIES)
             ProposeGroupThreat(bot, world, plan, tankRate, switchCost, stanceCost, enemyMelee, protects,
                 [&](float threatAdded, float holdSec, Position3 const& centre, float radius) -> std::pair<float, bool>
                 {
                     float benefit = 0.0f;
                     bool deadly = false;
-                    if (opens && threatAdded > 0.0f)
-                    {
-                        float filled = 0.0f;
-                        for (ThreatGapEntry const& g : opening.gaps)
-                            if (EnemyFacts const* e = world.FindEnemy(g.enemy))
-                                if (PackResolver::Distance(centre, e->pos) - e->boundingRadius <= radius)
-                                    filled += std::min(g.gap, threatAdded);
-                        benefit += opening.waitPerSec * filled / opening.fillRate;
-                    }
                     if (threatAdded > 0.0f)
-                        for (ThinEntry const& t : thin)
+                        for (RiskEntry const& r : risky)
                         {
-                            if (PackResolver::Distance(centre, t.enemy->pos) - t.enemy->boundingRadius > radius)
+                            if (PackResolver::Distance(centre, r.enemy->pos) - r.enemy->boundingRadius > radius)
                                 continue;
-                            float const after = ThreatRunway::Of(world, *t.enemy, self, plan.doctrine.AreaThreatOn(t.enemy->guid),
-                                                                 horizon, threatAdded).sec;
-                            benefit += std::max(0.0f, LooseEnemy::ThinLoss(world, *t.enemy, *t.taker, *myFacts, t.runwaySec, horizon) -
-                                                      LooseEnemy::ThinLoss(world, *t.enemy, *t.taker, *myFacts, after, horizon));
+                            float const after = ThreatRisk::Of(world, *r.enemy, self, plan.doctrine.AreaThreatOn(r.enemy->guid),
+                                                               horizon, threatAdded);
+                            benefit += std::max(0.0f, r.risk - after);
                         }
                     // Loose enemies: without the ability the tank wins them back with threat one
                     // after another (LooseEnemy::SequentialRecovery); with it each lacks
@@ -503,8 +469,7 @@ namespace Commander
                     return { benefit, deadly };
                 }, out);
 
-        // 2. Topping up an enemy whose lead does not survive the next heal, and the opening's
-        // single target switches: TargetAssigner (TankTargets).
+        // 2. Which enemy the tank hits (the same risk, one at a time): TargetAssigner (TankTargets).
     }
 
     // Damage dealers: stop before pulling aggro off a holder, when it is worth it.

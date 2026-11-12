@@ -40,8 +40,8 @@
  *                     the tank on the point meanwhile.
  *  Others   Approach / Return and the wait for the pack: stay where they are while out of
  *           combat. Settle after that: healers while PullPlan::holdHealing (a line of sight
- *           pull, Coordination/Situation/Pull/PullOpening.h; the wait for the tank's threat is the threat
- *           opening's, Coordination/Doctrine/ThreatOpening.h, for every bot); a healer still heals when a
+ *           pull, Coordination/Situation/Pull/PullOpening.h; damage dealers wait for the tank's threat
+ *           each on its own target, DamageTargets / ThreatRoom); a healer still heals when a
  *           member is below HOLD_HEAL_BELOW_PCT (the hold stands down, the rotation heals).
  *           A healer with a hiding point of a line of sight pull (PullPlan::losHiders) walks
  *           there while the break is Active, in combat or not. Ranged damage dealers do not

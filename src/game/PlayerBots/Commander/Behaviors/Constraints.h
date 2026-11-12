@@ -20,10 +20,9 @@
  *                              (PartyBotAI::PassesPartyCastChecks), not only Commander proposals:
  *                              a rotation's Blade Flurry broke a Shackle (strat-20261108-141921).
  *   Rest                       TeamPlan::ForbidsRest
- *   Attack, Chase, PetAttack   TeamPlan::threat.Holds: the threat opening, everyone but the
- *                              tank waits (Coordination/Doctrine/ThreatOpening.h)
- *   Cast                       while held: OpeningForbids below (no creature over the tank's
- *                              lead); every cast of the bot too (PartyBotAI::PassesPartyCastChecks)
+ * (The threat opening's "everyone but the tank waits" is gone since 2026-11-13: each damage
+ * dealer starts when it has threat room on its target, DamageTargets / ThreatRoom; doc
+ * .kiro/docs/2026-11-13-tank-threat-priority.md 6.)
  *
  * Casts are not checked against EngageBlock: an interrupt or a control from where the bot
  * stands does not walk it into a patrol's path.
@@ -76,16 +75,6 @@ namespace Commander
         // no neutral creature and no kept control within its radius of `centre`.
         char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     Position3 const& centre, SpellEntry const* spell, uint32 nowMs);
-
-        // The threat opening's rule for one cast (user 2026-11-12; before: no cast at all, user
-        // 2026-11-08, strat-20261108-200046): a bot the opening holds (TeamPlan::threat.Holds)
-        // may cast what puts no creature over the tank's lead: every creature's headroom for the
-        // bot (ThreatView::Headroom) after ThreatView::PredictCastThreat stays above 0, and a
-        // harmful cast reaches no creature not in combat yet. Ice Barrier before anything fights
-        // the mage, buffs, a heal small enough pass; a Counterspell at an enemy the tank has no
-        // threat on does not. Walking was never held. Null: allowed.
-        char const* OpeningForbids(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                   Unit* target, SpellEntry const* spell);
     }
 }
 

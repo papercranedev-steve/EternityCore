@@ -220,8 +220,8 @@ namespace Commander
                         unexpected.push_back(e.guid);
                 if (fightStarted)
                 {
-                    // Enemies nobody expected are in this fight too: the opening holds and the
-                    // line of sight pull count them.
+                    // Enemies nobody expected are in this fight too: the pack-coming wait and
+                    // the line of sight pull count them.
                     if (!unexpected.empty())
                     {
                         AddUnique(pull.extra, unexpected);
@@ -275,7 +275,7 @@ namespace Commander
                 return;
             case PullPhase::Settle:
                 // Ranged pull fought in place: the tank stays where it shot until the pack came.
-                // Settle's own time starts then (the opening holds below start then too).
+                // Settle's own time starts then (the waits below count from then too).
                 if (pull.awaitArrival)
                 {
                     bool const timedOut = elapsed > pull.arrivalTimeoutMs;
@@ -303,10 +303,12 @@ namespace Commander
                     }
                 }
                 // Healing once the casters of the break came (PullOpening.h). Settle also lasts
-                // while the threat opening holds the party (ThreatOpening.h: it runs after this
-                // module, so its result of the last refresh; one refresh late at worst).
+                // while pulled enemies are still on their way to the tank (PullPlan::packComing;
+                // until 2026-11-13 the threat opening held the party for them).
                 PullOpening::Update(world, pull, now);
-                if (pull.losBreak == PullLosBreak::Active || pull.holdHealing || plan.threat.active)
+                pull.packComing = elapsed <= PullOpening::HOLD_MAX_MS && world.HasPartyEnemy() &&
+                                  !PackArrived(world, pull, tank->pos);
+                if (pull.losBreak == PullLosBreak::Active || pull.holdHealing || pull.packComing)
                     return;
                 if (elapsed >= SETTLE_MS || !world.HasPartyEnemy())
                 {

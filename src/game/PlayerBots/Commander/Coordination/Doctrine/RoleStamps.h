@@ -12,7 +12,7 @@
  *                 the latest blast (Behaviors/Movement/BlastBehavior).
  *                 User 2026-11-10: kill it when the party can, step out when it cannot.
  *   Swarm         Tags::SourceOf Trap (Stratholme crate insects): no control of any kind
- *                 (CrowdControlAssigner), left out of the threat opening (ThreatOpening); NoTaunt.
+ *                 (CrowdControlAssigner), left out of the tank's threat risk (ThreatRisk::Counts); NoTaunt.
  *   NoTaunt       a swarm, a timed self-destruct, TAG_TAUNT_IMMUNE, TAG_TOTEM: no single target
  *                 taunt (RescueAssigner; winning it back with threat, area threat: still).
  *   KillOrder     TAG_HEALER, TAG_SUMMONER, TAG_TOTEM (user 2026-11-10: healers and summoners

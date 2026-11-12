@@ -4,7 +4,6 @@
 #include "Commander/Perception/Forecast/Runners.h"
 #include "Commander/Coordination/Doctrine/AreaSpot.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
-#include "Commander/Coordination/Doctrine/ThreatOpening.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/ThreatGap.h"
@@ -33,12 +32,10 @@ namespace Commander
             PullPlan const& pull = plan.pull;
             if (pull.phase == PullPhase::Approach || pull.phase == PullPhase::Return)
                 return true;
-            // The threat opening first (ThreatOpening.h, registered before this module: this
-            // refresh's): the tank builds threat on what came, the area spell waits.
-            if (plan.threat.active)
-                return true;
+            // The pack still coming (PullPlan::packComing). Whether the tank's threat is enough
+            // is the wait below (AreaWait::Tank; until 2026-11-13 the threat opening held it too).
             return pull.phase == PullPhase::Settle &&
-                   (pull.awaitArrival || pull.losBreak == PullLosBreak::Active);
+                   (pull.awaitArrival || pull.packComing || pull.losBreak == PullLosBreak::Active);
         }
 
         std::vector<ObjectGuid> AllTanks(WorldModel const& world)
@@ -193,8 +190,8 @@ namespace Commander
             return m && m->isBot && !m->isPet && m->alive && HoldsAround(*m) ? g : ObjectGuid();
         }
 
-        // While the pull or the opening holds the party (not a retreat): the caster the Area
-        // tactic counts on gets ready (header "While the pull or the opening holds").
+        // While the pull holds the party (not a retreat): the caster the Area
+        // tactic counts on gets ready (header "While the pull holds").
         void Prepare(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan& a)
         {
             if (plan.retreat.active)
@@ -283,7 +280,7 @@ namespace Commander
         // 4.3, 4.4). A wait of `sec` costs the share of the later net the spell would have
         // made by then (net x sec / its length). Later:
         //   Tank    nobody turns (net + turn loss) once the tank has filled their shortfalls;
-        //           not when the total did not shrink for ThreatOpeningAssigner::STALL_MS.
+        //           not when the total did not shrink for TANK_STALL_MS.
         //   Shield  the caster's shield (on cooldown now) first, as in step 2.
         // Writes the wait into `a` (active stays false); a note when it starts.
         bool Waits(WorldModel const& world, Candidate const& c, AreaPlan const& prev, AreaPlan& a,
@@ -305,8 +302,8 @@ namespace Commander
             float total = 0.0f;
             if (TankFill(world, c, fillSec, total))
             {
-                bool const stalled = waitedTank && total >= prev.waitShortfall - ThreatOpeningAssigner::PROGRESS_MIN &&
-                                     WorldTimer::getMSTimeDiff(prev.waitProgressMs, nowMs) > ThreatOpeningAssigner::STALL_MS;
+                bool const stalled = waitedTank && total >= prev.waitShortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN &&
+                                     WorldTimer::getMSTimeDiff(prev.waitProgressMs, nowMs) > AreaPhaseAssigner::TANK_STALL_MS;
                 float const later = c.value.net + c.value.turnLoss;
                 float const g = later - std::max(0.0f, later) * fillSec / spellSec - now;
                 if (!stalled && g > gain)
@@ -347,8 +344,8 @@ namespace Commander
             a.waitSinceMs = same ? prev.waitSinceMs : nowMs;
             if (wait == AreaWait::Tank)
             {
-                // Progress as the opening's: the smallest total so far and when it shrank.
-                bool const progress = !waitedTank || total < prev.waitShortfall - ThreatOpeningAssigner::PROGRESS_MIN;
+                // Progress: the smallest total so far and when it shrank.
+                bool const progress = !waitedTank || total < prev.waitShortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN;
                 a.waitShortfall = progress ? total : prev.waitShortfall;
                 a.waitProgressMs = progress ? nowMs : prev.waitProgressMs;
             }

@@ -16,7 +16,7 @@
  *              held where it stands, it never gets into the pile);
  *   Outlier    the rest (casters standing back).
  * Phase:
- *   Gathering  the pull runs (Approach, Return, Settle) or the threat opening is on;
+ *   Gathering  the pull runs (Approach, Return, Settle: the pack still coming, PullPlan::packComing);
  *   Cleanup    at most CLEANUP_FREE enemies not under a control;
  *   Clash      otherwise.
  * Tactic for the pile: Area when a damage dealer bot can cast an area spell (Tags::LedgerOf
@@ -33,8 +33,8 @@
  *   None       otherwise.
  *   Where the pull fights (here, brought back, corner) is chosen before it: FightPlace::Choose.
  * The main tank's job (DoctrinePlan::tankJob, todo 12, user 2026-11-10): none while gathering;
- *   Pick: Focus (TankTargets: the party focus when it is at the pile and the switch pays);
- *   Area: HoldPile (keeps its targets and top-ups; an enemy on the area caster is an Urgent
+ *   Pick: none (the tank follows the threat risk, TankTargets; Focus until 2026-11-13);
+ *   Area: HoldPile (its targets by the threat risk too; an enemy on the area caster is an Urgent
  *   rescue, two or more of them make a group threat Urgent: Challenging Shout).
  * Stamps:
  *   NoMez      Area tactic and InCluster; Tier Fodder; Cleanup (every enemy); a player hits it.
@@ -43,7 +43,7 @@
  *              it and does not move it.
  *   PlayerTarget  a player hits it (also NoMez: it would break anyway).
  *   The groups are stamps too, for the display.
- * Reads the pull, the threat opening and the retreat as their modules left them (this or the
+ * Reads the pull and the retreat as their modules left them (this or the
  * last refresh: one refresh late does not matter here).
  * Pure (facts and plan).
  */

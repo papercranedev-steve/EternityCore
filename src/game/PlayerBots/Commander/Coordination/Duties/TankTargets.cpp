@@ -2,13 +2,11 @@
 #include "Commander/Coordination/Duties/RescueAssigner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/RouteRisk.h"
 #include "Commander/Perception/Values/SwitchCost.h"
-#include "Commander/Perception/Tanks.h"
-#include "Commander/Perception/Forecast/ThreatRunway.h"
-#include "Commander/Perception/Forecast/ThreatView.h"
+#include "Commander/Perception/Values/ThreatRisk.h"
+#include "Commander/Perception/Forecast/ThreatGap.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
 
@@ -50,142 +48,59 @@ namespace TankTargets
             return TargetPick();
         }
 
-        TargetPick Keep(EnemyFacts const* e, char const* reason)
-        {
-            TargetPick p;
-            p.enemy = e;
-            p.reason = reason;
-            return p;
-        }
-
-        // 2. The threat opening's task (ThreatOpening.h): stay on the current enemy while it is
-        // short, else switch to the one short the most. The switch is worth the time the waiting
-        // party saves: waitPerSec x its gap / the tank's single target rate.
-        TargetPick Opening(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
-        {
-            ThreatOpeningPlan const& t = ctx.plan.threat;
-            if (!t.active || t.tank != tank.guid || t.gaps.empty())
-                return TargetPick();
-            if (current && t.GapOf(current->guid) > 0.0f)
-                return Keep(current, "opening: build threat on it");
-            EnemyFacts const* best = nullptr;
-            float bestGap = 0.0f;
-            for (ThreatGapEntry const& g : t.gaps)
-            {
-                EnemyFacts const* e = ctx.Find(g.enemy);
-                if (e && g.gap > bestGap && ctx.Hittable(*e, tank))
-                {
-                    best = e;
-                    bestGap = g.gap;
-                }
-            }
-            if (!best)
-                return TargetPick();
-            TargetPick p;
-            p.enemy = best;
-            p.benefit = t.waitPerSec * bestGap / t.fillRate;
-            p.cost = SwitchCost::Of(ctx.world, tank, *best, MELEE_REACH);
-            p.reason = "opening: the enemy short the most";
-            return p;
-        }
-
-        // 3. Top up (user 2026-11-08: "多打一会", 2026-11-12: by the runway): the enemy on the
-        // tank, at the pile, whose threat runway (Perception/Forecast/ThreatRunway.h, with the
-        // area spell the doctrine counts on) ends soonest within the doctrine's horizon. The tank
-        // stays on the current one while its runway is short and the shortest; a long runway on
-        // the current one makes a switch cheap (round robin with satiation, doc
-        // .kiro/docs/2026-11-11-aoe-threat.md 4.2). Before 2026-11-12: only an enemy whose lead
-        // did not survive the healer's next heal, so the tank sat on one enemy far ahead while
-        // the others thinned out; before 2026-11-08: lead / threat below 15%.
-        TargetPick TopUp(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
+        // 2. Threat (user 2026-11-13, doc .kiro/docs/2026-11-13-tank-threat-priority.md 4): the
+        // enemy on the tank at the pile where one global cooldown of the tank's threat takes off
+        // the most risk (Perception/Values/ThreatRisk.h, with the area spell the doctrine counts
+        // on), net of the switch. The current target pays no switch; a switch has to beat it.
+        // Nothing at risk: the current target (or none: First). Replaces the threat opening's
+        // "fill one, then the next", the top-up and the Pick tactic's focus step (before
+        // 2026-11-13: the tank sat 5 s on an enemy far ahead, strat-20261113-010348).
+        TargetPick Threat(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
         {
             WorldModel const& world = ctx.world;
             DoctrinePlan const& doctrine = ctx.plan.doctrine;
             float const horizon = doctrine.RunwayHorizon();
-            auto const runway = [&](EnemyFacts const& e)
+            float const gcdThreat = ThreatGap::FillRate(world, tank) * Value::GCD_SEC;
+            auto const removed = [&](EnemyFacts const& e)
             {
-                return ThreatRunway::Of(world, e, tank.guid, doctrine.AreaThreatOn(e.guid), horizon);
+                std::vector<PlannedThreat> const& planned = doctrine.AreaThreatOn(e.guid);
+                return ThreatRisk::Of(world, e, tank.guid, planned, horizon) -
+                       ThreatRisk::Of(world, e, tank.guid, planned, horizon, gcdThreat);
+            };
+            auto const counts = [&](EnemyFacts const& e)
+            {
+                return ThreatRisk::Counts(e, tank.guid) && ctx.Hittable(e, tank) &&
+                       PackResolver::Distance(tank.pos, e.pos) - e.boundingRadius <= TacticalDoctrine::CLUSTER_YD;
             };
 
-            float currentSec = horizon;
-            if (current && current->victim == tank.guid)
-                currentSec = std::min(horizon, runway(*current).sec);
-
-            EnemyFacts const* weakest = nullptr;
-            ThreatRunway::Result weakestRunway;
-            weakestRunway.sec = horizon;
+            float const stay = current && counts(*current) ? removed(*current) : 0.0f;
+            TargetPick best;
+            float bestNet = stay;
             for (EnemyFacts const* e : ctx.candidates)
             {
-                if (e == current || e->victim != tank.guid || !ctx.Hittable(*e, tank) ||
-                    PackResolver::Distance(tank.pos, e->pos) - e->boundingRadius > TacticalDoctrine::CLUSTER_YD)
+                if (e == current || !counts(*e))
                     continue;
-                ThreatRunway::Result const r = runway(*e);
-                if (r.sec < weakestRunway.sec)
+                float const benefit = removed(*e);
+                if (benefit <= 0.0f)
+                    continue;
+                float const cost = SwitchCost::Of(world, tank, *e, MELEE_REACH);
+                if (benefit - cost > bestNet)
                 {
-                    weakestRunway = r;
-                    weakest = e;
+                    bestNet = benefit - cost;
+                    best.enemy = e;
+                    best.benefit = benefit;
+                    best.cost = cost;
+                    best.reason = "threat: takes off the most risk";
                 }
             }
-            if (currentSec < horizon && (!weakest || currentSec <= weakestRunway.sec))
-                return Keep(current, "top up: its runway is the shortest");
-            if (!weakest)
-                return TargetPick();
-            // Who takes it when the runway ends, else a healer bot (the next heal puts it there).
-            PartyMemberFacts const* runner = weakestRunway.taker.IsEmpty() ? nullptr : world.FindMember(weakestRunway.taker);
-            if (!runner)
-                for (PartyMemberFacts const& m : world.party)
-                    if (m.isBot && !m.isPet && m.alive && m.role == ROLE_HEALER)
-                    {
-                        runner = &m;
-                        break;
-                    }
-            if (!runner || runner->isPet)
-                return currentSec < horizon ? Keep(current, "top up: its runway is short") : TargetPick();
-
-            TargetPick p;
-            p.enemy = weakest;
-            p.benefit = LooseEnemy::ThinLoss(world, *weakest, *runner, tank, weakestRunway.sec, horizon);
-            p.cost = SwitchCost::Of(world, tank, *weakest, MELEE_REACH);
-            p.reason = "top up: the shortest threat runway";
-            if (p.benefit > p.cost)
-                return p;
-            return currentSec < horizon ? Keep(current, "top up: its runway is short") : TargetPick();
+            if (best.enemy || !current)
+                return best;
+            best.enemy = current;
+            best.reason = stay > 0.0f ? "threat: its risk is the one to take off" : "keep: nothing at risk";
+            return best;
         }
 
-        // 4. The doctrine's job Focus (Pick tactic, TankJob): the main tank hits the party focus
-        // too, when it is at the pile (TacticalDoctrine::CLUSTER_YD, so the tank does not leave
-        // the enemies on it) and the switch pays: Smith's rule exchange as for the damage dealers
-        // (DamageTargets), the tank's share of it, against SwitchCost.
-        TargetPick Focus(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
-        {
-            WorldModel const& world = ctx.world;
-            if (ctx.plan.doctrine.tankJob != TankJob::Focus)
-                return TargetPick();
-            PartyMemberFacts const* main = Tanks::Main(world);
-            if (!main || main->guid != tank.guid)
-                return TargetPick();
-            EnemyFacts const* f = ctx.Find(ctx.plan.focus.enemy);
-            if (!f || f == current || !ctx.Hittable(*f, tank) ||
-                PackResolver::Distance(tank.pos, f->pos) - f->boundingRadius > TacticalDoctrine::CLUSTER_YD ||
-                RouteRisk::Blocked(world, tank, *f))
-                return TargetPick();
-            TargetPick p;
-            p.enemy = f;
-            p.cost = SwitchCost::Of(world, tank, *f, MELEE_REACH);
-            FocusScore const& fs = ctx.Score(*f);
-            if (current)
-            {
-                FocusScore const& cs = ctx.Score(*current);
-                p.benefit = (fs.harmRate * cs.killSec - cs.harmRate * fs.killSec) * ctx.Share();
-            }
-            else
-                p.benefit = std::max(fs.harmRate * fs.killSec * ctx.Share(),
-                                     Value::ContributionPerSec(world, tank) * Value::GCD_SEC);
-            p.reason = "doctrine: the tank hits the focus (pick)";
-            return p.benefit > p.cost ? p : TargetPick();
-        }
-
-        // 5. No target yet.
+        // 3. No target yet.
         TargetPick First(TargetContext const& ctx, PartyMemberFacts const& tank)
         {
             WorldModel const& world = ctx.world;
@@ -248,22 +163,9 @@ namespace TankTargets
                 loose.benefit = loose.cost = 0.0f;
             return loose;
         }
-        TargetPick const opening = Opening(ctx, tank, current);
-        if (opening.enemy)
-            return opening;
-        TargetPick const topUp = TopUp(ctx, tank, current);
-        if (topUp.enemy)
-            return topUp;
-        TargetPick const focus = Focus(ctx, tank, current);
-        if (focus.enemy)
-            return focus;
-        if (current)
-        {
-            TargetPick keep;
-            keep.enemy = current;
-            keep.reason = "keep";
-            return keep;
-        }
+        TargetPick const threat = Threat(ctx, tank, current);
+        if (threat.enemy)
+            return threat;
         return First(ctx, tank);
     }
 }

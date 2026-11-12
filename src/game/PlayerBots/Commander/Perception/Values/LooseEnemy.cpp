@@ -16,15 +16,6 @@ namespace LooseEnemy
                Value::HarassLoss(world, enemy, victim, seconds);
     }
 
-    float ThinLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& taker,
-                   PartyMemberFacts const& holder, float runwaySec, float horizonSec)
-    {
-        if (horizonSec <= 0.0f || runwaySec >= horizonSec)
-            return 0.0f;
-        float const soon = 1.0f - std::max(0.0f, runwaySec) / horizonSec;
-        return Loss(world, enemy, taker, holder, THIN_RECLAIM_SEC) * THIN_WEIGHT * soon;
-    }
-
     float TankRate(WorldModel const& world, ObjectGuid tank)
     {
         float rate = 0.0f;

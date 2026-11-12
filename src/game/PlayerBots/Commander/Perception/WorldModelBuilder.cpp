@@ -964,7 +964,7 @@ namespace WorldModelBuilder
                         s.manaCost = uint32(Spell::CalculatePowerCost(shield, me));
                     s.up = me->HasAura(shield->Id);
                     // Facts only: cooldown, mana, form, able to act (not the brain's constraints:
-                    // CanTryToCastSpell holds the threat opening, 2026-11-12 strat-20261112-204141).
+                    // e.g. the threat opening's hold until 2026-11-13, strat-20261112-204141).
                     s.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(shield);
                     int32 const left = me->GetSpellCooldownLeft(shield);
                     s.cooldownSec = left < 0 ? -1.0f : float(left) / 1000.0f;
