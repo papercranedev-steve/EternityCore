@@ -76,12 +76,23 @@ namespace AreaSpot
 
         // In case it slips: who, how fast.
         EnemyFacts const* slipEnemy = evaluate && hereValue.valid ? SlipEnemy(world, here, hereValue) : nullptr;
-        float speed = AggroTurnCost::RUN_YARDS_PER_SEC * (1.0f - spell.slowPct);
-        if (slipEnemy)
-            speed = slipEnemy->slowed ? slipEnemy->speed : slipEnemy->speed * (1.0f - spell.slowPct);
+        // Slowed inside the area only (AreaValue::WalkSecUnder): the average speed of its walk to `p`.
         auto const slipAt = [&](Position3 const& p)
         {
-            float const gap = slipEnemy ? Exposure::Gap(*slipEnemy, p) : Distance2d(p, base.centre);
+            float gap = 0.0f;
+            float speed = 0.0f;
+            if (slipEnemy)
+            {
+                gap = Exposure::Gap(*slipEnemy, p);
+                speed = AreaValue::SpeedTo(*slipEnemy, spell, base.centre, p);
+            }
+            else
+            {
+                gap = Distance2d(p, base.centre);
+                float const sec = AreaValue::WalkSecUnder(base.centre, AggroTurnCost::RUN_YARDS_PER_SEC, spell.slowPct,
+                                                          base.centre, spell.radius, p, 0.0f);
+                speed = sec > 0.0f ? gap / sec : AggroTurnCost::RUN_YARDS_PER_SEC;
+            }
             return Exposure::ChannelLoss(world, m, slipEnemy, gap, speed, channelSec);
         };
 

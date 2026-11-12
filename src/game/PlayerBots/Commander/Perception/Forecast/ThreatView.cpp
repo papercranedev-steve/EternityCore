@@ -4,7 +4,11 @@
 #include "Unit.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
+#include "DamageSpells.h"
+#include "HealSpells.h"
 #include <algorithm>
+#include <list>
 
 namespace Commander
 {
@@ -145,6 +149,69 @@ namespace ThreatView
             EnemyThreatDelta delta;
             delta.enemy = pEnemy->GetObjectGuid();
             delta.added = ThreatCalcHelper::CalcThreat(healer, threat, false, school, spell);
+            out.push_back(delta);
+        }
+    }
+
+    void PredictCastThreat(Unit* caster, Unit* target, SpellEntry const* spell,
+                           std::vector<EnemyThreatDelta>& out, bool* hitsIdle)
+    {
+        if (hitsIdle)
+            *hitsIdle = false;
+        if (!caster || !spell)
+            return;
+        if (!target)
+            target = caster;
+        SpellThreatEntry const* entry = sSpellMgr.GetSpellThreatEntry(spell->Id);
+        float const flat = entry ? float(entry->threat) : 0.0f;
+        SpellSchoolMask const school = spell->GetSpellSchoolMask();
+
+        if (spell->IsPositiveSpell() || !caster->IsValidAttackTarget(target))
+        {
+            if (spell->HasAttribute(SPELL_ATTR_EX4_NO_HELPFUL_THREAT))
+                return;
+            HealSpells::Amount const heal = HealSpells::Estimate(caster, target, spell);
+            float const missing = float(target->GetMaxHealth() - target->GetHealth());
+            float const healed = std::min(missing, heal.direct + heal.periodic);
+            if (healed > 0.0f)
+                PredictHealThreat(caster, target, healed, spell, out);
+            HostileRefManager& refs = target->GetHostileRefManager();
+            uint32 const count = refs.getSize();
+            if (flat <= 0.0f || !count)
+                return;
+            for (HostileReference* ref = refs.getFirst(); ref; ref = ref->next())
+            {
+                Unit* pEnemy = ref->getSource()->getOwner();
+                if (!pEnemy || !pEnemy->IsAlive())
+                    continue;
+                EnemyThreatDelta delta;
+                delta.enemy = pEnemy->GetObjectGuid();
+                delta.added = ThreatCalcHelper::CalcThreat(caster, flat / float(count), false, school, spell);
+                out.push_back(delta);
+            }
+            return;
+        }
+
+        // Harmful: the target, and around it for an area spell.
+        std::list<Unit*> hit;
+        if (spell->IsAreaOfEffectSpell())
+        {
+            float const radius = SpellTags::AreaRadius(spell);
+            caster->GetEnemyListInRadiusAround(target, radius > 0.0f ? radius : 10.0f, hit);
+        }
+        if (std::find(hit.begin(), hit.end(), target) == hit.end())
+            hit.push_back(target);
+        float const multiplier = sSpellMgr.GetSpellThreatMultiplier(spell);
+        for (Unit* pEnemy : hit)
+        {
+            if (!pEnemy || !pEnemy->IsAlive() || !caster->IsValidAttackTarget(pEnemy))
+                continue;
+            if (hitsIdle && !pEnemy->IsInCombat())
+                *hitsIdle = true;
+            float const damage = DamageSpells::Estimate(caster, pEnemy, spell);
+            EnemyThreatDelta delta;
+            delta.enemy = pEnemy->GetObjectGuid();
+            delta.added = std::max(1.0f, ThreatCalcHelper::CalcThreat(caster, damage * multiplier + flat, false, school, spell));
             out.push_back(delta);
         }
     }

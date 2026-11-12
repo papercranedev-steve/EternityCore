@@ -64,6 +64,18 @@ namespace ThreatView
     // for healing `healTarget` by `effectiveHeal` (already capped at missing health).
     void PredictHealThreat(Unit* healer, Unit* healTarget, float effectiveHeal,
                            SpellEntry const* spell, std::vector<EnemyThreatDelta>& out);
+
+    // Map thread only: threat one cast of `spell` by `caster` on `target` (null: itself) puts
+    // on each creature (2026-11-12, the threat opening's rule, Coordination/Doctrine/ThreatOpening.h):
+    //   helpful  its flat spell_threat + healing x 0.5 (paladins 0.25, PredictHealThreat), split
+    //            over the creatures that have the target on their list (HostileRefManager::
+    //            threatAssist); none on it: no threat (Ice Barrier before anything fights the mage);
+    //   harmful  on the target and, for an area spell, every creature within its radius of it:
+    //            damage x the spell's multiplier + its flat threat, at least 1 (a control, a
+    //            Counterspell: it joins the fight on that creature).
+    // `hitsIdle`: a harmful cast reaches a creature not in combat yet (it would start a fight).
+    void PredictCastThreat(Unit* caster, Unit* target, SpellEntry const* spell,
+                           std::vector<EnemyThreatDelta>& out, bool* hitsIdle = nullptr);
 }
 }
 

@@ -73,6 +73,14 @@ namespace Commander
         return ObjectGuid();
     }
 
+    bool TargetContext::InterceptUrgent(ObjectGuid bot) const
+    {
+        for (DutyResult const& r : plan.duties)
+            if (r.kind == DutyKind::Intercept && r.primary == bot)
+                return (r.detail & FocusAssigner::DETAIL_URGENT) != 0;
+        return false;
+    }
+
     float TargetContext::InterceptPoints(ObjectGuid bot) const
     {
         for (DutyResult const& r : plan.duties)
@@ -288,7 +296,7 @@ namespace Commander
                 {
                     TargetPick p;
                     p.enemy = e;
-                    p.urgent = true;
+                    p.urgent = ctx.InterceptUrgent(m.guid);
                     p.benefit = ctx.InterceptPoints(m.guid);
                     p.cost = SwitchCost::Of(ctx.world, m, *e,
                         m.role == ROLE_RANGE_DPS ? FocusAssigner::RANGED_REACH : FocusAssigner::MELEE_REACH);

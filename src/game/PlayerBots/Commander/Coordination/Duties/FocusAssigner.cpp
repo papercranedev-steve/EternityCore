@@ -121,6 +121,9 @@ namespace Commander
             char const* reason = "";
             bool rangedOnly = false;        // melee would walk to it
             bool loose = false;             // on a member who is not a tank (team rescue is the alternative)
+            // Urgent tier (FocusAssigner::DETAIL_URGENT): a bomb, a patrol's caster, a summon whose
+            // victim dies within the horizon. Else Assigned, against the other duties by points.
+            bool urgent = false;
         };
 
         // Judged on facts only (simple version, see design doc "limits"):
@@ -128,9 +131,13 @@ namespace Commander
         //  - a summon whose victim is a member that is not a tank (Perception/Tanks.h; players
         //    too since their role is known): an add running at the healer or a damage dealer.
         //    Pets take a few hits: not counted.
-        bool NeedsIntercept(WorldModel const& world, EnemyFacts const& e, InterceptNeed& out)
+        bool NeedsIntercept(WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e, InterceptNeed& out)
         {
             if (!e.acting || e.crowdControlled || !e.health)
+                return false;
+            // A trap's swarm is the area spells' (RoleStamps.h Swarm; strat-20261112-204141: the
+            // mage shot Frostbolts at crate insects worth 0.8 points instead of its Blizzard).
+            if (plan.doctrine.Has(e.guid, STAMP_SWARM))
                 return false;
             PartyMemberFacts const* victim = world.FindMember(e.victim);
             out.enemy = &e;
@@ -143,6 +150,7 @@ namespace Commander
                 {
                     out.reason = "self-destructs";
                     out.points = CastValues::Evaluate(world, e, bomb, e.victim).points;
+                    out.urgent = true;
                     return true;
                 }
             }
@@ -152,6 +160,7 @@ namespace Commander
                 out.loose = true;
                 float const horizon = std::min(FocusAssigner::ONE_OFF_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
                 out.points = Value::HitLoss(world, e, *victim, horizon);
+                out.urgent = Value::SurviveAllSec(world, e, *victim) < horizon;
                 return true;
             }
             return false;
@@ -165,7 +174,7 @@ namespace Commander
             for (EnemyFacts const& e : world.enemies)
             {
                 InterceptNeed n;
-                if (!NeedsIntercept(world, e, n))
+                if (!NeedsIntercept(world, plan, e, n))
                 {
                     // A caster standing in a patrol's path that no lure brings out
                     // (PatrolAssigner, same refresh: it runs in the situation stage). Worth what
@@ -180,6 +189,7 @@ namespace Commander
                     n.reason = "caster in a patrol's path";
                     n.points = plan.patrolMove.benefit;
                     n.rangedOnly = true;
+                    n.urgent = true;
                 }
 
                 ObjectGuid previousBot;
@@ -202,6 +212,7 @@ namespace Commander
                 // Equal points: closest to its victim first (the most urgent).
                 need.tieMs = uint32(n.distanceToVictim * 1000.0f);
                 need.reason = n.reason;
+                need.detail = n.urgent ? FocusAssigner::DETAIL_URGENT : uint8(0);
 
                 for (PartyMemberFacts const& m : world.party)
                 {

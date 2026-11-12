@@ -87,6 +87,21 @@ namespace Commander
 
         // The caster's area spell facts of `spellId` (any rank of it), null = none.
         AreaSpellFacts const* SpellOf(PartyMemberFacts const& caster, uint32 spellId);
+
+        // How long the spell's slow lingers once an enemy has left its area (Improved Blizzard's
+        // Chilled, renewed every tick inside: 1.5 s on average after the last one).
+        static constexpr float SLOW_LINGER_SEC = 1.5f;
+
+        // Seconds an enemy at `from` running at `speed` takes to get within `reach` of `to`,
+        // slowed by `slowPct` only while it is inside the area (`centre`, `radius`) and
+        // SLOW_LINGER_SEC after (2026-11-12, strat-20261112-204141: the slow was counted over
+        // the whole walk, so a mage 22-27 yd away looked out of reach for the whole channel).
+        float WalkSecUnder(Position3 const& from, float speed, float slowPct, Position3 const& centre, float radius,
+                           Position3 const& to, float reach);
+
+        // `e` running at `to` from the spell's area: the average speed of that walk
+        // (WalkSecUnder; an enemy slowed already keeps its speed, the chill is not counted twice).
+        float SpeedTo(EnemyFacts const& e, AreaSpellFacts const& spell, Position3 const& centre, Position3 const& to);
     }
 }
 

@@ -87,6 +87,7 @@ namespace Commander
         // Intercept primary of `bot` this allocation, empty = none.
         ObjectGuid InterceptOf(ObjectGuid bot) const;
         float InterceptPoints(ObjectGuid bot) const;
+        bool InterceptUrgent(ObjectGuid bot) const;     // FocusAssigner::DETAIL_URGENT
         // FocusAssigner::Evaluate, once per enemy and run.
         FocusScore const& Score(EnemyFacts const& e) const;
         // 1 / damage dealers (Smith's rule exchange share).

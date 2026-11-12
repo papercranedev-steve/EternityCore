@@ -55,6 +55,10 @@ namespace Commander
         // One-off bonuses (points) are spread over this many seconds to become a harm rate:
         // "lost within the next ~10 s if it is not dead by then".
         static constexpr float ONE_OFF_HORIZON_SEC = 10.0f;
+        // Intercept result detail: the target switch is Urgent (a bomb, a patrol's caster, a
+        // summon whose victim dies within the horizon: Value::SurviveAllSec). Else Assigned
+        // (2026-11-12; before every intercept was Urgent, whatever its points).
+        static constexpr uint8 DETAIL_URGENT = 1;
         // About to flee (health within FleePredictor::WINDOW_PCT above its flee line) or
         // running: what having the party on it saves, FleeFacts::FocusSaves (the whole run's
         // joiners minus a focused kill's, Perception/Forecast/FleePredictor.h). Nothing to call: no

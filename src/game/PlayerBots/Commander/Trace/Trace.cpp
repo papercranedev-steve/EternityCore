@@ -21,11 +21,26 @@ namespace Trace
 
         std::string VFormat(char const* format, va_list args)
         {
+            // Whole text, however long (a cut-off JSON broke the review: strat-20261112-204141).
             char buf[512];
+            va_list again;
+            va_copy(again, args);
             int const n = vsnprintf(buf, sizeof(buf), format, args);
             if (n < 0)
+            {
+                va_end(again);
                 return std::string();
-            return std::string(buf, std::min<size_t>(size_t(n), sizeof(buf) - 1));
+            }
+            if (size_t(n) < sizeof(buf))
+            {
+                va_end(again);
+                return std::string(buf, size_t(n));
+            }
+            std::string big(size_t(n) + 1, '\0');
+            vsnprintf(&big[0], big.size(), format, again);
+            va_end(again);
+            big.resize(size_t(n));
+            return big;
         }
     }
 

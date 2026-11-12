@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Profiles/Tags.h"
+#include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -76,6 +77,28 @@ namespace Commander
 
     namespace Constraints
     {
+        char const* OpeningForbids(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                   Unit* target, SpellEntry const* spell)
+        {
+            ObjectGuid const self = bot->me->GetObjectGuid();
+            if (!spell || !plan.threat.Holds(self, bot->GetRole() == ROLE_HEALER))
+                return nullptr;
+            std::vector<ThreatView::EnemyThreatDelta> deltas;
+            bool idle = false;
+            ThreatView::PredictCastThreat(bot->me, target, spell, deltas, &idle);
+            if (idle)
+                return "wait for the tank's threat (would start a fight)";
+            for (ThreatView::EnemyThreatDelta const& d : deltas)
+            {
+                if (d.added <= 0.0f)
+                    continue;
+                EnemyFacts const* e = world.FindEnemy(d.enemy);
+                if (!e || ThreatView::Headroom(*e, self) - d.added <= 0.0f)
+                    return "wait for the tank's threat";
+            }
+            return nullptr;
+        }
+
         char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                   Unit const* target, SpellEntry const* spell, uint32 nowMs)
         {
@@ -153,8 +176,12 @@ namespace Commander
                         return "wait for the tank's threat";
                     return plan.EngageBlock(self, p.action.target);
                 case BotActionType::Cast:
-                    if (plan.HoldsCast(self, bot->GetRole() == ROLE_HEALER, p.action.spell ? p.action.spell->Id : 0))
-                        return "wait for the tank's threat";
+                    if (held)
+                    {
+                        Unit* target = p.action.target.IsEmpty() ? bot->me : bot->me->GetMap()->GetUnit(p.action.target);
+                        if (char const* why = Constraints::OpeningForbids(bot, world, plan, target, p.action.spell))
+                            return why;
+                    }
                     return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:
                     return plan.ForbidsRest(self) ? "no rest" : nullptr;

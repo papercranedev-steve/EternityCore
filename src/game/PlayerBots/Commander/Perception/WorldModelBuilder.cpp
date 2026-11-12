@@ -658,7 +658,7 @@ namespace WorldModelBuilder
                 // Sap: it goes into stealth on its way (ControlAbility::ready).
                 if (!formOk && a.needsStealth && !me->IsInCombat())
                     if (SpellEntry const* stealth = ai->Kit().Stealth())
-                        formOk = ai->CanTryToCastSpell(me, stealth);
+                        formOk = ai->IsReadyWithStance(stealth);
                 a.ready = !f.controlled && me->IsSpellReady(spell) &&
                           (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
                           formOk &&
@@ -765,7 +765,8 @@ namespace WorldModelBuilder
             a.cooldownMs = spell->GetRecoveryTime();
             if (Powers(spell->powerType) == POWER_MANA)
                 a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
-            a.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, spell);
+            // Facts only (not CanTryToCastSpell: the brain's constraints are the brain's).
+            a.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(spell);
         }
 
         // Team rescue: ClassKit::Survival with the numbers from the spell data.
@@ -961,7 +962,9 @@ namespace WorldModelBuilder
                     if (Powers(shield->powerType) == POWER_MANA)
                         s.manaCost = uint32(Spell::CalculatePowerCost(shield, me));
                     s.up = me->HasAura(shield->Id);
-                    s.ready = f.CanAct() && !f.silenced && ai->CanTryToCastSpell(me, shield);
+                    // Facts only: cooldown, mana, form, able to act (not the brain's constraints:
+                    // CanTryToCastSpell holds the threat opening, 2026-11-12 strat-20261112-204141).
+                    s.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(shield);
                     int32 const left = me->GetSpellCooldownLeft(shield);
                     s.cooldownSec = left < 0 ? -1.0f : float(left) / 1000.0f;
                 }

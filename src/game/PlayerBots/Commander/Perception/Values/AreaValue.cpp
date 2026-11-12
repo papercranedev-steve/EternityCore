@@ -7,6 +7,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "SpellMgr.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -26,14 +27,6 @@ namespace AreaValue
             PartyMemberFacts const* holder = nullptr;
         };
 
-        // Speed of `e` running at the caster once the spell's slow is on it (an enemy already
-        // slowed keeps its speed: the chill is not counted twice).
-        float SpeedUnder(EnemyFacts const& e, float slowPct)
-        {
-            if (slowPct <= 0.0f || e.slowed)
-                return e.speed;
-            return e.speed * (1.0f - slowPct);
-        }
 
         // An enemy hitting the caster in melee from `fromSec` after the start on.
         struct Hitter
@@ -92,6 +85,46 @@ namespace AreaValue
         }
     }
 
+    float WalkSecUnder(Position3 const& from, float speed, float slowPct, Position3 const& centre, float radius,
+                       Position3 const& to, float reach)
+    {
+        speed = std::max(0.1f, speed);
+        float const dx = to.x - from.x, dy = to.y - from.y;
+        float const length = std::sqrt(dx * dx + dy * dy);
+        float const walk = std::max(0.0f, length - reach);
+        if (slowPct <= 0.0f || walk <= 0.0f)
+            return walk / speed;
+        // Yards of the walk inside the circle: from `from` along the line to where it leaves.
+        float inside = 0.0f;
+        float const fx = from.x - centre.x, fy = from.y - centre.y;
+        if (fx * fx + fy * fy <= radius * radius && length > 0.01f)
+        {
+            float const ux = dx / length, uy = dy / length;
+            float const b = fx * ux + fy * uy;
+            float const c = fx * fx + fy * fy - radius * radius;
+            inside = std::min(walk, -b + std::sqrt(std::max(0.0f, b * b - c)));
+        }
+        float const slow = speed * (1.0f - slowPct);
+        float sec = inside / slow;
+        float rest = walk - inside;
+        float const linger = std::min(rest, slow * SLOW_LINGER_SEC);
+        sec += linger / slow;
+        rest -= linger;
+        return sec + rest / speed;
+    }
+
+    float SpeedTo(EnemyFacts const& e, AreaSpellFacts const& spell, Position3 const& centre, Position3 const& to)
+    {
+        if (spell.slowPct <= 0.0f || e.slowed)
+            return e.speed;
+        float const reach = e.boundingRadius + MELEE_REACH;
+        float const walk = std::max(0.0f, PackResolver::Distance(e.pos, to) - reach);
+        if (walk <= 0.0f)
+            return e.speed;
+        float const sec = WalkSecUnder(e.pos, e.speed, spell.slowPct, centre, spell.radius, to, reach);
+        return sec > 0.0f ? walk / sec : e.speed;
+    }
+
     AreaSpellFacts const* SpellOf(PartyMemberFacts const& caster, uint32 spellId)
     {
         uint32 const first = sSpellMgr.GetFirstSpellInChain(spellId);
@@ -142,7 +175,7 @@ namespace AreaValue
                 // rate as the tank's threat runway.
                 if (t.holder)
                     t.holderRate = ThreatRunway::HolderRate(world, e, *t.holder);
-                t.speed = SpeedUnder(e, spell.slowPct);
+                t.speed = SpeedTo(e, spell, r.centre, r.from);
             }
             targets.push_back(t);
             out.targets.push_back(e.guid);

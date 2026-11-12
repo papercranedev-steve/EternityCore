@@ -17,8 +17,9 @@
  * the pulled enemies still walk to the tank (pull Settle past the arrival wait, an expected
  * enemy on the tank with melee on, further than REACH_YD; at most PullOpening::HOLD_MAX_MS of
  * Settle): the first hit of a damage dealer would take them.
- * While on: every bot except the tank waits (no cast, no attack: Behaviors/Constraints.h,
- * PartyBotAI::PassesPartyCastChecks, TargetAssigner holds their targets). Healers heal again
+ * While on: every bot except the tank waits (no attack; no cast that puts a creature over the
+ * tank's lead, Constraints::OpeningForbids since 2026-11-12, before: no cast at all; walking is
+ * free; Behaviors/Constraints.h, PartyBotAI::PassesPartyCastChecks, TargetAssigner holds their targets). Healers heal again
  * once someone is about to die (SurvivalValue danger, or below HEAL_BELOW_PCT); a member in
  * danger may act itself. The tank's task: `gaps` (TankTargets switches to the largest one,
  * ThreatBehavior values its area threat by the gaps it fills; both in points: the waiting

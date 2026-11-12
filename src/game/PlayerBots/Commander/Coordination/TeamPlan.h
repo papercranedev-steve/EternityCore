@@ -688,8 +688,9 @@ namespace Commander
         // No phase yet (the pull or the threat opening holds the party, or the phase waits): the
         // caster the Area tactic counts on gets ready (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md
         // 4.4, 4.5, 8): it walks to its cast spot (prepSpots, best first; centre prepCentre) and
-        // puts its shield up (prepShieldId, by the opening's estimate). The opening's hold lets
-        // the shield cast through (TeamPlan::HoldsCast); the ranged stance leaves it alone.
+        // puts its shield up (prepShieldId, by the opening's estimate; the opening lets a cast
+        // through that puts no enemy over the tank's lead, Constraints::OpeningForbids); the
+        // ranged stance leaves it alone.
         ObjectGuid prepCaster;
         uint32 prepShieldId = 0;
         float prepGain = 0.0f;       // the shield's, net of its mana
@@ -1025,15 +1026,6 @@ namespace Commander
                 if (d.bot == bot)
                     return &d;
             return nullptr;
-        }
-
-        // The threat opening holds `bot` for a cast of `spellId`: every cast but the shield the
-        // area phase has the caster put up first (AreaPlan::prepShieldId: no threat on anyone).
-        bool HoldsCast(ObjectGuid bot, bool healer, uint32 spellId) const
-        {
-            if (!threat.Holds(bot, healer))
-                return false;
-            return !(spellId && area.prepCaster == bot && area.prepShieldId == spellId);
         }
 
         // An area spell must leave `e` alone: it is under a control that breaks on damage
