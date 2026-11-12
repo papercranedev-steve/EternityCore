@@ -38,7 +38,7 @@ namespace FightLoadJson
             Json rates = Json::array();
             for (HealRate const& r : h.rates)
                 rates.push_back({ { "hps", r.hps }, { "perMana", r.perMana }, { "cast", r.castSec } });
-            healers.push_back({ { "mana", h.mana }, { "max", h.maxMana }, { "regen", h.regenPerSec }, { "rates", std::move(rates) } });
+            healers.push_back({ { "mana", h.mana }, { "max", h.maxMana }, { "regen", h.regenPerSec }, { "rest", h.restRegenPerSec }, { "rates", std::move(rates) } });
         }
         j["healers"] = std::move(healers);
         return j.dump();
@@ -98,6 +98,7 @@ namespace FightLoadJson
                 healer.mana = Num(h, "mana");
                 healer.maxMana = Num(h, "max");
                 healer.regenPerSec = Num(h, "regen");
+                healer.restRegenPerSec = Num(h, "rest");
                 auto const rates = h.find("rates");
                 if (rates != h.end() && rates->is_array())
                     for (Json const& r : *rates)

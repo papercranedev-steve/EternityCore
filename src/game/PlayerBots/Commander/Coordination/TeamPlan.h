@@ -603,16 +603,15 @@ namespace Commander
         float triggerPct = 0.0f;     // hold: cast from this health percent on (also once it runs)
     };
 
-    // Only controlled enemies are left (ControlledEndAssigner): wait for mana while they sleep,
-    // then the tank wakes the first one (attacks it, PartyBotAI::IsAssignedToBreakControl).
+    // Only controlled enemies are left (ControlledEndAssigner): the tank wakes the first one
+    // (attacks it, PartyBotAI::IsAssignedToBreakControl), after waiting for mana only when the
+    // fight would be too hard now.
     struct ControlEndPlan
     {
         bool active = false;
         ObjectGuid enemy;            // the one to wake first (its control ends soonest)
         ObjectGuid breaker;          // the main tank
         uint32 breakAtMs = 0;        // wake it from then on (now = no wait)
-        float waitGain = 0.0f;       // points of mana regained while waiting
-        float waitCost = 0.0f;       // points of time and risk
         bool noted = false;          // the leader was told
         // Why (the tank's target reason): only controlled enemies left, or the doctrine's area
         // pile has one of ours held by a bot's control (ControlledEnd.h).

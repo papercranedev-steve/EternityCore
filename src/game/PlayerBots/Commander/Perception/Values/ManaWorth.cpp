@@ -66,7 +66,6 @@ namespace ManaWorth
             Context c;
             c.fightSec = fight.sec;
             c.incomingDps = fight.incomingDps;
-            c.floor = fight.drinkAfter ? SCARCITY_FLOOR : 0.0f;
             return c;
         }
 

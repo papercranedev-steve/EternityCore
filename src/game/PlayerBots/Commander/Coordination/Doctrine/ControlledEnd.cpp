@@ -1,13 +1,13 @@
 #include "Commander/Coordination/Doctrine/ControlledEnd.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
-#include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/WorldModel.h"
 #include <algorithm>
 #include <cstdio>
+#include <string>
 
 namespace Commander
 {
@@ -40,6 +40,38 @@ namespace Commander
             return best;
         }
 
+        struct WaitChoice
+        {
+            float sec = 0.0f;           // 0 = wake it now
+            FightLoad::Result result;   // the fight after that wait
+        };
+
+        // Header "Waiting": none when the fight is bearable now; else the shortest wait (in
+        // WAIT_STEP_SEC steps, at most maxSec) after which it is; else the longest one, if
+        // that fight still goes better than now.
+        WaitChoice ChooseWait(FightLoad::Input const& fight, FightLoad::Result const& now, float maxSec)
+        {
+            WaitChoice c;
+            c.result = now;
+            if (FightLoad::Bearable(now) || maxSec <= 0.0f)
+                return c;
+            for (float w = std::min(CE::WAIT_STEP_SEC, maxSec);; w = std::min(w + CE::WAIT_STEP_SEC, maxSec))
+            {
+                FightLoad::Result const r = FightLoad::Run(FightLoad::AfterWait(fight, w), nullptr);
+                bool const last = w >= maxSec;
+                if (FightLoad::Bearable(r) || (last && FightLoad::Score(r) > FightLoad::Score(now)))
+                {
+                    c.sec = w;
+                    c.result = r;
+                    break;
+                }
+                if (last)
+                    break;
+            }
+            if (c.sec > 0.0f)   // for the calculation trace
+                FightLoad::Simulate(FightLoad::AfterWait(fight, c.sec), "controlled end: after the wait");
+            return c;
+        }
     }
 
     void ControlledEndAssigner::Clear(TeamPlan& plan) const
@@ -101,44 +133,37 @@ namespace Commander
         end.breaker = tank->guid;
 
         float const walkSec = std::max(0.0f, PackResolver::Distance(tank->pos, first->pos) - first->boundingRadius) / RUN_YD_PER_SEC;
-        float const waitSec = std::max(0.0f, first->control.remainingMs / 1000.0f - BREAK_LEAD_SEC - walkSec);
+        float const maxWaitSec = std::max(0.0f, first->control.remainingMs / 1000.0f - BREAK_LEAD_SEC - walkSec);
 
         // The fight still to come: every controlled enemy, all at once (rough: they wake one by one).
         FightLoad::Input fight;
-        ManaWorth::Fight planned;
-        planned.drinkAfter = false;     // header: only mana this fight lacks
-        if (FightLoad::FromWorld(world, fight))
+        if (!FightLoad::FromWorld(world, fight))
         {
-            for (FightLoad::Foe& f : fight.foes)
-            {
-                f.arriveSec = 0.0f;
-                f.sameFight = false;
-            }
-            FightLoad::Result const r = FightLoad::Simulate(fight, "controlled end: the rest of the fight");
-            planned.sec = r.fightSec;
-            planned.incomingDps = r.damage / std::max(1.0f, r.fightSec);
+            plan.notes.push_back("Only controlled enemies left: the tank wakes the first now.");
+            end.noted = true;
+            return;
         }
-
-        for (PartyMemberFacts const& m : world.party)
+        for (FightLoad::Foe& f : fight.foes)
         {
-            if (m.isPet || !m.alive || !m.UsesMana() || m.manaRegen <= 0.0f)
-                continue;
-            float const regained = std::min(m.manaRegen * waitSec, float(m.maxMana) - float(m.mana));
-            if (regained > 0.0f)
-                end.waitGain += ManaWorth::Points(world, m, regained, planned);
+            f.arriveSec = 0.0f;
+            f.sameFight = false;
         }
-        end.waitCost = WAIT_POINTS_PER_SEC * waitSec;
-        bool const patrol = waitSec > 0.0f && PatrolZone::Comes(world, first->pos, waitSec + planned.sec);
-        bool const wait = waitSec > 0.0f && !patrol && end.waitGain > end.waitCost;
-        end.breakAtMs = world.refreshedAtMs + (wait ? uint32(waitSec * 1000.0f) : 0);
+        FightLoad::Result const now = FightLoad::Simulate(fight, "controlled end: wake now");
+        WaitChoice const choice = ChooseWait(fight, now, maxWaitSec);
+        bool const patrol = choice.sec > 0.0f &&
+            PatrolZone::Comes(world, first->pos, choice.sec + choice.result.fightSec);
+        bool const wait = choice.sec > 0.0f && !patrol;
+        end.breakAtMs = world.refreshedAtMs + (wait ? uint32(choice.sec * 1000.0f) : 0);
 
-        char buf[200];
+        char buf[300];
+        std::string const nowText = FightLoad::Describe(now);
         if (wait)
-            snprintf(buf, sizeof(buf), "Only controlled enemies left: waiting %.0f s for mana (%.1f pt vs %.1f), then the tank wakes the first.",
-                waitSec, end.waitGain, end.waitCost);
+            snprintf(buf, sizeof(buf), "Only controlled enemies left: woken now it is too hard (%s); waiting %.0f s for mana (%s), then the tank wakes the first.",
+                nowText.c_str(), choice.sec, FightLoad::Describe(choice.result).c_str());
+        else if (patrol)
+            snprintf(buf, sizeof(buf), "Only controlled enemies left: the tank wakes the first now, a patrol is coming (%s).", nowText.c_str());
         else
-            snprintf(buf, sizeof(buf), "Only controlled enemies left: the tank wakes the first now%s.",
-                patrol ? " (a patrol is coming)" : "");
+            snprintf(buf, sizeof(buf), "Only controlled enemies left: the tank wakes the first now (%s).", nowText.c_str());
         plan.notes.push_back(buf);
         end.noted = true;
     }

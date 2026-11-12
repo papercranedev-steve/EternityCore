@@ -8,20 +8,21 @@
  * on damage (EnemyFacts::control: polymorph, sap, shackle, sleep; a stun or fear the party
  * hits through is not this situation). The enemy whose control ends first is woken first, by the
  * main tank (Perception/Tanks.h; none: nothing is planned).
- *   wait W  = its control left - BREAK_LEAD_SEC - the tank's walk to it (RUN_YD_PER_SEC)
- *   gain    = mana the party's mana users regenerate in W (PartyMemberFacts::manaRegen, the
- *             rate outside the five second rule; in combat nobody eats or drinks), capped at
- *             their missing mana, valued by ManaWorth for the fight still to come (FightLoad
- *             of the controlled enemies, all at once) without its after-fight floor
- *             (ManaWorth::Fight::drinkAfter false, since 2026-11-08): drinking after the fight
- *             gets the same mana back faster than standing in combat, so only mana that fight
- *             would lack counts (strat-20261108-232105: the party waited 34 s for 1.8 points next
- *             to a polymorphed insect of 784 health)
- *   cost    = WAIT_POINTS_PER_SEC x W; waiting is off when an idle patrol comes to the enemy
- *             (Perception/Spatial/PatrolZone.h) within W + that fight
- * gain > cost: wake it W seconds from now, else now. Decided once per enemy (kept while it
- * sleeps); notes tell the leader. The crowd control assigner gives nobody a control on it
- * meanwhile (no recast while waiting to wake it).
+ * Waiting (since 2026-11-13, user: standing in combat to regain mana is only for a fight the
+ * party could not get through otherwise, the healer running dry under the tank; before, mana
+ * regained was valued in points against WAIT_POINTS_PER_SEC, and strat-20261113-001309 waited
+ * 31 s for 2.0 vs 1.6 points next to one shackled Ghoul Ravener with the healer at 66% mana and
+ * the forecast ending at 1771 mana):
+ *   the fight still to come = FightLoad of the controlled enemies, all at once
+ *   bearable now (FightLoad::Bearable: the tank lives and stays above TANK_FLOOR_PCT): wake it now
+ *   else the shortest wait W, in WAIT_STEP_SEC steps up to its control left - BREAK_LEAD_SEC
+ *   - the tank's walk to it (RUN_YD_PER_SEC), after which it is bearable (FightLoad::AfterWait:
+ *   healers regain mana outside the five second rule); none is: the longest wait if that fight
+ *   scores better (FightLoad::Score) than now, else now
+ *   waiting is off when an idle patrol comes to the enemy (Perception/Spatial/PatrolZone.h)
+ *   within W + that fight
+ * Decided once per enemy (kept while it sleeps); notes tell the leader. The crowd control
+ * assigner gives nobody a control on it meanwhile (no recast while waiting to wake it).
  * Area pile (since 2026-11-09, doctrine doc .kiro/docs/2026-11-09-doctrine 9): the doctrine
  * (TacticalDoctrine.h, registered before this module; a refresh late would do) chose Area for
  * the pile and is in Clash, and a pile enemy is held by a bot's control that breaks on damage
@@ -44,7 +45,7 @@ namespace Commander
     public:
         static constexpr float BREAK_LEAD_SEC = 2.0f;
         static constexpr float RUN_YD_PER_SEC = 7.0f;
-        static constexpr float WAIT_POINTS_PER_SEC = 0.05f;    // untested guess
+        static constexpr float WAIT_STEP_SEC = 5.0f;
 
         // Same id as the crowd control modules: `.partybot ai module cc off` switches all.
         char const* GetId() const override { return "cc"; }

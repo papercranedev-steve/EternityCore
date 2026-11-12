@@ -388,9 +388,18 @@ namespace FightLoad
                 h.mana = float(m.mana);
                 h.maxMana = float(m.maxMana);
                 h.regenPerSec = m.manaRegenCasting;
+                h.restRegenPerSec = m.manaRegen;
                 out.healers.push_back(std::move(h));
             }
         }
+    }
+
+    Input AfterWait(Input const& in, float sec)
+    {
+        Input out = in;
+        for (Healer& h : out.healers)
+            h.mana = std::min(h.maxMana, h.mana + h.restRegenPerSec * std::max(0.0f, sec));
+        return out;
     }
 
     bool FromWorld(WorldModel const& world, Input& out)

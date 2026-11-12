@@ -72,6 +72,7 @@ namespace FightLoad
         float mana = 0.0f;
         float maxMana = 0.0f;
         float regenPerSec = 0.0f;   // inside the five second rule
+        float restRegenPerSec = 0.0f; // outside it (AfterWait)
     };
 
     struct Input
@@ -124,6 +125,10 @@ namespace FightLoad
     // What the fight costs the party in points: Points(damage on the tank) + Risk x `penalty`
     // (Value::DeathPenalty of the tank). Compare two runs of the same fight with it.
     float Loss(WorldModel const& world, Result const& r, float penalty);
+    // The same fight started `sec` later, the party standing still in combat meanwhile (a
+    // controlled enemy sleeping): healers regain mana outside the five second rule
+    // (restRegenPerSec), up to their maximum. Nothing else changes.
+    Input AfterWait(Input const& in, float sec);
     // "fight ~62 s, tank down to 41%, incoming up to 520/s, healer mana 5400 -> 1200"
     std::string Describe(Result const& r);
 
