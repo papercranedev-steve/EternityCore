@@ -1,0 +1,55 @@
+/*
+ * PartyBot Commander layer 3: the area caster keeps its own room from the enemies running at
+ * it ("aoe-room" module; doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4). Only for the bot the
+ * brain names (AreaPlan::roomCaster); EscapeBehavior then only puts up its danger shield.
+ *
+ * User 2026-11-12: do not run or stop the Blizzard as soon as something comes; wait until it
+ * is about to hit, by the caster's own danger, not by seconds; even take a hit or two so the
+ * ones behind catch up and one Frost Nova holds them all. Only a crowd in the face stops at once.
+ *
+ * When (3.3.1): the enemies running at it (Perception/Forecast/Runners) on a time line: when
+ * each gets within the Frost Nova's radius (Runners::ReachSec; the bot's running area channel
+ * slows them) and when in melee (ArriveSec). Moments to act: now, and each of those, within
+ * HORIZON_SEC. Acting at T is worth
+ *   held(T)  the Frost Nova ready: the runners within its radius by T, each Value::HitLoss +
+ *            HarassLoss over its hold (a root: at most EscapeBehavior::ROOT_HOLD_SEC)
+ *   - wait(T) the hits until T of the ones in melee by then (meleeDps x time), less the
+ *            absorbs (Ice Barrier: no health, no pushback), Value::Points
+ * T is out when the caster would not survive EscapeBehavior::DANGER_SEC after it ((health +
+ * absorbs - those hits) / their damage per second). The best T wins, a later one on a tie; it
+ * acts when that is within ACT_SEC. A running cast or channel: CastBreakBenefit = worth(now) -
+ * worth(at its end) when now is the best moment (CastBreak stops it when that beats what the
+ * rest of it is worth; the death penalty when the hits until then kill it).
+ * How (3.4, fixed order, not points):
+ *   1. Frost Nova ready and a runner within its radius: Frost Nova (all of them in: the area
+ *      phase then places the next Blizzard on all of them from farther away, AreaSpot);
+ *   2. (Blink: next step)
+ *   3. otherwise, and right after a Frost Nova that left some free: to the tank (RunToTank).
+ * Tier Urgent. While its own walk is under way: hold it; nobody running at it: stop it.
+ * Values: Frost Nova benefit held(now), cost LostAction(GCD) + ManaWorth(its mana).
+ */
+
+#ifndef MANGOS_COMMANDER_AREA_ROOM_BEHAVIOR_H
+#define MANGOS_COMMANDER_AREA_ROOM_BEHAVIOR_H
+
+#include "Commander/Behaviors/IBehavior.h"
+
+namespace Commander
+{
+    class AreaRoomBehavior : public IBehavior
+    {
+    public:
+        static constexpr float ACT_SEC = 0.3f;          // a bot tick and a refresh: "now"
+        static constexpr float HORIZON_SEC = 8.0f;      // a Blizzard's length
+        static constexpr float RADIUS_MARGIN_YD = 0.5f; // inside the Frost Nova's edge by this much
+
+        char const* GetId() const override { return "aoe-room"; }
+        bool AppliesTo(PartyBotAI const* bot) const override;
+        void Propose(PartyBotAI const* bot, WorldModel const& world,
+                     TeamPlan const& plan, std::vector<Proposal>& out) const override;
+        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                               uint32 castLeftMs, char const*& reason) const override;
+    };
+}
+
+#endif

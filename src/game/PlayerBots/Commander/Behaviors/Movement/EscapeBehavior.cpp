@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/Movement/EscapeBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/Movement/FleePoint.h"
+#include "Commander/Behaviors/Movement/RunToTank.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -34,27 +35,6 @@ namespace Commander
             Unit* unit;
             bool rooted;
         };
-
-        // The run this module started (MoveTo, BotDirectives::GetMovementOwner) is still under
-        // way: stop it where the bot is. False = not walking, or somebody else's walk.
-        bool ProposeStopOwnRun(PartyBotAI const* bot, char const* reason, std::vector<Proposal>& out)
-        {
-            if (!bot->me->IsMoving())
-                return false;
-            char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
-            if (!owner || strcmp(owner, "escape") != 0)
-                return false;
-            Proposal p;
-            p.tier = ProposalTier::Assigned;
-            p.source = "escape";
-            p.reason = reason;
-            // Above the "keep walking" Holds (score 0) other modules give for any MoveTo under
-            // way: this walk is ours, they only keep it from being cut by a cast.
-            p.score = 0.01f;
-            p.action.type = BotActionType::StopMove;
-            out.push_back(p);
-            return true;
-        }
 
         // Spells that stop a chaser where it stands come from the class kit
         // (ClassKit::HoldSpells); what they do (root / stun, area or single target, duration,
@@ -307,7 +287,7 @@ namespace Commander
         // Nobody chases any more (the tank took it): no reason to keep running.
         if (chasers.empty())
         {
-            ProposeStopOwnRun(bot, "nobody chasing any more, stop", out);
+            RunToTank::ProposeStop(bot, "escape", "nobody chasing any more, stop", out);
             return;
         }
 
@@ -364,6 +344,11 @@ namespace Commander
             }
         }
 
+        // The area caster keeps its own room (AreaRoomBehavior: when to Frost Nova, then away
+        // or to the tank; doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4).
+        if (plan.area.roomCaster == self->guid)
+            return;
+
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns,
         // or an area fear around the bot (Psychic Scream) valued like the brain's controls.
         if (dangerous && !allHeld)
@@ -395,54 +380,15 @@ namespace Commander
         float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
         ProposalTier const tier = dangerous ? ProposalTier::Urgent : ProposalTier::Assigned;
 
-        // 2. Run to the tank: it takes the enemy over there.
-        PartyMemberFacts const* tank = nullptr;
-        for (PartyMemberFacts const* t : Tanks::Alive(world))
+        // 2. Run to the tank: it takes the enemy over there (RunToTank.h).
+        std::vector<PartyMemberFacts const*> const tanks = Tanks::Alive(world);
+        if (std::any_of(tanks.begin(), tanks.end(),
+                        [&](PartyMemberFacts const* t) { return t->guid != self->guid && t->CanAct(); }))
         {
-            if (t->guid == self->guid || !t->CanAct())
-                continue;
-            if (!tank || Distance2d(here, t->pos) < Distance2d(here, tank->pos))
-                tank = t;
-        }
-        if (tank)
-        {
-            float const distance = Distance2d(here, tank->pos);
-            if (distance <= START_DISTANCE || distance > MAX_RUN_DISTANCE)
-                return;
-
-            SafeRoute::IdleCreatures const idle(me);
-            Position3 to;
-            float const k = STAND_OFF / distance;
-            to.x = tank->pos.x + (here.x - tank->pos.x) * k;
-            to.y = tank->pos.y + (here.y - tank->pos.y) * k;
-            to.z = tank->pos.z;
-            char const* reason = "melee enemy on me: run to the tank";
-            if (idle.Near(to) || !SafeRoute::PathIsSafe(me, idle, to, MAX_PATH_DETOUR))
-            {
-                // FleePoint prefers the tank too, else the party, else a ring; never an idle pack.
-                if (!FleePoint::Find(me, chasers.front().unit, &world, to.x, to.y, to.z))
-                    return;
-                reason = "melee enemy on me: way to the tank blocked, run to a safe spot";
-            }
-
-            float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
-            float benefit = 0.0f;
+            std::vector<EnemyFacts const*> facts;
             for (Chaser const& c : chasers)
-            {
-                float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::EnemyTimeToDie(world, *c.facts)));
-                // Loss of `seconds` more on me: the first absorbedSec of it costs nothing.
-                auto const loss = [&](float seconds)
-                {
-                    seconds = std::max(0.0f, seconds - absorbedSec);
-                    return Value::MoveLoss(world, *c.facts, *self, *tank, seconds) +
-                           Value::HarassLoss(world, *c.facts, *self, seconds);
-                };
-                benefit += loss(horizon) - loss(std::min(horizon, walkSec + TAUNT_REACTION_SEC));
-            }
-            Proposal p = MakeProposal(tier, reason);
-            SetMove(p, to, walkSec);
-            p.SetValue(benefit, Value::LostAction(world, *self, walkSec));
-            out.push_back(p);
+                facts.push_back(c.facts);
+            RunToTank::Propose(bot, world, *self, facts, chasers.front().unit, absorbedSec, tier, "escape", out);
             return;
         }
 

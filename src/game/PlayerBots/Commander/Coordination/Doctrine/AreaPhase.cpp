@@ -144,15 +144,12 @@ namespace Commander
             a.prepMoveCost = ch.walkCost;
         }
 
-        // While the pull or the opening holds the party (not a retreat): the caster the Area
-        // tactic counts on gets ready (header "While the pull or the opening holds").
-        void Prepare(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan& a)
+        // The caster the Area tactic counts on (header "who"), null = none.
+        PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan)
         {
-            if (plan.retreat.active)
-                return;
             DoctrinePlan const& d = plan.doctrine;
             PullPlan const& pull = plan.pull;
-            // Who: before the fight there is no tactic yet; a pull of AREA_MIN or more counts as Area.
+            // Before the fight there is no tactic yet; a pull of AREA_MIN or more counts as Area.
             std::vector<PlannedThreat> const casters = d.tactic == PileTactic::Area ? d.areaThreat
                 : (pull.phase != PullPhase::None && pull.expected.size() >= TacticalDoctrine::AREA_MIN)
                     ? AreaIntent::Of(world, nullptr) : std::vector<PlannedThreat>();
@@ -165,6 +162,45 @@ namespace Commander
                         m = f;
                         bestRate = p.perSec;
                     }
+            return m;
+        }
+
+        // It can hold what runs at it around itself (Frost Nova: FleeStopAbility with a radius).
+        bool HoldsAround(PartyMemberFacts const& m)
+        {
+            return std::any_of(m.fleeStops.begin(), m.fleeStops.end(),
+                               [](FleeStopAbility const& f) { return f.radius > 0.0f && f.holdSec > 0.0f; });
+        }
+
+        // An enemy hits or runs at `m` (rooted ones too: they come when the root ends).
+        bool Chased(WorldModel const& world, ObjectGuid m)
+        {
+            return std::any_of(world.enemies.begin(), world.enemies.end(),
+                               [m](EnemyFacts const& e) { return e.acting && e.health && e.victim == m; });
+        }
+
+        // Header "room": the area caster now, else the one waiting or getting ready, else the
+        // one the tactic counts on; the last refresh's one keeps it while chased.
+        ObjectGuid RoomCaster(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan const& a)
+        {
+            ObjectGuid g = a.active ? a.caster : !a.waitCaster.IsEmpty() ? a.waitCaster : a.prepCaster;
+            if (g.IsEmpty() && !prev.roomCaster.IsEmpty() && Chased(world, prev.roomCaster))
+                g = prev.roomCaster;
+            if (g.IsEmpty())
+                if (PartyMemberFacts const* m = PlannedCaster(world, plan))
+                    g = m->guid;
+            PartyMemberFacts const* m = g.IsEmpty() ? nullptr : world.FindMember(g);
+            return m && m->isBot && !m->isPet && m->alive && HoldsAround(*m) ? g : ObjectGuid();
+        }
+
+        // While the pull or the opening holds the party (not a retreat): the caster the Area
+        // tactic counts on gets ready (header "While the pull or the opening holds").
+        void Prepare(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan& a)
+        {
+            if (plan.retreat.active)
+                return;
+            PullPlan const& pull = plan.pull;
+            PartyMemberFacts const* m = PlannedCaster(world, plan);
             AreaSpellFacts const* spell = m ? AreaIntent::BestSpell(*m) : nullptr;
             if (!spell)
                 return;
@@ -328,6 +364,13 @@ namespace Commander
     void AreaPhaseAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
         AreaPlan const prev = plan.area;
+        Plan(world, plan, prev);
+        // Reads the last refresh's own roomCaster (RoomCaster), not another module's.
+        plan.area.roomCaster = world.HasPartyEnemy() ? RoomCaster(world, plan, prev, plan.area) : ObjectGuid();
+    }
+
+    void AreaPhaseAssigner::Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev)
+    {
         AreaPlan& a = plan.area;
         a = AreaPlan();
         if (!world.HasPartyEnemy())

@@ -55,6 +55,11 @@
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).
  *   tauntReserve = net - net without the tanks' taunts (RescueAssigner charges it to a taunt
  *   spent on an enemy outside the area).
+ * Room (AreaPlan::roomCaster, doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4): the area
+ *   caster keeps its own room from what runs at it (AreaRoomBehavior): the caster of the phase,
+ *   else the one waiting or getting ready, else the last refresh's while an enemy is on it,
+ *   else the one the tactic counts on; a bot that can hold enemies around itself (a flee stop
+ *   with a radius: Frost Nova).
  * One area phase per party at a time.
  * Pure (facts and plan).
  */
@@ -66,6 +71,8 @@
 
 namespace Commander
 {
+    struct AreaPlan;
+
     class AreaPhaseAssigner : public IAssigner
     {
     public:
@@ -76,6 +83,10 @@ namespace Commander
         AssignStage GetStage() const override { return AssignStage::Situation; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
+
+    private:
+        // Steps 1-3 and the prep (header); `prev` = the last refresh's plan.
+        static void Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev);
     };
 }
 

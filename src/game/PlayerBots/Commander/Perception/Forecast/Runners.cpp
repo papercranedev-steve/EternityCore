@@ -31,7 +31,12 @@ namespace Runners
 
     float ArriveSec(EnemyFacts const& e, Position3 const& at, AreaSpellFacts const* spell, Position3 const& centre)
     {
-        float const reach = e.boundingRadius + AreaValue::MELEE_REACH;
+        return ReachSec(e, at, e.boundingRadius + AreaValue::MELEE_REACH, spell, centre);
+    }
+
+    float ReachSec(EnemyFacts const& e, Position3 const& at, float reach, AreaSpellFacts const* spell, Position3 const& centre)
+    {
+        reach = std::max(0.0f, reach);
         float const length = Distance2d(e.pos, at);
         float const walk = std::max(0.0f, length - reach);
         float const speed = std::max(0.1f, e.speed);

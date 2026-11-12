@@ -35,6 +35,9 @@ namespace Runners
 
     // Header. `spell` null: no area spell.
     float ArriveSec(EnemyFacts const& e, Position3 const& at, AreaSpellFacts const* spell, Position3 const& centre);
+
+    // ArriveSec to within `reach` of `at` (centre to centre), e.g. a Frost Nova's radius.
+    float ReachSec(EnemyFacts const& e, Position3 const& at, float reach, AreaSpellFacts const* spell, Position3 const& centre);
 }
 }
 

@@ -701,6 +701,12 @@ namespace Commander
         float prepMoveGain = 0.0f;   // the spot's over here, before the walk
         float prepMoveCost = 0.0f;   // the walk (in combat; nothing is lost before the fight)
 
+        // The area caster that keeps its own room (AreaPhase.h "room"; doc
+        // .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4): AreaRoomBehavior decides when it Frost
+        // Novas the enemies running at it and goes away or to the tank; EscapeBehavior only puts
+        // up its danger shield. Empty = none.
+        ObjectGuid roomCaster;
+
         // The stance modules leave `bot`'s place to the area phase (AreaSpot.h).
         bool PlacesCaster(ObjectGuid bot) const
         {

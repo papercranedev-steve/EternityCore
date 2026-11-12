@@ -268,6 +268,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/AreaRoomBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/AreaRoomBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/RunToTank.h
+  ${COMMANDER_DIR}/Behaviors/Movement/RunToTank.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp
