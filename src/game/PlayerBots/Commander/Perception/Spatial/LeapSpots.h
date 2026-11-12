@@ -1,12 +1,16 @@
 /*
  * PartyBot Commander layer 1 (eyes): where a jump forward (mage Blink: the server moves the
- * caster `distance` yards the way it faces) would land, for a few directions away from
- * `awayFrom` (the enemies running at it): straight away and 30 / 60 / 90 degrees to either side
- * (doc .kiro/docs/2026-11-12-mage-hold.md 3.4: away from the chasers, a safe landing). A
- * landing is kept when the ground there is within MAX_STEP_Z of the bot, the bot sees it
- * (nothing in between to stop the jump short), and it is out of idle creatures' reach
- * (SafeRoute::IdleCreatures), ranged hazard zones and the way of a patrol (PatrolZone).
- * Live map reads: map thread.
+ * caster `distance` yards the way it faces) would land, for the directions away from `awayFrom`
+ * (the enemies running at it), up to 90 degrees to either side, one per position field cell on
+ * the jump's circle, straight away first (doc .kiro/docs/2026-11-12-mage-hold.md 3.4: away from
+ * the chasers, a safe landing; user 2026-11-12: use the position field).
+ * A landing is kept when
+ *   - its position field cell is standable (ground, linked to the party), no idle creature
+ *     covers it and no patrol comes there before the fight ends (Value::FightRemainingSec);
+ *     outside the field: Map::GetHeight, SafeRoute::IdleCreatures and PatrolZone instead;
+ *   - the ground is within MAX_STEP_Z of the bot, out of ranged hazard zones;
+ *   - the bot sees it: the jump is a straight line, the field's links are walks.
+ * Live map reads (sight): map thread.
  */
 
 #ifndef MANGOS_COMMANDER_LEAP_SPOTS_H
