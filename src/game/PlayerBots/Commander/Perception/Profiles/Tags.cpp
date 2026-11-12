@@ -77,7 +77,11 @@ namespace Tags
                 for (AreaSpellFacts const& a : m.areaSpells)
                     cheapest = std::min(cheapest, a.mana);
                 if (m.areaChannel.spellId || float(m.mana) >= cheapest)
+                {
                     ++l.areaDealers;
+                    for (AreaSpellFacts const& a : m.areaSpells)
+                        l.areaRadius = std::max(l.areaRadius, a.radius);
+                }
             }
             for (ControlAbility const& a : m.controls)
                 if (a.Kind() == ControlKind::Mez && !a.peacefulOnly)

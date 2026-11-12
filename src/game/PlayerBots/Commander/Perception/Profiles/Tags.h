@@ -22,6 +22,8 @@
  *                not "ready" but still counts).
  *   mezTypes     creature types (1 << (type - 1)) the bots' controls that break on damage
  *                can take (ControlAbility::Kind Mez); ~0 = a control for any type.
+ *   areaRadius   the largest radius among the area spells of the bots counted in areaDealers
+ *                (how far from the pile a control that breaks on damage is safe: ControlValue).
  */
 
 #ifndef MANGOS_COMMANDER_TAGS_H
@@ -70,6 +72,7 @@ namespace Commander
     {
         uint32 areaDealers = 0;
         uint32 mezTypes = 0;
+        float areaRadius = 0.0f;        // the largest radius of the area dealers' area spells, 0 = none
     };
 
     namespace Tags

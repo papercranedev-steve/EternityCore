@@ -155,14 +155,14 @@ namespace Commander
             // Doctrine KillNow (RoleStamps.h): a self-destruct the party kills before it blows is
             // the focus before anything else, fresh or not (it is fresh: it just spawned).
             // Above that, the charmer of a party member (AllyCharm.h): killing it frees the ally.
-            auto const stamped = [&](EnemyFacts const& e, uint16 stamp)
+            auto const stamped = [&](EnemyFacts const& e, uint32 stamp)
             {
                 return plan.doctrine.Has(e.guid, stamp) && e.acting && e.health && !excluded(e.guid) &&
                        plan.MayEngage(ObjectGuid(), e.guid);
             };
             bool const anyFreeAlly = std::any_of(world.enemies.begin(), world.enemies.end(),
                 [&](EnemyFacts const& e) { return stamped(e, STAMP_FREE_ALLY); });
-            uint16 const urgentStamp = anyFreeAlly ? uint16(STAMP_FREE_ALLY) : uint16(STAMP_KILL_NOW);
+            uint32 const urgentStamp = anyFreeAlly ? uint32(STAMP_FREE_ALLY) : uint32(STAMP_KILL_NOW);
             auto const killNow = [&](EnemyFacts const& e) { return stamped(e, urgentStamp); };
             bool const anyKillNow = std::any_of(world.enemies.begin(), world.enemies.end(), killNow);
             // Doctrine kill order (RoleStamps.h, user 2026-11-10): healers, summoners and totems
@@ -243,10 +243,6 @@ namespace Commander
         bool HeldOut(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& m)
         {
             if (plan.retreat.active)
-                return true;
-            // The threat opening (ThreatOpening.h, situation step of this refresh): everyone
-            // but the tank waits.
-            if (plan.threat.Holds(m.guid, m.role == ROLE_HEALER))
                 return true;
             if (m.inCombat)
                 return false;

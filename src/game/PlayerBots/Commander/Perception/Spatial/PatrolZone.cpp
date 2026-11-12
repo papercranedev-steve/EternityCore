@@ -116,5 +116,22 @@ namespace PatrolZone
         float const t = ArriveSec(world, at);
         return t >= 0.0f && t < withinSec;
     }
+
+    Approach FirstWithin(WorldModel const& world, PatrolFacts const& p, Position3 const& at, float yd)
+    {
+        Approach a;
+        if (!Counts(p))
+            return a;
+        float const age = TrackAgeSec(world);
+        for (size_t i = 0; i < p.track.size(); ++i)
+            if (PackResolver::Distance(p.track[i], at) <= yd)
+            {
+                a.sec = SecOf(p, i, age);
+                a.index = i;
+                a.point = p.track[i];
+                return a;
+            }
+        return a;
+    }
 }
 }

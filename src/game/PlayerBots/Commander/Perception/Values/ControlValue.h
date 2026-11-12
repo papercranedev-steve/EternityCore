@@ -122,6 +122,40 @@ namespace ControlValue
 
     // "net +4.2 (8 s: damage 3.1 danger 2.0 victims 0.5 | action 0.6 mana 0.4 adds 0.4)"
     std::string Describe(Worth const& w);
+
+    // ---- Battlefield groups (doc .kiro/docs/2026-11-09-doctrine/2026-11-13-battlefield-groups.md
+    // 5, 7, 8): facts for the doctrine's group tactics and the fight spot.
+
+    // One single target control a bot has that works on a creature (Affects): who could hold
+    // it, with what, for how long. Range, sight and readiness are not filtered (`ready` is the
+    // ability's; a plan made before the pull may count on it). Spells for creatures out of
+    // combat only (Sap) are left out: the doctrine's controls are cast in the fight.
+    struct Option
+    {
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        ControlKind kind = ControlKind::Mez;
+        float durationSec = 0.0f;
+        float maxRange = 0.0f;
+        uint32 castMs = 0;
+        bool ready = false;
+        bool areaDealer = false;    // the bot has area spells (the doctrine prefers other controllers)
+    };
+    std::vector<Option> OptionsFor(WorldModel const& world, uint32 entry, uint32 creatureTypeMask);
+
+    // How far from the pile (its centre, the main tank) a control that breaks on damage stays
+    // unbroken: the largest area spell radius of the party (TeamLedger::areaRadius) +
+    // PILE_SPREAD_YD (the pile spreads that far around the tank, TacticalDoctrine::CLUSTER_YD)
+    // + CLEAR_MARGIN_YD. Without area spells: PILE_SPREAD_YD + CLEAR_MARGIN_YD (melee splash).
+    float const PILE_SPREAD_YD = 10.0f;
+    float const CLEAR_MARGIN_YD = 5.0f;
+    float ClearOfPileYd(WorldModel const& world);
+
+    // What losing the control on `enemy` now costs (the release rule above, for an enemy
+    // already held): `fight` (FightLoad::FromWorld, the held enemy joining when its control
+    // ends) against the same fight with it back now; Points(damage) + Risk difference x the
+    // main tank's death penalty. 0 when it is not held or not in `fight`.
+    float HeldWorth(WorldModel const& world, FightLoad::Input const& fight, ObjectGuid enemy);
 }
 }
 

@@ -582,6 +582,9 @@ namespace Commander
         uint32 health = 0;
         uint32 maxHealth = 0;
         float meleeDps = 0.0f;          // estimate before armor (CreatureProfiles::EstimateMeleeDps)
+        // Its main ranged spell while it stands back casting (WorldModelBuilder::RangedSpellDps,
+        // from the profile's melee estimate), 0 = none. Before resistances.
+        float rangedDps = 0.0f;
         // A harmful aura that takes it out (SpellTags::IsDisableEffect) while it is not in
         // combat: a Sap before the pull (PullControl). 0 = none.
         uint32 controlSpellId = 0;

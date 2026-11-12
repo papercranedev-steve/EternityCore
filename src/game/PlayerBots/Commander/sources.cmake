@@ -115,6 +115,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/Exposure.cpp
   ${COMMANDER_DIR}/Perception/Values/SpotCost.h
   ${COMMANDER_DIR}/Perception/Values/SpotCost.cpp
+  ${COMMANDER_DIR}/Perception/Values/VictimDamage.h
+  ${COMMANDER_DIR}/Perception/Values/VictimDamage.cpp
   ${COMMANDER_DIR}/Perception/Values/SwitchCost.h
   ${COMMANDER_DIR}/Perception/Values/SwitchCost.cpp
   ${COMMANDER_DIR}/Perception/Values/CastValue.h

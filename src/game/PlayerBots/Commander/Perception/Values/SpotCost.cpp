@@ -1,4 +1,7 @@
 #include "Commander/Perception/Values/SpotCost.h"
+#include "Commander/Perception/Forecast/FightLoad.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
 #include <cmath>
@@ -61,6 +64,39 @@ namespace SpotCost
         if (excess <= 0.0f)
             return 0.0f;
         return Value::LostAction(world, member, std::min(h, excess / std::max(1.0f, speed)));
+    }
+
+    std::vector<HeldMez> HeldMezzes(WorldModel const& world)
+    {
+        std::vector<HeldMez> out;
+        FightLoad::Input fight;
+        bool built = false;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (e.onAllyOnly || !e.health || !e.control.spellId || !e.control.breaksOnDamage || e.control.fear)
+                continue;
+            if (!built)
+            {
+                if (!FightLoad::FromWorld(world, fight))
+                    return out;
+                built = true;
+            }
+            HeldMez h;
+            h.guid = e.guid;
+            h.pos = e.pos;
+            h.worth = ControlValue::HeldWorth(world, fight, e.guid);
+            out.push_back(h);
+        }
+        return out;
+    }
+
+    float BreaksHold(std::vector<HeldMez> const& held, Position3 const& spot, float clearYd)
+    {
+        float points = 0.0f;
+        for (HeldMez const& h : held)
+            if (PackResolver::Distance(h.pos, spot) < clearYd)
+                points += h.worth;
+        return points;
     }
 }
 }

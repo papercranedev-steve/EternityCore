@@ -4,6 +4,7 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Values/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -43,6 +44,26 @@ namespace ControlValue
         float RestSec(FightLoad::Input const& fight, std::vector<EnemyFacts const*> const& targets, char const* why)
         {
             return RestOf(fight, [&targets](ObjectGuid g) { return IsTarget(targets, g); }, why);
+        }
+
+        // `held` back in `fight` now instead of when its control ends: Points(damage) + Risk
+        // difference x penalty against `base` (Simulate of `fight`), at least 0. -1 = not held
+        // in `fight` (not there, or joining at once).
+        float FreedLoss(WorldModel const& world, FightLoad::Input const& fight, FightLoad::Result const& base,
+                        ObjectGuid held, float penalty, char const* why)
+        {
+            FightLoad::Input freed = fight;
+            bool found = false;
+            for (FightLoad::Foe& f : freed.foes)
+                if (f.guid == held && f.arriveSec > 0.0f)
+                {
+                    f.arriveSec = 0.0f;
+                    found = true;
+                }
+            if (!found)
+                return -1.0f;
+            FightLoad::Result const back = FightLoad::Simulate(freed, why);
+            return std::max(0.0f, Value::Points(world, back.damage - base.damage) + (Risk(back) - Risk(base)) * penalty);
         }
     }
 
@@ -154,18 +175,10 @@ namespace ControlValue
         // The enemy this cast frees (header: release).
         if (a.oneTarget && !a.holding.IsEmpty() && !IsTarget(targets, a.holding))
         {
-            FightLoad::Input freed = controlled;
-            bool found = false;
-            for (FightLoad::Foe& f : freed.foes)
-                if (f.guid == a.holding && f.arriveSec > 0.0f)
-                {
-                    f.arriveSec = 0.0f;
-                    found = true;
-                }
-            if (found)
+            float const loss = FreedLoss(world, controlled, ctrl, a.holding, penalty, "controlled, held one freed");
+            if (loss >= 0.0f)
             {
-                FightLoad::Result const back = FightLoad::Simulate(freed, "controlled, held one freed");
-                w.release = std::max(0.0f, Value::Points(world, back.damage - ctrl.damage) + (Risk(back) - Risk(ctrl)) * penalty);
+                w.release = loss;
                 w.released = a.holding;
             }
         }
@@ -278,6 +291,51 @@ namespace ControlValue
             }
         }
         return w;
+    }
+
+    std::vector<Option> OptionsFor(WorldModel const& world, uint32 entry, uint32 creatureTypeMask)
+    {
+        std::vector<Option> out;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.isBot || m.isPet || !m.alive)
+                continue;
+            for (ControlAbility const& a : m.controls)
+            {
+                if (a.radius > 0.0f || a.peacefulOnly || !Affects(a, entry, creatureTypeMask))
+                    continue;
+                Option o;
+                o.bot = m.guid;
+                o.spellId = a.spellId;
+                o.kind = a.Kind();
+                o.durationSec = a.durationSec;
+                o.maxRange = a.maxRange;
+                o.castMs = a.castMs;
+                o.ready = a.ready && m.CanAct();
+                o.areaDealer = !m.areaSpells.empty();
+                out.push_back(o);
+            }
+        }
+        return out;
+    }
+
+    float ClearOfPileYd(WorldModel const& world)
+    {
+        return Tags::LedgerOf(world).areaRadius + PILE_SPREAD_YD + CLEAR_MARGIN_YD;
+    }
+
+    float HeldWorth(WorldModel const& world, FightLoad::Input const& fight, ObjectGuid enemy)
+    {
+        PartyMemberFacts const* tank = Tanks::Main(world);
+        float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
+        Trace::Scope scope("held");
+        if (scope.On())
+            scope.Label("%s", Trace::Guid(enemy).c_str());
+        FightLoad::Result const base = FightLoad::Simulate(fight, "held");
+        float const loss = std::max(0.0f, FreedLoss(world, fight, base, enemy, penalty, "freed now"));
+        if (scope.On())
+            scope.Data(Trace::Format("{\"points\":%.2f}", loss));
+        return loss;
     }
 
     std::string Describe(Worth const& w)

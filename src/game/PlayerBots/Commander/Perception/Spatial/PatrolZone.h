@@ -62,6 +62,20 @@ namespace Commander
 
         bool Comes(WorldModel const& world, PatrolFacts const& p, Position3 const& at, float withinSec);
         bool Comes(WorldModel const& world, Position3 const& at, float withinSec);
+
+        // When the patrol itself (its track point, not its aggro zone) first gets within `yd`
+        // of `at` (3D): the latest a control that must land outside that distance can wait
+        // (battlefield groups doc .kiro/docs/2026-11-09-doctrine/2026-11-13-battlefield-groups.md
+        // 7.1: `at` the fight spot, `yd` ControlValue::ClearOfPileYd). Seconds from the
+        // refresh as in the rule above; `index` the track point; sec -1 = never on its track
+        // (or it does not count). index 0: it is that close now.
+        struct Approach
+        {
+            float sec = -1.0f;
+            size_t index = 0;
+            Position3 point;
+        };
+        Approach FirstWithin(WorldModel const& world, PatrolFacts const& p, Position3 const& at, float yd);
     }
 }
 

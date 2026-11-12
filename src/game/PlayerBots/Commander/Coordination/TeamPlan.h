@@ -297,9 +297,14 @@ namespace Commander
 
         // Healing hold of a line of sight pull, written by PullAssigner during Settle once the
         // arrival wait is over (Coordination/Situation/Pull/PullOpening.h): out of combat healers wait until the
-        // casters came (a heal's threat lands on every enemy at once). Who waits for the tank's
-        // threat is the threat opening's (TeamPlan::threat, Coordination/Doctrine/ThreatOpening.h).
+        // casters came (a heal's threat lands on every enemy at once). Damage dealers wait for
+        // the tank's threat each on its own target (DamageTargets, ThreatRoom).
         bool holdHealing = false;
+        // Settle past the arrival wait: pulled enemies coming for the tank are still on their
+        // way (further than PullAssigner::ARRIVAL_DISTANCE; at most PullOpening::HOLD_MAX_MS of
+        // Settle). Settle lasts while true; the area spell waits (AreaPhase). Written by
+        // PullAssigner (since 2026-11-13; before, the threat opening held the party for it).
+        bool packComing = false;
 
         // Where the tank will fight once the pack is on it, as planned, for the members to take
         // their places before (stance modules): a walk-in fought where the pack stands is fought
@@ -334,8 +339,7 @@ namespace Commander
         // Members other than the tank that are still out of combat wait while true (PullBehavior
         // holds them; healers and ranged first take their places for the planned fight,
         // PlannedFightSpot): the tank goes out or brings the pack back, the pack has not arrived
-        // yet, or (healers) the casters of a line of sight pull have not come. The wait for the
-        // tank's threat is TeamPlan::threat (every bot, in combat or not).
+        // yet, or (healers) the casters of a line of sight pull have not come.
         bool HoldsWaiting(bool healer) const
         {
             switch (phase)
@@ -684,14 +688,13 @@ namespace Commander
         float waitGain = 0.0f;
         float waitShortfall = 0.0f;  // Tank: the threat the tank lacks on them in total
         uint32 waitSinceMs = 0;
-        uint32 waitProgressMs = 0;   // Tank: last time waitShortfall shrank (ThreatOpeningAssigner::STALL_MS)
+        uint32 waitProgressMs = 0;   // Tank: last time waitShortfall shrank (AreaPhase::TANK_STALL_MS)
 
-        // No phase yet (the pull or the threat opening holds the party, or the phase waits): the
+        // No phase yet (the pull holds the party, or the phase waits): the
         // caster the Area tactic counts on gets ready (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md
         // 4.4, 4.5, 8): it walks to its cast spot (prepSpots, best first; centre prepCentre) and
-        // puts its shield up (prepShieldId, by the opening's estimate; the opening lets a cast
-        // through that puts no enemy over the tank's lead, Constraints::OpeningForbids); the
-        // ranged stance leaves it alone.
+        // puts its shield up (prepShieldId, by the opening's estimate); the ranged stance leaves
+        // it alone.
         ObjectGuid prepCaster;
         uint32 prepShieldId = 0;
         float prepGain = 0.0f;       // the shield's, net of its mana
@@ -725,7 +728,7 @@ namespace Commander
     enum class FightPhase : uint8
     {
         None,       // no fight of ours
-        Gathering,  // the pull or the threat opening still runs: groups change every refresh
+        Gathering,  // the pull still runs (the pack still coming): groups change every refresh
         Clash,
         Cleanup,    // at most CLEANUP_FREE enemies not under a control
     };
@@ -737,8 +740,9 @@ namespace Commander
         Pick,       // the pile may be controlled, killed one by one
     };
 
-    // Bits of DoctrineEnemy::stamps.
-    enum DoctrineStamp : uint16
+    // Bits of DoctrineEnemy::stamps (32 bits: the 16 of uint16 were all used, battlefield
+    // groups doc .kiro/docs/2026-11-09-doctrine/2026-11-13-battlefield-groups.md 9).
+    enum DoctrineStamp : uint32
     {
         STAMP_IN_CLUSTER    = 1 << 0,   // the pile around the main tank (or a melee enemy on its way there)
         STAMP_OUTLIER       = 1 << 1,   // stands back away from the pile (casters)
@@ -753,7 +757,7 @@ namespace Commander
         STAMP_SELF_DESTRUCT = 1 << 7,   // blows itself up (Broken Cadaver): no taunt, no rescue, no control
         STAMP_KILL_NOW      = 1 << 8,   // a self-destruct the party kills before its earliest blast: the focus
         STAMP_STAND_CLEAR   = 1 << 9,   // a self-destruct that will blow first: everyone but its victim steps out
-        STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no control, no threat opening, the area spells'
+        STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no control, no tank threat risk, the area spells'
         STAMP_ALARM         = 1 << 11,  // brings more as it aggroes: display (its summons are in FightLoad)
         STAMP_NO_TAUNT      = 1 << 12,  // no single target taunt (swarm, self-destruct, taunt immune, totem): RescueAssigner
         STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem, mana drain, resurrects): the focus is among these
@@ -775,8 +779,9 @@ namespace Commander
     // enemy and which ability stay the duties' and the cerebellum's (points).
     enum class TankJob : uint8
     {
-        None,       // gathering (the threat opening's task), no tactic
-        Focus,      // Pick: the tank hits the party focus too (TankTargets) when it is at the pile
+        // Gathering, no tactic, Pick (the tank follows the threat risk, TankTargets; until
+        // 2026-11-13 Pick had Focus: the tank hit the party focus too).
+        None,
         HoldPile,   // Area: the tank keeps the pile (top-up) and protects the area caster: a rescue
                     // of an enemy on it is Urgent (RescueAssigner), so is a group threat on two or
                     // more of them (ThreatBehavior: Challenging Shout)
@@ -794,7 +799,7 @@ namespace Commander
     struct DoctrineEnemy
     {
         ObjectGuid guid;
-        uint16 stamps = 0;
+        uint32 stamps = 0;
         uint8 engage = 0;           // Engage (Perception/Profiles/Tags.h)
         uint8 tier = 0;             // Tier
         uint8 source = 0;           // Tags::Source
@@ -818,8 +823,8 @@ namespace Commander
         std::vector<DoctrineEnemy> enemies;
         // The area spell the Area tactic counts on (Coordination/Doctrine/AreaIntent.h): each
         // area dealer bot's threat per second with it, on the pile, and the spell's length. The
-        // tank's threat runway is judged with it (ThreatRunway; the opening, the top-up, the
-        // tank's area threat). Empty / 0 under another tactic.
+        // tank's threat risk is judged with it (ThreatRisk: the tank's target, its area threat;
+        // AreaPhase's wait for the tank). Empty / 0 under another tactic.
         std::vector<PlannedThreat> areaThreat;
         float areaSec = 0.0f;
 
@@ -830,7 +835,7 @@ namespace Commander
                     return &d;
             return nullptr;
         }
-        bool Has(ObjectGuid enemy, uint16 stamp) const
+        bool Has(ObjectGuid enemy, uint32 stamp) const
         {
             DoctrineEnemy const* d = Find(enemy);
             return d && (d->stamps & stamp) != 0;
@@ -841,7 +846,7 @@ namespace Commander
             static std::vector<PlannedThreat> const none;
             return Has(enemy, STAMP_IN_CLUSTER) ? areaThreat : none;
         }
-        // How far ahead the tank's runway is judged outside the opening: the area spell, else
+        // How far ahead the tank's threat risk is judged: the area spell, else
         // ThreatRunway::HORIZON_SEC.
         float RunwayHorizon() const { return areaSec > 0.0f ? areaSec : ThreatRunway::HORIZON_SEC; }
     };

@@ -64,6 +64,22 @@ namespace SpotCost
     float TargetReach(WorldModel const& world, PartyMemberFacts const& member, Position3 const& at,
                       Position3 const& target, float targetReach, float rangeYd, bool inSight,
                       float speed, float horizonSec);
+
+    // Breaks a hold (battlefield groups doc .kiro/docs/2026-11-09-doctrine/2026-11-13-battlefield-groups.md
+    // 8.1), a term of the fight spot (where the main tank keeps the pile): every enemy held by
+    // a control that breaks on damage and is not a fear (ActiveControl: polymorph, shackle,
+    // sap; anyone's) within `clearYd` (ControlValue::ClearOfPileYd) of the spot costs what
+    // losing that control costs (ControlValue::HeldWorth). A stun or banish costs nothing.
+    // HeldMezzes values them once per refresh (one fight simulation each); BreaksHold is then
+    // a distance check per candidate.
+    struct HeldMez
+    {
+        ObjectGuid guid;
+        Position3 pos;
+        float worth = 0.0f;
+    };
+    std::vector<HeldMez> HeldMezzes(WorldModel const& world);
+    float BreaksHold(std::vector<HeldMez> const& held, Position3 const& spot, float clearYd);
 }
 }
 

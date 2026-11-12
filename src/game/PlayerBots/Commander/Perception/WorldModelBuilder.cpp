@@ -1374,6 +1374,8 @@ namespace WorldModelBuilder
             {
                 c.boss = profile->boss;
                 c.meleeDps = CreatureProfiles::EstimateMeleeDps(*profile, c.level);
+                if (profile->mainRangedSpellId)
+                    c.rangedDps = RangedSpellDps(*profile, c.level, CreatureProfiles::EstimateMeleeHit(*profile, c.level));
             }
             c.pos = PositionOf(creature);
             if (c.patrol)
