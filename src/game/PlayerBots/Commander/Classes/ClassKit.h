@@ -160,6 +160,9 @@ namespace Commander
         // A jump forward the way it faces (mage Blink): the area caster gets room from what
         // runs at it (AreaRoomBehavior, doc .kiro/docs/2026-11-12-mage-hold.md 3.4).
         virtual SpellEntry const* Leap() const { return nullptr; }
+        // A slow in a cone in front of it (mage Cone of Cold): the area caster slows what runs
+        // at it (AreaRoomBehavior, doc 3.5). Not an area damage spell any more.
+        virtual SpellEntry const* SlowCone() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

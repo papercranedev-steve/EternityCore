@@ -61,8 +61,9 @@ namespace Commander
                 Player const* me = m_bot.me;
                 float const chill = me->HasSpell(12488) ? 0.65f : me->HasSpell(12487) ? 0.5f
                                   : me->HasSpell(11185) ? 0.3f : 0.0f;
-                return { { s.pBlizzard, true, chill }, { s.pArcaneExplosion, false }, { s.pConeofCold, false },
-                         { s.pBlastWave, false } };
+                // Cone of Cold is a slow for what runs at the mage (SlowCone; user 2026-11-12,
+                // doc .kiro/docs/2026-11-12-mage-hold.md 3.5), not an area damage spell.
+                return { { s.pBlizzard, true, chill }, { s.pArcaneExplosion, false }, { s.pBlastWave, false } };
             }
 
             SpellEntry const* Filler() const override
@@ -88,6 +89,11 @@ namespace Commander
             SpellEntry const* Leap() const override
             {
                 return m_bot.m_spells.mage.pBlink;
+            }
+
+            SpellEntry const* SlowCone() const override
+            {
+                return m_bot.m_spells.mage.pConeofCold;
             }
 
             // Ice Block: immune, but the mage does nothing while it lasts.

@@ -33,7 +33,14 @@
  * Tier Urgent. While its own walk is under way: hold it; nobody running at it: stop it.
  * Values: Frost Nova benefit held(now); Blink the runners' hits and harassment while they
  * walk its distance again; cost LostAction(GCD) + ManaWorth(its mana).
- * Not yet: Cone of Cold on the one or two in the face before the Blink (doc 3.4 step 2, 3.5).
+ * Cone of Cold (ClassKit::SlowCone, doc 3.5): turned to the nearest runner not slowed yet
+ *   within its radius (talents included), every other one in the cone (SpellMgr::GetSpellCone)
+ *   slowed too. Before the Blink of step 2 on the ones about to hit (user 2026-11-12: some room
+ *   first). Before the timing whenever the Frost Nova is spent (on cooldown, or some rooted on
+ *   the bot): the ones still coming as they get near. Not before that: it would spread out the
+ *   ones a single Frost Nova could hold. Benefit: their hits and harassment over the slow's
+ *   share of its duration (at most ROOT_HOLD_SEC). The bot stops and turns (BotAction::facing);
+ *   the jump turn comes later (doc 3.5).
  */
 
 #ifndef MANGOS_COMMANDER_AREA_ROOM_BEHAVIOR_H

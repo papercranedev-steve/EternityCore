@@ -17,7 +17,9 @@
 #include "Map.h"
 #include "PartyBotAI.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include "Timer.h"
+#include <cmath>
 #include <algorithm>
 #include <cstring>
 
@@ -222,6 +224,76 @@ namespace Commander
             return true;
         }
 
+        bool CanCast(PartyBotAI const* bot, SpellEntry const* spell)
+        {
+            return spell && bot->CanTryToCastSpell(bot->me, spell);
+        }
+
+        // Header "Cone of Cold": turn to the nearest runner not slowed yet within its radius
+        // (`inFace`: only those about to hit, ArriveSec within ACT_SEC) and slow it and every
+        // other one inside the cone. False: not ready or nobody to slow.
+        bool ProposeCone(PartyBotAI const* bot, WorldModel const& world, Line const& line, bool inFace,
+                         char const* reason, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            SpellEntry const* cone = bot->Kit().SlowCone();
+            if (!CanCast(bot, cone))
+                return false;
+            float const radius = RadiusOf(me, cone) - RB::RADIUS_MARGIN_YD;
+            float const halfArc = sSpellMgr.GetSpellCone(cone->Id) * 0.5f;
+            float slowPct = 0.0f;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+                if (cone->Effect[i] == SPELL_EFFECT_APPLY_AURA && cone->EffectApplyAuraName[i] == SPELL_AURA_MOD_DECREASE_SPEED)
+                    slowPct = std::max(slowPct, std::min(1.0f, -float(cone->CalculateSimpleValue(SpellEffectIndex(i))) / 100.0f));
+            float const slowSec = std::min(EB::ROOT_HOLD_SEC, std::max(0, cone->GetDuration()) / 1000.0f * slowPct);
+            if (radius <= 0.0f || slowSec <= 0.0f)
+                return false;
+
+            Position3 const& at = line.self->pos;
+            auto const inReach = [&](EnemyFacts const& e)
+            {
+                return !e.slowed && PackResolver::Distance(at, e.pos) - e.boundingRadius <= radius;
+            };
+            EnemyFacts const* aim = nullptr;
+            for (Runner const& r : line.runners)
+                if (inReach(*r.facts) && (!inFace || r.inMeleeSec <= RB::ACT_SEC))
+                {
+                    aim = r.facts;
+                    break;      // nearest first
+                }
+            if (!aim)
+                return false;
+            float o = std::atan2(aim->pos.y - at.y, aim->pos.x - at.x);
+            if (o < 0.0f)
+                o += 2.0f * float(M_PI);
+
+            float saved = 0.0f;
+            for (Runner const& r : line.runners)
+            {
+                EnemyFacts const& e = *r.facts;
+                if (!inReach(e))
+                    continue;
+                float d = std::fabs(std::atan2(e.pos.y - at.y, e.pos.x - at.x) - o);
+                if (d > float(M_PI))
+                    d = 2.0f * float(M_PI) - d;
+                if (&e != aim && d > halfArc)
+                    continue;
+                saved += Value::HitLoss(world, e, *line.self, slowSec) + Value::HarassLoss(world, e, *line.self, slowSec);
+            }
+            Proposal p;
+            p.tier = ProposalTier::Urgent;
+            p.source = SOURCE;
+            p.reason = reason;
+            p.action.type = BotActionType::Cast;
+            p.action.spell = cone;
+            p.action.facing = o;
+            float const mana = DamageSpells::ManaCost(me, cone);
+            p.SetValue(saved, Value::LostAction(world, *line.self, Value::GCD_SEC) +
+                              (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
+            out.push_back(p);
+            return true;
+        }
+
         // Enemies rooted next to the bot that hit it (its own Frost Nova just now).
         bool RootedOnMe(WorldModel const& world, ObjectGuid self)
         {
@@ -279,6 +351,12 @@ namespace Commander
         }
         bool const rooted = me->HasUnitState(UNIT_STATE_ROOT);
 
+        // Frost Nova spent (on cooldown, or some rooted next to it): the ones still coming are
+        // slowed as they get near (doc 3.5).
+        bool const novaSpent = !line.novaReady || RootedOnMe(world, line.self->guid);
+        if (novaSpent && ProposeCone(bot, world, line, false, "chased, no Frost Nova: Cone of Cold", out))
+            return;
+
         // Right after a Frost Nova that left some free: to the tank now (doc 3.4 step 3).
         if (!line.novaReady && RootedOnMe(world, line.self->guid))
         {
@@ -322,9 +400,15 @@ namespace Commander
             proposeNova("they are here, all within reach: Frost Nova");
             return;
         }
-        // 2. It cannot: Blink away (its Blizzard goes ahead of the first one again, AreaPlace).
-        if (ProposeBlink(bot, world, line, out))
-            return;
+        // 2. It cannot: Blink away (its Blizzard goes ahead of the first one again, AreaPlace);
+        // the one or two about to hit get a Cone of Cold first (user 2026-11-12: some room).
+        if (CanCast(bot, bot->Kit().Leap()))
+        {
+            if (ProposeCone(bot, world, line, true, "about to be hit: Cone of Cold before the Blink", out))
+                return;
+            if (ProposeBlink(bot, world, line, out))
+                return;
+        }
         // 3. Frost Nova what it can, then to the tank.
         if (novaNow)
         {
