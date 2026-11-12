@@ -204,6 +204,11 @@ void PartyBotAI::ClearMovementHold()
     Commander::Backpedal::Stop(me, m_backpedal);
 }
 
+bool PartyBotAI::OrderJumpCast(SpellEntry const* pSpellEntry, float orientation)
+{
+    return Commander::JumpCast::Order(this, m_jumpCast, pSpellEntry, orientation);
+}
+
 bool PartyBotAI::OrderBackpedal(Commander::Position3 const& to, ObjectGuid face, uint32 durationMs)
 {
     return Commander::Backpedal::Order(this, m_backpedal, to, face, durationMs);
@@ -1290,6 +1295,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // Commander walk backwards: one step every frame, so the position and the packets follow
     // the run-back speed smoothly (the bot update below runs every bot interval only).
     Commander::Backpedal::Update(this, m_backpedal, diff);
+    // Commander jump turn cast: the jump's position and facing every frame.
+    Commander::JumpCast::Update(this, m_jumpCast);
 
     // Warrior stance swap (DoCastWithStance): cast the spell as soon as the stance is up, every
     // frame, so the bot stays in the other stance for one spell update instead of a bot interval.

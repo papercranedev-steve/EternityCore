@@ -274,6 +274,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Combat/AreaRoomBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RunToTank.h
   ${COMMANDER_DIR}/Behaviors/Movement/RunToTank.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/JumpCast.h
+  ${COMMANDER_DIR}/Behaviors/Movement/JumpCast.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp

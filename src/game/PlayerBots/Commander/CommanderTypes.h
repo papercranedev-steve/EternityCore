@@ -88,6 +88,9 @@ namespace Commander
         // Cast: turn to this orientation (radians) first, the spell goes the way the bot faces
         // (Blink); < 0 = no turn.
         float facing = -1.0f;
+        // Cast with `facing`, an instant spell: while the bot runs a point walk, jump and turn in
+        // the air (JumpCast.h: no stop); otherwise stop and turn.
+        bool jumpTurn = false;
     };
 
     // Replace: do this action this tick instead of the original rotation.

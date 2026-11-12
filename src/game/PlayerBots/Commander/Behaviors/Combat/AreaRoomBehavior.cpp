@@ -287,6 +287,7 @@ namespace Commander
             p.action.type = BotActionType::Cast;
             p.action.spell = cone;
             p.action.facing = o;
+            p.action.jumpTurn = true;   // running to the tank: jump turn, no stop (JumpCast.h)
             float const mana = DamageSpells::ManaCost(me, cone);
             p.SetValue(saved, Value::LostAction(world, *line.self, Value::GCD_SEC) +
                               (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
@@ -337,6 +338,23 @@ namespace Commander
             RunToTank::ProposeStop(bot, SOURCE, "nobody running at me any more, stop", out);
             return;
         }
+        // In the air (jump turn): nothing else until it lands.
+        if (bot->IsJumpCasting())
+        {
+            Proposal hold;
+            hold.tier = ProposalTier::Urgent;
+            hold.source = SOURCE;
+            hold.reason = "jump turn";
+            hold.action.type = BotActionType::Hold;
+            out.push_back(hold);
+            return;
+        }
+        // Frost Nova spent (on cooldown, or some rooted next to it): the ones still coming are
+        // slowed as they get near (doc 3.5); on the way to the tank with a jump turn.
+        bool const novaSpent = !line.novaReady || RootedOnMe(world, line.self->guid);
+        if (novaSpent && ProposeCone(bot, world, line, false, "chased, no Frost Nova: Cone of Cold", out))
+            return;
+
         // Its own walk to the tank is under way: keep walking.
         char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
         if (owner && !strcmp(owner, SOURCE) && me->IsMoving())
@@ -350,12 +368,6 @@ namespace Commander
             return;
         }
         bool const rooted = me->HasUnitState(UNIT_STATE_ROOT);
-
-        // Frost Nova spent (on cooldown, or some rooted next to it): the ones still coming are
-        // slowed as they get near (doc 3.5).
-        bool const novaSpent = !line.novaReady || RootedOnMe(world, line.self->guid);
-        if (novaSpent && ProposeCone(bot, world, line, false, "chased, no Frost Nova: Cone of Cold", out))
-            return;
 
         // Right after a Frost Nova that left some free: to the tank now (doc 3.4 step 3).
         if (!line.novaReady && RootedOnMe(world, line.self->guid))

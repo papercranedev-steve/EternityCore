@@ -519,7 +519,11 @@ namespace Commander
                 if (action.atPoint)
                     return bot->DoCastAt(action.x, action.y, action.z, action.spell) == SPELL_CAST_OK;
                 if (action.facing >= 0.0f)
+                {
+                    if (action.jumpTurn && bot->OrderJumpCast(action.spell, action.facing))
+                        return true;
                     return bot->DoCastFacing(action.facing, action.spell) == SPELL_CAST_OK;
+                }
                 Unit* pCastTarget = pTarget ? pTarget : me;
                 // A warrior swaps stance first when needed (Thunder Clap or Mocking Blow from
                 // Defensive Stance): PartyBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.

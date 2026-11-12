@@ -23,6 +23,7 @@
 #include "Commander/Behaviors/Combat/CastWatch.h"
 #include "Commander/Behaviors/Combat/CastBreak.h"
 #include "Commander/Behaviors/Movement/Backpedal.h"
+#include "Commander/Behaviors/Movement/JumpCast.h"
 #include "Commander/Behaviors/Movement/FollowSpot.h"
 #include <memory>
 
@@ -203,6 +204,10 @@ public:
     // for `durationMs`. False when it cannot walk there.
     bool OrderBackpedal(Commander::Position3 const& to, ObjectGuid face, uint32 durationMs);
     bool IsBackpedaling() const { return m_backpedal.active; }
+    // Jump, turn in the air, cast the instant `pSpellEntry` facing `orientation`, land and run on
+    // (Commander/Behaviors/Movement/JumpCast.h). False when it is not running a point walk.
+    bool OrderJumpCast(SpellEntry const* pSpellEntry, float orientation);
+    bool IsJumpCasting() const { return m_jumpCast.active; }
     bool IsTauntControlled() const;
     // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
     // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
@@ -369,6 +374,8 @@ public:
     Commander::CastBreakState m_castBreak;
     // Commander walk backwards (Commander/Behaviors/Movement/Backpedal.h), every frame in UpdateAI.
     Commander::BackpedalState m_backpedal;
+    // Commander jump turn cast (Commander/Behaviors/Movement/JumpCast.h), every frame in UpdateAI.
+    Commander::JumpCastState m_jumpCast;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

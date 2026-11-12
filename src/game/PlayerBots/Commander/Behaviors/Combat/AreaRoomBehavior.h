@@ -39,8 +39,10 @@
  *   first). Before the timing whenever the Frost Nova is spent (on cooldown, or some rooted on
  *   the bot): the ones still coming as they get near. Not before that: it would spread out the
  *   ones a single Frost Nova could hold. Benefit: their hits and harassment over the slow's
- *   share of its duration (at most ROOT_HOLD_SEC). The bot stops and turns (BotAction::facing);
- *   the jump turn comes later (doc 3.5).
+ *   share of its duration (at most ROOT_HOLD_SEC). Running to the tank: a jump turn
+ *   (BotAction::jumpTurn, Movement/JumpCast.h), it keeps running; standing: it turns and casts
+ *   (BotAction::facing). Also on the way to the tank (before the "keep walking" hold); while in
+ *   the air nothing else is proposed.
  */
 
 #ifndef MANGOS_COMMANDER_AREA_ROOM_BEHAVIOR_H
