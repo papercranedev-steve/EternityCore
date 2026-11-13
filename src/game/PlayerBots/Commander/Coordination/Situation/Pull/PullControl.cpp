@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Situation/Pull/PullControl.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
@@ -167,14 +168,24 @@ namespace PullControl
         bool const elsewhere = pull.returnToSpot || pull.OpensFromAfar();
         uint32 const nearTarget = elsewhere ? 0 : uint32(pull.expected.size()) - 1;
 
-        // What the doctrine will leave to area spells once the fight starts (TacticalDoctrine::
-        // PullNoMez): no control that breaks on damage on those, here either.
-        std::vector<TacticalDoctrine::PullCreature> pulled;
+        // What the doctrine will leave to area spells once the fight starts (Battlefield::
+        // PullNoMez, the groups of this plan): no control that breaks on damage on those, here either.
+        std::vector<Battlefield::Unit> pulled;
         for (ObjectGuid guid : pull.expected)
             if (Creature* c = map->GetCreature(guid))
                 if (c->IsAlive())
-                    pulled.push_back({ guid, c->GetEntry(), c->IsElite(), c->GetMaxHealth() });
-        std::vector<std::pair<ObjectGuid, char const*>> const noMez = TacticalDoctrine::PullNoMez(world, pulled);
+                {
+                    Battlefield::Unit u;
+                    u.guid = guid;
+                    u.entry = c->GetEntry();
+                    u.pos.x = c->GetPositionX();
+                    u.pos.y = c->GetPositionY();
+                    u.pos.z = c->GetPositionZ();
+                    u.elite = c->IsElite();
+                    u.maxHealth = c->GetMaxHealth();
+                    pulled.push_back(u);
+                }
+        std::vector<std::pair<ObjectGuid, char const*>> const noMez = Battlefield::PullNoMez(world, pulled, pull.target);
         auto const noMezWhy = [&noMez](ObjectGuid guid) -> char const*
         {
             for (auto const& n : noMez)

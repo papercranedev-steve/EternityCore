@@ -38,6 +38,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Commands/PlayerChat.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
+#include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
@@ -1041,6 +1042,19 @@ namespace DevConsole
                 lua_rawseti(L, -2, ++i);
             }
             lua_setfield(L, -2, "enemies");
+            // The battlefield split (Battlefield.h): {text = "pile (boss + adds), 4: area pile", members = {guids}}.
+            lua_createtable(L, int(d.groups.size()), 0);
+            i = 0;
+            for (Commander::DoctrineGroup const& g : d.groups)
+            {
+                lua_createtable(L, 0, 2);
+                std::string const text = Commander::Battlefield::Describe(d, g);
+                SetFieldS(L, "text", text.c_str());
+                PushGuidList(L, g.members);
+                lua_setfield(L, -2, "members");
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "groups");
             lua_setfield(L, -2, "doctrine");
         }
         return 1;

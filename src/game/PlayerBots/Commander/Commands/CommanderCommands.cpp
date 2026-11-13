@@ -49,6 +49,7 @@
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
+#include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Commands/ProfileCommands.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Creature.h"
@@ -348,6 +349,14 @@ namespace
             if (d.outliers != Commander::OutlierTactic::None)
                 handler->PSendSysMessage("    away from the tank: %s (%s)", Commander::TacticalDoctrine::Name(d.outliers),
                     d.outliersWhy.c_str());
+            // The battlefield split (Battlefield.h): each group, its tactic and members.
+            for (Commander::DoctrineGroup const& g : d.groups)
+            {
+                std::string names;
+                for (ObjectGuid const& m : g.members)
+                    names += (names.empty() ? "" : ", ") + NameOf(map, m);
+                handler->PSendSysMessage("    group %s: %s", Commander::Battlefield::Describe(d, g).c_str(), names.c_str());
+            }
             for (Commander::DoctrineEnemy const& x : d.enemies)
                 handler->PSendSysMessage("    |cffffcc00%s|r: %s", NameOf(map, x.guid).c_str(),
                     Commander::TacticalDoctrine::Describe(x).c_str());

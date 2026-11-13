@@ -728,7 +728,8 @@ namespace Commander
     enum class FightPhase : uint8
     {
         None,       // no fight of ours
-        Gathering,  // the pull still runs (the pack still coming): groups change every refresh
+        Planned,    // a pull is planned, nobody fights yet: only the groups (DoctrinePlan::groups)
+        Gathering,  // the pull still runs (the pack still coming): the pile tactic is chosen every refresh
         Clash,
         Cleanup,    // at most CLEANUP_FREE enemies not under a control
     };
@@ -796,9 +797,38 @@ namespace Commander
         KillFirst,  // no luring: under the Area tactic the focus is among them first (melee go when the walk is safe)
     };
 
+    // The kinds of groups the battlefield is split into (Coordination/Doctrine/Battlefield.h,
+    // doc .kiro/docs/2026-11-09-doctrine/2026-11-13-battlefield-groups.md 3).
+    enum class GroupKind : uint8
+    {
+        Pile,               // melee enemies together where the tank fights (with a heavy one: boss + adds)
+        MeleeStraggler,     // melee enemies away from the pile: they walk to it
+        RangedStraggler,    // enemies standing back (casters, archers)
+        Patrol,             // one walking patrol (planned: predicted to come; or it joined the fight)
+        Reinforcement,      // death spawns, summons, the called, trap swarms (they come in the fight)
+    };
+
+    // One group, kept by guid from the pull's plan to the end of the fight (Battlefield.h).
+    struct DoctrineGroup
+    {
+        GroupKind kind = GroupKind::Pile;
+        std::vector<ObjectGuid> members;
+        // Members of a group other than the pile that came within CLUSTER_YD of the main tank:
+        // they are the pile's from then on (one way, Battlefield::StampOf).
+        std::vector<ObjectGuid> joined;
+        ObjectGuid heavy;               // Pile: its heavy enemy (boss + adds), empty = none
+        float arriveSec = -1.0f;        // Patrol planned before the pull: comes this long after the plan, -1 = here
+        bool planned = false;           // made from the pull's plan (else from an enemy that showed up)
+        uint32 sinceMs = 0;
+
+        bool Has(ObjectGuid g) const { return std::find(members.begin(), members.end(), g) != members.end(); }
+        bool Joined(ObjectGuid g) const { return std::find(joined.begin(), joined.end(), g) != joined.end(); }
+    };
+
     struct DoctrineEnemy
     {
         ObjectGuid guid;
+        int8 group = -1;            // index into DoctrinePlan::groups, -1 = none (no main tank)
         uint32 stamps = 0;
         uint8 engage = 0;           // Engage (Perception/Profiles/Tags.h)
         uint8 tier = 0;             // Tier
@@ -820,6 +850,7 @@ namespace Commander
         std::string outliersWhy;
         bool lureCorner = false;            // Lure for a corner fight (not casters standing back)
         std::vector<CharmedAlly> charmed;
+        std::vector<DoctrineGroup> groups;  // the battlefield split (Battlefield.h), kept by guid
         std::vector<DoctrineEnemy> enemies;
         // The area spell the Area tactic counts on (Coordination/Doctrine/AreaIntent.h): each
         // area dealer bot's threat per second with it, on the pile, and the spell's length. The

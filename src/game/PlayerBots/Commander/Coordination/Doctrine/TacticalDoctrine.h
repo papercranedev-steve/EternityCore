@@ -9,13 +9,18 @@
  * candidates also made it move its shackle (strat-20261108-140533). Now the doctrine decides
  * once and keeps it.
  *
- * Groups, around the main tank (none without one):
- *   InCluster  within CLUSTER_YD of the tank (from the enemy's edge), or a melee enemy
- *              (Tags::Engage Melee) on its way there; except
- *   Special    a heavy enemy (Tags::Tier Heavy) not within CLUSTER_YD yet (a patrol walking in:
- *              held where it stands, it never gets into the pile);
+ * Groups (Battlefield.h, since 2026-11-13): made from the pull's plan before the fight (phase
+ *   Planned, no enemy yet: only DoctrinePlan::groups) and kept by guid into it; an enemy with
+ *   no group gets one when it shows up (none without a main tank). Their stamps
+ *   (Battlefield::StampOf):
+ *   InCluster  the pile, a member of another group that came to the tank (one way), or a melee
+ *              enemy on its way there; except
+ *   Special    a heavy enemy of another group not at the tank yet (a patrol walking in);
  *   Outlier    the rest (casters standing back).
+ *   Before 2026-11-13 the groups were made by distance every refresh (a heavy patrol one step
+ *   inside CLUSTER_YD turned from Special to the pile's).
  * Phase:
+ *   Planned    a pull is planned and nobody fights yet;
  *   Gathering  the pull runs (Approach, Return, Settle: the pack still coming, PullPlan::packComing);
  *   Cleanup    at most CLEANUP_FREE enemies not under a control;
  *   Clash      otherwise.
@@ -77,20 +82,6 @@ namespace Commander
         AssignStage GetStage() const override { return AssignStage::Situation; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
-
-        // A creature expected in a pull (PullControl, before the fight: no live facts yet).
-        struct PullCreature
-        {
-            ObjectGuid guid;
-            uint32 entry = 0;
-            bool elite = false;
-            uint32 maxHealth = 0;
-        };
-        // Before a pull: the expected creatures the doctrine will stamp NoMez once the fight
-        // starts, by the same rules: the pile they make (melee ones that are not heavy) when it
-        // is Area (area dealers and at least AREA_MIN of them), and fodder. `why` per guid.
-        static std::vector<std::pair<ObjectGuid, char const*>> PullNoMez(WorldModel const& world,
-            std::vector<PullCreature> const& expected);
 
         static char const* Name(FightPhase phase);
         static char const* Name(PileTactic tactic);

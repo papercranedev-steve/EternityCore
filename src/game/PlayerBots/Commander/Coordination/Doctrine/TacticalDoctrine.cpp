@@ -1,9 +1,12 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
+#include "Commander/Coordination/Doctrine/Battlefield.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/Doctrine/RoleStamps.h"
 #include "Commander/Coordination/Doctrine/AllyCharm.h"
 #include "Commander/Coordination/Doctrine/AreaIntent.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
@@ -49,6 +52,117 @@ namespace Commander
         {
             return std::find(known.begin(), known.end(), guid) != known.end();
         }
+
+        // The pull's creatures as the pack scan saw them (they are idle until the fight).
+        std::vector<Battlefield::Unit> PullUnits(WorldModel const& world, std::vector<ObjectGuid> const& expected)
+        {
+            std::vector<Battlefield::Unit> out;
+            auto const add = [&out](PackCreature const& c)
+            {
+                Battlefield::Unit u;
+                u.guid = c.guid;
+                u.entry = c.entry;
+                u.pos = c.pos;
+                u.elite = c.elite;
+                u.maxHealth = c.maxHealth;
+                out.push_back(u);
+            };
+            for (ObjectGuid g : expected)
+            {
+                bool found = false;
+                for (PackFacts const& p : world.packs)
+                    for (PackCreature const& c : p.members)
+                        if (!found && c.guid == g)
+                        {
+                            add(c);
+                            found = true;
+                        }
+                for (PatrolFacts const& p : world.patrols)
+                    if (!found && p.guid == g)
+                    {
+                        add(p);
+                        found = true;
+                    }
+            }
+            return out;
+        }
+
+        std::string NameOf(WorldModel const& world, ObjectGuid guid)
+        {
+            uint32 entry = 0;
+            if (EnemyFacts const* e = world.FindEnemy(guid))
+                entry = e->entry;
+            for (PackFacts const& p : world.packs)
+                for (PackCreature const& c : p.members)
+                    if (!entry && c.guid == guid)
+                        entry = c.entry;
+            for (PatrolFacts const& p : world.patrols)
+                if (!entry && p.guid == guid)
+                    entry = p.entry;
+            std::shared_ptr<CreatureProfile const> profile = entry ? sProfileStore.GetCreature(entry) : nullptr;
+            return profile ? profile->name : Trace::Guid(guid);
+        }
+
+        // "pile, 3: area pile (Ghoul x3)" for the party chat.
+        std::string Says(WorldModel const& world, DoctrinePlan const& d, DoctrineGroup const& g)
+        {
+            std::vector<std::pair<std::string, uint32>> names;
+            for (ObjectGuid m : g.members)
+            {
+                std::string const n = NameOf(world, m);
+                auto it = std::find_if(names.begin(), names.end(), [&n](auto const& p) { return p.first == n; });
+                if (it == names.end())
+                    names.push_back({ n, 1 });
+                else
+                    ++it->second;
+            }
+            std::string list;
+            for (auto const& n : names)
+                list += (list.empty() ? "" : ", ") + n.first + (n.second > 1 ? " x" + std::to_string(n.second) : "");
+            return Battlefield::Describe(d, g) + " (" + list + ")";
+        }
+
+        // Same kinds and members (not the arrival times, they change every refresh).
+        bool SameSplit(std::vector<DoctrineGroup> const& a, std::vector<DoctrineGroup> const& b)
+        {
+            if (a.size() != b.size())
+                return false;
+            for (size_t i = 0; i < a.size(); ++i)
+                if (a[i].kind != b[i].kind || a[i].members != b[i].members)
+                    return false;
+            return true;
+        }
+
+        // A pull is planned and nobody fights yet: the groups of the planned fight (Battlefield.h),
+        // made again every refresh until the fight starts (the pull is predicted again on its way).
+        // Said in the party chat when the split changes.
+        void PlanGroups(WorldModel const& world, TeamPlan& plan, DoctrinePlan const& prev, DoctrinePlan& d)
+        {
+            Trace::Scope scope("doctrine");
+            PullPlan const& pull = plan.pull;
+            d.phase = FightPhase::Planned;
+            d.why = "groups of the planned pull";
+            d.groups = Battlefield::FromPull(world, PullUnits(world, pull.expected), pull.target, world.refreshedAtMs);
+            Position3 spot;
+            if (pull.PlannedFightSpot(spot))
+                Battlefield::AddPatrols(world, spot, RouteGuard::StaySec(world, plan), pull.expected,
+                    world.refreshedAtMs, d.groups);
+            if (!d.groups.empty() && !SameSplit(prev.groups, d.groups))
+            {
+                std::string list;
+                for (DoctrineGroup const& g : d.groups)
+                    list += (list.empty() ? "" : "; ") + Says(world, d, g);
+                plan.notes.push_back("Plan: " + list + ".");
+            }
+            if (scope.On())
+            {
+                scope.Label("planned: %u group(s)", uint32(d.groups.size()));
+                std::string list;
+                for (DoctrineGroup const& g : d.groups)
+                    list += Trace::Format("%s\"%s\"", list.empty() ? "" : ",", Battlefield::Describe(d, g).c_str());
+                scope.Data(Trace::Format("{\"groups\":[%s]}", list.c_str()));
+            }
+        }
     }
 
     void TacticalDoctrine::Clear(TeamPlan& plan) const
@@ -62,8 +176,15 @@ namespace Commander
         DoctrinePlan& d = plan.doctrine;
         d = DoctrinePlan();
         if (!world.HasPartyEnemy())
+        {
+            if (plan.pull.phase != PullPhase::None)
+                PlanGroups(world, plan, prev, d);
             return;
+        }
         Trace::Scope scope("doctrine");
+        // The groups of the pull's plan or of the refreshes before (Battlefield.h).
+        d.groups = prev.groups;
+        bool const byPlaceOnly = d.groups.empty();
 
         std::vector<EnemyFacts const*> fight;
         uint32 free = 0;
@@ -95,13 +216,18 @@ namespace Commander
             x.tier = uint8(tier);
             if (tank)
             {
-                bool const atTank = PackResolver::Distance(tank->pos, e->pos) - e->boundingRadius <= CLUSTER_YD;
-                if (tier == Tier::Heavy && !atTank)
-                    x.stamps |= STAMP_SPECIAL;
-                else if (atTank || engage == Engage::Melee)
-                    x.stamps |= STAMP_IN_CLUSTER;
-                else
-                    x.stamps |= STAMP_OUTLIER;
+                int g = Battlefield::Find(d.groups, e->guid);
+                if (g < 0)
+                {
+                    size_t const before = d.groups.size();
+                    g = Battlefield::Place(world, *e, *tank, byPlaceOnly, world.refreshedAtMs, d.groups);
+                    // A new group in the fight (a patrol walked in, the first reinforcement).
+                    if (!byPlaceOnly && d.groups.size() > before)
+                        plan.notes.push_back(NameOf(world, e->guid) + " came in: " + Battlefield::Name(d.groups[g].kind) + ".");
+                }
+                x.group = int8(g);
+                bool const joined = Battlefield::UpdateJoined(*e, *tank, d.groups[g]);
+                x.stamps |= Battlefield::StampOf(d.groups[g].kind, joined, engage, tier);
                 if ((x.stamps & STAMP_IN_CLUSTER) && IsFree(*e))
                     ++freePile;
             }
@@ -242,36 +368,14 @@ namespace Commander
             scope.Label("%s, %s, tank %s, outliers %s", Name(d.phase), Name(d.tactic), Name(d.tankJob), Name(d.outliers));
             std::string list;
             for (DoctrineEnemy const& x : d.enemies)
-                list += Trace::Format("%s{\"guid\":\"%s\",\"stamps\":%u,\"engage\":%u,\"tier\":%u}",
-                    list.empty() ? "" : ",", Trace::Guid(x.guid).c_str(), x.stamps, x.engage, x.tier);
-            scope.Data(Trace::Format("{\"why\":\"%s\",\"freePile\":%u,\"areaDealers\":%u,\"outliers\":\"%s\",\"outliersWhy\":\"%s\",\"enemies\":[%s]}",
-                d.why.c_str(), freePile, ledger.areaDealers, Name(d.outliers), d.outliersWhy.c_str(), list.c_str()));
+                list += Trace::Format("%s{\"guid\":\"%s\",\"group\":%d,\"stamps\":%u,\"engage\":%u,\"tier\":%u}",
+                    list.empty() ? "" : ",", Trace::Guid(x.guid).c_str(), int(x.group), x.stamps, x.engage, x.tier);
+            std::string groups;
+            for (DoctrineGroup const& g : d.groups)
+                groups += Trace::Format("%s\"%s\"", groups.empty() ? "" : ",", Battlefield::Describe(d, g).c_str());
+            scope.Data(Trace::Format("{\"why\":\"%s\",\"freePile\":%u,\"areaDealers\":%u,\"outliers\":\"%s\",\"outliersWhy\":\"%s\",\"groups\":[%s],\"enemies\":[%s]}",
+                d.why.c_str(), freePile, ledger.areaDealers, Name(d.outliers), d.outliersWhy.c_str(), groups.c_str(), list.c_str()));
         }
-    }
-
-    std::vector<std::pair<ObjectGuid, char const*>> TacticalDoctrine::PullNoMez(WorldModel const& world,
-        std::vector<PullCreature> const& expected)
-    {
-        std::vector<uint32> eliteHealth;
-        for (PullCreature const& c : expected)
-            if (c.elite && c.maxHealth)
-                eliteHealth.push_back(c.maxHealth);
-        float const median = Tags::MedianHealth(std::move(eliteHealth));
-
-        std::vector<std::pair<ObjectGuid, char const*>> out;
-        std::vector<ObjectGuid> pile;
-        for (PullCreature const& c : expected)
-        {
-            Tier const tier = Tags::TierOf(world, c.elite, c.maxHealth, median);
-            if (tier == Tier::Fodder)
-                out.push_back({ c.guid, "fodder" });
-            else if (tier != Tier::Heavy && Tags::EngageOfEntry(c.entry) == Engage::Melee)
-                pile.push_back(c.guid);
-        }
-        if (Tags::LedgerOf(world).areaDealers > 0 && pile.size() >= AREA_MIN)
-            for (ObjectGuid g : pile)
-                out.push_back({ g, "area pile" });
-        return out;
     }
 
     char const* TacticalDoctrine::Name(FightPhase phase)
@@ -279,6 +383,7 @@ namespace Commander
         switch (phase)
         {
             case FightPhase::None:      return "no fight";
+            case FightPhase::Planned:   return "planned";
             case FightPhase::Gathering: return "gathering";
             case FightPhase::Clash:     return "clash";
             case FightPhase::Cleanup:   return "cleanup";
