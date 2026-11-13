@@ -2,6 +2,7 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolZone.h"
+#include "Timer.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -36,6 +37,34 @@ namespace Battlefield
         bool AtTank(EnemyFacts const& e, PartyMemberFacts const& tank)
         {
             return PackResolver::Distance(tank.pos, e.pos) - e.boundingRadius <= CLUSTER_YD;
+        }
+
+        // The add batch `e` belongs to (header: adds), its group of e's kind in it.
+        int AddBatchGroup(WorldModel const& world, EnemyFacts const& e, uint32 nowMs, std::vector<DoctrineGroup>& groups)
+        {
+            uint32 batch = 0;
+            uint32 last = 0;
+            for (DoctrineGroup const& g : groups)
+            {
+                last = std::max(last, g.addBatch);
+                if (batch || !g.addBatch || WorldTimer::getMSTimeDiff(g.sinceMs, nowMs) > ADD_BATCH_MS)
+                    continue;
+                for (ObjectGuid m : g.members)
+                    if (EnemyFacts const* o = world.FindEnemy(m))
+                        if (PackResolver::Distance(o->pos, e.pos) <= ADD_LINK_YD)
+                        {
+                            batch = g.addBatch;
+                            break;
+                        }
+            }
+            if (!batch)
+                batch = last + 1;
+            GroupKind const kind = Tags::EngageOf(e) == Engage::Melee ? GroupKind::MeleeStraggler : GroupKind::RangedStraggler;
+            for (size_t i = 0; i < groups.size(); ++i)
+                if (groups[i].addBatch == batch && groups[i].kind == kind)
+                    return int(i);
+            Make(groups, kind, false, nowMs).addBatch = batch;
+            return int(groups.size()) - 1;
         }
     }
 
@@ -150,6 +179,8 @@ namespace Battlefield
                     g = Shared(groups, GroupKind::Reinforcement, false, nowMs);
                     break;
                 default:
+                    if (!AtTank(e, tank))
+                        g = AddBatchGroup(world, e, nowMs, groups);
                     break;
             }
         }
@@ -237,9 +268,14 @@ namespace Battlefield
         if (g.kind == GroupKind::Pile && !g.heavy.IsEmpty())
             s += g.members.size() > 1 ? " (boss + adds)" : " (one heavy)";
         char buf[64];
+        if (g.addBatch)
+        {
+            snprintf(buf, sizeof(buf), " (add %u)", g.addBatch);
+            s += buf;
+        }
         snprintf(buf, sizeof(buf), ", %u", uint32(g.members.size()));
         s += buf;
-        if (!g.planned)
+        if (!g.planned && !g.addBatch)
             s += ", came in the fight";
         std::string tactic;
         switch (g.kind)

@@ -819,6 +819,10 @@ namespace Commander
         ObjectGuid heavy;               // Pile: its heavy enemy (boss + adds), empty = none
         float arriveSec = -1.0f;        // Patrol planned before the pull: comes this long after the plan, -1 = here
         bool planned = false;           // made from the pull's plan (else from an enemy that showed up)
+        // An unplanned add batch (Battlefield.h "adds"): creatures standing idle that came in
+        // together (bad standing, a stray hit, a runner's call); its melee and its standing back
+        // ones are two groups with the same number. 0 = not an add batch.
+        uint32 addBatch = 0;
         uint32 sinceMs = 0;
 
         bool Has(ObjectGuid g) const { return std::find(members.begin(), members.end(), g) != members.end(); }

@@ -17,10 +17,17 @@
  * AddPatrols: every idle patrol (PatrolZone::Counts) not expected that comes to the planned
  *   fight spot within the caller's horizon (PatrolZone::ArriveSec): a Patrol group each.
  * In the fight (Place), an enemy with no group:
- *   no group at all yet (a fight that began without a pull plan): by place only;
+ *   no group at all yet (a fight that began without a pull plan): by place only, into the
+ *   shared groups;
  *   else by source first (Tags::SourceOf): a patrol walking in: a new Patrol group; a death
- *   spawn, a summon, the called, a trap swarm: the Reinforcement group; else by place;
- *   by place: within CLUSTER_YD of the main tank (from its edge): Pile; melee: MeleeStraggler;
+ *   spawn, a summon, the called, a trap swarm: the Reinforcement group; else an add (user
+ *   2026-11-13: an idle creature brought in by bad standing, a stray hit, a runner's call):
+ *     within CLUSTER_YD of the main tank (from its edge): the Pile;
+ *     else its add batch: the batch of an unplanned group made within ADD_BATCH_MS with a
+ *     member within ADD_LINK_YD of it, else a new batch; in the batch its MeleeStraggler or
+ *     RangedStraggler group (by Engage), made when the batch has none. Kept apart from the
+ *     planned groups: the pull's fight estimate did not count them.
+ *   by place (no source): within CLUSTER_YD of the main tank: Pile; melee: MeleeStraggler;
  *   standing back: RangedStraggler.
  * Joining: a member of another group that comes within CLUSTER_YD of the main tank is the
  *   pile's from then on (DoctrineGroup::joined, one way: a pile enemy that steps back stays).
@@ -37,6 +44,7 @@
 
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include <string>
 #include <utility>
 #include <vector>
@@ -45,6 +53,9 @@ namespace Commander
 {
 namespace Battlefield
 {
+    uint32 const ADD_BATCH_MS = 3000;
+    float const ADD_LINK_YD = PackResolver::LINK_DISTANCE;     // one pack
+
     // A creature of the pull's plan (no live facts: it is not in the fight yet).
     struct Unit
     {

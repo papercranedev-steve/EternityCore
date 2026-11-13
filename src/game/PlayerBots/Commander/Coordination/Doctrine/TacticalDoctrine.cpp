@@ -206,6 +206,7 @@ namespace Commander
 
         // Groups.
         uint32 freePile = 0;
+        std::vector<std::pair<ObjectGuid, int>> cameIn;     // not in the plan, placed this refresh
         for (EnemyFacts const* e : fight)
         {
             DoctrineEnemy x;
@@ -219,11 +220,9 @@ namespace Commander
                 int g = Battlefield::Find(d.groups, e->guid);
                 if (g < 0)
                 {
-                    size_t const before = d.groups.size();
                     g = Battlefield::Place(world, *e, *tank, byPlaceOnly, world.refreshedAtMs, d.groups);
-                    // A new group in the fight (a patrol walked in, the first reinforcement).
-                    if (!byPlaceOnly && d.groups.size() > before)
-                        plan.notes.push_back(NameOf(world, e->guid) + " came in: " + Battlefield::Name(d.groups[g].kind) + ".");
+                    if (!byPlaceOnly)
+                        cameIn.push_back({ e->guid, g });
                 }
                 x.group = int8(g);
                 bool const joined = Battlefield::UpdateJoined(*e, *tank, d.groups[g]);
@@ -232,6 +231,33 @@ namespace Commander
                     ++freePile;
             }
             d.enemies.push_back(std::move(x));
+        }
+        // One party chat line for what came in unplanned this refresh:
+        // "Came in (not planned): Scarlet Monk x3 (melee stragglers (add 1)), Patchwork Horror (patrol)."
+        if (!cameIn.empty())
+        {
+            std::vector<std::pair<std::string, uint32>> seen;
+            for (auto const& c : cameIn)
+            {
+                DoctrineGroup const& g = d.groups[c.second];
+                std::string label = Battlefield::Name(g.kind);
+                if (g.addBatch)
+                    label += " (add " + std::to_string(g.addBatch) + ")";
+                std::string const key = NameOf(world, c.first) + "|" + label;
+                auto it = std::find_if(seen.begin(), seen.end(), [&key](auto const& p) { return p.first == key; });
+                if (it == seen.end())
+                    seen.push_back({ key, 1 });
+                else
+                    ++it->second;
+            }
+            std::string list;
+            for (auto const& s : seen)
+            {
+                size_t const bar = s.first.find('|');
+                list += (list.empty() ? "" : ", ") + s.first.substr(0, bar) +
+                        (s.second > 1 ? " x" + std::to_string(s.second) : "") + " (" + s.first.substr(bar + 1) + ")";
+            }
+            plan.notes.push_back("Came in (not planned): " + list + ".");
         }
 
         // Tactic. The retreat: as RetreatAssigner left it (it runs after this module).
