@@ -764,6 +764,9 @@ namespace Commander
         STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem, mana drain, resurrects): the focus is among these
         STAMP_HOLD_FIRE     = 1 << 14,  // a damage shield / spell reflection is on it: nobody hits it (EngageBlock, Constraints)
         STAMP_FREE_ALLY     = 1 << 15,  // it mind controls a party member: the focus, killed at once (TargetAssigner)
+        // Stragglers (Coordination/Doctrine/Stragglers.h, battlefield groups doc 3, user 2026-11-13):
+        STAMP_STRAGGLER     = 1 << 16,  // a melee straggler on its way: the tank's, damage dealers leave it (TargetAssigner, DamageTargets)
+        STAMP_DPS_ONLY      = 1 << 17,  // standing back, hurts its victim less than the tank's going costs: no rescue (RescueAssigner)
     };
 
     // A party member an enemy mind controls (Coordination/Doctrine/AllyCharm.h).

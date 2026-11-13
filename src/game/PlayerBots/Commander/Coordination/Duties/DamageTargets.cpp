@@ -47,6 +47,14 @@ namespace DamageTargets
         if (melee && current && PackResolver::Distance(bot.pos, current->pos) - current->boundingRadius > reach &&
             RouteRisk::Blocked(world, bot, *current))
             current = nullptr;
+        // On a melee straggler (Stragglers.h): any other enemy is taken as from nothing; it is
+        // kept only when there is none.
+        EnemyFacts const* straggler = nullptr;
+        if (current && ctx.plan.doctrine.Has(current->guid, STAMP_STRAGGLER))
+        {
+            straggler = current;
+            current = nullptr;
+        }
         float const range = current ? (melee ? MELEE_SWITCH_YD : RANGED_SWITCH_YD)
                                     : JOIN_FIGHT_YD;
 
@@ -78,6 +86,12 @@ namespace DamageTargets
             if (!ctx.Hittable(*e, bot))
             {
                 skip(*e, "not hittable");
+                continue;
+            }
+            // Doctrine (Stragglers.h): a melee straggler on its way is the tank's until it joins the pile.
+            if (ctx.plan.doctrine.Has(e->guid, STAMP_STRAGGLER))
+            {
+                skip(*e, "straggler: the tank's");
                 continue;
             }
             float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
@@ -163,6 +177,11 @@ namespace DamageTargets
         {
             pick.enemy = current;
             pick.reason = stalled ? "keep (near aggro, nothing safer)" : "keep";
+        }
+        else if (straggler)
+        {
+            pick.enemy = straggler;
+            pick.reason = "keep (a straggler, nothing else)";
         }
         if (Trace::On())
             Trace::Emit("target", Trace::Format("%s: %s %s", Trace::Guid(bot.guid).c_str(),

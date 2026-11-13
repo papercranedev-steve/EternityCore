@@ -141,7 +141,9 @@ namespace Commander
             {
                 // Standing in a patrol's path: the party stays off it (PatrolAssigner.h).
                 // (party-wide: no bot's intercept exception)
-                return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid);
+                // A melee straggler on its way is the tank's (Stragglers.h).
+                return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid) &&
+                       !plan.doctrine.Has(e.guid, STAMP_STRAGGLER);
             };
 
             // Doctrine (TacticalDoctrine.h, OutlierTactic::KillFirst): the pile is left to area

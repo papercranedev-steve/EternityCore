@@ -42,6 +42,10 @@ namespace Commander
             // threat, area threat: still).
             if (plan.doctrine.Has(e.guid, STAMP_SELF_DESTRUCT))
                 continue;
+            // Doctrine (Stragglers.h): standing back and not hurting its victim enough for the
+            // tank's going: the damage dealers' (user 2026-11-13).
+            if (plan.doctrine.Has(e.guid, STAMP_DPS_ONLY))
+                continue;
             bool const noTaunt = plan.doctrine.Has(e.guid, STAMP_NO_TAUNT);
             float const enemyDps = RescueValue::NextTauntDps(world, e.guid);
 

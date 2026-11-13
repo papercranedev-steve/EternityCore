@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
+#include "Commander/Coordination/Doctrine/Stragglers.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/Doctrine/RoleStamps.h"
@@ -388,6 +389,7 @@ namespace Commander
         }
 
         AllyCharm::Apply(world, d);
+        Stragglers::Apply(world, plan, d);
 
         if (scope.On())
         {
@@ -471,6 +473,8 @@ namespace Commander
         if (d.stamps & STAMP_KILL_ORDER)    s += ", kill first";
         if (d.stamps & STAMP_HOLD_FIRE)     s += ", hands off (reflects)";
         if (d.stamps & STAMP_FREE_ALLY)     s += ", kill it to free the ally";
+        if (d.stamps & STAMP_STRAGGLER)     s += ", straggler (the tank's)";
+        if (d.stamps & STAMP_DPS_ONLY)      s += ", left to the damage dealers";
         return s;
     }
 }
