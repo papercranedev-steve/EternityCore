@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Coordination/Doctrine/Stragglers.h"
+#include "Commander/Coordination/Doctrine/TacticCheck.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
 #include "Commander/Coordination/Doctrine/RoleStamps.h"
@@ -148,6 +149,24 @@ namespace Commander
             if (pull.PlannedFightSpot(spot))
                 Battlefield::AddPatrols(world, spot, RouteGuard::StaySec(world, plan), pull.expected,
                     world.refreshedAtMs, d.groups);
+            // The patrol the pull holds when it comes (PullPlan::holdPatrol, PullPatrolCheck): its
+            // group is held outside the pile, the hold is the controller's task in the fight.
+            int const held = pull.holdPatrol.IsEmpty() ? -1 : Battlefield::Find(d.groups, pull.holdPatrol);
+            if (held >= 0)
+            {
+                d.groups[held].holdOut = true;
+                DoctrineHold h;
+                h.enemy = pull.holdPatrol;
+                h.bot = pull.holdBot;
+                h.spellId = pull.holdSpellId;
+                h.planned = true;
+                h.why = "the pull's plan: held when it comes";
+                if (PartyMemberFacts const* b = world.FindMember(h.bot))
+                    for (ControlAbility const& a : b->controls)
+                        if (a.spellId == h.spellId)
+                            h.kind = a.Kind();
+                d.holds.push_back(h);
+            }
             if (!d.groups.empty() && !SameSplit(prev.groups, d.groups))
             {
                 std::string list;
@@ -186,6 +205,13 @@ namespace Commander
         // The groups of the pull's plan or of the refreshes before (Battlefield.h).
         d.groups = prev.groups;
         bool const byPlaceOnly = d.groups.empty();
+        // A reselect event for the check (TacticCheck.h): the first refresh of the fight, or an
+        // enemy the last refresh did not know (prev.known is the last refresh's while gathering,
+        // the last choice's after it: an add is an event then too).
+        bool recheck = prev.tactic == PileTactic::None;
+        for (EnemyFacts const& e : world.enemies)
+            if (!recheck && !e.onAllyOnly && e.acting && e.health && !Known(prev.known, e.guid))
+                recheck = true;
 
         std::vector<EnemyFacts const*> fight;
         uint32 free = 0;
@@ -227,7 +253,7 @@ namespace Commander
                 }
                 x.group = int8(g);
                 bool const joined = Battlefield::UpdateJoined(*e, *tank, d.groups[g]);
-                x.stamps |= Battlefield::StampOf(d.groups[g].kind, joined, engage, tier);
+                x.stamps |= Battlefield::StampOf(d.groups[g].kind, joined, d.groups[g].holdOut, engage, tier);
                 if ((x.stamps & STAMP_IN_CLUSTER) && IsFree(*e))
                     ++freePile;
             }
@@ -390,6 +416,7 @@ namespace Commander
 
         AllyCharm::Apply(world, d);
         Stragglers::Apply(world, plan, d);
+        TacticCheck::Apply(world, plan, prev, d, recheck);
 
         if (scope.On())
         {
@@ -475,6 +502,7 @@ namespace Commander
         if (d.stamps & STAMP_FREE_ALLY)     s += ", kill it to free the ally";
         if (d.stamps & STAMP_STRAGGLER)     s += ", straggler (the tank's)";
         if (d.stamps & STAMP_DPS_ONLY)      s += ", left to the damage dealers";
+        if (d.stamps & STAMP_MUST_CONTROL)  s += ", must be held (not bearable otherwise)";
         return s;
     }
 }

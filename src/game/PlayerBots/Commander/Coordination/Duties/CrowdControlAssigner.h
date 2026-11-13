@@ -48,6 +48,7 @@ namespace Commander
         // DutyNeed::detail bits.
         static constexpr uint8 DETAIL_AREA = 1;
         static constexpr uint8 DETAIL_BREAKS = 2;
+        static constexpr uint8 DETAIL_TASK = 4;     // a doctrine hold (TacticCheck.h): ControlDuty::task
 
         // Same id as CrowdControlBehavior: `.partybot ai module cc off` switches both.
         char const* GetId() const override { return "cc"; }

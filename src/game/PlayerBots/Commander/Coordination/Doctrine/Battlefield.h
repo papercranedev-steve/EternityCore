@@ -78,7 +78,8 @@ namespace Battlefield
     bool UpdateJoined(EnemyFacts const& e, PartyMemberFacts const& tank, DoctrineGroup& g);
 
     int Find(std::vector<DoctrineGroup> const& groups, ObjectGuid guid);
-    uint32 StampOf(GroupKind kind, bool joined, Engage engage, Tier tier);
+    // holdOut (DoctrineGroup::holdOut): Special whatever it is, it never joins the pile.
+    uint32 StampOf(GroupKind kind, bool joined, bool holdOut, Engage engage, Tier tier);
 
     // Before the pull: the expected creatures the doctrine will stamp NoMez once the fight
     // starts, by the fight's rules: fodder, and the pile's (IN_CLUSTER) when there are area

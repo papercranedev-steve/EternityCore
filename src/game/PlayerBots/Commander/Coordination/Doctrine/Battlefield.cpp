@@ -199,7 +199,7 @@ namespace Battlefield
     {
         if (g.kind == GroupKind::Pile || g.Joined(e.guid))
             return true;
-        if (!AtTank(e, tank))
+        if (g.holdOut || !AtTank(e, tank))
             return false;
         g.joined.push_back(e.guid);
         return true;
@@ -213,8 +213,10 @@ namespace Battlefield
         return -1;
     }
 
-    uint32 StampOf(GroupKind kind, bool joined, Engage engage, Tier tier)
+    uint32 StampOf(GroupKind kind, bool joined, bool holdOut, Engage engage, Tier tier)
     {
+        if (holdOut)
+            return STAMP_SPECIAL;
         if (kind == GroupKind::Pile || joined)
             return STAMP_IN_CLUSTER;
         if (tier == Tier::Heavy)
@@ -240,7 +242,7 @@ namespace Battlefield
             int const g = Find(groups, u.guid);
             if (tier == Tier::Fodder)
                 out.push_back({ u.guid, "fodder" });
-            if (g >= 0 && StampOf(groups[g].kind, false, Tags::EngageOfEntry(u.entry), tier) == STAMP_IN_CLUSTER)
+            if (g >= 0 && StampOf(groups[g].kind, false, false, Tags::EngageOfEntry(u.entry), tier) == STAMP_IN_CLUSTER)
                 pile.push_back(u.guid);
         }
         if (Tags::LedgerOf(world).areaDealers > 0 && pile.size() >= TacticalDoctrine::AREA_MIN)
@@ -296,7 +298,7 @@ namespace Battlefield
                     snprintf(buf, sizeof(buf), "comes in about %.0f s, ", g.arriveSec);
                     tactic = buf;
                 }
-                tactic += "joins the fight";
+                tactic += g.holdOut ? "held outside the pile" : "joins the fight";
                 break;
         }
         if (!g.joined.empty())

@@ -23,6 +23,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/ControlValue.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
@@ -269,6 +270,41 @@ namespace Commander
             if (out.bearableNow)
                 return out;
 
+            // Pull now, one patrol held when it comes (header).
+            for (int pass = 0; pass < 2; ++pass)
+                for (size_t i = 0; i < out.patrols.size(); ++i)
+                {
+                    float const arrive = out.patrols[i].ArriveAfter(0.0f);
+                    if (arrive < 0.0f || arrive > out.fightSec)
+                        continue;
+                    std::vector<PatrolArrival> others;
+                    for (size_t j = 0; j < out.patrols.size(); ++j)
+                        if (j != i)
+                            others.push_back(out.patrols[j]);
+                    float const rest = SimulateStart(input, others, source, 0.0f, out.fightSec).fightSec;
+                    Creature const* patrol = out.patrols[i].patrol;
+                    for (ControlValue::Option const& o : ControlValue::OptionsFor(world, patrol->GetEntry(), patrol->GetCreatureTypeMask()))
+                    {
+                        PartyMemberFacts const* b = world.FindMember(o.bot);
+                        if (!o.ready || o.kind == ControlKind::Fear || o.areaDealer != (pass == 1) || !b || Tanks::IsTank(*b))
+                            continue;
+                        FightLoad::Input held = input;
+                        FightLoad::Foe f = out.patrols[i].foe;
+                        f.arriveSec = o.kind == ControlKind::Hold ? arrive + o.durationSec : std::max(arrive, rest);
+                        f.sameFight = true;
+                        held.foes.push_back(f);
+                        FightLoad::Result const r = SimulateStart(held, others, source, 0.0f, out.fightSec);
+                        if (!FightLoad::Bearable(r))
+                            continue;
+                        out.holdIndex = int(i);
+                        out.holdBot = o.bot;
+                        out.holdSpellId = o.spellId;
+                        out.atStart = r;
+                        out.bearableAtStart = true;
+                        return out;
+                    }
+                }
+
             // The earliest bearable start, else the best one.
             float bestSec = 0.0f;
             FightLoad::Result best = out.now;
@@ -316,6 +352,14 @@ namespace Commander
             std::string const head = "Patrol " + DescribePatrol(s) + ". ";
             if (s.bearableNow)
                 return head + "The party can take it, pulling without waiting: " + FightLoad::Describe(s.now) + ".";
+            if (PatrolArrival const* held = s.Held())
+            {
+                Player const* bot = held->patrol->GetMap()->GetPlayer(s.holdBot);
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(s.holdSpellId);
+                return head + "Pulled now: " + FightLoad::Describe(s.now) + ". Not waiting: " +
+                    (bot ? bot->GetName() : "?") + " holds " + held->patrol->GetName() + " with " +
+                    (spell ? spell->SpellName[0].c_str() : "?") + " when it comes: " + FightLoad::Describe(s.atStart) + ".";
+            }
             if (s.startSec > 0.0f)
                 return head + "Pulled now: " + FightLoad::Describe(s.now) + Format(". %s about %.0f s", waiting,
                     std::ceil(s.startSec)) + (s.bearableAtStart ? ": " : ", which makes it easier: ") +

@@ -218,6 +218,12 @@ namespace Commander
         // Patrol expected near the target or the fight spot soon: held in WaitReady.
         uint32 patrolWaitSinceMs = 0;       // 0 = not waiting for a patrol
         ObjectGuid patrolWaitingFor;        // the patrol last announced (a new one is announced again)
+        // The patrol check's third way (PullPatrolCheck ChooseStart, battlefield groups doc 5):
+        // pull now, `holdBot` holds the patrol `holdPatrol` with `holdSpellId` when it comes
+        // (the doctrine's hold, TacticCheck.h). Empty = none.
+        ObjectGuid holdPatrol;
+        ObjectGuid holdBot;
+        uint32 holdSpellId = 0;
 
         // Members of `expected` that join because the tank stands in their aggro range
         // (AssistPredictor::JoinReason::AggroRange), for the report.
@@ -570,6 +576,7 @@ namespace Commander
         float points = 0.0f;         // net worth (Perception/Values/ControlValue.h)
         bool area = false;
         bool breaksOnDamage = false;
+        bool task = false;           // a doctrine hold (STAMP_MUST_CONTROL): Urgent, not valued against its cost
     };
 
     // How one loose enemy is taken off its victim, and by whom (RescueAssigner).
@@ -767,6 +774,21 @@ namespace Commander
         // Stragglers (Coordination/Doctrine/Stragglers.h, battlefield groups doc 3, user 2026-11-13):
         STAMP_STRAGGLER     = 1 << 16,  // a melee straggler on its way: the tank's, damage dealers leave it (TargetAssigner, DamageTargets)
         STAMP_DPS_ONLY      = 1 << 17,  // standing back, hurts its victim less than the tank's going costs: no rescue (RescueAssigner)
+        // The fight is not bearable without holding it (Coordination/Doctrine/TacticCheck.h,
+        // DoctrinePlan::holds): a task for its controller, nobody else controls it (CrowdControlAssigner).
+        STAMP_MUST_CONTROL  = 1 << 18,
+    };
+
+    // An enemy the doctrine holds under a control so the fight is bearable (TacticCheck.h).
+    struct DoctrineHold
+    {
+        ObjectGuid enemy;
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        bool planned = false;       // the pull's choice for a patrol (PullPlan::holdPatrol), not the fight's check
+        ControlKind kind = ControlKind::Mez;
+        float points = 0.0f;        // what holding it saves (FightLoad::Loss as is - held)
+        std::string why;
     };
 
     // A party member an enemy mind controls (Coordination/Doctrine/AllyCharm.h).
@@ -822,6 +844,9 @@ namespace Commander
         ObjectGuid heavy;               // Pile: its heavy enemy (boss + adds), empty = none
         float arriveSec = -1.0f;        // Patrol planned before the pull: comes this long after the plan, -1 = here
         bool planned = false;           // made from the pull's plan (else from an enemy that showed up)
+        // Patrol: held outside the pile (PullPlan::holdPatrol, TacticCheck.h): it never joins the
+        // pile, its stamp stays Special (Battlefield::StampOf).
+        bool holdOut = false;
         // An unplanned add batch (Battlefield.h "adds"): creatures standing idle that came in
         // together (bad standing, a stray hit, a runner's call); its melee and its standing back
         // ones are two groups with the same number. 0 = not an add batch.
@@ -858,6 +883,25 @@ namespace Commander
         bool lureCorner = false;            // Lure for a corner fight (not casters standing back)
         std::vector<CharmedAlly> charmed;
         std::vector<DoctrineGroup> groups;  // the battlefield split (Battlefield.h), kept by guid
+        // Controls the fight needs (TacticCheck.h), kept until the enemy dies, the controller
+        // cannot act or the hold fails; added to at the reselect events.
+        std::vector<DoctrineHold> holds;
+        std::string holdsWhy;               // the last check: "bearable" / "held 1, bearable" / "not bearable, no control left"
+
+        DoctrineHold const* HoldOn(ObjectGuid enemy) const
+        {
+            for (DoctrineHold const& h : holds)
+                if (h.enemy == enemy)
+                    return &h;
+            return nullptr;
+        }
+        DoctrineHold const* HoldBy(ObjectGuid bot) const
+        {
+            for (DoctrineHold const& h : holds)
+                if (h.bot == bot)
+                    return &h;
+            return nullptr;
+        }
         std::vector<DoctrineEnemy> enemies;
         // The area spell the Area tactic counts on (Coordination/Doctrine/AreaIntent.h): each
         // area dealer bot's threat per second with it, on the pile, and the spell's length. The

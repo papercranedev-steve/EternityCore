@@ -78,13 +78,23 @@ namespace Commander
             int mainIndex = -1;
             float mainArriveNow = -1.0f;
             uint32 mainCallsNow = 0;        // creatures the main patrol calls for help when pulled now
+            // Not bearable now: pull now and hold one patrol when it comes (battlefield groups
+            // doc 5, user 2026-11-13: "can't win, control"), tried before waiting. -1 = none.
+            int holdIndex = -1;
+            ObjectGuid holdBot;
+            uint32 holdSpellId = 0;
 
             PatrolArrival const* Main() const { return mainIndex >= 0 ? &patrols[mainIndex] : nullptr; }
+            PatrolArrival const* Held() const { return holdIndex >= 0 ? &patrols[holdIndex] : nullptr; }
         };
 
-        // The earliest start within `waitBudgetSec` the fight is bearable with every patrol
-        // joining when its walk brings it next to the pull (or the fight spot `spot`); none:
-        // the clearly best start (PullPlanner::PATROL_WAIT_MIN_GAIN), else now.
+        // Bearable now (every patrol joining when its walk brings it next to the pull or the
+        // fight spot `spot`): now. Else now with one patrol held (holdIndex: a bot's single
+        // target control on it, ControlValue::OptionsFor, ready, no fear, not the tank's, bots
+        // without area spells first; held for a Hold kind's duration, a Mez until the rest of
+        // the fight is over) when that is bearable. Else the earliest start within
+        // `waitBudgetSec` that is bearable; none: the clearly best start
+        // (PullPlanner::PATROL_WAIT_MIN_GAIN), else now.
         PatrolStart ChooseStart(WorldModel const& world, Map* map, Creature* target, Unit* tank, Unit* leader,
                                 Position3 const& spot, std::vector<ObjectGuid> const& expected, float waitBudgetSec);
 

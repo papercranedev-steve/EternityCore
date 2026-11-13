@@ -349,6 +349,12 @@ namespace
             if (d.outliers != Commander::OutlierTactic::None)
                 handler->PSendSysMessage("    away from the tank: %s (%s)", Commander::TacticalDoctrine::Name(d.outliers),
                     d.outliersWhy.c_str());
+            // The holds the fight needs (TacticCheck.h).
+            if (!d.holdsWhy.empty())
+                handler->PSendSysMessage("    fight check: %s", d.holdsWhy.c_str());
+            for (Commander::DoctrineHold const& h : d.holds)
+                handler->PSendSysMessage("    hold |cffffcc00%s|r: %s (%.1f points)", NameOf(map, h.enemy).c_str(),
+                    h.why.c_str(), h.points);
             // The battlefield split (Battlefield.h): each group, its tactic and members.
             for (Commander::DoctrineGroup const& g : d.groups)
             {

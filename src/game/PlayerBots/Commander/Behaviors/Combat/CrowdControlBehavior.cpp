@@ -173,9 +173,10 @@ namespace Commander
 
         float const cost = Value::LostAction(world, *self, Value::GCD_SEC);
         Proposal p;
-        p.tier = ProposalTier::Assigned;
+        // A doctrine hold (TacticCheck.h): the fight is not bearable without it, done first.
+        p.tier = duty->task ? ProposalTier::Urgent : ProposalTier::Assigned;
         p.source = "cc";
-        p.reason = duty->area ? "assigned: area control" : "assigned: control";
+        p.reason = duty->task ? "doctrine hold: control" : duty->area ? "assigned: area control" : "assigned: control";
         p.action.type = BotActionType::Cast;
         p.action.spell = spell;
         if (target)

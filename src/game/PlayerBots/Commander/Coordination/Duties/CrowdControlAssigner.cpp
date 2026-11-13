@@ -192,12 +192,21 @@ namespace Commander
                         continue;
                     // The doctrine's stamps first: no valuation for what it rules out.
                     ObjectGuid const committed = CommittedTo(plan, a);
-                    if (DoctrineForbids(plan, a, e.guid) || (!committed.IsEmpty() && committed != e.guid))
+                    // A doctrine hold (TacticCheck.h): only its controller and spell on its enemy,
+                    // and that spell on nothing else.
+                    DoctrineHold const* hold = plan.doctrine.HoldOn(e.guid);
+                    DoctrineHold const* holds = plan.doctrine.HoldBy(b.guid);
+                    bool const isHold = hold && hold->bot == b.guid && hold->spellId == a.spellId;
+                    char const* holdWhy = hold && !isHold ? "doctrine: held by its hold's controller"
+                        : holds && holds->spellId == a.spellId && holds->enemy != e.guid ? "doctrine: this spell holds another enemy"
+                        : nullptr;
+                    if (!isHold && (holdWhy || DoctrineForbids(plan, a, e.guid) || (!committed.IsEmpty() && committed != e.guid)))
                     {
                         DutyCandidate c;
                         c.bot = b.guid;
                         c.spellId = a.spellId;
-                        c.why = !committed.IsEmpty() && committed != e.guid
+                        c.why = holdWhy ? std::string(holdWhy)
+                            : !committed.IsEmpty() && committed != e.guid
                             ? "doctrine: holds " + Trace::Guid(committed) + ", renews only that"
                             : NoMezWhy(plan, e.guid);
                         needFor(e.guid).rejected.push_back(std::move(c));     // the log only
@@ -211,6 +220,17 @@ namespace Commander
                     c.spellId = a.spellId;
                     c.rank = w.Net();
                     c.why = ControlValue::Describe(w);
+                    if (isHold)
+                    {
+                        // A task: the fight is not bearable without it; worth what the check said.
+                        c.rank = std::max(w.Net(), hold->points);
+                        c.why = "doctrine hold: " + hold->why + "; " + c.why;
+                        need.points = std::max(need.points, c.rank);
+                        need.detail = Detail(a) | DETAIL_TASK;
+                        need.reason = "doctrine hold";
+                        need.candidates.push_back(c);
+                        continue;
+                    }
                     if (w.Net() <= 0.0f)
                     {
                         need.rejected.push_back(std::move(c));     // the log only (TeamPlan::offers)
@@ -306,6 +326,7 @@ namespace Commander
             ControlAbility const* a = FindAbility(world, d.bot, d.spellId);
             d.area = a ? a->radius > 0.0f : (r.detail & DETAIL_AREA) != 0;
             d.breaksOnDamage = a ? a->breaksOnDamage : (r.detail & DETAIL_BREAKS) != 0;
+            d.task = (r.detail & DETAIL_TASK) != 0;
             if (d.area && a)
                 if (PartyMemberFacts const* m = world.FindMember(d.bot))
                     for (EnemyFacts const* e : ControlValue::Targets(world, *m, *a, nullptr))

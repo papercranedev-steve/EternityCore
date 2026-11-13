@@ -46,6 +46,15 @@ namespace Commander
 
     namespace
     {
+        // The patrol check's hold (PatrolStart::Held) into the plan, for the doctrine (TacticCheck.h).
+        void SetPatrolHold(PullPlan& pull, PatrolStart const& patrols)
+        {
+            PatrolArrival const* held = patrols.Held();
+            pull.holdPatrol = held ? held->patrol->GetObjectGuid() : ObjectGuid();
+            pull.holdBot = held ? patrols.holdBot : ObjectGuid();
+            pull.holdSpellId = held ? patrols.holdSpellId : 0;
+        }
+
         // Warrior ranged weapon spells (learned with the weapon skill) and Auto Shot.
         uint32 const SPELL_SHOOT_BOW = 2480;
         uint32 const SPELL_SHOOT_GUN = 7918;
@@ -509,6 +518,7 @@ namespace Commander
                 Format(", party damage %.0f/s (%s).", fightLoad.partyDps, Value::DealtDpsSource(world)));
         PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected,
                                                 PATROL_WAIT_MAX_MS / 1000.0f);
+        SetPatrolHold(pull, patrols);
         if (patrols.considered)
         {
             if (skipReady)
@@ -663,7 +673,15 @@ namespace Commander
         float const budgetSec = waitedMs >= PATROL_WAIT_MAX_MS ? 0.0f : (PATROL_WAIT_MAX_MS - waitedMs) / 1000.0f;
         PatrolStart const patrols = ChooseStart(world, map, target, tank, leader, pull.spot, expected, budgetSec);
         ObjectGuid const mainPatrol = patrols.Main() ? patrols.Main()->patrol->GetObjectGuid() : ObjectGuid();
-        if (patrols.considered && patrols.startSec > 0.0f)
+        SetPatrolHold(pull, patrols);
+        if (patrols.Held())
+        {
+            // Pulled now, the patrol held when it comes (the doctrine's hold, TacticCheck.h).
+            if (pull.patrolWaitingFor != mainPatrol || pull.patrolWaitSinceMs)
+                plan.notes.push_back(PatrolVerdict(patrols, "Waiting"));
+            pull.patrolWaitingFor = mainPatrol;
+        }
+        else if (patrols.considered && patrols.startSec > 0.0f)
         {
             if (!pull.patrolWaitSinceMs)
                 pull.patrolWaitSinceMs = nowMs;
@@ -675,7 +693,7 @@ namespace Commander
             holdBack();
             return RecheckResult::Hold;
         }
-        if (patrols.considered && !patrols.bearableNow)
+        else if (patrols.considered && !patrols.bearableNow)
         {
             // Waited the whole time and it is still too much: the clear skips the pack.
             if (clear.active && waitedMs >= PATROL_WAIT_MAX_MS)
