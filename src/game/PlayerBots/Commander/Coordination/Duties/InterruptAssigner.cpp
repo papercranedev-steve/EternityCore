@@ -8,6 +8,7 @@
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "SharedDefines.h"
 #include <algorithm>
+#include <string>
 
 namespace Commander
 {
@@ -30,10 +31,23 @@ namespace Commander
             uint8 category = 0;
         };
 
+        // The doctrine stamped `enemy` NoMez and `a` leaves a control that ends on the next hit
+        // (Gouge): the same rule as the crowd control duty (CrowdControlAssigner). Null: allowed.
+        // strat-20261113-235712: a Gouge on a caster in the area pile kept the Blizzard off the
+        // pile until the tank, sent to wake it, broke it 1.9 s later.
+        std::string DoctrineForbids(TeamPlan const& plan, InterruptAbility const& a, ObjectGuid enemy)
+        {
+            if (!a.breaksOnDamage || !plan.doctrine.Has(enemy, STAMP_NO_MEZ))
+                return std::string();
+            DoctrineEnemy const* d = plan.doctrine.Find(enemy);
+            return "doctrine: no mez (" + (d ? d->noMezWhy : std::string("?")) + ")";
+        }
+
         // Every usable ability of one bot against one enemy. Abilities that cost more than the
-        // cast is worth (value-scoring doc 5.1) or that the enemy is immune to are skipped.
-        void Evaluate(WorldModel const& world, PartyMemberFacts const& m, Caster const& target,
-                      InterruptDuty const* previous, std::vector<Candidate>& out)
+        // cast is worth (value-scoring doc 5.1) or that the enemy is immune to are skipped; the
+        // ones the doctrine rules out go to `rejected` (the log only).
+        void Evaluate(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& m, Caster const& target,
+                      InterruptDuty const* previous, std::vector<Candidate>& out, std::vector<DutyCandidate>& rejected)
         {
             EnemyFacts const& e = *target.enemy;
             // Asleep, stunned, feared or mind controlled: cannot interrupt anything.
@@ -50,6 +64,16 @@ namespace Commander
                 // Stun on a stun-immune boss: goes on cooldown, the cast completes.
                 if (!CastValues::CanStop(a, e))
                     continue;
+                std::string why = DoctrineForbids(plan, a, e.guid);
+                if (!why.empty())
+                {
+                    DutyCandidate r;
+                    r.bot = m.guid;
+                    r.spellId = a.spellId;
+                    r.why = std::move(why);
+                    rejected.push_back(std::move(r));
+                    continue;
+                }
                 float const benefit = target.cast.points + CastValues::LockoutBenefit(world, e, a, target.cast.spellId);
                 if (benefit <= CastValues::InterruptCost(world, m, a, e, target.cast))
                     continue;
@@ -143,7 +167,7 @@ namespace Commander
             InterruptDuty const* previous = plan.FindInterruptDuty(e.guid);
             std::vector<Candidate> candidates;
             for (PartyMemberFacts const& m : world.party)
-                Evaluate(world, m, c, previous, candidates);
+                Evaluate(world, plan, m, c, previous, candidates, need.rejected);
             for (Candidate const& cand : candidates)
             {
                 DutyCandidate d;

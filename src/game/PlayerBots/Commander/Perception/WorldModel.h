@@ -39,6 +39,8 @@ namespace Commander
         // The target must face the caster (Gouge: Spell::CheckCast, attributes 0x150010). An
         // enemy faces its victim, so only its victim can count on it.
         bool needsFront = false;
+        // What it puts on the enemy ends on the next hit (Gouge: AURA_INTERRUPT_DAMAGE_CANCELS).
+        bool breaksOnDamage = false;
     };
 
     // A friendly dispel a bot has learned (ClassKit::Dispels).

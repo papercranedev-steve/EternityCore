@@ -19,6 +19,8 @@
  *                              The same rule gates every cast of the bot since 2026-11-08
  *                              (PartyBotAI::PassesPartyCastChecks), not only Commander proposals:
  *                              a rotation's Blade Flurry broke a Shackle (strat-20261108-141921).
+ *   Cast with a cast or        TeamPlan::ForbidsLongCast (the area phase's reserved caster,
+ *   channel time               AreaPhase.h "Reservation"), except its area spells: LongCastHeld
  *   Rest                       TeamPlan::ForbidsRest
  * (The threat opening's "everyone but the tank waits" is gone since 2026-11-13: each damage
  * dealer starts when it has threat room on its target, DamageTargets / ThreatRoom; doc
@@ -70,6 +72,11 @@ namespace Commander
         // shield / reflection, RoleStamps.h); then WakesControl.
         char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                   Unit const* target, SpellEntry const* spell, uint32 nowMs);
+
+        // TeamPlan::ForbidsLongCast: `spell` has a cast or channel time and is not one of the
+        // bot's area spells (AreaDamageBehavior::Judges), and the area phase reserves the bot.
+        // The arbiter's check above and every other cast of the bot (PartyBotAI::PassesPartyCastChecks).
+        char const* LongCastHeld(PartyBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell);
 
         // CastForbidden for a ground area spell cast at the point `centre` (BotAction::atPoint):
         // no neutral creature and no kept control within its radius of `centre`.

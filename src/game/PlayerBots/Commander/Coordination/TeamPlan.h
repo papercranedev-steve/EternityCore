@@ -722,6 +722,14 @@ namespace Commander
         // up its danger shield. Empty = none.
         ObjectGuid roomCaster;
 
+        // A reservation (AreaPhase.h "Reservation"): the caster the phase is about to use. It
+        // starts no spell with a cast or channel time but its area spells meanwhile
+        // (TeamPlan::ForbidsLongCast). reservedAtMs = the last refresh that named it.
+        ObjectGuid reserved;
+        uint32 reservedAtMs = 0;
+
+        bool Reserves(ObjectGuid bot) const { return !reserved.IsEmpty() && reserved == bot; }
+
         // The stance modules leave `bot`'s place to the area phase (AreaSpot.h).
         bool PlacesCaster(ObjectGuid bot) const
         {
@@ -1139,6 +1147,11 @@ namespace Commander
             FleeStopDuty const* d = FindFleeStopFor(bot);
             return d && (d->spellId == spellId || (finisher && d->needsCombo));
         }
+
+        // `bot` is the area phase's reserved caster (AreaPlan::reserved): no spell with a cast
+        // or channel time but its area spells (Constraints::LongCastHeld; the class rotations
+        // too, PartyBotAI::PassesPartyCastChecks), so the area spell is not held back by one.
+        bool ForbidsLongCast(ObjectGuid bot) const { return area.Reserves(bot); }
 
         // `bot` must not sit down to eat or drink: a retreat runs, the boss module says so, or it
         // is the pull's tank and on its way.

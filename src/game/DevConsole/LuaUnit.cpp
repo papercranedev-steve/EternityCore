@@ -1010,6 +1010,9 @@ namespace DevConsole
             }
             lua_setfield(L, -2, "areaWait");
         }
+        // The caster the area phase reserves (no cast or channel time but its area spells).
+        if (!plan.area.reserved.IsEmpty())
+            SetFieldG(L, "areaReserved", plan.area.reserved);
         // Doctrine (Coordination/Doctrine/TacticalDoctrine.h): how the fight is fought and every
         // enemy's tags and stamps as text (TacticalDoctrine::Describe), so the review shows each
         // enemy's role. A plan line is written when any of it changes.

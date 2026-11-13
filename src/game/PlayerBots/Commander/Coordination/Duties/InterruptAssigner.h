@@ -5,6 +5,10 @@
  * Duties module (2026-11-03): one need per enemy worth an interrupter, one candidate per usable
  * ability of each bot, ranked by the SCORE_* below. DutyAllocator picks the primary and the
  * backup (DutyAllocator.h), so a bot primary for another duty kind is not primary here.
+ *
+ * The doctrine's stamps first (2026-11-13): an ability whose control ends on the next hit
+ * (InterruptAbility::breaksOnDamage, Gouge) is not offered on an enemy stamped NoMez (the
+ * area pile, fodder, cleanup), the same rule as CrowdControlAssigner; logged as rejected.
  */
 
 #ifndef MANGOS_COMMANDER_INTERRUPT_ASSIGNER_H

@@ -135,11 +135,13 @@ namespace AreaValue
     Result Evaluate(WorldModel const& world, Request const& r)
     {
         Result out;
+        out.invalid = "no caster, spell or filler";
         if (!r.caster || !r.spell || r.caster->fillerDps <= 0.0f)
             return out;
         PartyMemberFacts const& self = *r.caster;
         AreaSpellFacts const& spell = *r.spell;
         uint32 const count = r.ticks ? std::min(r.ticks, spell.ticks) : spell.ticks;
+        out.invalid = "no ticks";
         if (!count)
             return out;
 
@@ -151,7 +153,10 @@ namespace AreaValue
                 PackResolver::Distance(r.centre, e.pos) - e.boundingRadius > spell.radius)
                 continue;
             if (r.forbidden && r.forbidden(e))
+            {
+                out.invalid = "a kept control in the area";
                 return out;
+            }
             if (e.crowdControlled)
                 continue;
             Target t;
@@ -161,7 +166,10 @@ namespace AreaValue
             {
                 // The tank has not built threat on a new enemy yet.
                 if (!r.paid && r.settle && ThreatRoom::Settling(world, e))
+                {
+                    out.invalid = "a new enemy in the area (the tank has no threat on it yet)";
                     return out;
+                }
                 ThreatEntry const* mine = ThreatView::FindEntry(e, self.guid);
                 t.myThreat = (mine ? mine->threat : 0.0f) + (self.boltTarget == e.guid ? self.boltThreat : 0.0f);
                 t.holderThreat = e.victimThreat;
@@ -173,8 +181,10 @@ namespace AreaValue
             targets.push_back(t);
             out.targets.push_back(e.guid);
         }
+        out.invalid = "no target in the area";
         if (targets.empty())
             return out;
+        out.invalid = nullptr;
 
         // Tick plan.
         std::vector<float> damage(count, 0.0f);
@@ -299,6 +309,8 @@ namespace AreaValue
                 }
             }
             out.valid = any;
+            if (!any)
+                out.invalid = "no ticks";
             return out;
         }
 
@@ -309,7 +321,10 @@ namespace AreaValue
         // Not less damage per mana than the filler (no fight length guess: adds come unannounced).
         if (spell.mana > 0.0f && self.fillerManaPerSec > 0.0f &&
             damage[count - 1] / spell.mana < fillerPerSec / self.fillerManaPerSec)
+        {
+            out.invalid = "less damage per mana than the filler";
             return out;
+        }
         float const extraMana = std::max(0.0f, spell.mana - self.fillerManaPerSec * busySec);
         out.mana = extraMana > 0.0f ? ManaWorth::Points(world, self, extraMana) : 0.0f;
         finish(count, b, c + out.mana, l);

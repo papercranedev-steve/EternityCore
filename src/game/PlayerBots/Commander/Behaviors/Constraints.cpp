@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Constraints.h"
+#include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
@@ -61,6 +62,8 @@ namespace Commander
             // Kept for an enemy about to run away (FleeStopBehavior casts it).
             if (strcmp(source, "fleestop") && plan.HoldsSpell(self, spell->Id, spell->NeedsComboPoints()))
                 return "kept for a flee stop";
+            if (char const* held = Constraints::LongCastHeld(bot, plan, spell))
+                return held;
 
             if (action.atPoint)
                 return Constraints::CastAtForbidden(bot, world, plan, Position3{ action.x, action.y, action.z }, spell, nowMs);
@@ -106,6 +109,17 @@ namespace Commander
                     return "it reflects damage: hands off";
             }
             return WakesControl(bot, world, plan, target, spell, nowMs);
+        }
+
+        char const* LongCastHeld(PartyBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell)
+        {
+            if (!spell || !plan.ForbidsLongCast(bot->me->GetObjectGuid()))
+                return nullptr;
+            if (spell->GetCastTime(bot->me) <= 0 && !spell->IsChanneledSpell())
+                return nullptr;
+            if (AreaDamageBehavior::Judges(bot, spell))
+                return nullptr;
+            return "reserved for the area spell";
         }
 
         char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,

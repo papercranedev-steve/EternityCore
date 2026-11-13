@@ -274,6 +274,9 @@ public:
     bool IsGapCloserForbidden(SpellEntry const* pSpell) const;
     // Commander flee stop keeps this spell (TeamPlan::HoldsSpell): the rotation does not cast it.
     bool IsSpellHeld(SpellEntry const* pSpell) const;
+    // The area phase reserves this bot (TeamPlan::ForbidsLongCast): no spell with a cast or
+    // channel time but its area spells.
+    bool IsLongCastHeld(SpellEntry const* pSpell) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).

@@ -15,6 +15,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Trace/Trace.h"
 #include "Timer.h"
 #include <algorithm>
 #include <cmath>
@@ -356,26 +357,84 @@ namespace Commander
                     : Text("Area spell waits %.0f s for the caster's shield (%.1f points better).", sec, gain));
             return true;
         }
+
+        // Header "Reservation": the caster this refresh names (a phase to start, a wait, the
+        // prep), else the last one for RESERVE_HOLD_MS while it can still cast an area spell.
+        void Reserve(WorldModel const& world, AreaPlan const& prev, AreaPlan& a)
+        {
+            ObjectGuid const named = a.active ? (a.step == AreaStep::Channel ? ObjectGuid() : a.caster)
+                                   : !a.waitCaster.IsEmpty() ? a.waitCaster : a.prepCaster;
+            if (!named.IsEmpty())
+            {
+                a.reserved = named;
+                a.reservedAtMs = world.refreshedAtMs;
+                return;
+            }
+            // A channel running is the phase itself; after it the next refresh decides afresh.
+            if (a.active || prev.reserved.IsEmpty() || !world.HasPartyEnemy() ||
+                WorldTimer::getMSTimeDiff(prev.reservedAtMs, world.refreshedAtMs) > AreaPhaseAssigner::RESERVE_HOLD_MS)
+                return;
+            PartyMemberFacts const* m = world.FindMember(prev.reserved);
+            if (!m || !m->CanAct() ||
+                std::none_of(m->areaSpells.begin(), m->areaSpells.end(), [](AreaSpellFacts const& s) { return s.ready; }))
+                return;
+            a.reserved = prev.reserved;
+            a.reservedAtMs = prev.reservedAtMs;
+        }
+
+        // The calculation trace: one step-2 candidate (or why there is none for it).
+        void TraceCandidate(PartyMemberFacts const& m, AreaSpellFacts const& spell, EnemyFacts const* centre,
+                            char const* why, Candidate const* c)
+        {
+            if (!Trace::On())
+                return;
+            std::string const label = Trace::Format("%s spell%u on %s", Trace::Guid(m.guid).c_str(), spell.spellId,
+                                                    centre ? Trace::Guid(centre->guid).c_str() : "self");
+            std::string data = Trace::Format("{\"why\":\"%s\"", why);
+            if (c)
+            {
+                AreaValue::Result const& v = c->value;
+                data += Trace::Format(",\"net\":%.2f,\"benefit\":%.2f,\"cost\":%.2f,\"turnLoss\":%.2f,\"mana\":%.2f,"
+                                      "\"targets\":%u,\"turning\":%u,\"shieldGain\":%.2f,\"move\":%s,\"moveCost\":%.2f,"
+                                      "\"netHere\":%.2f,\"score\":%.2f",
+                    v.net, v.benefit, v.cost, v.turnLoss, v.mana, uint32(v.targets.size()), uint32(v.turning.size()),
+                    c->shieldGain, c->move ? "true" : "false", c->moveCost, c->netHere, c->score);
+            }
+            Trace::Emit("areacand", label, data + "}");
+        }
     }
 
     void AreaPhaseAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
+        Trace::Scope scope("area");
         AreaPlan const prev = plan.area;
-        Plan(world, plan, prev);
+        char const* const outcome = Plan(world, plan, prev);
+        AreaPlan& a = plan.area;
         // Reads the last refresh's own roomCaster (RoomCaster), not another module's.
-        plan.area.roomCaster = world.HasPartyEnemy() ? RoomCaster(world, plan, prev, plan.area) : ObjectGuid();
+        a.roomCaster = world.HasPartyEnemy() ? RoomCaster(world, plan, prev, a) : ObjectGuid();
+        // Reads the last refresh's own reservation.
+        Reserve(world, prev, a);
+        if (scope.On())
+        {
+            scope.SetLabel(outcome);
+            scope.Data(Trace::Format("{\"active\":%s,\"caster\":\"%s\",\"spell\":%u,\"net\":%.2f,\"wait\":%u,"
+                                     "\"waitGain\":%.2f,\"waitSec\":%.1f,\"prep\":\"%s\",\"reserved\":\"%s\",\"reservedAgoMs\":%u}",
+                a.active ? "true" : "false", Trace::Guid(a.caster).c_str(), a.spellId, a.net, uint32(a.wait),
+                a.waitGain, a.waitSec, Trace::Guid(a.prepCaster).c_str(), Trace::Guid(a.reserved).c_str(),
+                a.reserved.IsEmpty() ? 0u : WorldTimer::getMSTimeDiff(a.reservedAtMs, world.refreshedAtMs)));
+        }
     }
 
-    void AreaPhaseAssigner::Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev)
+    char const* AreaPhaseAssigner::Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev)
     {
         AreaPlan& a = plan.area;
         a = AreaPlan();
         if (!world.HasPartyEnemy())
-            return;
+            return "no fight";
         if (PartyHolds(plan))
         {
             Prepare(world, plan, prev, a);
-            return;
+            return "the party holds: prep";
         }
 
         std::vector<ObjectGuid> const tanks = AllTanks(world);
@@ -416,7 +475,7 @@ namespace Commander
             a.sinceMs = prev.CastBy(m.guid) ? prev.sinceMs : world.refreshedAtMs;
             Reserves(world, r, v, 0.0f, tanks, a);
             AllyShield(world, r, v, a);
-            return;
+            return "a channel runs";
         }
 
         // 2. Who starts which one, where.
@@ -432,7 +491,10 @@ namespace Commander
             for (AreaSpellFacts const& spell : m.areaSpells)
             {
                 if (!spell.ready)
+                {
+                    TraceCandidate(m, spell, nullptr, "not ready", nullptr);
                     continue;
+                }
                 bool const ground = spell.onTarget && spell.channel;
                 std::vector<EnemyFacts const*> centres;
                 if (ground && !runners.empty())
@@ -464,7 +526,12 @@ namespace Commander
                                                 PrevSpot(prev, m.guid, e->pos, c.centre, spell.spellId))
                             : AreaPlace::OnLead(world, c.request, *e);
                         if (!ch.valid)
+                        {
+                            TraceCandidate(m, spell, e, ch.value.invalid ? ch.value.invalid
+                                : runners.empty() ? "no place on the pile (AreaPlace::OnPile)"
+                                : "no place ahead of the runner (AreaPlace::OnLead)", nullptr);
                             continue;
+                        }
                         c.request = ch.request;
                         c.netHere = ch.netHere;
                         c.value = ch.value;
@@ -484,11 +551,17 @@ namespace Commander
                         c.netHere = c.value.valid ? c.value.net : 0.0f;
                     }
                     if (!c.value.valid)
+                    {
+                        TraceCandidate(m, spell, e, c.value.invalid ? c.value.invalid : "out of range", nullptr);
                         continue;
+                    }
                     // Never a neutral (yellow) creature in the area (user 2026-11-10; the cast
                     // gate Constraints::CastForbidden would refuse it anyway).
                     if (Tags::NeutralNear(world, c.request.centre, spell.radius))
+                    {
+                        TraceCandidate(m, spell, e, "a neutral creature in the area", nullptr);
                         continue;
+                    }
 
                     // Its own shield first, whenever it is ready (user 2026-11-12, doc
                     // .kiro/docs/2026-11-12-mage-hold.md 3.6: on cooldown before every area
@@ -514,7 +587,9 @@ namespace Commander
                     c.score = c.value.net + c.shieldGain;
                     if (prev.active && prev.caster == m.guid && prev.spellId == spell.spellId && prev.centre == c.centre)
                         c.score += STICKY_POINTS;
-                    if (c.value.net + c.shieldGain > 0.0f && (!found || c.score > best.score))
+                    bool const pays = c.value.net + c.shieldGain > 0.0f;
+                    TraceCandidate(m, spell, e, pays ? "pays" : "does not pay", &c);
+                    if (pays && (!found || c.score > best.score))
                     {
                         best = c;
                         found = true;
@@ -523,7 +598,7 @@ namespace Commander
             }
         }
         if (!found)
-            return;
+            return "none: no area spell pays";
 
         // 3. Or a little later.
         if (Waits(world, best, prev, a, plan.notes))
@@ -537,7 +612,7 @@ namespace Commander
                 ch.gain = best.moveBenefit - best.moveCost;
                 SetPrepSpot(a, best.request.caster->guid, best.request.centre, ch);
             }
-            return;
+            return a.wait == AreaWait::Tank ? "waits: the tank first" : "waits: the shield first";
         }
 
         PartyMemberFacts const& m = *best.request.caster;
@@ -564,6 +639,7 @@ namespace Commander
         a.sinceMs = (prev.active && prev.caster == m.guid && prev.spellId == a.spellId) ? prev.sinceMs : world.refreshedAtMs;
         Reserves(world, best.request, best.value, best.moveCost, tanks, a);
         AllyShield(world, best.request, best.value, a);
+        return a.step == AreaStep::Move ? "start: walk to the spot" : a.step == AreaStep::Shield ? "start: shield first" : "start: cast";
     }
 
     void AreaPhaseAssigner::Clear(TeamPlan& plan) const

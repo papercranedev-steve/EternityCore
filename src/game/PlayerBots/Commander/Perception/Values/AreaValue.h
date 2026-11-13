@@ -73,6 +73,7 @@ namespace Commander
         struct Result
         {
             bool valid = false;
+            char const* invalid = nullptr;  // why not valid (the calculation trace)
             uint32 ticks = 0;               // judged
             float damage = 0.0f;            // of `ticks`
             float benefit = 0.0f;
