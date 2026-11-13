@@ -1,7 +1,10 @@
 /*
  * PartyBot Commander layer 3 (cerebellum): walks the tank to the spot TeamPlan::patrolMove
- * chose (PatrolAssigner: an idle patrol would walk into the fight), and every other bot the
- * same shift (melee too since strat-20261102-225354). The enemies chase the tank.
+ * chose (PatrolAssigner with FightSpot.h: a patrol walking in, a control next to the pile).
+ * The enemies chase the tank. Since 2026-11-13 (battlefield groups doc 8) the others no
+ * longer walk the tank's shift: they pick their own field cells around the tank (healer and
+ * ranged stance; patrol cells are left out by FieldSpots), and whoever still stands where the
+ * patrol comes gets RouteGuard's walk off (OffRouteBehavior, Urgent).
  *
  * Guard (after the move, until the patrol walked past):
  *   - Hider of an Active lure (PatrolLure): walks backwards to the lure's point and stays there
@@ -11,10 +14,6 @@
  *   - Anyone else but healers: its target is in PatrolMovePlan::avoid (and not its intercept)
  *     and out of melee reach: Attack the nearest enemy within TARGET_RANGE not in avoid.
  *
- * Fix: before, only the tank moved. A healer anchors on the tank but only moves once the tank
- * is out of heal range (HealerStanceBehavior), ranged keep their 25 yd chase distance: a 15-25
- * yd move left them standing in the patrol's path, and a healer pulled the patrol from behind.
- *
  * Tank of the plan: once per move, the plan's spots in order, the first whose ground is
  * found within MAX_STEP_Z of the tank, that no idle creature covers, and whose path is safe
  * (SafeRoute::PathIsSafe, MAX_PATH_DETOUR) is written to patrolMove.chosen (-2: none). Then
@@ -22,11 +21,6 @@
  * tank's victim (Backpedal, order renewed every tick, the rotation keeps fighting), or
  * MoveTo when no backwards path is found or the tank has no victim, with Hold while that
  * walk is under way.
- *
- * Followers of the plan (TeamPlan.h, PatrolFollower): once the tank's spot is chosen, target =
- * own start + (chosen spot - tank start), the place PatrolAssigner checked against the
- * patrol's walk. The same ground / idle creature / path checks once (failed: stay, the stance
- * module keeps the healer in range); then MoveTo (Hold while walking), after a cast in progress.
  */
 
 #ifndef MANGOS_COMMANDER_PATROL_BEHAVIOR_H

@@ -3,30 +3,22 @@
  * From strat-20261101-225111: Patchwork Horror (17000 hp elite, ~70 s loop) walked through the
  * fight spot 28 s into a 7-elite pull and the party wiped.
  *
- * Pure (facts and plan only). Per refresh while the party fights and no move is running:
- *   arrive     = first time the patrol comes to a living member (Perception/Spatial/PatrolZone.h,
- *                the rule every patrol check uses: aggro range against the tank + its margin
- *                around the predicted walk); ignored when the fight should end first
- *                (Value::FightRemainingSec)
- *   benefit    = its melee on the tank (after armor) from arrival until the end of the fight
- *                plus its own kill time, + Value::FightExtension(its kill time)
- *   spots      = rings of SPOT_DISTANCES around the tank where the party, moved along with the
- *                tank, is not come to (PatrolZone) within SPOT_TRACK_SEC, nearest first, at
- *                most MAX_SPOTS
- *   cost       = Value::FightExtension(walk time to the nearest spot) + the area phase's
- *                endCost (TeamPlan::area, last refresh: a channel losing its tank): the fight lasts longer
- *                while the tank walks and the enemies follow
- * benefit > cost and a spot: TeamPlan::patrolMove (PatrolBehavior walks the tank there).
- * Otherwise the party stays and the leader is told why. Each patrol is judged once per fight.
+ * Pure (facts and plan only). While the party fights, no move is running and the tank holds
+ * most enemies, every CHECK_MS: the tank's place against the field cells around it
+ * (Coordination/Situation/FightSpot/FightSpot.h, battlefield groups doc 8, user 2026-11-13:
+ * on the position field; it loses points to a patrol walking in or to a control that breaks
+ * on damage next to the pile). A better cell: TeamPlan::patrolMove with its spots
+ * (PatrolBehavior walks the tank there), the patrol costing the most as `patrol` (none for a
+ * control only). Else the party stays and the leader is told why (once per reason).
  * While the pull still places the tank (Settle with the arrival wait or an Active line of sight
- * pull, whose point already avoids patrol paths) a patrol arriving after
- * PULL_PLACING_DEFER_SEC is judged once that is over.
+ * pull, whose point already avoids patrol paths) only patrols arriving within
+ * PULL_PLACING_DEFER_SEC count.
+ * Until 2026-11-13: per patrol, benefit (its damage) > cost (the walk) to the first of rings at
+ * 15 / 25 / 35 yd x 12 where the whole party shifted with the tank was clear of its walk, and
+ * every bot walked that shift. Now the others pick their own cells (stance modules).
  *
- * Every other bot (healer, ranged, melee) is a follower (TeamPlan.h, PatrolFollower) and walks
- * the tank's shift itself (PatrolBehavior).
- *
- * Move phase ends when the tank and the followers arrived or after MOVE_TIMEOUT_MS; then
- * Guard (strat-20261102-225354: after the move the tank walked back to win two casters back
+ * Move phase ends when the tank arrived or after MOVE_TIMEOUT_MS; without a patrol the plan
+ * ends there; else Guard (strat-20261102-225354: after the move the tank walked back to win two casters back
  * that stood at the old spot with the rogue, and the patrol joined there):
  *   avoid  = every refresh while active, enemies the patrol comes to (PatrolZone) before the
  *            fight ends. Nobody chases or walks over to them, they are not the focus; in
@@ -65,14 +57,7 @@ namespace Commander
     class PatrolAssigner : public IAssigner
     {
     public:
-        static constexpr float SPOT_DISTANCES[] = { 15.0f, 25.0f, 35.0f };
-        // A spot must stay clear of the patrol's walk this long (the track length before it
-        // became a full lap).
-        static constexpr float SPOT_TRACK_SEC = 60.0f;
-        static constexpr uint32 SPOT_ANGLES = 12;
-        static constexpr uint32 MAX_SPOTS = 8;
-        static constexpr float RUN_YARDS_PER_SEC = 7.0f;
-        static constexpr float PATH_FACTOR = 1.3f;
+        static constexpr uint32 CHECK_MS = 1000;
         static constexpr float ARRIVED_DISTANCE = 4.0f;
         static constexpr uint32 MOVE_TIMEOUT_MS = 15 * 1000;
         static constexpr uint32 GUARD_TIMEOUT_MS = 60 * 1000;

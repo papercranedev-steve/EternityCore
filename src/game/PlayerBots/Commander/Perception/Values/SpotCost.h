@@ -80,6 +80,17 @@ namespace SpotCost
     };
     std::vector<HeldMez> HeldMezzes(WorldModel const& world);
     float BreaksHold(std::vector<HeldMez> const& held, Position3 const& spot, float clearYd);
+
+    // A patrol joins the fight at `spot` (battlefield groups doc 8.1, the fight spot's patrol
+    // term; moved from PatrolAssigner's benefit): every counted patrol (PatrolZone::Counts)
+    // whose walk comes within its zone (PatrolZone::Radius) + PILE_SPREAD_YD of the spot (the
+    // pile and the party around it, PatrolZone::FirstWithin) before min(remaining, withinSec)
+    // costs its melee on the tank (after armor) from then until the fight is over and it is
+    // dead (remaining - arrive + its kill time at Value::DealtDps) + Value::FightExtension(its
+    // kill time). `worst` gets the patrol that costs the most (null = none).
+    float const PILE_SPREAD_YD = 10.0f;
+    float PatrolJoins(WorldModel const& world, PartyMemberFacts const& tank, Position3 const& spot,
+                      float withinSec, PatrolFacts const** worst = nullptr);
 }
 }
 

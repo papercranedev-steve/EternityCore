@@ -402,29 +402,15 @@ namespace Commander
         uint32 dangerSinceMs = 0;           // 0 = not in danger now
     };
 
-    // Fight-time patrol response (PatrolAssigner): an idle patrol walks into the fight before
-    // it ends and moving the fight is worth it. The tank walks to the first candidate that
-    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies
-    // follow the tank, the followers below walk the same shift.
-    //
-    // Every other bot (healer, ranged, melee): healers and ranged keep their place in range
-    // (HealerStanceBehavior, the 25 yd caster chase), melee stay on their target, so they
-    // would stay in the patrol's path (strat-20261102-225354: the rogue stayed with two
-    // casters at the old spot). It walks start + (tank's chosen spot - tankStart), the
-    // position the assigner already checked against the patrol's walk.
-    struct PatrolFollower
-    {
-        ObjectGuid guid;
-        Position3 start;
-        // Written by the follower's PatrolBehavior: 0 = not checked yet, 1 = target passed
-        // the live checks, -1 = it did not (the follower stays, its stance module moves it).
-        mutable int8 state = 0;
-        mutable Position3 target;
-    };
-
+    // Moving the fight (PatrolAssigner, the spot from Coordination/Situation/FightSpot/FightSpot.h):
+    // the main tank's place loses more than a field cell around it (a patrol walking in, a
+    // control that breaks on damage next to the pile). The tank walks to the first spot that
+    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies follow
+    // the tank. The others pick their own cells around the tank's new place (the stance
+    // modules; until 2026-11-13 they walked the tank's shift, PatrolFollower).
     enum class PatrolPhase : uint8
     {
-        Move,       // the tank and the followers walk to the chosen spot
+        Move,       // the tank walks to the chosen spot
         Guard,      // arrived: nobody goes back into the path until the patrol walked past
     };
 
@@ -453,14 +439,13 @@ namespace Commander
     {
         bool active = false;
         PatrolPhase phase = PatrolPhase::Move;
-        ObjectGuid patrol;
+        ObjectGuid patrol;                  // the patrol it moves for (Guard follows), empty = a hold only
         ObjectGuid tank;
         Position3 tankStart;                // the tank's position at decision time
-        std::vector<PatrolFollower> followers;
         std::vector<Position3> spots;       // best first, fixed while active
-        float arriveSec = 0.0f;             // patrol reaches the current fight, at decision time
-        float benefit = 0.0f;               // points not lost to the patrol
+        float benefit = 0.0f;               // points not lost there (FightSpot: here - best spot's loss)
         float cost = 0.0f;                  // points lost walking there
+        std::string why;                    // FightSpot::Choice::why
         uint32 sinceMs = 0;
         uint32 guardSinceMs = 0;
         // Written by the tank's PatrolBehavior (same exception as PullPlan::rangedShot): index
@@ -479,8 +464,10 @@ namespace Commander
         // ranged damage dealer kills each (FocusAssigner intercept; since 2026-11-03 it runs after PatrolAssigner and reads this in the same refresh).
         std::vector<ObjectGuid> kill;
 
-        // Patrols already judged this fight (moved for, or staying put): one note each.
-        std::vector<ObjectGuid> judged;
+        // Not active: the last look for a better spot (PatrolAssigner::CHECK_MS apart) and what
+        // the leader was told last (said again only when it changes).
+        uint32 checkedAtMs = 0;
+        std::string lastNote;
 
         bool Avoids(ObjectGuid enemy) const
         {

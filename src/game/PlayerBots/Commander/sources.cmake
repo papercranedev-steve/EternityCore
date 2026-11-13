@@ -319,6 +319,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolHold.h
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolHold.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpot.h
+  ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpot.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

@@ -50,7 +50,7 @@ namespace Commander
             // and the rotation keeps fighting.
             if (bot->IsMovementHeld() && me->IsMoving() && !bot->IsBackpedaling())
             {
-                p.reason = "moving the fight off a patrol's path, keep walking";
+                p.reason = "moving the fight, keep walking";
                 p.action.type = BotActionType::Hold;
                 out.push_back(p);
                 return;
@@ -78,7 +78,7 @@ namespace Commander
             float const distance = SafeRoute::Distance2d(here, to);
             if (distance <= PatrolAssigner::ARRIVED_DISTANCE)
                 return;
-            p.reason = "move the fight off a patrol's path";
+            p.reason = "move the fight (fight spot)";
             p.action.x = to.x;
             p.action.y = to.y;
             p.action.z = to.z;
@@ -97,66 +97,6 @@ namespace Commander
             }
             p.action.type = BotActionType::MoveTo;
             p.action.holdMs = WalkHoldMs(me, distance);
-            out.push_back(p);
-        }
-
-        void ProposeFollower(PartyBotAI const* bot, PatrolMovePlan const& m, std::vector<Proposal>& out)
-        {
-            // Waits for the tank's spot: the shift is only known then.
-            if (m.chosen < 0)
-                return;
-            Player* me = bot->me;
-            auto f = std::find_if(m.followers.begin(), m.followers.end(),
-                [me](PatrolFollower const& x) { return x.guid == me->GetObjectGuid(); });
-            if (f == m.followers.end() || f->state < 0)
-                return;
-
-            Proposal p;
-            p.tier = ProposalTier::Assigned;
-            p.source = "patrol";
-
-            // A MoveTo is under way: without a proposal the rotation's first cast-time spell
-            // stops the walk (DoCastSpell -> StopMoving).
-            if (bot->IsMovementHeld() && me->IsMoving())
-            {
-                p.reason = "moving with the tank off a patrol's path, keep walking";
-                p.action.type = BotActionType::Hold;
-                out.push_back(p);
-                return;
-            }
-
-            Position3 const here = Here(me);
-            if (f->state == 0)
-            {
-                Position3 s = f->start;
-                s.x += m.chosenSpot.x - m.tankStart.x;
-                s.y += m.chosenSpot.y - m.tankStart.y;
-                SafeRoute::IdleCreatures const idle(me);
-                if (SpotOk(me, idle, here.z, s))
-                {
-                    f->state = 1;
-                    f->target = s;
-                }
-                else
-                    f->state = -1;
-            }
-            if (f->state < 0)
-                return;
-
-            float const distance = SafeRoute::Distance2d(here, f->target);
-            if (distance <= PatrolAssigner::ARRIVED_DISTANCE)
-                return;
-            // The cast in progress (a heal) finishes first.
-            if (me->IsNonMeleeSpellCasted(false, false, true))
-                return;
-
-            p.reason = "move with the tank off a patrol's path";
-            p.action.type = BotActionType::MoveTo;
-            p.action.x = f->target.x;
-            p.action.y = f->target.y;
-            p.action.z = f->target.z;
-            p.action.holdMs = WalkHoldMs(me, distance);
-            p.SetValue(m.benefit, m.cost);
             out.push_back(p);
         }
 
@@ -283,9 +223,8 @@ namespace Commander
         }
         if (m.spots.empty())
             return;
+        // Only the tank walks; the others pick their own cells around it (stance modules).
         if (m.tank == me->GetObjectGuid())
             ProposeTank(bot, m, out);
-        else
-            ProposeFollower(bot, m, out);
     }
 }

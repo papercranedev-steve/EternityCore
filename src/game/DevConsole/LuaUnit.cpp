@@ -898,16 +898,7 @@ namespace DevConsole
                 SetFieldN(L, "spotX", Round2(m.chosenSpot.x));
                 SetFieldN(L, "spotY", Round2(m.chosenSpot.y));
             }
-            lua_createtable(L, int(m.followers.size()), 0);
-            int i = 0;
-            for (Commander::PatrolFollower const& f : m.followers)
-            {
-                lua_createtable(L, 0, 2);
-                SetFieldG(L, "g", f.guid);
-                SetField(L, "state", f.state);
-                lua_rawseti(L, -2, ++i);
-            }
-            lua_setfield(L, -2, "followers");
+            SetFieldS(L, "why", m.why.c_str());
             if (!m.avoid.empty())
             {
                 PushGuidList(L, m.avoid);

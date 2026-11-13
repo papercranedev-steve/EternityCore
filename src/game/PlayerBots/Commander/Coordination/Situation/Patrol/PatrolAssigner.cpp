@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
+#include "Commander/Coordination/Situation/FightSpot/FightSpot.h"
 #include "Commander/Coordination/Situation/Los/LosBreak.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
@@ -19,37 +20,6 @@ namespace Commander
 {
     namespace
     {
-        // Living members (players and bots, no pets), each shifted by (dx, dy): where they
-        // stand after the tank moved that far (they keep their place around the tank).
-        std::vector<Position3> Members(WorldModel const& world, float dx, float dy)
-        {
-            std::vector<Position3> out;
-            for (PartyMemberFacts const& m : world.party)
-            {
-                if (m.isPet || !m.alive)
-                    continue;
-                Position3 p = m.pos;
-                p.x += dx;
-                p.y += dy;
-                out.push_back(p);
-            }
-            return out;
-        }
-
-        // First time (seconds from the refresh) the patrol comes to any of `members`
-        // (PatrolZone::ArriveSec), -1 = never within its track.
-        float FirstArrive(WorldModel const& world, PatrolFacts const& p, std::vector<Position3> const& members)
-        {
-            float best = -1.0f;
-            for (Position3 const& m : members)
-            {
-                float const t = PatrolZone::ArriveSec(world, p, m);
-                if (t >= 0.0f && (best < 0.0f || t < best))
-                    best = t;
-            }
-            return best;
-        }
-
         std::string NameOf(uint32 entry, char const* fallback = "patrol")
         {
             std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(entry);
@@ -87,75 +57,10 @@ namespace Commander
             return std::find(list.begin(), list.end(), guid) != list.end();
         }
 
-        // Ring points around the tank where the patrol's walk never comes near the party moved
-        // along with the tank, nearest ring first; within a ring, farthest from where the
-        // patrol arrives first.
-        std::vector<Position3> Spots(WorldModel const& world, PatrolFacts const& p, Position3 const& tank,
-                                     Position3 const& arrivesAt)
-        {
-            std::vector<Position3> spots;
-            float const away = std::atan2(tank.y - arrivesAt.y, tank.x - arrivesAt.x);
-            for (float d : PatrolAssigner::SPOT_DISTANCES)
-            {
-                for (uint32 k = 0; k < PatrolAssigner::SPOT_ANGLES && spots.size() < PatrolAssigner::MAX_SPOTS; ++k)
-                {
-                    // 0, +1, -1, +2, -2 ... steps from straight away from the patrol.
-                    int32 const step = int32((k + 1) / 2) * ((k % 2) ? 1 : -1);
-                    float const angle = away + 2.0f * float(M_PI) * step / PatrolAssigner::SPOT_ANGLES;
-                    Position3 s;
-                    s.x = tank.x + d * std::cos(angle);
-                    s.y = tank.y + d * std::sin(angle);
-                    s.z = tank.z;
-                    // (the first SPOT_TRACK_SEC of the track: the tracks became a full lap long,
-                    // a spot clear of the whole loop is rarely found and not needed)
-                    std::vector<Position3> const moved = Members(world, s.x - tank.x, s.y - tank.y);
-                    if (std::none_of(moved.begin(), moved.end(), [&](Position3 const& at)
-                        { return PatrolZone::Comes(world, p, at, PatrolAssigner::SPOT_TRACK_SEC); }))
-                        spots.push_back(s);
-                }
-            }
-            return spots;
-        }
-
-        // Every bot but the tank walks the tank's shift (TeamPlan.h, PatrolFollower).
-        std::vector<PatrolFollower> Followers(WorldModel const& world, ObjectGuid tank)
-        {
-            std::vector<PatrolFollower> out;
-            for (PartyMemberFacts const& m : world.party)
-            {
-                if (!m.isBot || m.isPet || !m.alive || m.guid == tank)
-                    continue;
-                if (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS && m.role != ROLE_MELEE_DPS)
-                    continue;
-                PatrolFollower f;
-                f.guid = m.guid;
-                f.start = m.pos;
-                out.push_back(f);
-            }
-            return out;
-        }
-
-        // Every follower that can still walk its shift is there (the tank's spot is chosen).
-        bool FollowersArrived(WorldModel const& world, PatrolMovePlan const& m)
-        {
-            for (PatrolFollower const& f : m.followers)
-            {
-                if (f.state < 0)
-                    continue;
-                PartyMemberFacts const* member = world.FindMember(f.guid);
-                if (!member || !member->CanAct())
-                    continue;
-                if (f.state == 0 || PackResolver::Distance(member->pos, f.target) > PatrolAssigner::ARRIVED_DISTANCE)
-                    return false;
-            }
-            return true;
-        }
-
         void End(PatrolMovePlan& m)
         {
             m.active = false;
             m.phase = PatrolPhase::Move;
-            m.followers.clear();
             m.spots.clear();
             m.chosen = -1;
             m.avoid.clear();
@@ -276,19 +181,21 @@ namespace Commander
     {
         PatrolMovePlan& m = plan.patrolMove;
         PatrolFacts const* patrol = FindPatrol(world, m);
-        // Joined the fight (now an enemy), died, or walked out of the scan.
-        if (m.tank != tank.guid || !patrol)
+        // Its patrol joined the fight (now an enemy), died, or walked out of the scan. A move for
+        // a control next to the pile has no patrol.
+        if (m.tank != tank.guid || (!m.patrol.IsEmpty() && !patrol))
         {
             End(m);
             return;
         }
-        std::string const name = NameOf(patrol->entry);
+        std::string const name = patrol ? NameOf(patrol->entry) : std::string("The fight");
         float const remaining = Value::FightRemainingSec(world);
 
         m.avoid.clear();
-        for (EnemyFacts const& e : world.enemies)
-            if (e.health && PatrolZone::Comes(world, *patrol, e.pos, remaining))
-                m.avoid.push_back(e.guid);
+        if (patrol)
+            for (EnemyFacts const& e : world.enemies)
+                if (e.health && PatrolZone::Comes(world, *patrol, e.pos, remaining))
+                    m.avoid.push_back(e.guid);
 
         if (m.phase == PatrolPhase::Move)
         {
@@ -306,13 +213,18 @@ namespace Commander
                 End(m);
                 return;
             }
-            bool const arrived = m.chosen >= 0 && PackResolver::Distance(tank.pos, m.chosenSpot) <= ARRIVED_DISTANCE &&
-                                 FollowersArrived(world, m);
+            bool const arrived = m.chosen >= 0 && PackResolver::Distance(tank.pos, m.chosenSpot) <= ARRIVED_DISTANCE;
             bool const timedOut = WorldTimer::getMSTimeDiff(m.sinceMs, world.refreshedAtMs) > MOVE_TIMEOUT_MS;
             if (!arrived && !timedOut)
                 return;
             if (timedOut && !arrived)
-                plan.notes.push_back(name + ": moving the fight took too long, staying out of its path from here.");
+                plan.notes.push_back(name + ": moving the fight took too long, fighting from here.");
+            // No patrol to guard against: done (the next check looks again from here).
+            if (!patrol)
+            {
+                End(m);
+                return;
+            }
             m.phase = PatrolPhase::Guard;
             m.guardSinceMs = world.refreshedAtMs;
         }
@@ -369,69 +281,49 @@ namespace Commander
         if (!HoldsMost(world, tank->guid))
             return;
 
-        float const remaining = Value::FightRemainingSec(world);
-        float const dealt = std::max(1.0f, Value::DealtDps(world));
-        std::vector<Position3> const members = Members(world, 0.0f, 0.0f);
-        for (PatrolFacts const& p : world.patrols)
+        // The tank's place against the field cells around it (FightSpot.h), CHECK_MS apart.
+        if (m.checkedAtMs && WorldTimer::getMSTimeDiff(m.checkedAtMs, world.refreshedAtMs) < CHECK_MS)
+            return;
+        m.checkedAtMs = world.refreshedAtMs;
+        // While the pull places the tank, only patrols coming soon count (judged again later).
+        float const within = pullPlacing ? PULL_PLACING_DEFER_SEC : FLT_MAX;
+        FightSpot::Choice const c = FightSpot::Choose(world, plan, *tank, within);
+        if (c.hereLoss <= 0.0f)
         {
-            if (!PatrolZone::Counts(p) || Contains(m.judged, p.guid))
-                continue;
-            float const arrive = FirstArrive(world, p, members);
-            if (arrive < 0.0f || arrive >= remaining)
-                continue;
-            if (pullPlacing && arrive > PULL_PLACING_DEFER_SEC)
-                continue;   // not judged yet
-            m.judged.push_back(p.guid);
-            std::string const name = NameOf(p.entry);
-
-            // What it costs if it joins: it hits the tank from arrival until the fight is over
-            // and it is dead, and the fight lasts its kill time longer.
-            float const killSec = float(p.health) / dealt;
-            float const hit = p.meleeDps * (1.0f - Value::ArmorReduction(tank->armor, p.level));
-            float const benefit = Value::Points(world, hit * (remaining - arrive + killSec)) +
-                                  Value::FightExtension(world, killSec);
-
-            Position3 const arrivesAt = PatrolZone::PositionAt(world, p, arrive);
-            std::vector<Position3> spots = Spots(world, p, tank->pos, arrivesAt);
-            if (spots.empty())
-            {
-                plan.notes.push_back(Format("%s reaches the fight in about %.0f s (fight about %.0f s left); "
-                    "no spot within %.0f yd keeps away from its path, fighting here.", name.c_str(), arrive, remaining,
-                    SPOT_DISTANCES[sizeof(SPOT_DISTANCES) / sizeof(float) - 1]));
-                continue;
-            }
-            float const walkSec = PackResolver::Distance(tank->pos, spots.front()) * PATH_FACTOR / RUN_YARDS_PER_SEC;
-            // The area phase loses this when the tank walks off (AreaPhase runs after this
-            // module: its result of the last refresh; strat-20261108-161025, the tank left a
-            // channelling mage with six enemies turning to him).
-            float const cost = Value::FightExtension(world, walkSec) + (plan.area.active ? plan.area.endCost : 0.0f);
-            if (benefit <= cost)
-            {
-                plan.notes.push_back(Format("%s reaches the fight in about %.0f s; staying (it costs %.1f, "
-                    "moving %.1f).", name.c_str(), arrive, benefit, cost));
-                continue;
-            }
-
-            m.active = true;
-            m.phase = PatrolPhase::Move;
-            m.patrol = p.guid;
-            m.tank = tank->guid;
-            m.tankStart = tank->pos;
-            m.followers = Followers(world, tank->guid);
-            m.spots = std::move(spots);
-            m.arriveSec = arrive;
-            m.benefit = benefit;
-            m.cost = cost;
-            m.sinceMs = world.refreshedAtMs;
-            m.guardSinceMs = 0;
-            m.chosen = -1;
-            m.avoid.clear();
-            m.lures.clear();
-            m.kill.clear();
-            plan.notes.push_back(Format("%s reaches the fight in about %.0f s (fight about %.0f s left): "
-                "moving the fight about %.0f yd off its path (%.1f vs %.1f).", name.c_str(), arrive, remaining,
-                PackResolver::Distance(tank->pos, m.spots.front()), benefit, cost));
+            m.lastNote.clear();
             return;
         }
+        std::string const name = c.patrol ? NameOf(c.patrol->entry) : std::string();
+        std::string const reason = c.herePatrols > 0.0f && c.hereHolds > 0.0f ? name + " walks in and a control is next to the pile"
+                                 : c.herePatrols > 0.0f ? name + " walks into the fight"
+                                 : "a control that breaks on damage is next to the pile";
+        if (c.spots.empty())
+        {
+            std::string const note = reason + Format(" (loses %.1f here); no better spot within %.0f yd, fighting here.",
+                c.hereLoss, FightSpot::MAX_YD);
+            if (note != m.lastNote)
+                plan.notes.push_back(note);
+            m.lastNote = note;
+            return;
+        }
+
+        m.active = true;
+        m.phase = PatrolPhase::Move;
+        m.patrol = c.patrol ? c.patrol->guid : ObjectGuid();
+        m.tank = tank->guid;
+        m.tankStart = tank->pos;
+        m.spots = c.spots;
+        m.benefit = c.hereLoss - c.bestLoss;
+        m.cost = c.bestWalk;
+        m.why = c.why;
+        m.sinceMs = world.refreshedAtMs;
+        m.guardSinceMs = 0;
+        m.chosen = -1;
+        m.avoid.clear();
+        m.lures.clear();
+        m.kill.clear();
+        m.lastNote.clear();
+        plan.notes.push_back(reason + Format(": moving the fight about %.0f yd (loses %.1f here, %.1f there + %.1f walking).",
+            PackResolver::Distance(tank->pos, m.spots.front()), c.hereLoss, c.bestLoss, c.bestWalk));
     }
 }

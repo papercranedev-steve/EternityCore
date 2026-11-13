@@ -37,9 +37,7 @@ namespace Commander
             if (pull.LosHiderOf(m.guid))
                 return true;
             PatrolMovePlan const& move = plan.patrolMove;
-            if (move.active && move.phase == PatrolPhase::Move &&
-                (move.tank == m.guid || std::any_of(move.followers.begin(), move.followers.end(),
-                    [&m](PatrolFollower const& f) { return f.guid == m.guid; })))
+            if (move.active && move.phase == PatrolPhase::Move && move.tank == m.guid)
                 return true;
             return false;
         }
