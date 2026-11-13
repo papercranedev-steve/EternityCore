@@ -22,6 +22,15 @@
  * hold until the fight starts; Takeover::Stealth meanwhile (the rogue rotation would cancel
  * the stealth out of combat).
  *
+ * Patrol hold (TeamPlan::patrolHold, Coordination/Situation/Patrol/PatrolHold.h; battlefield
+ * groups doc 7), all Urgent (the fight is not bearable without it, the doctrine's hold):
+ *   cast    the fight is on (an enemy of ours, or the pull past its opener: Return, Settle), the
+ *           patrol alive, not under the spell, at least clearYd from fightAt, in range, in sight,
+ *           CanTryToCastSpell: cast it, out of combat too;
+ *   go      from goAtMs: walk to the first spot with sight of holdAt (eye height), hold there.
+ * Before goAtMs nothing (the bot does what it does). Once the patrol is in the fight the
+ * doctrine's hold is a duty above.
+ *
  * Known limit: CanTryToCastSpell refuses a spell whose aura the target still has, so a sheep
  * is cast again only once the old one ended (not RECAST_LEAD_SEC before).
  */
@@ -52,6 +61,10 @@ namespace Commander
         // The Sap controller before the pull (PullControlPlan::beforeOpener).
         void ProposeSap(PartyBotAI const* bot, TeamPlan const& plan, PartyMemberFacts const& self,
                         std::vector<Proposal>& out) const;
+        // The controller of the pull's patrol hold before the patrol is in the fight
+        // (TeamPlan::patrolHold, PatrolHold.h). True = it proposed.
+        bool ProposePatrolHold(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                               PartyMemberFacts const& self, std::vector<Proposal>& out) const;
     };
 }
 

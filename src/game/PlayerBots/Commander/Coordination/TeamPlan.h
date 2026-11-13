@@ -499,6 +499,25 @@ namespace Commander
         }
     };
 
+    // The pull's patrol hold before the patrol comes (Coordination/Situation/Patrol/PatrolHold.h,
+    // battlefield groups doc 7): the controller walks to a spot in time and holds it outside
+    // the pile. Written every refresh while the held patrol is idle; the doctrine's hold
+    // (DoctrinePlan::holds, planned) takes over once it is in the fight.
+    struct PatrolHoldPlan
+    {
+        bool active = false;
+        ObjectGuid patrol;
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        Position3 fightAt;              // the pile: the main tank, before the fight the planned spot
+        float clearYd = 0.0f;           // ControlValue::ClearOfPileYd: held at least this far from fightAt
+        Position3 holdAt;               // the last track point before it gets within clearYd
+        float holdSec = 0.0f;           // when it is there, from the refresh
+        std::vector<Position3> spots;   // where the controller stands, best first (sight is checked live)
+        uint32 goAtMs = 0;              // WorldTimer ms the controller sets out (0 = at once)
+        std::string why;
+    };
+
     // A member stands (or walks to) where an idle patrol comes before we leave
     // (RouteGuardAssigner): it walks off the route now (OffRouteBehavior, Urgent).
     struct OffRouteTask
@@ -1007,6 +1026,7 @@ namespace Commander
         ClearPlan clear;
         RetreatPlan retreat;
         PatrolMovePlan patrolMove;
+        PatrolHoldPlan patrolHold;
         RouteGuardPlan routeGuard;
         AreaPlan area;
         DoctrinePlan doctrine;

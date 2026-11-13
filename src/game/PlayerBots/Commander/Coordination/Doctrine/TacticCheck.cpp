@@ -2,6 +2,7 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/Tags.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -67,6 +68,12 @@ namespace TacticCheck
                 return "it died";
             if (h.kind != ControlKind::Hold && d.Has(h.enemy, STAMP_NO_MEZ))
                 return "a control that breaks on damage is not allowed on it now";
+            // The pull's patrol hold (PatrolHold.h): not held before it reached the pile (user
+            // 2026-11-13: then it is fought with the rest).
+            if (h.planned && h.kind != ControlKind::Hold && !e->control.spellId)
+                if (PartyMemberFacts const* tank = Tanks::Main(world))
+                    if (PackResolver::Distance(tank->pos, e->pos) - e->boundingRadius < ControlValue::ClearOfPileYd(world))
+                        return "it reached the pile before it was held, fought with the rest";
             return nullptr;
         }
 
@@ -109,6 +116,11 @@ namespace TacticCheck
             {
                 if (EnemyFacts const* e = world.FindEnemy(h.enemy))
                     plan.notes.push_back("Hold on " + EnemyName(e->entry) + " ended: " + why + ".");
+                // Its patrol group is no longer held outside: it joins the pile like any other.
+                if (h.planned)
+                    for (DoctrineGroup& g : d.groups)
+                        if (g.Has(h.enemy))
+                            g.holdOut = false;
                 recheck = true;
                 continue;
             }

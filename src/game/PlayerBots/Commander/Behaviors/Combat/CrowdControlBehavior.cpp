@@ -10,6 +10,7 @@
 #include "Spell.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
+#include "Timer.h"
 
 namespace Commander
 {
@@ -102,12 +103,86 @@ namespace Commander
         out.push_back(Opening("opening sap: wait at the spot", BotActionType::Hold));
     }
 
+    bool CrowdControlBehavior::ProposePatrolHold(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                                 PartyMemberFacts const& self, std::vector<Proposal>& out) const
+    {
+        PatrolHoldPlan const& h = plan.patrolHold;
+        if (!h.active || h.bot != self.guid)
+            return false;
+        Player* me = bot->me;
+        Map* map = me->GetMap();
+        Unit* patrol = map->GetUnit(h.patrol);
+        SpellEntry const* spell = sSpellMgr.GetSpellEntry(h.spellId);
+        if (!patrol || !patrol->IsAlive() || !spell)
+            return false;
+        auto const make = [](char const* reason, BotActionType type)
+        {
+            Proposal p;
+            p.tier = ProposalTier::Urgent;
+            p.source = "cc";
+            p.reason = reason;
+            p.score = 5.0f;
+            p.action.type = type;
+            return p;
+        };
+
+        float range = 0.0f;
+        for (ControlAbility const& a : self.controls)
+            if (a.spellId == h.spellId)
+                range = a.maxRange;
+        PullPhase const phase = plan.pull.phase;
+        bool const fightOn = world.HasPartyEnemy() || phase == PullPhase::Return || phase == PullPhase::Settle;
+        Position3 at;
+        at.x = patrol->GetPositionX();
+        at.y = patrol->GetPositionY();
+        at.z = patrol->GetPositionZ();
+        if (fightOn && !patrol->HasAura(spell->Id) && PackResolver::Distance(at, h.fightAt) >= h.clearYd &&
+            me->GetDistance(patrol) <= range && me->IsWithinLOSInMap(patrol) && bot->CanTryToCastSpell(patrol, spell))
+        {
+            Proposal p = make("patrol hold: cast outside the pile", BotActionType::Cast);
+            p.action.spell = spell;
+            p.action.target = h.patrol;
+            p.action.dropTarget = true;
+            out.push_back(p);
+            return true;
+        }
+
+        if (h.spots.empty())
+            return false;
+        uint32 const now = WorldTimer::getMSTime();
+        if (h.goAtMs && int32(now - h.goAtMs) < 0)
+            return false;
+        float const eye = 1.8f;
+        Position3 const* spot = &h.spots.front();
+        for (Position3 const& s : h.spots)
+            if (map->isInLineOfSight(s.x, s.y, s.z + eye, h.holdAt.x, h.holdAt.y, h.holdAt.z + eye))
+            {
+                spot = &s;
+                break;
+            }
+        float const left = PackResolver::Distance(self.pos, *spot);
+        if (left <= PullControl::ARRIVED_YD || (bot->IsMovementHeld() && me->IsMoving()))
+        {
+            out.push_back(make("patrol hold: wait at the spot", BotActionType::Hold));
+            return true;
+        }
+        Proposal p = make("patrol hold: to the spot", BotActionType::MoveTo);
+        p.action.x = spot->x;
+        p.action.y = spot->y;
+        p.action.z = spot->z;
+        p.action.holdMs = uint32(left / OPENING_WALK_YD_PER_SEC * 1000.0f) + 1000;
+        out.push_back(p);
+        return true;
+    }
+
     void CrowdControlBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())
+            return;
+        if (ProposePatrolHold(bot, world, plan, *self, out))
             return;
 
         // Opening controller of a pull (PullControl.h), before the fight: walk to the spot and
@@ -188,6 +263,11 @@ namespace Commander
 
     bool CrowdControlBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
+        // The patrol hold's controller once it should be on its way (it casts as soon as it can).
+        PatrolHoldPlan const& h = plan.patrolHold;
+        if (h.active && h.bot == bot->me->GetObjectGuid() &&
+            (!h.goAtMs || int32(WorldTimer::getMSTime() - h.goAtMs) >= 0))
+            return true;
         return world.HasPartyEnemy() && plan.FindControlFor(bot->me->GetObjectGuid()) != nullptr;
     }
 }

@@ -30,6 +30,10 @@ namespace Commander
             // (its spot was checked against patrols for the time it stands there: PullControl)
             if (pull.control.Active() && pull.control.bot == m.guid)
                 return true;
+            // The patrol hold's controller (PatrolHold.h): its spot is off the patrol's walk until
+            // it is held there; afterwards the patrol stands still.
+            if (plan.patrolHold.active && plan.patrolHold.bot == m.guid)
+                return true;
             if (pull.LosHiderOf(m.guid))
                 return true;
             PatrolMovePlan const& move = plan.patrolMove;

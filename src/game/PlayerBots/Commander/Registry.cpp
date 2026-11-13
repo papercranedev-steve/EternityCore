@@ -28,6 +28,7 @@
 #include "Commander/Coordination/Doctrine/ControlledEnd.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
+#include "Commander/Coordination/Situation/Patrol/PatrolHold.h"
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Duties/InterruptAssigner.h"
@@ -74,6 +75,8 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RoleAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TacticalDoctrine>()));
+        // Reads this refresh's doctrine holds (the pull's patrol hold); RouteGuard reads it.
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolHoldAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<InterruptAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TargetAssigner>()));

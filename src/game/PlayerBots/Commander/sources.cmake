@@ -317,6 +317,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.h
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolHold.h
+  ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolHold.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})

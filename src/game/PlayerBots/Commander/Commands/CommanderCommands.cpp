@@ -355,6 +355,10 @@ namespace
             for (Commander::DoctrineHold const& h : d.holds)
                 handler->PSendSysMessage("    hold |cffffcc00%s|r: %s (%.1f points)", NameOf(map, h.enemy).c_str(),
                     h.why.c_str(), h.points);
+            // The pull's patrol hold before the patrol comes (PatrolHold.h).
+            if (plan.patrolHold.active)
+                handler->PSendSysMessage("    patrol hold |cffffcc00%s|r by %s: %s", NameOf(map, plan.patrolHold.patrol).c_str(),
+                    NameOf(map, plan.patrolHold.bot).c_str(), plan.patrolHold.why.c_str());
             // The battlefield split (Battlefield.h): each group, its tactic and members.
             for (Commander::DoctrineGroup const& g : d.groups)
             {
