@@ -47,13 +47,16 @@ namespace Commander
             PlayerChat::SendAddonMessage(player, PREFIX, body);
         }
 
-        // Highest threat on the list of anyone but the victim (0 = nobody else).
-        float SecondThreat(EnemyFacts const& e)
+        // Highest threat on the list of anyone but the victim (0 / empty guid = nobody else).
+        float SecondThreat(EnemyFacts const& e, ObjectGuid* who)
         {
             float second = 0.0f;
             for (ThreatEntry const& t : e.threat)
-                if (t.onList && t.guid != e.victim)
-                    second = std::max(second, t.threat);
+                if (t.onList && t.guid != e.victim && t.threat > second)
+                {
+                    second = t.threat;
+                    *who = t.guid;
+                }
             return second;
         }
 
@@ -96,10 +99,12 @@ namespace Commander
                 float const lead = ThreatView::VictimLead(e, &closest);
                 PartyMemberFacts const* victim = world.FindMember(e.victim);
                 char const* flags = victim && Tanks::IsTank(*victim) ? "t" : "";
+                ObjectGuid secondGuid;
+                float const second = SecondThreat(e, &secondGuid);
                 char buf[256];
-                snprintf(buf, sizeof(buf), "A;%s;%.0f;%s;%s;%s;%s;%s;%s", NameOf(map, e.guid).c_str(), e.healthPct,
+                snprintf(buf, sizeof(buf), "A;%s;%.0f;%s;%s;%s;%s;%s;%s;%s", NameOf(map, e.guid).c_str(), e.healthPct,
                     NameOf(map, e.victim).c_str(), Num(e.victimThreat).c_str(), Num(lead).c_str(),
-                    NameOf(map, closest).c_str(), Num(SecondThreat(e)).c_str(), flags);
+                    NameOf(map, closest).c_str(), Num(second).c_str(), flags, NameOf(map, secondGuid).c_str());
                 out.push_back(buf);
             }
         }

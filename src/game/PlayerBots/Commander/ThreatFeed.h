@@ -16,11 +16,12 @@
  *        headroom: threat left before taking aggro, "-" for the victim
  *        flags: v = current victim, m = in melee reach (110%, else 130%), n = not on the list
  *               yet, o = not of the party (ally NPC)
- *   A;<name>;<hp%>;<victim>;<victim threat>;<lead>;<closest>;<second>;<flags>   mode "all"
- *        only: every enemy
+ *   A;<name>;<hp%>;<victim>;<victim threat>;<lead>;<closest>;<second>;<flags>;<second name>
+ *        mode "all" only: every enemy
  *        lead: threat the closest other member is still away from taking it ("-" = nobody)
  *        second: highest threat of anyone on its list but the victim (0 = nobody)
  *        flags: t = the victim is a tank (Perception/Tanks.h)
+ *        second name: who has <second> ("-" = nobody)
  *   E                                                  end
  * No selection or the selection is not fighting the party: B, (A lines,) E without T / R.
  * Nothing at all is sent while there is nothing to show, except one empty B/E to clear.
