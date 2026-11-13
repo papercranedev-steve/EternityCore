@@ -342,6 +342,24 @@ namespace Commander
             return true;
         }
 
+        // The pull places the tank (PullBehavior walks it): going out, bringing the pack back,
+        // waiting where it opened for the pack, hiding from casters. The tank's stance
+        // (TankStanceBehavior) stands down then, the fight spot is not judged except for patrols
+        // coming soon (FightSpotAssigner).
+        bool PlacesTank() const
+        {
+            switch (phase)
+            {
+                case PullPhase::Approach:
+                case PullPhase::Return:
+                    return true;
+                case PullPhase::Settle:
+                    return awaitArrival || losBreak == PullLosBreak::Active;
+                default:
+                    return false;
+            }
+        }
+
         // Members other than the tank that are still out of combat wait while true (PullBehavior
         // holds them; healers and ranged first take their places for the planned fight,
         // PlannedFightSpot): the tank goes out or brings the pack back, the pack has not arrived
@@ -402,16 +420,41 @@ namespace Commander
         uint32 dangerSinceMs = 0;           // 0 = not in danger now
     };
 
-    // Moving the fight (PatrolAssigner, the spot from Coordination/Situation/FightSpot/FightSpot.h):
-    // the main tank's place loses more than a field cell around it (a patrol walking in, a
-    // control that breaks on damage next to the pile). The tank walks to the first spot that
-    // passes the live ground / idle creature / path checks (PatrolBehavior); the enemies follow
-    // the tank. The others pick their own cells around the tank's new place (the stance
-    // modules; until 2026-11-13 they walked the tank's shift, PatrolFollower).
-    enum class PatrolPhase : uint8
+    // Where the main tank keeps the pile (FightSpotAssigner, the spot from
+    // Coordination/Situation/FightSpot/FightSpot.h; tank fight spot doc
+    // .kiro/docs/2026-11-14-tank-fight-spot.md): the tank's place loses more than a field cell
+    // around it (a patrol walking in, a control that breaks on damage next to the pile). The
+    // tank walks to the first spot that passes the live ground / idle creature / path checks
+    // (TankStanceBehavior); the enemies follow the tank. The others pick their own cells around
+    // the tank's new place (the stance modules). Not moving: the tank holds where it stands.
+    struct FightSpotPlan
     {
-        Move,       // the tank walks to the chosen spot
-        Guard,      // arrived: nobody goes back into the path until the patrol walked past
+        bool moving = false;
+        ObjectGuid tank;
+        ObjectGuid patrol;                  // the patrol costing the most at the start, empty = none
+        Position3 from;                     // the tank's position at decision time
+        std::vector<Position3> spots;       // best first, fixed while moving
+        float benefit = 0.0f;               // points not lost there (FightSpot: here - best spot's loss)
+        float cost = 0.0f;                  // points lost walking there
+        std::string why;                    // FightSpot::Choice::why
+        uint32 sinceMs = 0;
+        // Written by the tank's TankStanceBehavior (same exception as PullPlan::rangedShot):
+        // index of the spot that passed the live checks, -1 = none yet, -2 = none of them passed.
+        mutable int32 chosen = -1;
+        mutable Position3 chosenSpot;       // spots[chosen] with its ground height
+        // What the leader was told last while not moving (said again only when it changes).
+        std::string lastNote;
+
+        bool Moves(ObjectGuid bot) const { return moving && !bot.IsEmpty() && bot == tank; }
+        // Where the pile will be: the chosen spot (the first one before the tank checked them),
+        // else false (not moving).
+        bool Target(Position3& out) const
+        {
+            if (!moving || spots.empty())
+                return false;
+            out = chosen >= 0 ? chosenSpot : spots.front();
+            return true;
+        }
     };
 
     enum class PatrolLureState : uint8
@@ -435,39 +478,33 @@ namespace Commander
         uint32 sinceMs = 0;                 // Active since then
     };
 
-    struct PatrolMovePlan
+    // Guarding against a patrol (PatrolAssigner): it walks over enemies standing away from the
+    // pile, not into the pile itself (that is the fight spot's: FightSpotPlan). Nobody goes
+    // over to them until it walked past.
+    struct PatrolGuardPlan
     {
         bool active = false;
-        PatrolPhase phase = PatrolPhase::Move;
-        ObjectGuid patrol;                  // the patrol it moves for (Guard follows), empty = a hold only
+        ObjectGuid patrol;
         ObjectGuid tank;
-        Position3 tankStart;                // the tank's position at decision time
-        std::vector<Position3> spots;       // best first, fixed while active
-        float benefit = 0.0f;               // points not lost there (FightSpot: here - best spot's loss)
-        float cost = 0.0f;                  // points lost walking there
-        std::string why;                    // FightSpot::Choice::why
         uint32 sinceMs = 0;
-        uint32 guardSinceMs = 0;
-        // Written by the tank's PatrolBehavior (same exception as PullPlan::rangedShot): index
-        // of the spot that passed the live checks, -1 = none yet, -2 = none of them passed.
-        mutable int32 chosen = -1;
-        mutable Position3 chosenSpot;       // spots[chosen] with its ground height
+        // What the patrol costs if the fight goes to one of `avoid` (SpotCost::PatrolJoinPoints
+        // at the worst of them): the worth of killing a caster no lure brings out.
+        float points = 0.0f;
+        // Patrols guarded until GUARD_TIMEOUT_MS this fight: not guarded again.
+        std::vector<ObjectGuid> timedOut;
+        // Patrols the leader was told about this fight (once each).
+        std::vector<ObjectGuid> announced;
 
         // Enemies standing where the patrol walks before the fight ends, every refresh while
         // active. Nobody chases them (PartyBotAI::BeginChasing), the tank does not walk over
         // to win them back and nobody is given them as a target (TargetAssigner), unless a bot
         // was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
         std::vector<ObjectGuid> avoid;
-        // Guard only. Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
+        // Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
         std::vector<PatrolLure> lures;
         // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot): a
         // ranged damage dealer kills each (FocusAssigner intercept; since 2026-11-03 it runs after PatrolAssigner and reads this in the same refresh).
         std::vector<ObjectGuid> kill;
-
-        // Not active: the last look for a better spot (PatrolAssigner::CHECK_MS apart) and what
-        // the leader was told last (said again only when it changes).
-        uint32 checkedAtMs = 0;
-        std::string lastNote;
 
         bool Avoids(ObjectGuid enemy) const
         {
@@ -684,7 +721,7 @@ namespace Commander
         float benefit = 0.0f;        // of the whole spell from `spot` (or here)
         float cost = 0.0f;
         float net = 0.0f;
-        // What ending the phase now loses (a tank sent elsewhere: PatrolAssigner pays it).
+        // What ending the phase now loses (a tank sent elsewhere: the fight spot pays it, FightSpot.h).
         float endCost = 0.0f;
         // The phase counts on the tanks' taunts for the enemies it turns: what it loses
         // without them (RescueAssigner adds it to a taunt spent on another enemy).
@@ -1020,7 +1057,8 @@ namespace Commander
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         RetreatPlan retreat;
-        PatrolMovePlan patrolMove;
+        FightSpotPlan fightSpot;
+        PatrolGuardPlan patrolGuard;
         PatrolHoldPlan patrolHold;
         RouteGuardPlan routeGuard;
         AreaPlan area;
@@ -1094,7 +1132,7 @@ namespace Commander
         // IsGapCloserForbidden). The exceptions live here, not at the readers.
 
         // `bot` was given `enemy` to kill by the brain (intercept, also a caster of
-        // patrolMove.kill). This refresh's allocation.
+        // patrolGuard.kill). This refresh's allocation.
         bool AssignedToKill(ObjectGuid bot, ObjectGuid enemy) const
         {
             if (bot.IsEmpty())
@@ -1116,7 +1154,7 @@ namespace Commander
             if (doctrine.Has(enemy, STAMP_HOLD_FIRE))
                 return "it reflects damage: hands off";
             // Standing in a patrol's path (PatrolAssigner.h): the party stays off it.
-            if (patrolMove.Avoids(enemy) && !AssignedToKill(bot, enemy))
+            if (patrolGuard.Avoids(enemy) && !AssignedToKill(bot, enemy))
                 return "in a patrol's path";
             return nullptr;
         }

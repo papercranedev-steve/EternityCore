@@ -41,7 +41,7 @@ namespace FightSpot
             Scored x;
             x.pos = s.pos;
             x.loss = SpotCost::PatrolJoins(world, tank, s.pos, patrolWithinSec) + SpotCost::BreaksHold(held, s.pos, clearYd);
-            x.walk = Value::FightExtension(world, s.WalkEstimate(PATH_FACTOR) / RUN_YARDS_PER_SEC) + areaEnd;
+            x.walk = Value::FightExtension(world, s.WalkEstimate(PATH_FACTOR) / WALK_YARDS_PER_SEC) + areaEnd;
             if (x.loss + x.walk < c.hereLoss - margin)
                 scored.push_back(x);
         }

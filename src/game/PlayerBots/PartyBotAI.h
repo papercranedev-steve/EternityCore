@@ -228,13 +228,14 @@ public:
     // CheckForDispelTargets stands down. Out of combat it dispels as before.
     bool IsDispelControlled() const;
     // While the party fights a Commander stance module places this healer, ranged (keeping a
-    // caster distance) or melee damage bot (Takeover::Stance: HealerStanceBehavior,
-    // RangedStanceBehavior, MeleeStanceBehavior), also before it is in combat itself: UpdateAI
-    // does not follow the leader and stops a follow under way. Not tanks yet.
+    // caster distance), melee damage bot or tank (Takeover::Stance: HealerStanceBehavior,
+    // RangedStanceBehavior, MeleeStanceBehavior, TankStanceBehavior), also before it is in
+    // combat itself: UpdateAI does not follow the leader and stops a follow under way.
     bool IsStanceControlled() const;
     // IsStanceControlled and the bot is not a healer: its chase belongs to the stance module
     // (BeginChasing does not start one, UpdateAI drops one under way). Ranged: no 25 yd caster
-    // chase; melee: the module chases at the angle it chose (OrderChase).
+    // chase; melee: the module chases at the angle it chose (OrderChase); tank: it holds its
+    // place and chases only an enemy that does not come (OrderChase, angle 0).
     bool IsChaseControlled() const;
     // Commander melee stance (BotActionType::Chase): chase `pVictim` at `angle` (radians, from
     // its facing; MoveChase distance 1 as the original chase). False when it cannot (rooted,

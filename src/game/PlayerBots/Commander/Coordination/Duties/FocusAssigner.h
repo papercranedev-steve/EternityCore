@@ -74,7 +74,7 @@ namespace Commander
         // melee bots only when the enemy is already close (no running across the room).
         static constexpr float INTERCEPT_RANGE = 40.0f;
         static constexpr float MELEE_INTERCEPT_RANGE = 10.0f;
-        // Caster in a patrol's path (PatrolMovePlan::kill): ranged only, within spell range
+        // Caster in a patrol's path (PatrolGuardPlan::kill): ranged only, within spell range
         // (the chase into the path is blocked, they cannot walk closer).
         static constexpr float PATROL_INTERCEPT_RANGE = 30.0f;
         static constexpr float INTERCEPT_STICKY_YARDS = 5.0f;   // previous interceptor counts as this much closer

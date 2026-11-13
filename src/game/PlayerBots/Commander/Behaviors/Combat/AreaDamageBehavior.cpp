@@ -105,8 +105,8 @@ namespace Commander
             if (!r.ticks)
                 return false;
             r.paid = true;
-            if (plan.patrolMove.active && plan.patrolMove.phase == PatrolPhase::Move)
-                r.turn.busyTanks.push_back(plan.patrolMove.tank);
+            if (plan.fightSpot.moving)
+                r.turn.busyTanks.push_back(plan.fightSpot.tank);
             r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
             out = AreaValue::Evaluate(world, r);
             return out.valid;

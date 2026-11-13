@@ -438,10 +438,10 @@ namespace Commander
         }
 
         std::vector<ObjectGuid> const tanks = AllTanks(world);
-        // Tanks walking off a patrol's path (PatrolAssigner, this refresh or the last one).
+        // Tanks moving the fight (FightSpotAssigner, this refresh: it runs before).
         std::vector<ObjectGuid> busy;
-        if (plan.patrolMove.active && plan.patrolMove.phase == PatrolPhase::Move)
-            busy.push_back(plan.patrolMove.tank);
+        if (plan.fightSpot.moving)
+            busy.push_back(plan.fightSpot.tank);
         auto const forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
 
         // 1. A channel running.

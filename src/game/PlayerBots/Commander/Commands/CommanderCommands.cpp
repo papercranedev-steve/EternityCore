@@ -333,10 +333,15 @@ namespace
         for (ObjectGuid const& g : plan.orders.leaveAlone)
             handler->PSendSysMessage("Order: leave |cffffcc00%s|r alone", NameOf(map, g).c_str());
         // Constraints in force (TeamPlan, directive types doc): the arbiter drops proposals breaking them.
-        if (plan.patrolMove.active)
-            for (ObjectGuid const& g : plan.patrolMove.avoid)
+        if (plan.patrolGuard.active)
+            for (ObjectGuid const& g : plan.patrolGuard.avoid)
                 handler->PSendSysMessage("Constraint: nobody engages |cffffcc00%s|r (in a patrol's path, except its interceptor)",
                     NameOf(map, g).c_str());
+        // Where the tank keeps the pile (FightSpotAssigner).
+        if (plan.fightSpot.moving)
+            handler->PSendSysMessage("Fight spot: %s moves the fight (%.1f - %.1f pt): %s",
+                NameOf(map, plan.fightSpot.tank).c_str(), plan.fightSpot.benefit, plan.fightSpot.cost,
+                plan.fightSpot.why.c_str());
         // Doctrine (TacticalDoctrine): how this fight is fought, the stamps the duties read.
         if (plan.doctrine.phase != Commander::FightPhase::None)
         {

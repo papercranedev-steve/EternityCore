@@ -883,22 +883,34 @@ namespace DevConsole
             SetFieldN(L, "z", Round2(plan.retreat.point.z));
             lua_setfield(L, -2, "retreat");
         }
-        Commander::PatrolMovePlan const& m = plan.patrolMove;
-        if (m.active)
+        Commander::FightSpotPlan const& f = plan.fightSpot;
+        if (f.moving)
         {
             lua_createtable(L, 0, 10);
-            SetFieldS(L, "phase", m.phase == Commander::PatrolPhase::Guard ? "guard" : "move");
+            SetFieldS(L, "phase", "move");
+            SetFieldG(L, "patrol", f.patrol);
+            SetFieldG(L, "tank", f.tank);
+            SetFieldN(L, "startX", Round2(f.from.x));
+            SetFieldN(L, "startY", Round2(f.from.y));
+            SetField(L, "chosen", f.chosen);
+            if (f.chosen >= 0)
+            {
+                SetFieldN(L, "spotX", Round2(f.chosenSpot.x));
+                SetFieldN(L, "spotY", Round2(f.chosenSpot.y));
+            }
+            SetFieldN(L, "benefit", Round2(f.benefit));
+            SetFieldN(L, "cost", Round2(f.cost));
+            SetFieldS(L, "why", f.why.c_str());
+            lua_setfield(L, -2, "fightSpot");
+        }
+        Commander::PatrolGuardPlan const& m = plan.patrolGuard;
+        if (m.active)
+        {
+            lua_createtable(L, 0, 6);
+            SetFieldS(L, "phase", "guard");
             SetFieldG(L, "patrol", m.patrol);
             SetFieldG(L, "tank", m.tank);
-            SetFieldN(L, "startX", Round2(m.tankStart.x));
-            SetFieldN(L, "startY", Round2(m.tankStart.y));
-            SetField(L, "chosen", m.chosen);
-            if (m.chosen >= 0)
-            {
-                SetFieldN(L, "spotX", Round2(m.chosenSpot.x));
-                SetFieldN(L, "spotY", Round2(m.chosenSpot.y));
-            }
-            SetFieldS(L, "why", m.why.c_str());
+            SetFieldN(L, "points", Round2(m.points));
             if (!m.avoid.empty())
             {
                 PushGuidList(L, m.avoid);

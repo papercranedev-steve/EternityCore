@@ -179,15 +179,15 @@ namespace Commander
                     // A caster standing in a patrol's path that no lure brings out
                     // (PatrolAssigner, same refresh: it runs in the situation stage). Worth what
                     // the patrol would cost.
-                    if (!(plan.patrolMove.active &&
-                          std::find(plan.patrolMove.kill.begin(), plan.patrolMove.kill.end(), e.guid) != plan.patrolMove.kill.end() &&
+                    if (!(plan.patrolGuard.active &&
+                          std::find(plan.patrolGuard.kill.begin(), plan.patrolGuard.kill.end(), e.guid) != plan.patrolGuard.kill.end() &&
                           e.acting && !e.crowdControlled && e.health))
                         continue;
                     PartyMemberFacts const* victim = world.FindMember(e.victim);
                     n.enemy = &e;
                     n.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
                     n.reason = "caster in a patrol's path";
-                    n.points = plan.patrolMove.benefit;
+                    n.points = plan.patrolGuard.points;
                     n.rangedOnly = true;
                     n.urgent = true;
                 }

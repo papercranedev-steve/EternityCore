@@ -21,7 +21,7 @@
  * Hard limits (TargetRules::Hittable), no points: acting and alive; not under a control that
  *   breaks on damage (anyone's), unless ControlledEnd sent this bot to wake it; not about to get
  *   one from another bot (CrowdControl duty this allocation whose spell breaks on damage); not
- *   in a patrol's path (PatrolMovePlan::avoid) unless it is this bot's intercept; not left alone
+ *   in a patrol's path (PatrolGuardPlan::avoid) unless it is this bot's intercept; not left alone
  *   by the player (`.partybot attackstop`).
  * Nobody gets a target: healers; during a retreat; out of combat while a pull holds them
  *   (non-tanks in Approach / Return / Settle, the pull's tank in WaitReady / Approach: PullBehavior

@@ -8,12 +8,12 @@
  *
  * Not while: no fight, a retreat, the pull's Approach / Return, Settle while the damage
  * dealers hold or the tank waits for the pack or hides from casters (PullPlan).
- * Tanks sent elsewhere (patrolMove Move: walking off a patrol's path; read as PatrolAssigner
- * left it this refresh) take nothing back: AggroTurnCost::Options::busyTanks.
+ * Tanks sent elsewhere (TeamPlan::fightSpot moving: the tank takes the pile to another spot;
+ * read as FightSpotAssigner left it this refresh) take nothing back: AggroTurnCost::Options::busyTanks.
  *
  * 1. A bot channelling an area spell (PartyMemberFacts::areaChannel): the phase is its channel
  *    (step Channel), valued by AreaValue on the ticks left (paid). endCost = its net now -
- *    its net with every tank busy (what sending the tank away costs, PatrolAssigner pays it).
+ *    its net with every tank busy (what sending the tank away costs, the fight spot pays it).
  * 2. Otherwise every damage dealer bot, every ready area spell (AreaSpellFacts), every centre
  *    (ground spell: each acting enemy within range; else around the caster), valued by
  *    AreaValue for the whole spell (never "start and stop after a few ticks"):

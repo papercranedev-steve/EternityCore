@@ -10,16 +10,20 @@
  *             ends (only those within `patrolWithinSec`: the pull still places the tank);
  *   holds     SpotCost::BreaksHold(S): the controls that break on damage within
  *             ControlValue::ClearOfPileYd of S (the area spells there would wake them);
- *   walk      (S not the tank's place) Value::FightExtension(walk to S at RUN_YARDS_PER_SEC,
+ *   walk      (S not the tank's place) Value::FightExtension(walk to S at WALK_YARDS_PER_SEC,
+ *             the tank's backwards walk with the pile on it (Backpedal.h),
  *             the grid walk or the straight line x PATH_FACTOR) + the area phase's end cost
  *             (plan.area, the last refresh: AreaPhase runs after this).
  * The tank's place costs patrols + holds. At most MARGIN_SEC of the tank's LostAction: nothing
  * to gain, no search. Else the field cells MIN_YD..MAX_YD around the tank (FieldSpots::Collect:
  * standable, no idle creature, reachable) are scored; the best MAX_SPOTS that lose less than the
  * tank's place by more than the margin are the move's spots, best first (ground, idle creatures
- * and the path are checked live by PatrolBehavior on the tank).
- * Not scored yet (doc 8.1): how well the healers and ranged can stand around S (they pick their
- * own cells around the tank afterwards, Healer / RangedStanceBehavior).
+ * and the path are checked live by TankStanceBehavior on the tank). Called every refresh by
+ * FightSpotAssigner (tank fight spot doc .kiro/docs/2026-11-14-tank-fight-spot.md).
+ * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), the area
+ * spell's value with the pile at S, fleeing enemies' helpers, how well the healers and ranged
+ * can stand around S (they pick their own cells around the tank afterwards, Healer /
+ * RangedStanceBehavior).
  * Pure (facts and plan).
  */
 
@@ -37,7 +41,8 @@ namespace FightSpot
     float const MIN_YD = 5.0f;
     float const MAX_YD = 35.0f;
     float const MARGIN_SEC = 1.0f;
-    float const RUN_YARDS_PER_SEC = 7.0f;
+    // Backwards run speed (4.5 yd/s, measured 2026-11-08); was the forward 7 until 2026-11-14.
+    float const WALK_YARDS_PER_SEC = 4.5f;
     float const PATH_FACTOR = 1.3f;
     size_t const MAX_SPOTS = 8;
 

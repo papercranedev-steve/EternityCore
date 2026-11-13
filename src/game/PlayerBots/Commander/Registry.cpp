@@ -11,6 +11,7 @@
 #include "Commander/Behaviors/Movement/HealerStanceBehavior.h"
 #include "Commander/Behaviors/Movement/RangedStanceBehavior.h"
 #include "Commander/Behaviors/Movement/MeleeStanceBehavior.h"
+#include "Commander/Behaviors/Movement/TankStanceBehavior.h"
 #include "Commander/Behaviors/Support/RestBehavior.h"
 #include "Commander/Behaviors/Movement/EscapeBehavior.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
@@ -26,6 +27,7 @@
 #include "Commander/Coordination/Duties/RescueAssigner.h"
 #include "Commander/Coordination/Duties/FleeStopAssigner.h"
 #include "Commander/Coordination/Doctrine/ControlledEnd.h"
+#include "Commander/Coordination/Situation/FightSpot/FightSpotAssigner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolHold.h"
@@ -60,6 +62,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RangedStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<MeleeStanceBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TankStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RestBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EscapeBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaDamageBehavior>()));
@@ -86,6 +89,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FleeStopAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ControlledEndAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FightSpotAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RouteGuardAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<AreaPhaseAssigner>()));

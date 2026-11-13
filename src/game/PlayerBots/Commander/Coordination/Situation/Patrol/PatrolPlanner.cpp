@@ -62,8 +62,8 @@ namespace Commander
 
     void PatrolPlanner::Step(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
     {
-        PatrolMovePlan& m = plan.patrolMove;
-        if (!m.active || m.phase != PatrolPhase::Guard)
+        PatrolGuardPlan& m = plan.patrolGuard;
+        if (!m.active)
             return;
         PatrolFacts const* patrol = PatrolAssigner::FindPatrol(world, m);
         if (!patrol)

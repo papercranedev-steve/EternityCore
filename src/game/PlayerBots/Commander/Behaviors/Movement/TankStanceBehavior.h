@@ -1,0 +1,63 @@
+/*
+ * PartyBot Commander layer 3 (cerebellum): where a tank stands while the party fights
+ * ("tankstance"; tank fight spot doc .kiro/docs/2026-11-14-tank-fight-spot.md, step 1).
+ *
+ * Before: the original chase (CombatBotBaseAI::BeginChasing, MoveChase in front of the victim)
+ * ran after every new target and every enemy that walked off, so the pile drifted wherever the
+ * loose enemies went (towards the area caster, out of the Blizzard).
+ *
+ * Now the module takes the chase over (Takeover::Stance, PartyBotAI::IsChaseControlled:
+ * BeginChasing stands down, UpdateAI drops a chase it did not order) while the party fights
+ * (WorldModel::InFight), not while the pull places the tank (PullPlan::PlacesTank: the pull
+ * walks it, a walk-in pull's chase is the original one) unless the fight spot moves it.
+ *
+ *  - The fight spot moves this tank (TeamPlan::fightSpot, FightSpotAssigner): once per move,
+ *    the plan's spots in order, the first whose ground is found within MAX_STEP_Z of the tank,
+ *    that no idle creature covers, and whose path is safe (SafeRoute::PathIsSafe,
+ *    MAX_PATH_DETOUR) is written to fightSpot.chosen (-2: none). Then walk there (tier
+ *    Assigned, valued with the plan's benefit and cost): backwards facing the tank's victim
+ *    (Backpedal, order renewed every tick, the rotation keeps fighting), or MoveTo when no
+ *    backwards path is found or the tank has no victim, with Hold while that walk is under way.
+ *    (Was PatrolBehavior's until 2026-11-14.)
+ *  - Otherwise the tank stays where it stands. Its enemy (the brain's target, else the victim)
+ *    out of melee reach:
+ *      comes by itself (it hits this tank, walks in to melee: Tags::Engage::Melee with melee
+ *      on, not rooted, controlled or running away): no chase; a chase under way is stopped
+ *      (StopChase);
+ *      else (stands back casting, rooted, hits someone else and the tank must get it with a
+ *      melee ability, runs away): chase it (BotActionType::Chase, angle 0 in front, value
+ *      LostAction(min(HORIZON_SEC, the fight's remaining time)), tier Assigned). Whether to taunt
+ *      it instead is the team rescue's (RescueAssigner); once it turns, it comes.
+ *    Where the chase ended is where the tank stands: the next refresh judges the spot again
+ *    from there (FightSpot), it does not walk back on its own (doc 9, answer 4).
+ *
+ * Not while: the retreat runs, rooted, a duel, on a transport, the bot cannot act.
+ * Tank facing (turning enemies away from the party) is not done.
+ */
+
+#ifndef MANGOS_COMMANDER_TANK_STANCE_BEHAVIOR_H
+#define MANGOS_COMMANDER_TANK_STANCE_BEHAVIOR_H
+
+#include "Commander/Behaviors/IBehavior.h"
+
+namespace Commander
+{
+    class TankStanceBehavior : public IBehavior
+    {
+    public:
+        static constexpr float MAX_STEP_Z = 6.0f;
+        static constexpr float MAX_PATH_DETOUR = 1.8f;
+        static constexpr float PATH_FACTOR = 1.3f;
+        static constexpr uint32 HOLD_EXTRA_MS = 1000;
+        static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
+        static constexpr float HORIZON_SEC = 8.0f;
+
+        char const* GetId() const override { return "tankstance"; }
+        bool AppliesTo(PartyBotAI const* bot) const override;
+        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(PartyBotAI const* bot, WorldModel const& world,
+                     TeamPlan const& plan, std::vector<Proposal>& out) const override;
+    };
+}
+
+#endif

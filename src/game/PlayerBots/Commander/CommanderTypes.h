@@ -135,8 +135,8 @@ namespace Commander
         // ranged weapon users, melee behind its victim). The stance module of the bot's role
         // places it instead (PartyBotAI::IsStanceControlled): HealerStanceBehavior (healers),
         // RangedStanceBehavior (ranged damage dealers), MeleeStanceBehavior (melee damage
-        // dealers). Tanks are not taken over yet. Was CasterChase (healers and ranged only)
-        // until 2026-11-07.
+        // dealers), TankStanceBehavior (tanks, since 2026-11-14). Was CasterChase (healers and
+        // ranged only) until 2026-11-07.
         Stance,
         Count
     };

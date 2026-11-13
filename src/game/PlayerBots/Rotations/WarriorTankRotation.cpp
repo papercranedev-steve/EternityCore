@@ -94,9 +94,8 @@ namespace
             if (Cast(pVictim, w.pSunderArmor))
                 return;
 
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE &&
-               !me->CanReachWithMeleeAutoAttack(pVictim))
-                bot.BeginChasing(pVictim);
+            // (where the tank stands: the Commander tank stance module, TankStanceBehavior; in a
+            // duel UpdateAI restarts an idle chase before the rotation)
 
             // Rage left over: on the next swing (no global cooldown).
             if (me->GetPower(POWER_RAGE) > RAGE_DUMP)

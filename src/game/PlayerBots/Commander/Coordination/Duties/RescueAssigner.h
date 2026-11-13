@@ -8,7 +8,7 @@
  * Offer, while the party fights: one need per loose enemy (now = true, kind Rescue,
  * exclusive DutyExclusive::EnemyHandled: a single target control or an intercept of the same
  * enemy is an alternative, whichever is worth more is answered). Not for an enemy the party
- * stays off (PatrolMovePlan::Avoids) or the player said to leave alone. Candidates
+ * stays off (PatrolGuardPlan::Avoids) or the player said to leave alone. Candidates
  * (Perception/Values/RescueValue.h), each offered when its net is positive, rank = net (+ STICKY_POINTS
  * for the bot and spell given it last refresh):
  *   every tank bot that can act within TANK_REACH yd: each ready taunt (spellId), and winning it

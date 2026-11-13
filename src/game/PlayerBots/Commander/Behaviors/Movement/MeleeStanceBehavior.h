@@ -13,7 +13,7 @@
  * The enemy to stand at: the brain's target for the bot (TeamPlan::targets), else its victim.
  *  - Its walk there passes an idle creature or finds no path (RouteRisk::Blocked: the navmesh
  *    route of Perception/Spatial/MeleeRoutes.h, the straight line before it is checked), or the enemy
- *    stands in a patrol's path the party moved off (PatrolMovePlan::avoid): no chase; a chase
+ *    stands in a patrol's path away from the pile (PatrolGuardPlan::avoid): no chase; a chase
  *    under way is stopped (StopChase). The brain gives it another target next refresh
  *    (DamageTargets: a current target it cannot walk to counts as none).
  *  - Otherwise chase it (BotActionType::Chase: attack it if it is not the victim yet, MoveChase

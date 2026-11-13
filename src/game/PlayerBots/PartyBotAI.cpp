@@ -245,13 +245,15 @@ bool PartyBotAI::IsStanceControlled() const
     // a healer still out of combat is placed too)
     // (a ranged damage dealer fighting in melee, no mana and no ranged weapon or a form, keeps
     // the original chase: RangedStanceBehavior does not place it)
-    return m_directives && (GetRole() == ROLE_HEALER || GetRole() == ROLE_MELEE_DPS || UsesCasterChase()) &&
+    // (tanks since 2026-11-14: TankStanceBehavior)
+    return m_directives &&
+           (GetRole() == ROLE_HEALER || GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK || UsesCasterChase()) &&
            m_directives->IsTakenOver(Commander::Takeover::Stance, WorldTimer::getMSTime());
 }
 
 bool PartyBotAI::IsChaseControlled() const
 {
-    return (UsesCasterChase() || GetRole() == ROLE_MELEE_DPS) && IsStanceControlled();
+    return (UsesCasterChase() || GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsStanceControlled();
 }
 
 bool PartyBotAI::OrderChase(Unit* pVictim, float angle)
@@ -3983,12 +3985,8 @@ void PartyBotAI::UpdateInCombatAI_Druid()
         {
             if (me->HasDistanceCasterMovement())
                 me->SetCasterChaseDistance(0.0f);
-
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-                && !me->CanReachWithMeleeAutoAttack(pVictim))
-            {
-                BeginChasing(pVictim);
-            }
+            // (the chase: the Commander tank / melee stance module, or in a duel UpdateAI
+            // restarts an idle one before the rotation)
 
             if (m_spells.druid.pFeralCharge &&
                 CanTryToCastSpell(pVictim, m_spells.druid.pFeralCharge))

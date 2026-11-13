@@ -28,11 +28,11 @@
  * Not for: dead members, players and pets (not ours to move); everyone during a retreat; the
  * pull's tank while it goes out or brings the pack back (Approach / Return, the pull owns its
  * walk), the opening controller walking to its spot (PullControl, its spot checks patrols),
- * line of sight hiders; the tank and followers of a fight move off a patrol
- * (TeamPlan::patrolMove). In a fight a member whose main tank stands on the route too: the
- * whole fight is on it, PatrolAssigner's question, not one member's.
+ * line of sight hiders; the tank while it moves the fight (TeamPlan::fightSpot). In a fight a
+ * member whose main tank stands on the route too: the whole fight is on it, the fight spot's
+ * question (FightSpotAssigner), not one member's.
  *
- * Reads the pull plan and patrolMove as this refresh's earlier assigners left them (or the
+ * Reads the pull plan and fightSpot as this refresh's earlier assigners left them (or the
  * last refresh's): only who is exempt depends on it, a refresh later at worst.
  */
 

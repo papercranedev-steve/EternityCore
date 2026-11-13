@@ -96,19 +96,13 @@ namespace SpotCost
     {
         if (worst)
             *worst = nullptr;
-        float const remaining = Value::FightRemainingSec(world);
-        float const horizon = std::min(remaining, withinSec);
-        float const dealt = std::max(1.0f, Value::DealtDps(world));
         float total = 0.0f;
         float most = 0.0f;
         for (PatrolFacts const& p : world.patrols)
         {
-            PatrolZone::Approach const a = PatrolZone::FirstWithin(world, p, spot, PatrolZone::Radius(p) + PILE_SPREAD_YD);
-            if (a.sec < 0.0f || a.sec >= horizon)
+            float const points = PatrolJoinPoints(world, tank, p, spot, withinSec);
+            if (points <= 0.0f)
                 continue;
-            float const killSec = float(p.health) / dealt;
-            float const hit = p.meleeDps * (1.0f - Value::ArmorReduction(tank.armor, p.level));
-            float const points = Value::Points(world, hit * (remaining - a.sec + killSec)) + Value::FightExtension(world, killSec);
             total += points;
             if (points > most)
             {
@@ -118,6 +112,20 @@ namespace SpotCost
             }
         }
         return total;
+    }
+
+    float PatrolJoinPoints(WorldModel const& world, PartyMemberFacts const& tank, PatrolFacts const& p,
+                           Position3 const& spot, float withinSec)
+    {
+        float const remaining = Value::FightRemainingSec(world);
+        float const horizon = std::min(remaining, withinSec);
+        PatrolZone::Approach const a = PatrolZone::FirstWithin(world, p, spot, PatrolZone::Radius(p) + PILE_SPREAD_YD);
+        if (a.sec < 0.0f || a.sec >= horizon)
+            return 0.0f;
+        float const dealt = std::max(1.0f, Value::DealtDps(world));
+        float const killSec = float(p.health) / dealt;
+        float const hit = p.meleeDps * (1.0f - Value::ArmorReduction(tank.armor, p.level));
+        return Value::Points(world, hit * (remaining - a.sec + killSec)) + Value::FightExtension(world, killSec);
     }
 
     float BreaksHold(std::vector<HeldMez> const& held, Position3 const& spot, float clearYd)

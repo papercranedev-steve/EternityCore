@@ -272,6 +272,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/TankStanceBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/TankStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/RestBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/RestBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.h
@@ -321,6 +323,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolHold.cpp
   ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpot.h
   ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpot.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpotAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/FightSpot/FightSpotAssigner.cpp
 )
 
 target_sources(game PRIVATE ${COMMANDER_SRCS})
