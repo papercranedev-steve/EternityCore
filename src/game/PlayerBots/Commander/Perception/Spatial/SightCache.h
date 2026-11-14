@@ -17,6 +17,9 @@
  * Live(viewer, from, to): the same line now, exact positions, nothing kept: the final check
  * of the spot a module takes.
  *
+ * PathFailed / MarkPathFailed: a short memo of failed path checks (below), kept here since the
+ * same modules use it on the same cells.
+ *
  * Owned by PositionFieldBuilder (kept across builds, dropped with the field), reached through
  * PositionField::sight. Map thread of the party.
  */
@@ -26,6 +29,7 @@
 
 #include "Commander/Perception/WorldModel.h"
 #include <unordered_map>
+#include <vector>
 
 class Unit;
 
@@ -45,7 +49,25 @@ namespace Commander
         static bool Live(Unit const* viewer, Position3 const& from, Position3 const& to);
         Sight Cells(Unit const* viewer, Position3 const& from, Position3 const& to, uint32& budget);
 
+        // The walk of `walker` to the cell of `to` failed SafeRoute::PathIsSafe (`tight`: on the
+        // hard line) within PATH_FAIL_MS, from the cell it stands in now. The stance modules
+        // check the path on a few cells per tick; without this the same failing cells came
+        // first every tick (stockade-20261115-000917). Moving to another cell, or the time,
+        // lets it be tried again (an idle creature walked off).
+        static constexpr uint32 PATH_FAIL_MS = 3000;
+        bool PathFailed(Unit const* walker, Position3 const& to, bool tight) const;
+        void MarkPathFailed(Unit const* walker, Position3 const& to, bool tight);
+
     private:
+        struct PathFail
+        {
+            uint64 walker = 0;      // ObjectGuid raw
+            int32 fromX = 0, fromY = 0, toX = 0, toY = 0;
+            bool tight = false;
+            uint32 atMs = 0;
+        };
+        std::vector<PathFail> m_pathFails;
+
         struct Entry
         {
             float fromZ = 0.0f;

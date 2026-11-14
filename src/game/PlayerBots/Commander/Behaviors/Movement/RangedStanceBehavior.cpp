@@ -10,6 +10,7 @@
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
+#include "Commander/Behaviors/Movement/SpotRejects.h"
 #include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -207,7 +208,15 @@ namespace Commander
         bool const hereValid = !unsafe && (inReach || placed);
         float const margin = SpotCost::Walk(world, *self, MOVE_MARGIN_SEC);
         if (hereValid && lossHere <= margin)
+        {
+            // The area phase holds its caster out of the victim's reach: say so (the stance
+            // leaves it there, the area phase moves it).
+            if (placed && !inReach && !prepare && Trace::On())
+                Trace::Emit("stance", Trace::Format("%s: victim out of reach, the area phase places it (ranged)", me->GetName()),
+                    Trace::Format("{\"bot\":\"%s\",\"active\":%s}", Trace::Guid(me->GetObjectGuid()).c_str(),
+                                  plan.area.CastBy(self->guid) ? "true" : "false"));
             return;
+        }
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
         float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
@@ -221,6 +230,7 @@ namespace Commander
         bool const mayTighten = !prepare && !inReach && !placed;
         uint32 checked = 0;
         size_t found = 0;
+        SpotRejects why;
         std::unique_ptr<SafeRoute::IdleCreatures> idleTight;
         for (bool const tight : { false, true })
         {
@@ -244,13 +254,22 @@ namespace Commander
                 if (s.loss >= bestLoss || (hereValid && lossHere - s.loss <= margin))
                     break;
                 if (own.Near(s.pos))
+                {
+                    ++why.idle;
                     continue;
+                }
                 ++checked;
                 SightCache::Sight const v = sight.Cells(me, s.pos, at, budget);
                 if (v == SightCache::Sight::Unknown)
+                {
+                    why.budget = true;
                     break;      // out of budget: the next ticks go on (the answers are kept)
+                }
                 if (v == SightCache::Sight::No)
+                {
+                    ++why.hidden;
                     continue;
+                }
                 Spot full = s;
                 full.sight = SightMargin::LossAt(world, *self, me, sight, points, s.pos, budget);
                 full.loss += full.sight;
@@ -258,19 +277,36 @@ namespace Commander
                 seen.push_back(full);
             }
             SortSpots(world, *self, speed, seen);
-            // The path only on cells that passed the sight check (stockade-20261114-221943).
+            why.seen += uint32(seen.size());
+            // The path only on cells that passed the sight check (stockade-20261114-221943); a
+            // cell that failed it is skipped for a while (SightCache::PathFailed), so the next
+            // tick checks the next ones instead of the same MAX_GEOMETRY_CHECKS again
+            // (stockade-20261115-000917: mage and priest stood in the corridor for 30 s).
             uint32 checks = 0;
             for (Spot const& s : seen)
             {
                 if (hereValid && lossHere - s.loss <= margin)
                     return;
+                if (sight.PathFailed(me, s.pos, tight))
+                {
+                    ++why.pathKept;
+                    continue;
+                }
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;
                 // The kept answer is from the cells' centres: the spell's line now, then the path.
-                if (!SightCache::Live(me, s.pos, at) ||
-                    !SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
+                if (!SightCache::Live(me, s.pos, at))
+                {
+                    ++why.live;
                     continue;
+                }
+                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
+                {
+                    ++why.path;
+                    sight.MarkPathFailed(me, s.pos, tight);
+                    continue;
+                }
 
                 float const walkSec = s.walkSec;
                 float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
@@ -315,7 +351,8 @@ namespace Commander
         // Out of the victim's range or sight and no spot: the only record of why it stands.
         if (!prepare && !inReach && Trace::On())
             Trace::Emit("stance", Trace::Format("%s: no spot for %s (ranged)", me->GetName(), mayTighten ? "the victim, hard line too" : "the victim"),
-                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s}",
-                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false"));
+                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s,%s}",
+                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false",
+                    why.Json().c_str()));
     }
 }

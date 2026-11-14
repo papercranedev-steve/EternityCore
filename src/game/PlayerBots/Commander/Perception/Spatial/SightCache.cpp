@@ -63,4 +63,33 @@ namespace Commander
         e.sees = sees;
         return sees ? Sight::Yes : Sight::No;
     }
+
+    bool SightCache::PathFailed(Unit const* walker, Position3 const& to, bool tight) const
+    {
+        uint64 const w = walker->GetObjectGuid().GetRawValue();
+        int32 const fx = PositionField::CellOf(walker->GetPositionX()), fy = PositionField::CellOf(walker->GetPositionY());
+        int32 const tx = PositionField::CellOf(to.x), ty = PositionField::CellOf(to.y);
+        uint32 const now = WorldTimer::getMSTime();
+        for (PathFail const& f : m_pathFails)
+            if (f.walker == w && f.tight == tight && f.fromX == fx && f.fromY == fy && f.toX == tx && f.toY == ty &&
+                WorldTimer::getMSTimeDiff(f.atMs, now) <= PATH_FAIL_MS)
+                return true;
+        return false;
+    }
+
+    void SightCache::MarkPathFailed(Unit const* walker, Position3 const& to, bool tight)
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        m_pathFails.erase(std::remove_if(m_pathFails.begin(), m_pathFails.end(),
+            [now](PathFail const& f) { return WorldTimer::getMSTimeDiff(f.atMs, now) > PATH_FAIL_MS; }), m_pathFails.end());
+        PathFail f;
+        f.walker = walker->GetObjectGuid().GetRawValue();
+        f.fromX = PositionField::CellOf(walker->GetPositionX());
+        f.fromY = PositionField::CellOf(walker->GetPositionY());
+        f.toX = PositionField::CellOf(to.x);
+        f.toY = PositionField::CellOf(to.y);
+        f.tight = tight;
+        f.atMs = now;
+        m_pathFails.push_back(f);
+    }
 }

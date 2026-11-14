@@ -34,7 +34,7 @@ review.tell = true             -- tell the leader each anomaly
 local DEATH_LOOKBACK_MS = 6000
 local LOW_HP_PCT, LOW_HP_CLEAR_PCT, LOW_HP_MS = 35, 50, 2000
 local STUCK_COUNT, STUCK_WINDOW_MS, STUCK_COOLDOWN_MS = 3, 3000, 8000
-local IDLE_MS, IDLE_COOLDOWN_MS = 4000, 10000
+local IDLE_MS, IDLE_COOLDOWN_MS, IDLE_MID_MS = 4000, 10000, 10000
 local AGGRO_REPEAT_MS = 5000
 local HEAL_RANGE = 40
 local TANK_MELEE_DIST = 8
@@ -472,7 +472,9 @@ review.detectors[#review.detectors + 1] = { kind = "idle", run = function(rs, ct
             local facts = { last = lastDecisionText(u), holdMs = ai.movementHoldMs, victim = nameOf(rs, i.victim),
                             victimDist = victim and u:dist(victim) or nil,
                             decisions = decisionsMatching(rs, i.guid, ctx.now - 3000, { "" }) }
-            emit(rs, "idle", { whoG = i.guid, sev = "low",
+            -- Long idle is a real problem (stockade-20261115-000917: mage and priest stood 30 s in
+            -- the corridor): mid, so a warning-level recording keeps the trace around it.
+            emit(rs, "idle", { whoG = i.guid, sev = (ctx.now - last >= IDLE_MID_MS) and "mid" or "low",
                 cause = string.format("%.1f 秒没出手，目标 %s%s，最后决策：%s", (ctx.now - last) / 1000,
                     facts.victim or "无", facts.victimDist and string.format("（%.0f 码）", facts.victimDist) or "",
                     facts.last or "无"),

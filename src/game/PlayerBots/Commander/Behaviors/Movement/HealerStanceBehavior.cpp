@@ -12,6 +12,7 @@
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
+#include "Commander/Behaviors/Movement/SpotRejects.h"
 #include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -380,6 +381,8 @@ namespace Commander
         bool const mayTighten = !ctx.prepare && !anchorOk;
         uint32 checked = 0;
         size_t found = 0;
+        SpotRejects why;
+        char const* anchorWhy = "";
         std::unique_ptr<SafeRoute::IdleCreatures> idleTight;
         for (bool const tight : { false, true })
         {
@@ -419,13 +422,22 @@ namespace Commander
                 if (s.loss >= bestLoss || (hereValid && stayHere - s.loss <= margin))
                     break;
                 if (own.Near(s.pos))
+                {
+                    ++why.idle;
                     continue;
+                }
                 ++checked;
                 SightCache::Sight const v = sight->Cells(me, s.pos, ctx.anchor, budget);
                 if (v == SightCache::Sight::Unknown)
+                {
+                    why.budget = true;
                     break;      // out of budget: the next ticks go on (the answers are kept)
+                }
                 if (v == SightCache::Sight::No)
+                {
+                    ++why.hidden;
                     continue;
+                }
                 Spot full = s;
                 full.sight = SightMargin::LossAt(world, *ctx.self, me, *sight, points, s.pos, budget);
                 full.stay += full.sight;
@@ -434,19 +446,35 @@ namespace Commander
                 seen.push_back(full);
             }
             SortSpots(ctx, world, weights, seen);
+            why.seen += uint32(seen.size());
             // The path (`pathIdle`: `own`, or its LeavingFrom(here) copy) only on cells that passed
-            // the sight check (stockade-20261114-221943).
+            // the sight check (stockade-20261114-221943); a cell that failed it is skipped for a
+            // while (SightCache::PathFailed, stockade-20261115-000917).
             uint32 checks = 0;
             for (Spot const& s : seen)
             {
                 if (hereValid && stayHere - s.loss <= margin)
                     return;
+                if (sight->PathFailed(me, s.pos, tight))
+                {
+                    ++why.pathKept;
+                    continue;
+                }
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;
                 // The kept answer is from the cells' centres: the heal's line now, then the path.
-                if (!Los(me, s.pos, ctx.anchor) || !SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
+                if (!Los(me, s.pos, ctx.anchor))
+                {
+                    ++why.live;
                     continue;
+                }
+                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
+                {
+                    ++why.path;
+                    sight->MarkPathFailed(me, s.pos, tight);
+                    continue;
+                }
                 propose(s.pos, stayHere - s.stay);
                 if (tight)
                     out.back().reason = "tank out of reach, spot on the hard line";
@@ -463,8 +491,14 @@ namespace Commander
             // a spot taken on the hard line: staying beats the walk into the enemies at the tank.
             bool const marginOnly = unsafe && anchorOk &&
                 !SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN).Near(here);
-            if ((!anchorOk || (unsafe && !marginOnly)) && !own.Near(ctx.anchor) &&
-                SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR))
+            bool const wantsAnchor = !anchorOk || (unsafe && !marginOnly);
+            bool const anchorIdle = wantsAnchor && own.Near(ctx.anchor);
+            if (anchorIdle)
+                anchorWhy = tight ? "tank in idle reach (hard line)" : "tank in idle reach";
+            bool const anchorPath = wantsAnchor && !anchorIdle && SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR);
+            if (wantsAnchor && !anchorIdle && !anchorPath)
+                anchorWhy = tight ? "path to the tank unsafe (hard line)" : "path to the tank unsafe";
+            if (anchorPath)
             {
                 Proposal p;
                 if (unsafe)
@@ -481,7 +515,8 @@ namespace Commander
         // The tank out of reach or sight and no way to it: the only record of why it stands.
         if (!ctx.prepare && !anchorOk && Trace::On())
             Trace::Emit("stance", Trace::Format("%s: no spot for the tank (healer)%s", me->GetName(), mayTighten ? ", hard line too" : ""),
-                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s}",
-                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false"));
+                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s,%s,\"anchor\":\"%s\"}",
+                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false",
+                    why.Json().c_str(), anchorWhy));
     }
 }

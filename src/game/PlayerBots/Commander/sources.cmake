@@ -278,6 +278,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/SpotRejects.h
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/TankStanceBehavior.h
