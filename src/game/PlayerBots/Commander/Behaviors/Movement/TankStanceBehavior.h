@@ -26,7 +26,9 @@
  *      (StopChase);
  *      else (stands back casting, rooted, hits someone else and the tank must get it with a
  *      melee ability, runs away): chase it (BotActionType::Chase, angle 0 in front, value
- *      LostAction(min(HORIZON_SEC, the fight's remaining time)), tier Assigned). Whether to taunt
+ *      LostAction(min(HORIZON_SEC, the fight's remaining time)), tier Assigned; an order without
+ *      value when the plan sends this tank to wake it, TeamPlan::controlEnd: with only controlled
+ *      enemies left LostAction is 0 and the chase was dropped). Whether to taunt
  *      it instead is the team rescue's (RescueAssigner); once it turns, it comes.
  *    Where the chase ended is where the tank stands: the next refresh judges the spot again
  *    from there (FightSpot), it does not walk back on its own (doc 9, answer 4).

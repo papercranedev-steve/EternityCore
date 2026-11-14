@@ -182,11 +182,20 @@ namespace Commander
         if (chasing && std::fabs(current) < 0.01f)
             return;
 
-        Proposal p = Make(ProposalTier::Assigned, BotActionType::Chase, "it does not come: walk to it");
+        // Sent to wake it (TeamPlan::controlEnd): the walk is part of that order, not valued.
+        // LostAction is 0 there when only controlled enemies are left (nothing hits the party),
+        // and the arbiter dropped the chase: the tank stood 25 yd off for 30 s
+        // (strat-20261114-132853).
+        bool const wakes = plan.controlEnd.Breaks(self->guid, enemy->GetObjectGuid(), world.refreshedAtMs);
+        Proposal p = Make(ProposalTier::Assigned, BotActionType::Chase,
+                          wakes ? "sent to wake it: walk to it" : "it does not come: walk to it");
         p.action.target = enemy->GetObjectGuid();
         p.action.x = 0.0f;
-        float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
-        p.SetValue(Value::LostAction(world, *self, horizon), 0.0f);
+        if (!wakes)
+        {
+            float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
+            p.SetValue(Value::LostAction(world, *self, horizon), 0.0f);
+        }
         out.push_back(p);
     }
 }
