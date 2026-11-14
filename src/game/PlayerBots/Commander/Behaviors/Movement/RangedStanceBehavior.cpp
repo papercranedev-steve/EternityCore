@@ -242,16 +242,25 @@ namespace Commander
             if (tight)
                 idleTight.reset(new SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN));
             SafeRoute::IdleCreatures const& own = tight ? *idleTight : idle;
-            // The walk out of an idle creature's reach starts inside it.
-            SafeRoute::IdleCreatures const pathIdle = unsafe ? own.LeavingFrom(here) : own;
+            // The walk out of an idle creature's reach starts inside it. In the fight, a circle
+            // that covers the victim's spot counts only closer to its home than the victim (the
+            // fight is there and nothing came: MeleeRoutes.h, the melee's walk in;
+            // stockade-20261115-002203: every walk into the tank's cell failed on such a circle).
+            SafeRoute::IdleCreatures pathIdle = unsafe ? own.LeavingFrom(here) : own;
+            if (!prepare)
+                pathIdle = pathIdle.ArrivingAt(at);
             // Cells that see the victim, with their sight margin (header "Where"). Sorted by the
             // loss without the margin, which only adds: past the best full loss so far, or past
-            // what saves the margin over here, nothing further down can win.
+            // what saves the margin over here, nothing further down can win. Not before
+            // MAX_GEOMETRY_CHECKS cells to try the path on are in (stockade-20261115-002203: the
+            // first cell that saw the victim stopped the search, its path failed, nothing else
+            // was ever tried).
             std::vector<Spot> seen;
             float bestLoss = 1e9f;
+            uint32 tryable = 0;
             for (Spot const& s : spots)
             {
-                if (s.loss >= bestLoss || (hereValid && lossHere - s.loss <= margin))
+                if ((tryable >= MAX_GEOMETRY_CHECKS && s.loss >= bestLoss) || (hereValid && lossHere - s.loss <= margin))
                     break;
                 if (own.Near(s.pos))
                 {
@@ -273,8 +282,11 @@ namespace Commander
                 Spot full = s;
                 full.sight = SightMargin::LossAt(world, *self, me, sight, points, s.pos, budget);
                 full.loss += full.sight;
-                bestLoss = std::min(bestLoss, full.loss);
                 seen.push_back(full);
+                if (sight.PathFailed(me, s.pos, tight))
+                    continue;       // (the path stage skips it: not a cell to try)
+                ++tryable;
+                bestLoss = std::min(bestLoss, full.loss);
             }
             SortSpots(world, *self, speed, seen);
             why.seen += uint32(seen.size());
@@ -301,9 +313,10 @@ namespace Commander
                     ++why.live;
                     continue;
                 }
-                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
+                SafeRoute::Verdict verdict;
+                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR, nullptr, nullptr, &verdict))
                 {
-                    ++why.path;
+                    why.Path(verdict);
                     sight.MarkPathFailed(me, s.pos, tight);
                     continue;
                 }
