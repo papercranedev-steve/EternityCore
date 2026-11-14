@@ -76,7 +76,9 @@ public:
     float SpellReadyInSec(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // The class kit's filler (Frostbolt, Fireball) is cast while its own slow / burn is still on
     // the target: the "already has the aura" rule left the mage idle until Frostbolt's 9 s slow
-    // ran out (strat-20261102-205906, 13-19 s).
+    // ran out (strat-20261102-205906, 13-19 s). A stacking aura too (Sunder Armor): each cast
+    // adds a stack or refreshes it, and the cast is made for its threat (stockade-20261114-194753:
+    // one Sunder per enemy, the tank had nothing but Heroic Strike left).
     bool IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const override;
     // PartyBotAI's checks on top of CombatBotBaseAI's (the Commander plan's constraints, no
     // AoE that hits an idle creature, no AoE that pulls aggro for non-tanks).

@@ -768,7 +768,7 @@ float PartyBotAI::SpellReadyInSec(Unit const* pTarget, SpellEntry const* pSpellE
 
 bool PartyBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
 {
-    return pSpellEntry && pSpellEntry == Kit().Filler();
+    return pSpellEntry && (pSpellEntry == Kit().Filler() || pSpellEntry->GetStackAmount() > 1);
 }
 
 // Checks the server makes at cast time (Spell::CheckRange, Spell::CheckCast, Spell::CheckItems)
@@ -819,6 +819,13 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 {
     if (!PassesServerCastChecks(pTarget, pSpellEntry))
         return false;
+    // Already queued on the next swing (Heroic Strike, Cleave, Maul, Raptor Strike): casting it
+    // again interrupts the queued one and queues it anew, every tick until the swing; the client
+    // shows the bot frozen with its weapon out (stockade-20261114-194753, 24.5-31.4 s).
+    if (pSpellEntry->IsNextMeleeSwingSpell())
+        if (Spell const* queued = me->GetCurrentSpell(CURRENT_MELEE_SPELL))
+            if (queued->m_spellInfo == pSpellEntry)
+                return false;
     // The pull brings the pack back: charging in would put the tank in the middle of it.
     if (IsGapCloserForbidden(pSpellEntry))
         return false;
