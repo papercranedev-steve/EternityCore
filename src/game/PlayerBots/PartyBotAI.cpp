@@ -3701,7 +3701,8 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
 
         if (!me->HasAuraType(SPELL_AURA_MOD_STEALTH))
         {
-            if (m_spells.rogue.pEvasion &&
+            // Evasion: the team rescue's while the Commander decides survival (Takeover::Survival).
+            if (m_spells.rogue.pEvasion && !IsSurvivalControlled() &&
                (me->GetHealthPercent() < 80.0f) &&
                ((GetAttackersInRangeCount(10.0f) > 2) || !IsRangedDamageClass(pVictim->GetClass())) &&
                 CanTryToCastSpell(me, m_spells.rogue.pEvasion))
@@ -3869,7 +3870,9 @@ void PartyBotAI::UpdateInCombatAI_Druid()
 {
     ShapeshiftForm const form = me->GetShapeshiftForm();
 
-    if (m_spells.druid.pBarkskin &&
+    // Barkskin, Frenzied Regeneration: the team rescue's while the Commander decides survival
+    // (Takeover::Survival).
+    if (m_spells.druid.pBarkskin && !IsSurvivalControlled() &&
         (form == FORM_NONE || form == FORM_MOONKIN) &&
         (me->GetHealthPercent() < 50.0f) &&
         CanTryToCastSpell(me, m_spells.druid.pBarkskin))
@@ -4039,7 +4042,7 @@ void PartyBotAI::UpdateInCombatAI_Druid()
                     return;
             }
 
-            if (m_spells.druid.pFrenziedRegeneration &&
+            if (m_spells.druid.pFrenziedRegeneration && !IsSurvivalControlled() &&
                 (me->GetHealthPercent() < 30.0f) &&
                 CanTryToCastSpell(me, m_spells.druid.pFrenziedRegeneration))
             {

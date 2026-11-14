@@ -9,6 +9,7 @@ namespace Commander
         // Berserking has one spell per power type (mana 20554, rage 26296, energy 26297).
         uint32 const BERSERKING[] = { 20554, 26296, 26297 };
         uint32 const BLOOD_FURY = 20572;
+        uint32 const STONEFORM = 20594;
 
         SpellEntry const* Known(PartyBotAI const& bot, uint32 spellId)
         {
@@ -39,6 +40,21 @@ namespace Commander
             b.healTakenCut = true;
             b.durationSec = 15.0f;
             out.push_back(b);
+        }
+        return out;
+    }
+
+    std::vector<SurvivalSpell> RaceKit::Survival(PartyBotAI const& bot)
+    {
+        std::vector<SurvivalSpell> out;
+        if (SpellEntry const* spell = Known(bot, STONEFORM))
+        {
+            SurvivalSpell s;
+            s.spell = spell;
+            s.effect = SurvivalEffect::ReducePhysical;
+            s.fraction = 0.9f;
+            s.selfOnly = true;
+            out.push_back(s);
         }
         return out;
     }

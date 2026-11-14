@@ -20,6 +20,8 @@ namespace Commander
         // Berserking (troll: 10-30% attack and casting speed, more at low health), Blood Fury
         // (orc: +25% base attack power, healing taken halved).
         std::vector<BurstSpell> Bursts(PartyBotAI const& bot);
+        // Stoneform (dwarf, 3 min): +10% armor, immune to poison, disease and bleeding.
+        std::vector<SurvivalSpell> Survival(PartyBotAI const& bot);
     }
 }
 

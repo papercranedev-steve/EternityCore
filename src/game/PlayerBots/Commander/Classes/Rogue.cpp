@@ -63,7 +63,13 @@ namespace Commander
                 vanish.spell = m_bot.m_spells.rogue.pVanish;
                 vanish.effect = SurvivalEffect::DropThreat;
                 vanish.selfOnly = true;
-                return { vanish };
+                // Evasion (5 min): +50% dodge, about half the melee hits.
+                SurvivalSpell evasion;
+                evasion.spell = m_bot.m_spells.rogue.pEvasion;
+                evasion.effect = SurvivalEffect::ReducePhysical;
+                evasion.fraction = 0.5f;
+                evasion.selfOnly = true;
+                return { vanish, evasion };
             }
 
             // Adrenaline Rush (5 min): energy twice as fast. Blade Flurry (2 min): the hits also

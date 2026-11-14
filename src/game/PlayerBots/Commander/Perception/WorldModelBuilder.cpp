@@ -805,7 +805,10 @@ namespace WorldModelBuilder
         void FillSurvival(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
-            for (SurvivalSpell const& s : ai->Kit().Survival())
+            std::vector<SurvivalSpell> spells = ai->Kit().Survival();
+            std::vector<SurvivalSpell> const racial = RaceKit::Survival(*ai);
+            spells.insert(spells.end(), racial.begin(), racial.end());
+            for (SurvivalSpell const& s : spells)
             {
                 SpellEntry const* spell = s.spell;
                 if (!spell)
@@ -826,6 +829,9 @@ namespace WorldModelBuilder
                         for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
                             if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN)
                                 a.amount = std::max(0.0f, 1.0f + spell->CalculateSimpleValue(SpellEffectIndex(i)) / 100.0f);
+                        break;
+                    case SurvivalEffect::ReducePhysical:
+                        a.amount = s.fraction;
                         break;
                     case SurvivalEffect::Heal:
                         // Lay on Hands: the caster's maximum health (SPELL_EFFECT_HEAL_MAX_HEALTH);

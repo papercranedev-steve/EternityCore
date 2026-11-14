@@ -139,12 +139,13 @@ namespace Commander
     // Effect kinds: SurvivalAbility::Effect = ClassKit's SurvivalEffect (same order).
     struct SurvivalAbility
     {
-        enum class Effect : uint8 { Absorb, Reduce, Immune, ImmunePhysical, Heal, ExtraHealth, DropThreat };
+        enum class Effect : uint8 { Absorb, Reduce, Immune, ImmunePhysical, Heal, ExtraHealth, DropThreat, ReducePhysical };
 
         uint32 spellId = 0;
         Effect effect = Effect::Absorb;
         // Absorb: health absorbed. Reduce: damage taken factor (Shield Wall 0.25). Heal: health
-        // healed (the caster's maximum health). ExtraHealth: health added.
+        // healed (Lay on Hands: the caster's maximum health). ExtraHealth: health added.
+        // ReducePhysical: melee damage taken factor (Evasion 0.5).
         float amount = 0.0f;
         float durationSec = 0.0f;
         float maxRange = 0.0f;

@@ -133,7 +133,8 @@ namespace Commander
         Stealth,
         // Keeping someone about to die alive (team rescue: RescueBehavior): the rotations'
         // health threshold reflexes stand down (Divine Shield, Blessing of Protection, Lay on
-        // Hands, Feign Death, Vanish, Ice Block, a damage warrior's Shield Wall / Last Stand).
+        // Hands, Feign Death, Vanish, Ice Block, a damage warrior's Shield Wall / Last Stand;
+        // since 2026-11-14 Evasion, Barkskin, Frenzied Regeneration).
         Survival,
         // While the party fights (WorldModel::InFight), where a bot stands: following the
         // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and

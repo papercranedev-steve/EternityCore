@@ -139,6 +139,9 @@ namespace SurvivalValue
             case SurvivalAbility::Effect::ImmunePhysical:
                 factor = dps > 0.0f ? std::max(0.0f, 1.0f - danger.physicalDps / dps) : 1.0f;
                 break;
+            case SurvivalAbility::Effect::ReducePhysical:
+                factor = dps > 0.0f ? std::max(0.0f, 1.0f - danger.physicalDps / dps * (1.0f - a.amount)) : 1.0f;
+                break;
             case SurvivalAbility::Effect::Heal:
                 healUsed = std::min(a.amount, float(member.maxHealth) - float(member.health));
                 extra = healUsed;

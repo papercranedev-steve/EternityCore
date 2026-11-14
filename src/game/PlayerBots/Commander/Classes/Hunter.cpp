@@ -17,7 +17,13 @@ namespace Commander
                 fd.spell = m_bot.m_spells.hunter.pFeignDeath;
                 fd.effect = SurvivalEffect::DropThreat;
                 fd.selfOnly = true;
-                return { fd };
+                // Deterrence (talent, 5 min): +25% dodge and parry, about half the melee hits.
+                SurvivalSpell deterrence;
+                deterrence.spell = m_bot.m_spells.hunter.pDeterrence;
+                deterrence.effect = SurvivalEffect::ReducePhysical;
+                deterrence.fraction = 0.5f;
+                deterrence.selfOnly = true;
+                return { fd, deterrence };
             }
 
             // Feign Death also to shake off an enemy that turned to the hunter (30 s cooldown,

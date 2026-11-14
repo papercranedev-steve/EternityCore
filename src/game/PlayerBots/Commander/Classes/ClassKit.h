@@ -64,6 +64,9 @@ namespace Commander
         Heal,           // heals the caster's maximum health (Lay on Hands; uses all mana)
         ExtraHealth,    // more health for a while: `fraction` of maximum health (Last Stand)
         DropThreat,     // the enemies on it turn to someone else (Vanish, Feign Death)
+        // Melee hits taken x `fraction` for its duration (Evasion, Deterrence: dodge / parry;
+        // Barkskin, Stoneform), the rest as it is.
+        ReducePhysical,
     };
 
     struct SurvivalSpell

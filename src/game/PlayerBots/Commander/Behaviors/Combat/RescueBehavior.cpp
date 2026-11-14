@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Classes/RaceKit.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -18,7 +19,7 @@ namespace Commander
             for (SurvivalSpell const& s : bot->Kit().Survival())
                 if (s.spell)
                     return true;
-            return false;
+            return !RaceKit::Survival(*bot).empty();
         }
     }
 

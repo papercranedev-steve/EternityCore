@@ -20,6 +20,7 @@
  * An option (Save): the member's damage per second x factor f for its duration d, plus extra
  * health A (absorb, Last Stand) or a heal (Lay on Hands, capped at the health missing):
  *   Absorb A, Reduce f = amount, Immune f = 0, ImmunePhysical f = 1 - physical share,
+ *   ReducePhysical f = 1 - physical share x (1 - amount) (Evasion, Deterrence, Barkskin),
  *   Heal, ExtraHealth, DropThreat f = 1 - share of the enemies on it for HORIZON_SEC.
  * ttd' from the drain with f during d and without after.
  * benefit = DeathPenalty x (Risk(ttd) - Risk(ttd')) + Points(health it keeps within the horizon:
