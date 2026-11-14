@@ -278,7 +278,7 @@ namespace Commander
         // brain planned (PullPlan::PlannedFightSpot), then wait there (PullBehavior's hold).
         bool const inCombat = me->IsInCombat();
         Position3 planned;
-        bool const prepare = !inCombat && plan.pull.PlannedFightSpot(planned);
+        bool const prepare = !inCombat && plan.PlannedFightSpot(planned);
         if (!prepare)
         {
             // In combat the pull owns movement while the tank goes out and brings the pack back.

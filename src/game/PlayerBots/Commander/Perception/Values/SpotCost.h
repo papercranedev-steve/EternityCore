@@ -88,12 +88,14 @@ namespace SpotCost
     // costs its melee on the tank (after armor) from then until the fight is over and it is
     // dead (remaining - arrive + its kill time at Value::DealtDps) + Value::FightExtension(its
     // kill time). `worst` gets the patrol that costs the most (null = none).
+    // remaining = how long the fight lasts from now: Value::FightRemainingSec in the fight, the
+    // pull's estimate before it (FightRemainingSec is 0 then).
     float const PILE_SPREAD_YD = 10.0f;
     float PatrolJoins(WorldModel const& world, PartyMemberFacts const& tank, Position3 const& spot,
-                      float withinSec, PatrolFacts const** worst = nullptr);
+                      float remainingSec, float withinSec, PatrolFacts const** worst = nullptr);
     // One patrol of PatrolJoins (0 = it does not walk to the pile at `spot` in time).
     float PatrolJoinPoints(WorldModel const& world, PartyMemberFacts const& tank, PatrolFacts const& p,
-                           Position3 const& spot, float withinSec);
+                           Position3 const& spot, float remainingSec, float withinSec);
 }
 }
 

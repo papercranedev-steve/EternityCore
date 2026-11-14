@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Situation/FightSpot/FightSpot.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -11,13 +12,22 @@ namespace Commander
 {
 namespace FightSpot
 {
-    Choice Choose(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, float patrolWithinSec)
+    Request InFight(WorldModel const& world, PartyMemberFacts const& tank, float patrolWithinSec)
+    {
+        Request r;
+        r.at = tank.pos;
+        r.remainingSec = Value::FightRemainingSec(world);
+        r.patrolWithinSec = patrolWithinSec;
+        return r;
+    }
+
+    Choice Choose(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, Request const& r)
     {
         Choice c;
         std::vector<SpotCost::HeldMez> const held = SpotCost::HeldMezzes(world);
         float const clearYd = ControlValue::ClearOfPileYd(world);
-        c.herePatrols = SpotCost::PatrolJoins(world, tank, tank.pos, patrolWithinSec, &c.patrol);
-        c.hereHolds = SpotCost::BreaksHold(held, tank.pos, clearYd);
+        c.herePatrols = SpotCost::PatrolJoins(world, tank, r.at, r.remainingSec, r.patrolWithinSec, &c.patrol);
+        c.hereHolds = SpotCost::BreaksHold(held, r.at, clearYd);
         c.hereLoss = c.herePatrols + c.hereHolds;
         float const margin = Value::LostAction(world, tank, MARGIN_SEC);
         if (c.hereLoss <= margin || !world.field)
@@ -25,7 +35,7 @@ namespace FightSpot
 
         Trace::Scope scope("fightspot");
         FieldSpots::Query q;
-        q.center = tank.pos;
+        q.center = r.at;
         q.minYd = MIN_YD;
         q.maxYd = MAX_YD;
         struct Scored
@@ -40,8 +50,10 @@ namespace FightSpot
         {
             Scored x;
             x.pos = s.pos;
-            x.loss = SpotCost::PatrolJoins(world, tank, s.pos, patrolWithinSec) + SpotCost::BreaksHold(held, s.pos, clearYd);
-            x.walk = Value::FightExtension(world, s.WalkEstimate(PATH_FACTOR) / WALK_YARDS_PER_SEC) + areaEnd;
+            x.loss = SpotCost::PatrolJoins(world, tank, s.pos, r.remainingSec, r.patrolWithinSec) +
+                     SpotCost::BreaksHold(held, s.pos, clearYd);
+            float const walkYd = r.walkFromAt ? PackResolver::Distance(r.at, s.pos) * PATH_FACTOR : s.WalkEstimate(PATH_FACTOR);
+            x.walk = Value::FightExtension(world, walkYd / WALK_YARDS_PER_SEC) + areaEnd;
             if (x.loss + x.walk < c.hereLoss - margin)
                 scored.push_back(x);
         }

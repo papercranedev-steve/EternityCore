@@ -58,7 +58,21 @@ namespace FightSpot
         std::string why;
     };
 
-    Choice Choose(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, float patrolWithinSec);
+    // Where the pile is (or will be) and for how long.
+    struct Request
+    {
+        Position3 at;                   // the pile: the tank in the fight, the pull's spot before it
+        float remainingSec = 0.0f;      // the fight from now (Value::FightRemainingSec, the pull's estimate before)
+        float patrolWithinSec = 0.0f;   // patrols arriving later are not counted (judged again then)
+        // Before the fight: the tank walks from `at` (it opens there, then takes the pile to the
+        // spot), straight line x PATH_FACTOR. In the fight: the grid walk from the tank.
+        bool walkFromAt = false;
+    };
+
+    // In the fight: the tank's place, the fight's remaining time.
+    Request InFight(WorldModel const& world, PartyMemberFacts const& tank, float patrolWithinSec);
+
+    Choice Choose(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, Request const& r);
 }
 }
 

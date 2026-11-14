@@ -112,9 +112,13 @@ namespace Commander
             seeds.push_back(e.pos);
         if (pulling)
         {
+            // (the pull's own spot and the cell the fight spot takes the pile to from there)
             Position3 spot;
-            if (plan.pull.PlannedFightSpot(spot))
+            if (plan.pull.PullFightSpot(spot))
                 seeds.push_back(spot);
+            Position3 planned;
+            if (plan.PlannedFightSpot(planned) && PackResolver::Distance(planned, spot) > PositionField::CELL_YD)
+                seeds.push_back(planned);
             if (plan.pull.packAt.x != 0.0f || plan.pull.packAt.y != 0.0f)
                 seeds.push_back(plan.pull.packAt);
         }

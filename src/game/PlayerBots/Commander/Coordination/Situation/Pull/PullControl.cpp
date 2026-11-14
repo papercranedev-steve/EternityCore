@@ -93,9 +93,10 @@ namespace PullControl
             return AggroRange::WanderOf(c).radius <= 0.0f && c->GetDefaultMovementType() != WAYPOINT_MOTION_TYPE;
         }
 
-        bool TrySap(WorldModel const& world, Map* map, PullPlan const& pull, FightLoad::Input const& fight,
+        bool TrySap(WorldModel const& world, Map* map, TeamPlan const& plan, FightLoad::Input const& fight,
                     FightLoad::Result const& asIs, uint32 nearTarget, Option const& o, Choice& out)
         {
+            PullPlan const& pull = plan.pull;
             Player* rogue = map->GetPlayer(o.bot->guid);
             PartyBotAI const* ai = rogue ? dynamic_cast<PartyBotAI const*>(rogue->AI()) : nullptr;
             if (!ai)
@@ -115,7 +116,7 @@ namespace PullControl
             in.target = o.target;
             in.spot = spot.at;
             in.expected = pull.expected;
-            in.hasPlannedSpot = pull.PlannedFightSpot(in.plannedSpot);
+            in.hasPlannedSpot = plan.PlannedFightSpot(in.plannedSpot);
             if (PartyMemberFacts const* tank = Tanks::Main(world))
                 in.tankTravelSec = PackResolver::Distance(tank->pos, OpenerPoint(pull, map)) / SapValue::RUN_YARDS_PER_SEC;
             in.nearTarget = nearTarget;
@@ -267,7 +268,7 @@ namespace PullControl
                 break;
             Choice c;
             bool const found = o.sap
-                ? TrySap(world, map, pull, fight, asIs, nearTarget, o, c)
+                ? TrySap(world, map, plan, fight, asIs, nearTarget, o, c)
                 : TryCast(map, o, ControlValue::OfPull(world, fight, asIs, *o.bot, *o.ability,
                                                         o.target->GetObjectGuid(), nearTarget), c);
             if (!found)

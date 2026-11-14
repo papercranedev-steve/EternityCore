@@ -172,7 +172,7 @@ namespace Commander
             float worst = 0.0f;
             for (ObjectGuid g : enemies)
                 if (EnemyFacts const* e = world.FindEnemy(g))
-                    worst = std::max(worst, SpotCost::PatrolJoinPoints(world, tank, p, e->pos, FLT_MAX));
+                    worst = std::max(worst, SpotCost::PatrolJoinPoints(world, tank, p, e->pos, Value::FightRemainingSec(world), FLT_MAX));
             return worst;
         }
     }
@@ -217,7 +217,7 @@ namespace Commander
         {
             PatrolFacts const* patrol = FindPatrol(world, m);
             // Joined the fight or left the scan; or it walks into the pile now (the fight spot's).
-            if (!patrol || SpotCost::PatrolJoinPoints(world, *tank, *patrol, pile, FLT_MAX) > 0.0f)
+            if (!patrol || SpotCost::PatrolJoinPoints(world, *tank, *patrol, pile, remaining, FLT_MAX) > 0.0f)
             {
                 End(m);
                 return;
@@ -242,7 +242,7 @@ namespace Commander
         {
             if (!PatrolZone::Counts(p) || Contains(m.timedOut, p.guid))
                 continue;
-            if (SpotCost::PatrolJoinPoints(world, *tank, p, pile, FLT_MAX) > 0.0f)
+            if (SpotCost::PatrolJoinPoints(world, *tank, p, pile, remaining, FLT_MAX) > 0.0f)
                 continue;
             std::vector<ObjectGuid> avoid = InPath(world, p, remaining);
             if (avoid.empty())

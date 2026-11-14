@@ -884,6 +884,17 @@ namespace DevConsole
             lua_setfield(L, -2, "retreat");
         }
         Commander::FightSpotPlan const& f = plan.fightSpot;
+        if (f.planned && !f.plannedSpots.empty())
+        {
+            lua_createtable(L, 0, 6);
+            SetFieldN(L, "x", Round2(f.plannedSpots.front().x));
+            SetFieldN(L, "y", Round2(f.plannedSpots.front().y));
+            SetFieldN(L, "z", Round2(f.plannedSpots.front().z));
+            SetFieldN(L, "benefit", Round2(f.plannedBenefit));
+            SetFieldN(L, "cost", Round2(f.plannedCost));
+            SetFieldS(L, "why", f.plannedWhy.c_str());
+            lua_setfield(L, -2, "fightSpotPlanned");
+        }
         if (f.moving)
         {
             lua_createtable(L, 0, 10);

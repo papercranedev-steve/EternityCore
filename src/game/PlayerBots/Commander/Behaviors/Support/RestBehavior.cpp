@@ -28,7 +28,7 @@ namespace Commander
                      PartyMemberFacts const& self)
         {
             Position3 planned;
-            bool const beforeFight = !world.HasPartyEnemy() && plan.pull.PlannedFightSpot(planned);
+            bool const beforeFight = !world.HasPartyEnemy() && plan.PlannedFightSpot(planned);
             if (bot->GetRole() == ROLE_HEALER)
             {
                 if (beforeFight)

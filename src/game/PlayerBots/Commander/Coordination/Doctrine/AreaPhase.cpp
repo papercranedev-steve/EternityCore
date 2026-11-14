@@ -221,7 +221,7 @@ namespace Commander
             Position3 at;
             if (centre)
                 at = centre->pos;
-            else if (!pull.PlannedFightSpot(at))
+            else if (!plan.PlannedFightSpot(at))
                 return;
 
             AreaValue::Request r;

@@ -92,7 +92,7 @@ namespace SpotCost
     }
 
     float PatrolJoins(WorldModel const& world, PartyMemberFacts const& tank, Position3 const& spot,
-                      float withinSec, PatrolFacts const** worst)
+                      float remainingSec, float withinSec, PatrolFacts const** worst)
     {
         if (worst)
             *worst = nullptr;
@@ -100,7 +100,7 @@ namespace SpotCost
         float most = 0.0f;
         for (PatrolFacts const& p : world.patrols)
         {
-            float const points = PatrolJoinPoints(world, tank, p, spot, withinSec);
+            float const points = PatrolJoinPoints(world, tank, p, spot, remainingSec, withinSec);
             if (points <= 0.0f)
                 continue;
             total += points;
@@ -115,9 +115,9 @@ namespace SpotCost
     }
 
     float PatrolJoinPoints(WorldModel const& world, PartyMemberFacts const& tank, PatrolFacts const& p,
-                           Position3 const& spot, float withinSec)
+                           Position3 const& spot, float remainingSec, float withinSec)
     {
-        float const remaining = Value::FightRemainingSec(world);
+        float const remaining = remainingSec;
         float const horizon = std::min(remaining, withinSec);
         PatrolZone::Approach const a = PatrolZone::FirstWithin(world, p, spot, PatrolZone::Radius(p) + PILE_SPREAD_YD);
         if (a.sec < 0.0f || a.sec >= horizon)

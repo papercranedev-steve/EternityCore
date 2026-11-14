@@ -19,6 +19,17 @@
  * way (it takes them back first), the tank changed, or the retreat or the pull's walk out /
  * back took over. From the new place the next refresh judges again.
  *
+ * Before the fight (PlanAhead, doc step 2): a pull fought "here" (a walk-in where the pack
+ * stands, a shot or face pull where the tank opens; not brought back, not a corner, doc 9
+ * answer 3) is judged once for the pull's spot (PullPlan::PullFightSpot) before the opener, with
+ * the pull's fight estimate (PullPlan::expectedFightSec, else RouteGuard::PULL_FALLBACK_FIGHT_SEC)
+ * and the walk from that spot (FightSpot::Request::walkFromAt). Judged again when the pull is
+ * planned again or its spot moved more than REJUDGE_YD. A better cell: FightSpotPlan::planned;
+ * the members take their places for it (TeamPlan::PlannedFightSpot) and the move starts with
+ * its spots as soon as the fight is on, the tank holds most enemies and the pull no longer
+ * places the tank (a walk-in: once the opener landed; a shot or face pull: once the pack came
+ * to where the tank opened). The tank opens as planned (Charge included) and takes the pile there.
+ *
  * Reads plan.area (FightSpot's area end cost) and plan.pull as the earlier assigners left them
  * this refresh or the last one (AreaPhase runs after this): one refresh late at worst.
  */
@@ -43,6 +54,8 @@ namespace Commander
         // arriving later than this is judged afterwards: the line of sight break lasts at most
         // PullAssigner::LOS_BREAK_TIMEOUT_MS (8 s), plus a move of about 15 yd.
         static constexpr float PULL_PLACING_DEFER_SEC = 20.0f;
+        // The pull's spot moved this far (a new shot spot): the plan is judged again.
+        static constexpr float REJUDGE_YD = 4.0f;
 
         char const* GetId() const override { return "fightspot"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
@@ -52,6 +65,7 @@ namespace Commander
         static bool HoldsMost(WorldModel const& world, ObjectGuid tank);
 
     private:
+        void PlanAhead(WorldModel const& world, TeamPlan& plan) const;
         void Continue(WorldModel const& world, TeamPlan& plan, PartyMemberFacts const& tank) const;
     };
 }

@@ -146,7 +146,7 @@ namespace Commander
             d.why = "groups of the planned pull";
             d.groups = Battlefield::FromPull(world, PullUnits(world, pull.expected), pull.target, world.refreshedAtMs);
             Position3 spot;
-            if (pull.PlannedFightSpot(spot))
+            if (plan.PlannedFightSpot(spot))
                 Battlefield::AddPatrols(world, spot, RouteGuard::StaySec(world, plan), pull.expected,
                     world.refreshedAtMs, d.groups);
             // The patrol the pull holds when it comes (PullPlan::holdPatrol, PullPatrolCheck): its

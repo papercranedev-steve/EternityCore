@@ -46,7 +46,7 @@ namespace Commander
                 return;
             h.fightAt = tank->pos;
         }
-        else if (!plan.pull.PlannedFightSpot(h.fightAt))
+        else if (!plan.PlannedFightSpot(h.fightAt))
             return;
 
         Trace::Scope scope("patrolhold");

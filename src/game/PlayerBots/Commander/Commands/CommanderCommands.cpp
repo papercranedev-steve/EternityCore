@@ -52,6 +52,7 @@
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Commands/ProfileCommands.h"
 #include "Commander/Perception/Spatial/PositionField.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Creature.h"
 #include <algorithm>
 #include <cstdlib>
@@ -342,6 +343,10 @@ namespace
             handler->PSendSysMessage("Fight spot: %s moves the fight (%.1f - %.1f pt): %s",
                 NameOf(map, plan.fightSpot.tank).c_str(), plan.fightSpot.benefit, plan.fightSpot.cost,
                 plan.fightSpot.why.c_str());
+        else if (plan.fightSpot.planned && !plan.fightSpot.plannedSpots.empty())
+            handler->PSendSysMessage("Fight spot: planned %.0f yd from the pull's spot (%.1f - %.1f pt): %s",
+                Commander::PackResolver::Distance(plan.fightSpot.plannedFor, plan.fightSpot.plannedSpots.front()),
+                plan.fightSpot.plannedBenefit, plan.fightSpot.plannedCost, plan.fightSpot.plannedWhy.c_str());
         // Doctrine (TacticalDoctrine): how this fight is fought, the stamps the duties read.
         if (plan.doctrine.phase != Commander::FightPhase::None)
         {
@@ -525,7 +530,7 @@ namespace
                 WorldTimer::getMSTimeDiffToNow(pull.patrolWaitSinceMs) / 1000.0f,
                 Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
         Commander::Position3 planned;
-        bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && pull.PlannedFightSpot(planned);
+        bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && commander->GetPlan().PlannedFightSpot(planned);
         auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana, hasPlanned ? &planned : nullptr);
         if (issues.empty())
         {

@@ -312,11 +312,12 @@ namespace Commander
         // PullAssigner (since 2026-11-13; before, the threat opening held the party for it).
         bool packComing = false;
 
-        // Where the tank will fight once the pack is on it, as planned, for the members to take
-        // their places before (stance modules): a walk-in fought where the pack stands is fought
-        // at packAt (the stance modules keep out of the pack's aggro range, it is still idle).
-        // False = the fight is already on (Settle past the arrival wait: the tank's position).
-        bool PlannedFightSpot(Position3& out) const
+        // Where the pull puts the fight: a walk-in fought where the pack stands at packAt, a shot
+        // or face pull where the tank opens, brought back at `spot`, a line of sight pull at
+        // losPoint. False = the fight is already on (Settle past the arrival wait: the tank's
+        // position). The members read TeamPlan::PlannedFightSpot: the fight spot may take the
+        // pile on from here (FightSpotPlan::planned).
+        bool PullFightSpot(Position3& out) const
         {
             if (phase == PullPhase::Settle)
             {
@@ -444,6 +445,28 @@ namespace Commander
         mutable Position3 chosenSpot;       // spots[chosen] with its ground height
         // What the leader was told last while not moving (said again only when it changes).
         std::string lastNote;
+
+        // Before the fight (tank fight spot doc step 2): a pull fought "here" (walk-in, shot or
+        // face pull, not brought back, not a corner) is judged once for its pull spot
+        // (PullPlan::PullFightSpot) with the pull's fight estimate. A better cell: `planned`, the
+        // members take their places for plannedSpots.front() (TeamPlan::PlannedFightSpot), and
+        // once the pull no longer places the tank the move starts with these spots.
+        bool planned = false;
+        bool plannedJudged = false;         // judged for plannedFor / plannedPullMs (planned or not)
+        Position3 plannedFor;               // the pull spot it was judged for
+        uint32 plannedPullMs = 0;           // PullPlan::plannedAtMs it was judged for
+        std::vector<Position3> plannedSpots;
+        float plannedBenefit = 0.0f;
+        float plannedCost = 0.0f;
+        std::string plannedWhy;
+
+        void ClearPlanned()
+        {
+            planned = false;
+            plannedJudged = false;
+            plannedSpots.clear();
+            plannedWhy.clear();
+        }
 
         bool Moves(ObjectGuid bot) const { return moving && !bot.IsEmpty() && bot == tank; }
         // Where the pile will be: the chosen spot (the first one before the tank checked them),
@@ -1130,6 +1153,22 @@ namespace Commander
         // something else), the arbiter drops a proposal that breaks one (Behaviors/Constraints.h)
         // and the class rotations ask the same queries (PartyBotAI::IsEngageForbidden,
         // IsGapCloserForbidden). The exceptions live here, not at the readers.
+
+        // Where the tank will fight once the pack is on it, as planned, for the members to take
+        // their places before (stance modules, the area phase's prep, the patrol hold, the
+        // ready check): the pull's spot (PullPlan::PullFightSpot), or the cell the fight spot
+        // takes the pile to from there (FightSpotPlan::planned; while the tank goes out, and
+        // while it waits where it opened for the pack). False = the fight is already on.
+        bool PlannedFightSpot(Position3& out) const
+        {
+            if (!pull.PullFightSpot(out))
+                return false;
+            bool const before = pull.phase == PullPhase::WaitReady || pull.phase == PullPhase::Approach ||
+                (pull.phase == PullPhase::Settle && pull.awaitArrival && pull.losBreak != PullLosBreak::Active);
+            if (before && fightSpot.planned && !fightSpot.plannedSpots.empty())
+                out = fightSpot.plannedSpots.front();
+            return true;
+        }
 
         // `bot` was given `enemy` to kill by the brain (intercept, also a caster of
         // patrolGuard.kill). This refresh's allocation.

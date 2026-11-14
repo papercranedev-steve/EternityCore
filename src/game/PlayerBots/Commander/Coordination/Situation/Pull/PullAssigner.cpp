@@ -173,7 +173,7 @@ namespace Commander
                     return;
                 }
                 Position3 planned;
-                bool const hasPlanned = pull.PlannedFightSpot(planned);
+                bool const hasPlanned = plan.PlannedFightSpot(planned);
                 std::vector<PullPlanner::Issue> const issues =
                     PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr);
                 if (issues.empty())
