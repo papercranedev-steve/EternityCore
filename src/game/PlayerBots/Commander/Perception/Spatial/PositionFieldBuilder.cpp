@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Trace/Trace.h"
 #include "Creature.h"
@@ -99,6 +100,7 @@ namespace Commander
         {
             world.field.reset();
             m_field.reset();
+            m_sight.reset();
             Forget(nowMs);
             return;
         }
@@ -132,6 +134,9 @@ namespace Commander
         m_field = std::make_shared<PositionField>();
         PositionField& field = *m_field;
         field.worldVersion = world.version;
+        if (!m_sight)
+            m_sight = std::make_shared<SightCache>();
+        field.sight = m_sight;
 
         // 1. Blocks within COVER_YD of a participant, nearest first.
         std::unordered_map<uint64, float> nearest;
@@ -287,6 +292,8 @@ namespace Commander
             }
             g = GroundCell();
             nav.erase(Key(cx, cy));
+            // (its idle coverage was decided at the old height: BuildIdle checks the block again)
+            m_groundChanged.push_back(Key(PositionField::BlockOf(cx), PositionField::BlockOf(cy)));
         };
         auto const linked = [&](int32 ax, int32 ay, GroundCell const& a, int32 nx, int32 ny, GroundCell const& n, uint8 d) -> bool
         {
@@ -413,6 +420,11 @@ namespace Commander
     void PositionFieldBuilder::BuildIdle(Map* map, WorldModel const& world, PositionField& field,
                                          Position3 const& center, float radius, uint32 nowMs)
     {
+        for (uint64 changed : m_groundChanged)
+            for (IdleCover& ic : m_idleCovers)
+                ic.covered.erase(changed);
+        m_groundChanged.clear();
+
         std::vector<Player*> members;
         for (PartyMemberFacts const& m : world.party)
             if (!m.isPet && m.alive)
@@ -511,53 +523,51 @@ namespace Commander
                     PositionField::Block& block = field.m_blocks[bi->second];
                     GroundBlock const& ground = m_ground[bi->first];
 
+                    // Per cell (2026-11-14): a cell's answer is kept once decided, so a block with
+                    // ground still unknown (inside a wall, never flooded) or cut by the budget no
+                    // longer gets all its cells checked again in every build
+                    // (stockade-20261114-224312: 491-600 checks per build, cells over the budget
+                    // dropped as covered).
+                    CoveredBlock* kept = cover ? &cover->covered[bi->first] : nullptr;
                     uint64 bits = 0;
-                    bool kept = false;
-                    if (cover)
+                    for (int32 i = 0; i < CELLS; ++i)
                     {
-                        auto const ci = cover->covered.find(bi->first);
-                        if (ci != cover->covered.end())
+                        GroundCell const& g = ground.cells[i];
+                        if (g.state != GROUND_YES)
+                            continue;
+                        uint64 const cellBit = uint64(1) << i;
+                        if (kept && (kept->checked & cellBit))
                         {
-                            bits = ci->second;
-                            kept = true;
+                            bits |= kept->bits & cellBit;
+                            continue;
                         }
-                    }
-                    if (!kept)
-                    {
-                        // Kept only when every cell's ground is known and every cell got its sight check.
-                        bool complete = !moving;
-                        for (int32 i = 0; i < CELLS; ++i)
+                        Position3 at = field.CenterOf(bx * PositionField::BLOCK_CELLS + i % PositionField::BLOCK_CELLS,
+                                                      by * PositionField::BLOCK_CELLS + i / PositionField::BLOCK_CELLS);
+                        at.z = g.z;
+                        bool covers = CoversByDistance(from, range, c->CanFly(), at);
+                        bool decided = !covers;
+                        if (covers && !moving)
                         {
-                            GroundCell const& g = ground.cells[i];
-                            if (g.state == GROUND_UNKNOWN)
-                            {
-                                complete = false;
-                                continue;
-                            }
-                            if (g.state != GROUND_YES)
-                                continue;
-                            Position3 at = field.CenterOf(bx * PositionField::BLOCK_CELLS + i % PositionField::BLOCK_CELLS,
-                                                          by * PositionField::BLOCK_CELLS + i / PositionField::BLOCK_CELLS);
-                            at.z = g.z;
-                            if (!CoversByDistance(from, range, c->CanFly(), at))
-                                continue;
-                            bool covers = true;
-                            if (!moving && checks < MAX_SIGHT_CHECKS)
+                            if (checks < MAX_SIGHT_CHECKS)
                             {
                                 ++checks;
                                 covers = AggroRange::CoversWandering(c, k.idle.reach, at);
+                                decided = true;
                             }
-                            else if (!moving)
+                            else
                             {
-                                complete = false;
                                 allSight = false;
                                 field.stats.budgetHit = true;
                             }
-                            if (covers)
-                                bits |= uint64(1) << i;
                         }
-                        if (cover && complete)
-                            cover->covered[bi->first] = bits;
+                        if (covers)
+                            bits |= cellBit;
+                        if (kept && decided)
+                        {
+                            kept->checked |= cellBit;
+                            if (covers)
+                                kept->bits |= cellBit;
+                        }
                     }
                     for (int32 i = 0; i < CELLS; ++i)
                     {

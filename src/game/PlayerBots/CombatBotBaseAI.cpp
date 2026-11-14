@@ -2938,6 +2938,9 @@ bool CombatBotBaseAI::CanTryToCastSpellBesidesTimers(Unit const* pTarget, SpellE
     if (power < powerCost)
         return false;
 
+    if (pTarget != me && LosFailedRecently(pTarget))
+        return false;
+
     if (pTarget->IsImmuneToSpell(pSpellEntry, false))
         return false;
 
@@ -2961,6 +2964,16 @@ bool CombatBotBaseAI::CanTryToCastSpellBesidesTimers(Unit const* pTarget, SpellE
     }
 
     return true;
+}
+
+bool CombatBotBaseAI::LosFailedRecently(Unit const* pTarget) const
+{
+    if (!m_losFailMs || pTarget->GetObjectGuid() != m_losFailTarget)
+        return false;
+    if (WorldTimer::getMSTimeDiff(m_losFailMs, WorldTimer::getMSTime()) > LOS_RETRY_MS)
+        return false;
+    float const dx = me->GetPositionX() - m_losFailX, dy = me->GetPositionY() - m_losFailY;
+    return dx * dx + dy * dy < LOS_RETRY_MOVED_YD * LOS_RETRY_MOVED_YD;
 }
 
 SpellCastResult CombatBotBaseAI::DoCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry)
@@ -3026,6 +3039,14 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
     auto result = me->CastSpell(pTarget, pSpellEntry, false);
 
     //printf("cast %s result %u\n", pSpellEntry->SpellName[0].c_str(), result);
+
+    if (result == SPELL_FAILED_LINE_OF_SIGHT && pTarget != me)
+    {
+        m_losFailTarget = pTarget->GetObjectGuid();
+        m_losFailMs = WorldTimer::getMSTime();
+        m_losFailX = me->GetPositionX();
+        m_losFailY = me->GetPositionY();
+    }
 
     if ((result == SPELL_FAILED_MOVING ||
         result == SPELL_CAST_OK) &&

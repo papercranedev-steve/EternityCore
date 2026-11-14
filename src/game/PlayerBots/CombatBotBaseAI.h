@@ -590,9 +590,20 @@ public:
     bool m_initialized = false;
     bool m_isBuffing = false;
     bool m_preventCasting = false;
-    bool m_receivedBgInvite = false;
     uint8 m_visualHonorRank = 0;
     CombatBotRoles m_role = ROLE_INVALID;
+
+    // Fix (2026-11-14, stockade-20261114-224312: a mage's Frostbolt failed on line of sight
+    // every 200 ms for 2 s): a spell on `m_losFailTarget` failed SPELL_FAILED_LINE_OF_SIGHT;
+    // CanTryToCastSpell skips that target for LOS_RETRY_MS, or until the bot moved
+    // LOS_RETRY_MOVED_YD from where it failed, so the rotation goes on to what it can cast.
+    static constexpr uint32 LOS_RETRY_MS = 600;
+    static constexpr float LOS_RETRY_MOVED_YD = 1.0f;
+    ObjectGuid m_losFailTarget;
+    uint32 m_losFailMs = 0;
+    float m_losFailX = 0.0f;
+    float m_losFailY = 0.0f;
+    bool LosFailedRecently(Unit const* pTarget) const;
 };
 
 #endif

@@ -117,6 +117,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/ValueModel.cpp
   ${COMMANDER_DIR}/Perception/Values/Exposure.h
   ${COMMANDER_DIR}/Perception/Values/Exposure.cpp
+  ${COMMANDER_DIR}/Perception/Values/SightMargin.h
+  ${COMMANDER_DIR}/Perception/Values/SightMargin.cpp
   ${COMMANDER_DIR}/Perception/Values/SpotCost.h
   ${COMMANDER_DIR}/Perception/Values/SpotCost.cpp
   ${COMMANDER_DIR}/Perception/Values/StandLoss.h
@@ -246,6 +248,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/PositionField.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PositionFieldBuilder.h
   ${COMMANDER_DIR}/Perception/Spatial/PositionFieldBuilder.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/SightCache.h
+  ${COMMANDER_DIR}/Perception/Spatial/SightCache.cpp
   ${COMMANDER_DIR}/Perception/Spatial/FieldSpots.h
   ${COMMANDER_DIR}/Perception/Spatial/FieldSpots.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PatrolZone.h

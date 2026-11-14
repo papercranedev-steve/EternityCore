@@ -51,10 +51,21 @@
  * the near cells lie in its aggro range). The field drops cells off the ground or cut off from
  * the party (a slope is fine; the rings before compared heights with the victim's), under an
  * idle creature, on a patrol's way before the fight ends, and cells the bot cannot walk to.
- * Kept: outside areas dangerous to ranged (HazardZones). Shortest grid walk first. Live checks
- * per pass: this bot's own idle scan and line of sight to the victim on at most
- * MAX_SIGHT_CHECKS cells, SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of those that
- * passed (2026-11-14: one budget for both kept checking the same cells behind a wall). Nothing found, or no field: the bot stays (no chase into a pack).
+ * Kept: outside areas dangerous to ranged (HazardZones). Lowest loss first. Live checks per
+ * pass: this bot's own idle scan, then line of sight to the victim from the field's sight
+ * cache (PositionField::sight, SightCache.h: kept per pair of cells, so the next tick goes on
+ * past the cells checked already; at most MAX_SIGHT_CHECKS new checks per tick, cells and
+ * margin points together). A cell that sees the victim adds its sight margin
+ * (SightMargin::LossAt, Perception/Values/SightMargin.h: the share of the pile's other places
+ * it does not see; 2026-11-14, stockade-20261114-224312: the mage stood in the doorway and lost
+ * the victim whenever it moved further in). The cells that see are sorted again by their full
+ * loss; the search stops at the first cell whose loss without the margin reaches the best full
+ * loss. Then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at most
+ * MAX_GEOMETRY_CHECKS of them. Nothing found, or no field: the bot stays (no chase into a pack).
+ * The spot here costs its exposure + its sight margin (in reach only); the move's reason
+ * "sees the victim only narrowly" when the margin saved more than the exposure.
+ * Line of sight as the spell checks it (SightCache::Live: collision height to target + 1 yd;
+ * before 2026-11-14 eye to eye at 2 yd).
  * Cost = SpotCost::Walk(bot, walk seconds), walk = the grid walk at the bot's run speed.
  * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS.
  * Hazard zones stay an exclusion here (PositioningBehavior owns leaving them); they become a
@@ -84,8 +95,8 @@ namespace Commander
         // bot's action (doc 2026-11-11-spot-scoring.md section 5.3; noise, the walk is in the loss).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // pathfinding, cells that passed the sight check
-        static constexpr uint32 MAX_SIGHT_CHECKS = 48;      // idle scan + LOS (cheap) per pass
-        static constexpr float LOS_EYE_HEIGHT = 2.0f;
+        // Line of sight checks not in the sight cache yet, per tick (cells and margin points).
+        static constexpr uint32 MAX_SIGHT_CHECKS = 48;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
         static constexpr float PATH_FACTOR = StandLoss::RANGED_PATH_FACTOR;

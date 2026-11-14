@@ -32,6 +32,7 @@
  *    PatrolFacts::track (one lap of its path); NO_PATROL if its walk never comes there. The
  *    rule is PatrolZone.h (this is its cache): ask PatrolZone for any point.
  * Hazard zones are not stored: HazardZones::IsInside is plain math over a few zones.
+ * Line of sight from a cell to a target: `sight` (SightCache.h), shared by the stance modules.
  *
  * Walking distance (WalkYd): shortest walk over linked standable cells from a member's cell
  * (straight 2 yd, diagonal 2.8 yd, height difference included). Cells an idle creature covers
@@ -47,11 +48,14 @@
 #define MANGOS_COMMANDER_POSITION_FIELD_H
 
 #include "Commander/Perception/WorldModel.h"
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
 namespace Commander
 {
+    class SightCache;
+
     // The 8 neighbours, counter-clockwise from east.
     enum FieldDir : uint8
     {
@@ -135,6 +139,9 @@ namespace Commander
 
         uint32 worldVersion = 0;        // WorldModel::version it was built for
         FieldStats stats;
+        // Line of sight between cells and targets (SightCache.h): the builder's, kept across
+        // builds; filled on reads like the walk cache. Never null in a built field.
+        std::shared_ptr<SightCache> sight;
 
     private:
         friend class PositionFieldBuilder;

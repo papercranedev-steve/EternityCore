@@ -16,10 +16,14 @@
  *     SEARCH_HALF_HEIGHT off its cell's kept height (another floor) gets its cell found again.
  *  3. Idle layer: idle creatures within reach of the field (AggroRange::IsIdleAggressor
  *     against any member; reach = the farthest over the members + SafeRoute::IDLE_MARGIN),
- *     nearest MAX_IDLE. Coverage of a creature standing still or wandering is kept per block
- *     while its home stays within IDLE_MOVED_YD and its reach the same; at most
- *     MAX_SIGHT_CHECKS line of sight checks per build, cells over the budget count as covered
- *     by distance and height (safe side) and are checked again next build.
+ *     nearest MAX_IDLE. Coverage of a creature standing still or wandering is kept per cell
+ *     while its home stays within IDLE_MOVED_YD and its reach the same (and the cell's ground
+ *     was not found again on another floor); at most MAX_SIGHT_CHECKS line of sight checks per
+ *     build on cells not decided yet, cells over the budget count as covered by distance and
+ *     height (safe side) and are checked in the next builds. (Before 2026-11-14 it was kept
+ *     per block and only for blocks with every cell's ground known: blocks touching a wall
+ *     never were, every build checked them again and hit the budget.)
+ *  5. The sight cache (SightCache.h) is kept across builds and set on every field.
  *  4. Patrol layer: PatrolFacts::track of aggressive patrols (one lap), seconds from this
  *     build (the tracks are from the last pack refresh).
  *
@@ -40,6 +44,7 @@ class Map;
 namespace Commander
 {
     struct TeamPlan;
+    class SightCache;
 
     class PositionFieldBuilder
     {
@@ -75,14 +80,21 @@ namespace Commander
             GroundCell cells[PositionField::BLOCK_CELLS * PositionField::BLOCK_CELLS];
             uint32 usedMs = 0;
         };
+        // Bit per cell of a block: `checked` = decided (by distance, or by the line of sight
+        // check), `bits` = covered (only meaningful where checked).
+        struct CoveredBlock
+        {
+            uint64 bits = 0;
+            uint64 checked = 0;
+        };
         struct IdleCover
         {
             ObjectGuid guid;
             Position3 home;
             float reach = 0.0f;
             uint32 usedMs = 0;
-            // Block key -> bit per cell of that block (checked with line of sight).
-            std::unordered_map<uint64, uint64> covered;
+            // Block key -> its cells.
+            std::unordered_map<uint64, CoveredBlock> covered;
         };
 
         GroundCell* Ground(int32 cx, int32 cy, bool create);
@@ -97,6 +109,8 @@ namespace Commander
 
         std::unordered_map<uint64, GroundBlock> m_ground;
         std::vector<IdleCover> m_idleCovers;
+        std::vector<uint64> m_groundChanged;   // blocks with a cell found again on another floor (FloodGround)
+        std::shared_ptr<SightCache> m_sight;   // kept across builds, handed to every field
         std::shared_ptr<PositionField> m_field;
         uint32 m_maxBuildMicros = 0;
     };

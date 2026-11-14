@@ -77,11 +77,18 @@
  *            for every enemy not hitting the healer TURN_CHANCE x (HitLoss + LostAction) over
  *            the seconds an enemy that turns to the healer gets before the tank takes it back.
  * Before: yards with made-up weights (-1 per yd walk, +4 per member in range, tanks x3,
- * +0.5 per yd of enemy gap up to 20). Live checks per
- * pass: this healer's own idle scan and line of sight to the anchor on at most
- * MAX_SIGHT_CHECKS cells, SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of those that
- * passed (2026-11-14). (The rings started straight behind the anchor; that only
- * broke ties of the order and is gone.)
+ * +0.5 per yd of enemy gap up to 20).
+ *   sight    (in the fight, cells that see the anchor; 2026-11-14, stockade-20261114-224312:
+ *            the priest stood in the doorway of the tank's cell) SightMargin::LossAt
+ *            (Perception/Values/SightMargin.h): the share of the enemies around the tank the
+ *            spot does not see. Also part of StayLoss here when the anchor is in reach.
+ * Live checks per pass, as the ranged stance: this healer's own idle scan, line of sight to
+ * the anchor from the field's sight cache (SightCache.h, at most MAX_SIGHT_CHECKS new checks
+ * per tick), the cells that see sorted again with their sight term, then the heal's line now
+ * (SightCache::Live) and SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of them. Line of
+ * sight as the spell checks it (collision height to target + 1 yd; before 2026-11-14 eye to
+ * eye at 2 yd). (The rings started straight behind the anchor; that only broke ties of the
+ * order and is gone.)
  * Nothing found and the anchor out of reach, or the healer in an idle creature's reach: walk
  * to the anchor itself if it stands outside every idle reach and that path is safe.
  *
@@ -123,8 +130,8 @@ namespace Commander
         // healer's action (doc 2026-11-11-spot-scoring.md section 5.3).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // pathfinding, cells that passed the sight check
-        static constexpr uint32 MAX_SIGHT_CHECKS = 48;      // idle scan + LOS (cheap) per pass
-        static constexpr float LOS_EYE_HEIGHT = 2.0f;
+        // Line of sight checks not in the sight cache yet, per tick (cells and margin points).
+        static constexpr uint32 MAX_SIGHT_CHECKS = 48;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
 
         // Closer than this to an enemy's edge (in its melee, cleave and most area spells):
