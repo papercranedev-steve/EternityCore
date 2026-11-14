@@ -8,6 +8,9 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Forecast/FleePredictor.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Values/Exposure.h"
+#include "Commander/Perception/Values/StandLoss.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -225,13 +228,113 @@ namespace FightSpot
             return f;
         }
 
+        // Header "team": how well the healer and ranged bots can stand around S (StandLoss), minus
+        // the same around the pile's place.
+        struct Team
+        {
+            struct Member
+            {
+                PartyMemberFacts const* facts = nullptr;
+                bool healer = false;
+                std::vector<size_t> turnable;       // indices into world.enemies (Exposure::Turnable)
+                float here = 0.0f;
+            };
+            bool on = false;
+            bool movePile = false;                  // in the fight: the tank's enemies come along
+            PartyMemberFacts const* tank = nullptr;
+            Position3 at;
+            float patrolSec = 0.0f;
+            std::vector<Member> members;
+            std::vector<EnemyFacts> moved;          // world.enemies with the tank's around S
+
+            float Best(WorldModel const& world, Member const& m, Position3 const& s) const
+            {
+                std::vector<EnemyFacts const*> enemies;
+                for (size_t i : m.turnable)
+                    enemies.push_back(&moved[i]);
+                return m.healer ? StandLoss::BestHealerSpot(world, *m.facts, tank->guid, s, enemies, patrolSec)
+                                : StandLoss::BestRangedSpot(world, *m.facts, s, enemies, patrolSec);
+            }
+
+            // No cell to stand on around S: it does nothing over the horizon.
+            float Nowhere(WorldModel const& world, Member const& m) const
+            {
+                return Value::LostAction(world, *m.facts, StandLoss::HORIZON_SEC);
+            }
+
+            void Move(WorldModel const& world, Position3 const& s)
+            {
+                for (size_t i = 0; i < world.enemies.size(); ++i)
+                {
+                    EnemyFacts const& e = world.enemies[i];
+                    Position3& p = moved[i].pos;
+                    p = e.pos;
+                    if (!movePile || e.victim != tank->guid || !e.acting || e.crowdControlled)
+                        continue;
+                    p.x = s.x + (e.pos.x - at.x);
+                    p.y = s.y + (e.pos.y - at.y);
+                    p.z = s.z + (e.pos.z - at.z);
+                }
+            }
+
+            float Loss(WorldModel const& world, Position3 const& s)
+            {
+                Move(world, s);
+                float total = 0.0f;
+                for (Member const& m : members)
+                {
+                    float const best = Best(world, m, s);
+                    total += (best >= 0.0f ? best : Nowhere(world, m)) - m.here;
+                }
+                return total;
+            }
+        };
+
+        Team MakeTeam(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, Request const& r)
+        {
+            Team t;
+            if (!world.field)
+                return t;
+            t.tank = &tank;
+            t.at = r.at;
+            t.movePile = !r.walkFromAt;
+            t.patrolSec = RouteGuard::StaySec(world, plan);
+            t.moved = world.enemies;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || !m.CanAct() || m.guid == tank.guid ||
+                    (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS))
+                    continue;
+                // (the area caster's place is the area term's)
+                if (m.guid == plan.area.caster || m.guid == plan.area.prepCaster)
+                    continue;
+                Team::Member x;
+                x.facts = &m;
+                x.healer = m.role == ROLE_HEALER;
+                for (EnemyFacts const* e : Exposure::Turnable(world, m.guid))
+                    x.turnable.push_back(size_t(e - world.enemies.data()));
+                t.members.push_back(x);
+            }
+            if (t.members.empty())
+                return t;
+            t.Move(world, r.at);
+            for (Team::Member& m : t.members)
+            {
+                float const best = t.Best(world, m, r.at);
+                m.here = best >= 0.0f ? best : t.Nowhere(world, m);
+            }
+            t.on = true;
+            return t;
+        }
+
         struct Scored
         {
             Position3 pos;
-            float loss = 0.0f;      // patrols + holds
+            float loss = 0.0f;      // patrols + holds + flee
             float walk = 0.0f;
             float area = 0.0f;      // room (before the fight) or the channel's loss
-            float Total() const { return loss + walk + area; }
+            float team = 0.0f;      // the healers' and ranged's places (negative: better)
+            float Total() const { return loss + walk + area + team; }
         };
     }
 
@@ -260,7 +363,7 @@ namespace FightSpot
         // Before the fight the caster's room can make another cell better (a gain); in the
         // fight the area term is only a loss of moving: nothing to gain here, no search.
         Room const room = r.walkFromAt ? MakeRoom(world, plan, r) : Room();
-        if (c.hereLoss <= margin && !room.on)
+        if (c.hereLoss <= margin && !r.walkFromAt)
             return c;
         float const hereRoom = room.on ? room.Loss(r.at) : 0.0f;
 
@@ -284,15 +387,24 @@ namespace FightSpot
         }
         std::stable_sort(scored.begin(), scored.end(), [](Scored const& a, Scored const& b) { return a.Total() < b.Total(); });
 
-        // The channel running (in the fight): the best MAX_VALUED cells only (doc 9, answer 5).
+        // The channel running (in the fight) and the party's places: the best MAX_VALUED cells
+        // by the other terms only (doc 9, answer 5).
         Channel const channel = r.walkFromAt ? Channel() : MakeChannel(world, plan);
-        if (channel.on && !scored.empty())
+        Team team = scored.empty() ? Team() : MakeTeam(world, plan, tank, r);
+        if ((channel.on || team.on) && !scored.empty())
         {
             if (scored.size() > MAX_VALUED)
                 scored.resize(MAX_VALUED);
-            WorldModel moved = world;
+            WorldModel moved;
+            if (channel.on)
+                moved = world;
             for (Scored& x : scored)
-                x.area = ChannelLoss(world, moved, channel, tank, r.at, x.pos);
+            {
+                if (channel.on)
+                    x.area = ChannelLoss(world, moved, channel, tank, r.at, x.pos);
+                if (team.on)
+                    x.team = team.Loss(world, x.pos);
+            }
             std::stable_sort(scored.begin(), scored.end(), [](Scored const& a, Scored const& b) { return a.Total() < b.Total(); });
         }
         scored.erase(std::remove_if(scored.begin(), scored.end(),
@@ -302,13 +414,15 @@ namespace FightSpot
             c.spots.push_back(scored[i].pos);
         if (!scored.empty())
         {
-            c.bestLoss = scored.front().loss + scored.front().area;
+            c.bestLoss = scored.front().loss + scored.front().area + scored.front().team;
             c.bestArea = scored.front().area;
+            c.bestTeam = scored.front().team;
             c.bestWalk = scored.front().walk;
         }
-        char buf[240];
-        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f, flee %.1f); best %s %.1f (area %+.1f) + walk %.1f",
-            c.hereLoss, c.herePatrols, c.hereHolds, c.hereFlee, scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea, c.bestWalk);
+        char buf[260];
+        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f, flee %.1f); best %s %.1f (area %+.1f, party %+.1f) + walk %.1f",
+            c.hereLoss, c.herePatrols, c.hereHolds, c.hereFlee, scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea,
+            c.bestTeam, c.bestWalk);
         c.why = buf;
         if (scope.On())
         {

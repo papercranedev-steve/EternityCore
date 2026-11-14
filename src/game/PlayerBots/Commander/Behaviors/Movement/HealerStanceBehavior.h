@@ -106,15 +106,17 @@
 #define MANGOS_COMMANDER_HEALER_STANCE_BEHAVIOR_H
 
 #include "Commander/Behaviors/IBehavior.h"
+#include "Commander/Perception/Values/StandLoss.h"
 
 namespace Commander
 {
     class HealerStanceBehavior : public IBehavior
     {
     public:
-        static constexpr float HEAL_RANGE = 28.0f;          // same as PositioningBehavior::HEAL_RANGE
+        // (the cell terms: Perception/Values/StandLoss.h)
+        static constexpr float HEAL_RANGE = StandLoss::HEAL_RANGE;      // same as PositioningBehavior::HEAL_RANGE
         // Farthest candidate cell from the anchor (before the fight: just inside HEAL_RANGE).
-        static constexpr float MAX_YD = 24.0f;
+        static constexpr float MAX_YD = StandLoss::HEALER_MAX_YD;
         static constexpr float PREPARE_MAX_YD = 27.0f;
         // A valid spot is left only for a cell that saves more than this many seconds of the
         // healer's action (doc 2026-11-11-spot-scoring.md section 5.3).
@@ -127,11 +129,11 @@ namespace Commander
         // the move is Urgent (2026-11-10; the tier only, not where to go).
         static constexpr float DANGER_ENEMY_GAP = 8.0f;
 
-        static constexpr float HORIZON_SEC = 8.0f;
+        static constexpr float HORIZON_SEC = StandLoss::HORIZON_SEC;
         static constexpr float URGENT_HEALTH_PCT = 35.0f;
-        static constexpr float INJURED_PCT = 80.0f;
-        static constexpr float IDLE_COST_FACTOR = 0.25f;
-        static constexpr float PATH_FACTOR = 1.2f;
+        static constexpr float INJURED_PCT = StandLoss::INJURED_PCT;
+        static constexpr float IDLE_COST_FACTOR = StandLoss::IDLE_COST_FACTOR;
+        static constexpr float PATH_FACTOR = StandLoss::HEALER_PATH_FACTOR;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "stance"; }

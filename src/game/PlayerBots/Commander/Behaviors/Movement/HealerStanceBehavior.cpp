@@ -4,6 +4,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/Exposure.h"
 #include "Commander/Perception/Values/SpotCost.h"
+#include "Commander/Perception/Values/StandLoss.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
@@ -117,46 +118,19 @@ namespace Commander
 
         // What a spot costs (header "Order"): the walk there, and standing there: the walks to
         // members it does not reach weighted by their share of the damage taken, enemies close
-        // enough to reach the healer before the tank takes them back.
-        struct Weights
-        {
-            float speed = 7.0f;
-            float walkFactor = 1.0f;            // IDLE_COST_FACTOR while nobody is injured
-            float horizon = 1.0f;               // H (doc 2026-11-11-spot-scoring.md 5.2)
-            // Other members (not the anchor, which every candidate reaches): share of the heals.
-            std::vector<std::pair<PartyMemberFacts const*, float>> shares;
-        };
+        // enough to reach the healer before the tank takes them back (Perception/Values/
+        // StandLoss.h since 2026-11-14: the fight spot prices the healer's place the same way).
+        using Weights = StandLoss::HealerWeights;
 
         Weights MakeWeights(Context const& ctx, WorldModel const& world, bool anyInjured)
         {
-            Weights w;
-            w.speed = std::max(1.0f, ctx.me->GetSpeed(MOVE_RUN));
-            w.walkFactor = anyInjured ? 1.0f : HS::IDLE_COST_FACTOR;
-            w.horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
-            float total = 0.0f;
-            for (PartyMemberFacts const& m : world.party)
-            {
-                if (m.isPet || !m.alive || m.guid == ctx.self->guid || m.guid == ctx.anchorGuid)
-                    continue;
-                float const taken = Value::TakenDps(world, m.guid);
-                w.shares.emplace_back(&m, taken);
-                total += taken;
-            }
-            for (auto& s : w.shares)
-                s.second = total > 0.0f ? s.second / total : 1.0f / float(w.shares.size());
-            return w;
+            return StandLoss::HealerWeightsOf(world, *ctx.self, ctx.anchorGuid, ctx.me->GetSpeed(MOVE_RUN), anyInjured);
         }
 
-        // Points of standing at `p` (the walk there not included): members out of heal range
-        // (SpotCost::TargetReach, the walk to reach them) by their share, and the exposure.
+        // Points of standing at `p` (the walk there not included).
         float StayLoss(Context const& ctx, WorldModel const& world, Weights const& w, Position3 const& p)
         {
-            PartyMemberFacts const& self = *ctx.self;
-            float loss = 0.0f;
-            for (auto const& s : w.shares)
-                loss += s.second * SpotCost::TargetReach(world, self, p, s.first->pos, 0.0f, HS::HEAL_RANGE, true,
-                                                         w.speed / HS::PATH_FACTOR, w.horizon);
-            return loss + Exposure::LossAt(world, self, ctx.enemies, p);
+            return StandLoss::HealerStay(world, *ctx.self, w, ctx.enemies, p);
         }
 
         // Field cells passing the cheap checks (outside areas dangerous to healers), lowest

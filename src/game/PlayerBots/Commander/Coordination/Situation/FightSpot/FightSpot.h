@@ -26,8 +26,8 @@
  *             pre-fight score (slip + walk, AreaSpot::CasterCells / SlipAt, within range -
  *             SPOT_MARGIN_YD; none: as if it cast standing on the pile) - the same at the
  *             pull's spot. Negative: more room at S.
- * The tank's place costs patrols + holds. In the fight at most MARGIN_SEC of the tank's
- * LostAction: nothing to gain, no search (the area term is only a loss of moving there). Else
+ * The tank's place costs patrols + holds + flee. In the fight at most MARGIN_SEC of the tank's
+ * LostAction: nothing to gain, no search (the area and team terms only price the cells). Else
  * the field cells MIN_YD..MAX_YD around the place (FieldSpots::Collect: standable, no idle
  * creature, reachable) are scored; the best MAX_SPOTS that lose less than the tank's place by
  * more than the margin are the move's spots, best first (ground, idle creatures and the path
@@ -41,9 +41,14 @@
  *             (FleePredictor::PointsOf: the fight now, before it the pull's creatures from the
  *             packs, with the joiners arriving when it runs), cached by the joiners reached.
  *             Counted at the pile's place too (it can make the tank move).
- * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), how well the
- * healers and ranged can stand around S (they pick their own cells around the tank
- * afterwards, Healer / RangedStanceBehavior).
+ *   team      (doc 3.6) every healer and ranged damage dealer bot that can act (not the tank,
+ *             not the area phase's caster): its best cell around S by its stance module's
+ *             terms (Perception/Values/StandLoss.h; the enemies on the tank moved with the pile
+ *             in the fight), no cell: LostAction(StandLoss::HORIZON_SEC); minus the same at the
+ *             pile's place. Negative: they stand better at S. MAX_VALUED best cells only.
+ * Before the fight the cells are always searched (once per pull): the room and team terms
+ * can make another cell better although nothing is lost here.
+ * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks).
  * Pure (facts and plan).
  */
 
@@ -79,6 +84,7 @@ namespace FightSpot
         std::vector<Position3> spots;   // better spots, best first; empty = stay
         float bestLoss = 0.0f;          // the first spot's patrols + holds + area
         float bestArea = 0.0f;          // of which the area term (negative: a gain over here)
+        float bestTeam = 0.0f;          // and the party's places (negative: they stand better there)
         float bestWalk = 0.0f;          // the first spot's walk
         std::string why;
     };

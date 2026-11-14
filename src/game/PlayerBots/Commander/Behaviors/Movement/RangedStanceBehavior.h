@@ -64,6 +64,7 @@
 #define MANGOS_COMMANDER_RANGED_STANCE_BEHAVIOR_H
 
 #include "Commander/Behaviors/IBehavior.h"
+#include "Commander/Perception/Values/StandLoss.h"
 
 namespace Commander
 {
@@ -73,7 +74,7 @@ namespace Commander
         // Trigger: the victim farther than this from its edge (spells and wands reach 30).
         static constexpr float CAST_RANGE = 29.0f;
         // Farthest candidate cell from the victim's edge (28 before the fight).
-        static constexpr float MAX_RADIUS = 26.0f;
+        static constexpr float MAX_RADIUS = StandLoss::RANGED_MAX_YD;    // (the fight spot's too)
         static constexpr float PREPARE_MAX_RADIUS = 28.0f;
         // Nearer than this to the edge of an enemy fighting someone else: the move is Urgent
         // (same line as the healer stance; the tier only, not where to go).
@@ -85,7 +86,7 @@ namespace Commander
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
-        static constexpr float PATH_FACTOR = 1.2f;
+        static constexpr float PATH_FACTOR = StandLoss::RANGED_PATH_FACTOR;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "rangedstance"; }

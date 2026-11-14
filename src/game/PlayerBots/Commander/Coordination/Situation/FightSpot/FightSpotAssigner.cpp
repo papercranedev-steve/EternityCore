@@ -54,6 +54,8 @@ namespace Commander
                 add("a runner would bring more from here");
             if (c.bestArea < 0.0f)
                 add("the area caster has more room there");
+            if (c.bestTeam < 0.0f)
+                add("the healers and ranged stand better there");
             return out.empty() ? std::string("a better spot") : out;
         }
 
