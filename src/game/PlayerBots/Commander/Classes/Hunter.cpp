@@ -33,6 +33,21 @@ namespace Commander
                 auto const& s = m_bot.m_spells.hunter;
                 return { s.pConcussiveShot, s.pWingClip };
             }
+
+            // Rapid Fire (5 min): +40% ranged attack speed. Bestial Wrath (talent, 2 min): on
+            // the pet, +50% pet damage.
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.hunter;
+                BurstSpell rapid;
+                rapid.spell = s.pRapidFire;
+                rapid.damageMult = 0.3f;
+                BurstSpell wrath;
+                wrath.spell = s.pBestialWrath;
+                wrath.damageMult = 0.2f;
+                wrath.needsPet = true;
+                return { rapid, wrath };
+            }
         };
     }
 

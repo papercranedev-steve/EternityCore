@@ -143,6 +143,10 @@ namespace Commander
         // dealers), TankStanceBehavior (tanks, since 2026-11-14). Was CasterChase (healers and
         // ranged only) until 2026-11-07.
         Stance,
+        // Damage cooldowns (BurstBehavior, cooldown doc 2026-11-14): the rotations' Recklessness,
+        // Death Wish, Retaliation, Sweeping Strikes, Adrenaline Rush, Cold Blood, Blade Flurry,
+        // Elemental Mastery, Combustion, Arcane Power, Presence of Mind stand down.
+        Burst,
         Count
     };
 

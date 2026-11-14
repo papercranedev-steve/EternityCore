@@ -22,6 +22,7 @@
 #include "Commander/Behaviors/Combat/CrowdControlBehavior.h"
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Behaviors/Combat/FleeStopBehavior.h"
+#include "Commander/Behaviors/Combat/BurstBehavior.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/Duties/CrowdControlAssigner.h"
 #include "Commander/Coordination/Duties/RescueAssigner.h"
@@ -53,6 +54,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CrowdControlBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RescueBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FleeStopBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));

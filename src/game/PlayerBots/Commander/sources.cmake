@@ -299,6 +299,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Classes/Druid.cpp
   ${COMMANDER_DIR}/Classes/Warlock.cpp
   ${COMMANDER_DIR}/Classes/Hunter.cpp
+  ${COMMANDER_DIR}/Classes/RaceKit.h
+  ${COMMANDER_DIR}/Classes/RaceKit.cpp
+  ${COMMANDER_DIR}/Perception/Values/BurstValue.h
+  ${COMMANDER_DIR}/Perception/Values/BurstValue.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h

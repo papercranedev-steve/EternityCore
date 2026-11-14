@@ -91,6 +91,28 @@ namespace Commander
         bool instant = false;       // the next heal with a cast time is instant (Nature's Swiftness)
     };
 
+    // A damage cooldown (BurstBehavior, Perception/Values/BurstValue.h, cooldown doc
+    // .kiro/docs/2026-11-14-cooldowns.md 6). A buff on itself (damageMult while it lasts), or a
+    // pairing (`then`: put on right before that cast, BotAction::prepSpell; extraSec).
+    // Numbers are untested guesses: what it adds, as a share of the bot's own damage.
+    struct BurstSpell
+    {
+        SpellEntry const* spell = nullptr;
+        float damageMult = 0.0f;        // own damage added while it lasts (Rapid Fire 0.3)
+        float extraSec = 0.0f;          // pairing: seconds of own damage the boosted cast gains
+        SpellEntry const* then = nullptr;   // pairing: the cast it boosts (Cold Blood: Eviscerate)
+        float durationSec = 0.0f;       // 0 = the spell's (a buff used up by charges: 10 s)
+        float damageTakenUp = 0.0f;     // damage taken x (1 + this) while it lasts (Recklessness 0.2)
+        uint8 minEnemiesNear = 0;       // enemies around the bot (Blade Flurry, Sweeping Strikes 2)
+        uint8 minAttackersOnSelf = 0;   // melee enemies hitting it (Retaliation 3)
+        float minManaPct = 0.0f;        // Arcane Power 50 (its spells cost 30% more)
+        bool notTank = false;           // armor or healing taken goes down (Death Wish, Blood Fury)
+        bool healTakenCut = false;      // healing taken halved: not while it is hit (Blood Fury)
+        bool needsPet = false;          // on the pet, the pet on the bot's victim (Bestial Wrath)
+        bool needsCombo = false;        // pairing with a finisher: 5 combo points on the victim
+        bool thenNotOnTarget = false;   // pairing with a curse: not while the bot's curse is up (Amplify Curse)
+    };
+
     class ClassKit
     {
     public:
@@ -151,6 +173,9 @@ namespace Commander
         // on before the heal it suits (a big deficit; an emergency the heal would not reach in
         // time); the rotations do not cast them while it decides heals.
         virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
+        // Damage cooldowns (BurstBehavior, Takeover::Burst): the rotations do not cast them while
+        // the Commander does. Racial ones come from RaceKit (merged in WorldModelBuilder).
+        virtual std::vector<BurstSpell> Bursts() const { return {}; }
         // A heal on itself that costs no mana (priest Desperate Prayer): the heal module casts it
         // when the bot is hit and misses about that much health (also non-healer bots); the team
         // rescue may pick it for a bot about to die (it is in Survival too).

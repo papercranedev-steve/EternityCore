@@ -75,6 +75,33 @@ namespace Commander
                 stand.selfOnly = true;
                 return { wall, stand };
             }
+
+            // Death Wish (talent, 3 min): +20% physical damage, -20% armor. Sweeping Strikes
+            // (30 s): the next hits also strike a second enemy. Recklessness and Retaliation
+            // (30 min): kept for a boss or someone about to die (BurstValue long cooldowns);
+            // Recklessness: every hit crits, +20% damage taken.
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.warrior;
+                BurstSpell wish;
+                wish.spell = s.pDeathWish;
+                wish.damageMult = 0.2f;
+                wish.notTank = true;
+                BurstSpell sweep;
+                sweep.spell = s.pSweepingStrikes;
+                sweep.damageMult = 0.5f;
+                sweep.minEnemiesNear = 2;
+                BurstSpell reck;
+                reck.spell = s.pRecklessness;
+                reck.damageMult = 0.5f;
+                reck.damageTakenUp = 0.2f;
+                reck.notTank = true;
+                BurstSpell retaliation;
+                retaliation.spell = s.pRetaliation;
+                retaliation.damageMult = 0.3f;
+                retaliation.minAttackersOnSelf = 3;
+                return { wish, sweep, reck, retaliation };
+            }
         };
     }
 

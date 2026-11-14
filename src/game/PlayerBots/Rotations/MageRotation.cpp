@@ -231,13 +231,16 @@ namespace
             return false;
         }
 
-        // Cooldowns of fire and arcane builds, as in the original PartyBot rotation.
+        // Cooldowns of fire and arcane builds, as in the original PartyBot rotation. Combustion,
+        // Arcane Power and Presence of Mind are the Commander's while it decides damage
+        // cooldowns (BurstBehavior, Takeover::Burst: Presence of Mind goes on with its Pyroblast).
         bool Burst(Unit* pVictim)
         {
             Player* me = m_bot.me;
             auto const& s = m_bot.m_spells.mage;
+            bool const own = !m_bot.IsBurstControlled();
 
-            if (s.pCombustion && Cast(me, s.pCombustion))
+            if (own && s.pCombustion && Cast(me, s.pCombustion))
                 return true;
 
             if (s.pPyroblast &&
@@ -246,12 +249,12 @@ namespace
                 Cast(pVictim, s.pPyroblast))
                 return true;
 
-            if (s.pArcanePower &&
+            if (own && s.pArcanePower &&
                 (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
                 Cast(me, s.pArcanePower))
                 return true;
 
-            if (s.pPresenceOfMind &&
+            if (own && s.pPresenceOfMind &&
                 (me->GetPowerPercent(POWER_MANA) > 50.0f) &&
                 Cast(me, s.pPresenceOfMind))
                 return true;

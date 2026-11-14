@@ -65,6 +65,26 @@ namespace Commander
                 vanish.selfOnly = true;
                 return { vanish };
             }
+
+            // Adrenaline Rush (5 min): energy twice as fast. Blade Flurry (2 min): the hits also
+            // strike a second enemy. Cold Blood (3 min): the next Eviscerate crits.
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.rogue;
+                BurstSpell rush;
+                rush.spell = s.pAdrenalineRush;
+                rush.damageMult = 0.6f;
+                BurstSpell flurry;
+                flurry.spell = s.pBladeFlurry;
+                flurry.damageMult = 0.5f;
+                flurry.minEnemiesNear = 2;
+                BurstSpell cold;
+                cold.spell = s.pColdBlood;
+                cold.then = s.pEviscerate;
+                cold.extraSec = 1.5f;
+                cold.needsCombo = true;
+                return { rush, flurry, cold };
+            }
         };
     }
 

@@ -1,5 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
+#include <algorithm>
 
 namespace Commander
 {
@@ -105,6 +106,26 @@ namespace Commander
                 block.selfOnly = true;
                 block.casterStops = true;
                 return { block };
+            }
+
+            // Combustion (3 min): fire crits climb until 3 crits. Arcane Power (3 min): +30%
+            // damage, +30% mana cost (above half mana, as in the original rotation). Presence of
+            // Mind (3 min): the next cast is instant, used for Pyroblast (6 s cast).
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.mage;
+                BurstSpell combustion;
+                combustion.spell = s.pCombustion;
+                combustion.damageMult = 0.2f;
+                BurstSpell power;
+                power.spell = s.pArcanePower;
+                power.damageMult = 0.3f;
+                power.minManaPct = 50.0f;
+                BurstSpell mind;
+                mind.spell = s.pPresenceOfMind;
+                mind.then = s.pPyroblast ? s.pPyroblast : Filler();
+                mind.extraSec = mind.then ? std::max(0.0f, mind.then->GetCastTime(m_bot.me) / 1000.0f - 1.5f) : 0.0f;
+                return { combustion, power, mind };
             }
         };
     }

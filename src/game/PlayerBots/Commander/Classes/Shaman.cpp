@@ -39,6 +39,18 @@ namespace Commander
                 b.instant = true;
                 return { b };
             }
+
+            // Elemental Mastery (talent, 3 min): the next spell crits and costs no mana, used for
+            // Chain Lightning (Lightning Bolt until learned).
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.shaman;
+                BurstSpell mastery;
+                mastery.spell = s.pElementalMastery;
+                mastery.then = s.pChainLightning ? s.pChainLightning : s.pLightningBolt;
+                mastery.extraSec = 1.0f;
+                return { mastery };
+            }
         };
     }
 

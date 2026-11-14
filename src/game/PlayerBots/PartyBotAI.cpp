@@ -306,6 +306,11 @@ bool PartyBotAI::IsSurvivalControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Survival, WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsBurstControlled() const
+{
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Burst, WorldTimer::getMSTime());
+}
+
 void PartyBotAI::BreakControl()
 {
     // Divine Shield / Ice Block lift a stun too, but they are the bot's emergency cooldowns: the
@@ -2277,7 +2282,8 @@ void PartyBotAI::UpdateInCombatAI_Shaman()
     {
         if (Unit* pVictim = me->GetVictim())
         {
-            if (m_spells.shaman.pElementalMastery &&
+            // The Commander's damage cooldown while it decides them (BurstBehavior, Takeover::Burst).
+            if (m_spells.shaman.pElementalMastery && !IsBurstControlled() &&
                 me->GetAttackers().empty() &&
                 CanTryToCastSpell(me, m_spells.shaman.pElementalMastery))
             {
@@ -3358,7 +3364,9 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if (m_spells.warrior.pRetaliation &&
+        // Retaliation, Sweeping Strikes, Recklessness, Death Wish: the Commander's damage
+        // cooldowns while it decides them (BurstBehavior, Takeover::Burst).
+        if (m_spells.warrior.pRetaliation && !IsBurstControlled() &&
            (GetAttackersInRangeCount(10.0f) > 2) &&
             CanTryToCastSpell(me, m_spells.warrior.pRetaliation))
         {
@@ -3366,7 +3374,7 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if (m_spells.warrior.pSweepingStrikes &&
+        if (m_spells.warrior.pSweepingStrikes && !IsBurstControlled() &&
             CanTryToCastSpell(me, m_spells.warrior.pSweepingStrikes) &&
            (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2))
         {
@@ -3374,7 +3382,8 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                 return;
         }
 
-        if ((me->GetHealthPercent() > 60.0f) && (pVictim->GetHealthPercent() > 40.0f) &&
+        if (!IsBurstControlled() &&
+            (me->GetHealthPercent() > 60.0f) && (pVictim->GetHealthPercent() > 40.0f) &&
            !me->HasUnitState(UNIT_STATE_ROOT) &&
            !me->IsImmuneToMechanic(MECHANIC_FEAR))
         {
@@ -3663,7 +3672,9 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
             }
         }
 
-        if (m_spells.rogue.pAdrenalineRush &&
+        // Adrenaline Rush, Cold Blood, Blade Flurry: the Commander's damage cooldowns while it
+        // decides them (BurstBehavior, Takeover::Burst).
+        if (m_spells.rogue.pAdrenalineRush && !IsBurstControlled() &&
            !me->GetPower(POWER_ENERGY) &&
             CanTryToCastSpell(me, m_spells.rogue.pAdrenalineRush))
         {
@@ -3699,13 +3710,13 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
                     return;
             }
 
-            if (m_spells.rogue.pColdBlood &&
+            if (m_spells.rogue.pColdBlood && !IsBurstControlled() &&
                 CanTryToCastSpell(me, m_spells.rogue.pColdBlood))
             {
                 DoCastSpell(me, m_spells.rogue.pColdBlood);
             }
 
-            if (m_spells.rogue.pBladeFlurry &&
+            if (m_spells.rogue.pBladeFlurry && !IsBurstControlled() &&
                 CanTryToCastSpell(me, m_spells.rogue.pBladeFlurry))
             {
                 if (DoCastSpell(me, m_spells.rogue.pBladeFlurry) == SPELL_CAST_OK)

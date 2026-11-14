@@ -11,6 +11,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Classes/RaceKit.h"
 #include "DamageSpells.h"
 #include "HealSpells.h"
 #include "RoleCapability.h"
@@ -859,6 +860,41 @@ namespace WorldModelBuilder
             }
         }
 
+        // Damage cooldowns: ClassKit::Bursts and the racial ones (RaceKit::Bursts).
+        void FillBursts(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            std::vector<BurstSpell> spells = ai->Kit().Bursts();
+            std::vector<BurstSpell> const racial = RaceKit::Bursts(*ai);
+            spells.insert(spells.end(), racial.begin(), racial.end());
+            for (BurstSpell const& s : spells)
+            {
+                SpellEntry const* spell = s.spell;
+                if (!spell || (s.then == nullptr && s.extraSec > 0.0f))
+                    continue;   // a pairing whose cast is not learned
+                BurstAbility a;
+                a.spellId = spell->Id;
+                a.thenSpellId = s.then ? s.then->Id : 0;
+                a.damageMult = s.damageMult;
+                a.extraSec = s.extraSec;
+                float const own = std::max(0, spell->GetDuration()) / 1000.0f;
+                a.durationSec = s.durationSec > 0.0f ? s.durationSec : (own > 0.0f ? own : 10.0f);
+                a.damageTakenUp = s.damageTakenUp;
+                a.cooldownMs = spell->GetRecoveryTime();
+                a.gcd = spell->StartRecoveryTime > 0;
+                a.minEnemiesNear = s.minEnemiesNear;
+                a.minAttackersOnSelf = s.minAttackersOnSelf;
+                a.minManaPct = s.minManaPct;
+                a.notTank = s.notTank;
+                a.healTakenCut = s.healTakenCut;
+                a.needsPet = s.needsPet;
+                a.needsCombo = s.needsCombo;
+                a.thenNotOnTarget = s.thenNotOnTarget;
+                a.ready = f.CanAct() && !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
+                          ai->IsReadyWithStance(spell);
+                f.bursts.push_back(a);
+            }
+        }
+
         // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim
         // (the pull's control valuation, ControlValue::OfPull).
         void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
@@ -1170,6 +1206,7 @@ namespace WorldModelBuilder
                         FillTaunts(ai, f);
                         FillThreatDrops(ai, f);
                         FillSurvival(ai, f);
+                        FillBursts(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
                         FillAreaPhase(ai, f);

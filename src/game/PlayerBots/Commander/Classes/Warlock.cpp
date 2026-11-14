@@ -36,6 +36,19 @@ namespace Commander
             {
                 return m_bot.m_spells.warlock.pLifeTap;
             }
+
+            // Amplify Curse (talent, 3 min): the next Curse of Agony does 50% more, when the
+            // warlock's Agony is not up on its victim.
+            std::vector<BurstSpell> Bursts() const override
+            {
+                auto const& s = m_bot.m_spells.warlock;
+                BurstSpell amplify;
+                amplify.spell = s.pAmplifyCurse;
+                amplify.then = s.pCurseofAgony;
+                amplify.extraSec = 2.0f;
+                amplify.thenNotOnTarget = true;
+                return { amplify };
+            }
         };
     }
 

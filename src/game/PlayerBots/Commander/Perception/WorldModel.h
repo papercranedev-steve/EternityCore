@@ -160,6 +160,30 @@ namespace Commander
         bool ready = false;
     };
 
+    // A damage cooldown of a bot (ClassKit::Bursts, RaceKit::Bursts), with the numbers of its
+    // data; Perception/Values/BurstValue.h values it. Fields as ClassKit::BurstSpell.
+    struct BurstAbility
+    {
+        uint32 spellId = 0;
+        uint32 thenSpellId = 0;         // a pairing: the cast it boosts
+        float damageMult = 0.0f;
+        float extraSec = 0.0f;
+        float durationSec = 0.0f;
+        float damageTakenUp = 0.0f;
+        uint32 cooldownMs = 0;
+        bool gcd = false;               // starts the global cooldown (StartRecoveryTime)
+        uint8 minEnemiesNear = 0;
+        uint8 minAttackersOnSelf = 0;
+        float minManaPct = 0.0f;
+        bool notTank = false;
+        bool healTakenCut = false;
+        bool needsPet = false;
+        bool needsCombo = false;
+        bool thenNotOnTarget = false;
+        // Off cooldown, enough power (stance swap counted), can act and cast.
+        bool ready = false;
+    };
+
     // The control effect an enemy is under now (the one lasting longest). A party member's
     // control cast that is done and on its way (Spell in SPELL_STATE_DELAYED: the server lands
     // it a few hundred ms later) counts as on, at its full duration: seeing nothing there
@@ -361,6 +385,7 @@ namespace Commander
         std::vector<TauntAbility> taunts;           // tank-role bots only
         std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
+        std::vector<BurstAbility> bursts;           // bots only
         std::vector<FleeStopAbility> fleeStops;     // bots only
         // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,

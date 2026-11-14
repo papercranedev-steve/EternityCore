@@ -219,6 +219,8 @@ public:
     // Takeover::Survival): the rotations' health threshold Divine Shield, Blessing of
     // Protection, Lay on Hands, Feign Death, Vanish, Ice Block, Shield Wall, Last Stand stand down.
     bool IsSurvivalControlled() const;
+    // A Commander module decides the bot's damage cooldowns (BurstBehavior, Takeover::Burst).
+    bool IsBurstControlled() const;
     // Stunned, feared, polymorphed: break out with a trinket, Blink or a shapeshift (CombatBotBaseAI::
     // BreakCrowdControlEffects). Divine Shield / Ice Block only as the team rescue's duty
     // (CastRescueWhileControlled); in a duel the original reflex.
