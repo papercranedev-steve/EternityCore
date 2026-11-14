@@ -282,6 +282,8 @@ public:
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).
     void StopTakenOverMovement();
+    // Swinging at a victim in reach while standing still and not facing it: turn to it (UpdateAI).
+    void FaceMeleeVictim(Unit* pVictim);
     // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
     // idle creatures' aggro range (Commander/Behaviors/Movement/FollowSpot.h).
     void StartFollowing(Unit* pLeader);

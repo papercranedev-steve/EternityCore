@@ -1735,8 +1735,27 @@ void PartyBotAI::UpdateAI(uint32 const diff)
              (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsValidHostileTarget(pVictim))
         me->Attack(pVictim, true);
 
+    FaceMeleeVictim(pVictim);
+
     if (me->IsInCombat())
         UpdateInCombatAI();
+}
+
+void PartyBotAI::FaceMeleeVictim(Unit* pVictim)
+{
+    // Fix: only the chase movement turned a melee bot to its victim. Since the stance modules
+    // hold it on a spot (TankStanceBehavior: "it comes to the tank", already in reach), it kept
+    // the facing it had: the guardian it faced died, the cadaver hitting it from the side got no
+    // swing for 8 s (bad facing), no rage, no ability, and Dazed from behind
+    // (strat-20261114-173302). Turn as a player does; a walk (chase, backpedal, jump turn) faces
+    // by itself.
+    if (!pVictim || !pVictim->IsAlive() || !me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) ||
+        me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) || me->IsMoving() ||
+        IsBackpedaling() || IsJumpCasting() || !me->CanReachWithMeleeAutoAttack(pVictim) ||
+        me->HasInArc(pVictim, 2 * M_PI_F / 3))     // Unit::CanAutoAttackTarget's facing arc
+        return;
+    me->SetInFront(pVictim);
+    me->SendMovementPacket(MSG_MOVE_SET_FACING, false);
 }
 
 
