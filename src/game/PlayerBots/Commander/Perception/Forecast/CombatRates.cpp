@@ -1,5 +1,6 @@
 #include "Commander/Perception/Forecast/CombatRates.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Tanks.h"
 #include "SharedDefines.h"
 #include "Timer.h"
 #include <algorithm>
@@ -24,6 +25,8 @@ namespace Commander
                 ++r.damageDealers;
         }
 
+        PartyMemberFacts const* const tank = Tanks::Main(world);
+        float heldDps = 0.0f;   // controlled enemies, once they wake (RateFacts::worthDps)
         for (EnemyFacts const& e : world.enemies)
         {
             // Enemies only fighting an ally (prisoners, guards) are not our fight: their health
@@ -31,11 +34,21 @@ namespace Commander
             if (e.onAllyOnly)
                 continue;
             r.enemyHealth += float(e.health);
-            if (e.crowdControlled || !e.acting || e.victim.IsEmpty())
+            if (e.crowdControlled)
+            {
+                PartyMemberFacts const* victim = world.FindMember(e.victim);
+                if (!victim)
+                    victim = tank;
+                if (victim)
+                    heldDps += Value::HitDps(e, *victim);
+                continue;
+            }
+            if (!e.acting || e.victim.IsEmpty())
                 continue;
             if (PartyMemberFacts const* victim = world.FindMember(e.victim))
                 r.incomingDps += Value::HitDps(e, *victim);
         }
+        r.worthDps = r.incomingDps > 0.0f ? r.incomingDps : heldDps;
 
         // No enemies: the fight is over, start a new measurement next time. A long enough fight
         // is remembered for the next pull (Value::DealtDps before it is measured).

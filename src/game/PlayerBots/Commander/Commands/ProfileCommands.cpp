@@ -255,8 +255,8 @@ namespace ProfileCommands
         RateFacts const& r = world.rates;
         handler->PSendSysMessage("Party max health %.0f (1 point = %.0f health), %u healers, %u others",
             r.partyMaxHealth, r.partyMaxHealth / 100.0f, r.healers, r.damageDealers);
-        handler->PSendSysMessage("Incoming melee %.1f/s = %.2f points/s; dealt %.1f/s (%s); enemy health %.0f, fight left %.1f s",
-            r.incomingDps, Value::Points(world, r.incomingDps), Value::DealtDps(world),
+        handler->PSendSysMessage("Incoming melee %.1f/s = %.2f points/s (actions valued at %.1f/s); dealt %.1f/s (%s); enemy health %.0f, fight left %.1f s",
+            r.incomingDps, Value::Points(world, r.incomingDps), r.worthDps, Value::DealtDps(world),
             r.dealtMeasured ? "measured" : "estimate", r.enemyHealth, Value::FightRemainingSec(world));
 
         Map* map = player->GetMap();

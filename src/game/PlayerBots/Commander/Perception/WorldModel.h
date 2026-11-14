@@ -652,6 +652,12 @@ namespace Commander
         // Melee of enemies hitting us after armor, plus the main ranged spell of casters standing
         // back (EnemyFacts::rangedDps). Other spells are not included yet.
         float incomingDps = 0.0f;
+        // What the party's actions are worth per second (Value::ContributionPerSec): incomingDps,
+        // or when no enemy hits us now because all are controlled (a stun, the controlled end),
+        // the damage they deal once they wake (on their victim, else on the main tank). With
+        // incomingDps alone every action was worth 0 then: the tank stood 25 yd off the enemy
+        // it was sent to wake for 30 s (strat-20261114-132853), walks cost nothing.
+        float worthDps = 0.0f;
         float dealtDps = 0.0f;          // measured drop of enemy health per second
         bool dealtMeasured = false;     // false = not enough samples yet, dealtDps is an estimate
         // The last fight's damage per second over its whole length (CombatRates), 0 = none

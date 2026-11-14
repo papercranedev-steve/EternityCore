@@ -70,7 +70,7 @@ namespace Value
 
     float ContributionPerSec(WorldModel const& world, PartyMemberFacts const& member)
     {
-        return ContributionPerSecAt(world, member, world.rates.incomingDps);
+        return ContributionPerSecAt(world, member, world.rates.worthDps);
     }
 
     float ContributionPerSecAt(WorldModel const& world, PartyMemberFacts const& member, float incomingDps)

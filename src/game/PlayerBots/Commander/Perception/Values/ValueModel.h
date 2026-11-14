@@ -58,6 +58,7 @@ namespace Commander
 
         // What one member contributes per second, in points per second:
         // healers keep up with incoming damage (shared between healers), others shorten the fight.
+        // At RateFacts::worthDps (the controlled enemies' damage when nothing hits us now).
         float ContributionPerSec(WorldModel const& world, PartyMemberFacts const& member);
         // The same in a fight with `incomingDps` damage per second on us: one that has not
         // started yet (the pull's FightLoad estimate, PullPlan::expectedIncomingDps).
