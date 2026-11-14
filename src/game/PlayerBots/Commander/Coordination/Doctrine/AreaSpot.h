@@ -59,6 +59,22 @@ namespace Commander
         // spot of the last refresh (nullptr: none).
         Choice Pick(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base, bool evaluate,
                     Position3 const* prevSpot);
+
+        // The parts of Pick's score other modules ask (the fight spot before the fight, tank
+        // fight spot doc 3.4: how well the caster can stand for a pile at S).
+        // Cells the caster may cast from, within `maxYd` of `around` (Collect's rules, out of
+        // ranged hazards), with their walk cost; `taken` as FieldSpots.
+        struct CasterCell
+        {
+            Position3 pos;
+            float walkCost = 0.0f;
+            bool taken = false;
+        };
+        std::vector<CasterCell> CasterCells(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& caster,
+                                            Position3 const& around, float maxYd);
+        // Header "slip": the caster at `p`, an enemy at `centre` turning at once.
+        float SlipAt(WorldModel const& world, PartyMemberFacts const& caster, AreaSpellFacts const& spell,
+                     Position3 const& centre, Position3 const& p);
     }
 }
 

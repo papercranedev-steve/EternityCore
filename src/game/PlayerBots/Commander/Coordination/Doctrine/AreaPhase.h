@@ -13,7 +13,7 @@
  *
  * 1. A bot channelling an area spell (PartyMemberFacts::areaChannel): the phase is its channel
  *    (step Channel), valued by AreaValue on the ticks left (paid). endCost = its net now -
- *    its net with every tank busy (what sending the tank away costs, the fight spot pays it).
+ *    its net with every tank busy (what sending the tank away costs, Stragglers pays it).
  * 2. Otherwise every damage dealer bot, every ready area spell (AreaSpellFacts), every centre
  *    (ground spell: each acting enemy within range; else around the caster), valued by
  *    AreaValue for the whole spell (never "start and stop after a few ticks"):

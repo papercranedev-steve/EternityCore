@@ -12,18 +12,30 @@
  *             ControlValue::ClearOfPileYd of S (the area spells there would wake them);
  *   walk      (S not the tank's place) Value::FightExtension(walk to S at WALK_YARDS_PER_SEC,
  *             the tank's backwards walk with the pile on it (Backpedal.h),
- *             the grid walk or the straight line x PATH_FACTOR) + the area phase's end cost
- *             (plan.area, the last refresh: AreaPhase runs after this).
- * The tank's place costs patrols + holds. At most MARGIN_SEC of the tank's LostAction: nothing
- * to gain, no search. Else the field cells MIN_YD..MAX_YD around the tank (FieldSpots::Collect:
- * standable, no idle creature, reachable) are scored; the best MAX_SPOTS that lose less than the
- * tank's place by more than the margin are the move's spots, best first (ground, idle creatures
- * and the path are checked live by TankStanceBehavior on the tank). Called every refresh by
+ *             the grid walk or the straight line x PATH_FACTOR);
+ *   area      (tank fight spot doc 3.4, user 2026-11-14: the tank keeps the pile where the
+ *             mage's worst-case Blizzard wants it, the far half of the circle, not its centre;
+ *             the same valuation as the mage's, no zone of its own)
+ *             in the fight, a bot's area channel running: its AreaValue for the ticks left now
+ *             - with the enemies on the tank around S (each keeps its place relative to the
+ *             tank) and the tank busy walking (MAX_VALUED best cells by the other terms only;
+ *             replaces the area phase's end cost). Between casts 0: the next circle is put on
+ *             the pile wherever it is (AreaCentre::NearSide).
+ *             before the fight (Request::walkFromAt), the planned area caster with a ground
+ *             channel (AreaIntent::PlannedCaster): its best cell for a pile at S by AreaSpot's
+ *             pre-fight score (slip + walk, AreaSpot::CasterCells / SlipAt, within range -
+ *             SPOT_MARGIN_YD; none: as if it cast standing on the pile) - the same at the
+ *             pull's spot. Negative: more room at S.
+ * The tank's place costs patrols + holds. In the fight at most MARGIN_SEC of the tank's
+ * LostAction: nothing to gain, no search (the area term is only a loss of moving there). Else
+ * the field cells MIN_YD..MAX_YD around the place (FieldSpots::Collect: standable, no idle
+ * creature, reachable) are scored; the best MAX_SPOTS that lose less than the tank's place by
+ * more than the margin are the move's spots, best first (ground, idle creatures and the path
+ * are checked live by TankStanceBehavior on the tank). Called every refresh by
  * FightSpotAssigner (tank fight spot doc .kiro/docs/2026-11-14-tank-fight-spot.md).
- * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), the area
- * spell's value with the pile at S, fleeing enemies' helpers, how well the healers and ranged
- * can stand around S (they pick their own cells around the tank afterwards, Healer /
- * RangedStanceBehavior).
+ * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), fleeing
+ * enemies' helpers, how well the healers and ranged can stand around S (they pick their own
+ * cells around the tank afterwards, Healer / RangedStanceBehavior).
  * Pure (facts and plan).
  */
 
@@ -45,6 +57,9 @@ namespace FightSpot
     float const WALK_YARDS_PER_SEC = 4.5f;
     float const PATH_FACTOR = 1.3f;
     size_t const MAX_SPOTS = 8;
+    // The running channel is valued (AreaValue, a world copy) for the best this many by the
+    // other terms only (doc 9, answer 5).
+    size_t const MAX_VALUED = 8;
 
     struct Choice
     {
@@ -53,7 +68,8 @@ namespace FightSpot
         float hereHolds = 0.0f;
         PatrolFacts const* patrol = nullptr;    // the patrol costing the most here (null = none)
         std::vector<Position3> spots;   // better spots, best first; empty = stay
-        float bestLoss = 0.0f;          // the first spot's patrols + holds
+        float bestLoss = 0.0f;          // the first spot's patrols + holds + area
+        float bestArea = 0.0f;          // of which the area term (negative: a gain over here)
         float bestWalk = 0.0f;          // the first spot's walk
         std::string why;
     };

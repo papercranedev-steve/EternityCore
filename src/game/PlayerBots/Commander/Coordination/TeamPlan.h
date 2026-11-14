@@ -744,7 +744,8 @@ namespace Commander
         float benefit = 0.0f;        // of the whole spell from `spot` (or here)
         float cost = 0.0f;
         float net = 0.0f;
-        // What ending the phase now loses (a tank sent elsewhere: the fight spot pays it, FightSpot.h).
+        // What ending the phase now loses (a tank sent elsewhere: Stragglers pays it; the fight
+        // spot values the channel with the pile moved itself, FightSpot.h).
         float endCost = 0.0f;
         // The phase counts on the tanks' taunts for the enemies it turns: what it loses
         // without them (RescueAssigner adds it to a taunt spent on another enemy).

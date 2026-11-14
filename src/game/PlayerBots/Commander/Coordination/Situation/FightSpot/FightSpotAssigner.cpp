@@ -46,7 +46,8 @@ namespace Commander
             std::string const name = c.patrol ? NameOf(c.patrol->entry) : std::string();
             return c.herePatrols > 0.0f && c.hereHolds > 0.0f ? name + " walks in and a control is next to the pile"
                  : c.herePatrols > 0.0f ? name + " walks into the fight"
-                 : "a control that breaks on damage is next to the pile";
+                 : c.hereHolds > 0.0f ? "a control that breaks on damage is next to the pile"
+                 : "the area caster has more room there";
         }
 
         void End(FightSpotPlan& m)

@@ -34,13 +34,47 @@ namespace AreaSpot
         };
     }
 
+    float SlipAt(WorldModel const& world, PartyMemberFacts const& m, AreaSpellFacts const& spell,
+                 Position3 const& centre, Position3 const& p)
+    {
+        float const channelSec = float(spell.ticks) * spell.periodSec;
+        float const gap = Distance2d(p, centre);
+        float const sec = AreaValue::WalkSecUnder(centre, AggroTurnCost::RUN_YARDS_PER_SEC, spell.slowPct,
+                                                  centre, spell.radius, p, 0.0f);
+        float const speed = sec > 0.0f ? gap / sec : AggroTurnCost::RUN_YARDS_PER_SEC;
+        return Exposure::ChannelLoss(world, m, gap, speed, channelSec);
+    }
+
+    std::vector<CasterCell> CasterCells(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& m,
+                                        Position3 const& around, float maxYd)
+    {
+        std::vector<CasterCell> out;
+        if (!world.field)
+            return out;
+        FieldSpots::Query q;
+        q.center = around;
+        q.maxYd = maxYd;
+        q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
+        std::vector<HazardZone> const& zones = HazardZones::Get(world);
+        for (FieldSpots::Spot const& s : FieldSpots::Collect(world, m, q))
+        {
+            if (HazardZones::IsInside(zones, HAZARD_RANGED, s.pos))
+                continue;
+            CasterCell c;
+            c.pos = s.pos;
+            c.walkCost = SpotCost::Walk(world, m, s.WalkEstimate(PATH_FACTOR) / RUN_YD_PER_SEC);
+            c.taken = s.taken;
+            out.push_back(c);
+        }
+        return out;
+    }
+
     Choice Pick(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base, bool evaluate,
                 Position3 const* prevSpot)
     {
         Choice out;
         PartyMemberFacts const& m = *base.caster;
         AreaSpellFacts const& spell = *base.spell;
-        float const channelSec = float(spell.ticks) * spell.periodSec;
 
         AreaValue::Request here = base;
         here.from = m.pos;
@@ -51,14 +85,7 @@ namespace AreaSpot
         // An enemy at the centre that turns at once (header "slip"); slowed inside the area only
         // (AreaValue::WalkSecUnder). It ranks the cells to value; it is in the score only
         // without enemies to value (before the fight): valued, the worst case is in AreaValue.
-        auto const slipAt = [&](Position3 const& p)
-        {
-            float const gap = Distance2d(p, base.centre);
-            float const sec = AreaValue::WalkSecUnder(base.centre, AggroTurnCost::RUN_YARDS_PER_SEC, spell.slowPct,
-                                                      base.centre, spell.radius, p, 0.0f);
-            float const speed = sec > 0.0f ? gap / sec : AggroTurnCost::RUN_YARDS_PER_SEC;
-            return Exposure::ChannelLoss(world, m, gap, speed, channelSec);
-        };
+        auto const slipAt = [&](Position3 const& p) { return SlipAt(world, m, spell, base.centre, p); };
 
         // Here.
         bool const idleHere = world.field && world.field->At(m.pos) && world.field->At(m.pos)->idle;
@@ -73,19 +100,12 @@ namespace AreaSpot
             return out;
 
         // Cells.
-        FieldSpots::Query q;
-        q.center = base.centre;
-        q.maxYd = spell.range - SPOT_MARGIN_YD;
-        q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
-        std::vector<HazardZone> const& zones = HazardZones::Get(world);
         std::vector<Cell> cells;
-        for (FieldSpots::Spot const& s : FieldSpots::Collect(world, m, q))
+        for (CasterCell const& s : CasterCells(world, plan, m, base.centre, spell.range - SPOT_MARGIN_YD))
         {
-            if (HazardZones::IsInside(zones, HAZARD_RANGED, s.pos))
-                continue;
             Cell c;
             c.pos = s.pos;
-            c.walkCost = SpotCost::Walk(world, m, s.WalkEstimate(PATH_FACTOR) / RUN_YD_PER_SEC);
+            c.walkCost = s.walkCost;
             c.slip = slipAt(s.pos);
             c.taken = s.taken;
             cells.push_back(c);

@@ -20,6 +20,7 @@ namespace Commander
 {
     struct WorldModel;
     struct DoctrinePlan;
+    struct TeamPlan;
     struct PartyMemberFacts;
     struct AreaSpellFacts;
 
@@ -33,6 +34,12 @@ namespace Commander
 
         // Fills d.areaThreat and d.areaSec (d.tactic is Area).
         void Fill(WorldModel const& world, DoctrinePlan& d);
+
+        // The caster the Area tactic counts on (the one with the most threat per second of the
+        // list), null = none. Before the fight (no tactic yet) a pull of
+        // TacticalDoctrine::AREA_MIN or more counts as Area. (Was AreaPhase's until 2026-11-14;
+        // the fight spot asks it too.)
+        PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan);
     }
 }
 
