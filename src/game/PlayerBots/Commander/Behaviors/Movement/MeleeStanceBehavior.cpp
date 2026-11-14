@@ -100,8 +100,10 @@ namespace Commander
         }
 
         // Chase `enemy`; false when its walk is blocked (the caller waits near the tank then).
+        // `assigned`: the brain's target. Its walk is checked on the hard line: the brain sends a
+        // bot over it only when no other enemy is open to it (DamageTargets, RouteFact::safeTight).
         bool ProposeChase(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                          PartyMemberFacts const& self, Unit* enemy, std::vector<Proposal>& out)
+                          PartyMemberFacts const& self, Unit* enemy, bool assigned, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             bool const inReach = me->CanReachWithMeleeAutoAttack(enemy);
@@ -110,7 +112,8 @@ namespace Commander
 
             EnemyFacts const* facts = FactsOf(world, enemy->GetObjectGuid());
             bool const blocked = !inReach &&
-                ((facts && RouteRisk::Blocked(world, self, *facts)) || !plan.MayEngage(self.guid, enemy->GetObjectGuid()));
+                ((facts && RouteRisk::Blocked(world, self, *facts, assigned)) ||
+                 !plan.MayEngage(self.guid, enemy->GetObjectGuid()));
             if (blocked)
             {
                 if (chasing)
@@ -290,10 +293,11 @@ namespace Commander
         Unit* enemy = nullptr;
         if (TargetDuty const* duty = plan.FindTargetFor(me->GetObjectGuid()))
             enemy = me->GetMap()->GetUnit(duty->enemy);
-        if (!enemy || !enemy->IsAlive() || !bot->IsValidHostileTarget(enemy))
+        bool const assigned = enemy && enemy->IsAlive() && bot->IsValidHostileTarget(enemy);
+        if (!assigned)
             enemy = me->GetVictim();
         if (enemy && enemy->IsAlive() && bot->IsValidHostileTarget(enemy) &&
-            ProposeChase(bot, world, plan, *self, enemy, out))
+            ProposeChase(bot, world, plan, *self, enemy, assigned, out))
             return;
         ProposeWait(bot, world, plan, *self, out);
     }

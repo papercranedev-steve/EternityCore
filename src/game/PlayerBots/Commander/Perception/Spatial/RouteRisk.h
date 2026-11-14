@@ -28,7 +28,10 @@ namespace Commander
         // The walk of `bot` to `enemy` pulls another pack or finds no way: the navmesh route
         // (WorldModel::routes, Perception/Spatial/MeleeRoutes.h) when checked, else the straight line
         // above (not checked yet: the first refresh of a fight).
-        bool Blocked(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy);
+        // `tight`: on the hard line (RouteFact::safeTight, SafeRoute::TIGHT_MARGIN); the straight
+        // line before the first check is the same either way.
+        bool Blocked(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy,
+                     bool tight = false);
 
         // Yards `bot` walks to `enemy`: the route's path length when checked, else the straight
         // distance (centre to centre).

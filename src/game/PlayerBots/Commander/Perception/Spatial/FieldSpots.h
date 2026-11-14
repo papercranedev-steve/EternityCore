@@ -6,6 +6,7 @@
  *  - standable (ground, linked to the participants);
  *  - no idle creature covers the cell (the end of a walk is checked strictly, like
  *    SafeRoute: a circle the member stands in only lets the walk out, not the stop);
+ *    Query::tight: on the hard line (FieldCell::idleTight);
  *  - with `patrolBeforeSec` > 0: no patrol reaches the cell before then (how long we stay:
  *    RouteGuard::StaySec, the fight's remaining time once it is on);
  *  - when the member's own cell is standable: reachable by a grid walk around idle creatures
@@ -53,6 +54,9 @@ namespace Commander
             float minYd = 0.0f;         // 2D distance band around `center`
             float maxYd = 0.0f;
             float patrolBeforeSec = 0.0f;
+            // The hard line (FieldCell::idleTight, SafeRoute::TIGHT_MARGIN) for the cell and the
+            // grid walk: a member who finds nothing otherwise and cannot do its job where it is.
+            bool tight = false;
         };
 
         // From world.field (must be set).

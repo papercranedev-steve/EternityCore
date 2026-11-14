@@ -24,6 +24,10 @@
  *  - idle: bit i = idle()[i] would attack a member standing here (AggroRange: aggro range of the
  *    member it reaches farthest + SafeRoute::IDLE_MARGIN, wander circle, height, line of sight;
  *    moving creatures without a wander circle by distance and height only).
+ *  - idleTight: the same with SafeRoute::TIGHT_MARGIN (the hard line, since 2026-11-14): a
+ *    cell of `idle` within the creature's reachTight (+ wander circle) by distance; its line of
+ *    sight was checked for `idle` already. For a member who cannot do its job otherwise
+ *    (FieldSpots::Query::tight).
  *  - patrolSec: earliest second (from the build) a patrol's zone covers the cell centre, from
  *    PatrolFacts::track (one lap of its path); NO_PATROL if its walk never comes there. The
  *    rule is PatrolZone.h (this is its cache): ask PatrolZone for any point.
@@ -63,6 +67,7 @@ namespace Commander
         bool standable = false;
         uint8 links = 0;                // bit FieldDir
         uint64 idle = 0;                // bit index into PositionField::Idle()
+        uint64 idleTight = 0;           // the same on the hard line (FieldIdle::reachTight), a subset of `idle`
         float patrolSec = NO_PATROL;
     };
 
@@ -72,6 +77,7 @@ namespace Commander
         ObjectGuid guid;
         Position3 home;                 // AggroRange::WanderOf (its position when not wandering)
         float reach = 0.0f;             // aggro range + margin, farthest over the members
+        float reachTight = 0.0f;        // aggro range + SafeRoute::TIGHT_MARGIN, farthest over the members
         float wander = 0.0f;            // wander radius, 0 = none
         bool sightChecked = false;      // false: distance and height only (moving, or over budget)
     };
@@ -114,8 +120,9 @@ namespace Commander
         std::vector<FieldIdle> const& Idle() const { return m_idle; }
 
         // Shortest grid walk (yards) from `from` to the cell of `to`, -1 = not reachable over the
-        // field (outside it, not standable, blocked by idle creatures).
-        float WalkYd(PartyMemberFacts const& from, Position3 const& to) const;
+        // field (outside it, not standable, blocked by idle creatures). `tight`: around the
+        // idleTight circles only.
+        float WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight = false) const;
 
         // Every cell of the field: fn(cx, cy, cell).
         template <class Fn>
@@ -151,10 +158,11 @@ namespace Commander
         struct Walk
         {
             ObjectGuid from;
+            bool tight = false;
             std::vector<float> yd;      // per flat index, < 0 = not reached
         };
         mutable std::vector<Walk> m_walks;
-        Walk const& WalkFrom(PartyMemberFacts const& from) const;
+        Walk const& WalkFrom(PartyMemberFacts const& from, bool tight) const;
     };
 }
 

@@ -53,10 +53,10 @@ namespace RouteRisk
         return false;
     }
 
-    bool Blocked(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy)
+    bool Blocked(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& enemy, bool tight)
     {
         if (RouteFact const* r = world.FindRoute(bot.guid, enemy.guid))
-            return !r->safe;
+            return tight ? !r->safeTight : !r->safe;
         return CrossesIdle(world, bot.pos, enemy.pos);
     }
 

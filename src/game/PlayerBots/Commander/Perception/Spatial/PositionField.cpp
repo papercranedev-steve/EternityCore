@@ -66,15 +66,17 @@ namespace Commander
         m_walks.clear();
     }
 
-    PositionField::Walk const& PositionField::WalkFrom(PartyMemberFacts const& from) const
+    PositionField::Walk const& PositionField::WalkFrom(PartyMemberFacts const& from, bool tight) const
     {
         for (Walk const& w : m_walks)
-            if (w.from == from.guid)
+            if (w.from == from.guid && w.tight == tight)
                 return w;
 
         m_walks.emplace_back();
         Walk& w = m_walks.back();
         w.from = from.guid;
+        w.tight = tight;
+        auto const idleOf = [tight](FieldCell const& c) { return tight ? c.idleTight : c.idle; };
         w.yd.assign(m_blocks.size() * BLOCK_CELLS * BLOCK_CELLS, -1.0f);
 
         int32 const sx = CellOf(from.pos.x), sy = CellOf(from.pos.y);
@@ -85,15 +87,16 @@ namespace Commander
 
         // Circles the member stands in: entered only farther from the creature's home than
         // the member is now (SafeRoute::IdleCreatures::LeavingFrom).
-        uint64 const startMask = startCell->idle;
+        uint64 const startMask = idleOf(*startCell);
         float startGap[MAX_IDLE];
         for (uint32 i = 0; i < m_idle.size(); ++i)
             startGap[i] = (startMask >> i) & 1 ? SafeRoute::Distance2d(from.pos, m_idle[i].home) : 0.0f;
         auto const enterable = [&](FieldCell const& c, Position3 const& at)
         {
-            if (c.idle & ~startMask)
+            uint64 const mask = idleOf(c);
+            if (mask & ~startMask)
                 return false;
-            uint64 shared = c.idle & startMask;
+            uint64 shared = mask & startMask;
             for (uint32 i = 0; shared; ++i, shared >>= 1)
                 if ((shared & 1) && SafeRoute::Distance2d(at, m_idle[i].home) < startGap[i] - SafeRoute::END_GAP_TOLERANCE)
                     return false;
@@ -139,11 +142,11 @@ namespace Commander
         return w;
     }
 
-    float PositionField::WalkYd(PartyMemberFacts const& from, Position3 const& to) const
+    float PositionField::WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight) const
     {
         int32 const i = FlatIndex(CellOf(to.x), CellOf(to.y));
         if (i < 0)
             return -1.0f;
-        return WalkFrom(from).yd[i];
+        return WalkFrom(from, tight).yd[i];
     }
 }

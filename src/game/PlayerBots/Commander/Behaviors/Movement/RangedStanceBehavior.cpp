@@ -8,10 +8,12 @@
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
+#include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace Commander
 {
@@ -50,7 +52,7 @@ namespace Commander
         std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
                                      std::vector<HazardZone> const& zones, Position3 const& victim,
                                      float victimReach, bool prepare, float staySec, float speed,
-                                     std::vector<EnemyFacts const*> const& turnable)
+                                     std::vector<EnemyFacts const*> const& turnable, bool tight)
         {
             std::vector<Spot> spots;
             FieldSpots::Query q;
@@ -58,6 +60,7 @@ namespace Commander
             q.minYd = 0.0f;
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
             q.patrolBeforeSec = staySec;
+            q.tight = tight;
             for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
@@ -205,59 +208,85 @@ namespace Commander
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
         float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
         // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
-        std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, RouteGuard::StaySec(world, plan),
-                                             speed, turnable);
-        // The walk out of an idle creature's reach starts inside it.
-        SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
-        uint32 checks = 0;
-        for (Spot const& s : spots)
+        float const staySec = RouteGuard::StaySec(world, plan);
+        // The hard line (SafeRoute::TIGHT_MARGIN): in the fight, the victim out of range or sight
+        // and no cell on the preferred line (stockade-20261114-203133: the mage stood in the
+        // corridor while the tank fought in a cell, the opposite cell's margin closed its door).
+        // A spot taken on the hard line is in the margin (`unsafe` next tick): the walk out goes
+        // only to a cell that still sees the victim (GeometryOk), so it does not walk back out.
+        bool const mayTighten = !prepare && !inReach && !placed;
+        uint32 checked = 0;
+        size_t found = 0;
+        std::unique_ptr<SafeRoute::IdleCreatures> idleTight;
+        for (bool const tight : { false, true })
         {
-            // Sorted: no cell further down saves more than this one.
-            if (hereValid && exposureHere - s.loss <= margin)
-                return;
-            if (checks >= MAX_GEOMETRY_CHECKS)
+            if (tight && !mayTighten)
                 break;
-            ++checks;
-            if (!GeometryOk(me, idle, pathIdle, at, s))
-                continue;
+            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, tight);
+            found += spots.size();
+            // This bot's own idle scan on the pass's line (scanned again only for the hard line).
+            if (tight)
+                idleTight.reset(new SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN));
+            SafeRoute::IdleCreatures const& own = tight ? *idleTight : idle;
+            // The walk out of an idle creature's reach starts inside it.
+            SafeRoute::IdleCreatures const pathIdle = unsafe ? own.LeavingFrom(here) : own;
+            uint32 checks = 0;
+            for (Spot const& s : spots)
+            {
+                // Sorted: no cell further down saves more than this one.
+                if (hereValid && exposureHere - s.loss <= margin)
+                    return;
+                if (checks >= MAX_GEOMETRY_CHECKS)
+                    break;
+                ++checks;
+                if (!GeometryOk(me, own, pathIdle, at, s))
+                    continue;
 
-            float const walkSec = s.walkSec;
-            float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
-            Proposal p;
-            p.source = "rangedstance";
-            p.action.type = BotActionType::MoveTo;
-            p.action.x = s.pos.x;
-            p.action.y = s.pos.y;
-            p.action.z = s.pos.z;
-            p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
-            if (unsafe || danger)
-            {
-                // A constraint: never stand where an idle pack would come, nor in the enemies'
-                // melee (their cleaves and area spells, an instant hit when one turns).
-                p.tier = ProposalTier::Urgent;
-                p.reason = unsafe ? "an idle creature would attack here" : "standing in the enemies' melee";
-                p.score = -walkSec;
+                float const walkSec = s.walkSec;
+                float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
+                Proposal p;
+                p.source = "rangedstance";
+                p.action.type = BotActionType::MoveTo;
+                p.action.x = s.pos.x;
+                p.action.y = s.pos.y;
+                p.action.z = s.pos.z;
+                p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
+                if (unsafe || danger)
+                {
+                    // A constraint: never stand where an idle pack would come, nor in the enemies'
+                    // melee (their cleaves and area spells, an instant hit when one turns).
+                    p.tier = ProposalTier::Urgent;
+                    p.reason = unsafe ? "an idle creature would attack here" : "standing in the enemies' melee";
+                    p.score = -walkSec;
+                }
+                else if (prepare)
+                {
+                    // Nothing to do before the fight: the walk costs nothing now and saves walking
+                    // it once the fight is on (its part of the planned fight, FightLoad estimate).
+                    float const incoming = std::max(world.rates.incomingDps, plan.pull.expectedIncomingDps);
+                    p.tier = ProposalTier::Assigned;
+                    p.reason = "take a place for the planned fight";
+                    p.SetValue(Value::ContributionPerSecAt(world, *self, incoming) * walkSec, 0.0f);
+                }
+                else
+                {
+                    p.tier = ProposalTier::Assigned;
+                    p.reason = inReach ? "too close to the enemies" :
+                               tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight";
+                    // Out of reach: it cannot do its job. Plus the exposure the walk saves.
+                    float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
+                    benefit += std::max(0.0f, exposureHere - s.exposure);
+                    p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
+                }
+                out.push_back(p);
+                return;
             }
-            else if (prepare)
-            {
-                // Nothing to do before the fight: the walk costs nothing now and saves walking
-                // it once the fight is on (its part of the planned fight, FightLoad estimate).
-                float const incoming = std::max(world.rates.incomingDps, plan.pull.expectedIncomingDps);
-                p.tier = ProposalTier::Assigned;
-                p.reason = "take a place for the planned fight";
-                p.SetValue(Value::ContributionPerSecAt(world, *self, incoming) * walkSec, 0.0f);
-            }
-            else
-            {
-                p.tier = ProposalTier::Assigned;
-                p.reason = inReach ? "too close to the enemies" : "victim out of range or sight";
-                // Out of reach: it cannot do its job. Plus the exposure the walk saves.
-                float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
-                benefit += std::max(0.0f, exposureHere - s.exposure);
-                p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
-            }
-            out.push_back(p);
-            return;
+            checked += checks;
         }
+        // Out of the victim's range or sight and no spot: the only record of why it stands.
+        if (!prepare && !inReach && Trace::On())
+            Trace::Emit("stance", Trace::Format("%s: no spot for %s (ranged)", me->GetName(), mayTighten ? "the victim, hard line too" : "the victim"),
+                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s}",
+                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false"));
     }
 }

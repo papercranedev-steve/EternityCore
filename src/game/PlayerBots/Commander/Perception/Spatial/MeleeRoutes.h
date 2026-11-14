@@ -21,6 +21,9 @@
  * to its home than that end (SafeRoute::IdleCreatures::LeavingFrom / ArrivingAt). Not for an
  * enemy only targeted: it is not fighting at its spot yet.
  * Each check records why it is not safe (RouteFact::why / blocker, trace "route").
+ * A walk an idle creature's margin blocks is checked again on the hard line
+ * (SafeRoute::TIGHT_MARGIN, RouteFact::safeTight, since 2026-11-14): the brain takes it when no
+ * other enemy is open to the bot (DamageTargets).
  *
  * Cost: one navmesh query per pair. Results are kept until the bot or the enemy moved
  * MOVED_YD or MAX_AGE_MS passed (idle creatures wander); at most MAX_CHECKS_PER_REFRESH new

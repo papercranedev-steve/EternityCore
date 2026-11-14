@@ -240,7 +240,21 @@ namespace Commander
             b->Propose(bot, world, plan, proposals);
 
         if (proposals.empty())
+        {
+            // The first tick without a proposal after one with: an empty record, once. Without it
+            // the log and the review showed the last proposal as what the bot was doing: "pull
+            // hold, 4.2 s ago" for a rogue no module proposed anything to for 20 s
+            // (stockade-20261114-203133). The class rotation may still act on such a tick.
+            std::deque<DecisionRecord> const& log = directives.GetDecisionLog();
+            if (!log.empty() && !log.back().candidates.empty())
+            {
+                DecisionRecord none;
+                none.timeMs = now;
+                directives.RecordDecision(std::move(none));
+                directives.SetLastDecision(now, "no proposal");
+            }
             return false;
+        }
 
         for (IBehavior const* b : active)
             b->Adjust(bot, world, proposals);

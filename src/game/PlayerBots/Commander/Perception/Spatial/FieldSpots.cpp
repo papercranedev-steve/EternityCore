@@ -25,7 +25,7 @@ namespace FieldSpots
             for (int32 cy = cy0; cy <= cy1; ++cy)
             {
                 FieldCell const* c = field.At(cx, cy);
-                if (!c || !c->standable || c->idle)
+                if (!c || !c->standable || (q.tight ? c->idleTight : c->idle))
                     continue;
                 if (q.patrolBeforeSec > 0.0f && c->patrolSec >= 0.0f && c->patrolSec < q.patrolBeforeSec)
                     continue;
@@ -41,7 +41,7 @@ namespace FieldSpots
                         s.taken = true;
                 if (walks)
                 {
-                    s.walkYd = field.WalkYd(member, s.pos);
+                    s.walkYd = field.WalkYd(member, s.pos, q.tight);
                     if (s.walkYd < 0.0f)
                     {
                         unreached.push_back(s);

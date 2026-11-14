@@ -642,7 +642,8 @@ namespace DevConsole
     }
 
     // u:decisions([sinceMs]): the Commander arbiter's decision log of a party bot (last
-    // BotDirectives::LOG_SIZE ticks with proposals), newer than sinceMs (server ms, now()).
+    // BotDirectives::LOG_SIZE ticks with proposals, and an empty cands for the first tick
+    // without one), newer than sinceMs (server ms, now()).
     // [{t, cands=[{src, what, tier, score, b, c, valued, reason, res}]}]; nil if not a bot.
     // Second value: true when records newer than sinceMs were already pushed out of the log
     // (the caller polled too slowly; the combat recorder writes a `gap` line).

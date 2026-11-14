@@ -699,6 +699,9 @@ namespace Commander
         // The navmesh path gets there without coming into an idle creature's aggro range
         // (SafeRoute::PathIsSafe, wander circles included). False also when there is no path.
         bool safe = false;
+        // The same with the hard line (SafeRoute::TIGHT_MARGIN): the walk a bot may take when
+        // no other enemy is open to it (DamageTargets). Equal to `safe` when `safe` holds.
+        bool safeTight = false;
         float pathYd = 0.0f;        // path length (straight distance without a navmesh)
         char const* why = "";       // not safe: SafeRoute::Verdict::why
         ObjectGuid blocker;         // "idle creature": the one the walk comes into

@@ -440,7 +440,10 @@ namespace Commander
             k.creature = c;
             for (Player* m : members)
                 if (AggroRange::IsIdleAggressor(c, m))
+                {
                     k.idle.reach = std::max(k.idle.reach, AggroRange::Reach(c, m, SafeRoute::IDLE_MARGIN));
+                    k.idle.reachTight = std::max(k.idle.reachTight, AggroRange::Reach(c, m, SafeRoute::TIGHT_MARGIN));
+                }
             if (k.idle.reach <= 0.0f)
                 continue;
             AggroRange::Wander const w = AggroRange::WanderOf(c);
@@ -460,6 +463,7 @@ namespace Commander
                 break;
             Creature* c = k.creature;
             float const range = k.idle.reach + k.idle.wander;
+            float const rangeTight = k.idle.reachTight + k.idle.wander;
             // Moving along a path (not a wanderer): where it stands now, distance only.
             bool const moving = c->IsMoving() && k.idle.wander <= 0.0f;
             Position3 from = k.idle.home;
@@ -560,6 +564,12 @@ namespace Commander
                         if (!(bits & (uint64(1) << i)) || !block.cells[i].standable)
                             continue;
                         block.cells[i].idle |= uint64(1) << bit;
+                        // The hard line: distance only (the sight was checked for `idle`).
+                        Position3 at = field.CenterOf(bx * PositionField::BLOCK_CELLS + i % PositionField::BLOCK_CELLS,
+                                                      by * PositionField::BLOCK_CELLS + i / PositionField::BLOCK_CELLS);
+                        at.z = block.cells[i].z;
+                        if (CoversByDistance(from, rangeTight, c->CanFly(), at))
+                            block.cells[i].idleTight |= uint64(1) << bit;
                         any = true;
                     }
                 }

@@ -10,10 +10,12 @@
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
+#include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace Commander
 {
@@ -359,53 +361,88 @@ namespace Commander
         };
 
         std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        // The walk out of an idle creature's reach starts inside it.
-        SafeRoute::IdleCreatures const pathIdle = unsafe ? idle.LeavingFrom(here) : idle;
-
-        // Cells of the position field within MAX_YD of the anchor (PREPARE_MAX_YD before the
-        // fight: a walk-in fought where the pack stands has the idle pack itself as the anchor,
-        // the inner cells lie in its aggro range and the field drops them).
-        std::vector<Spot> spots;
-        if (world.field)
+        // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
+        float const staySec = RouteGuard::StaySec(world, plan);
+        // The hard line (SafeRoute::TIGHT_MARGIN): in the fight, the tank out of reach or sight
+        // and nothing on the preferred line (stockade-20261114-203133: the tank fought in a cell,
+        // the opposite cell's margin closed its door, the priest never healed and the tank died).
+        // A spot taken on the hard line is in the margin (`unsafe` next tick): the walk out goes
+        // only to a cell that still sees the tank (GeometryOk) or to the tank, not back out.
+        bool const mayTighten = !ctx.prepare && !anchorOk;
+        uint32 checked = 0;
+        size_t found = 0;
+        std::unique_ptr<SafeRoute::IdleCreatures> idleTight;
+        for (bool const tight : { false, true })
         {
-            FieldSpots::Query q;
-            q.center = ctx.anchor;
-            q.minYd = 0.0f;
-            q.maxYd = ctx.prepare ? PREPARE_MAX_YD : MAX_YD;
-            // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
-            q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
-            spots = Candidates(ctx, world, zones, weights, FieldSpots::Collect(world, *ctx.self, q));
-        }
-
-        uint32 checks = 0;
-        for (Spot const& s : spots)
-        {
-            // Sorted: no cell further down saves more than this one.
-            if (hereValid && stayHere - s.loss <= margin)
-                return;
-            if (checks >= MAX_GEOMETRY_CHECKS)
+            if (tight && !mayTighten)
                 break;
-            ++checks;
-            if (!GeometryOk(ctx, idle, pathIdle, s))
-                continue;
-            propose(s.pos, stayHere - s.stay);
-            return;
-        }
+            // This healer's own idle scan on the pass's line (scanned again only for the hard line).
+            if (tight)
+                idleTight.reset(new SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN));
+            SafeRoute::IdleCreatures const& own = tight ? *idleTight : idle;
+            // The walk out of an idle creature's reach starts inside it.
+            SafeRoute::IdleCreatures const pathIdle = unsafe ? own.LeavingFrom(here) : own;
 
-        // No spot: walk to the anchor itself while it is out of reach (what following did) or
-        // the healer stands in an idle creature's reach, unless the anchor stands in one too or
-        // the walk passes an idle pack.
-        if ((!anchorOk || unsafe) && !idle.Near(ctx.anchor) &&
-            SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR))
-        {
-            Proposal p;
-            if (unsafe)
-                MakeUnsafeProposal(ctx, ctx.anchor, "an idle creature would attack here", p);
-            else
-                MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured, 0.0f,
-                             ctx.prepare ? "planned fight spot, no free spot around it: go there"
-                                         : "tank out of reach, no free spot: go to the tank", p);
-            out.push_back(p);
+            // Cells of the position field within MAX_YD of the anchor (PREPARE_MAX_YD before the
+            // fight: a walk-in fought where the pack stands has the idle pack itself as the anchor,
+            // the inner cells lie in its aggro range and the field drops them).
+            std::vector<Spot> spots;
+            if (world.field)
+            {
+                FieldSpots::Query q;
+                q.center = ctx.anchor;
+                q.minYd = 0.0f;
+                q.maxYd = ctx.prepare ? PREPARE_MAX_YD : MAX_YD;
+                q.patrolBeforeSec = staySec;
+                q.tight = tight;
+                spots = Candidates(ctx, world, zones, weights, FieldSpots::Collect(world, *ctx.self, q));
+            }
+            found += spots.size();
+
+            uint32 checks = 0;
+            for (Spot const& s : spots)
+            {
+                // Sorted: no cell further down saves more than this one.
+                if (hereValid && stayHere - s.loss <= margin)
+                    return;
+                if (checks >= MAX_GEOMETRY_CHECKS)
+                    break;
+                ++checks;
+                if (!GeometryOk(ctx, own, pathIdle, s))
+                    continue;
+                propose(s.pos, stayHere - s.stay);
+                if (tight)
+                    out.back().reason = "tank out of reach, spot on the hard line";
+                return;
+            }
+            checked += checks;
+
+            // No spot: walk to the anchor itself while it is out of reach (what following did) or
+            // the healer stands in an idle creature's reach, unless the anchor stands in one too or
+            // the walk passes an idle pack.
+            // In the margin only (the hard line holds there) with the tank in reach and sight, e.g.
+            // a spot taken on the hard line: staying beats the walk into the enemies at the tank.
+            bool const marginOnly = unsafe && anchorOk &&
+                !SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN).Near(here);
+            if ((!anchorOk || (unsafe && !marginOnly)) && !own.Near(ctx.anchor) &&
+                SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR))
+            {
+                Proposal p;
+                if (unsafe)
+                    MakeUnsafeProposal(ctx, ctx.anchor, "an idle creature would attack here", p);
+                else
+                    MakeProposal(ctx, world, ctx.anchor, anchorOk, anyInjured, 0.0f,
+                                 ctx.prepare ? "planned fight spot, no free spot around it: go there" :
+                                 tight ? "tank out of reach, no free spot: go to the tank on the hard line"
+                                       : "tank out of reach, no free spot: go to the tank", p);
+                out.push_back(p);
+                return;
+            }
         }
+        // The tank out of reach or sight and no way to it: the only record of why it stands.
+        if (!ctx.prepare && !anchorOk && Trace::On())
+            Trace::Emit("stance", Trace::Format("%s: no spot for the tank (healer)%s", me->GetName(), mayTighten ? ", hard line too" : ""),
+                Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s}",
+                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false"));
     }
 }

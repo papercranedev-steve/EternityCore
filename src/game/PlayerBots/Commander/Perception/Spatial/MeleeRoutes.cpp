@@ -121,50 +121,70 @@ namespace Commander
         if (due.size() > MAX_CHECKS_PER_REFRESH)
             due.resize(MAX_CHECKS_PER_REFRESH);
 
-        // One idle creature scan per bot, out to its farthest walk checked now.
-        std::vector<std::pair<ObjectGuid, std::unique_ptr<SafeRoute::IdleCreatures>>> scans;
+        // One idle creature scan per bot and margin, out to its farthest walk checked now.
+        struct Scan
+        {
+            ObjectGuid bot;
+            float margin = 0.0f;
+            std::unique_ptr<SafeRoute::IdleCreatures> idle;
+        };
+        std::vector<Scan> scans;
+        auto const scanOf = [&](Player* me, Pair const* p, float margin) -> SafeRoute::IdleCreatures const&
+        {
+            for (Scan const& s : scans)
+                if (s.bot == p->bot->guid && s.margin == margin)
+                    return *s.idle;
+            float farthest = 0.0f;
+            for (Pair const* q : due)
+                if (q->bot == p->bot)
+                    farthest = std::max(farthest, q->distance);
+            float const radius = std::min(MAX_SCAN_YD, farthest + SCAN_EXTRA_YD);
+            Scan s;
+            s.bot = p->bot->guid;
+            s.margin = margin;
+            s.idle.reset(new SafeRoute::IdleCreatures(me, p->bot->pos, radius, margin));
+            scans.push_back(std::move(s));
+            return *scans.back().idle;
+        };
+        // The walk's idle set for one margin (header: LeavingFrom, the pack, ArrivingAt).
+        auto const pathIdleOf = [&](Player* me, Pair const* p, float margin)
+        {
+            SafeRoute::IdleCreatures pathIdle = scanOf(me, p, margin).LeavingFrom(p->bot->pos);
+            pathIdle.Ignore(PackOf(world, p->enemy->guid));
+            // The party fights it there and nothing else came (header).
+            if (p->engaged)
+                pathIdle = pathIdle.ArrivingAt(p->enemy->pos);
+            return pathIdle;
+        };
         for (Pair* p : due)
         {
             Player* me = map->GetPlayer(p->bot->guid);
             if (!me || !me->IsInWorld() || me->GetMap() != map)
                 continue;
-            SafeRoute::IdleCreatures const* idle = nullptr;
-            for (auto const& s : scans)
-                if (s.first == p->bot->guid)
-                    idle = s.second.get();
-            if (!idle)
-            {
-                float farthest = 0.0f;
-                for (Pair const* q : due)
-                    if (q->bot == p->bot)
-                        farthest = std::max(farthest, q->distance);
-                float const radius = std::min(MAX_SCAN_YD, farthest + SCAN_EXTRA_YD);
-                scans.emplace_back(p->bot->guid, std::unique_ptr<SafeRoute::IdleCreatures>(
-                    new SafeRoute::IdleCreatures(me, p->bot->pos, radius)));
-                idle = scans.back().second.get();
-            }
-            SafeRoute::IdleCreatures pathIdle = idle->LeavingFrom(p->bot->pos);
-            pathIdle.Ignore(PackOf(world, p->enemy->guid));
-            // The party fights it there and nothing else came (header).
-            if (p->engaged)
-                pathIdle = pathIdle.ArrivingAt(p->enemy->pos);
 
             Entry e;
             e.fact.bot = p->bot->guid;
             e.fact.enemy = p->enemy->guid;
             e.fact.pathYd = p->distance;
             SafeRoute::Verdict verdict;
-            e.fact.safe = SafeRoute::PathIsSafe(me, pathIdle, p->enemy->pos, MAX_DETOUR, &e.fact.pathYd, nullptr, &verdict);
+            e.fact.safe = SafeRoute::PathIsSafe(me, pathIdleOf(me, p, SafeRoute::IDLE_MARGIN), p->enemy->pos, MAX_DETOUR,
+                                                &e.fact.pathYd, nullptr, &verdict);
+            e.fact.safeTight = e.fact.safe;
             e.fact.why = verdict.why;
             if (verdict.blocker)
                 e.fact.blocker = verdict.blocker->GetObjectGuid();
+            // Only an idle creature's margin can differ with the hard line (no path, a detour do not).
+            if (!e.fact.safe && verdict.blocker)
+                e.fact.safeTight = SafeRoute::PathIsSafe(me, pathIdleOf(me, p, SafeRoute::TIGHT_MARGIN), p->enemy->pos,
+                                                         MAX_DETOUR);
             if (Trace::On())
-                Trace::Emit("route", Trace::Format("%s -> %s: %s%s%s", me->GetName(), Trace::Guid(e.fact.enemy).c_str(),
+                Trace::Emit("route", Trace::Format("%s -> %s: %s%s%s%s", me->GetName(), Trace::Guid(e.fact.enemy).c_str(),
                         e.fact.safe ? "safe" : verdict.why,
-                        verdict.blocker ? " " : "", verdict.blocker ? verdict.blocker->GetName() : ""),
-                    Trace::Format("{\"safe\":%s,\"why\":\"%s\",\"pathYd\":%.1f,\"straightYd\":%.1f,\"engaged\":%s,\"blocker\":\"%s\"}",
-                        e.fact.safe ? "true" : "false", verdict.why, e.fact.pathYd, p->distance,
-                        p->engaged ? "true" : "false", Trace::Guid(e.fact.blocker).c_str()));
+                        verdict.blocker ? " " : "", verdict.blocker ? verdict.blocker->GetName() : "",
+                        !e.fact.safe && e.fact.safeTight ? " (safe on the hard line)" : ""),
+                    Trace::Format("{\"safe\":%s,\"safeTight\":%s,\"why\":\"%s\",\"pathYd\":%.1f,\"straightYd\":%.1f,\"engaged\":%s,\"blocker\":\"%s\"}",
+                        e.fact.safe ? "true" : "false", e.fact.safeTight ? "true" : "false", verdict.why, e.fact.pathYd,
+                        p->distance, p->engaged ? "true" : "false", Trace::Guid(e.fact.blocker).c_str()));
             e.from = p->bot->pos;
             e.to = p->enemy->pos;
             e.atMs = nowMs;

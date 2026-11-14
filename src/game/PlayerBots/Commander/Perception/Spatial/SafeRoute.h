@@ -35,6 +35,14 @@ namespace Commander
         float const SCAN_RADIUS = 70.0f;
         // Default margin: covers the bot's bounding radius and creatures turning to face it a moment later.
         float const IDLE_MARGIN = 5.0f;
+        // The hard line (2026-11-14, stockade-20261114-203133): the bot's bounding radius and a
+        // step, no comfort. IDLE_MARGIN is the preferred line; a member who cannot do its job
+        // in the party's fight (out of reach or sight, no way in) may cross it, never this one.
+        // Two cells facing each other across the Stockade corridor are 25-30 yd apart: with
+        // IDLE_MARGIN the opposite cell's circle (aggro 21 + 5) closed the door of the cell the
+        // tank fought in, and the three others stood in the corridor until the tank died; the
+        // player walked through that door 23.3 yd from the creature and nothing came.
+        float const TIGHT_MARGIN = 1.5f;
         // The path is checked against idle creatures every this many yards.
         float const PATH_SAMPLE_STEP = 3.0f;
 

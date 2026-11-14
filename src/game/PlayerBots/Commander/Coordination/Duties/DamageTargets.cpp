@@ -72,103 +72,116 @@ namespace DamageTargets
         // Calculation trace: why each enemy was not taken (a bot without a target proposes
         // nothing at all, so this is the only record of it).
         std::string skipped;
-        auto const skip = [&skipped](EnemyFacts const& e, std::string const& why)
+        char const* pass = "";      // "hard line: " in the second pass below
+        auto const skip = [&skipped, &pass](EnemyFacts const& e, std::string const& why)
         {
             if (Trace::On())
-                skipped += Trace::Format("%s{\"g\":\"%s\",\"why\":\"%s\"}", skipped.empty() ? "" : ",",
-                    Trace::Guid(e.guid).c_str(), why.c_str());
+                skipped += Trace::Format("%s{\"g\":\"%s\",\"why\":\"%s%s\"}", skipped.empty() ? "" : ",",
+                    Trace::Guid(e.guid).c_str(), pass, why.c_str());
         };
 
         TargetPick best;
         TargetPick focus;
         float bestRank = 0.0f;
-        for (EnemyFacts const* e : ctx.candidates)
+        // A melee bot whose every walk the margin blocks (SafeRoute::IDLE_MARGIN): a second pass
+        // on the hard line (RouteFact::safeTight). Standing in the corridor helps nobody
+        // (stockade-20261114-203133: the opposite cell's circle closed the door, the rogue
+        // stood 9 yd from the tank's cell for 20 s).
+        for (bool const tight : { false, true })
         {
-            if (e == current)
-                continue;
-            if (!ctx.Hittable(*e, bot))
+            if (tight && (!melee || focus.enemy || best.enemy || current))
+                break;
+            if (tight)
+                pass = "hard line: ";
+            for (EnemyFacts const* e : ctx.candidates)
             {
-                skip(*e, "not hittable");
-                continue;
-            }
-            // Doctrine (Stragglers.h): a melee straggler on its way is the tank's until it joins the pile.
-            if (ctx.plan.doctrine.Has(e->guid, STAMP_STRAGGLER))
-            {
-                skip(*e, "straggler: the tank's");
-                continue;
-            }
-            float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
-            // Doctrine KillFirst (TargetRules.h): the pile is the area spells', a melee bot may
-            // go to the focus outside it (scratchpad 剧本1 方法2; the route check below is 方法3).
-            bool const outlierFocus = melee && e->guid == ctx.plan.focus.enemy &&
-                ctx.plan.doctrine.outliers == OutlierTactic::KillFirst && ctx.plan.doctrine.Has(e->guid, STAMP_OUTLIER);
-            if (distance > (outlierFocus ? std::max(range, OUTLIER_MELEE_YD) : range))
-            {
-                skip(*e, Trace::On() ? Trace::Format("%.0f yd away", distance) : std::string());
-                continue;
-            }
-            if (melee && distance > reach && RouteRisk::Blocked(world, bot, *e))
-            {
-                if (Trace::On())
+                if (e == current)
+                    continue;
+                if (!ctx.Hittable(*e, bot))
                 {
-                    RouteFact const* r = world.FindRoute(bot.guid, e->guid);
-                    skip(*e, Trace::Format("route: %s%s%s", r ? r->why : "straight line crosses an idle creature",
-                        r && !r->blocker.IsEmpty() ? " " : "", r && !r->blocker.IsEmpty() ? Trace::Guid(r->blocker).c_str() : ""));
-                }
-                continue;
-            }
-            // Doctrine KillNow (RoleStamps.h): the self-destruct focus is a task: no threat rule
-            // (it is dead or blown up before threat matters), no exchange.
-            // Same for the charmer of a party member (AllyCharm.h).
-            bool const killNow = e->guid == ctx.plan.focus.enemy &&
-                                 ctx.plan.doctrine.Has(e->guid, STAMP_KILL_NOW | STAMP_FREE_ALLY);
-            if (!killNow && !ThreatAllows(ctx, bot, *e, false))
-            {
-                skip(*e, "threat room");
-                continue;
-            }
-
-            FocusScore const& f = ctx.Score(*e);
-            float const switchCost = SwitchCost::Of(world, bot, *e, reach);
-            TargetPick p;
-            p.enemy = e;
-            float rank;
-            if (killNow)
-            {
-                p.forced = true;
-                p.reason = ctx.plan.doctrine.Has(e->guid, STAMP_FREE_ALLY) ? "doctrine: kill it to free the ally"
-                                                                           : "doctrine: kill it before it blows up";
-                focus = p;
-                continue;
-            }
-            if (c)
-            {
-                // Smith's rule exchange (FocusAssigner.h), this bot's share of it.
-                p.benefit = (f.harmRate * c->killSec - c->harmRate * f.killSec) * share;
-                p.cost = switchCost;
-                if (p.benefit <= p.cost)
-                {
-                    skip(*e, "switch not worth it");
+                    skip(*e, "not hittable");
                     continue;
                 }
-                rank = p.benefit - p.cost;
-            }
-            else
-            {
-                p.benefit = std::max(f.harmRate * f.killSec * share, idleGain);
-                p.cost = 0.0f;
-                rank = p.benefit - switchCost;
-            }
-            if (e->guid == ctx.plan.focus.enemy)
-            {
-                p.reason = "party focus";
-                focus = p;
-            }
-            else if (!best.enemy || rank > bestRank)
-            {
-                p.reason = c ? "kill it first" : (stalled ? "near aggro, switch" : "first target");
-                best = p;
-                bestRank = rank;
+                // Doctrine (Stragglers.h): a melee straggler on its way is the tank's until it joins the pile.
+                if (ctx.plan.doctrine.Has(e->guid, STAMP_STRAGGLER))
+                {
+                    skip(*e, "straggler: the tank's");
+                    continue;
+                }
+                float const distance = PackResolver::Distance(bot.pos, e->pos) - e->boundingRadius;
+                // Doctrine KillFirst (TargetRules.h): the pile is the area spells', a melee bot may
+                // go to the focus outside it (scratchpad 剧本1 方法2; the route check below is 方法3).
+                bool const outlierFocus = melee && e->guid == ctx.plan.focus.enemy &&
+                    ctx.plan.doctrine.outliers == OutlierTactic::KillFirst && ctx.plan.doctrine.Has(e->guid, STAMP_OUTLIER);
+                if (distance > (outlierFocus ? std::max(range, OUTLIER_MELEE_YD) : range))
+                {
+                    skip(*e, Trace::On() ? Trace::Format("%.0f yd away", distance) : std::string());
+                    continue;
+                }
+                if (melee && distance > reach && RouteRisk::Blocked(world, bot, *e, tight))
+                {
+                    if (Trace::On())
+                    {
+                        RouteFact const* r = world.FindRoute(bot.guid, e->guid);
+                        skip(*e, Trace::Format("route: %s%s%s", r ? r->why : "straight line crosses an idle creature",
+                            r && !r->blocker.IsEmpty() ? " " : "", r && !r->blocker.IsEmpty() ? Trace::Guid(r->blocker).c_str() : ""));
+                    }
+                    continue;
+                }
+                // Doctrine KillNow (RoleStamps.h): the self-destruct focus is a task: no threat rule
+                // (it is dead or blown up before threat matters), no exchange.
+                // Same for the charmer of a party member (AllyCharm.h).
+                bool const killNow = e->guid == ctx.plan.focus.enemy &&
+                                     ctx.plan.doctrine.Has(e->guid, STAMP_KILL_NOW | STAMP_FREE_ALLY);
+                if (!killNow && !ThreatAllows(ctx, bot, *e, false))
+                {
+                    skip(*e, "threat room");
+                    continue;
+                }
+
+                FocusScore const& f = ctx.Score(*e);
+                float const switchCost = SwitchCost::Of(world, bot, *e, reach);
+                TargetPick p;
+                p.enemy = e;
+                float rank;
+                if (killNow)
+                {
+                    p.forced = true;
+                    p.reason = ctx.plan.doctrine.Has(e->guid, STAMP_FREE_ALLY) ? "doctrine: kill it to free the ally"
+                                                                               : "doctrine: kill it before it blows up";
+                    focus = p;
+                    continue;
+                }
+                if (c)
+                {
+                    // Smith's rule exchange (FocusAssigner.h), this bot's share of it.
+                    p.benefit = (f.harmRate * c->killSec - c->harmRate * f.killSec) * share;
+                    p.cost = switchCost;
+                    if (p.benefit <= p.cost)
+                    {
+                        skip(*e, "switch not worth it");
+                        continue;
+                    }
+                    rank = p.benefit - p.cost;
+                }
+                else
+                {
+                    p.benefit = std::max(f.harmRate * f.killSec * share, idleGain);
+                    p.cost = 0.0f;
+                    rank = p.benefit - switchCost;
+                }
+                if (e->guid == ctx.plan.focus.enemy)
+                {
+                    p.reason = tight ? "party focus (walk on the hard line)" : "party focus";
+                    focus = p;
+                }
+                else if (!best.enemy || rank > bestRank)
+                {
+                    p.reason = tight ? "only walk open, on the hard line" :
+                               c ? "kill it first" : (stalled ? "near aggro, switch" : "first target");
+                    best = p;
+                    bestRank = rank;
+                }
             }
         }
         TargetPick pick;
