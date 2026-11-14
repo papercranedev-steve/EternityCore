@@ -18,6 +18,18 @@
  *     (seen < ThreatRoom::NEW_ENEMY_SETTLE_SEC, not judged when paid): not valid at all;
  *   - crowd controlled ones (fear, a stun damage does not break): not counted;
  *   - one hitting the caster or nobody: free (no turn to fear).
+ * On the caster (2026-11-14, strat-20261114-180150: a mage at the tank with two enemies on it
+ * cast Arcane Explosion twice for a net +0.05 and went from 73% to 28% health; they were
+ * "free"). Only while a tank other than the caster is alive (Tanks::Main; no tank: nobody
+ * takes them back, nothing changes):
+ *   - not paid: not valid when the caster would not live SurvivalValue::DANGER_SEC + the
+ *     spell's busy time (at least a GCD) under what hits it now (SurvivalValue::Of, heals
+ *     included): no more threat grabbing in danger (user 2026-11-14);
+ *   - cost after n ticks: the enemies on it stay there longer: the tank (110% of the caster's
+ *     threat, at its measured rate one after another, LooseEnemy::SequentialRecovery, plus
+ *     its walk; taunts not counted) with the caster's threat now and with n ticks more; the
+ *     longer time x their hits beyond the tank's (Value::Points) + Value::HarassLoss, at most
+ *     AggroTurnCost::HORIZON_SEC and their time to die. Added to the turn loss.
  * Tick plan (as AreaDamageBehavior before, now on facts): damage after n ticks = sum of
  * min(perTick x n, health). An enemy turns at the first tick k it survives where my threat (+
  * my bolt in the air at it) + k x tickThreat passes its holder's threat now x 110% (caster

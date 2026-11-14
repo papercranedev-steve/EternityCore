@@ -15,16 +15,16 @@
  *   5. No area spells (user, 2026-11-02): the Commander area damage module decides when, which
  *      and where (Commander/Behaviors/Combat/AreaDamageBehavior.h); without it the mage casts the filler.
  *   6. Burst of other builds (Combustion, Arcane Power, Presence of Mind + Pyroblast).
- *   7. Fire Blast to finish the victim (it dies from it), or while moving above half mana.
- *   8. The filler (ClassKit::Filler: Frostbolt, Fireball for a fire build).
- *   9. Wand when out of mana.
+ *   7. The filler (ClassKit::Filler: Frostbolt, Fireball for a fire build).
+ *   8. Wand when out of mana.
+ * No Fire Blast (user 2026-11-14, strat-20261114-180150: "while moving" took the GCD just as
+ * the area caster needed Frost Nova; how to use it is decided later).
  * Evocation is the Commander's call (ManaBudgetBehavior self restore), not the rotation's.
  * Scorch is not cast: without Improved Scorch it does less per cast than the filler.
  */
 
 #include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
-#include "DamageSpells.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Player.h"
 #include "MotionMaster.h"
@@ -35,7 +35,6 @@ namespace
     float const ICE_BLOCK_HEALTH_PCT = 15.0f;
     float const COLD_SNAP_HEALTH_PCT = 40.0f;
     float const LEGACY_MANA_SHIELD_HEALTH_PCT = 50.0f;
-    float const MOVING_FIRE_BLAST_MANA_PCT = 50.0f;
     float const WAND_MANA_PCT = 5.0f;
 
     class MageRotation : public ClassRotation
@@ -134,12 +133,6 @@ namespace
             if (Burst(pVictim))
                 return;
 
-            if (s.pFireBlast &&
-               (WouldKill(pVictim, s.pFireBlast) ||
-                (me->IsMoving() && me->GetPowerPercent(POWER_MANA) > MOVING_FIRE_BLAST_MANA_PCT)) &&
-                Cast(pVictim, s.pFireBlast))
-                return;
-
             if (SpellEntry const* pFiller = bot.Kit().Filler())
                 if (Cast(pVictim, pFiller))
                     return;
@@ -175,11 +168,6 @@ namespace
             if (m_bot.me->GetGroup())
                 return s.pMageArmor ? s.pMageArmor : s.pIceArmor;
             return s.pIceArmor ? s.pIceArmor : s.pMageArmor;
-        }
-
-        bool WouldKill(Unit const* pVictim, SpellEntry const* pSpell) const
-        {
-            return float(pVictim->GetHealth()) <= DamageSpells::Estimate(m_bot.me, pVictim, pSpell);
         }
 
         // Melee enemies near and the Commander escape module off: Blink out of roots / slows,

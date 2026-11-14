@@ -2905,13 +2905,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
             }
         }
 
-        if (m_spells.warlock.pRainOfFire &&
-           (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2) &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pRainOfFire))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pRainOfFire) == SPELL_CAST_OK)
-                return;
-        }
+        // Rain of Fire: the Commander's area phase (Classes/Warlock.cpp ClassKit::AreaDamage).
 
         if (m_spells.warlock.pDemonicSacrifice)
         {

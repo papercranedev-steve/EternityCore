@@ -1,5 +1,8 @@
 #include "Commander/Perception/Values/AreaValue.h"
+#include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Values/SurvivalValue.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
@@ -184,6 +187,47 @@ namespace AreaValue
         out.invalid = "no target in the area";
         if (targets.empty())
             return out;
+
+        // On the caster already (header "On the caster"): only while a tank is alive to take
+        // them back (no tank: nobody else would, the spell's threat changes nothing).
+        struct OnCaster
+        {
+            EnemyFacts const* facts = nullptr;
+            float myThreat = 0.0f;
+            float tankThreat = 0.0f;
+            float tankWalkSec = 0.0f;
+            float extraDps = 0.0f;
+        };
+        std::vector<OnCaster> onCaster;
+        PartyMemberFacts const* tank = Tanks::Main(world);
+        if (tank && tank->guid != self.guid)
+        {
+            for (Target const& t : targets)
+            {
+                EnemyFacts const& e = *t.facts;
+                if (e.victim != self.guid)
+                    continue;
+                OnCaster c;
+                c.facts = &e;
+                ThreatEntry const* mine = ThreatView::FindEntry(e, self.guid);
+                ThreatEntry const* tanks = ThreatView::FindEntry(e, tank->guid);
+                c.myThreat = (mine ? mine->threat : 0.0f) + (self.boltTarget == e.guid ? self.boltThreat : 0.0f);
+                c.tankThreat = tanks ? tanks->threat : 0.0f;
+                c.tankWalkSec = std::max(0.0f, PackResolver::Distance(tank->pos, e.pos) - MELEE_REACH) /
+                                AggroTurnCost::RUN_YARDS_PER_SEC;
+                c.extraDps = std::max(0.0f, Value::HitDps(e, self) - Value::HitDps(e, *tank));
+                onCaster.push_back(c);
+            }
+            if (!r.paid && !onCaster.empty())
+            {
+                float const busySec = std::max(Value::GCD_SEC, float(count) * spell.periodSec);
+                if (SurvivalValue::Of(world, self).ttd < SurvivalValue::DANGER_SEC + busySec)
+                {
+                    out.invalid = "the caster is in danger under the enemies on it";
+                    return out;
+                }
+            }
+        }
         out.invalid = nullptr;
 
         // Tick plan.
@@ -241,6 +285,36 @@ namespace AreaValue
                 if (e.acting && !e.crowdControlled && e.health && e.victim == self.guid)
                     onMe.push_back({ &e, WalkSec(e, r.from, SpeedTo(e, spell, r.centre, r.from)) });
 
+        // The longer the enemies on the caster stay there after n ticks of the spell's threat
+        // (the tank wins them back one after another at its measured rate; taunts not counted).
+        float const tankRate = tank ? LooseEnemy::TankRate(world, tank->guid) : 0.0f;
+        auto const keptOnCaster = [&](uint32 n)
+        {
+            if (onCaster.empty())
+                return 0.0f;
+            std::vector<float> before, after;
+            for (OnCaster const& c : onCaster)
+            {
+                before.push_back(std::max(0.0f, c.myThreat * ThreatView::MELEE_AGGRO_FACTOR - c.tankThreat));
+                after.push_back(std::max(0.0f, (c.myThreat + float(n) * spell.tickThreat) * ThreatView::MELEE_AGGRO_FACTOR -
+                                               c.tankThreat));
+            }
+            std::vector<float> const secBefore = LooseEnemy::SequentialRecovery(before, tankRate);
+            std::vector<float> const secAfter = LooseEnemy::SequentialRecovery(after, tankRate);
+            float loss = 0.0f;
+            for (size_t i = 0; i < onCaster.size(); ++i)
+            {
+                OnCaster const& c = onCaster[i];
+                float const horizon = std::min(AggroTurnCost::HORIZON_SEC, Value::EnemyTimeToDie(world, *c.facts));
+                float const endBefore = std::min(horizon, c.tankWalkSec + secBefore[i]);
+                float const endAfter = std::min(horizon, c.tankWalkSec + secAfter[i]);
+                float const longer = std::max(0.0f, endAfter - endBefore);
+                if (longer > 0.0f)
+                    loss += Value::Points(world, c.extraDps * longer) + Value::HarassLoss(world, *c.facts, self, longer);
+            }
+            return loss;
+        };
+
         AggroTurnCost::Options options = r.turn;
         options.at = &r.from;
         float const fillerPerSec = self.fillerDps;
@@ -266,6 +340,7 @@ namespace AreaValue
             }
             if (!group.empty())
                 turnLoss += AggroTurnCost::OfGroup(world, group, self, options);
+            turnLoss += keptOnCaster(n);
             float const sec = float(n) * spell.periodSec;
             benefit = Value::LostAction(world, self, damage[n - 1] / fillerPerSec) +
                       (fillerManaPerSec > 0.0f ? ManaWorth::Points(world, self, fillerManaPerSec * sec) : 0.0f);
