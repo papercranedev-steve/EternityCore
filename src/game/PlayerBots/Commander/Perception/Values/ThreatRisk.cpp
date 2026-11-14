@@ -21,7 +21,8 @@ namespace ThreatRisk
         PartyMemberFacts const* holder = world.FindMember(tank);
         if (!holder)
             return 0.0f;
-        float const T = std::min(horizonSec, Value::EnemyTimeToDie(world, e));
+        float const ttd = Value::EnemyTimeToDie(world, e);
+        float const T = std::min(horizonSec, ttd);
         if (T <= 0.0f)
             return 0.0f;
         float risk = 0.0f;
@@ -33,7 +34,12 @@ namespace ThreatRisk
             float const p = std::min(1.0f, 1.0f - std::max(0.0f, r.sec) / T);
             if (p <= 0.0f)
                 continue;
-            risk = std::max(risk, p * LooseEnemy::Loss(world, e, *m, *holder, RECLAIM_SEC));
+            // Only while it lives once m has it: an enemy that dies in a second (an Eye of
+            // Naxxramas, 270 hp) costs that second (user 2026-11-14).
+            float const lossSec = std::min(RECLAIM_SEC, ttd - std::max(0.0f, r.sec));
+            if (lossSec <= 0.0f)
+                continue;
+            risk = std::max(risk, p * LooseEnemy::Loss(world, e, *m, *holder, lossSec));
         }
         return risk;
     }

@@ -8,7 +8,8 @@
  * heal, the area spell the doctrine counts on):
  *   T       min(horizonSec, e's time to die)
  *   p(m)    clamp(1 - m's runway / T, 0, 1): m takes it before it dies
- *   loss(m) LooseEnemy::Loss of e on m instead of the tank for RECLAIM_SEC
+ *   loss(m) LooseEnemy::Loss of e on m instead of the tank for RECLAIM_SEC, or less: only
+ *           while e lives after m took it (time to die - m's runway)
  *   risk    max over m of p(m) x loss(m)
  * Every rival that can catch up counts, not only the runner-up now (it changes as the damage
  * dealers start) and not the frailest member of the party (one that never touches `e` would
