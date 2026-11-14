@@ -91,8 +91,12 @@ namespace Commander
                 if (distance > TANK_REACH)
                     continue;
                 float const tankRate = LooseEnemy::TankRate(world, tank->guid);
+                // On the hard line (RouteFact::safeTight, 2026-11-15, stockade-20261115-010336: the
+                // player pulled a cell, the opposite cell's margin closed the door to the tank for
+                // 14 s while the rogue walked in on the hard line and the player nearly died). A
+                // member is being hit: the comfort margin is not worth that.
                 bool const walkBlocked = tank->victim != e.guid && distance > MELEE_REACH + e.boundingRadius &&
-                                         RouteRisk::Blocked(world, *tank, e);
+                                         RouteRisk::Blocked(world, *tank, e, true);
                 if (!walkBlocked)
                     add(tank->guid, 0, RescueValue::Threat(world, e, *victim, *tank, tankRate, distance));
                 for (TauntAbility const& t : tank->taunts)

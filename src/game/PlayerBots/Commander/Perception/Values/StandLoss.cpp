@@ -1,6 +1,7 @@
 #include "Commander/Perception/Values/StandLoss.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
+#include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Values/Exposure.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -50,8 +51,14 @@ namespace StandLoss
     {
         float loss = 0.0f;
         for (auto const& s : w.shares)
-            loss += s.second * SpotCost::TargetReach(world, healer, p, s.first->pos, 0.0f, HEAL_RANGE, true,
+        {
+            // In sight by the field's estimate (2026-11-15, stockade-20261115-010336: the player
+            // was beaten in the cell for 16 s, the priest stood in the corridor in range, out of
+            // sight, and the term counted it as reached). No field: in sight.
+            bool const inSight = !world.field || world.field->SeesEstimate(s.first->pos, p);
+            loss += s.second * SpotCost::TargetReach(world, healer, p, s.first->pos, 0.0f, HEAL_RANGE, inSight,
                                                      w.speed / HEALER_PATH_FACTOR, w.horizon);
+        }
         return loss + Exposure::LossAt(world, healer, enemies, p);
     }
 

@@ -988,6 +988,11 @@ bool PartyBotAI::IsClothCaster() const
 
 Player* PartyBotAI::SelectResurrectionTarget() const
 {
+    // Not while the party fights (the stance modules have the bot then): a healer not in combat
+    // itself stood 10 s casting Resurrection next to the fight (stockade-20261115-010336), the
+    // member came back into the enemies.
+    if (IsStanceControlled())
+        return nullptr;
     Group* pGroup = me->GetGroup();
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {

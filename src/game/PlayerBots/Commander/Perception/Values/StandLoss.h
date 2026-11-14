@@ -8,8 +8,9 @@
  * Healer at p, anchor A (the tank):
  *   shares  every other living member but A: its share of Value::TakenDps (even when nobody
  *           takes damage);
- *   stay    sum over them of share x SpotCost::TargetReach(p -> member, HEAL_RANGE, walk at
- *           speed / HEALER_PATH_FACTOR, horizon) + Exposure::LossAt(enemies, p);
+ *   stay    sum over them of share x SpotCost::TargetReach(p -> member, HEAL_RANGE, in sight by
+ *           PositionField::SeesEstimate (since 2026-11-15), walk at speed / HEALER_PATH_FACTOR,
+ *           horizon) + Exposure::LossAt(enemies, p);
  *   cell    walkFactor x SpotCost::Walk(grid walk x HEALER_PATH_FACTOR / speed) + stay;
  *           walkFactor IDLE_COST_FACTOR while nobody is injured (below INJURED_PCT).
  * Ranged at p: SpotCost::Walk(grid walk x RANGED_PATH_FACTOR / speed) + Exposure::LossAt.

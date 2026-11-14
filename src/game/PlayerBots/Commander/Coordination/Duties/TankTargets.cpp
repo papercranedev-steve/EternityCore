@@ -109,8 +109,12 @@ namespace TankTargets
                 if (!e || !ctx.Hittable(*e, tank))
                     return false;
                 float const distance = PackResolver::Distance(tank.pos, e->pos);
+                // An enemy already hitting one of us: the hard line (RouteFact::safeTight) is enough
+                // (stockade-20261115-010336: the tank stood in the corridor 14 s, every walk into
+                // the cell blocked by the opposite cell's comfort margin, while the rogue went in).
+                bool const tight = !e->victim.IsEmpty();
                 return distance <= JOIN_FIGHT_YD &&
-                       (distance <= MELEE_REACH + e->boundingRadius || !RouteRisk::Blocked(world, tank, *e));
+                       (distance <= MELEE_REACH + e->boundingRadius || !RouteRisk::Blocked(world, tank, *e, tight));
             };
             auto const pick = [&](EnemyFacts const* e, char const* reason)
             {
