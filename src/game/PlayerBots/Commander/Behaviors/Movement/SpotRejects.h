@@ -30,7 +30,18 @@ namespace Commander
         uint32 live = 0;
         uint32 path = 0;
         uint32 pathKept = 0;
+        // The field's estimate (PositionField::SeesEstimate) against the real line, cells checked.
+        uint32 estWrongSeen = 0;        // estimated in sight, hidden
+        uint32 estWrongHidden = 0;      // estimated hidden, in sight
         bool budget = false;
+
+        void Real(bool estimated, bool sees)
+        {
+            if (estimated && !sees)
+                ++estWrongSeen;
+            else if (!estimated && sees)
+                ++estWrongHidden;
+        }
         char const* pathWhy = "";
         std::string blocker;
 
@@ -48,8 +59,9 @@ namespace Commander
         std::string Json() const
         {
             return Trace::Format("\"idle\":%u,\"hidden\":%u,\"budget\":%s,\"seen\":%u,\"live\":%u,\"path\":%u,\"pathKept\":%u,"
-                                 "\"pathWhy\":\"%s\",\"blocker\":\"%s\"",
-                                 idle, hidden, budget ? "true" : "false", seen, live, path, pathKept, pathWhy, blocker.c_str());
+                                 "\"pathWhy\":\"%s\",\"blocker\":\"%s\",\"estWrongSeen\":%u,\"estWrongHidden\":%u",
+                                 idle, hidden, budget ? "true" : "false", seen, live, path, pathKept, pathWhy, blocker.c_str(),
+                                 estWrongSeen, estWrongHidden);
         }
     };
 }

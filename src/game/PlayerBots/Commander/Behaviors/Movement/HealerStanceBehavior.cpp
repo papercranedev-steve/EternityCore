@@ -48,10 +48,14 @@ namespace Commander
         {
             Position3 pos;
             float walkSec = 0.0f;
-            float stay = 0.0f;      // points of standing there (StayLoss; + sight for cells that see the anchor)
+            float stay = 0.0f;      // points of standing there (StayLoss + sight)
             float sight = 0.0f;     // points: SightMargin::LossAt there
             float loss = 0.0f;      // points: the walk + stay, lower first
+            bool viewed = false;    // PositionField::SeesEstimate from the anchor
             bool taken = false;     // FieldSpots::Spot::taken
+
+            // Cells estimated in sight first (header "Where"), then the loss.
+            float Key() const { return loss + (viewed ? 0.0f : FieldSpots::HIDDEN_KEY); }
         };
 
         // (the heal's line: SightCache::Live, as Spell::CheckCast)
@@ -142,18 +146,21 @@ namespace Commander
 
         void SortSpots(Context const& ctx, WorldModel const& world, Weights const& w, std::vector<Spot>& spots)
         {
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.loss < y.loss; });
+            std::stable_sort(spots.begin(), spots.end(), [](Spot const& x, Spot const& y) { return x.Key() < y.Key(); });
             // Equally good: within one cell of walk.
             float const tie = w.walkFactor * SpotCost::Walk(world, *ctx.self, PositionField::CELL_YD * HS::PATH_FACTOR / w.speed);
-            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.loss; }, [](Spot const& s) { return s.taken; }, tie);
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.Key(); }, [](Spot const& s) { return s.taken; }, tie);
         }
 
-        // Field cells passing the cheap checks (outside areas dangerous to healers), lowest
-        // loss first. The field already dropped cells off the ground, under an idle creature,
-        // on a patrol's way before the stay ends and cells the healer cannot walk to.
+        // Field cells passing the cheap checks (outside areas dangerous to healers), estimated
+        // in sight of the anchor first, then the lowest loss (sight margin included: `points`).
+        // The field already dropped cells off the ground, under an idle creature, on a patrol's
+        // way before the stay ends and cells the healer cannot walk to.
         std::vector<Spot> Candidates(Context const& ctx, WorldModel const& world, std::vector<HazardZone> const& zones,
-                                     Weights const& w, std::vector<FieldSpots::Spot> const& cells)
+                                     Weights const& w, std::vector<Position3> const& points,
+                                     std::vector<FieldSpots::Spot> const& cells)
         {
+            PositionField const& field = *world.field;
             std::vector<Spot> spots;
             for (FieldSpots::Spot const& c : cells)
             {
@@ -162,8 +169,10 @@ namespace Commander
                 Spot s;
                 s.pos = c.pos;
                 s.walkSec = c.WalkEstimate(HS::PATH_FACTOR) / w.speed;
-                s.stay = StayLoss(ctx, world, w, s.pos);
+                s.sight = SightMargin::LossAt(world, *ctx.self, field, points, s.pos);
+                s.stay = StayLoss(ctx, world, w, s.pos) + s.sight;
                 s.loss = w.walkFactor * SpotCost::Walk(world, *ctx.self, s.walkSec) + s.stay;
+                s.viewed = field.SeesEstimate(ctx.anchor, s.pos);
                 s.taken = c.taken;
                 spots.push_back(s);
             }
@@ -336,7 +345,7 @@ namespace Commander
         // (the field and its sight cache: built while the party fights or a pull runs; without
         // them no cells, only the walk to the anchor below)
         SightCache* const sight = world.field ? world.field->sight.get() : nullptr;
-        // Sight checks not kept yet, this tick (cells and the margin's points together).
+        // Real line of sight checks not kept yet, this tick.
         uint32 budget = MAX_SIGHT_CHECKS;
         // How narrowly a spot sees the tank among the enemies it holds (Perception/Values/
         // SightMargin.h, 2026-11-14). Not before the fight.
@@ -346,7 +355,7 @@ namespace Commander
         bool const hereValid = anchorOk && !unsafe;
         Weights const weights = MakeWeights(ctx, world, anyInjured);
         float const sightHere = anchorOk && sight ?
-            SightMargin::LossAt(world, *ctx.self, me, *sight, points, ctx.here, budget) : 0.0f;
+            SightMargin::LossAt(world, *ctx.self, *world.field, points, ctx.here) : 0.0f;
         float const stayHere = StayLoss(ctx, world, weights, ctx.here) + sightHere;
         float const margin = SpotCost::Walk(world, *ctx.self, MOVE_MARGIN_SEC);
         // Before the fight a valid spot is kept: the others are still walking to their places.
@@ -412,25 +421,30 @@ namespace Commander
                 q.maxYd = ctx.prepare ? PREPARE_MAX_YD : MAX_YD;
                 q.patrolBeforeSec = staySec;
                 q.tight = tight;
-                spots = Candidates(ctx, world, zones, weights, FieldSpots::Collect(world, *ctx.self, q));
+                spots = Candidates(ctx, world, zones, weights, points, FieldSpots::Collect(world, *ctx.self, q));
             }
             found += spots.size();
 
-            // Cells that see the anchor, with their sight margin (header "Where"; same search as
-            // the ranged stance). Sorted by the loss without the margin, which only adds: past
-            // the best full loss so far, or past what saves the margin over here, nothing
-            // further down can win.
-            // Not before MAX_GEOMETRY_CHECKS cells to try the path on are in (as the ranged stance).
-            std::vector<Spot> seen;
-            float bestLoss = 1e9f;
-            uint32 tryable = 0;
+            // One pass in order, as the ranged stance (header "Where"): this healer's idle scan,
+            // the real line (sight cache, budget), the path (`pathIdle`; failures kept a while,
+            // SightCache::PathFailed). The first that passes all is taken.
+            uint32 checks = 0;
             for (Spot const& s : spots)
             {
-                if ((tryable >= MAX_GEOMETRY_CHECKS && s.loss >= bestLoss) || (hereValid && stayHere - s.loss <= margin))
+                if (hereValid && stayHere - s.loss <= margin)
+                {
+                    if (s.viewed)
+                        continue;   // (further down an estimate in sight may still pay)
                     break;
+                }
                 if (own.Near(s.pos))
                 {
                     ++why.idle;
+                    continue;
+                }
+                if (sight->PathFailed(me, s.pos, tight))
+                {
+                    ++why.pathKept;
                     continue;
                 }
                 ++checked;
@@ -440,36 +454,13 @@ namespace Commander
                     why.budget = true;
                     break;      // out of budget: the next ticks go on (the answers are kept)
                 }
+                why.Real(s.viewed, v == SightCache::Sight::Yes);
                 if (v == SightCache::Sight::No)
                 {
                     ++why.hidden;
                     continue;
                 }
-                Spot full = s;
-                full.sight = SightMargin::LossAt(world, *ctx.self, me, *sight, points, s.pos, budget);
-                full.stay += full.sight;
-                full.loss += full.sight;
-                seen.push_back(full);
-                if (sight->PathFailed(me, s.pos, tight))
-                    continue;       // (the path stage skips it: not a cell to try)
-                ++tryable;
-                bestLoss = std::min(bestLoss, full.loss);
-            }
-            SortSpots(ctx, world, weights, seen);
-            why.seen += uint32(seen.size());
-            // The path (`pathIdle`: `own`, or its LeavingFrom(here) copy) only on cells that passed
-            // the sight check (stockade-20261114-221943); a cell that failed it is skipped for a
-            // while (SightCache::PathFailed, stockade-20261115-000917).
-            uint32 checks = 0;
-            for (Spot const& s : seen)
-            {
-                if (hereValid && stayHere - s.loss <= margin)
-                    return;
-                if (sight->PathFailed(me, s.pos, tight))
-                {
-                    ++why.pathKept;
-                    continue;
-                }
+                ++why.seen;
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;

@@ -12,12 +12,11 @@
  *
  *   LossAt(p) = MOVE_CHANCE x hidden / points x Value::LostAction(member, REACQUIRE_SEC)
  *
- * hidden = points a member at `p` does not see (SightCache::Cells: the cell of `p`, the
- * member's eye height). REACQUIRE_SEC: the target gone out of sight, the stance notices on its
- * next tick and walks to a cell that sees it again (the spell in progress is lost too). A point
- * left Unknown by the budget counts as seen (no loss for what was not looked at). No points
- * (a lone enemy): 0.
- * Facts (positions) and the sight cache; map thread of the party.
+ * hidden = points `p` does not see by the position field's estimate (PositionField::
+ * SeesEstimate, 2026-11-15: a soft score for every candidate cell, no vmap call).
+ * REACQUIRE_SEC: the target gone out of sight, the stance notices on its next tick and walks
+ * to a cell that sees it again (the spell in progress is lost too). No points (a lone enemy): 0.
+ * Facts (positions) and the field; map thread of the party.
  */
 
 #ifndef MANGOS_COMMANDER_SIGHT_MARGIN_H
@@ -26,11 +25,9 @@
 #include "Commander/Perception/WorldModel.h"
 #include <vector>
 
-class Unit;
-
 namespace Commander
 {
-    class SightCache;
+    class PositionField;
 
 namespace SightMargin
 {
@@ -42,9 +39,8 @@ namespace SightMargin
     std::vector<Position3> Points(WorldModel const& world, Position3 const& target, ObjectGuid targetGuid,
                                   ObjectGuid member);
 
-    // `viewer`: the member's unit (eye height). `budget`: SightCache::Cells.
-    float LossAt(WorldModel const& world, PartyMemberFacts const& member, Unit const* viewer, SightCache& sight,
-                 std::vector<Position3> const& points, Position3 const& p, uint32& budget);
+    float LossAt(WorldModel const& world, PartyMemberFacts const& member, PositionField const& field,
+                 std::vector<Position3> const& points, Position3 const& p);
 }
 }
 

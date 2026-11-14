@@ -1,6 +1,7 @@
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <queue>
 
@@ -64,6 +65,54 @@ namespace Commander
         m_blockIndex.clear();
         m_idle.clear();
         m_walks.clear();
+        m_views.clear();
+    }
+
+    bool PositionField::LineLinked(int32 fx, int32 fy, int32 tx, int32 ty) const
+    {
+        // Bresenham over cells; every step must follow a link of the cell it leaves.
+        int32 const ax = std::abs(tx - fx), ay = std::abs(ty - fy);
+        int32 const sx = tx > fx ? 1 : -1, sy = ty > fy ? 1 : -1;
+        int32 err = ax - ay;
+        int32 x = fx, y = fy;
+        while (x != tx || y != ty)
+        {
+            FieldCell const* c = At(x, y);
+            if (!c)
+                return false;
+            int32 const e2 = 2 * err;
+            int32 dx = 0, dy = 0;
+            if (e2 > -ay) { err -= ay; dx = sx; }
+            if (e2 < ax)  { err += ax; dy = sy; }
+            uint8 dir = 0;
+            for (uint8 d = 0; d < FIELD_DIRS; ++d)
+            {
+                int32 ddx, ddy;
+                Step(d, ddx, ddy);
+                if (ddx == dx && ddy == dy)
+                    dir = d;
+            }
+            if (!(c->links & (1 << dir)))
+                return false;
+            x += dx;
+            y += dy;
+        }
+        return true;
+    }
+
+    bool PositionField::SeesEstimate(Position3 const& from, Position3 const& to) const
+    {
+        int32 const fx = CellOf(from.x), fy = CellOf(from.y);
+        int32 const tx = CellOf(to.x), ty = CellOf(to.y);
+        int32 const ti = FlatIndex(tx, ty);
+        if (ti < 0 || FlatIndex(fx, fy) < 0)
+            return false;
+        std::vector<int8>& view = m_views[Key(fx, fy)];
+        if (view.empty())
+            view.assign(m_blocks.size() * BLOCK_CELLS * BLOCK_CELLS, int8(-1));
+        if (view[ti] < 0)
+            view[ti] = LineLinked(fx, fy, tx, ty) ? 1 : 0;
+        return view[ti] == 1;
     }
 
     PositionField::Walk const& PositionField::WalkFrom(PartyMemberFacts const& from, bool tight) const

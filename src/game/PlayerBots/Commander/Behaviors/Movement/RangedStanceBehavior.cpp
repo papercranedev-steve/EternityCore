@@ -39,28 +39,35 @@ namespace Commander
             Position3 pos;
             float walkSec = 0.0f;
             float exposure = 0.0f;  // points: Exposure::LossAt there
-            float sight = 0.0f;     // points: SightMargin::LossAt there (cells that see the victim)
-            float loss = 0.0f;      // points: SpotCost::Walk + exposure (+ sight), lower first
+            float sight = 0.0f;     // points: SightMargin::LossAt there
+            float loss = 0.0f;      // points: SpotCost::Walk + exposure + sight, lower first
+            bool viewed = false;    // PositionField::SeesEstimate from the victim
             bool taken = false;     // FieldSpots::Spot::taken
+
+            // Cells estimated in sight first (header "Where"), then the loss.
+            float Key() const { return loss + (viewed ? 0.0f : FieldSpots::HIDDEN_KEY); }
         };
 
         void SortSpots(WorldModel const& world, PartyMemberFacts const& self, float speed, std::vector<Spot>& spots)
         {
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.loss < b.loss; });
+            std::stable_sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.Key() < b.Key(); });
             // Equally good: within one cell of walk.
             float const tie = SpotCost::Walk(world, self, PositionField::CELL_YD * RS::PATH_FACTOR / speed);
-            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.loss; }, [](Spot const& s) { return s.taken; }, tie);
+            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.Key(); }, [](Spot const& s) { return s.taken; }, tie);
         }
 
         // Field cells up to MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the victim's
-        // edge, outside areas dangerous to ranged; lowest loss first (header "Where"). The field
-        // drops cells off the ground, under an idle creature, on a patrol's way before `staySec`,
-        // and cells the bot cannot walk to. `turnable` empty: the walk alone.
+        // edge, outside areas dangerous to ranged; estimated in sight first, then the lowest loss
+        // (header "Where"). The field drops cells off the ground, under an idle creature, on a
+        // patrol's way before `staySec`, and cells the bot cannot walk to. `turnable` empty: the
+        // walk alone; `points` empty: no sight margin.
         std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
                                      std::vector<HazardZone> const& zones, Position3 const& victim,
                                      float victimReach, bool prepare, float staySec, float speed,
-                                     std::vector<EnemyFacts const*> const& turnable, bool tight)
+                                     std::vector<EnemyFacts const*> const& turnable,
+                                     std::vector<Position3> const& points, bool tight)
         {
+            PositionField const& field = *world.field;
             std::vector<Spot> spots;
             FieldSpots::Query q;
             q.center = victim;
@@ -76,7 +83,9 @@ namespace Commander
                 s.pos = c.pos;
                 s.walkSec = c.WalkEstimate(RS::PATH_FACTOR) / speed;
                 s.exposure = Exposure::LossAt(world, self, turnable, c.pos);
-                s.loss = SpotCost::Walk(world, self, s.walkSec) + s.exposure;
+                s.sight = SightMargin::LossAt(world, self, field, points, c.pos);
+                s.loss = SpotCost::Walk(world, self, s.walkSec) + s.exposure + s.sight;
+                s.viewed = field.SeesEstimate(victim, c.pos);
                 s.taken = c.taken;
                 spots.push_back(s);
             }
@@ -202,7 +211,7 @@ namespace Commander
         // the fight like the exposure.
         std::vector<Position3> const points =
             useExposure ? SightMargin::Points(world, at, atGuid, self->guid) : std::vector<Position3>();
-        float const sightHere = inReach ? SightMargin::LossAt(world, *self, me, sight, points, here, budget) : 0.0f;
+        float const sightHere = inReach ? SightMargin::LossAt(world, *self, *world.field, points, here) : 0.0f;
         float const lossHere = exposureHere + sightHere;
         // The spot here is still good (header "When"): a cell must save more than the margin.
         bool const hereValid = !unsafe && (inReach || placed);
@@ -236,7 +245,7 @@ namespace Commander
         {
             if (tight && !mayTighten)
                 break;
-            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, tight);
+            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, points, tight);
             found += spots.size();
             // This bot's own idle scan on the pass's line (scanned again only for the hard line).
             if (tight)
@@ -249,22 +258,28 @@ namespace Commander
             SafeRoute::IdleCreatures pathIdle = unsafe ? own.LeavingFrom(here) : own;
             if (!prepare)
                 pathIdle = pathIdle.ArrivingAt(at);
-            // Cells that see the victim, with their sight margin (header "Where"). Sorted by the
-            // loss without the margin, which only adds: past the best full loss so far, or past
-            // what saves the margin over here, nothing further down can win. Not before
-            // MAX_GEOMETRY_CHECKS cells to try the path on are in (stockade-20261115-002203: the
-            // first cell that saw the victim stopped the search, its path failed, nothing else
-            // was ever tried).
-            std::vector<Spot> seen;
-            float bestLoss = 1e9f;
-            uint32 tryable = 0;
+            // One pass in order (header "Where": every cell's loss is known, cells estimated in
+            // sight first). Each cell: this bot's idle scan, the real line (sight cache, budget),
+            // the path (failures kept a while: SightCache::PathFailed). The first that passes all
+            // is taken. (Before 2026-11-15 the cells were probed nearest first with the real line
+            // only: the cells behind a wall used the budget, stockade-20261115-002203.)
+            uint32 checks = 0;
             for (Spot const& s : spots)
             {
-                if ((tryable >= MAX_GEOMETRY_CHECKS && s.loss >= bestLoss) || (hereValid && lossHere - s.loss <= margin))
+                if (hereValid && lossHere - s.loss <= margin)
+                {
+                    if (s.viewed)
+                        continue;   // (further down an estimate in sight may still pay)
                     break;
+                }
                 if (own.Near(s.pos))
                 {
                     ++why.idle;
+                    continue;
+                }
+                if (sight.PathFailed(me, s.pos, tight))
+                {
+                    ++why.pathKept;
                     continue;
                 }
                 ++checked;
@@ -274,36 +289,13 @@ namespace Commander
                     why.budget = true;
                     break;      // out of budget: the next ticks go on (the answers are kept)
                 }
+                why.Real(s.viewed, v == SightCache::Sight::Yes);
                 if (v == SightCache::Sight::No)
                 {
                     ++why.hidden;
                     continue;
                 }
-                Spot full = s;
-                full.sight = SightMargin::LossAt(world, *self, me, sight, points, s.pos, budget);
-                full.loss += full.sight;
-                seen.push_back(full);
-                if (sight.PathFailed(me, s.pos, tight))
-                    continue;       // (the path stage skips it: not a cell to try)
-                ++tryable;
-                bestLoss = std::min(bestLoss, full.loss);
-            }
-            SortSpots(world, *self, speed, seen);
-            why.seen += uint32(seen.size());
-            // The path only on cells that passed the sight check (stockade-20261114-221943); a
-            // cell that failed it is skipped for a while (SightCache::PathFailed), so the next
-            // tick checks the next ones instead of the same MAX_GEOMETRY_CHECKS again
-            // (stockade-20261115-000917: mage and priest stood in the corridor for 30 s).
-            uint32 checks = 0;
-            for (Spot const& s : seen)
-            {
-                if (hereValid && lossHere - s.loss <= margin)
-                    return;
-                if (sight.PathFailed(me, s.pos, tight))
-                {
-                    ++why.pathKept;
-                    continue;
-                }
+                ++why.seen;
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;

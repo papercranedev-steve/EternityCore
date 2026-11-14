@@ -51,17 +51,21 @@
  * the near cells lie in its aggro range). The field drops cells off the ground or cut off from
  * the party (a slope is fine; the rings before compared heights with the victim's), under an
  * idle creature, on a patrol's way before the fight ends, and cells the bot cannot walk to.
- * Kept: outside areas dangerous to ranged (HazardZones). Lowest loss first. Live checks per
- * pass: this bot's own idle scan, then line of sight to the victim from the field's sight
- * cache (PositionField::sight, SightCache.h: kept per pair of cells, so the next tick goes on
- * past the cells checked already; at most MAX_SIGHT_CHECKS new checks per tick, cells and
- * margin points together). A cell that sees the victim adds its sight margin
- * (SightMargin::LossAt, Perception/Values/SightMargin.h: the share of the pile's other places
- * it does not see; 2026-11-14, stockade-20261114-224312: the mage stood in the doorway and lost
- * the victim whenever it moved further in). The cells that see are sorted again by their full
- * loss; the search stops at the first cell whose loss without the margin reaches the best full
- * loss. Then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at most
- * MAX_GEOMETRY_CHECKS of them. Nothing found, or no field: the bot stays (no chase into a pack).
+ * Kept: outside areas dangerous to ranged (HazardZones). Every cell's loss up front: walk +
+ * exposure + sight margin (SightMargin::LossAt, Perception/Values/SightMargin.h: the share of
+ * the pile's other places it does not see, by the field's estimate; 2026-11-14,
+ * stockade-20261114-224312: the mage stood in the doorway and lost the victim whenever it moved
+ * further in). Order (2026-11-15, the viewshed): cells the field estimates in sight of the
+ * victim (PositionField::SeesEstimate, grid lines over the navmesh links) first, then the rest,
+ * each by loss. One pass in that order: this bot's own idle scan, cells whose path failed a
+ * moment ago skipped (SightCache::PathFailed), the real line of sight from the field's sight
+ * cache (SightCache.h, kept per pair of cells, at most MAX_SIGHT_CHECKS new checks per tick),
+ * then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at most
+ * MAX_GEOMETRY_CHECKS cells; the first that passes is taken. In the fight the walk counts a
+ * circle covering the victim's spot only closer than the victim (ArrivingAt, MeleeRoutes.h).
+ * (Before: cells probed nearest first with the real line only, those behind a wall used the
+ * budget and the path checks, stockade-20261115-002203.) Nothing found, or no field: the bot
+ * stays (no chase into a pack).
  * The spot here costs its exposure + its sight margin (in reach only); the move's reason
  * "sees the victim only narrowly" when the margin saved more than the exposure.
  * Line of sight as the spell checks it (SightCache::Live: collision height to target + 1 yd;
@@ -95,7 +99,7 @@ namespace Commander
         // bot's action (doc 2026-11-11-spot-scoring.md section 5.3; noise, the walk is in the loss).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // pathfinding, cells that passed the sight check
-        // Line of sight checks not in the sight cache yet, per tick (cells and margin points).
+        // Real line of sight checks not in the sight cache yet, per tick.
         static constexpr uint32 MAX_SIGHT_CHECKS = 48;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;

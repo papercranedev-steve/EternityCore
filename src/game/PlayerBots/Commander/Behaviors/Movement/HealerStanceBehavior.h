@@ -82,10 +82,12 @@
  *            the priest stood in the doorway of the tank's cell) SightMargin::LossAt
  *            (Perception/Values/SightMargin.h): the share of the enemies around the tank the
  *            spot does not see. Also part of StayLoss here when the anchor is in reach.
- * Live checks per pass, as the ranged stance: this healer's own idle scan, line of sight to
- * the anchor from the field's sight cache (SightCache.h, at most MAX_SIGHT_CHECKS new checks
- * per tick), the cells that see sorted again with their sight term, then the heal's line now
- * (SightCache::Live) and SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of them. Line of
+ * Order and checks as the ranged stance (2026-11-15, the viewshed): cells the field estimates
+ * in sight of the anchor (PositionField::SeesEstimate) first, then the rest, each by loss; one
+ * pass: this healer's own idle scan, recent path failures skipped, the real line from the
+ * field's sight cache (SightCache.h, at most MAX_SIGHT_CHECKS new checks per tick), then the
+ * heal's line now (SightCache::Live) and SafeRoute::PathIsSafe (in the fight ArrivingAt the
+ * anchor) on at most MAX_GEOMETRY_CHECKS cells. Line of
  * sight as the spell checks it (collision height to target + 1 yd; before 2026-11-14 eye to
  * eye at 2 yd). (The rings started straight behind the anchor; that only broke ties of the
  * order and is gone.)
@@ -130,7 +132,7 @@ namespace Commander
         // healer's action (doc 2026-11-11-spot-scoring.md section 5.3).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // pathfinding, cells that passed the sight check
-        // Line of sight checks not in the sight cache yet, per tick (cells and margin points).
+        // Real line of sight checks not in the sight cache yet, per tick.
         static constexpr uint32 MAX_SIGHT_CHECKS = 48;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
 

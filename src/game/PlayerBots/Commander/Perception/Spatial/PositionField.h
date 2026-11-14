@@ -128,6 +128,16 @@ namespace Commander
         // idleTight circles only.
         float WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight = false) const;
 
+        // Estimated line of sight from the cell of `from` to the cell of `to` over the grid
+        // (2026-11-15, the viewshed): a line of cells (Bresenham) where every step follows a
+        // link (FieldCell::links: the navmesh surface goes on; a wall or a drop cuts it). No vmap
+        // call. Errs on the hidden side: a crate or a railing that stops a walk but not the eye
+        // reads as a wall, a cell outside the field as blocked; heights are not compared (a ledge
+        // seen across may be wrong). An order and a soft score, not the answer: the stance
+        // modules take cells estimated in sight first and confirm with the real line
+        // (SightCache). Kept per origin cell for this build, filled on reads.
+        bool SeesEstimate(Position3 const& from, Position3 const& to) const;
+
         // Every cell of the field: fn(cx, cy, cell).
         template <class Fn>
         void ForEachCell(Fn fn) const
@@ -170,6 +180,10 @@ namespace Commander
         };
         mutable std::vector<Walk> m_walks;
         Walk const& WalkFrom(PartyMemberFacts const& from, bool tight) const;
+
+        // SeesEstimate per origin cell: per flat index, -1 not known yet, 0 hidden, 1 seen.
+        mutable std::unordered_map<uint64, std::vector<int8>> m_views;
+        bool LineLinked(int32 fx, int32 fy, int32 tx, int32 ty) const;
     };
 }
 

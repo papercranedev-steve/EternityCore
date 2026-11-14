@@ -1,7 +1,6 @@
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Spatial/PositionField.h"
-#include "Commander/Perception/Spatial/SightCache.h"
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -52,14 +51,14 @@ namespace SightMargin
         return points;
     }
 
-    float LossAt(WorldModel const& world, PartyMemberFacts const& member, Unit const* viewer, SightCache& sight,
-                 std::vector<Position3> const& points, Position3 const& p, uint32& budget)
+    float LossAt(WorldModel const& world, PartyMemberFacts const& member, PositionField const& field,
+                 std::vector<Position3> const& points, Position3 const& p)
     {
         if (points.empty())
             return 0.0f;
         uint32 hidden = 0;
         for (Position3 const& q : points)
-            if (sight.Cells(viewer, p, q, budget) == SightCache::Sight::No)
+            if (!field.SeesEstimate(q, p))
                 ++hidden;
         if (!hidden)
             return 0.0f;

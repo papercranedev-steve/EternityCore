@@ -47,6 +47,9 @@ namespace Commander
         float const TAKEN_YD = 1.5f;
         // Two spots whose order keys differ by at most this count as equally good (one cell of walk).
         float const TIE = 2.0f;
+        // Added to the order key of a cell estimated out of sight (PositionField::SeesEstimate):
+        // such cells come after every one estimated in sight, PreferFree never mixes the two.
+        float const HIDDEN_KEY = 1.0e6f;
 
         struct Query
         {
