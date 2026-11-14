@@ -410,7 +410,7 @@ namespace Commander
             pull.expectedIncomingDps = estimate.damage / estimate.fightSec;
             pull.expectedFightSec = estimate.fightSec;
             pull.expectedPartyDps = load.partyDps;
-            pull.expectedDpsSource = Value::DealtDpsSource(world);
+            pull.expectedDpsSource = Value::CapacityDpsSource(world);
             pull.expectedManaStart = estimate.manaStart;
             pull.expectedManaLeft = estimate.manaLeft;
             pull.expectedLowestTankPct = estimate.lowestTankPct;
@@ -515,7 +515,7 @@ namespace Commander
         FightLoad::Input fightLoad;
         if (FightLoad::Build(world, map, pull.expected, fightLoad))
             report.push_back("Fight estimate: " + FightLoad::Describe(FightLoad::Simulate(fightLoad, "estimate: report")) +
-                Format(", party damage %.0f/s (%s).", fightLoad.partyDps, Value::DealtDpsSource(world)));
+                Format(", party damage %.0f/s (%s).", fightLoad.partyDps, Value::CapacityDpsSource(world)));
         PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected,
                                                 PATROL_WAIT_MAX_MS / 1000.0f);
         SetPatrolHold(pull, patrols);

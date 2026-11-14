@@ -672,6 +672,13 @@ namespace Commander
         float worthDps = 0.0f;
         float dealtDps = 0.0f;          // measured drop of enemy health per second
         bool dealtMeasured = false;     // false = not enough samples yet, dealtDps is an estimate
+        // This fight so far (CombatRates): enemy health lost per second per damage dealer that
+        // could act, over the time something could be hit (not every enemy held by a control
+        // that breaks on damage); 0 until that time reaches CombatRates::MIN_REMEMBERED_FIGHT_MS.
+        // Value::CapacityDps uses it: dealtDps covers only the last few seconds, 45/s while
+        // one small enemy was left and the rogue held fire, and the party waited 20 s for mana
+        // before a 16k-health enemy it killed at 345/s (strat-20261114-174903).
+        float fightDpsPerDealer = 0.0f;
         // The last fight's damage per second over its whole length (CombatRates), 0 = none
         // yet, and how many damage dealers the party had then. Value::DealtDps uses it
         // before the next fight is measured.

@@ -58,6 +58,13 @@ namespace Commander
         float DealtDps(WorldModel const& world);
         // Where DealtDps comes from now: "measured", "last fight" or "gear estimate".
         char const* DealtDpsSource(WorldModel const& world);
+        // What the party deals per second over a fight, for forecasts of a fight (FightLoad):
+        // this fight so far (RateFacts::fightDpsPerDealer x the damage dealers that can act
+        // now), else as DealtDps without its few-second measurement. DealtDps stays the
+        // current pace ("how soon does this enemy die").
+        float CapacityDps(WorldModel const& world);
+        // Where CapacityDps comes from now: "this fight", "last fight" or "gear estimate".
+        char const* CapacityDpsSource(WorldModel const& world);
         // Seconds until all current enemies are dead at the current rate.
         float FightRemainingSec(WorldModel const& world);
         // Points lost when the fight lasts `seconds` longer (incoming damage during that time).

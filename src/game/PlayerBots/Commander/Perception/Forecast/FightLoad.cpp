@@ -373,7 +373,7 @@ namespace FightLoad
             out = Input();
             out.tankHealth = float(tank->health);
             out.tankMaxHealth = float(std::max(1u, tank->maxHealth));
-            out.partyDps = Value::DealtDps(world);
+            out.partyDps = Value::CapacityDps(world);   // a fight to come, not the last seconds
             return true;
         }
 
@@ -440,7 +440,7 @@ namespace FightLoad
         if (Trace::On())
             Trace::Emit("party", "fight input", Trace::Format(
                 "{\"partyDps\":%.1f,\"dpsSource\":\"%s\",\"tank\":\"%s\",\"tankHealth\":%u,\"tankMax\":%u,\"tankArmor\":%u}",
-                out.partyDps, Value::DealtDpsSource(world), Trace::Guid(tank->guid).c_str(), tank->health, tank->maxHealth,
+                out.partyDps, Value::CapacityDpsSource(world), Trace::Guid(tank->guid).c_str(), tank->health, tank->maxHealth,
                 uint32(tank->armor)));
         for (ObjectGuid g : creatures)
             if (Creature const* c = map->GetCreature(g))

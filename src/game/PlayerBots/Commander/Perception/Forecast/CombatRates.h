@@ -2,6 +2,7 @@
  * PartyBot Commander layer 1: fight-wide rates (value-scoring doc section 3).
  *  - incoming melee damage per second, after armor
  *  - damage the party deals per second, measured from enemy health over a few seconds
+ *  - the same over the whole fight so far, per damage dealer (RateFacts::fightDpsPerDealer)
  * Pure data, one instance per PartyCommander. Runs after ThreatHistory::Annotate.
  * Enemies fighting only an ally (EnemyFacts::onAllyOnly) are left out: their stored rows are
  * dropped while they are, and measured again from scratch once they fight the party.
@@ -33,6 +34,10 @@ namespace Commander
         uint32 m_fightStartMs = 0;
         uint32 m_fightLastMs = 0;
         float m_fightLost = 0.0f;
+        // RateFacts::fightDpsPerDealer: time something could be hit, and that time x the
+        // damage dealers that could act, since the first sample.
+        uint32 m_hittableMs = 0;
+        float m_dealerSec = 0.0f;
         float m_lastFightDps = 0.0f;
         uint32 m_lastFightDealers = 0;
 

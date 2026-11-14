@@ -27,6 +27,7 @@ namespace Commander
 
         PartyMemberFacts const* const tank = Tanks::Main(world);
         float heldDps = 0.0f;   // controlled enemies, once they wake (RateFacts::worthDps)
+        bool hittable = false;  // an enemy of ours the party may hit now (fightDpsPerDealer)
         for (EnemyFacts const& e : world.enemies)
         {
             // Enemies only fighting an ally (prisoners, guards) are not our fight: their health
@@ -34,6 +35,8 @@ namespace Commander
             if (e.onAllyOnly)
                 continue;
             r.enemyHealth += float(e.health);
+            if (e.acting && e.health && !(e.control.spellId && e.control.breaksOnDamage))
+                hittable = true;
             if (e.crowdControlled)
             {
                 PartyMemberFacts const* victim = world.FindMember(e.victim);
@@ -61,6 +64,8 @@ namespace Commander
             }
             m_fightStartMs = 0;
             m_fightLost = 0.0f;
+            m_hittableMs = 0;
+            m_dealerSec = 0.0f;
             m_samples.clear();
             r.lastFightDps = m_lastFightDps;
             r.lastFightDealers = m_lastFightDealers;
@@ -118,8 +123,17 @@ namespace Commander
                 EnemyFacts const* now = world.FindEnemy(row.enemy);
                 m_fightLost += now ? std::max(0.0f, row.health - float(now->health)) : row.health;
             }
+            // Waiting for every enemy's control to end deals nothing by choice: not counted.
+            if (hittable)
+            {
+                uint32 const ms = WorldTimer::getMSTimeDiff(m_samples.back().timeMs, nowMs);
+                m_hittableMs += ms;
+                m_dealerSec += float(r.damageDealers) * ms / 1000.0f;
+            }
         }
         m_fightLastMs = nowMs;
+        if (m_hittableMs >= MIN_REMEMBERED_FIGHT_MS && m_dealerSec > 0.0f)
+            r.fightDpsPerDealer = m_fightLost / m_dealerSec;
 
         Sample sample;
         sample.timeMs = nowMs;

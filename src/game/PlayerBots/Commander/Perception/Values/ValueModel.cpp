@@ -41,29 +41,62 @@ namespace Value
         return DEATH_PENALTY_OTHER;
     }
 
+    namespace
+    {
+        // Before anything is measured: the last fight, scaled to the damage dealers there are
+        // now, else the damage dealers' own estimates.
+        float EstimatedDps(WorldModel const& world)
+        {
+            if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
+                return std::max(1.0f, world.rates.lastFightDps * float(world.rates.damageDealers) /
+                                      float(world.rates.lastFightDealers));
+
+            float estimate = 0.0f;
+            for (PartyMemberFacts const& m : world.party)
+                if (!m.isPet && m.alive && !(m.isBot && m.role == ROLE_HEALER))
+                    estimate += m.soloDps > 0.0f ? m.soloDps : FALLBACK_DPS_PER_LEVEL * m.level;
+            return std::max(1.0f, estimate);
+        }
+
+        char const* EstimatedDpsSource(WorldModel const& world)
+        {
+            if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
+                return "last fight";
+            return "gear estimate";
+        }
+
+        bool FightMeasured(WorldModel const& world)
+        {
+            return world.rates.fightDpsPerDealer > 0.0f && world.rates.damageDealers;
+        }
+    }
+
     float DealtDps(WorldModel const& world)
     {
         if (world.rates.dealtMeasured && world.rates.dealtDps > 0.0f)
             return world.rates.dealtDps;
-        // The last fight, scaled to the damage dealers there are now.
-        if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
-            return std::max(1.0f, world.rates.lastFightDps * float(world.rates.damageDealers) /
-                                  float(world.rates.lastFightDealers));
-
-        float estimate = 0.0f;
-        for (PartyMemberFacts const& m : world.party)
-            if (!m.isPet && m.alive && !(m.isBot && m.role == ROLE_HEALER))
-                estimate += m.soloDps > 0.0f ? m.soloDps : FALLBACK_DPS_PER_LEVEL * m.level;
-        return std::max(1.0f, estimate);
+        return EstimatedDps(world);
     }
 
     char const* DealtDpsSource(WorldModel const& world)
     {
         if (world.rates.dealtMeasured && world.rates.dealtDps > 0.0f)
             return "measured";
-        if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
-            return "last fight";
-        return "gear estimate";
+        return EstimatedDpsSource(world);
+    }
+
+    float CapacityDps(WorldModel const& world)
+    {
+        if (FightMeasured(world))
+            return std::max(1.0f, world.rates.fightDpsPerDealer * float(world.rates.damageDealers));
+        return EstimatedDps(world);
+    }
+
+    char const* CapacityDpsSource(WorldModel const& world)
+    {
+        if (FightMeasured(world))
+            return "this fight";
+        return EstimatedDpsSource(world);
     }
 
     float FightRemainingSec(WorldModel const& world)
