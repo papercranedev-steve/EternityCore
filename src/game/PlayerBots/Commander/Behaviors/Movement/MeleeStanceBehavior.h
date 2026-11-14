@@ -18,12 +18,19 @@
  *    (DamageTargets: a current target it cannot walk to counts as none).
  *  - Otherwise chase it (BotActionType::Chase: attack it if it is not the victim yet, MoveChase
  *    at the chosen angle). Angle: the victim hits this bot: 0 (in front, no circling); else
- *    the first of ANGLES (behind first, then turning to the sides) whose melee spot is outside
- *    every idle creature's reach and not where an idle patrol walks before the fight should end
- *    (Perception/Spatial/PatrolZone.h); none: behind (PI). Areas are the position module's.
+ *    one of ANGLES (behind, the back diagonals, the sides; exact melee spots, not field cells),
+ *    since 2026-11-14 by points (tank fight spot doc step 5; before: the first that passed):
+ *      excluded  an idle creature's reach, an idle patrol's walk before the fight should end
+ *                (Perception/Spatial/PatrolZone.h), an area dangerous to melee (HazardZones:
+ *                an exclusion, stepping out of one is the position module's);
+ *      loss      in front of the victim (its front half: parry and block):
+ *                FRONT_LOSS_SHARE x LostAction(horizon); + SpotCost::Walk of the straight walk
+ *                there from the spot of the angle it chases at (or from the bot, not chasing yet);
+ *      the angle it chases at is kept while it is allowed and loses at most MOVE_MARGIN_SEC of
+ *      LostAction more than the best; none allowed: behind (PI).
  *    Proposed only when the bot does not run that chase yet (PartyBotAI::GetChaseAngle) or the
- *    spot of its angle became unsafe. Value: out of reach Value::LostAction(HORIZON_SEC), in
- *    reach LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.
+ *    angle changes. Value: out of reach Value::LostAction(HORIZON_SEC), in reach
+ *    LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.
  * No enemy it can walk to: wait near the tank (Tanks::Main, else the leader). Farther than
  * WAIT_NEAR_YD: walk to a position field cell WAIT_MIN_YD..WAIT_MAX_YD from it (since
  * 2026-11-10, step C; FieldSpots::Collect: ground linked to the party, no idle creature, no
@@ -62,6 +69,11 @@ namespace Commander
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
         static constexpr float KEEP_SEC = 1.0f;
+        // Share of a melee bot's output lost in front of its victim (parry and block; behind it
+        // neither). Untested guess: mob parry ~5-14%, plus block for shield bearers.
+        static constexpr float FRONT_LOSS_SHARE = 0.1f;
+        // The angle it chases at changes only for a spot better by this much of its LostAction.
+        static constexpr float MOVE_MARGIN_SEC = 1.0f;
         static constexpr float PATH_FACTOR = 1.2f;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 

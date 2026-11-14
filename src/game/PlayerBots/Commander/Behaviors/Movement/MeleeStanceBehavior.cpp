@@ -9,6 +9,8 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"         // StaySec: pure
 #include "Commander/Perception/Spatial/PatrolZone.h"
+#include "Commander/Perception/Spatial/HazardZones.h"
+#include "Commander/Perception/Values/SpotCost.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "Timer.h"
@@ -77,6 +79,18 @@ namespace Commander
             return !idle.Near(p) && !InPatrolPath(world, p);
         }
 
+        // Header "angle": standing at `s` in front of `victim` (its front half) lets it parry and
+        // block: FRONT_LOSS_SHARE of the bot's output over the horizon.
+        float SpotLoss(WorldModel const& world, PartyMemberFacts const& self, Unit const* victim,
+                       Position3 const& s, float horizonSec)
+        {
+            float const facing = victim->GetOrientation();
+            float const toSpot = std::atan2(s.y - victim->GetPositionY(), s.x - victim->GetPositionX());
+            float diff = std::fabs(std::remainder(toSpot - facing, 2.0f * float(M_PI)));
+            bool const inFront = diff < float(M_PI) * 0.5f;
+            return inFront ? MS::FRONT_LOSS_SHARE * Value::LostAction(world, self, horizonSec) : 0.0f;
+        }
+
         bool IsListedAngle(float angle)
         {
             for (float a : ANGLES)
@@ -112,16 +126,36 @@ namespace Commander
             {
                 SafeRoute::IdleCreatures idle(me, PositionOf(enemy), SPOT_SCAN_YD);
                 idle.Ignore({ enemy->GetObjectGuid() });
-                if (chasing && IsListedAngle(current) && SpotOk(world, idle, enemy, current))
-                    return true;    // its spot is still fine
+                float const horizon = std::max(1.0f, std::min(MS::HORIZON_SEC, Value::FightRemainingSec(world)));
+                std::vector<HazardZone> const& zones = HazardZones::Get(world);
+                bool const keep = chasing && IsListedAngle(current);
+                Position3 const from = keep ? SpotAt(enemy, current) : PositionOf(me);
+                float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+                float best = 0.0f;
+                float currentLoss = -1.0f;
+                bool found = false;
                 for (float a : ANGLES)
                 {
-                    if (SpotOk(world, idle, enemy, a))
+                    if (!SpotOk(world, idle, enemy, a))
+                        continue;
+                    Position3 const s = SpotAt(enemy, a);
+                    // (an area is an exclusion here: stepping out of one is the position module's)
+                    if (HazardZones::IsInside(zones, HAZARD_MELEE, s))
+                        continue;
+                    float const loss = SpotLoss(world, self, enemy, s, horizon) +
+                                       SpotCost::Walk(world, self, Distance2d(from, s) / speed);
+                    if (keep && std::fabs(a - current) < 0.01f)
+                        currentLoss = loss;
+                    if (!found || loss < best)
                     {
+                        best = loss;
                         angle = a;
-                        break;
+                        found = true;
                     }
                 }
+                // Its spot is still fine and not worse than the best by more than the margin.
+                if (currentLoss >= 0.0f && currentLoss <= best + SpotCost::Walk(world, self, MS::MOVE_MARGIN_SEC))
+                    return true;
             }
             if (chasing && std::fabs(current - angle) < 0.01f)
                 return true;
