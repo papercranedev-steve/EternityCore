@@ -46,12 +46,15 @@
 #define MANGOS_COMMANDER_FLEE_PREDICTOR_H
 
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Forecast/FightLoad.h"
 #include <vector>
 
 class Map;
 
 namespace Commander
 {
+    struct TeamPlan;
+
     class FleePredictor
     {
     public:
@@ -72,6 +75,22 @@ namespace Commander
         // Fills EnemyFacts::flee of world.enemies.
         void Annotate(Map* map, WorldModel& world, uint32 nowMs);
 
+        // Before the fight of a pull fought "here" (tank fight spot doc 3.5): world.pullRunners,
+        // the pull's creatures that run for help, each with its joiners searched from where it
+        // stands FIGHT_SPOT_YD farther than its run (the fight spot may take the pile that far:
+        // FightSpot::MAX_YD) and with the party's run kill time (RunKillSec at its flee line,
+        // full health before: arriveSec as if it were killed first). Once per planned pull.
+        static constexpr float FIGHT_SPOT_YD = 35.0f;
+        void AnnotatePull(Map* map, WorldModel& world, TeamPlan const& plan);
+
+        // A run starting at `start` (the fight spot's candidate; straight line to each joiner's
+        // caller - CALL_YD within `reachYd`): bit i = joiners[i] comes (at most 64).
+        static uint64 Reached(std::vector<FleeJoiner> const& joiners, Position3 const& start, float reachYd);
+        // Points the joiners of `mask` arriving `arriveSec` in cost on top of `base` (its Loss:
+        // `baseLoss`), as PointsWithin. Pure.
+        static float PointsOf(WorldModel const& world, FightLoad::Input const& base, float baseLoss,
+                              std::vector<FleeJoiner> const& joiners, uint64 mask, float arriveSec);
+
         // Points the joiners of `e` within a run of `reachYd` cost (header). Pure.
         static float PointsWithin(WorldModel const& world, EnemyFacts const& e, float reachYd);
         // Health it has when it starts to run (now if it already runs).
@@ -90,6 +109,8 @@ namespace Commander
         };
         std::vector<Entry> m_cache;
         std::vector<ObjectGuid> m_fled;         // seen running, alive and still on our lists
+        uint32 m_pullAtMs = 0;                  // PullPlan::plannedAtMs of m_pullRunners
+        std::vector<PullRunnerFacts> m_pullRunners;
     };
 }
 

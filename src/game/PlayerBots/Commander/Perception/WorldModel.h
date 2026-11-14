@@ -193,6 +193,23 @@ namespace Commander
         float needYd = 0.0f;
         float health = 0.0f;
         float dps = 0.0f;               // on the main tank, after armor (FightLoad::Foe)
+        // Where its caller stands (the creature the runner calls; for the caller itself its own
+        // place): the fight spot judges a run starting elsewhere from it (straight line,
+        // FleePredictor::JoinPoints).
+        Position3 callerPos;
+    };
+
+    // A creature of the planned pull that runs for help at low health (FleePredictor::
+    // AnnotatePull, before the fight; WorldModel::pullRunners): who it may bring, as FleeFacts
+    // for an enemy in the fight. Callers are searched from where it stands now, FIGHT_SPOT_YD
+    // farther than its run (the fight spot may take the pile that far).
+    struct PullRunnerFacts
+    {
+        ObjectGuid guid;
+        Position3 pos;
+        float reachYd = 0.0f;           // the run with the party on it (FleeFacts::focusedReachYd)
+        float arriveSec = 0.0f;         // when its joiners come, from the fight's start (worst: it is killed first)
+        std::vector<FleeJoiner> joiners;
     };
 
     // Running away at low health (Perception/Forecast/FleePredictor.h fills it; EnemyFacts::flee).
@@ -689,6 +706,9 @@ namespace Commander
         // Grid over the fight area with ground, links, idle creatures and patrols
         // (Perception/Spatial/PositionField.h). Null while the party neither fights nor pulls.
         std::shared_ptr<PositionField const> field;
+        // The planned pull's creatures that run for help at low health (FleePredictor::
+        // AnnotatePull), while a pull is planned and before its fight; empty otherwise.
+        std::vector<PullRunnerFacts> pullRunners;
 
         PartyMemberFacts const* FindMember(ObjectGuid guid) const;
         RouteFact const* FindRoute(ObjectGuid bot, ObjectGuid enemy) const

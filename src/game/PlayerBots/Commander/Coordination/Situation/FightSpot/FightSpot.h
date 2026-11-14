@@ -33,9 +33,17 @@
  * more than the margin are the move's spots, best first (ground, idle creatures and the path
  * are checked live by TankStanceBehavior on the tank). Called every refresh by
  * FightSpotAssigner (tank fight spot doc .kiro/docs/2026-11-14-tank-fight-spot.md).
- * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), fleeing
- * enemies' helpers, how well the healers and ranged can stand around S (they pick their own
- * cells around the tank afterwards, Healer / RangedStanceBehavior).
+ *   flee      (doc 3.5, user 2026-11-14: fight away from the packs a runner would bring) the
+ *             creatures on the tank that run for help (EnemyFacts::flee predicted, not spent or
+ *             prevented; before the fight the pull's, WorldModel::pullRunners): the joiners
+ *             whose caller is within the run with the party on it (focusedReachYd) + CALL_YD of
+ *             its start at S (straight line, FleePredictor::Reached), points as PointsWithin
+ *             (FleePredictor::PointsOf: the fight now, before it the pull's creatures from the
+ *             packs, with the joiners arriving when it runs), cached by the joiners reached.
+ *             Counted at the pile's place too (it can make the tank move).
+ * Not scored yet (doc 3.3): hazards (HazardZones mark no zone dangerous to tanks), how well the
+ * healers and ranged can stand around S (they pick their own cells around the tank
+ * afterwards, Healer / RangedStanceBehavior).
  * Pure (facts and plan).
  */
 
@@ -63,9 +71,10 @@ namespace FightSpot
 
     struct Choice
     {
-        float hereLoss = 0.0f;          // patrols + holds where the tank is
+        float hereLoss = 0.0f;          // patrols + holds + flee at the pile's place
         float herePatrols = 0.0f;
         float hereHolds = 0.0f;
+        float hereFlee = 0.0f;
         PatrolFacts const* patrol = nullptr;    // the patrol costing the most here (null = none)
         std::vector<Position3> spots;   // better spots, best first; empty = stay
         float bestLoss = 0.0f;          // the first spot's patrols + holds + area

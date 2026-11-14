@@ -5,6 +5,9 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Values/AreaValue.h"
+#include "Commander/Perception/Forecast/FightLoad.h"
+#include "Commander/Perception/Forecast/FleePredictor.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -13,6 +16,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <map>
 
 namespace Commander
 {
@@ -138,6 +142,89 @@ namespace FightSpot
             return std::max(0.0f, ch.hereNet - (v.valid ? std::max(0.0f, v.net) : 0.0f));
         }
 
+        // Header "flee": the creatures on the tank (before the fight: the pull's) that run for
+        // help, their joiners judged from a run starting at S.
+        struct Flee
+        {
+            struct Runner
+            {
+                std::vector<FleeJoiner> const* joiners = nullptr;
+                Position3 offset;           // from the pile's place (each keeps its place relative to the tank)
+                float reachYd = 0.0f;
+                float arriveSec = 0.0f;
+                std::map<uint64, float> points;     // by the joiners reached
+            };
+            bool on = false;
+            FightLoad::Input base;
+            float baseLoss = 0.0f;
+            std::vector<Runner> runners;
+
+            float Loss(WorldModel const& world, Position3 const& s)
+            {
+                float total = 0.0f;
+                for (Runner& r : runners)
+                {
+                    Position3 start = s;
+                    start.x += r.offset.x;
+                    start.y += r.offset.y;
+                    uint64 const mask = FleePredictor::Reached(*r.joiners, start, r.reachYd);
+                    if (!mask)
+                        continue;
+                    auto const it = r.points.find(mask);
+                    float const p = it != r.points.end() ? it->second
+                        : (r.points[mask] = FleePredictor::PointsOf(world, base, baseLoss, *r.joiners, mask, r.arriveSec));
+                    total += p;
+                }
+                return total;
+            }
+        };
+
+        Flee MakeFlee(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank, Request const& r)
+        {
+            Flee f;
+            if (r.walkFromAt)
+            {
+                for (PullRunnerFacts const& p : world.pullRunners)
+                {
+                    Flee::Runner x;
+                    x.joiners = &p.joiners;
+                    x.reachYd = p.reachYd;
+                    x.arriveSec = p.arriveSec;
+                    f.runners.push_back(x);
+                }
+            }
+            else
+            {
+                for (EnemyFacts const& e : world.enemies)
+                {
+                    FleeFacts const& fl = e.flee;
+                    if (e.victim != tank.guid || !fl.predicted || fl.spent || fl.prevented || fl.joiners.empty())
+                        continue;
+                    Flee::Runner x;
+                    x.joiners = &fl.joiners;
+                    x.offset.x = e.pos.x - r.at.x;
+                    x.offset.y = e.pos.y - r.at.y;
+                    x.reachYd = fl.focusedReachYd;
+                    x.arriveSec = (fl.fleeing ? 0.0f : fl.secToFlee) + FleePredictor::JOIN_SEC;
+                    f.runners.push_back(x);
+                }
+            }
+            if (f.runners.empty() || !FightLoad::FromWorld(world, f.base))
+                return f;
+            // Before the fight: the planned pull's creatures as the fight (nothing is engaged yet).
+            if (r.walkFromAt)
+                for (ObjectGuid g : plan.pull.expected)
+                    for (PackFacts const& pack : world.packs)
+                        for (PackCreature const& c : pack.members)
+                            if (c.guid == g)
+                                f.base.foes.push_back(FightLoad::FoeOf(c, tank, 0.0f));
+            PartyMemberFacts const* main = Tanks::Main(world);
+            float const penalty = main ? Value::DeathPenalty(*main) : 0.0f;
+            f.baseLoss = FightLoad::Loss(world, FightLoad::Simulate(f.base, "flee: the fight spot's base"), penalty);
+            f.on = true;
+            return f;
+        }
+
         struct Scored
         {
             Position3 pos;
@@ -164,7 +251,9 @@ namespace FightSpot
         float const clearYd = ControlValue::ClearOfPileYd(world);
         c.herePatrols = SpotCost::PatrolJoins(world, tank, r.at, r.remainingSec, r.patrolWithinSec, &c.patrol);
         c.hereHolds = SpotCost::BreaksHold(held, r.at, clearYd);
-        c.hereLoss = c.herePatrols + c.hereHolds;
+        Flee flee = MakeFlee(world, plan, tank, r);
+        c.hereFlee = flee.on ? flee.Loss(world, r.at) : 0.0f;
+        c.hereLoss = c.herePatrols + c.hereHolds + c.hereFlee;
         float const margin = Value::LostAction(world, tank, MARGIN_SEC);
         if (!world.field)
             return c;
@@ -186,7 +275,7 @@ namespace FightSpot
             Scored x;
             x.pos = s.pos;
             x.loss = SpotCost::PatrolJoins(world, tank, s.pos, r.remainingSec, r.patrolWithinSec) +
-                     SpotCost::BreaksHold(held, s.pos, clearYd);
+                     SpotCost::BreaksHold(held, s.pos, clearYd) + (flee.on ? flee.Loss(world, s.pos) : 0.0f);
             float const walkYd = r.walkFromAt ? PackResolver::Distance(r.at, s.pos) * PATH_FACTOR : s.WalkEstimate(PATH_FACTOR);
             x.walk = Value::FightExtension(world, walkYd / WALK_YARDS_PER_SEC);
             if (room.on)
@@ -218,8 +307,8 @@ namespace FightSpot
             c.bestWalk = scored.front().walk;
         }
         char buf[240];
-        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f); best %s %.1f (area %+.1f) + walk %.1f",
-            c.hereLoss, c.herePatrols, c.hereHolds, scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea, c.bestWalk);
+        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f, flee %.1f); best %s %.1f (area %+.1f) + walk %.1f",
+            c.hereLoss, c.herePatrols, c.hereHolds, c.hereFlee, scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea, c.bestWalk);
         c.why = buf;
         if (scope.On())
         {

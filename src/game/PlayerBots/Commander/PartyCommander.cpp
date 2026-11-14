@@ -272,6 +272,8 @@ namespace Commander
         m_meleeRoutes.Annotate(bot->me->GetMap(), m_world, nowMs);
         // (after the rates: time to the flee line uses the party's damage)
         m_fleePredictor.Annotate(bot->me->GetMap(), m_world, nowMs);
+        // (the pull of the last refresh: planned on the map thread before this, PullPlanner)
+        m_fleePredictor.AnnotatePull(bot->me->GetMap(), m_world, m_plan);
 
         ++m_world.version;
         m_world.refreshedAtMs = nowMs;

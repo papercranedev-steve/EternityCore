@@ -44,10 +44,17 @@ namespace Commander
         std::string Reason(FightSpot::Choice const& c)
         {
             std::string const name = c.patrol ? NameOf(c.patrol->entry) : std::string();
-            return c.herePatrols > 0.0f && c.hereHolds > 0.0f ? name + " walks in and a control is next to the pile"
-                 : c.herePatrols > 0.0f ? name + " walks into the fight"
-                 : c.hereHolds > 0.0f ? "a control that breaks on damage is next to the pile"
-                 : "the area caster has more room there";
+            std::string out;
+            auto const add = [&out](std::string const& part) { out += (out.empty() ? "" : ", ") + part; };
+            if (c.herePatrols > 0.0f)
+                add(name + " walks into the fight");
+            if (c.hereHolds > 0.0f)
+                add("a control that breaks on damage is next to the pile");
+            if (c.hereFlee > 0.0f)
+                add("a runner would bring more from here");
+            if (c.bestArea < 0.0f)
+                add("the area caster has more room there");
+            return out.empty() ? std::string("a better spot") : out;
         }
 
         void End(FightSpotPlan& m)

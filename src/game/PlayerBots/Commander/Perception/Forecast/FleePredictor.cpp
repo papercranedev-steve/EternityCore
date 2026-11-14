@@ -6,6 +6,7 @@
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Creature.h"
 #include "Map.h"
 #include "PathFinder.h"
@@ -15,6 +16,7 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include <algorithm>
+#include <cmath>
 #include <list>
 
 namespace Commander
@@ -68,10 +70,12 @@ namespace Commander
 
         // Worst case: every idle creature the run can come within CALL_YD of (header), each
         // with what it brings, nearest caller first.
+        // `extraYd`: callers this much farther too (the run may start elsewhere: AnnotatePull).
         std::vector<FleeJoiner> PredictJoiners(Creature* runner, Unit* victim, WorldModel const& world,
-                                               PartyMemberFacts const& tank)
+                                               PartyMemberFacts const& tank, float extraYd = 0.0f,
+                                               std::vector<ObjectGuid> const* inFight = nullptr)
         {
-            float const radius = ReachYd(runner) + FleePredictor::CALL_YD;
+            float const radius = ReachYd(runner) + FleePredictor::CALL_YD + extraYd;
             std::list<Creature*> found;
             FleeCallCheck check(runner, victim, radius);
             MaNGOS::CreatureListSearcher<FleeCallCheck> searcher(found, check);
@@ -114,6 +118,8 @@ namespace Commander
             std::vector<ObjectGuid> seen{ runner->GetObjectGuid() };
             for (EnemyFacts const& e : world.enemies)
                 seen.push_back(e.guid);
+            if (inFight)
+                seen.insert(seen.end(), inFight->begin(), inFight->end());
             std::vector<FleeJoiner> out;
             for (Caller const& caller : callers)
             {
@@ -129,6 +135,7 @@ namespace Commander
                     FleeJoiner fj;
                     fj.guid = j.guid;
                     fj.needYd = std::max(0.0f, caller.distance - FleePredictor::CALL_YD);
+                    fj.callerPos = PositionOf(caller.creature);
                     fj.health = foe.health;
                     fj.dps = foe.dps;
                     out.push_back(fj);
@@ -201,6 +208,89 @@ namespace Commander
         float const penalty = Value::DeathPenalty(*tank);
         float const base = FightLoad::Loss(world, FightLoad::Simulate(asIs, "flee: as is"), penalty);
         return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with, "flee: with the joiners"), penalty) - base);
+    }
+
+    uint64 FleePredictor::Reached(std::vector<FleeJoiner> const& joiners, Position3 const& start, float reachYd)
+    {
+        uint64 mask = 0;
+        for (size_t i = 0; i < joiners.size() && i < 64; ++i)
+        {
+            float const dx = joiners[i].callerPos.x - start.x, dy = joiners[i].callerPos.y - start.y;
+            if (std::sqrt(dx * dx + dy * dy) - CALL_YD <= reachYd)
+                mask |= uint64(1) << i;
+        }
+        return mask;
+    }
+
+    float FleePredictor::PointsOf(WorldModel const& world, FightLoad::Input const& base, float baseLoss,
+                                  std::vector<FleeJoiner> const& joiners, uint64 mask, float arriveSec)
+    {
+        PartyMemberFacts const* tank = Tanks::Main(world);
+        if (!mask || !tank)
+            return 0.0f;
+        FightLoad::Input with = base;
+        for (size_t i = 0; i < joiners.size() && i < 64; ++i)
+        {
+            if (!(mask & (uint64(1) << i)))
+                continue;
+            FightLoad::Foe foe;
+            foe.guid = joiners[i].guid;
+            foe.health = joiners[i].health;
+            foe.dps = joiners[i].dps;
+            foe.arriveSec = arriveSec;
+            foe.sameFight = true;
+            with.foes.push_back(foe);
+        }
+        float const penalty = Value::DeathPenalty(*tank);
+        return std::max(0.0f, FightLoad::Loss(world, FightLoad::Simulate(with, "flee: from the fight spot"), penalty) - baseLoss);
+    }
+
+    void FleePredictor::AnnotatePull(Map* map, WorldModel& world, TeamPlan const& plan)
+    {
+        PullPlan const& pull = plan.pull;
+        bool const before = (pull.phase == PullPhase::WaitReady || (pull.phase == PullPhase::Approach && !world.HasPartyEnemy())) &&
+                            !pull.returnToSpot && !pull.corner;
+        if (!before)
+        {
+            m_pullAtMs = 0;
+            m_pullRunners.clear();
+            world.pullRunners.clear();
+            return;
+        }
+        if (m_pullAtMs != pull.plannedAtMs)
+        {
+            m_pullAtMs = pull.plannedAtMs;
+            m_pullRunners.clear();
+            PartyMemberFacts const* tank = world.FindMember(pull.tank);
+            Unit* victim = tank ? map->GetUnit(tank->guid) : nullptr;
+            float const dealt = std::max(1.0f, Value::DealtDps(world));
+            for (ObjectGuid g : pull.expected)
+            {
+                if (!tank || !victim)
+                    break;
+                Creature* runner = map->GetCreature(g);
+                if (!runner || !runner->IsAlive())
+                    continue;
+                std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(runner->GetEntry());
+                if (!profile || profile->fleeAtHealthPct <= 0.0f)
+                    continue;
+                EnemyFacts e;
+                e.guid = g;
+                e.health = runner->GetMaxHealth();
+                e.maxHealth = runner->GetMaxHealth();
+                e.healthPct = 100.0f;
+                e.flee.atPct = profile->fleeAtHealthPct;
+                PullRunnerFacts r;
+                r.guid = g;
+                r.pos = PositionOf(runner);
+                r.reachYd = std::min(ReachYd(runner), runner->GetSpeed(MOVE_RUN) * RunKillSec(world, e, FleeSec()));
+                r.arriveSec = float(e.maxHealth) * (1.0f - e.flee.atPct / 100.0f) / dealt + JOIN_SEC;
+                r.joiners = PredictJoiners(runner, victim, world, *tank, FIGHT_SPOT_YD, &pull.expected);
+                if (!r.joiners.empty())
+                    m_pullRunners.push_back(r);
+            }
+        }
+        world.pullRunners = m_pullRunners;
     }
 
     void FleePredictor::Annotate(Map* map, WorldModel& world, uint32 nowMs)
