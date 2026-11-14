@@ -30,6 +30,14 @@
  *      Also while rooted (Blink frees it).
  *   3. Frost Nova ready and a runner within its radius: Frost Nova what it can; then, and
  *      when nothing else is left: to the tank (RunToTank).
+ * Ready (2026-11-14, strat-20261114-180150: a rotation Fire Blast's global cooldown made the
+ *   Frost Nova and Blink "not ready" 1.4 s before they were, and the mage walked to the tank
+ *   under the hits): Frost Nova and Blink count with the seconds until they can be cast
+ *   (PartyBotAI::SpellReadyInSec) when that is within a global cooldown (Value::GCD_SEC); a
+ *   longer cooldown counts as not ready, as before (waiting for it is not weighed against the
+ *   other steps). The Frost Nova's moment is one of the time line's moments; a step whose
+ *   spell is that soon waits for it when the caster survives until then (the "When" danger
+ *   check), else the next step.
  * Tier Urgent. While its own walk is under way: hold it; nobody running at it: stop it.
  * Values: Frost Nova benefit held(now); Blink the runners' hits and harassment while they
  * walk its distance again; cost LostAction(GCD) + ManaWorth(its mana).

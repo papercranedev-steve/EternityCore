@@ -875,6 +875,25 @@ bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpell
     return CombatBotBaseAI::CanTryToCastSpell(pTarget, pSpellEntry) && PassesPartyCastChecks(pTarget, pSpellEntry);
 }
 
+float PartyBotAI::SpellReadyInSec(Unit const* pTarget, SpellEntry const* pSpellEntry) const
+{
+    if (!pSpellEntry || !pTarget)
+        return -1.0f;
+    if (CanTryToCastSpell(pTarget, pSpellEntry))
+        return 0.0f;
+    int32 const cooldown = me->GetSpellCooldownLeft(pSpellEntry);
+    if (cooldown < 0)
+        return -1.0f;
+    uint32 const left = std::max(uint32(cooldown), me->GetGCDLeft(pSpellEntry));
+    if (!left)
+        return -1.0f;
+    uint32 const power = pSpellEntry->powerType == POWER_HEALTH ? 0 : me->GetPower(Powers(pSpellEntry->powerType));
+    if (!CanTryToCastSpellBesidesTimers(pTarget, pSpellEntry, me->GetShapeshiftForm(), power) ||
+        !PassesPartyCastChecks(pTarget, pSpellEntry))
+        return -1.0f;
+    return left / 1000.0f;
+}
+
 bool PartyBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
 {
     return pSpellEntry && pSpellEntry == Kit().Filler();
@@ -2739,14 +2758,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
 
         if (me->GetShapeshiftForm() == FORM_NONE)
         {
-            if (m_spells.priest.pHolyNova &&
-                GetAttackersInRangeCount(10.0f) > 2 &&
-                CanTryToCastSpell(me, m_spells.priest.pHolyNova))
-            {
-                if (DoCastSpell(me, m_spells.priest.pHolyNova) == SPELL_CAST_OK)
-                    return;
-            }
-
+            // Holy Nova: the Commander's area phase (Classes/Priest.cpp ClassKit::AreaDamage).
             if (m_spells.priest.pSmite &&
                 CanTryToCastSpell(pVictim, m_spells.priest.pSmite))
             {
@@ -4084,13 +4096,7 @@ void PartyBotAI::UpdateInCombatAI_Druid()
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == DISTANCING_MOTION_TYPE)
                 return;
 
-            if (m_spells.druid.pHurricane &&
-               (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2) &&
-                CanTryToCastSpell(pVictim, m_spells.druid.pHurricane))
-            {
-                if (DoCastSpell(pVictim, m_spells.druid.pHurricane) == SPELL_CAST_OK)
-                    return;
-            }
+            // Hurricane: the Commander's area phase (Classes/Druid.cpp ClassKit::AreaDamage).
 
             if (m_spells.druid.pMoonfire &&
                 CanTryToCastSpell(pVictim, m_spells.druid.pMoonfire))

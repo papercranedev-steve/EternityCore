@@ -92,6 +92,21 @@ namespace Commander
                 return { bark, regen };
             }
 
+            // A caster damage druid only (bear and cat do not cast it): Wrath.
+            SpellEntry const* Filler() const override
+            {
+                return m_bot.GetRole() == ROLE_RANGE_DPS ? m_bot.m_spells.druid.pWrath : nullptr;
+            }
+
+            // Hurricane: a ground channel like Blizzard (its slow is on attack speed, not
+            // movement); the area phase decides it (user 2026-11-14: the rotation's is gone).
+            std::vector<AreaDamageSpell> AreaDamage() const override
+            {
+                if (m_bot.GetRole() != ROLE_RANGE_DPS)
+                    return {};
+                return { { m_bot.m_spells.druid.pHurricane, true, 0.0f } };
+            }
+
             // Innervate (6 min): +400% mana regeneration, all of it while casting, 20 s.
             std::vector<AllyBoostSpell> AllyBoosts() const override
             {

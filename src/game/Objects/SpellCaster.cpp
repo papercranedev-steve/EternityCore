@@ -2557,6 +2557,17 @@ int32 SpellCaster::GetSpellCooldownLeft(SpellEntry const* spellEntry) const
     return int32(std::chrono::duration_cast<std::chrono::milliseconds>(latest - now).count());
 }
 
+uint32 SpellCaster::GetGCDLeft(SpellEntry const* spellEntry) const
+{
+    auto const itr = m_GCDCatMap.find(spellEntry->StartRecoveryCategory);
+    if (itr == m_GCDCatMap.end())
+        return 0;
+    TimePoint const now = World::GetCurrentClockTime();
+    if (itr->second <= now)
+        return 0;
+    return uint32(std::chrono::duration_cast<std::chrono::milliseconds>(itr->second - now).count());
+}
+
 bool SpellCaster::IsSpellOnPermanentCooldown(SpellEntry const* spellEntry) const
 {
     TimePoint now = World::GetCurrentClockTime();

@@ -2914,6 +2914,15 @@ bool CombatBotBaseAI::CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const*
     if (me->HasGCD(pSpellEntry))
         return false;
 
+    return CanTryToCastSpellBesidesTimers(pTarget, pSpellEntry, form, power);
+}
+
+bool CombatBotBaseAI::CanTryToCastSpellBesidesTimers(Unit const* pTarget, SpellEntry const* pSpellEntry,
+                                                     ShapeshiftForm form, uint32 power) const
+{
+    if (m_preventCasting)
+        return false;
+
     if (pSpellEntry->TargetAuraState &&
        !pTarget->HasAuraState(AuraState(pSpellEntry->TargetAuraState)))
         return false;

@@ -70,6 +70,10 @@ public:
     bool IsRoleLocked() const { return m_roleLocked; }
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
+    // Seconds until CanTryToCastSpell would pass when only the spell's cooldown, the global
+    // cooldown or a school lockout stand in the way: 0 = now, < 0 = something else does (no
+    // mana, silenced, wrong form, out of range, a party check) or a permanent cooldown.
+    float SpellReadyInSec(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // The class kit's filler (Frostbolt, Fireball) is cast while its own slow / burn is still on
     // the target: the "already has the aura" rule left the mage idle until Frostbolt's 9 s slow
     // ran out (strat-20261102-205906, 13-19 s).

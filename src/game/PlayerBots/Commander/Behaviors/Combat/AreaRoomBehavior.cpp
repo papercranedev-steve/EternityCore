@@ -51,6 +51,14 @@ namespace Commander
             return radius;
         }
 
+        // Seconds until a self spell of the bot can be cast, counted only within a global
+        // cooldown (header "Ready"): 0 now, < 0 not soon (a longer cooldown or anything else).
+        float ReadyIn(PartyBotAI const* bot, SpellEntry const* spell)
+        {
+            float const sec = spell ? bot->SpellReadyInSec(bot->me, spell) : -1.0f;
+            return sec <= Value::GCD_SEC ? sec : -1.0f;
+        }
+
         struct Runner
         {
             EnemyFacts const* facts = nullptr;
@@ -63,7 +71,8 @@ namespace Commander
         {
             PartyMemberFacts const* self = nullptr;
             std::vector<Runner> runners;
-            bool novaReady = false;
+            // Seconds until the Frost Nova can be cast (ReadyIn): 0 now, < 0 not soon.
+            float novaInSec = -1.0f;
             float holdSec = 0.0f;
 
             // Header: held(T) - wait(T); `alive` false: T is out (danger).
@@ -73,7 +82,7 @@ namespace Commander
                 for (Runner const& r : runners)
                 {
                     EnemyFacts const& e = *r.facts;
-                    if (novaReady && r.inRadiusSec <= t)
+                    if (novaInSec >= 0.0f && t >= novaInSec && r.inRadiusSec <= t)
                         held += Value::HitLoss(world, e, *self, holdSec) + Value::HarassLoss(world, e, *self, holdSec);
                     if (r.inMeleeSec < t)
                     {
@@ -92,6 +101,8 @@ namespace Commander
             float Best(WorldModel const& world, float horizon, float& worth) const
             {
                 std::vector<float> moments{ 0.0f };
+                if (novaInSec > 0.0f && novaInSec <= horizon)
+                    moments.push_back(novaInSec);
                 for (Runner const& r : runners)
                 {
                     if (r.inRadiusSec <= horizon)
@@ -131,7 +142,7 @@ namespace Commander
             if (nova)
             {
                 radius = RadiusOf(me, nova);
-                line.novaReady = radius > 0.0f && bot->CanTryToCastSpell(me, nova);
+                line.novaInSec = radius > 0.0f ? ReadyIn(bot, nova) : -1.0f;
                 line.holdSec = std::min(EB::ROOT_HOLD_SEC, std::max(0, nova->GetDuration()) / 1000.0f);
             }
             // Its own area channel slows them on the way.
@@ -351,7 +362,7 @@ namespace Commander
         }
         // Frost Nova spent (on cooldown, or some rooted next to it): the ones still coming are
         // slowed as they get near (doc 3.5); on the way to the tank with a jump turn.
-        bool const novaSpent = !line.novaReady || RootedOnMe(world, line.self->guid);
+        bool const novaSpent = line.novaInSec < 0.0f || RootedOnMe(world, line.self->guid);
         if (novaSpent && ProposeCone(bot, world, line, false, "chased, no Frost Nova: Cone of Cold", out))
             return;
 
@@ -370,7 +381,7 @@ namespace Commander
         bool const rooted = me->HasUnitState(UNIT_STATE_ROOT);
 
         // Right after a Frost Nova that left some free: to the tank now (doc 3.4 step 3).
-        if (!line.novaReady && RootedOnMe(world, line.self->guid))
+        if (line.novaInSec < 0.0f && RootedOnMe(world, line.self->guid))
         {
             if (!rooted)
                 ProposeToTank(bot, world, line, "Frost Nova did not hold them all: to the tank", out);
@@ -404,28 +415,46 @@ namespace Commander
                              (mana > 0.0f ? ManaWorth::Points(world, *line.self, mana) : 0.0f));
             out.push_back(p);
         };
-        bool const novaNow = line.novaReady && nova && within > 0;
+        // A step's spell still in the global cooldown (header "Ready"): wait for it when the
+        // caster lives that long, rather than drop to the next step (strat-20261114-180150: the
+        // Nova was 1.4 s off, the mage walked to the tank under the hits instead).
+        auto const waits = [&](float inSec)
+        {
+            if (inSec <= 0.0f)
+                return false;
+            bool alive = true, dies = false;
+            line.Worth(world, inSec, alive, dies);
+            return alive;
+        };
+        bool const novaSoon = nova && within > 0 && line.novaInSec >= 0.0f;
 
         // 1. Frost Nova holds all of them.
-        if (novaNow && within == line.runners.size())
+        if (novaSoon && within == line.runners.size())
         {
-            proposeNova("they are here, all within reach: Frost Nova");
-            return;
+            if (line.novaInSec <= 0.0f)
+                proposeNova("they are here, all within reach: Frost Nova");
+            if (line.novaInSec <= 0.0f || waits(line.novaInSec))
+                return;
         }
         // 2. It cannot: Blink away (its Blizzard goes ahead of the first one again, AreaPlace);
         // the one or two about to hit get a Cone of Cold first (user 2026-11-12: some room).
-        if (CanCast(bot, bot->Kit().Leap()))
+        float const blinkInSec = ReadyIn(bot, bot->Kit().Leap());
+        if (blinkInSec == 0.0f)
         {
             if (ProposeCone(bot, world, line, true, "about to be hit: Cone of Cold before the Blink", out))
                 return;
             if (ProposeBlink(bot, world, line, out))
                 return;
         }
-        // 3. Frost Nova what it can, then to the tank.
-        if (novaNow)
-        {
-            proposeNova("they are here, no Blink: Frost Nova what it can");
+        else if (waits(blinkInSec))
             return;
+        // 3. Frost Nova what it can, then to the tank.
+        if (novaSoon)
+        {
+            if (line.novaInSec <= 0.0f)
+                proposeNova("they are here, no Blink: Frost Nova what it can");
+            if (line.novaInSec <= 0.0f || waits(line.novaInSec))
+                return;
         }
         if (!rooted)
             ProposeToTank(bot, world, line, "they are here, no Frost Nova: to the tank", out);

@@ -153,6 +153,8 @@ public:
     // The checks of CanTryToCastSpell as if the bot were in shapeshift form `form` with `power`
     // of the spell's power type (warrior: right after a stance swap, PartyBotAI::CanCastWithStance).
     bool CanTryToCastSpellAs(Unit const* pTarget, SpellEntry const* pSpellEntry, ShapeshiftForm form, uint32 power) const;
+    // CanTryToCastSpellAs without its cooldown and global cooldown checks (PartyBotAI::SpellReadyInSec).
+    bool CanTryToCastSpellBesidesTimers(Unit const* pTarget, SpellEntry const* pSpellEntry, ShapeshiftForm form, uint32 power) const;
     // CanTryToCastSpell skips a spell whose aura the target already has (no reapplying DoTs and
     // debuffs). True = cast it anyway: the aura is a side effect of a spell cast for its damage
     // (Frostbolt's slow, Fireball's burn), PartyBotAI::IsSpammedOverOwnAura.

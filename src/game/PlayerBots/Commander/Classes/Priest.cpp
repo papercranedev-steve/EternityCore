@@ -87,6 +87,26 @@ namespace Commander
                 return { b };
             }
 
+            // A damage priest only (a healer's damage is not compared with anything): Mind Flay
+            // for a shadow build, else Smite.
+            SpellEntry const* Filler() const override
+            {
+                if (m_bot.GetRole() != ROLE_RANGE_DPS)
+                    return nullptr;
+                auto const& s = m_bot.m_spells.priest;
+                return (s.pShadowform && s.pMindFlay) ? s.pMindFlay : s.pSmite;
+            }
+
+            // Holy Nova around the priest (user 2026-11-14: the rotation's "three on me" Holy Nova
+            // is gone, the area phase decides); a damage priest only (WorldModelBuilder fills area
+            // facts for damage roles; a healer does not cast it).
+            std::vector<AreaDamageSpell> AreaDamage() const override
+            {
+                if (m_bot.GetRole() != ROLE_RANGE_DPS)
+                    return {};
+                return { { m_bot.m_spells.priest.pHolyNova, false, 0.0f } };
+            }
+
             // Desperate Prayer: no mana cost, 10 min cooldown (spell_template, 1.12).
             SpellEntry const* FreeSelfHeal() const override
             {
