@@ -52,8 +52,9 @@
  * the party (a slope is fine; the rings before compared heights with the victim's), under an
  * idle creature, on a patrol's way before the fight ends, and cells the bot cannot walk to.
  * Kept: outside areas dangerous to ranged (HazardZones). Shortest grid walk first. Live checks
- * on at most MAX_GEOMETRY_CHECKS cells per tick: this bot's own idle scan, line of sight to the
- * victim, SafeRoute::PathIsSafe. Nothing found, or no field: the bot stays (no chase into a pack).
+ * per pass: this bot's own idle scan and line of sight to the victim on at most
+ * MAX_SIGHT_CHECKS cells, SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of those that
+ * passed (2026-11-14: one budget for both kept checking the same cells behind a wall). Nothing found, or no field: the bot stays (no chase into a pack).
  * Cost = SpotCost::Walk(bot, walk seconds), walk = the grid walk at the bot's run speed.
  * holdMs = walk seconds x 1000 + HOLD_EXTRA_MS.
  * Hazard zones stay an exclusion here (PositioningBehavior owns leaving them); they become a
@@ -82,7 +83,8 @@ namespace Commander
         // A valid spot is left only for a cell that saves more than this many seconds of the
         // bot's action (doc 2026-11-11-spot-scoring.md section 5.3; noise, the walk is in the loss).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // LOS + pathfinding each
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // pathfinding, cells that passed the sight check
+        static constexpr uint32 MAX_SIGHT_CHECKS = 48;      // idle scan + LOS (cheap) per pass
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;

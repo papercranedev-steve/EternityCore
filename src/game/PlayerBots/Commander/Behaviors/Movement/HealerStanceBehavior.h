@@ -77,9 +77,10 @@
  *            for every enemy not hitting the healer TURN_CHANCE x (HitLoss + LostAction) over
  *            the seconds an enemy that turns to the healer gets before the tank takes it back.
  * Before: yards with made-up weights (-1 per yd walk, +4 per member in range, tanks x3,
- * +0.5 per yd of enemy gap up to 20). Live checks on at
- * most MAX_GEOMETRY_CHECKS cells per tick: this healer's own idle scan, line of sight to the
- * anchor, SafeRoute::PathIsSafe. (The rings started straight behind the anchor; that only
+ * +0.5 per yd of enemy gap up to 20). Live checks per
+ * pass: this healer's own idle scan and line of sight to the anchor on at most
+ * MAX_SIGHT_CHECKS cells, SafeRoute::PathIsSafe on at most MAX_GEOMETRY_CHECKS of those that
+ * passed (2026-11-14). (The rings started straight behind the anchor; that only
  * broke ties of the order and is gone.)
  * Nothing found and the anchor out of reach, or the healer in an idle creature's reach: walk
  * to the anchor itself if it stands outside every idle reach and that path is safe.
@@ -121,7 +122,8 @@ namespace Commander
         // A valid spot is left only for a cell that saves more than this many seconds of the
         // healer's action (doc 2026-11-11-spot-scoring.md section 5.3).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // LOS + pathfinding each
+        static constexpr uint32 MAX_GEOMETRY_CHECKS = 5;    // pathfinding, cells that passed the sight check
+        static constexpr uint32 MAX_SIGHT_CHECKS = 48;      // idle scan + LOS (cheap) per pass
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
 

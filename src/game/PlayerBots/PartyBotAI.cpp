@@ -700,6 +700,18 @@ bool PartyBotAI::StartResting()
     return IsResting();
 }
 
+void PartyBotAI::EndRestWhenFull()
+{
+    if (me->HasAura(PB_SPELL_DRINK) &&
+        (me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA)))
+        me->RemoveAurasDueToSpell(PB_SPELL_DRINK);
+    if (me->HasAura(PB_SPELL_FOOD) && me->GetHealth() >= me->GetMaxHealth() &&
+        !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE) &&
+        !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE_PERCENT) &&
+        !me->HasAuraType(SPELL_AURA_PERIODIC_LEECH))
+        me->RemoveAurasDueToSpell(PB_SPELL_FOOD);
+}
+
 bool PartyBotAI::ShouldAutoRevive() const
 {
     if (me->GetDeathState() == DEAD)
@@ -1421,7 +1433,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     // Eating and drinking are the Commander's (RestBehavior): the hook runs out of combat while
     // something is missing, and a resting bot stands up when the Commander has something better
-    // (the arbiter before any other action, the heal order step), or here for a resurrection.
+    // (the arbiter before any other action, the heal order step), here for a resurrection, or
+    // once full (EndRestWhenFull).
+    EndRestWhenFull();
     bool const needsRest = !me->IsInCombat() && NeedsRest();
     bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst;
     if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting)

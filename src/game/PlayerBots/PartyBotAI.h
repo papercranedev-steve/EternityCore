@@ -244,6 +244,11 @@ public:
     // leader: full at once (it is about to be teleported), false. The Commander decides when a
     // resting bot stands up (the arbiter before any other action, the heal order step).
     bool StartResting();
+    // The drink off at full mana, the food off at full health unless a periodic damage aura
+    // still ticks (poison, bleed: they do not stand it up, the food keeps up with them).
+    // Called each tick before the stand-up check, so a full bot stands at once instead of
+    // sitting out the aura (stockade-20261114-221943: full at 10 s, sat to 34 s).
+    void EndRestWhenFull();
     // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
     // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
     // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's

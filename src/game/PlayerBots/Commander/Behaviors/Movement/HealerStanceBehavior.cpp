@@ -161,15 +161,10 @@ namespace Commander
             return spots;
         }
 
-        // Live checks: this healer's own idle scan, line of sight to the anchor, safe path.
-        // `pathIdle`: `idle`, or its LeavingFrom(here) copy when the healer stands in reach now.
-        bool GeometryOk(Context const& ctx, SafeRoute::IdleCreatures const& idle,
-                        SafeRoute::IdleCreatures const& pathIdle, Spot const& s)
+        // Cheap live checks: this healer's own idle scan, line of sight to the anchor.
+        bool SightOk(Context const& ctx, SafeRoute::IdleCreatures const& idle, Spot const& s)
         {
-            Position3 const& a = ctx.anchor;
-            if (idle.Near(s.pos) || !Los(ctx.map, s.pos, a))
-                return false;
-            return SafeRoute::PathIsSafe(ctx.me, pathIdle, s.pos, HS::MAX_PATH_DETOUR);
+            return !idle.Near(s.pos) && Los(ctx.map, s.pos, ctx.anchor);
         }
 
         // Standing where an idle creature would attack, or in the enemies' melee (DANGER_ENEMY_GAP):
@@ -367,7 +362,7 @@ namespace Commander
         // and nothing on the preferred line (stockade-20261114-203133: the tank fought in a cell,
         // the opposite cell's margin closed its door, the priest never healed and the tank died).
         // A spot taken on the hard line is in the margin (`unsafe` next tick): the walk out goes
-        // only to a cell that still sees the tank (GeometryOk) or to the tank, not back out.
+        // only to a cell that still sees the tank (SightOk) or to the tank, not back out.
         bool const mayTighten = !ctx.prepare && !anchorOk;
         uint32 checked = 0;
         size_t found = 0;
@@ -399,23 +394,30 @@ namespace Commander
             }
             found += spots.size();
 
+            // Two budgets (stockade-20261114-221943, the ranged stance: the nearest cells all behind
+            // a wall, the same ones every tick): sight on up to MAX_SIGHT_CHECKS cells, the path
+            // (`pathIdle`: `own`, or its LeavingFrom(here) copy) only on cells that passed it.
             uint32 checks = 0;
+            uint32 sightChecks = 0;
             for (Spot const& s : spots)
             {
                 // Sorted: no cell further down saves more than this one.
                 if (hereValid && stayHere - s.loss <= margin)
                     return;
-                if (checks >= MAX_GEOMETRY_CHECKS)
+                if (checks >= MAX_GEOMETRY_CHECKS || sightChecks >= MAX_SIGHT_CHECKS)
                     break;
+                ++sightChecks;
+                if (!SightOk(ctx, own, s))
+                    continue;
                 ++checks;
-                if (!GeometryOk(ctx, own, pathIdle, s))
+                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
                     continue;
                 propose(s.pos, stayHere - s.stay);
                 if (tight)
                     out.back().reason = "tank out of reach, spot on the hard line";
                 return;
             }
-            checked += checks;
+            checked += sightChecks;
 
             // No spot: walk to the anchor itself while it is out of reach (what following did) or
             // the healer stands in an idle creature's reach, unless the anchor stands in one too or

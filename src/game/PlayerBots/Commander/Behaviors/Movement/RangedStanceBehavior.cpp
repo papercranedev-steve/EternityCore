@@ -80,15 +80,10 @@ namespace Commander
             return spots;
         }
 
-        // Live checks: not in this bot's own idle scan's reach, line of sight to the victim,
-        // safe path. `pathIdle`: `idle`, or its LeavingFrom(here) copy when the bot stands in
-        // reach now.
-        bool GeometryOk(Player* me, SafeRoute::IdleCreatures const& idle, SafeRoute::IdleCreatures const& pathIdle,
-                        Position3 const& victim, Spot const& s)
+        // Cheap live checks: not in this bot's own idle scan's reach, line of sight to the victim.
+        bool SightOk(Map* map, SafeRoute::IdleCreatures const& idle, Position3 const& victim, Spot const& s)
         {
-            if (idle.Near(s.pos) || !Los(me->GetMap(), s.pos, victim))
-                return false;
-            return SafeRoute::PathIsSafe(me, pathIdle, s.pos, RS::MAX_PATH_DETOUR);
+            return !idle.Near(s.pos) && Los(map, s.pos, victim);
         }
     }
 
@@ -230,16 +225,23 @@ namespace Commander
             SafeRoute::IdleCreatures const& own = tight ? *idleTight : idle;
             // The walk out of an idle creature's reach starts inside it.
             SafeRoute::IdleCreatures const pathIdle = unsafe ? own.LeavingFrom(here) : own;
+            // Two budgets (stockade-20261114-221943: the mage in the corridor, its 6 nearest cells
+            // all behind the wall, the same 6 every tick, the doorway never checked): sight on
+            // up to MAX_SIGHT_CHECKS cells, the path only on cells that passed it.
             uint32 checks = 0;
+            uint32 sightChecks = 0;
             for (Spot const& s : spots)
             {
                 // Sorted: no cell further down saves more than this one.
                 if (hereValid && exposureHere - s.loss <= margin)
                     return;
-                if (checks >= MAX_GEOMETRY_CHECKS)
+                if (checks >= MAX_GEOMETRY_CHECKS || sightChecks >= MAX_SIGHT_CHECKS)
                     break;
+                ++sightChecks;
+                if (!SightOk(me->GetMap(), own, at, s))
+                    continue;
                 ++checks;
-                if (!GeometryOk(me, own, pathIdle, at, s))
+                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR))
                     continue;
 
                 float const walkSec = s.walkSec;
@@ -281,7 +283,7 @@ namespace Commander
                 out.push_back(p);
                 return;
             }
-            checked += checks;
+            checked += sightChecks;
         }
         // Out of the victim's range or sight and no spot: the only record of why it stands.
         if (!prepare && !inReach && Trace::On())
