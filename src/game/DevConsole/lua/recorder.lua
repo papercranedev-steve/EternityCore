@@ -54,6 +54,8 @@ rec.dir = rec.dir or "../logs/combat"
 -- target switches between two snaps
 rec.interval = rec.interval or 200
 rec.endAfterMs = rec.endAfterMs or 2000
+-- The leader out of the world this long (logged out, not a teleport): the watcher stops.
+rec.LEADER_GONE_MS = rec.LEADER_GONE_MS or 60000
 rec.offersInterval = rec.offersInterval or 1000
 -- Calculation trace (Commander/Trace/Trace.h, u:trace): kept here for rec.traceKeepMs, written
 -- for the trees that ended within rec.traceBeforeMs before .. rec.traceAfterMs after an anomaly
@@ -481,11 +483,18 @@ end
 local function tick(w)
     local leader = unit(w.leader)
     if not leader then
+        -- A teleport or a loading screen takes the leader out of the world for a moment
+        -- (2026-11-15: the watcher stopped at 00:55:27 and the next fights were not recorded).
+        -- Wait up to LEADER_GONE_MS before giving up.
+        w.goneSince = w.goneSince or now()
+        if now() - w.goneSince < rec.LEADER_GONE_MS then return end
         if w.file then w.file:close() w.file = nil end
         combatlog.enable(false)
         rec.watcher = nil
+        dev.pushError("recorder", "leader gone for " .. rec.LEADER_GONE_MS .. " ms, watcher stopped")
         return false
     end
+    w.goneSince = nil
 
     -- (also before the fight: keeps the trace armed for the pull planning)
     pollTrace(w, leader)
