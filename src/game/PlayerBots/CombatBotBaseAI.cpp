@@ -2106,9 +2106,6 @@ Unit* CombatBotBaseAI::SelectHealTarget(float selfHealPercent, float groupHealPe
     if (me->GetHealthPercent() < selfHealPercent)
         return me;
 
-    if (IsInDuel())
-        return nullptr;
-
     Unit* pTarget = nullptr;
     float healthPercent = 100.0f;
 
@@ -2151,33 +2148,30 @@ bool CombatBotBaseAI::FindAndPreHealTarget()
     Unit* pTarget = me;
     int32 maxIncomingDamage = GetIncomingdamage(me);
 
-    if (!IsInDuel())
+    if (Group* pGroup = me->GetGroup())
     {
-        if (Group* pGroup = me->GetGroup())
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
-            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            if (Unit* pMember = itr->getSource())
             {
-                if (Unit* pMember = itr->getSource())
+                // We already checked self.
+                if (pMember == me)
+                    continue;
+
+                // Avoid all healers picking same target.
+                if (pTarget && !IsTankClass(pMember->GetClass()) && AreOthersOnSameTarget(pMember->GetObjectGuid(), false, true))
+                    continue;
+
+                int32 incomingDamage = GetIncomingdamage(pMember);
+                if (!incomingDamage)
+                    continue;
+
+                // Check if we should heal party member.
+                if (incomingDamage > maxIncomingDamage &&
+                    IsValidHealTarget(pMember))
                 {
-                    // We already checked self.
-                    if (pMember == me)
-                        continue;
-
-                    // Avoid all healers picking same target.
-                    if (pTarget && !IsTankClass(pMember->GetClass()) && AreOthersOnSameTarget(pMember->GetObjectGuid(), false, true))
-                        continue;
-
-                    int32 incomingDamage = GetIncomingdamage(pMember);
-                    if (!incomingDamage)
-                        continue;
-
-                    // Check if we should heal party member.
-                    if (incomingDamage > maxIncomingDamage &&
-                        IsValidHealTarget(pMember))
-                    {
-                        maxIncomingDamage = incomingDamage;
-                        pTarget = pMember;
-                    }
+                    maxIncomingDamage = incomingDamage;
+                    pTarget = pMember;
                 }
             }
         }
@@ -3537,86 +3531,9 @@ bool CombatBotBaseAI::IsWearingShield(Player* pPlayer) const
     return false;
 }
 
-bool CombatBotBaseAI::IsInDuel() const
-{
-    return me->m_duel && me->m_duel->startTime != 0;
-}
-
 CombatBotRoles CombatBotBaseAI::GetRole() const
 {
-    if (m_role == ROLE_HEALER && IsInDuel())
-    {
-        if (IsMeleeDamageClass(me->GetClass()))
-            return ROLE_MELEE_DPS;
-        else
-            return ROLE_RANGE_DPS;
-    }
-
     return m_role;
-}
-
-void CombatBotBaseAI::SendBattlefieldPortPacket()
-{
-    for (uint32 i = BATTLEGROUND_QUEUE_AV; i <= BATTLEGROUND_QUEUE_AB; i++)
-    {
-        if (me->IsInvitedForBattleGroundQueueType(static_cast<BattleGroundQueueTypeId>(i)))
-        {
-            WorldPackets::Battleground::BattleFieldPort packet;
-#if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
-            packet.mapId = GetBattleGrounMapIdByTypeId(static_cast<BattleGroundTypeId>(i));
-#endif
-            packet.action = 1;
-            me->GetSession()->HandleBattleFieldPortOpcode(packet);
-            break;
-        }
-    }
-}
-
-void CombatBotBaseAI::SendBattlemasterJoinPacket(uint8 battlegroundId)
-{
-    uint32 instanceId = 0; // first available
-    uint32 mapId;
-    switch (battlegroundId)
-    {
-        case BATTLEGROUND_QUEUE_AV:
-            mapId = MAP_ALTERAC_VALLEY;
-            break;
-        case BATTLEGROUND_QUEUE_WS:
-            mapId = MAP_WARSONG_GULCH;
-            break;
-        case BATTLEGROUND_QUEUE_AB:
-            mapId = MAP_ARATHI_BASIN;
-            break;
-        default:
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "BattleBot: Invalid BG queue type!");
-            botEntry->requestRemoval = true;
-            return;
-    }
-
-    me->GetSession()->RequestBgJoinQueue(me->GetObjectGuid(), instanceId, mapId, false);
-}
-
-void CombatBotBaseAI::SendAreaTriggerPacket(uint32 areaTriggerId)
-{
-    WorldPackets::Misc::AreaTrigger packet;
-    packet.triggerId = areaTriggerId;
-    me->GetSession()->HandleAreaTriggerOpcode(packet);
-}
-
-void CombatBotBaseAI::ActivateNearbyAreaTrigger()
-{
-    for (auto const& itr : sObjectMgr.GetAreaTriggersMap())
-    {
-        AreaTriggerEntry const* pTrigger = &itr.second;
-        if (!pTrigger)
-            continue;
-
-        if (!IsPointInAreaTriggerZone(pTrigger, me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 5.0f))
-            continue;
-
-        SendAreaTriggerPacket(pTrigger->id);
-        break;
-    }
 }
 
 void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
@@ -3694,26 +3611,6 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             data->accept = true;
             me->GetSession()->QueuePacket(std::move(data));
             break;
-        }
-        case SMSG_BATTLEFIELD_STATUS:
-        {
-            if (!me)
-                return;
-
-            if (me->IsBeingTeleported() || me->InBattleGround())
-                m_receivedBgInvite = false;
-            else
-            {
-                for (uint32 i = BATTLEGROUND_QUEUE_AV; i <= BATTLEGROUND_QUEUE_AB; i++)
-                {
-                    if (me->IsInvitedForBattleGroundQueueType(BattleGroundQueueTypeId(i)))
-                    {
-                        m_receivedBgInvite = true;
-                        break;
-                    }
-                }
-            }
-            return;
         }
         case SMSG_LOOT_START_ROLL:
         {

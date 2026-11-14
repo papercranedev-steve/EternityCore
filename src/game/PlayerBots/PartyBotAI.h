@@ -149,33 +149,16 @@ public:
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
     bool ShouldAutoRevive() const;
-    bool EnterCombatDruidForm();
-    bool ShouldEnterStealth() const;
-    bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
 
-    bool CheckForDispelTargets();
+    // Out of combat: the class kit's friendly dispels (ClassKit::Dispels) on the party, in
+    // caster form only. In combat the Commander dispels (DispelBehavior).
+    bool DispelOutOfCombat();
+    // Both run the class rotation (Rotations/ClassRotation.h); out of combat after
+    // resurrection and dispels, in combat followed by trinkets.
     void UpdateInCombatAI() final;
     void UpdateOutOfCombatAI() final;
-    void UpdateInCombatAI_Paladin() final;
-    void UpdateOutOfCombatAI_Paladin() final;
-    void UpdateInCombatAI_Shaman() final;
-    void UpdateOutOfCombatAI_Shaman() final;
-    void UpdateInCombatAI_Hunter() final;
-    void UpdateOutOfCombatAI_Hunter() final;
-    void UpdateInCombatAI_Mage() final;
-    void UpdateOutOfCombatAI_Mage() final;
-    void UpdateInCombatAI_Priest() final;
-    void UpdateOutOfCombatAI_Priest() final;
-    void UpdateInCombatAI_Warlock() final;
-    void UpdateOutOfCombatAI_Warlock() final;
-    void UpdateInCombatAI_Warrior() final;
-    void UpdateOutOfCombatAI_Warrior() final;
     // The cast waiting for a stance swap (DoCastWithStance). True: it was cast or is still waiting.
     bool ContinueStanceSwap();
-    void UpdateInCombatAI_Rogue() final;
-    void UpdateOutOfCombatAI_Rogue() final;
-    void UpdateInCombatAI_Druid() final;
-    void UpdateOutOfCombatAI_Druid() final;
 
     // Commander (PlayerBots/Commander/). Directives are created on first use.
     Commander::BotDirectives& Directives();
@@ -183,9 +166,8 @@ public:
     // What this bot's class can do (Commander/Classes/ClassKit.h). Created when the bot enters
     // the world (spells known); before that, on first use. Map thread of the bot.
     Commander::ClassKit const& Kit() const;
-    // The class rotation moved out of this file (Rotations/ClassRotation.h); nullptr while the
-    // class (or this role of it) still runs its UpdateInCombatAI_<Class> here. Created with the
-    // kit, made again when the role changes.
+    // The class rotation (Rotations/ClassRotation.h). Created with the kit, made again when
+    // the role changes.
     ClassRotation* Rotation();
     // Commander (PartyCommander::WakeBots): run the next bot update in the next frame instead
     // of after the rest of the bot interval. A longer wait set by a player command (pause,

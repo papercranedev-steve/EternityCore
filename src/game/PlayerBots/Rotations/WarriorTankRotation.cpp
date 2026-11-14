@@ -1,7 +1,6 @@
 /*
  * Warrior tank rotation (user, 2026-11-02): the class mechanics only, no decisions.
- * Doc: .kiro/docs/2026-11-01-warrior-tank.md. Damage warriors still run
- * PartyBotAI::UpdateInCombatAI_Warrior.
+ * Doc: .kiro/docs/2026-11-01-warrior-tank.md. Damage warriors: Rotations/WarriorRotation.cpp.
  *
  * Out of combat: Defensive Stance (the tank's home stance), Battle Shout (Bloodrage for the rage
  * when it has none).
@@ -101,12 +100,6 @@ namespace
         }
 
     private:
-        bool Cast(Unit* pTarget, SpellEntry const* pSpell)
-        {
-            return pSpell && m_bot.CanTryToCastSpell(pTarget, pSpell) &&
-                   m_bot.DoCastSpell(pTarget, pSpell) == SPELL_CAST_OK;
-        }
-
         // True = the stance spell was cast: it goes off on the next spell update, another cast
         // in this tick would replace it. A stance on cooldown does not stop the rotation.
         bool KeepDefensiveStance()

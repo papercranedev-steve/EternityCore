@@ -1,5 +1,5 @@
 /*
- * PartyBot class rotations ("cerebellum"): how a class casts, one file per class.
+ * PartyBot class rotations ("cerebellum", Routine layer): how a class casts, one file per class.
  *
  * The rotation is the bot's default behaviour each tick: buffs, ability order, class
  * mechanics. Whether and which (taunt, interrupt, heal target, area spells, mana restore) is
@@ -7,11 +7,9 @@
  * Behaviors/Arbiter.h); "which spell does job X" for those modules is the ClassKit
  * (Commander/Classes/ClassKit.h). Keep decisions out of here.
  *
- * Classes move out of PartyBotAI.cpp one at a time, when their rotation needs changes
- * (user, 2026-11-01). A class may have one rotation per role when the roles do different jobs
- * (warrior: WarriorTankRotation for the tank role, the damage roles still in PartyBotAI.cpp).
- * ClassRotations::Create returns nullptr for a class / role still in PartyBotAI.cpp;
- * PartyBotAI's UpdateInCombatAI_<Class> delegates when there is a rotation.
+ * Every class has its rotation here since 2026-11-14 (before: moved out of PartyBotAI.cpp one
+ * at a time). A class may have one rotation per role when the roles do different jobs
+ * (warrior: WarriorTankRotation for the tank role, WarriorRotation for the damage roles).
  *
  * Injection: PartyBotAI creates its rotation with its class kit (UpdateAI init) and holds it
  * (PartyBotAI::Rotation(), made again when the role changes). The rotation keeps a reference to
@@ -26,6 +24,8 @@
 #include <memory>
 
 class PartyBotAI;
+class SpellEntry;
+class Unit;
 
 class ClassRotation
 {
@@ -37,21 +37,54 @@ public:
     virtual void UpdateInCombat() = 0;
     // PartyBotAI::UpdateOutOfCombatAI, after resurrection, marks and dispels.
     virtual void UpdateOutOfCombat() = 0;
+    // While an auto-repeat spell runs (Auto Shot, wand) with a victim; the bot update does not
+    // reach UpdateInCombat then. Default: keep shooting (a wand user's rotation waits for it).
+    virtual void UpdateWhileAutoRepeating() {}
 
 protected:
+    // CanTryToCastSpell + DoCastSpell; true = cast.
+    bool Cast(Unit* pTarget, SpellEntry const* pSpell);
+    // Cast, then marks the bot as buffing (UpdateAI waits for the buff before moving on).
+    bool Buff(Unit* pTarget, SpellEntry const* pSpell);
+    // Ends m_isBuffing once the global cooldown of the buff that started it is over.
+    void EndBuffing(SpellEntry const* pBuffSpell);
+    // Rogue Stealth, cat Prowl: in when there is a victim, the bot is almost dead, or the leader
+    // is dead / feigning / stealthed; cancelled otherwise. Stands down while the Commander keeps
+    // the Sap controller of a pull stealthed (PartyBotAI::IsStealthControlled). True = cast.
+    bool KeepStealth(SpellEntry const* pStealthSpell);
+    // Wand when out of mana (below `manaPct`), standing, not already shooting.
+    void ShootWandBelowMana(Unit* pVictim, float manaPct);
+    // A caster standing idle more than 30 yd from its victim walks closer (BeginChasing honours
+    // the Commander's movement hold and stance takeover).
+    void ChaseWhenOutOfRange(Unit* pVictim);
+    // An idle pet (hunter, warlock) attacks `pVictim`.
+    void SendPetAt(Unit* pVictim);
+
     PartyBotAI& m_bot;
+
+private:
+    bool ShouldBeStealthed() const;
 };
 
 namespace ClassRotations
 {
-    // Spells every rotation may use (same ids as PartyBotAI.cpp PartyBotSpells).
+    // Spells every rotation may use.
     uint32 const SPELL_SHOOT_WAND = 5019;
+    uint32 const SPELL_AUTO_SHOT = 75;
 
-    // The rotation of the bot's class and role, nullptr while it is still in PartyBotAI.cpp.
+    // The rotation of the bot's class and role; nullptr for a class without one.
     std::unique_ptr<ClassRotation> Create(PartyBotAI& bot);
 
     // One per file (Rotations/<Class>[<Role>]Rotation.cpp).
+    std::unique_ptr<ClassRotation> MakeDruid(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeHunter(PartyBotAI& bot);
     std::unique_ptr<ClassRotation> MakeMage(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakePaladin(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakePriest(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeRogue(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeShaman(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarlock(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarrior(PartyBotAI& bot);
     std::unique_ptr<ClassRotation> MakeWarriorTank(PartyBotAI& bot);
 }
 

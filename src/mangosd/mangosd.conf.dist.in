@@ -3309,17 +3309,6 @@ AHBuyer.MaxMarkup = 50
 #        24 factors for 0:00 - 23:00 (server machine local time) applied to MaxBots and MaxMoving.
 #        Default: "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
 #
-#    BattleBot.AutoEquip
-#        What gear will new battlebots spawn with.
-#        Default: 1 (random items)
-#                 0 (normal starting items)
-#                 2 (premade gear template)
-#
-#    BattleBot.AutoJoin
-#        Adds enough battlebots for battleground to start when a player queues.
-#        Default: 0 - off
-#                 1 - on
-#
 ###################################################################################################################
 
 RandomBot.Enable = 0
@@ -3354,9 +3343,6 @@ PopBot.City.Showcase = 4
 PopBot.City.Crafters = 6
 PopBot.City.EmptyGraceSec = 120
 PopBot.HourCurve = "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
-
-BattleBot.AutoEquip = 1
-BattleBot.AutoJoin = 0
 
 ###################################################################################################################
 # MAIL FLOODING MITIGATION

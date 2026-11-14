@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 3: casts the dispels DispelAssigner gave this bot (2026-11-03).
  *
- * In combat only this module dispels (the rotation's PartyBotAI::CheckForDispelTargets runs
+ * In combat only this module dispels (the rotation's PartyBotAI::DispelOutOfCombat runs
  * out of combat only); who removes what is decided by the brain
  * (Coordination/Duties/DispelAssigner.h, worth: Perception/Values/DispelValue.h).
  * Live checks before proposing: the member is still there with the debuff, in line of sight

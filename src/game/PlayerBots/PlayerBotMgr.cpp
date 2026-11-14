@@ -11,9 +11,6 @@
 #include "Group.h"
 #include "PlayerBotAI.h"
 #include "PartyBotAI.h"
-#include "BattleBotAI.h"
-#include "BattleBotWaypoints.h"
-#include "BattleGroundMgr.h"
 #include "MapManager.h"
 #include "Language.h"
 #include "Utilities/Random.h"
@@ -44,13 +41,11 @@ PlayerBotMgr::PlayerBotMgr()
     m_confUpdateDiff            = 10000;
     m_confEnableRandomBots      = false;
     m_confDebug                 = false;
-    m_confBattleBotAutoJoin     = false;
 
     // Time
     m_elapsedTime = 0;
     m_lastBotsRefresh = 0;
     m_lastUpdate = 0;
-    m_lastBattleBotQueueUpdate = 0;
 }
 
 PlayerBotMgr::~PlayerBotMgr()
@@ -67,7 +62,6 @@ void PlayerBotMgr::LoadConfig()
     m_confAllowSaving = sConfig.GetBoolDefault("PlayerBot.AllowSaving", false);
     m_confDebug = sConfig.GetBoolDefault("PlayerBot.Debug", false);
     m_confUpdateDiff = sConfig.GetIntDefault("PlayerBot.UpdateMs", 10000);
-    m_confBattleBotAutoJoin = sConfig.GetBoolDefault("BattleBot.AutoJoin", false);
 
     sPopulationMgr.LoadConfig();    // PlayerBots/Population/
 
@@ -333,67 +327,6 @@ void PlayerBotMgr::Update(uint32 diff)
         ++iter;
     }
 
-    if (m_confBattleBotAutoJoin && (m_lastBattleBotQueueUpdate <= (sWorld.GetGameTime() - 10)))
-    {
-        m_lastBattleBotQueueUpdate = sWorld.GetGameTime();
-        for (uint32 queueType = BATTLEGROUND_QUEUE_AV; queueType < MAX_BATTLEGROUND_QUEUE_TYPES; ++queueType)
-        {
-            bool hasPlayerInQueue[MAX_BATTLEGROUND_BRACKETS] = {};
-            uint32 queuedAllianceCount[MAX_BATTLEGROUND_BRACKETS] = {};
-            uint32 queuedHordeCount[MAX_BATTLEGROUND_BRACKETS] = {};
-            BattleGroundQueue const& bgQueue = sBattleGroundMgr.m_battleGroundQueues[queueType];
-            for (auto const& itr : bgQueue.m_queuedPlayers)
-            {
-                if (itr.second.groupInfo->isInvitedToBgInstanceGuid)
-                    continue;
-
-                if (Player* pPlayer = sObjectAccessor.FindPlayer(itr.first))
-                {
-                    BattleGroundTypeId bgTypeId = itr.second.groupInfo->bgTypeId;
-                    BattleGroundBracketId bgBracketId = pPlayer->GetBattleGroundBracketIdFromLevel(bgTypeId);
-                    if (bgBracketId == BG_BRACKET_ID_NONE)
-                        continue;
-
-                    if (itr.second.groupInfo->groupTeam == ALLIANCE)
-                        ++queuedAllianceCount[bgBracketId];
-                    else
-                        ++queuedHordeCount[bgBracketId];
-
-                    if (!pPlayer->IsBot())
-                        hasPlayerInQueue[bgBracketId] = true;
-                }
-            }
-
-            for (uint32 bracketId = BG_BRACKET_ID_FIRST; bracketId < MAX_BATTLEGROUND_BRACKETS; ++bracketId)
-            {
-                if (!hasPlayerInQueue[bracketId])
-                    continue;
-
-                if (!queuedAllianceCount[bracketId] && !queuedHordeCount[bracketId])
-                    continue;
-
-                BattleGroundTypeId bgTypeId = BattleGroundMgr::BgTemplateId(BattleGroundQueueTypeId(queueType));
-                BattleGround* bg = sBattleGroundMgr.GetBattleGroundTemplate(bgTypeId);
-                ASSERT(bg);
-
-                uint32 const minLevel = bg->GetMinLevel() + 10 * bracketId;
-                ASSERT(minLevel <= PLAYER_MAX_LEVEL);
-                uint32 const maxLevel = std::min<uint32>(minLevel + 9, PLAYER_MAX_LEVEL);
-
-                for (uint32 i = queuedAllianceCount[bracketId]; i < bg->GetMinPlayersPerTeam(); ++i)
-                {
-                    uint32 const botLevel = urand(minLevel, maxLevel);
-                    AddBattleBot(BattleGroundQueueTypeId(queueType), ALLIANCE, botLevel, true);
-                }
-                for (uint32 i = queuedHordeCount[bracketId]; i < bg->GetMinPlayersPerTeam(); ++i)
-                {
-                    uint32 const botLevel = urand(minLevel, maxLevel);
-                    AddBattleBot(BattleGroundQueueTypeId(queueType), HORDE, botLevel, true);
-                }
-            }
-        }
-    }
-
     if (m_confEnableRandomBots)
     {
         uint32 updatesCount = (m_elapsedTime - m_lastBotsRefresh) / m_confRandomBotsRefresh;
@@ -612,62 +545,6 @@ uint8 SelectRandomRaceForClass(uint8 playerClass, Team playerTeam)
         return 0;
 
     return SelectRandomContainerElement(validRaces);
-}
-
-void PlayerBotMgr::AddBattleBot(BattleGroundQueueTypeId queueType, Team botTeam, uint32 botLevel, bool temporary)
-{
-    std::vector<uint32> availableClasses = { CLASS_WARRIOR, CLASS_HUNTER, CLASS_ROGUE, CLASS_MAGE, CLASS_WARLOCK, CLASS_PRIEST, CLASS_DRUID };
-    if (botTeam == HORDE)
-        availableClasses.push_back(CLASS_SHAMAN);
-    else
-        availableClasses.push_back(CLASS_PALADIN);
-
-    uint8 botClass = SelectRandomContainerElement(availableClasses);
-    uint8 botRace = SelectRandomRaceForClass(botClass, botTeam);
-    if (!botRace)
-        return;
-
-    // Spawn bot on GM Island
-    uint32 const instanceId = sMapMgr.GetContinentInstanceId(1, 16224.356f, 16284.763f);
-    BattleBotAI* ai = new BattleBotAI(botRace, botClass, botLevel, 1, instanceId, 16224.356f, 16284.763f, 13.175f, 4.56f, queueType, temporary);
-    AddBot(ai);
-
-    if (botTeam == ALLIANCE)
-    {
-        if (temporary)
-        {
-            sWorld.SendWorldTextToBGAndQueue(LANG_ALLIANCE_BATTLEBOT_TEMP_ADDED, botLevel, queueType, botLevel, queueType);
-            sLog.Out(LOG_BG, LOG_LVL_BASIC, "[PlayerBotMgr] Adding temporary level %u alliance battlebot to bg queue %u.", botLevel, queueType);
-        }
-        else
-        {
-            sWorld.SendWorldTextToBGAndQueue(LANG_ALLIANCE_BATTLEBOT_ADDED, botLevel, queueType, botLevel, queueType);
-            sLog.Out(LOG_BG, LOG_LVL_BASIC, "[PlayerBotMgr] Adding level %u alliance battlebot to bg queue %u.", botLevel, queueType);
-        }
-    }
-    else
-    {
-        if (temporary)
-        {
-            sWorld.SendWorldTextToBGAndQueue(LANG_HORDE_BATTLEBOT_TEMP_ADDED, botLevel, queueType, botLevel, queueType);
-            sLog.Out(LOG_BG, LOG_LVL_BASIC, "[PlayerBotMgr] Adding temporary level %u horde battlebot to bg queue %u.", botLevel, queueType);
-        }
-        else
-        {
-            sWorld.SendWorldTextToBGAndQueue(LANG_HORDE_BATTLEBOT_ADDED, botLevel, queueType, botLevel, queueType);
-            sLog.Out(LOG_BG, LOG_LVL_BASIC, "[PlayerBotMgr] Adding level %u horde battlebot to bg queue %u.", botLevel, queueType);
-        }
-    }
-}
-
-void PlayerBotMgr::DeleteBattleBots()
-{
-    for (auto const& itr : m_bots)
-    {
-        if (dynamic_cast<BattleBotAI*>(itr.second->ai.get()))
-            itr.second->requestRemoval = true;
-    }
-    m_confBattleBotAutoJoin = false;
 }
 
 bool PlayerBotMgr::ForceAccountConnection(WorldSession* sess)
@@ -2664,183 +2541,6 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
     SendSysMessage("Target is not a party bot.");
     SetSentErrorMessage(true);
     return false;
-}
-
-bool ChatHandler::HandleBattleBotAddAlteracCommand(char* args)
-{
-    return HandleBattleBotAddCommand(args, BATTLEGROUND_QUEUE_AV);
-}
-
-bool ChatHandler::HandleBattleBotAddArathiCommand(char* args)
-{
-    return HandleBattleBotAddCommand(args, BATTLEGROUND_QUEUE_AB);
-}
-
-bool ChatHandler::HandleBattleBotAddWarsongCommand(char* args)
-{
-    return HandleBattleBotAddCommand(args, BATTLEGROUND_QUEUE_WS);
-}
-
-bool ChatHandler::HandleBattleBotAddCommand(char* args, uint8 bg)
-{
-    if (!*args)
-    {
-        SendSysMessage("Incorrect syntax. Expected faction");
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    Team botTeam = HORDE;
-    uint32 botLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
-    bool isTemporary = false;
-    std::string option;
-    if (char* arg1 = ExtractArg(&args))
-    {
-        option = arg1;
-        if (option == "horde")
-            botTeam = HORDE;
-        else if (option == "alliance")
-            botTeam = ALLIANCE;
-        else
-        {
-            SendSysMessage("Incorrect syntax. Expected faction");
-            SetSentErrorMessage(true);
-            return false;
-        }
-
-
-        ExtractUInt32(&args, botLevel);
-
-
-        if (char* tempStr = ExtractArg(&args))
-        {
-            if (strcmp(tempStr, "temp") == 0)
-                isTemporary = true;
-        }
-    }
-
-    sPlayerBotMgr.AddBattleBot(BattleGroundQueueTypeId(bg), botTeam, botLevel, isTemporary);
-    return true;
-}
-
-bool ChatHandler::HandleBattleBotRemoveCommand(char* args)
-{
-    Player* pTarget = GetSelectedPlayer();
-    if (!pTarget)
-    {
-        SendSysMessage(LANG_NO_CHAR_SELECTED);
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    if (pTarget->AI())
-    {
-        if (BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(pTarget->AI()))
-        {
-            pAI->botEntry->requestRemoval = true;
-            return true;
-        }
-    }
-
-    SendSysMessage("Target is not a battle bot.");
-    SetSentErrorMessage(true);
-    return false;
-}
-
-bool ChatHandler::HandleBattleBotRemoveAllCommand(char* args)
-{
-    sPlayerBotMgr.DeleteBattleBots();
-    SendSysMessage("Removed all battlebots.");
-    return true;
-}
-
-#define SPELL_RED_GLOW 20370
-
-void ShowBattleBotPathHelper(Map* pMap, BattleBotPath* pPath, uint32 id)
-{
-    for (const auto& point : *pPath)
-    {
-        if (Creature* pWaypoint = pMap->SummonCreature(VISUAL_WAYPOINT, point.x, point.y, point.z, 0.0f, TEMPSUMMON_TIMED_DESPAWN, 120000, true))
-        {
-            // Show path id as level to distinguish individual paths.
-            pWaypoint->SetUInt32Value(UNIT_FIELD_LEVEL, id);
-
-            // Mark points that have script attached.
-            if (point.pFunc)
-                pWaypoint->CastSpell(pWaypoint, SPELL_RED_GLOW, true);
-        }
-    }
-}
-
-bool ChatHandler::HandleBattleBotShowPathCommand(char* args)
-{
-    Player* pTarget = GetSelectedPlayer();
-    if (!pTarget)
-    {
-        SendSysMessage(LANG_NO_CHAR_SELECTED);
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    if (pTarget->AI())
-    {
-        if (BattleBotAI* pAI = dynamic_cast<BattleBotAI*>(pTarget->AI()))
-        {
-            if (pAI->m_currentPath)
-                ShowBattleBotPathHelper(pTarget->GetMap(), pAI->m_currentPath, 1);
-            else
-                SendSysMessage("Target is not following a path.");
-
-            return true;
-        }
-    }
-
-    SendSysMessage("Target is not a battle bot.");
-    SetSentErrorMessage(true);
-    return false;
-}
-
-bool ChatHandler::HandleBattleBotShowAllPathsCommand(char* args)
-{
-    Player* pPlayer = m_session->GetPlayer();
-    BattleGround* pBG = pPlayer->GetBattleGround();
-    if (!pBG)
-    {
-        SendSysMessage("You are not in a battleground.");
-        return false;
-    }
-
-    std::vector<BattleBotPath*> const* pPaths;
-
-    switch (pBG->GetTypeID())
-    {
-        case BATTLEGROUND_AB:
-        {
-            pPaths = &vPaths_AB;
-            break;
-        }
-        case BATTLEGROUND_AV:
-        {
-            pPaths = &vPaths_AV;
-            break;
-        }
-        case BATTLEGROUND_WS:
-        {
-            pPaths = &vPaths_WS;
-            break;
-        }
-        default:
-            return false;
-    }
-
-    uint32 id = 1;
-    for (const auto& path : *pPaths)
-    {
-        ShowBattleBotPathHelper(pPlayer->GetMap(), path, id++);
-    }
-
-    PSendSysMessage("Showing %u paths for battleground.", id);
-    return true;
 }
 
 // ---------------------------------------------------------------------------

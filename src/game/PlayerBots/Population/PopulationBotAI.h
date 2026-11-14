@@ -35,24 +35,6 @@ namespace Population
         // Combat comes with the field behaviour (phase 1c). Not called yet.
         void UpdateInCombatAI() override {}
         void UpdateOutOfCombatAI() override {}
-        void UpdateInCombatAI_Paladin() override {}
-        void UpdateOutOfCombatAI_Paladin() override {}
-        void UpdateInCombatAI_Shaman() override {}
-        void UpdateOutOfCombatAI_Shaman() override {}
-        void UpdateInCombatAI_Hunter() override {}
-        void UpdateOutOfCombatAI_Hunter() override {}
-        void UpdateInCombatAI_Mage() override {}
-        void UpdateOutOfCombatAI_Mage() override {}
-        void UpdateInCombatAI_Priest() override {}
-        void UpdateOutOfCombatAI_Priest() override {}
-        void UpdateInCombatAI_Warlock() override {}
-        void UpdateOutOfCombatAI_Warlock() override {}
-        void UpdateInCombatAI_Warrior() override {}
-        void UpdateOutOfCombatAI_Warrior() override {}
-        void UpdateInCombatAI_Rogue() override {}
-        void UpdateOutOfCombatAI_Rogue() override {}
-        void UpdateInCombatAI_Druid() override {}
-        void UpdateOutOfCombatAI_Druid() override {}
 
     private:
         void Initialize();

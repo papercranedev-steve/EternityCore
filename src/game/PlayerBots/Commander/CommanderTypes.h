@@ -127,7 +127,7 @@ namespace Commander
         Healing,
         // A rogue's own stealth while it is the Sap controller of a pull (CrowdControlBehavior,
         // Sap doc .kiro/docs/2026-11-08-sap.md): the rotation's "go into / cancel stealth"
-        // (PartyBotAI::EnterStealthIfNeeded) stands down.
+        // (ClassRotation::KeepStealth) stands down.
         Stealth,
         // While the party fights (WorldModel::InFight), where a bot stands: following the
         // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and

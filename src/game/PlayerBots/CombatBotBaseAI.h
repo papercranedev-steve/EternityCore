@@ -94,12 +94,8 @@ public:
     }
 
     virtual void OnPacketReceived(WorldPacket const* packet) override;
-    void SendBattlefieldPortPacket();
-    void SendBattlemasterJoinPacket(uint8 battlegroundId);
-    void SendAreaTriggerPacket(uint32 areaTriggerId);
-    void ActivateNearbyAreaTrigger();
 
-    // Virtual: PartyBotAI picks from RoleCapability (talents, gear); battle and population bots keep this.
+    // Virtual: PartyBotAI picks from RoleCapability (talents, gear); population bots keep this.
     virtual void AutoAssignRole();
     void PopulateSpellData();
     void ResetSpellData();
@@ -160,7 +156,6 @@ public:
     // (Frostbolt's slow, Fireball's burn), PartyBotAI::IsSpammedOverOwnAura.
     virtual bool IsSpammedOverOwnAura(SpellEntry const* /*pSpellEntry*/) const { return false; }
     bool IsWearingShield(Player* pPlayer) const;
-    bool IsInDuel() const;
     CombatBotRoles GetRole() const;
 
     void EquipOrUseNewItem();
@@ -196,24 +191,6 @@ public:
 
     virtual void UpdateInCombatAI() = 0;
     virtual void UpdateOutOfCombatAI() = 0;
-    virtual void UpdateInCombatAI_Paladin() = 0;
-    virtual void UpdateOutOfCombatAI_Paladin() = 0;
-    virtual void UpdateInCombatAI_Shaman() = 0;
-    virtual void UpdateOutOfCombatAI_Shaman() = 0;
-    virtual void UpdateInCombatAI_Hunter() = 0;
-    virtual void UpdateOutOfCombatAI_Hunter() = 0;
-    virtual void UpdateInCombatAI_Mage() = 0;
-    virtual void UpdateOutOfCombatAI_Mage() = 0;
-    virtual void UpdateInCombatAI_Priest() = 0;
-    virtual void UpdateOutOfCombatAI_Priest() = 0;
-    virtual void UpdateInCombatAI_Warlock() = 0;
-    virtual void UpdateOutOfCombatAI_Warlock() = 0;
-    virtual void UpdateInCombatAI_Warrior() = 0;
-    virtual void UpdateOutOfCombatAI_Warrior() = 0;
-    virtual void UpdateInCombatAI_Rogue() = 0;
-    virtual void UpdateOutOfCombatAI_Rogue() = 0;
-    virtual void UpdateInCombatAI_Druid() = 0;
-    virtual void UpdateOutOfCombatAI_Druid() = 0;
 
     static bool IsPhysicalDamageClass(uint8 playerClass)
     {

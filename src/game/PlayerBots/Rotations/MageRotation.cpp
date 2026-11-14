@@ -50,22 +50,14 @@ namespace
             SpellEntry const* pBuffSpell = nullptr;
             if (Player* pTarget = bot.SelectBuffTarget(s.pArcaneIntellect, s.pArcaneBrilliance, pBuffSpell))
             {
-                if (bot.CanTryToCastSpell(pTarget, pBuffSpell) && Buff(pTarget, pBuffSpell))
+                if (Buff(pTarget, pBuffSpell))
                     return;
             }
 
-            if (SpellEntry const* pArmor = ChooseArmor())
-            {
-                if (bot.CanTryToCastSpell(me, pArmor) && Buff(me, pArmor))
-                    return;
-            }
+            if (Buff(me, ChooseArmor()))
+                return;
 
-            if (bot.m_isBuffing &&
-               (!s.pArcaneIntellect ||
-                !me->HasGCD(s.pArcaneIntellect)))
-            {
-                bot.m_isBuffing = false;
-            }
+            EndBuffing(s.pArcaneIntellect);
 
             // Opening on a target before combat starts (pull, assist).
             if (me->GetVictim())
@@ -94,11 +86,7 @@ namespace
                 Cast(me, s.pColdSnap))
                 return;
 
-            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE
-                && me->GetDistance(pVictim) > 30.0f)
-            {
-                bot.BeginChasing(pVictim);
-            }
+            ChaseWhenOutOfRange(pVictim);
 
             if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == DISTANCING_MOTION_TYPE)
                 return;
@@ -115,29 +103,10 @@ namespace
                 if (Cast(pVictim, pFiller))
                     return;
 
-            if (me->HasSpell(ClassRotations::SPELL_SHOOT_WAND) &&
-               !me->IsMoving() &&
-               (me->GetPowerPercent(POWER_MANA) < WAND_MANA_PCT) &&
-               !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
-                me->CastSpell(pVictim, ClassRotations::SPELL_SHOOT_WAND, false);
+            ShootWandBelowMana(pVictim, WAND_MANA_PCT);
         }
 
     private:
-        bool Cast(Unit* pTarget, SpellEntry const* pSpell)
-        {
-            return pSpell && m_bot.CanTryToCastSpell(pTarget, pSpell) &&
-                   m_bot.DoCastSpell(pTarget, pSpell) == SPELL_CAST_OK;
-        }
-
-        bool Buff(Unit* pTarget, SpellEntry const* pSpell)
-        {
-            if (m_bot.DoCastSpell(pTarget, pSpell) != SPELL_CAST_OK)
-                return false;
-            m_bot.m_isBuffing = true;
-            m_bot.me->ClearTarget();
-            return true;
-        }
-
         // Mage Armor in a group, Ice Armor (Frost Armor at low level) alone; the other one when
         // only one is known.
         SpellEntry const* ChooseArmor() const

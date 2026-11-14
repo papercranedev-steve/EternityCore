@@ -98,13 +98,11 @@ enum class ParseCommandResult
 };
 
 class PartyBotAI;
-class BattleBotAI;
 
 class ChatHandler
 {
     friend class CombatBotBaseAI;
     friend class PartyBotAI;
-    friend class BattleBotAI;
     public:
         explicit ChatHandler(WorldSession* session);
         explicit ChatHandler(Player* player);
@@ -310,14 +308,6 @@ class ChatHandler
         bool HandlePopBotCommand(char* args);           // PlayerBots/Population/PopulationCommands.cpp
         bool HandleLuaCommand(char* args);              // DevConsole/DevConsoleCommands.cpp
         bool HandleScenarioCommand(char* args);         // DevConsole/DevConsoleCommands.cpp
-        bool HandleBattleBotAddCommand(char* args, uint8 bg);
-        bool HandleBattleBotAddAlteracCommand(char* args);
-        bool HandleBattleBotAddArathiCommand(char* args);
-        bool HandleBattleBotAddWarsongCommand(char* args);
-        bool HandleBattleBotRemoveCommand(char* args);
-        bool HandleBattleBotRemoveAllCommand(char* args);
-        bool HandleBattleBotShowPathCommand(char* args);
-        bool HandleBattleBotShowAllPathsCommand(char* args);
 
         // spell_disabled
         bool HandleReloadSpellDisabledCommand(char *args);
