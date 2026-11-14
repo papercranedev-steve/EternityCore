@@ -60,6 +60,13 @@ namespace Commander
             // The hard line (FieldCell::idleTight, SafeRoute::TIGHT_MARGIN) for the cell and the
             // grid walk: a member who finds nothing otherwise and cannot do its job where it is.
             bool tight = false;
+            // In the fight (2026-11-15, stockade-20261115-012103: tank and rogue fought inside a
+            // circle of an idle prisoner of the same cell, every cell that saw them was in it, mage
+            // and priest stood in the corridor until the tank died): where the party fights. A
+            // circle that covers it does not drop a cell no closer to the creature's home than
+            // that spot, nor stop the grid walk there (PositionField::ClearOfIdle, WalkYd).
+            bool hasFight = false;
+            Position3 fightAt;
         };
 
         // From world.field (must be set).

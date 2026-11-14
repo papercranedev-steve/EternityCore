@@ -17,6 +17,7 @@ namespace FieldSpots
         std::vector<Spot> unreached;    // cells the grid walk does not get to
         FieldCell const* own = field.At(member.pos);
         bool const walks = own && own->standable;
+        Position3 const* fight = q.hasFight ? &q.fightAt : nullptr;
 
         int32 const cx0 = PositionField::CellOf(q.center.x - q.maxYd), cx1 = PositionField::CellOf(q.center.x + q.maxYd);
         int32 const cy0 = PositionField::CellOf(q.center.y - q.maxYd), cy1 = PositionField::CellOf(q.center.y + q.maxYd);
@@ -25,12 +26,14 @@ namespace FieldSpots
             for (int32 cy = cy0; cy <= cy1; ++cy)
             {
                 FieldCell const* c = field.At(cx, cy);
-                if (!c || !c->standable || (q.tight ? c->idleTight : c->idle))
+                if (!c || !c->standable)
                     continue;
                 if (q.patrolBeforeSec > 0.0f && c->patrolSec >= 0.0f && c->patrolSec < q.patrolBeforeSec)
                     continue;
                 Spot s;
                 s.pos = field.CenterOf(cx, cy);
+                if (!field.ClearOfIdle(q.tight ? c->idleTight : c->idle, s.pos, fight, q.tight))
+                    continue;
                 float const d = SafeRoute::Distance2d(s.pos, q.center);
                 if (d < q.minYd || d > q.maxYd)
                     continue;
@@ -41,7 +44,7 @@ namespace FieldSpots
                         s.taken = true;
                 if (walks)
                 {
-                    s.walkYd = field.WalkYd(member, s.pos, q.tight);
+                    s.walkYd = field.WalkYd(member, s.pos, q.tight, fight);
                     if (s.walkYd < 0.0f)
                     {
                         unreached.push_back(s);

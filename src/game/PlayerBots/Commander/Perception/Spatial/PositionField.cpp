@@ -1,5 +1,6 @@
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <functional>
@@ -115,16 +116,35 @@ namespace Commander
         return view[ti] == 1;
     }
 
-    PositionField::Walk const& PositionField::WalkFrom(PartyMemberFacts const& from, bool tight) const
+    bool PositionField::ClearOfIdle(uint64 mask, Position3 const& at, Position3 const* fightAt, bool tight) const
     {
+        if (!mask)
+            return true;
+        FieldCell const* f = fightAt ? At(*fightAt) : nullptr;
+        if (!f)
+            return false;
+        uint64 const fightMask = tight ? f->idleTight : f->idle;
+        if (mask & ~fightMask)
+            return false;
+        for (uint32 i = 0; mask; ++i, mask >>= 1)
+            if ((mask & 1) && SafeRoute::Distance2d(at, m_idle[i].home) <
+                                  SafeRoute::Distance2d(*fightAt, m_idle[i].home) - SafeRoute::END_GAP_TOLERANCE)
+                return false;
+        return true;
+    }
+
+    PositionField::Walk const& PositionField::WalkFrom(PartyMemberFacts const& from, bool tight, Position3 const* fightAt) const
+    {
+        int32 const fightCell = fightAt ? FlatIndex(CellOf(fightAt->x), CellOf(fightAt->y)) : -1;
         for (Walk const& w : m_walks)
-            if (w.from == from.guid && w.tight == tight)
+            if (w.from == from.guid && w.tight == tight && w.fightCell == fightCell)
                 return w;
 
         m_walks.emplace_back();
         Walk& w = m_walks.back();
         w.from = from.guid;
         w.tight = tight;
+        w.fightCell = fightCell;
         auto const idleOf = [tight](FieldCell const& c) { return tight ? c.idleTight : c.idle; };
         w.yd.assign(m_blocks.size() * BLOCK_CELLS * BLOCK_CELLS, -1.0f);
 
@@ -135,19 +155,29 @@ namespace Commander
             return w;
 
         // Circles the member stands in: entered only farther from the creature's home than
-        // the member is now (SafeRoute::IdleCreatures::LeavingFrom).
+        // the member is now (SafeRoute::IdleCreatures::LeavingFrom). Circles covering the fight
+        // spot: no closer than the fight (ArrivingAt). Both: the smaller gap.
         uint64 const startMask = idleOf(*startCell);
-        float startGap[MAX_IDLE];
+        FieldCell const* fightCellPtr = fightAt ? At(*fightAt) : nullptr;
+        uint64 const fightMask = fightCellPtr ? idleOf(*fightCellPtr) : 0;
+        uint64 const openMask = startMask | fightMask;
+        float gap[MAX_IDLE];
         for (uint32 i = 0; i < m_idle.size(); ++i)
-            startGap[i] = (startMask >> i) & 1 ? SafeRoute::Distance2d(from.pos, m_idle[i].home) : 0.0f;
+        {
+            gap[i] = 1.0e9f;
+            if ((startMask >> i) & 1)
+                gap[i] = SafeRoute::Distance2d(from.pos, m_idle[i].home);
+            if ((fightMask >> i) & 1)
+                gap[i] = std::min(gap[i], SafeRoute::Distance2d(*fightAt, m_idle[i].home));
+        }
         auto const enterable = [&](FieldCell const& c, Position3 const& at)
         {
             uint64 const mask = idleOf(c);
-            if (mask & ~startMask)
+            if (mask & ~openMask)
                 return false;
-            uint64 shared = mask & startMask;
+            uint64 shared = mask & openMask;
             for (uint32 i = 0; shared; ++i, shared >>= 1)
-                if ((shared & 1) && SafeRoute::Distance2d(at, m_idle[i].home) < startGap[i] - SafeRoute::END_GAP_TOLERANCE)
+                if ((shared & 1) && SafeRoute::Distance2d(at, m_idle[i].home) < gap[i] - SafeRoute::END_GAP_TOLERANCE)
                     return false;
             return true;
         };
@@ -191,11 +221,11 @@ namespace Commander
         return w;
     }
 
-    float PositionField::WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight) const
+    float PositionField::WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight, Position3 const* fightAt) const
     {
         int32 const i = FlatIndex(CellOf(to.x), CellOf(to.y));
         if (i < 0)
             return -1.0f;
-        return WalkFrom(from, tight).yd[i];
+        return WalkFrom(from, tight, fightAt).yd[i];
     }
 }

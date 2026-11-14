@@ -126,7 +126,15 @@ namespace Commander
         // Shortest grid walk (yards) from `from` to the cell of `to`, -1 = not reachable over the
         // field (outside it, not standable, blocked by idle creatures). `tight`: around the
         // idleTight circles only.
-        float WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight = false) const;
+        // `fightAt` (2026-11-15): where the party fights; the circles that cover it are entered
+        // only no closer to the creature's home than that spot (the fight is there and nothing
+        // came: the rule of MeleeRoutes.h and SafeRoute::IdleCreatures::ArrivingAt).
+        float WalkYd(PartyMemberFacts const& from, Position3 const& to, bool tight = false,
+                     Position3 const* fightAt = nullptr) const;
+
+        // A cell with idle bits `mask` is as safe as the fight at `fightAt` (null: no fight):
+        // every bit is a circle that covers `fightAt` too, and `at` is no closer to its home.
+        bool ClearOfIdle(uint64 mask, Position3 const& at, Position3 const* fightAt, bool tight) const;
 
         // Estimated line of sight from the cell of `from` to the cell of `to` over the grid
         // (2026-11-15, the viewshed): a line of cells (Bresenham) where every step follows a
@@ -176,10 +184,11 @@ namespace Commander
         {
             ObjectGuid from;
             bool tight = false;
+            int32 fightCell = -1;       // flat index of the fight spot, -1 = none
             std::vector<float> yd;      // per flat index, < 0 = not reached
         };
         mutable std::vector<Walk> m_walks;
-        Walk const& WalkFrom(PartyMemberFacts const& from, bool tight) const;
+        Walk const& WalkFrom(PartyMemberFacts const& from, bool tight, Position3 const* fightAt) const;
 
         // SeesEstimate per origin cell: per flat index, -1 not known yet, 0 hidden, 1 seen.
         mutable std::unordered_map<uint64, std::vector<int8>> m_views;

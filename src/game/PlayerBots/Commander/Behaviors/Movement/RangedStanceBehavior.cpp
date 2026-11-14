@@ -75,6 +75,9 @@ namespace Commander
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
             q.patrolBeforeSec = staySec;
             q.tight = tight;
+            // In the fight: circles covering the victim's spot as the fight there (FieldSpots.h).
+            q.hasFight = !prepare;
+            q.fightAt = victim;
             for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
@@ -190,7 +193,9 @@ namespace Commander
         }
 
         SafeRoute::IdleCreatures const idle(me);
-        bool const unsafe = idle.Near(here);
+        // In the fight a circle covering the victim's spot counts only closer than the victim
+        // (FieldSpots.h): a spot taken by that rule is not left again next tick.
+        bool const unsafe = (prepare ? idle : idle.ArrivingAt(at)).Near(here);
         // The enemies' exposure (2026-11-10, user: squishy casters stand well back;
         // Perception/Values/Exposure.h). Not before the fight, not for the area caster: the
         // area phase picked where it casts from.
@@ -258,6 +263,8 @@ namespace Commander
             SafeRoute::IdleCreatures pathIdle = unsafe ? own.LeavingFrom(here) : own;
             if (!prepare)
                 pathIdle = pathIdle.ArrivingAt(at);
+            // The spot itself by the same rule (stockade-20261115-012103, FieldSpots.h).
+            SafeRoute::IdleCreatures const endIdle = prepare ? own : own.ArrivingAt(at);
             // One pass in order (header "Where": every cell's loss is known, cells estimated in
             // sight first). Each cell: this bot's idle scan, the real line (sight cache, budget),
             // the path (failures kept a while: SightCache::PathFailed). The first that passes all
@@ -272,7 +279,7 @@ namespace Commander
                         continue;   // (further down an estimate in sight may still pay)
                     break;
                 }
-                if (own.Near(s.pos))
+                if (endIdle.Near(s.pos))
                 {
                     ++why.idle;
                     continue;

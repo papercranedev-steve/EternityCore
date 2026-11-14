@@ -277,7 +277,8 @@ namespace Commander
 
         Position3 const here = PositionOf(me);
         SafeRoute::IdleCreatures const idle(me);
-        bool const unsafe = idle.Near(here);
+        // (in the fight relaxed below once the anchor is known: FieldSpots.h)
+        bool unsafe = idle.Near(here);
 
         // A MoveTo (this module's or another's) is under way: keep walking. Without a proposal
         // the rotation's first cast-time heal stops the walk (DoCastSpell -> StopMoving).
@@ -323,6 +324,10 @@ namespace Commander
                 return;
             ctx.anchor = anchor->pos;
             ctx.anchorGuid = anchor->guid;
+            // A circle covering the tank's spot counts only closer than the tank (the fight is
+            // there and nothing came; stockade-20261115-012103): a spot taken by that rule is
+            // not left again next tick.
+            unsafe = unsafe && idle.ArrivingAt(ctx.anchor).Near(here);
         }
         ctx.here = here;
         ctx.enemies = Exposure::Turnable(world, ctx.self->guid);
@@ -408,6 +413,8 @@ namespace Commander
             SafeRoute::IdleCreatures pathIdle = unsafe ? own.LeavingFrom(here) : own;
             if (!ctx.prepare)
                 pathIdle = pathIdle.ArrivingAt(ctx.anchor);
+            // The spot itself by the same rule (stockade-20261115-012103, FieldSpots.h).
+            SafeRoute::IdleCreatures const endIdle = ctx.prepare ? own : own.ArrivingAt(ctx.anchor);
 
             // Cells of the position field within MAX_YD of the anchor (PREPARE_MAX_YD before the
             // fight: a walk-in fought where the pack stands has the idle pack itself as the anchor,
@@ -421,6 +428,9 @@ namespace Commander
                 q.maxYd = ctx.prepare ? PREPARE_MAX_YD : MAX_YD;
                 q.patrolBeforeSec = staySec;
                 q.tight = tight;
+                // In the fight: circles covering the tank's spot as the fight there (FieldSpots.h).
+                q.hasFight = !ctx.prepare;
+                q.fightAt = ctx.anchor;
                 spots = Candidates(ctx, world, zones, weights, points, FieldSpots::Collect(world, *ctx.self, q));
             }
             found += spots.size();
@@ -437,7 +447,7 @@ namespace Commander
                         continue;   // (further down an estimate in sight may still pay)
                     break;
                 }
-                if (own.Near(s.pos))
+                if (endIdle.Near(s.pos))
                 {
                     ++why.idle;
                     continue;
@@ -494,7 +504,7 @@ namespace Commander
             bool const marginOnly = unsafe && anchorOk &&
                 !SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN).Near(here);
             bool const wantsAnchor = !anchorOk || (unsafe && !marginOnly);
-            bool const anchorIdle = wantsAnchor && own.Near(ctx.anchor);
+            bool const anchorIdle = wantsAnchor && endIdle.Near(ctx.anchor);
             if (anchorIdle)
                 anchorWhy = tight ? "tank in idle reach (hard line)" : "tank in idle reach";
             SafeRoute::Verdict anchorVerdict;
