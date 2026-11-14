@@ -36,6 +36,13 @@ namespace Commander
         static constexpr float MELEE_ABILITY_FACTOR = 1.4f;
         static constexpr float CASTER_UPTIME = 0.6f;
 
+        // What a cooldown used now costs (cooldown doc .kiro/docs/2026-11-14-cooldowns.md 5):
+        // COOLDOWN_POINTS_PER_MIN for every minute it is missing, up to `horizonSec` (the fight
+        // left; callers add the next pulls for spells that matter there too). 0 for a cooldown
+        // of a GCD or less. The one place long cooldowns are judged "worth saving".
+        static constexpr float COOLDOWN_POINTS_PER_MIN = 3.0f;
+        float CooldownPoints(float cooldownSec, float horizonSec);
+
         // Armor mitigation of melee hits, vanilla formula (Unit::CalcArmorReducedDamage), max 75%.
         float ArmorReduction(uint32 armor, uint32 attackerLevel);
 

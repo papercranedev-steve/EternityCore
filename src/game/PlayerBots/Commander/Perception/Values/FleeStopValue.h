@@ -16,8 +16,7 @@
  *   reach     LostAction(walk into range / run speed), walk = distance - range (0 in range;
  *             an area spell around the caster: its radius)
  *   mana      ManaWorth::Points(mana cost)
- *   cooldown  ControlValue::COOLDOWN_POINTS_PER_MIN x min(cooldown, fight left) / 60 for
- *             cooldowns longer than a GCD
+ *   cooldown  Value::CooldownPoints(cooldown, fight left)
  * Holding the spell until the trigger (TeamPlan::HoldsSpell) is not counted.
  */
 

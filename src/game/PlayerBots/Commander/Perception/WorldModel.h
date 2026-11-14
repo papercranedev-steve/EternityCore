@@ -459,6 +459,9 @@ namespace Commander
         uint32 entry = 0;
         uint32 level = 0;
         bool elite = false;
+        // CreatureProfile::boss (world boss rank, boss_ script, an EventAI encounter): the long
+        // cooldowns kept for big fights may go here (cooldown doc .kiro/docs/2026-11-14-cooldowns.md).
+        bool boss = false;
         float healthPct = 0.0f;
         uint32 health = 0;
         uint32 maxHealth = 0;

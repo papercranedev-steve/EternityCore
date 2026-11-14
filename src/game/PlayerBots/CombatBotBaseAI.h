@@ -343,7 +343,7 @@ public:
     {
         struct
         {
-            SpellEntry const* spells[45];
+            SpellEntry const* spells[50];   // at least the largest class struct below (static_assert after the union)
         } raw;
         struct
         {
@@ -368,6 +368,7 @@ public:
             SpellEntry const* pTurnEvil;
             SpellEntry const* pHolyShield;
             SpellEntry const* pPurify; // fallback dispel when Cleanse is not learned
+            SpellEntry const* pDivineProtection;
         } paladin;
         struct
         {
@@ -389,6 +390,7 @@ public:
             SpellEntry const* pWaterTotem;
             SpellEntry const* pManaTideTotem;
             SpellEntry const* pWeaponBuff;
+            SpellEntry const* pNaturesSwiftness;
         } shaman;
         struct
         {
@@ -408,6 +410,9 @@ public:
             SpellEntry const* pFeignDeath;
             SpellEntry const* pScareBeast;
             SpellEntry const* pVolley;
+            SpellEntry const* pRapidFire;
+            SpellEntry const* pBestialWrath;
+            SpellEntry const* pDeterrence;
         } hunter;
         struct
         {
@@ -466,6 +471,8 @@ public:
             SpellEntry const* pShackleUndead;
             SpellEntry const* pSmite;
             SpellEntry const* pCureDisease; // fallback dispel when Abolish Disease is not learned
+            SpellEntry const* pDesperatePrayer;
+            SpellEntry const* pPowerInfusion;
         } priest;
         struct
         {
@@ -494,6 +501,7 @@ public:
             SpellEntry const* pCurseofTongues;
             SpellEntry const* pCurseofExhaustion;
             SpellEntry const* pLifeTap;
+            SpellEntry const* pAmplifyCurse;
         } warlock;
         struct
         {
@@ -615,8 +623,10 @@ public:
             SpellEntry const* pMaul;
             SpellEntry const* pBash;
             SpellEntry const* pFeralCharge;
+            SpellEntry const* pTranquility;
         } druid;
     } m_spells;
+    static_assert(sizeof(m_spells) == sizeof(m_spells.raw), "a class spell struct is larger than raw.spells");
 
     bool m_initialized = false;
     bool m_isBuffing = false;

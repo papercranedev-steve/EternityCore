@@ -40,9 +40,7 @@ namespace FleeStopValue
             w.reach = Value::LostAction(world, member, walk / CastValues::RUN_YARDS_PER_SEC);
         if (a.manaCost)
             w.mana = ManaWorth::Points(world, member, float(a.manaCost));
-        float const cooldownSec = a.cooldownMs / 1000.0f;
-        if (cooldownSec > Value::GCD_SEC)
-            w.cooldown = ControlValue::COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, Value::FightRemainingSec(world)) / 60.0f;
+        w.cooldown = Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world));
         return w;
     }
 

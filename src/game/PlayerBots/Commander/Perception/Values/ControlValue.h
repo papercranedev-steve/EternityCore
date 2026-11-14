@@ -28,7 +28,7 @@
  *   action   Value::LostAction(max(cast time, GCD))
  *   reach    LostAction(its own cast or channel left + walk into range / run speed)
  *   mana     ManaWorth::Points(mana cost)
- *   cooldown COOLDOWN_POINTS_PER_MIN x min(cooldown, fight left) / 60 for cooldowns longer than
+ *   cooldown Value::CooldownPoints(cooldown, fight left): COOLDOWN_POINTS_PER_MIN per minute, for cooldowns longer than
  *            a GCD: not there for a later emergency in this fight
  *   aoe      before a pull only (OfPull). In combat whether a pile is left to area spells is
  *            the doctrine's (Coordination/Doctrine/TacticalDoctrine.h, NoMez); AreaLoss was
@@ -69,7 +69,6 @@ namespace ControlValue
     // Untested guesses (crowd control doc section 7).
     float const TAKEOVER_SEC = 4.0f;
     float const REGATHER_SEC = 3.0f;
-    float const COOLDOWN_POINTS_PER_MIN = 3.0f;
     float const ADD_ARRIVE_SEC = 4.0f;
 
     struct Worth

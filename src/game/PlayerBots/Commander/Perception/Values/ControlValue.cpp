@@ -212,9 +212,7 @@ namespace ControlValue
                 if (m.alive && IsTarget(targets, m.victim))
                     w.scatter += Value::LostAction(world, m, SwitchCost::SWITCH_SEC +
                         (m.comboTarget == m.victim ? m.comboPoints * SwitchCost::COMBO_POINT_SEC : 0.0f));
-        float const cooldownSec = a.cooldownMs / 1000.0f;
-        if (cooldownSec > Value::GCD_SEC)
-            w.cooldown = COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, Value::FightRemainingSec(world)) / 60.0f;
+        w.cooldown = Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world));
 
         if (a.fear)
         {
@@ -273,9 +271,7 @@ namespace ControlValue
         planned.sec = asIs.fightSec;
         planned.incomingDps = asIs.damage / std::max(1.0f, asIs.fightSec);
         w.mana = ManaWorth::Points(world, member, float(a.manaCost), planned);
-        float const cooldownSec = a.cooldownMs / 1000.0f;
-        if (cooldownSec > Value::GCD_SEC)
-            w.cooldown = COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, asIs.fightSec) / 60.0f;
+        w.cooldown = Value::CooldownPoints(a.cooldownMs / 1000.0f, asIs.fightSec);
 
         // Fought next to it: the party's area spells keep off the pack while it sleeps.
         if (a.breaksOnDamage && nearTarget > 0)

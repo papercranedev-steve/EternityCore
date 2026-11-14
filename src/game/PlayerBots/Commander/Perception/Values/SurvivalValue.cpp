@@ -166,10 +166,7 @@ namespace SurvivalValue
             o.cost += Value::LostAction(world, caster, a.durationSec);
         if (a.targetStops && !self && (member.role == ROLE_MELEE_DPS || member.role == ROLE_TANK))
             o.cost += Value::LostAction(world, member, a.durationSec);
-        float const cooldownSec = a.cooldownMs / 1000.0f;
-        if (cooldownSec > Value::GCD_SEC)
-            o.cost += ControlValue::COOLDOWN_POINTS_PER_MIN *
-                      std::min(cooldownSec, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC) / 60.0f;
+        o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC);
         if (a.effect == SurvivalAbility::Effect::DropThreat)
         {
             for (EnemyFacts const& e : world.enemies)

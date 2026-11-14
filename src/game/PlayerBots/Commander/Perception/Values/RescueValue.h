@@ -32,7 +32,7 @@
  *             (Feint, Cower: HORIZON_SEC, the victim's ThreatRoom stop rule keeps it off) or
  *             the enemy dies. Urgent when the victim dies within FADE_URGENT_SEC of the hits on
  *             it. cost = LostAction(GCD) + ManaWorth::Points(mana) + cooldown points
- *             (ControlValue::COOLDOWN_POINTS_PER_MIN, as for controls).
+ *             (Value::CooldownPoints, as for controls).
  *             A wipe (ThreatDropAbility::wipe, rogue Vanish since 2026-11-08: the Sap doc; hunter
  *             Feign Death since 2026-11-14, a resist is not counted;
  *             .kiro/docs/2026-11-08-sap.md 5): one cast frees the victim of every enemy on

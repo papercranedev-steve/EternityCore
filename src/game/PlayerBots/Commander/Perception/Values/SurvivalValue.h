@@ -26,9 +26,8 @@
  *           the damage f takes off, the absorb or extra health used, the heal used)
  * cost    = LostAction(caster, GCD) [+ LostAction(caster, d): Ice Block]
  *           [+ LostAction(target, d) for a melee target that cannot attack: Blessing of Protection]
- *           + ManaWorth::Points(mana) + cooldown points (ControlValue::COOLDOWN_POINTS_PER_MIN x
- *           min(cooldown, fight left + NEXT_FIGHTS_SEC) / 60: a long cooldown is also missing in
- *           the next pulls) [+ DropThreat: what the enemies' next holders take on top of it,
+ *           + ManaWorth::Points(mana) + cooldown points (Value::CooldownPoints over
+ *           fight left + NEXT_FIGHTS_SEC: a long cooldown is also missing in the next pulls) [+ DropThreat: what the enemies' next holders take on top of it,
  *           Value::MoveLoss, for the horizon]
  * Not offered: not ready, out of range (ally spells), a target immune to the spell's mechanic
  * (Weakened Soul, Forbearance), a tank target for notOnTank spells, self-only spells on others.

@@ -25,6 +25,13 @@ namespace Value
         return health / world.rates.partyMaxHealth * 100.0f;
     }
 
+    float CooldownPoints(float cooldownSec, float horizonSec)
+    {
+        if (cooldownSec <= GCD_SEC)
+            return 0.0f;
+        return COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, std::max(0.0f, horizonSec)) / 60.0f;
+    }
+
     float DeathPenalty(PartyMemberFacts const& member)
     {
         if (member.isBot && member.role == ROLE_HEALER)

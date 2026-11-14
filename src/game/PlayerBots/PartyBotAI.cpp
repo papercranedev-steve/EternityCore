@@ -524,11 +524,25 @@ bool PartyBotAI::CastHealOrder()
         me->SetStandState(UNIT_STAND_STATE_STAND);
     if (!CanTryToCastSpell(pTarget, action.spell))
         return false;
+    if (!CastPrepSpell(action.prepSpell))
+        return false;
     if (DoCastSpell(pTarget, action.spell) != SPELL_CAST_OK)
         return false;
     uint32 const busyMs = std::max(uint32(HealSpells::GCD_SEC * 1000.0f), action.spell->GetCastTime(me));
     m_directives->NoteOrderedHeal(pTarget->GetObjectGuid(), now, busyMs);
     return true;
+}
+
+bool PartyBotAI::CastPrepSpell(SpellEntry const* pPrep)
+{
+    if (!pPrep)
+        return true;
+    // Already on: put up in an earlier tick whose main cast did not go out.
+    if (me->HasAura(pPrep->Id))
+        return true;
+    if (!CanTryToCastSpell(me, pPrep))
+        return false;
+    return DoCastSpell(me, pPrep) == SPELL_CAST_OK;
 }
 
 bool PartyBotAI::FindAndPreHealTarget()

@@ -529,6 +529,8 @@ namespace Commander
                 // Defensive Stance): PartyBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.
                 if (!bot->CanCastWithStance(pCastTarget, action.spell))
                     return false;
+                if (!bot->CastPrepSpell(action.prepSpell))
+                    return false;
                 // Fix: an auto-repeat shot (Auto Shot, ranged pull) cast on a unit that is not the
                 // bot's victim is cancelled by PartyBotAI::UpdateAI on the next tick ("stop auto
                 // shot if no target") before its 0.5 s wind-up ends when the bot ticks faster than

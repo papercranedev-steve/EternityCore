@@ -139,10 +139,7 @@ namespace RescueValue
                     o.benefit += Value::HitLoss(world, other, victim, seconds);     // it leaves the fight
             }
             o.cost = Value::LostAction(world, victim, Value::GCD_SEC);
-            float const cooldownSec = a.cooldownMs / 1000.0f;
-            if (cooldownSec > Value::GCD_SEC)
-                o.cost += ControlValue::COOLDOWN_POINTS_PER_MIN *
-                          std::min(cooldownSec, Value::FightRemainingSec(world) + WIPE_NEXT_FIGHTS_SEC) / 60.0f;
+            o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world) + WIPE_NEXT_FIGHTS_SEC);
             float const incoming = Value::IncomingOn(world, victim.guid);
             o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;
             return o;
@@ -184,9 +181,7 @@ namespace RescueValue
             o.benefit = Value::HitLoss(world, e, victim, seconds);
 
         o.cost = Value::LostAction(world, victim, Value::GCD_SEC) + ManaWorth::Points(world, victim, float(a.manaCost));
-        float const cooldownSec = a.cooldownMs / 1000.0f;
-        if (cooldownSec > Value::GCD_SEC)
-            o.cost += ControlValue::COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, Value::FightRemainingSec(world)) / 60.0f;
+        o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world));
 
         float const incoming = Value::IncomingOn(world, victim.guid);
         o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;

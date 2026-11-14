@@ -91,6 +91,11 @@ namespace Commander
         // Cast with `facing`, an instant spell: while the bot runs a point walk, jump and turn in
         // the air (JumpCast.h: no stop); otherwise stop and turn.
         bool jumpTurn = false;
+        // Cast: put this on itself first, in the same tick (PartyBotAI::CastPrepSpell): an instant
+        // off the global cooldown that changes `spell` (Inner Focus, Divine Favor, Nature's
+        // Swiftness before a heal; Cold Blood, Presence of Mind, Elemental Mastery before a hit;
+        // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7). Not cast when `spell` cannot be.
+        SpellEntry const* prepSpell = nullptr;
     };
 
     // Replace: do this action this tick instead of the original rotation.

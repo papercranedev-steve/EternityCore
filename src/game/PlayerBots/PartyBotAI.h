@@ -306,6 +306,9 @@ public:
     bool IsHealingControlled() const;
     // Casts the Commander's heal order of this tick (BotDirectives::GetHealOrder), once.
     bool CastHealOrder();
+    // Commander::BotAction::prepSpell: puts the instant `pPrep` on itself right before the main
+    // cast (true when null or already on). False = it could not, the main cast is not made.
+    bool CastPrepSpell(SpellEntry const* pPrep);
     // Heal choice (CombatBotBaseAI::ChooseHeal) and shields use the Commander's measured
     // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
     float GetIncomingDps(Unit const* pTarget) const override;
