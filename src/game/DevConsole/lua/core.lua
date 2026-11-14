@@ -129,8 +129,10 @@ function engaged(leader, radius)
     local isMember = {}
     for _, m in ipairs(members) do isMember[m:guid()] = true end
     local out = {}
-    for _, e in ipairs(leader:nearby(radius or 60, "enemy")) do
-        if e:incombat() then
+    -- 'alive', not 'enemy': a neutral (yellow) creature stays neutral while it fights us
+    -- (strat-20261114-183556 recorded no enemies for a Ghostly Citizen the player attacked).
+    for _, e in ipairs(leader:nearby(radius or 60, "alive")) do
+        if e:incombat() and not isMember[e:guid()] and not leader:friendly(e) then
             local hit = false
             for _, row in ipairs(e:threat()) do
                 if isMember[row.unit:guid()] then hit = true break end

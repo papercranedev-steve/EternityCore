@@ -120,8 +120,9 @@ public:
     // Breakable controls the plan keeps (TeamPlan::KeepsUnbroken) that this cast would hit:
     // the target, the area of an area spell, the enemy a chained hit jumps to, the enemies
     // next to the victim of a melee splash buff (Blade Flurry, Sweeping Strikes). Same rule
-    // as the arbiter's (Constraints::WakesControl). Every cast of the bot passes here
-    // (PassesPartyCastChecks): rotations too.
+    // as the arbiter's (Constraints::CastForbidden, the neutral-creature rules too). Every
+    // cast of the bot passes here (PassesPartyCastChecks): rotations too, while the party
+    // fights (WorldModel::InFight), not only once the bot itself is in combat.
     bool WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // Every bot tick in combat: a melee splash buff on the bot while an enemy the plan keeps
     // controlled stands next to its victim is cancelled (Blade Flurry broke a Shackle,

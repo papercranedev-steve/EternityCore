@@ -66,7 +66,8 @@ namespace Commander
                                  Unit const* target, SpellEntry const* spell, uint32 nowMs);
 
         // Every rule for one cast (the gate the arbiter and PartyBotAI::PassesPartyCastChecks
-        // use): never a neutral (yellow) creature, not as the target, not within an area
+        // use): never a neutral (yellow) creature outside the fight, not as the target (one in
+        // the party's fight, WorldModel::FindEnemy, is an enemy), not within an area
         // spell's radius, a chained hit's jump or a melee splash buff's reach (user 2026-11-10,
         // Tags::NeutralNear); no damage at an enemy the doctrine stamped HoldFire (its damage
         // shield / reflection, RoleStamps.h); then WakesControl.

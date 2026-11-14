@@ -97,7 +97,11 @@ namespace Commander
             }
             else if (SpellTags::DealsDamage(spell))
             {
-                if (target->IsCreature() && !me->IsHostileTo(target) && me->IsValidAttackTarget(target))
+                // A neutral creature already in the party's fight is an enemy like any other: its
+                // reaction stays neutral in combat (faction only), and the mage stood idle all
+                // fight next to one the player attacked (strat-20261114-183556).
+                if (target->IsCreature() && !me->IsHostileTo(target) && me->IsValidAttackTarget(target) &&
+                    !world.FindEnemy(target->GetObjectGuid()))
                     return "never a neutral creature";
                 Position3 const centre = PositionOf(world, target);
                 if (spell->IsAreaOfEffectSpell() && NeutralIn(world, centre, SpellTags::AreaRadius(spell)))

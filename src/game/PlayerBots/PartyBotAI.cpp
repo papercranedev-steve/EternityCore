@@ -1001,15 +1001,22 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 
 bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
-    if (!pTarget || !pSpellEntry || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!pTarget || !pSpellEntry || !sCommanderMgr.IsEnabled())
         return false;
     // Cheap test first: most casts of a tick are buffs and heals.
     if (!Commander::SpellTags::DealsDamage(pSpellEntry) && Commander::SpellTags::MeleeSplashRadius(pSpellEntry) <= 0.0f)
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    return commander && Commander::Constraints::CastForbidden(this, commander->GetWorld(), commander->GetPlan(),
-                                                             pTarget, pSpellEntry, WorldTimer::getMSTime());
+    if (!commander)
+        return false;
+    // While the party fights, not only once the bot itself is in combat: a bot's opener before
+    // its own combat flag was set skipped the rules (strat-20261114-183556).
+    Commander::WorldModel const& world = commander->GetWorld();
+    if (!world.InFight(me->IsInCombat()))
+        return false;
+    return Commander::Constraints::CastForbidden(this, world, commander->GetPlan(), pTarget, pSpellEntry,
+                                                 WorldTimer::getMSTime());
 }
 
 void PartyBotAI::CancelSplashNearKeptControl()
