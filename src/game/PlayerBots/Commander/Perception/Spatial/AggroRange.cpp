@@ -1,6 +1,8 @@
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Creature.h"
 #include "Map.h"
+#include "MotionMaster.h"
+#include <algorithm>
 #include <cmath>
 
 namespace Commander
@@ -16,10 +18,18 @@ namespace AggroRange
         return c->IsHostileTo(who) && who->IsTargetableBy(c);
     }
 
+    bool StandsStill(Creature const* c)
+    {
+        return c->GetDefaultMovementType() == IDLE_MOTION_TYPE && !c->IsMoving() &&
+               c->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE;
+    }
+
     float Reach(Creature const* c, Unit const* who, float margin)
     {
         float const attack = c->GetAttackDistance(who);
-        return attack > 0.0f ? attack + margin : 0.0f;
+        if (attack <= 0.0f)
+            return 0.0f;
+        return attack + (StandsStill(c) ? std::min(margin, STILL_MARGIN) : margin);
     }
 
     bool Covers(Creature const* c, float reach, Position3 const& at)

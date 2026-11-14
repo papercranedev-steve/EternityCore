@@ -34,7 +34,17 @@ namespace AggroRange
     // Position-independent part: `c` is idle and would start a fight with `who` on sight.
     bool IsIdleAggressor(Creature const* c, Unit const* who);
 
-    // GetAttackDistance(who) + margin; 0 when the creature has no aggro range against `who`.
+    // A creature that stands where it is (no default movement, not moving, idle motion now):
+    // its aggro range is exact, the callers' margin is cut to STILL_MARGIN (2026-11-15, user:
+    // stockade-20261115-012103, a Defias Prisoner standing in the corridor 21.1 yd from the
+    // door's corner, aggro range about 20; the 1.5 yd hard line closed the door to the whole
+    // party). STILL_MARGIN covers a walk's step off its path. Wanderers keep the margin and
+    // their circle (CoversWandering); patrols are PatrolZone's.
+    float const STILL_MARGIN = 0.5f;
+    bool StandsStill(Creature const* c);
+
+    // GetAttackDistance(who) + margin (STILL_MARGIN at most for a creature that stands still);
+    // 0 when the creature has no aggro range against `who`.
     float Reach(Creature const* c, Unit const* who, float margin);
 
     // `at` is within `reach` of `c` (3D), within its aggro height and in its line of sight.
