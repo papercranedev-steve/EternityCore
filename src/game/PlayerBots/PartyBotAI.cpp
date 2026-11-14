@@ -215,11 +215,6 @@ bool PartyBotAI::OrderBackpedal(Commander::Position3 const& to, ObjectGuid face,
     return Commander::Backpedal::Order(this, m_backpedal, to, face, durationMs);
 }
 
-bool PartyBotAI::IgnoresCrowdControlMarks() const
-{
-    return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
-}
-
 bool PartyBotAI::IsStanceControlled() const
 {
     // (the stance modules take over only while the party fights: no own combat check here,
@@ -846,11 +841,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell())
     {
-        // (With the Commander crowd control module on, marks are not used; area spells keep
-        // off controlled enemies through TeamPlan::KeepsUnbroken instead.)
-        if (!m_marksToCC.empty() && !IgnoresCrowdControlMarks())
-            return false;
-
+        // (controlled enemies: WouldWakeKeptControl above)
         float radius;
         if (pSpellEntry->EffectRadiusIndex[0])
             radius = Spells::GetSpellRadius(sSpellRadiusStore.LookupEntry(pSpellEntry->EffectRadiusIndex[0]));
@@ -987,15 +978,6 @@ bool PartyBotAI::IsClothCaster() const
     }
 }
 
-Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const
-{
-    ObjectGuid targetGuid = me->GetGroup()->GetTargetWithIcon(mark);
-    if (targetGuid.IsUnit())
-        return me->GetMap()->GetUnit(targetGuid);
-
-    return nullptr;
-}
-
 Player* PartyBotAI::SelectResurrectionTarget() const
 {
     Group* pGroup = me->GetGroup();
@@ -1054,37 +1036,6 @@ Player* PartyBotAI::SelectShieldTarget() const
     }
 
     return pBest;
-}
-
-bool PartyBotAI::CrowdControlMarkedTargets()
-{
-    // The Commander chooses controls by value, marks are not read (crowd control doc 2026-11-07).
-    if (IgnoresCrowdControlMarks())
-        return false;
-
-    SpellEntry const* pSpellEntry = GetCrowdControlSpell();
-    if (!pSpellEntry)
-        return false;
-
-    for (auto mark : m_marksToCC)
-    {
-        if (Unit* pTarget = GetMarkedTarget(mark))
-        {
-            if (!pTarget->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) &&
-                IsValidHostileTarget(pTarget) && !AreOthersOnSameTarget(pTarget->GetObjectGuid()))
-            {
-                if (CanTryToCastSpell(pTarget, pSpellEntry))
-                {
-                    if (DoCastSpell(pTarget, pSpellEntry) == SPELL_CAST_OK)
-                    {
-                        me->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
 }
 
 void PartyBotAI::AddToPlayerGroup()
@@ -1636,9 +1587,6 @@ void PartyBotAI::UpdateOutOfCombatAI()
                 if (DoCastSpell(pTarget, m_resurrectionSpell) == SPELL_CAST_OK)
                     return;
 
-    if (m_role != ROLE_TANK && me->GetVictim() && CrowdControlMarkedTargets())
-        return;
-
     if (CheckForDispelTargets())
         return;
 
@@ -1676,10 +1624,7 @@ void PartyBotAI::UpdateOutOfCombatAI()
 
 void PartyBotAI::UpdateInCombatAI()
 {
-    // (the tank's targets and taunts: the Commander, TargetAssigner and the team rescue)
-    if (m_role != ROLE_TANK && CrowdControlMarkedTargets())
-        return;
-
+    // (targets, taunts and crowd control: the Commander)
     // (dispels in combat: the Commander, DispelAssigner / DispelBehavior)
     switch (me->GetClass())
     {

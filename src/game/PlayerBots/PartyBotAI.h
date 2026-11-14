@@ -78,7 +78,7 @@ public:
     // the target: the "already has the aura" rule left the mage idle until Frostbolt's 9 s slow
     // ran out (strat-20261102-205906, 13-19 s).
     bool IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const override;
-    // PartyBotAI's checks on top of CombatBotBaseAI's (no AoE next to crowd control marks, no
+    // PartyBotAI's checks on top of CombatBotBaseAI's (the Commander plan's constraints, no
     // AoE that hits an idle creature, no AoE that pulls aggro for non-tanks).
     bool PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // The server's cast checks the base check lacks or makes looser: combat range reach,
@@ -146,9 +146,7 @@ public:
     bool IsClothCaster() const;
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
-    Unit* GetMarkedTarget(RaidTargetIcon mark) const;
     bool ShouldAutoRevive() const;
-    bool CrowdControlMarkedTargets();
     bool EnterCombatDruidForm();
     bool ShouldEnterStealth() const;
     bool EnterStealthIfNeeded(SpellEntry const* pStealthSpell);
@@ -244,9 +242,6 @@ public:
     // leader: full at once (it is about to be teleported), false. The Commander decides when a
     // resting bot stands up (the arbiter before any other action, the heal order step).
     bool StartResting();
-    // The Commander crowd control module is on (any time): raid marks are not used for
-    // controls, the brain chooses (user, 2026-11-07). Out of combat too, for the marked pull.
-    bool IgnoresCrowdControlMarks() const;
     // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
     // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
     // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's
@@ -302,7 +297,6 @@ public:
     // controlled enemies that are all that is left (Commander/Coordination/Doctrine/ControlledEnd.h).
     bool IsAssignedToBreakControl(Unit const* pTarget) const;
 
-    std::vector<RaidTargetIcon> m_marksToCC;
     std::vector<RaidTargetIcon> m_marksToFocus;
     ShortTimeTracker m_updateTimer;
     ObjectGuid m_leaderGuid;

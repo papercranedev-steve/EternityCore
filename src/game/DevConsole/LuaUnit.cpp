@@ -603,9 +603,6 @@ namespace DevConsole
         SetFieldB(L, "preventCasting", ai->m_preventCasting);
         SetFieldU(L, "leader", ai->GetPartyLeader());
         lua_newtable(L);
-        for (size_t i = 0; i < ai->m_marksToCC.size(); ++i) { lua_pushinteger(L, ai->m_marksToCC[i]); lua_rawseti(L, -2, lua_Integer(i + 1)); }
-        lua_setfield(L, -2, "ccMarks");
-        lua_newtable(L);
         for (size_t i = 0; i < ai->m_marksToFocus.size(); ++i) { lua_pushinteger(L, ai->m_marksToFocus[i]); lua_rawseti(L, -2, lua_Integer(i + 1)); }
         lua_setfield(L, -2, "focusMarks");
         Commander::BotDirectives const& d = ai->Directives();

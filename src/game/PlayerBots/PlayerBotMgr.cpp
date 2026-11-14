@@ -1464,65 +1464,6 @@ static std::map<std::string, RaidTargetIcon> raidTargetIcons =
     { "skull",    RAID_TARGET_ICON_SKULL    },
 };
 
-bool ChatHandler::HandlePartyBotControlMarkCommand(char* args)
-{
-    std::string mark = args;
-    auto itrMark = raidTargetIcons.find(mark);
-    if (itrMark == raidTargetIcons.end())
-    {
-        SendSysMessage("Unknown target mark. Valid names are: star, circle, diamond, triangle, moon, square, cross, skull");
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    Player* pPlayer = GetSession()->GetPlayer();
-    Player* pTarget = GetSelectedPlayer();
-
-    if (pTarget && (pTarget != pPlayer))
-    {
-        if (pTarget->AI())
-        {
-            if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
-            {
-                PSendSysMessage("%s will crowd control %s.", pTarget->GetName(), args);
-                pAI->m_marksToCC.push_back(itrMark->second);
-                return true;
-            }
-        }
-        SendSysMessage("Target is not a party bot.");
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    Group* pGroup = pPlayer->GetGroup();
-    if (!pGroup)
-    {
-        SendSysMessage("You are not in a group.");
-        SetSentErrorMessage(true);
-        return false;
-    }
-
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
-    {
-        if (Player* pMember = itr->getSource())
-        {
-            if (pMember == pPlayer)
-                continue;
-
-            if (pMember->AI())
-            {
-                if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
-                {
-                    pAI->m_marksToCC.push_back(itrMark->second);
-                }
-            }
-        }
-    }
-
-    PSendSysMessage("All party bots will crowd control %s.", args);
-    return true;
-}
-
 bool ChatHandler::HandlePartyBotFocusMarkCommand(char* args)
 {
     std::string mark = args;
@@ -1605,7 +1546,6 @@ bool ChatHandler::HandlePartyBotClearMarksCommand(char* args)
             if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
             {
                 PSendSysMessage("All mark assignments cleared for %s.", pTarget->GetName());
-                pAI->m_marksToCC.clear();
                 pAI->m_marksToFocus.clear();
                 return true;
             }
@@ -1634,7 +1574,6 @@ bool ChatHandler::HandlePartyBotClearMarksCommand(char* args)
             {
                 if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pMember->AI()))
                 {
-                    pAI->m_marksToCC.clear();
                     pAI->m_marksToFocus.clear();
                 }
             }
