@@ -11,6 +11,9 @@ namespace Commander
             EnemyFacts const* prev = previous.FindEnemy(e.guid);
             e.victimSinceMs = (prev && prev->victim == e.victim) ? prev->victimSinceMs : nowMs;
             e.firstSeenMs = prev ? prev->firstSeenMs : nowMs;
+            // Lost health since the last snapshot (first seen: already hurt).
+            bool const hurt = prev ? e.health < prev->health : e.health < e.maxHealth;
+            e.lastHurtMs = hurt ? nowMs : (prev ? prev->lastHurtMs : 0);
             // Only interruptible casts: an uninterruptible one (mind control, resurrection)
             // would make the pre-assignment value 0 and leave the healer cast unguarded.
             e.lastCastSpellId = (e.castingSpellId && e.castInterruptible) ? e.castingSpellId

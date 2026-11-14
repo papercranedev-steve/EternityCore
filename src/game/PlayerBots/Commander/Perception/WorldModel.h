@@ -508,6 +508,9 @@ namespace Commander
         bool summoned = false;          // temporary summon or guardian (adds)
         ObjectGuid summoner;            // who summoned it, if known
         uint32 firstSeenMs = 0;         // WorldTimer ms of the first snapshot it was in (ThreatHistory)
+        // WorldTimer ms of the latest snapshot in which it had lost health (ThreatHistory), 0 =
+        // not hurt since it was first seen: nobody hits it (Value::EnemyDyingSec).
+        uint32 lastHurtMs = 0;
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat

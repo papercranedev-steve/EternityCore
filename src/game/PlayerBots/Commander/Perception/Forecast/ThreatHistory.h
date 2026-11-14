@@ -2,6 +2,7 @@
  * PartyBot Commander layer 1: facts that need more than one snapshot.
  *  - threat per second of every party-side unit on every enemy
  *  - since when an enemy has been hitting its current victim
+ *  - when an enemy last lost health (EnemyFacts::lastHurtMs)
  * Pure data, one instance per PartyCommander.
  */
 

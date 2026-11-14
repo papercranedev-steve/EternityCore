@@ -22,7 +22,7 @@
  *  - Otherwise the tank stays where it stands. Its enemy (the brain's target, else the victim)
  *    out of melee reach:
  *      comes by itself (it hits this tank, walks in to melee: Tags::Engage::Melee with melee
- *      on, not rooted, controlled or running away): no chase; a chase under way is stopped
+ *      on, not rooted, controlled, casting or running away): no chase; a chase under way is stopped
  *      (StopChase);
  *      else (stands back casting, rooted, hits someone else and the tank must get it with a
  *      melee ability, runs away): chase it (BotActionType::Chase, angle 0 in front, value

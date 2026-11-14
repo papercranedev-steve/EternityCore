@@ -446,9 +446,9 @@ namespace CastValues
             remainingMs = p->channeled ? p->durationMs : p->castMs;
         }
 
-        // It may die before the cast completes.
+        // It may die before the cast completes (only when it is being hit: Value::EnemyDyingSec).
         float const remainingSec = remainingMs / 1000.0f;
-        float const ttd = Value::EnemyTimeToDie(world, enemy);
+        float const ttd = Value::EnemyDyingSec(world, enemy);
         if (remainingSec > 0.0f && ttd < remainingSec)
         {
             v.points *= ttd / remainingSec;
@@ -459,7 +459,7 @@ namespace CastValues
         {
             if (EnemyFacts const* healed = world.FindEnemy(enemy.castTarget))
             {
-                float const healedTtd = Value::EnemyTimeToDie(world, *healed);
+                float const healedTtd = Value::EnemyDyingSec(world, *healed);
                 if (remainingSec > 0.0f && healedTtd < remainingSec)
                     v.points *= healedTtd / remainingSec;
             }
@@ -479,7 +479,7 @@ namespace CastValues
 
         // SpellCaster::LockOutSpells locks the whole school: Kicking Holy Strike also blocks
         // the heal (scenario 2, 1.3). Only while the enemy lives.
-        float const window = std::min(ability.lockoutMs / 1000.0f, Value::EnemyTimeToDie(world, enemy));
+        float const window = std::min(ability.lockoutMs / 1000.0f, Value::EnemyDyingSec(world, enemy));
         uint8 const school = interrupted->school;
         float const elapsed = CastElapsedSec(enemy, interruptedSpellId);
 

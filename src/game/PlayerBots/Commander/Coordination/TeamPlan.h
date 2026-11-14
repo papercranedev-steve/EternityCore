@@ -852,6 +852,10 @@ namespace Commander
         // The fight is not bearable without holding it (Coordination/Doctrine/TacticCheck.h,
         // DoctrinePlan::holds): a task for its controller, nobody else controls it (CrowdControlAssigner).
         STAMP_MUST_CONTROL  = 1 << 18,
+        // The tank does not need to hold it (user 2026-11-14: fodder, a trap swarm; not a
+        // self-destruct, its own stamps decide): damage dealers hit it without waiting for the
+        // tank's threat (DamageTargets::ThreatAllows, ThreatBehavior's stop).
+        STAMP_NO_HOLD       = 1 << 19,
     };
 
     // An enemy the doctrine holds under a control so the fight is bearable (TacticCheck.h).

@@ -311,7 +311,7 @@ namespace Commander
                 break;
             case ROLE_MELEE_DPS:
             case ROLE_RANGE_DPS:
-                ProposeDamage(bot, world, out);
+                ProposeDamage(bot, world, plan, out);
                 break;
             case ROLE_HEALER:
                 ProposeHealer(bot, world, out);
@@ -473,7 +473,8 @@ namespace Commander
     }
 
     // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
-    void ThreatBehavior::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ThreatBehavior::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                       std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         Unit const* pVictim = me->GetVictim();
@@ -484,6 +485,9 @@ namespace Commander
         PartyMemberFacts const* myFacts = world.FindMember(self);
         EnemyFacts const* e = world.FindEnemy(pVictim->GetObjectGuid());
         if (!myFacts || !e || e->victim.IsEmpty() || e->victim == self)
+            return;
+        // Doctrine NoHold (fodder, a trap swarm): the tank need not hold it (DamageTargets).
+        if (plan.doctrine.Has(e->guid, STAMP_NO_HOLD))
             return;
 
         // Only protect a holder (also a tank-like ally). If it is on a healer, another dps or an

@@ -18,6 +18,9 @@ namespace DamageTargets
     bool ThreatAllows(TargetContext const& ctx, PartyMemberFacts const& bot, EnemyFacts const& e, bool staying)
     {
         WorldModel const& world = ctx.world;
+        // Doctrine NoHold (fodder, a trap swarm): the tank need not hold it, no threat rule.
+        if (ctx.plan.doctrine.Has(e.guid, STAMP_NO_HOLD))
+            return true;
         // Nobody fights it yet: the tank's first (its opener builds the lead), else the player's.
         if (e.victim.IsEmpty())
             return !ctx.tankBot;

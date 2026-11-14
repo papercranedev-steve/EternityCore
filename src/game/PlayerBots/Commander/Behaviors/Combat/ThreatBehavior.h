@@ -112,7 +112,8 @@ namespace Commander
     private:
         void ProposeTank(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                          std::vector<Proposal>& out) const;
-        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                           std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
         void ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;

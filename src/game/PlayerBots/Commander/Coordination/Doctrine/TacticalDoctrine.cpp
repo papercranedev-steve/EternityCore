@@ -409,6 +409,8 @@ namespace Commander
                     noMez("player hits it");
                 }
             RoleStamps::Apply(world, *e, x);
+            if ((Tier(x.tier) == Tier::Fodder || (x.stamps & STAMP_SWARM)) && !(x.stamps & STAMP_SELF_DESTRUCT))
+                x.stamps |= STAMP_NO_HOLD;
             uint32 const othersFree = free - (IsFree(*e) ? 1 : 0);
             if (!(x.stamps & STAMP_NO_MEZ) && othersFree > 0 && HeldByBot(world, *e))
                 x.stamps |= STAMP_COMMITTED;
@@ -503,6 +505,7 @@ namespace Commander
         if (d.stamps & STAMP_STRAGGLER)     s += ", straggler (the tank's)";
         if (d.stamps & STAMP_DPS_ONLY)      s += ", left to the damage dealers";
         if (d.stamps & STAMP_MUST_CONTROL)  s += ", must be held (not bearable otherwise)";
+        if (d.stamps & STAMP_NO_HOLD)       s += ", no tank hold";
         return s;
     }
 }

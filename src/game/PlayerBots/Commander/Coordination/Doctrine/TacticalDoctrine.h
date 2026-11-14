@@ -47,6 +47,8 @@
  *              time (ControlAbility::holding), and another enemy is still free: that bot renews
  *              it and does not move it.
  *   PlayerTarget  a player hits it (also NoMez: it would break anyway).
+ *   NoHold     Tier Fodder or a trap swarm, not a self-destruct: damage dealers do not wait
+ *              for the tank's threat on it.
  *   The groups are stamps too, for the display.
  * Reads the pull and the retreat as their modules left them (this or the
  * last refresh: one refresh late does not matter here).

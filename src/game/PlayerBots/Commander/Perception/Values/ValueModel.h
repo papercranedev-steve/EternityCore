@@ -97,6 +97,13 @@ namespace Commander
 
         // Seconds until `enemy` dies at its share of the party's damage.
         float EnemyTimeToDie(WorldModel const& world, EnemyFacts const& enemy);
+        // Seconds until `enemy` dies of the damage it is taking: EnemyTimeToDie while it is being
+        // hurt (lost health within HURT_RECENT_SEC, EnemyFacts::lastHurtMs), else NO_LIMIT. For
+        // "it dies before its cast ends" (CastValue): nobody hitting it, it does not
+        // (strat-20261114-133225: a 10 s summon on a 270 hp Eye of Naxxramas nobody hit was
+        // worth 5 points at the start, the Counterspell came 1.2 s before the end).
+        static constexpr float HURT_RECENT_SEC = 3.0f;
+        float EnemyDyingSec(WorldModel const& world, EnemyFacts const& enemy);
 
         // Share of a bot's output lost while melee enemies chase it (user, 2026-11-01): a healer's
         // casts are pushed back and it has to step around, a ranged damage dealer kites or is

@@ -3,6 +3,7 @@
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Tanks.h"
 #include "SharedDefines.h"
+#include "Timer.h"
 #include <algorithm>
 
 namespace Commander
@@ -212,6 +213,13 @@ namespace Value
                 ++targets;
         float const share = DealtDps(world) / float(std::max<size_t>(1, targets));
         return float(enemy.health) / std::max(1.0f, share);
+    }
+
+    float EnemyDyingSec(WorldModel const& world, EnemyFacts const& enemy)
+    {
+        bool const hurt = enemy.lastHurtMs &&
+            WorldTimer::getMSTimeDiff(enemy.lastHurtMs, world.refreshedAtMs) <= uint32(HURT_RECENT_SEC * 1000.0f);
+        return hurt ? EnemyTimeToDie(world, enemy) : ThreatView::NO_LIMIT;
     }
 }
 }

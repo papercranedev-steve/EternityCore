@@ -107,11 +107,13 @@ namespace Commander
             out.push_back(p);
         }
 
-        // It walks to this tank by itself (header).
+        // It walks to this tank by itself (header). Not while it casts: it stands until the cast
+        // ends (strat-20261114-133225: an Eye of Naxxramas 10 yd off read its 10 s summon, the
+        // tank waited for it to come and nobody hit it).
         bool Comes(EnemyFacts const& e, ObjectGuid tank)
         {
             return e.victim == tank && e.meleeEnabled && !e.rooted && !e.crowdControlled && !e.flee.fleeing &&
-                   Tags::EngageOf(e) == Engage::Melee;
+                   !e.castingSpellId && Tags::EngageOf(e) == Engage::Melee;
         }
     }
 
