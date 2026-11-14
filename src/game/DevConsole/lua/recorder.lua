@@ -2,7 +2,7 @@
 -- in rec.dir (relative to the mangosd working directory, i.e. repack\server).
 --
 -- Line types:
---   begin   {type, t, label, file, members=[{guid,name,class,role,level}]}
+--   begin   {type, t, label, file, level (rec.level), members=[{guid,name,class,role,level}]}
 --   snap    {type, t, party=[info], enemies=[info + threat=[{g,v}]]}   every rec.interval ms;
 --           info without the unit line's fields (name, class, level, maxhp, ...)
 --   ev      {type, t, ev, src, dst, spell, amount, extra, school, crit} from the server hooks
@@ -63,6 +63,19 @@ rec.traceKeepMs = rec.traceKeepMs or 6000
 rec.traceBeforeMs = rec.traceBeforeMs or 4000
 rec.traceAfterMs = rec.traceAfterMs or 1000
 rec.traceStartMs = rec.traceStartMs or 2000
+
+-- Recording level (2026-11-14): how much of the calculation trace goes in the file. snap / ev /
+-- dec / plan / anomaly lines are written at every level (the review needs them).
+--   verbose   the trace of the whole fight; repeated decisions written one by one
+--   normal    trace around every anomaly
+--   warning   trace around mid and high anomalies (low ones: idle, stuck, ccmove get their
+--             anomaly line only)
+--   danger    trace around high anomalies only (deaths, heal gaps, player marks, ...)
+-- The fight's start and the pull planning are written at every level. Set with rec.level = "..."
+-- (wowdbg.ps1); it is read when a fight begins and written in the begin line.
+rec.level = rec.level or "warning"
+local LEVEL_MIN_SEV = { verbose = 1, normal = 1, warning = 2, danger = 3 }
+local SEV_RANK = { low = 1, mid = 2, high = 3 }
 
 local function ensureDir(dir)
     local win = dir:gsub("/", "\\")
@@ -182,7 +195,7 @@ end
 local function writeDec(w, d)
     local key = json(d.cands)
     local run = w.decRuns[d.bot]
-    if run and run.key == key then
+    if run and run.key == key and w.level ~= "verbose" then
         run.n = run.n + 1
         run.t = d.t
         return
@@ -407,10 +420,16 @@ local function beginFight(w, members)
     w.unitStatic = {}
     w.decRuns = {}
     w.anomaliesSeen = 0
-    openTraceWindow(w, w.fightStart - 1000, w.fightStart + rec.traceStartMs)
+    w.level = LEVEL_MIN_SEV[rec.level] and rec.level or "warning"
+    if w.level == "verbose" then
+        openTraceWindow(w, w.fightStart - 1000, math.huge)
+    else
+        openTraceWindow(w, w.fightStart - 1000, w.fightStart + rec.traceStartMs)
+    end
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     review.begin(w, members)
-    write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, members = memberRows(members) })
+    write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, level = w.level,
+               members = memberRows(members) })
     for _, e in ipairs(w.pre) do
         e.type = "ev"
         write(w, e)
@@ -534,11 +553,14 @@ local function tick(w)
     review.observe(w, { leader = leader, members = members, party = party, enemies = enemies,
                         enemyRows = enemyRows, evs = evs, decs = decs, plan = plan, pull = pull, now = now() })
 
-    -- anomalies found this tick (marks too): the calculations around them
+    -- anomalies found this tick (marks too): the calculations around them, from the level's
+    -- severity up
     local found = w.review and w.review.list or {}
     for k = (w.anomaliesSeen or 0) + 1, #found do
         local a = found[k]
-        openTraceWindow(w, a.t - rec.traceBeforeMs, a.t + rec.traceAfterMs)
+        if (SEV_RANK[a.sev] or 2) >= LEVEL_MIN_SEV[w.level] then
+            openTraceWindow(w, a.t - rec.traceBeforeMs, a.t + rec.traceAfterMs)
+        end
     end
     w.anomaliesSeen = #found
 

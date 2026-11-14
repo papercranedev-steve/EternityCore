@@ -264,7 +264,7 @@ local function emit(rs, kind, a)
                    who = nameOf(rs, whoG), by = nameOf(rs, byG), whoG = whoG, byG = byG,
                    cause = a.cause, facts = a.facts, links = a.links }
     rec.writeLine(w, line)
-    rs.list[#rs.list + 1] = { id = id, t = t, kind = kind, whoG = whoG, byG = byG }
+    rs.list[#rs.list + 1] = { id = id, t = t, kind = kind, sev = line.sev, whoG = whoG, byG = byG }
     rs.counts[kind] = (rs.counts[kind] or 0) + 1
 
     local leader = unit(w.leader)
