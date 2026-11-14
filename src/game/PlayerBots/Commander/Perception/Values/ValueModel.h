@@ -26,6 +26,8 @@ namespace Commander
 
         // Global cooldown used for the time cost of an instant ability.
         static constexpr float GCD_SEC = 1.5f;
+        // A rooted enemy hits in melee only this far from its edge (IncomingOn).
+        static constexpr float ROOTED_REACH_YD = 5.0f;
         // Damage per second per level of one member whose own estimate is unknown
         // (PartyMemberFacts::soloDps 0), used before the fight has been measured.
         static constexpr float FALLBACK_DPS_PER_LEVEL = 6.0f;
@@ -85,7 +87,8 @@ namespace Commander
         // Seconds `victim` survives being hit by `enemy` alone, no heals.
         float SurviveSec(EnemyFacts const& enemy, PartyMemberFacts const& victim);
 
-        // Melee damage per second all enemies currently deal to `member`, after armor.
+        // Melee damage per second all enemies currently deal to `member`, after armor (a
+        // rooted one beyond ROOTED_REACH_YD of it: only its ranged damage).
         float IncomingOn(WorldModel const& world, ObjectGuid member);
         // Damage per second `member` is expected to take: the larger of IncomingOn (predicted
         // from the enemies on it) and the measured rate (PartyMemberFacts::takenDps), which

@@ -5,6 +5,7 @@
 #include "SharedDefines.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -158,8 +159,17 @@ namespace Value
             return 0.0f;
         float total = 0.0f;
         for (EnemyFacts const& e : world.enemies)
-            if (!e.crowdControlled && e.victim == member)
+        {
+            if (e.crowdControlled || e.victim != member)
+                continue;
+            // Rooted (Frost Nova) out of melee reach: only its ranged spell hits (2026-11-14:
+            // the area caster that rooted its chasers counted their whole melee).
+            float const dx = e.pos.x - m->pos.x, dy = e.pos.y - m->pos.y;
+            if (e.rooted && e.acting && std::sqrt(dx * dx + dy * dy) - e.boundingRadius > ROOTED_REACH_YD)
+                total += e.rangedDps;
+            else
                 total += HitDps(e, *m);
+        }
         return total;
     }
 

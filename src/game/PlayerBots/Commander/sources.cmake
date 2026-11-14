@@ -63,6 +63,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/AreaValue.cpp
   ${COMMANDER_DIR}/Perception/Forecast/Runners.h
   ${COMMANDER_DIR}/Perception/Forecast/Runners.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/AreaRound.h
+  ${COMMANDER_DIR}/Perception/Forecast/AreaRound.cpp
   ${COMMANDER_DIR}/Perception/Spatial/AreaCentre.h
   ${COMMANDER_DIR}/Perception/Spatial/AreaCentre.cpp
   ${COMMANDER_DIR}/Perception/Spatial/LeapSpots.h

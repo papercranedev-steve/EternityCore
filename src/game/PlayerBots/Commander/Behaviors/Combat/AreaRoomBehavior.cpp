@@ -4,6 +4,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Forecast/AreaRound.h"
 #include "Commander/Perception/Forecast/Runners.h"
 #include "Commander/Perception/Spatial/LeapSpots.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -313,19 +314,72 @@ namespace Commander
                                [self](EnemyFacts const& e) { return e.acting && e.rooted && e.victim == self; });
         }
 
+        void ProposeToTank(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+                           std::vector<EnemyFacts const*> const& chasers, char const* reason, std::vector<Proposal>& out)
+        {
+            if (chasers.empty())
+                return;
+            Unit* from = bot->me->GetMap()->GetUnit(chasers.front()->guid);
+            float const incoming = Value::IncomingOn(world, self.guid);
+            float const absorbedSec = incoming > 0.0f ? self.absorb / incoming : 0.0f;
+            std::size_t const before = out.size();
+            if (RunToTank::Propose(bot, world, self, chasers, from, absorbedSec, ProposalTier::Urgent, SOURCE, out) &&
+                out.size() > before)
+                out.back().reason = reason;
+        }
+
         void ProposeToTank(PartyBotAI const* bot, WorldModel const& world, Line const& line, char const* reason,
                            std::vector<Proposal>& out)
         {
             std::vector<EnemyFacts const*> chasers;
             for (Runner const& r : line.runners)
                 chasers.push_back(r.facts);
-            Unit* from = bot->me->GetMap()->GetUnit(chasers.front()->guid);
-            float const incoming = Value::IncomingOn(world, line.self->guid);
-            float const absorbedSec = incoming > 0.0f ? line.self->absorb / incoming : 0.0f;
-            std::size_t const before = out.size();
-            if (RunToTank::Propose(bot, world, *line.self, chasers, from, absorbedSec, ProposalTier::Urgent, SOURCE, out) &&
-                out.size() > before)
-                out.back().reason = reason;
+            ProposeToTank(bot, world, *line.self, chasers, reason, out);
+        }
+
+        // Header "Another round": the area phase plans a new ground channel for the bot (not
+        // the running one) and AreaRound says its chasers stay off it until it is safe.
+        AreaRound::Result Round(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                PartyMemberFacts const& self, SpellEntry const* nova)
+        {
+            AreaRound::Result none;
+            none.why = "the area phase plans no new ground channel for it";
+            AreaPlan const& a = plan.area;
+            if (!a.CastBy(self.guid) || a.step == AreaStep::Channel)
+                return none;
+            AreaSpellFacts const* spell = AreaValue::SpellOf(self, a.spellId);
+            if (!spell || !spell->onTarget || !spell->channel)
+                return none;
+            Player* me = bot->me;
+            AreaRound::Request r;
+            r.caster = &self;
+            r.spell = spell;
+            r.from = (a.step == AreaStep::Move && !a.spots.empty()) ? a.spot : self.pos;
+            r.centre = a.centrePos;
+            for (SpellEntry const* s : { nova, bot->Kit().Leap(), bot->Kit().SlowCone() })
+            {
+                float const in = s ? bot->SpellReadyInSec(me, s) : -1.0f;
+                if (in >= 0.0f && (r.rescueInSec < 0.0f || in < r.rescueInSec))
+                    r.rescueInSec = in;
+            }
+            r.rescueMana = nova ? DamageSpells::ManaCost(me, nova) : 0.0f;
+            return AreaRound::Of(world, r);
+        }
+
+        // Enemies rooted on the bot (its Frost Nova held them all), not crowd controlled.
+        std::vector<EnemyFacts const*> RootedChasers(WorldModel const& world, ObjectGuid self)
+        {
+            std::vector<EnemyFacts const*> out;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && e.rooted && !e.crowdControlled && e.health && e.victim == self)
+                    out.push_back(&e);
+            return out;
+        }
+
+        bool WalkingToTank(PartyBotAI const* bot)
+        {
+            char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
+            return owner && !strcmp(owner, SOURCE) && bot->me->IsMoving();
         }
     }
 
@@ -346,6 +400,26 @@ namespace Commander
         Player* me = bot->me;
         if (line.runners.empty())
         {
+            // All of them rooted (its Frost Nova): another round when it is safe, else to the
+            // tank (header "Another round"); re-judged on the way (the plan may come a refresh late).
+            std::vector<EnemyFacts const*> const rooted = RootedChasers(world, line.self->guid);
+            if (!rooted.empty() && !me->HasUnitState(UNIT_STATE_ROOT) &&
+                !Round(bot, world, plan, *line.self, nova).ok)
+            {
+                if (WalkingToTank(bot))
+                {
+                    Proposal hold;
+                    hold.tier = ProposalTier::Urgent;
+                    hold.source = SOURCE;
+                    hold.reason = "on the way to the tank";
+                    hold.action.type = BotActionType::Hold;
+                    out.push_back(hold);
+                }
+                else
+                    ProposeToTank(bot, world, *line.self, rooted,
+                                  "all rooted, the next Blizzard would not keep them off: to the tank", out);
+                return;
+            }
             RunToTank::ProposeStop(bot, SOURCE, "nobody running at me any more, stop", out);
             return;
         }
@@ -366,10 +440,16 @@ namespace Commander
         if (novaSpent && ProposeCone(bot, world, line, false, "chased, no Frost Nova: Cone of Cold", out))
             return;
 
-        // Its own walk to the tank is under way: keep walking.
-        char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
-        if (owner && !strcmp(owner, SOURCE) && me->IsMoving())
+        // Its own walk to the tank is under way: keep walking, unless another round became
+        // safe (the plan may come a refresh late; nothing else is re-judged on the way).
+        AreaRound::Result const round = Round(bot, world, plan, *line.self, nova);
+        if (WalkingToTank(bot))
         {
+            if (round.ok)
+            {
+                RunToTank::ProposeStop(bot, SOURCE, "under control: another round", out);
+                return;
+            }
             Proposal hold;
             hold.tier = ProposalTier::Urgent;
             hold.source = SOURCE;
@@ -383,7 +463,7 @@ namespace Commander
         // Right after a Frost Nova that left some free: to the tank now (doc 3.4 step 3).
         if (line.novaInSec < 0.0f && RootedOnMe(world, line.self->guid))
         {
-            if (!rooted)
+            if (!rooted && !round.ok)
                 ProposeToTank(bot, world, line, "Frost Nova did not hold them all: to the tank", out);
             return;
         }
@@ -456,7 +536,7 @@ namespace Commander
             if (line.novaInSec <= 0.0f || waits(line.novaInSec))
                 return;
         }
-        if (!rooted)
+        if (!rooted && !round.ok)
             ProposeToTank(bot, world, line, "they are here, no Frost Nova: to the tank", out);
     }
 

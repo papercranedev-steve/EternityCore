@@ -38,6 +38,15 @@
  *   other steps). The Frost Nova's moment is one of the time line's moments; a step whose
  *   spell is that soon waits for it when the caster survives until then (the "When" danger
  *   check), else the next step.
+ * Another round (user 2026-11-14, doc .kiro/docs/2026-11-14-area-round.md): where it would go
+ *   to the tank ("Frost Nova did not hold them all", "no Frost Nova"), it stays when the area
+ *   phase plans a new ground channel for it (AreaPlan::CastBy, not the running one) and
+ *   Perception/Forecast/AreaRound says every chaser is under control and stays off it until the
+ *   channel ends or its next rescue (Frost Nova, Blink, Cone of Cold, PartyBotAI::SpellReadyInSec)
+ *   is ready; the area phase then walks it to its spot and casts. All of them rooted (nobody
+ *   running): before 2026-11-14 it always left them to the area phase; now to the tank unless
+ *   that round is safe. A walk to the tank already under way stops once the round is safe (the
+ *   plan can come a refresh after the Frost Nova); nothing else is re-judged on the way.
  * Tier Urgent. While its own walk is under way: hold it; nobody running at it: stop it.
  * Values: Frost Nova benefit held(now); Blink the runners' hits and harassment while they
  * walk its distance again; cost LostAction(GCD) + ManaWorth(its mana).
