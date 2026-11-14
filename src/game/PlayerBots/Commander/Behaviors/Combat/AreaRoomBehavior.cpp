@@ -326,7 +326,7 @@ namespace Commander
     void AreaRoomBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
-        if (plan.retreat.active || bot->IsInDuel())
+        if (plan.retreat.active)
             return;
         Line line;
         SpellEntry const* nova = nullptr;
@@ -434,7 +434,7 @@ namespace Commander
     float AreaRoomBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                              uint32 castLeftMs, char const*& reason) const
     {
-        if (plan.retreat.active || bot->IsInDuel())
+        if (plan.retreat.active)
             return 0.0f;
         Line line;
         SpellEntry const* nova = nullptr;

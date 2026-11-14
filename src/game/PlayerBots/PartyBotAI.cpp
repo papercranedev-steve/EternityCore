@@ -134,17 +134,18 @@ Player* PartyBotAI::GetPartyLeader() const
 
     if (Player* originalLeader = ObjectAccessor::FindPlayerNotInWorld(m_leaderGuid))
     {
-        if (me->InBattleGround() == originalLeader->InBattleGround())
-        {
-            // In case the original spawner is not in the same group as the bots anymore.
-            if (pGroup != originalLeader->GetGroup())
-                return nullptr;
+        // A leader in a battleground is in the battleground's raid, not in the bots' group:
+        // still the leader, the bots wait outside (UpdateAI). Bots do not go to battlegrounds.
+        if (originalLeader->InBattleGround())
+            return originalLeader;
 
-            // In case the current leader is the bot itself and it's not inside a Battleground.
-            ObjectGuid currentLeaderGuid = pGroup->GetLeaderGuid();
-            if (currentLeaderGuid == me->GetObjectGuid() && !me->InBattleGround())
-                return nullptr;
-        }
+        // In case the original spawner is not in the same group as the bots anymore.
+        if (pGroup != originalLeader->GetGroup())
+            return nullptr;
+
+        // In case the current leader is the bot itself.
+        if (pGroup->GetLeaderGuid() == me->GetObjectGuid())
+            return nullptr;
 
         return originalLeader;
     }
@@ -237,7 +238,7 @@ bool PartyBotAI::IsCrowdControlControlled() const
 
 bool PartyBotAI::IgnoresCrowdControlMarks() const
 {
-    return !IsInDuel() && sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
+    return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
 }
 
 bool PartyBotAI::IsStanceControlled() const
@@ -322,8 +323,7 @@ void PartyBotAI::BreakControl()
     // Divine Shield / Ice Block lift a stun too, but they are the bot's emergency cooldowns: the
     // team rescue decides them (RescueAssigner gives one when this bot is about to die), not the
     // stun. The arbiter does not run while the bot is controlled, so its duty is cast here.
-    // Duels are not the Commander's: there the original reflex spends them on any control.
-    if (!IsInDuel() && CastRescueWhileControlled())
+    if (CastRescueWhileControlled())
         return;
     // Will of the Forsaken (2 min) before the trinket (5 min): one answer to a fear or charm
     // (cooldown doc 2026-11-14, section 8 of the spell list).
@@ -331,7 +331,7 @@ void PartyBotAI::BreakControl()
         if ((me->HasAuraType(SPELL_AURA_MOD_FEAR) || me->HasAuraType(SPELL_AURA_MOD_CHARM)) &&
             me->IsSpellReady(pBreak) && DoCastSpell(me, pBreak) == SPELL_CAST_OK)
             return;
-    BreakCrowdControlEffects(IsInDuel());
+    BreakCrowdControlEffects(false);
 }
 
 bool PartyBotAI::CastRescueWhileControlled()
@@ -366,7 +366,7 @@ bool PartyBotAI::IsStealthControlled() const
 
 bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 {
-    if (!pUnit || IsInDuel() || !sCommanderMgr.IsEnabled())
+    if (!pUnit || !sCommanderMgr.IsEnabled())
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -375,7 +375,7 @@ bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 
 bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
 {
-    if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_CHARGE) || IsInDuel() || !sCommanderMgr.IsEnabled())
+    if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_CHARGE) || !sCommanderMgr.IsEnabled())
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().ForbidsGapCloser(me->GetObjectGuid());
@@ -383,7 +383,7 @@ bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
 
 bool PartyBotAI::IsSpellHeld(SpellEntry const* pSpell) const
 {
-    if (!pSpell || IsInDuel() || !sCommanderMgr.IsEnabled())
+    if (!pSpell || !sCommanderMgr.IsEnabled())
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().HoldsSpell(me->GetObjectGuid(), pSpell->Id, pSpell->NeedsComboPoints());
@@ -392,7 +392,7 @@ bool PartyBotAI::IsSpellHeld(SpellEntry const* pSpell) const
 bool PartyBotAI::IsLongCastHeld(SpellEntry const* pSpell) const
 {
     // Cheap tests first: most casts of a tick are instant.
-    if (!pSpell || IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled() ||
+    if (!pSpell || !me->IsInCombat() || !sCommanderMgr.IsEnabled() ||
         (pSpell->GetCastTime(me) <= 0 && !pSpell->IsChanneledSpell()))
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -426,7 +426,7 @@ void PartyBotAI::AssignRole(CombatBotRoles role)
 bool PartyBotAI::UsesSafeFollow() const
 {
     // (on a transport the follow point is relative to the transport, FollowSpot does not handle it)
-    return sCommanderMgr.IsEnabled() && !IsInDuel() && !me->GetTransport();
+    return sCommanderMgr.IsEnabled() && !me->GetTransport();
 }
 
 Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader)
@@ -623,7 +623,7 @@ bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 
 bool PartyBotAI::IsAssignedToBreakControl(Unit const* pTarget) const
 {
-    if (!pTarget || !me->IsInCombat() || IsInDuel() || !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("cc"))
+    if (!pTarget || !me->IsInCombat() || !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("cc"))
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -716,8 +716,7 @@ bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
 
     // Commander position module: run where no idle pack is (FleePoint.h). Nowhere safe:
     // stay and fight, running blind pulled the next hall in the first Stockade test.
-    if (sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("position") && !IsInDuel() &&
-        !me->GetTransport())
+    if (sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("position") && !me->GetTransport())
     {
         float x, y, z;
         std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -944,7 +943,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     if (WouldWakeKeptControl(pTarget, pSpellEntry))
         return false;
 
-    if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell() && !IsInDuel())
+    if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell())
     {
         // (With the Commander crowd control module on, marks are not used; area spells keep
         // off controlled enemies through TeamPlan::KeepsUnbroken instead.)
@@ -1002,7 +1001,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 
 bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
-    if (!pTarget || !pSpellEntry || IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!pTarget || !pSpellEntry || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
         return false;
     // Cheap test first: most casts of a tick are buffs and heals.
     if (!Commander::SpellTags::DealsDamage(pSpellEntry) && Commander::SpellTags::MeleeSplashRadius(pSpellEntry) <= 0.0f)
@@ -1016,7 +1015,7 @@ bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSp
 void PartyBotAI::CancelSplashNearKeptControl()
 {
     Unit* pVictim = me->GetVictim();
-    if (!pVictim || IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!pVictim || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
         return;
     std::shared_ptr<Commander::PartyCommander> commander;
     for (uint32 spellId : Commander::SpellTags::MELEE_SPLASH_SPELLS)
@@ -1048,9 +1047,6 @@ bool PartyBotAI::WouldAreaSpellPullIdle(Unit const* pUnit) const
 
 bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const
 {
-    if (IsInDuel())
-        return true;
-
     if (pSpellEntry->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS) &&
         AreOthersOnSameTarget(pTarget->GetObjectGuid()))
         return false;
@@ -1108,24 +1104,8 @@ Unit* PartyBotAI::GetMarkedTarget(RaidTargetIcon mark) const
     return nullptr;
 }
 
-// Was SelectAttackTarget (focus marks, the leader's victim, own attackers, the first attacker of
-// any member within 50 yd, the pet's attacker) and SelectPartyAttackTarget. Outside duels the
-// Commander chooses every target since 2026-11-07 (Coordination/Duties/TargetAssigner.h).
-Unit* PartyBotAI::SelectDuelTarget() const
-{
-    if (me->m_duel && me->m_duel->opponent && IsValidHostileTarget(me->m_duel->opponent))
-        return me->m_duel->opponent;
-    for (const auto pAttacker : me->GetAttackers())
-        if (IsValidHostileTarget(pAttacker))
-            return pAttacker;
-    return nullptr;
-}
-
 Player* PartyBotAI::SelectResurrectionTarget() const
 {
-    if (IsInDuel())
-        return nullptr;
-
     Group* pGroup = me->GetGroup();
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
@@ -1156,9 +1136,6 @@ Player* PartyBotAI::SelectResurrectionTarget() const
 
 Player* PartyBotAI::SelectShieldTarget() const
 {
-    if (IsInDuel())
-        return nullptr;
-
     Group* pGroup = me->GetGroup();
     if (!pGroup)
         return nullptr;
@@ -1261,7 +1238,9 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
         }
         case SMSG_DUEL_REQUESTED:
         {
-            auto data = std::make_unique<WorldPackets::Duel::DuelAccepted>();
+            // Party bots do not duel: decline (the request would hang until the challenger
+            // walked away).
+            auto data = std::make_unique<WorldPackets::Duel::DuelCancelled>();
             data->playerGuid = me->GetObjectGuid();
             me->GetSession()->QueuePacket(std::move(data));
             return;
@@ -1439,21 +1418,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!pLeader->IsInWorld())
         return;
 
-    sCommanderMgr.OnBotUpdate(this);
-
-    if (pLeader->InBattleGround() &&
-        !me->InBattleGround())
-    {
-        if (m_receivedBgInvite)
-        {
-            SendBattlefieldPortPacket();
-            m_receivedBgInvite = false;
-            return;
-        }
-
-        // Remain idle until we can join battleground.
+    // Bots do not go to battlegrounds: they wait until the leader is back.
+    if (pLeader->InBattleGround())
         return;
-    }
+
+    sCommanderMgr.OnBotUpdate(this);
 
     if (pLeader->IsTaxiFlying())
     {
@@ -1478,24 +1447,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (me->IsDead())
     {
-        if (me->InBattleGround())
+        if (ShouldAutoRevive())
         {
-            if (me->GetDeathState() == CORPSE)
-            {
-                me->BuildPlayerRepop();
-                me->RepopAtGraveyard();
-            }
+            me->ResurrectPlayer(0.5f);
+            me->SpawnCorpseBones();
+            me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
         }
-        else
-        {
-            if (ShouldAutoRevive())
-            {
-                me->ResurrectPlayer(0.5f);
-                me->SpawnCorpseBones();
-                me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
-            }
-        }
-
         return;
     }
 
@@ -1605,7 +1562,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // (eating and drinking: the Commander rest module, RestBehavior, through the hook below)
 
         // Teleport to leader if too far away.
-        if (!me->IsWithinDistInMap(pLeader, 100.0f) && !IsInDuel())
+        if (!me->IsWithinDistInMap(pLeader, 100.0f))
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -1621,7 +1578,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // Eating and drinking are the Commander's (RestBehavior): the hook runs out of combat while
     // something is missing, and a resting bot stands up when the Commander has something better
     // (the arbiter before any other action, the heal order step), or here for a resurrection.
-    bool const commanderOn = sCommanderMgr.IsEnabled() && !IsInDuel();
+    bool const commanderOn = sCommanderMgr.IsEnabled();
     bool const needsRest = commanderOn && !me->IsInCombat() && NeedsRest();
     bool const commanderResting = commanderOn && !me->IsInCombat() && IsResting() && !resurrectFirst;
     if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting)
@@ -1681,16 +1638,6 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // that set this tick's heal order (the out of combat AI above runs before it).
     if (!me->IsInCombat() && IsHealingControlled() && CastHealOrder())
         return;
-
-    // The Commander does not run in duels: the opponent is the only target.
-    if (IsInDuel() && !me->GetVictim())
-    {
-        if (Unit* pOpponent = SelectDuelTarget())
-        {
-            AttackStart(pOpponent);
-            return;
-        }
-    }
 
     Unit* pVictim = me->GetVictim();
 
@@ -1792,17 +1739,14 @@ void PartyBotAI::FaceMeleeVictim(Unit* pVictim)
 
 void PartyBotAI::UpdateOutOfCombatAI()
 {
-    if (!IsInDuel())
-    {
-        if (m_resurrectionSpell)
-            if (Player* pTarget = SelectResurrectionTarget())
-                if (CanTryToCastSpell(pTarget, m_resurrectionSpell))
-                    if (DoCastSpell(pTarget, m_resurrectionSpell) == SPELL_CAST_OK)
-                        return;
+    if (m_resurrectionSpell)
+        if (Player* pTarget = SelectResurrectionTarget())
+            if (CanTryToCastSpell(pTarget, m_resurrectionSpell))
+                if (DoCastSpell(pTarget, m_resurrectionSpell) == SPELL_CAST_OK)
+                    return;
 
-        if (m_role != ROLE_TANK && me->GetVictim() && CrowdControlMarkedTargets())
-            return;
-    }
+    if (m_role != ROLE_TANK && me->GetVictim() && CrowdControlMarkedTargets())
+        return;
 
     if (CheckForDispelTargets())
         return;
@@ -1844,7 +1788,7 @@ void PartyBotAI::UpdateInCombatAI()
     // The tank's "defend party members" (switch to the first enemy hitting a member) and its
     // taunt on its own victim are gone since 2026-11-07: the Commander chooses the tank's targets
     // (TargetAssigner) and its taunts (team rescue: RescueAssigner / RescueBehavior, Takeover::Taunt).
-    if (!IsInDuel() && m_role != ROLE_TANK && CrowdControlMarkedTargets())
+    if (m_role != ROLE_TANK && CrowdControlMarkedTargets())
         return;
 
     if (CheckForDispelTargets())
@@ -3136,7 +3080,7 @@ bool PartyBotAI::CanTryToCastSpellAt(float x, float y, float z, SpellEntry const
         return false;
     if (IsSpellHeld(pSpellEntry))
         return false;
-    if (IsInDuel() || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!me->IsInCombat() || !sCommanderMgr.IsEnabled())
         return true;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     Commander::Position3 const at{ x, y, z };
@@ -3503,7 +3447,7 @@ bool PartyBotAI::ShouldEnterStealth() const
     if (me->IsMounted())
         return false;
 
-    if (me->GetVictim() || me->InBattleGround() || me->IsFFAPvP())
+    if (me->GetVictim())
         return true;
 
     if (me->GetHealthPercent() < 10.0f)
@@ -4033,8 +3977,7 @@ void PartyBotAI::UpdateInCombatAI_Druid()
         {
             if (me->HasDistanceCasterMovement())
                 me->SetCasterChaseDistance(0.0f);
-            // (the chase: the Commander tank / melee stance module, or in a duel UpdateAI
-            // restarts an idle one before the rotation)
+            // (the chase: the Commander tank / melee stance module)
 
             if (m_spells.druid.pFeralCharge &&
                 CanTryToCastSpell(pVictim, m_spells.druid.pFeralCharge))

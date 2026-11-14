@@ -35,8 +35,6 @@ namespace Commander
     bool RescueBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
                                    TeamPlan const& /*plan*/) const
     {
-        if (bot->IsInDuel())
-            return false;
         switch (what)
         {
             case Takeover::Taunt:

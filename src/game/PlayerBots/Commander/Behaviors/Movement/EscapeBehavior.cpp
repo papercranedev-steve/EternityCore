@@ -246,7 +246,7 @@ namespace Commander
     bool EscapeBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
                                    TeamPlan const& /*plan*/) const
     {
-        return what == Takeover::Escape && AppliesTo(bot) && !bot->IsInDuel();
+        return what == Takeover::Escape && AppliesTo(bot);
     }
 
     void EscapeBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -260,7 +260,7 @@ namespace Commander
             return;
 
         Player* me = bot->me;
-        if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT) || bot->IsInDuel())
+        if (!me->IsInCombat() || me->HasUnitState(UNIT_STATE_ROOT))
             return;
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())

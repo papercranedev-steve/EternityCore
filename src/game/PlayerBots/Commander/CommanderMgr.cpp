@@ -141,7 +141,7 @@ namespace Commander
 
     bool CommanderMgr::OnBotCombatUpdate(PartyBotAI* bot)
     {
-        if (!IsEnabled() || bot->IsInDuel())
+        if (!IsEnabled())
             return false;
 
         if (std::shared_ptr<PartyCommander> commander = GetCommander(bot))
@@ -152,7 +152,7 @@ namespace Commander
 
     bool CommanderMgr::WantsOutOfCombatControl(PartyBotAI* bot)
     {
-        if (!IsEnabled() || bot->IsInDuel())
+        if (!IsEnabled())
             return false;
         std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
         return commander && commander->WantsOutOfCombatControl();
@@ -160,7 +160,7 @@ namespace Commander
 
     bool CommanderMgr::IsRetreating(PartyBotAI* bot)
     {
-        if (!IsEnabled() || bot->IsInDuel())
+        if (!IsEnabled())
             return false;
         std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
         return commander && commander->GetPlan().retreat.active;

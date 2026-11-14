@@ -36,7 +36,7 @@ namespace CastBreak
         if (state.lastBreakMs && WorldTimer::getMSTimeDiff(state.lastBreakMs, now) < COOLDOWN_MS)
             return false;
 
-        if (!sCommanderMgr.IsEnabled() || !me->IsInCombat() || bot->IsInDuel())
+        if (!sCommanderMgr.IsEnabled() || !me->IsInCombat())
             return false;
         // Same map as the bot, so the commander belongs to this map thread.
         std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(me);

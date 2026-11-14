@@ -32,14 +32,14 @@ namespace Commander
     bool BurstBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
                                   TeamPlan const& /*plan*/) const
     {
-        return what == Takeover::Burst && !bot->IsInDuel();
+        return what == Takeover::Burst;
     }
 
     void BurstBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
-        if (bot->IsInDuel() || !world.InFight(me->IsInCombat()))
+        if (!world.InFight(me->IsInCombat()))
             return;
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct() || self->bursts.empty())

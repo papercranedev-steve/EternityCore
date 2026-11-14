@@ -75,7 +75,7 @@ namespace Commander
         {
             Player* me = bot->me;
             Spell* channel = me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-            if (!channel || channel->getState() != SPELL_STATE_CASTING || bot->IsInDuel())
+            if (!channel || channel->getState() != SPELL_STATE_CASTING)
                 return false;
             SpellEntry const* spell = channel->m_spellInfo;
             if (!AreaDamageBehavior::Judges(bot, spell))
@@ -252,7 +252,7 @@ namespace Commander
         // be in combat yet).
         if (a.prepCaster == guid && !a.active)
         {
-            if (!bot->IsInDuel() && !me->GetTransport())
+            if (!me->GetTransport())
                 ProposePrep(bot, world, a, out);
             return;
         }

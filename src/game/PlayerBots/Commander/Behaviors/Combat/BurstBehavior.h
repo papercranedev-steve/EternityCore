@@ -11,7 +11,7 @@
  *                 Elemental Mastery + Chain Lightning, Amplify Curse + Curse of Agony); only
  *                 when that cast can go now (for Amplify Curse: the curse not up on the victim)
  * Takes over Takeover::Burst: the rotations' own uses of these spells stand down
- * (PartyBotAI::IsBurstControlled; duels keep them).
+ * (PartyBotAI::IsBurstControlled).
  */
 
 #ifndef MANGOS_COMMANDER_BURST_BEHAVIOR_H

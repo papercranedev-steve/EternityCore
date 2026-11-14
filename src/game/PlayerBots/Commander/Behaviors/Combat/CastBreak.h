@@ -18,7 +18,7 @@
  *
  * At most one stop every COOLDOWN_MS: when the follow-up fails (no spot to step to, the
  * interrupt out of range) the rotation casts again and is not stopped in a loop.
- * Commander on, in combat, not in a duel. Each stop is written to the bot's decision log
+ * Commander on, in combat. Each stop is written to the bot's decision log
  * (source = the behavior's id, what = "cast-break spellN").
  *
  * The healer heal checks (CastWatch.h) and the area channel check (AreaDamageBehavior

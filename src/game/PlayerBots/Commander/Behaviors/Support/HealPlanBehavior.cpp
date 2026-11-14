@@ -196,7 +196,7 @@ namespace Commander
     bool HealPlanBehavior::ControlsSelfHealOf(PartyBotAI const* bot, WorldModel const& world)
     {
         return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
-               !bot->IsInDuel() && world.HasPartyEnemy();
+               world.HasPartyEnemy();
     }
 
     bool HealPlanBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
@@ -208,7 +208,7 @@ namespace Commander
     bool HealPlanBehavior::ControlsHealingOf(PartyBotAI const* bot, WorldModel const& world)
     {
         return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
-               bot->GetRole() == ROLE_HEALER && !bot->IsInDuel() && world.HasPartyEnemy();
+               bot->GetRole() == ROLE_HEALER && world.HasPartyEnemy();
     }
 
     void HealPlanBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,

@@ -7,7 +7,7 @@
  * frame, before its bot update throttle: the cast is tracked every frame (cheap pointer
  * compare), the checks below run at most every CHECK_INTERVAL_MS.
  *
- * Only for healer bots, Commander on, `threat` module on, outside duels, and only for a
+ * Only for healer bots, Commander on, `threat` module on, and only for a
  * single-target direct heal with a cast time (not channelled, not area, not chained).
  * Resurrections and any other cast have no heal effect and are never touched. Targets below
  * ThreatBehavior::HEAL_IGNORE_THREAT_PCT are never cancelled.

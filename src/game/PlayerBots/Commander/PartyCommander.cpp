@@ -80,7 +80,7 @@ namespace Commander
                 !member->IsAlive() || !member->AI())
                 continue;
             PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
-            if (!ai || ai->IsInDuel())
+            if (!ai)
                 continue;
             for (auto const& slot : behaviors)
             {

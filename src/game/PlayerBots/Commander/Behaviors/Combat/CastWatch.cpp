@@ -98,7 +98,7 @@ namespace CastWatch
             return false;
         state.lastCheckMs = now;
 
-        if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat") || bot->IsInDuel())
+        if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
             return false;
         if (!target->IsAlive() || !target->IsInWorld() || target->GetMaxHealth() == 0)
             return false;

@@ -139,8 +139,6 @@ public:
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
-    // Duels only (the Commander does not run there): the opponent, else an attacker.
-    Unit* SelectDuelTarget() const;
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
     Unit* GetMarkedTarget(RaidTargetIcon mark) const;
@@ -225,7 +223,7 @@ public:
     bool IsBoostControlled() const;
     // Stunned, feared, polymorphed: break out with a trinket, Blink or a shapeshift (CombatBotBaseAI::
     // BreakCrowdControlEffects). Divine Shield / Ice Block only as the team rescue's duty
-    // (CastRescueWhileControlled); in a duel the original reflex.
+    // (CastRescueWhileControlled).
     void BreakControl();
     bool CastRescueWhileControlled();
     // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's

@@ -125,7 +125,7 @@ namespace Commander
     bool TankStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan) const
     {
-        if (what != Takeover::Stance || !world.InFight(bot->me->IsInCombat()) || bot->IsInDuel() ||
+        if (what != Takeover::Stance || !world.InFight(bot->me->IsInCombat()) ||
             bot->me->GetTransport())
             return false;
         ObjectGuid const self = bot->me->GetObjectGuid();
@@ -139,7 +139,7 @@ namespace Commander
         if (plan.retreat.active)
             return;
         Player* me = bot->me;
-        if (me->HasUnitState(UNIT_STATE_ROOT) || bot->IsInDuel() || me->GetTransport())
+        if (me->HasUnitState(UNIT_STATE_ROOT) || me->GetTransport())
             return;
         if (!world.InFight(me->IsInCombat()))
             return;

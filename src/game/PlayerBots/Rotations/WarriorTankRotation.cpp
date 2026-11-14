@@ -94,8 +94,7 @@ namespace
             if (Cast(pVictim, w.pSunderArmor))
                 return;
 
-            // (where the tank stands: the Commander tank stance module, TankStanceBehavior; in a
-            // duel UpdateAI restarts an idle chase before the rotation)
+            // (where the tank stands: the Commander tank stance module, TankStanceBehavior)
 
             // Rage left over: on the next swing (no global cooldown).
             if (me->GetPower(POWER_RAGE) > RAGE_DUMP)

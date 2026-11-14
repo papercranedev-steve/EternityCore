@@ -33,7 +33,7 @@
  *    Where the chase ended is where the tank stands: the next refresh judges the spot again
  *    from there (FightSpot), it does not walk back on its own (doc 9, answer 4).
  *
- * Not while: the retreat runs, rooted, a duel, on a transport, the bot cannot act.
+ * Not while: the retreat runs, rooted, on a transport, the bot cannot act.
  * Tank facing (turning enemies away from the party) is not done.
  */
 

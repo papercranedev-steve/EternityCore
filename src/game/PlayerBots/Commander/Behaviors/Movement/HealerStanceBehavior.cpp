@@ -231,7 +231,7 @@ namespace Commander
     bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
                                          TeamPlan const& /*plan*/) const
     {
-        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
+        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
                !bot->me->GetTransport();
     }
 

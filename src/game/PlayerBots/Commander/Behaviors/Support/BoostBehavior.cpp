@@ -29,7 +29,7 @@ namespace Commander
     bool BoostBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
                                   TeamPlan const& /*plan*/) const
     {
-        return what == Takeover::Boost && !bot->IsInDuel();
+        return what == Takeover::Boost;
     }
 
     void BoostBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,

@@ -247,7 +247,7 @@ namespace Commander
     bool MeleeStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
                                         TeamPlan const& /*plan*/) const
     {
-        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) && !bot->IsInDuel() &&
+        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
                !bot->me->GetTransport();
     }
 
@@ -258,7 +258,7 @@ namespace Commander
         if (plan.retreat.active)
             return;
         Player* me = bot->me;
-        if (me->HasUnitState(UNIT_STATE_ROOT) || bot->IsInDuel() || me->GetTransport())
+        if (me->HasUnitState(UNIT_STATE_ROOT) || me->GetTransport())
             return;
         bool const inCombat = me->IsInCombat();
         if (!world.InFight(inCombat))
