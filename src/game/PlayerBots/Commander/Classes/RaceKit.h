@@ -22,6 +22,9 @@ namespace Commander
         std::vector<BurstSpell> Bursts(PartyBotAI const& bot);
         // Stoneform (dwarf, 3 min): +10% armor, immune to poison, disease and bleeding.
         std::vector<SurvivalSpell> Survival(PartyBotAI const& bot);
+        // Breaks a fear or charm on itself (Will of the Forsaken, 2 min): hands and feet, cast as
+        // soon as the bot is feared or charmed (PartyBotAI::BreakControl). Null = none.
+        SpellEntry const* FearBreak(PartyBotAI const& bot);
     }
 }
 

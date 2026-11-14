@@ -10,6 +10,7 @@ namespace Commander
         uint32 const BERSERKING[] = { 20554, 26296, 26297 };
         uint32 const BLOOD_FURY = 20572;
         uint32 const STONEFORM = 20594;
+        uint32 const WILL_OF_THE_FORSAKEN = 7744;
 
         SpellEntry const* Known(PartyBotAI const& bot, uint32 spellId)
         {
@@ -42,6 +43,11 @@ namespace Commander
             out.push_back(b);
         }
         return out;
+    }
+
+    SpellEntry const* RaceKit::FearBreak(PartyBotAI const& bot)
+    {
+        return Known(bot, WILL_OF_THE_FORSAKEN);
     }
 
     std::vector<SurvivalSpell> RaceKit::Survival(PartyBotAI const& bot)

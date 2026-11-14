@@ -31,6 +31,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Classes/RaceKit.h"
 #include "Rotations/ClassRotation.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
@@ -324,6 +325,12 @@ void PartyBotAI::BreakControl()
     // Duels are not the Commander's: there the original reflex spends them on any control.
     if (!IsInDuel() && CastRescueWhileControlled())
         return;
+    // Will of the Forsaken (2 min) before the trinket (5 min): one answer to a fear or charm
+    // (cooldown doc 2026-11-14, section 8 of the spell list).
+    if (SpellEntry const* pBreak = Commander::RaceKit::FearBreak(*this))
+        if ((me->HasAuraType(SPELL_AURA_MOD_FEAR) || me->HasAuraType(SPELL_AURA_MOD_CHARM)) &&
+            me->IsSpellReady(pBreak) && DoCastSpell(me, pBreak) == SPELL_CAST_OK)
+            return;
     BreakCrowdControlEffects(IsInDuel());
 }
 
