@@ -115,15 +115,21 @@ namespace Commander
         bool ready = false;
     };
 
-    // A non-tank bot's own threat drop (ClassKit::ThreatDrop: priest Fade, rogue Vanish).
+    // A non-tank bot's own threat drop (ClassKit::ThreatDrops), one entry per spell:
+    //   wipe      off every threat list for good (Vanish, Feign Death); drop, durationSec unused
+    //   onTarget  `drop` off its target's list for good (Feint, Cower: SPELL_EFFECT_THREAT < 0)
+    //   otherwise `drop` off every list for durationSec (Fade: SPELL_AURA_MOD_TOTAL_THREAT)
     struct ThreatDropAbility
     {
-        uint32 spellId = 0;             // 0 = none
-        float drop = 0.0f;              // threat taken off every threat list, for durationSec
-        float durationSec = 0.0f;
-        // Takes it off every threat list for good (SPELL_EFFECT_SANCTUARY: Vanish); drop and
-        // durationSec are not used. An enemy with nobody else on its list leaves the fight.
+        uint32 spellId = 0;
+        float drop = 0.0f;              // threat taken off (onTarget: after the caster's threat modifiers)
+        float durationSec = 0.0f;       // 0 = for good
+        // Takes it off every threat list for good (SPELL_EFFECT_SANCTUARY: Vanish, the
+        // SPELL_AURA_FEIGN_DEATH aura: Unit::SetFeignDeath). An enemy with nobody else on its
+        // list leaves the fight.
         bool wipe = false;
+        bool onTarget = false;
+        float maxRange = 0.0f;          // onTarget: yards to the enemy's edge
         uint32 manaCost = 0;
         uint32 cooldownMs = 0;
         bool ready = false;             // off cooldown, enough mana, can act and cast
@@ -353,7 +359,7 @@ namespace Commander
         std::vector<DispelAbility> dispels;         // bots only
         std::vector<ControlAbility> controls;       // bots only
         std::vector<TauntAbility> taunts;           // tank-role bots only
-        ThreatDropAbility threatDrop;               // non-tank bots only
+        std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
         std::vector<FleeStopAbility> fleeStops;     // bots only
         // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far

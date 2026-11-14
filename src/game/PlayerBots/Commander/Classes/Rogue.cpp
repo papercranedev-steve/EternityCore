@@ -47,12 +47,13 @@ namespace Commander
                 return m_bot.m_spells.rogue.pStealth;
             }
 
-            // Vanish also as a way to shake an enemy off (team rescue "loose enemy", user
-            // 2026-11-08: a failed Sap, scored against the tank's taunt); and to keep the
-            // rogue alive below.
-            SpellEntry const* ThreatDrop() const override
+            // Feint on the enemy hitting it (10 s cooldown, user 2026-11-14). Vanish also as a
+            // way to shake every enemy off (team rescue "loose enemy", user 2026-11-08: a failed
+            // Sap, scored against the tank's taunt); and to keep the rogue alive below.
+            std::vector<SpellEntry const*> ThreatDrops() const override
             {
-                return m_bot.m_spells.rogue.pVanish;
+                auto const& s = m_bot.m_spells.rogue;
+                return { s.pFeint, s.pVanish };
             }
 
             // Vanish: the enemies on the rogue turn to someone else.

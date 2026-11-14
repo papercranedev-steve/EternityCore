@@ -7,6 +7,7 @@
 #include "Map.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
+#include <algorithm>
 
 namespace Commander
 {
@@ -27,7 +28,7 @@ namespace Commander
             return true;
         if (bot->GetRole() == ROLE_TANK)
             return !bot->m_spellListTaunt.empty();
-        return bot->Kit().ThreatDrop() != nullptr;
+        return bot->Kit().HasThreatDrop();
     }
 
     bool RescueBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
@@ -40,7 +41,7 @@ namespace Commander
             case Takeover::Taunt:
                 return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
             case Takeover::ThreatDrop:
-                return bot->GetRole() != ROLE_TANK && bot->Kit().ThreatDrop();
+                return bot->GetRole() != ROLE_TANK && bot->Kit().HasThreatDrop();
             case Takeover::Survival:
                 return HasSurvival(bot);
             default:
@@ -88,10 +89,23 @@ namespace Commander
         }
         else
         {
-            if (!bot->CanTryToCastSpell(me, spell))
-                return;
+            // Feint, Cower: on the enemy hitting it; Fade, Feign Death, Vanish: on itself.
+            auto const drop = std::find_if(self->threatDrops.begin(), self->threatDrops.end(),
+                                           [&](ThreatDropAbility const& a) { return a.spellId == duty->spellId; });
+            if (drop != self->threatDrops.end() && drop->onTarget)
+            {
+                Unit* enemy = me->GetMap()->GetUnit(duty->enemy);
+                if (!enemy || !enemy->IsAlive() || !me->IsWithinLOSInMap(enemy) || !bot->CanTryToCastSpell(enemy, spell))
+                    return;
+                p.action.target = duty->enemy;
+            }
+            else
+            {
+                if (!bot->CanTryToCastSpell(me, spell))
+                    return;
+                p.action.target = me->GetObjectGuid();
+            }
             p.reason = "rescue: attacked, drop threat";
-            p.action.target = me->GetObjectGuid();
         }
         float const cost = Value::LostAction(world, *self, Value::GCD_SEC);
         p.SetValue(duty->points + cost, cost);

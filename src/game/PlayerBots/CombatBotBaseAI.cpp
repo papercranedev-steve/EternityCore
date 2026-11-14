@@ -1365,6 +1365,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.rogue.pVanish))
                         m_spells.rogue.pVanish = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Feint") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.rogue.pFeint))
+                        m_spells.rogue.pFeint = pSpellEntry;
+                }
                 else if (pSpellEntry->IsFitToFamily<SPELLFAMILY_ROGUE, CF_ROGUE_BLIND>())
                 {
                     if (IsHigherRankSpell(m_spells.rogue.pBlind))

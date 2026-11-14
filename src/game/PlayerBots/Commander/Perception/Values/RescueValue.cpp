@@ -3,6 +3,7 @@
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Values/SwitchCost.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -122,10 +123,9 @@ namespace RescueValue
     namespace
     {
         // Vanish (ThreatDropAbility::wipe): every enemy on the victim turns away at once.
-        Option Wipe(WorldModel const& world, PartyMemberFacts const& victim)
+        Option Wipe(WorldModel const& world, PartyMemberFacts const& victim, ThreatDropAbility const& a)
         {
             Option o;
-            ThreatDropAbility const& a = victim.threatDrop;
             for (EnemyFacts const& other : world.enemies)
             {
                 if (!other.acting || other.crowdControlled || other.victim != victim.guid)
@@ -149,15 +149,23 @@ namespace RescueValue
         }
     }
 
-    Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim)
+    Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+                      ThreatDropAbility const& a)
     {
         Option o;
-        ThreatDropAbility const& a = victim.threatDrop;
         if (!a.spellId || !a.ready)
             return o;
         if (a.wipe)
-            return Wipe(world, victim);
-        if (a.drop <= 0.0f || a.durationSec <= 0.0f)
+            return Wipe(world, victim, a);
+        if (a.drop <= 0.0f)
+            return o;
+        if (a.onTarget)
+        {
+            float const reach = PackResolver::Distance(victim.pos, e.pos) - e.boundingRadius;
+            if (reach > a.maxRange || !e.InSightOf(victim.guid))
+                return o;
+        }
+        else if (a.durationSec <= 0.0f)
             return o;
         float mine = 0.0f;
         for (ThreatEntry const& r : e.threat)
@@ -166,7 +174,10 @@ namespace RescueValue
         ThreatEntry const* next = NextHolder(e, victim.guid, std::max(0.0f, mine - a.drop));
         if (!next)
             return o;
-        float const seconds = std::min(a.durationSec, Value::EnemyTimeToDie(world, e));
+        // For good (Feint, Cower): the victim's own stop rule (ThreatRoom) keeps it from taking
+        // the enemy back, so it counts like a taunt's horizon.
+        float const lasts = a.durationSec > 0.0f ? a.durationSec : HORIZON_SEC;
+        float const seconds = std::min(lasts, Value::EnemyTimeToDie(world, e));
         if (PartyMemberFacts const* holder = world.FindMember(next->guid))
             o.benefit = std::max(0.0f, Value::MoveLoss(world, e, victim, *holder, seconds));
         else

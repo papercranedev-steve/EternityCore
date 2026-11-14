@@ -49,6 +49,13 @@ namespace Commander
                 return m_bot.m_spells.druid.pFerociousBite;
             }
 
+            // Cower: cat form only (a bear is a tank, WorldModelBuilder skips tanks; the form is
+            // read through PartyBotAI::IsReadyWithStance).
+            std::vector<SpellEntry const*> ThreatDrops() const override
+            {
+                return { m_bot.m_spells.druid.pCower };
+            }
+
             // Hibernate: beasts and dragonkin, caster form.
             std::vector<SpellEntry const*> Controls() const override
             {

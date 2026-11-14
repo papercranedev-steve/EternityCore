@@ -105,8 +105,12 @@ namespace Commander
                 }
             }
 
+            // The victim's own threat drops (Fade, Feint, Cower, Feign Death, Vanish): only now
+            // that the enemy hits it (user 2026-11-14: not while it is merely close to the
+            // holder's threat, that is ThreatRoom's stop / switch).
             if (victim->isBot)
-                add(victim->guid, victim->threatDrop.spellId, RescueValue::ThreatDrop(world, e, *victim));
+                for (ThreatDropAbility const& a : victim->threatDrops)
+                    add(victim->guid, a.spellId, RescueValue::ThreatDrop(world, e, *victim, a));
 
             if (!need.candidates.empty())
                 out.push_back(std::move(need));

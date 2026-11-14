@@ -116,10 +116,20 @@ namespace Commander
         // Absorb shields on itself the rotation puts up when attacked (EscapeBehavior counts them
         // into survival before they are cast). Active absorbs are read from auras for every class.
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
-        // Drops its own threat so enemies turn to someone else (priest Fade for a while, rogue
-        // Vanish for good). The team rescue decides it for an enemy hitting the bot
-        // (RescueAssigner "loose enemy", RescueBehavior, Takeover::ThreatDrop).
-        virtual SpellEntry const* ThreatDrop() const { return nullptr; }
+        // Drops its own threat so an enemy hitting the bot turns to someone else: on every
+        // enemy for a while (priest Fade), off every list (rogue Vanish, hunter Feign Death) or
+        // on its target only (rogue Feint, cat Cower). What each does is read from the spell data
+        // (WorldModelBuilder fills ThreatDropAbility). Only once an enemy already hits the bot
+        // (user 2026-11-14: not before, it would break the damage rhythm); the team rescue
+        // decides which (RescueAssigner "loose enemy", RescueBehavior, Takeover::ThreatDrop).
+        virtual std::vector<SpellEntry const*> ThreatDrops() const { return {}; }
+        bool HasThreatDrop() const
+        {
+            for (SpellEntry const* s : ThreatDrops())
+                if (s)
+                    return true;
+            return false;
+        }
         // Instant absorb on an ally: the healer itself hit while casting (HealPlanBehavior),
         // last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }

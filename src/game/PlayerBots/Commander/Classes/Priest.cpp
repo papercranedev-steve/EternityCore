@@ -42,9 +42,9 @@ namespace Commander
                 return { s.pShackleUndead, s.pPsychicScream };
             }
 
-            SpellEntry const* ThreatDrop() const override
+            std::vector<SpellEntry const*> ThreatDrops() const override
             {
-                return m_bot.m_spells.priest.pFade;
+                return { m_bot.m_spells.priest.pFade };
             }
 
             // Weakened Soul is not checked by CanTryToCastSpell: the cast may fail, the caller

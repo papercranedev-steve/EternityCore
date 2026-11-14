@@ -650,7 +650,7 @@ namespace Commander
     {
         Taunt,          // the tank taunts it (spellId), then holds it (TargetAssigner gives it the enemy)
         Threat,         // the tank walks over and wins it back with threat (its target)
-        ThreatDrop,     // the victim drops its threat (Fade, spellId)
+        ThreatDrop,     // the victim drops its threat (Fade, Feint, Cower, Feign Death, Vanish: spellId)
         Save,           // keep the victim alive (spellId on the victim: Shield Wall, a shield; no enemy)
     };
 

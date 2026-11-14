@@ -747,28 +747,55 @@ namespace WorldModelBuilder
             }
         }
 
-        // ClassKit::ThreatDrop of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
+        // ClassKit::ThreatDrops of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
         // negative amount on every threat list for the aura's duration. Vanish: a sanctuary
-        // effect (Spell::EffectSanctuary removes the rogue from every threat list).
-        void FillThreatDrop(PartyBotAI const* ai, PartyMemberFacts& f)
+        // effect (Spell::EffectSanctuary removes the rogue from every threat list); Feign
+        // Death: its aura (Unit::SetFeignDeath deletes every hostile reference). Feint, Cower:
+        // SPELL_EFFECT_THREAT with a negative amount on the target (Spell::EffectThreat ->
+        // AddThreat: the caster's threat modifiers apply, ThreatCalcHelper::CalcThreat).
+        void FillThreatDrops(PartyBotAI const* ai, PartyMemberFacts& f)
         {
-            SpellEntry const* spell = ai->Kit().ThreatDrop();
-            if (!spell || ai->GetRole() == ROLE_TANK)
+            if (ai->GetRole() == ROLE_TANK)
                 return;
             Player* me = ai->me;
-            ThreatDropAbility& a = f.threatDrop;
-            a.spellId = spell->Id;
-            a.wipe = spell->HasEffect(SPELL_EFFECT_SANCTUARY);
-            if (!a.wipe)
+            for (SpellEntry const* spell : ai->Kit().ThreatDrops())
             {
-                a.drop = -float(spell->CalculateSimpleValue(EFFECT_INDEX_0));
-                a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+                if (!spell)
+                    continue;
+                ThreatDropAbility a;
+                a.spellId = spell->Id;
+                a.wipe = spell->HasEffect(SPELL_EFFECT_SANCTUARY) || spell->HasAura(SPELL_AURA_FEIGN_DEATH);
+                if (!a.wipe)
+                {
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    {
+                        float const amount = -float(spell->CalculateSimpleValue(SpellEffectIndex(i)));
+                        if (spell->Effect[i] == SPELL_EFFECT_THREAT && amount > 0.0f)
+                        {
+                            a.onTarget = true;
+                            a.drop = me->ApplyTotalThreatModifier(amount, spell->GetSpellSchoolMask());
+                            a.maxRange = AbilityRange(me, spell, 5.0f);
+                            break;
+                        }
+                        if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                            spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TOTAL_THREAT && amount > 0.0f)
+                        {
+                            a.drop = amount;
+                            a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+                            break;
+                        }
+                    }
+                    if (a.drop <= 0.0f)
+                        continue;   // no threat drop in its data
+                }
+                a.cooldownMs = spell->GetRecoveryTime();     // Feint, Cower 10 s; Fade 30 s; Feign Death 30 s
+                if (Powers(spell->powerType) == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                // Facts only (not CanTryToCastSpell: the brain's constraints are the brain's).
+                // The form (cat Cower) is checked by IsReadyWithStance.
+                a.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(spell);
+                f.threatDrops.push_back(a);
             }
-            a.cooldownMs = spell->GetRecoveryTime();
-            if (Powers(spell->powerType) == POWER_MANA)
-                a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
-            // Facts only (not CanTryToCastSpell: the brain's constraints are the brain's).
-            a.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(spell);
         }
 
         // Team rescue: ClassKit::Survival with the numbers from the spell data.
@@ -1136,7 +1163,7 @@ namespace WorldModelBuilder
                         FillControls(ai, f);
                         FillFleeStops(ai, f);
                         FillTaunts(ai, f);
-                        FillThreatDrop(ai, f);
+                        FillThreatDrops(ai, f);
                         FillSurvival(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);

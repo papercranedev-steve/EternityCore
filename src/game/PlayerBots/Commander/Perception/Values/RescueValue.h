@@ -23,14 +23,18 @@
  *             needs a stance swap.
  *   Threat    the tank walks over and wins it back with threat (LooseEnemy::WinBack);
  *             x the taunt weight; cost = SwitchCost::Of (0 when it already is the tank's target).
- *   ThreatDrop the victim's own Fade (PartyMemberFacts::threatDrop, ready): after the drop, the
+ *   ThreatDrop the victim's own threat drop (each of PartyMemberFacts::threatDrops, ready; only
+ *             once the enemy hits it, user 2026-11-14): Fade, or Feint / Cower on that enemy
+ *             (onTarget: within its range and sight). After the drop, the
  *             highest other row beating its lowered threat (110% in melee reach, 130% otherwise)
  *             takes the enemy; none: no option. benefit = what the victim does not take on top
- *             of that one (Value::MoveLoss; all hits if it is not a member) until Fade ends or
+ *             of that one (Value::MoveLoss; all hits if it is not a member) until Fade ends
+ *             (Feint, Cower: HORIZON_SEC, the victim's ThreatRoom stop rule keeps it off) or
  *             the enemy dies. Urgent when the victim dies within FADE_URGENT_SEC of the hits on
  *             it. cost = LostAction(GCD) + ManaWorth::Points(mana) + cooldown points
  *             (ControlValue::COOLDOWN_POINTS_PER_MIN, as for controls).
- *             A wipe (ThreatDropAbility::wipe, rogue Vanish, since 2026-11-08: the Sap doc
+ *             A wipe (ThreatDropAbility::wipe, rogue Vanish since 2026-11-08: the Sap doc; hunter
+ *             Feign Death since 2026-11-14, a resist is not counted;
  *             .kiro/docs/2026-11-08-sap.md 5): one cast frees the victim of every enemy on
  *             it, so the option counts all of them (whichever enemy's need it is offered
  *             in): each turns to its highest other row with any threat (MoveLoss onto it, 0
@@ -103,7 +107,9 @@ namespace Commander
                      float enemyDps);
         Option Threat(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
                       PartyMemberFacts const& tank, float tankRate, float distance);
-        Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim);
+        // `a`: one of victim.threatDrops.
+        Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+                          ThreatDropAbility const& a);
     }
 }
 

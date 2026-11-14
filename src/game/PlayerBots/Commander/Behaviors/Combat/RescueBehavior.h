@@ -4,14 +4,16 @@
  *
  * Takeovers: Takeover::Taunt (tank bots with a taunt: the shared tank step's own taunts in
  * PartyBotAI::UpdateInCombatAI stand down) and Takeover::ThreatDrop (non-tank bots with a
- * threat drop: the priest rotation's "attacked: Fade"). Taunts and Fade are only cast for a
- * rescue duty now (they were ThreatBehavior's own choice until 2026-11-07).
+ * threat drop: the priest rotation's "attacked: Fade"; the cat rotation's Cower was deleted
+ * 2026-11-14). Taunts and threat drops are only cast for a rescue duty now (they were
+ * ThreatBehavior's own choice until 2026-11-07).
  *
  * Propose, for this bot's RescueDuty (TeamPlan::FindRescueFor), checked live:
  *   Taunt       the enemy alive, in sight, CanCastWithStance (range, cooldown, rage, stance
  *               swap; the arbiter swaps stance first). Out of range or sight: nothing here,
  *               TargetAssigner gives the tank the enemy and it walks over (TankTargets.cpp).
- *   ThreatDrop  CanTryToCastSpell on itself.
+ *   ThreatDrop  CanTryToCastSpell on itself (Fade, Feign Death, Vanish), or on the enemy in
+ *               sight (ThreatDropAbility::onTarget: Feint, Cower).
  *   Threat      nothing here: TargetBehavior attacks it.
  * Tier Urgent when the duty is (the victim dies within the horizon), else Assigned;
  * value = the duty's net + one global cooldown, cost = that global cooldown (as the crowd

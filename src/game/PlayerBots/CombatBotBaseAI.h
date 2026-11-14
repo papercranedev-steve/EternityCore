@@ -555,6 +555,7 @@ public:
             SpellEntry const* pColdBlood;
             SpellEntry const* pBladeFlurry;
             SpellEntry const* pVanish;
+            SpellEntry const* pFeint;   // only the Commander casts it (team rescue: drop threat)
             SpellEntry const* pBlind;
             SpellEntry const* pSap;     // only the Commander casts it (crowd control, before a pull)
             SpellEntry const* pPreparation;

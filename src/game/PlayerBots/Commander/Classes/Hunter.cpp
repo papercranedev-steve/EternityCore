@@ -20,6 +20,13 @@ namespace Commander
                 return { fd };
             }
 
+            // Feign Death also to shake off an enemy that turned to the hunter (30 s cooldown,
+            // user 2026-11-14), not only when it is about to die.
+            std::vector<SpellEntry const*> ThreatDrops() const override
+            {
+                return { m_bot.m_spells.hunter.pFeignDeath };
+            }
+
             // Concussive Shot (ranged), Wing Clip (melee).
             std::vector<SpellEntry const*> FleeStoppers() const override
             {
