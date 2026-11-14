@@ -54,10 +54,8 @@ enum PartyBotSpells
     PB_SPELL_DRINK = 1137,
     PB_SPELL_AUTO_SHOT = 75,
     PB_SPELL_SHOOT_WAND = 5019,
-    PB_SPELL_HONORLESS_TARGET = 2479,
 };
 
-#define PB_UPDATE_INTERVAL 1000
 #define PB_MIN_FOLLOW_DIST 3.0f
 #define PB_MAX_FOLLOW_DIST 6.0f
 #define PB_MIN_FOLLOW_ANGLE 0.0f
@@ -106,9 +104,6 @@ void PartyBotAI::CloneFromPlayer(Player const* pPlayer)
         if (!me->HasSpell(spell.first))
             me->LearnSpell(spell.first, false, (firstRankId == spell.first && GetTalentSpellPos(firstRankId)));
     }
-
-    me->GetHonorMgr().SetHighestRank(pPlayer->GetHonorMgr().GetHighestRank());
-    me->GetHonorMgr().SetRank(pPlayer->GetHonorMgr().GetRank());
 
     // Unequip current gear
     for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
@@ -1167,7 +1162,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     m_updateTimer.Update(diff);
     if (m_updateTimer.Passed())
-        m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval()); // was PB_UPDATE_INTERVAL
+        m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval());
     else
         return;
 
@@ -1294,7 +1289,6 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         {
             me->ResurrectPlayer(0.5f);
             me->SpawnCorpseBones();
-            me->CastSpell(me, PB_SPELL_HONORLESS_TARGET, true);
         }
         return;
     }
