@@ -9,10 +9,8 @@
  *            is not immune to, busy casting, gone) or the cast is past BACKUP_AFTER_PROGRESS.
  *  Abilities the enemy is immune to (CastValues::CanStop) are never proposed; each ability's
  *            benefit includes its school lockout (CastValues::LockoutBenefit).
- *  Takeover - while this module applies to a bot, the class rotations' reflex interrupts are
- *            off (TakesOver Takeover::Interrupt): only duties from
- *            the plan are cast. A cast nobody was assigned to is one not worth an interrupt.
- *            (Until 2026-11-03 the reflexes ran and this module vetoed the bad ones.)
+ *  Only    - the class rotations have no reflex interrupts (deleted 2026-11-14): only duties
+ *            from the plan are cast. A cast nobody was assigned to is one not worth an interrupt.
  *  Urgent tier only when the cast would kill someone; otherwise team-task tier.
  *  Timing  - a refresh that sees the duty's enemy casting wakes the primary and the backup
  *            (WantsTickNow), so they do not wait for their next bot interval. A bot busy with
@@ -39,7 +37,6 @@ namespace Commander
         bool AppliesTo(PartyBotAI const* bot) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // The bot is primary or backup of a duty whose enemy casts now.
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // Own cast: the duty's enemy cast ends before it does (CAST_BREAK_SLACK_MS), nobody free

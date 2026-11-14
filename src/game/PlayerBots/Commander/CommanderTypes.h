@@ -116,26 +116,19 @@ namespace Commander
     // veto: .kiro/docs/2026-11-03-discussion/2026-11-03-architecture-refinement.md 5.2). While a
     // module takes it over (IBehavior::TakesOver -> BotDirectives::TakeOver) the rotation's own
     // version stands down; the check in official code is listed in the code-structure doc 6.2.
+    // Only decisions the rotation still makes in other situations are leased here. Decisions the
+    // Commander owns completely have no lease: the rotation's version is deleted (taunts,
+    // escapes, interrupts, threat drops, dispels in combat, crowd control, survival spells,
+    // damage cooldowns, party boosts: 2026-11-14 hands layer cleanup).
     enum class Takeover : uint8
     {
-        Taunt,      // tank auto-taunt and "protect a member" (team rescue: RescueBehavior)
-        Escape,     // Frost Nova / Blink / Psychic Scream / run away from melee (EscapeBehavior)
-        Interrupt,  // reflex interrupts of the class rotations (InterruptBehavior)
-        Healing,    // heal target, rank and Power Word: Shield (HealPlanBehavior), while the party fights
-        ThreatDrop, // Fade, Feint, Cower, Feign Death, Vanish to shake an enemy off (team rescue: RescueBehavior)
-        Dispel,     // friendly dispels in combat (DispelAssigner / DispelBehavior)
-        // Crowd control in combat: marked targets and the rotations' own sheep, Blind,
-        // Hibernate, Shackle, Banish, Fear, Howl, Intimidating Shout (CrowdControlBehavior)
-        CrowdControl,
+        // Heal target, rank, Power Word: Shield and heal boosts of a healer while the party
+        // fights (HealPlanBehavior); out of a fight the rotation still heals.
+        Healing,
         // A rogue's own stealth while it is the Sap controller of a pull (CrowdControlBehavior,
         // Sap doc .kiro/docs/2026-11-08-sap.md): the rotation's "go into / cancel stealth"
         // (PartyBotAI::EnterStealthIfNeeded) stands down.
         Stealth,
-        // Keeping someone about to die alive (team rescue: RescueBehavior): the rotations'
-        // health threshold reflexes stand down (Divine Shield, Blessing of Protection, Lay on
-        // Hands, Feign Death, Vanish, Ice Block, a damage warrior's Shield Wall / Last Stand;
-        // since 2026-11-14 Evasion, Barkskin, Frenzied Regeneration).
-        Survival,
         // While the party fights (WorldModel::InFight), where a bot stands: following the
         // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and
         // ranged weapon users, melee behind its victim). The stance module of the bot's role
@@ -144,13 +137,6 @@ namespace Commander
         // dealers), TankStanceBehavior (tanks, since 2026-11-14). Was CasterChase (healers and
         // ranged only) until 2026-11-07.
         Stance,
-        // Damage cooldowns (BurstBehavior, cooldown doc 2026-11-14): the rotations' Recklessness,
-        // Death Wish, Retaliation, Sweeping Strikes, Adrenaline Rush, Cold Blood, Blade Flurry,
-        // Elemental Mastery, Combustion, Arcane Power, Presence of Mind stand down.
-        Burst,
-        // Cooldowns for a party member (BoostAssigner / BoostBehavior, cooldown doc 2026-11-14):
-        // the rotations' Innervate and Mana Tide Totem stand down.
-        Boost,
         Count
     };
 

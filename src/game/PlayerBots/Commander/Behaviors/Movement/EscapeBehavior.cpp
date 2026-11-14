@@ -243,12 +243,6 @@ namespace Commander
         return bot->GetRole() == ROLE_HEALER || bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    bool EscapeBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                   TeamPlan const& /*plan*/) const
-    {
-        return what == Takeover::Escape && AppliesTo(bot);
-    }
-
     void EscapeBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {

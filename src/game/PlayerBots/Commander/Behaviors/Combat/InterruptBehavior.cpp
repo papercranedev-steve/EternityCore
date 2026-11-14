@@ -187,12 +187,6 @@ namespace Commander
         out.insert(out.end(), made.begin(), made.end());
     }
 
-    bool InterruptBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                      TeamPlan const& /*plan*/) const
-    {
-        return what == Takeover::Interrupt;
-    }
-
     bool InterruptBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
     {
         ObjectGuid const self = bot->me->GetObjectGuid();

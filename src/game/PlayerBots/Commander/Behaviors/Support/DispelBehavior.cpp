@@ -15,12 +15,6 @@ namespace Commander
         return bot->Kit().CanDispel();
     }
 
-    bool DispelBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                   TeamPlan const& /*plan*/) const
-    {
-        return what == Takeover::Dispel && bot->me->IsInCombat();
-    }
-
     void DispelBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {

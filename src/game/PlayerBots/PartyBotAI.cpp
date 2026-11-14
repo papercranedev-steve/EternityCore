@@ -35,7 +35,6 @@
 #include "Rotations/ClassRotation.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Behaviors/Movement/FleePoint.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
@@ -216,26 +215,6 @@ bool PartyBotAI::OrderBackpedal(Commander::Position3 const& to, ObjectGuid face,
     return Commander::Backpedal::Order(this, m_backpedal, to, face, durationMs);
 }
 
-bool PartyBotAI::IsTauntControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Taunt, WorldTimer::getMSTime());
-}
-
-bool PartyBotAI::IsEscapeControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Escape, WorldTimer::getMSTime());
-}
-
-bool PartyBotAI::IsDispelControlled() const
-{
-    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::Dispel, WorldTimer::getMSTime());
-}
-
-bool PartyBotAI::IsCrowdControlControlled() const
-{
-    return m_directives && me->IsInCombat() && m_directives->IsTakenOver(Commander::Takeover::CrowdControl, WorldTimer::getMSTime());
-}
-
 bool PartyBotAI::IgnoresCrowdControlMarks() const
 {
     return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("cc");
@@ -303,21 +282,6 @@ void PartyBotAI::StopTakenOverMovement()
     }
 }
 
-bool PartyBotAI::IsSurvivalControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Survival, WorldTimer::getMSTime());
-}
-
-bool PartyBotAI::IsBurstControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Burst, WorldTimer::getMSTime());
-}
-
-bool PartyBotAI::IsBoostControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Boost, WorldTimer::getMSTime());
-}
-
 void PartyBotAI::BreakControl()
 {
     // Divine Shield / Ice Block lift a stun too, but they are the bot's emergency cooldowns: the
@@ -354,11 +318,6 @@ bool PartyBotAI::CastRescueWhileControlled()
     return DoCastSpell(target, spell) == SPELL_CAST_OK;
 }
 
-bool PartyBotAI::IsThreatDropControlled() const
-{
-    return m_directives && m_directives->IsTakenOver(Commander::Takeover::ThreatDrop, WorldTimer::getMSTime());
-}
-
 bool PartyBotAI::IsStealthControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Stealth, WorldTimer::getMSTime());
@@ -366,7 +325,7 @@ bool PartyBotAI::IsStealthControlled() const
 
 bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 {
-    if (!pUnit || !sCommanderMgr.IsEnabled())
+    if (!pUnit)
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -375,7 +334,7 @@ bool PartyBotAI::IsEngageForbidden(Unit const* pUnit) const
 
 bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
 {
-    if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_CHARGE) || !sCommanderMgr.IsEnabled())
+    if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_CHARGE))
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().ForbidsGapCloser(me->GetObjectGuid());
@@ -383,7 +342,7 @@ bool PartyBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
 
 bool PartyBotAI::IsSpellHeld(SpellEntry const* pSpell) const
 {
-    if (!pSpell || !sCommanderMgr.IsEnabled())
+    if (!pSpell)
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().HoldsSpell(me->GetObjectGuid(), pSpell->Id, pSpell->NeedsComboPoints());
@@ -392,7 +351,7 @@ bool PartyBotAI::IsSpellHeld(SpellEntry const* pSpell) const
 bool PartyBotAI::IsLongCastHeld(SpellEntry const* pSpell) const
 {
     // Cheap tests first: most casts of a tick are instant.
-    if (!pSpell || !me->IsInCombat() || !sCommanderMgr.IsEnabled() ||
+    if (!pSpell || !me->IsInCombat() ||
         (pSpell->GetCastTime(me) <= 0 && !pSpell->IsChanneledSpell()))
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -425,8 +384,9 @@ void PartyBotAI::AssignRole(CombatBotRoles role)
 
 bool PartyBotAI::UsesSafeFollow() const
 {
-    // (on a transport the follow point is relative to the transport, FollowSpot does not handle it)
-    return sCommanderMgr.IsEnabled() && !me->GetTransport();
+    // (on a transport the follow point is relative to the transport, FollowSpot does not handle
+    // it: the original random offset there)
+    return !me->GetTransport();
 }
 
 Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader)
@@ -591,25 +551,16 @@ float PartyBotAI::GetIncomingDps(Unit const* pTarget) const
 {
     // The Commander's facts: melee after armor plus ranged spells of every enemy on the target,
     // refreshed every PerceptionMs. Same map as the bot, so the commander is this thread's.
-    if (sCommanderMgr.IsEnabled())
+    if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
     {
-        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
-        {
-            Commander::WorldModel const& world = commander->GetWorld();
-            // 0 also when the attackers are not in the snapshot yet (just pulled): melee then.
-            if (world.FindMember(pTarget->GetObjectGuid()))
-                if (float const dps = Commander::Value::IncomingOn(world, pTarget->GetObjectGuid()))
-                    return dps;
-        }
+        Commander::WorldModel const& world = commander->GetWorld();
+        // 0 also when the attackers are not in the snapshot yet (just pulled): melee then.
+        if (world.FindMember(pTarget->GetObjectGuid()))
+            if (float const dps = Commander::Value::IncomingOn(world, pTarget->GetObjectGuid()))
+                return dps;
     }
+    // (no snapshot of the target yet: its attackers' melee)
     return CombatBotBaseAI::GetIncomingDps(pTarget);
-}
-
-bool PartyBotAI::SkipsReflexInterrupt(Unit const* pVictim) const
-{
-    if (m_directives && m_directives->IsTakenOver(Commander::Takeover::Interrupt, WorldTimer::getMSTime()))
-        return true;
-    return Commander::VetoChecks::ImmuneToReflexInterrupts(this, pVictim);
 }
 
 bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
@@ -623,7 +574,7 @@ bool PartyBotAI::IsValidHostileTarget(Unit const* pTarget) const
 
 bool PartyBotAI::IsAssignedToBreakControl(Unit const* pTarget) const
 {
-    if (!pTarget || !me->IsInCombat() || !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("cc"))
+    if (!pTarget || !me->IsInCombat())
         return false;
     // Same map as the bot, so the commander belongs to this map thread.
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
@@ -664,75 +615,6 @@ Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
     }
 
     return nullptr;
-}
-
-bool PartyBotAI::IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy)
-{
-    if (pTarget->IsInWorld() && pTarget->IsAlive() &&
-        pTarget->GetMap() == me->GetMap())
-    {
-        float const distance = me->GetDistance(pTarget);
-        if (distance >= 15.0f && distance <= 30.0f &&
-            pTarget->GetDistance(pEnemy) >= 15.0f)
-            return true;
-    }
-
-    return false;
-}
-
-Unit* PartyBotAI::GetDistancingTarget(Unit* pEnemy)
-{
-    if (Player* pLeader = GetPartyLeader())
-        if (IsValidDistancingTarget(pLeader, pEnemy))
-            return pLeader;
-
-    Unit* pNonTank = nullptr;
-    Group* pGroup = me->GetGroup();
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
-    {
-        if (Player* pMember = itr->getSource())
-        {
-            if (pMember == me)
-                continue;
-
-            if (IsValidDistancingTarget(pMember, pEnemy))
-            {
-                if (IsTankingForm(pMember->GetShapeshiftForm()) || IsWearingShield(pMember))
-                    return pMember;
-                else
-                    pNonTank = pMember;
-            }
-        }
-    }
-
-    return pNonTank;
-}
-
-bool PartyBotAI::RunAwayFromTarget(Unit* pEnemy)
-{
-    // The Commander escape module runs to the tank instead (Commander/Behaviors/Movement/EscapeBehavior.h).
-    if (IsMovementHeld() || IsEscapeControlled())
-        return false;
-
-    // Commander position module: run where no idle pack is (FleePoint.h). Nowhere safe:
-    // stay and fight, running blind pulled the next hall in the first Stockade test.
-    if (sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("position") && !me->GetTransport())
-    {
-        float x, y, z;
-        std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-        if (!Commander::FleePoint::Find(me, pEnemy, commander ? &commander->GetWorld() : nullptr, x, y, z))
-            return false;
-        me->GetMotionMaster()->MoveDistancingTo(x, y, z);
-        return true;
-    }
-
-    if (Unit* pTarget = GetDistancingTarget(pEnemy))
-    {
-        me->MonsterMove(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ());
-        return true;
-    }
-
-    return me->GetMotionMaster()->MoveDistance(pEnemy, 15.0f);
 }
 
 namespace
@@ -1020,7 +902,7 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
 
 bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
-    if (!pTarget || !pSpellEntry || !sCommanderMgr.IsEnabled())
+    if (!pTarget || !pSpellEntry)
         return false;
     // Cheap test first: most casts of a tick are buffs and heals.
     if (!Commander::SpellTags::DealsDamage(pSpellEntry) && Commander::SpellTags::MeleeSplashRadius(pSpellEntry) <= 0.0f)
@@ -1041,7 +923,7 @@ bool PartyBotAI::WouldWakeKeptControl(Unit const* pTarget, SpellEntry const* pSp
 void PartyBotAI::CancelSplashNearKeptControl()
 {
     Unit* pVictim = me->GetVictim();
-    if (!pVictim || !me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!pVictim || !me->IsInCombat())
         return;
     std::shared_ptr<Commander::PartyCommander> commander;
     for (uint32 spellId : Commander::SpellTags::MELEE_SPLASH_SPELLS)
@@ -1069,22 +951,6 @@ bool PartyBotAI::WouldAreaSpellPullIdle(Unit const* pUnit) const
     if (pCreature->IsImmuneToAoe() || pCreature->GetCreatureType() == CREATURE_TYPE_CRITTER)
         return false;
     return me->IsValidAttackTarget(pUnit);
-}
-
-bool PartyBotAI::CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const
-{
-    if (pSpellEntry->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS) &&
-        AreOthersOnSameTarget(pTarget->GetObjectGuid()))
-        return false;
-
-    if (pSpellEntry->HasSingleTargetAura())
-    {
-        auto const& singleAuras = me->GetSingleCastSpellTargets();
-        if (singleAuras.find(pSpellEntry) != singleAuras.end())
-            return false;
-    }
-
-    return true;
 }
 
 bool PartyBotAI::AttackStart(Unit* pVictim)
@@ -1604,9 +1470,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // Eating and drinking are the Commander's (RestBehavior): the hook runs out of combat while
     // something is missing, and a resting bot stands up when the Commander has something better
     // (the arbiter before any other action, the heal order step), or here for a resurrection.
-    bool const commanderOn = sCommanderMgr.IsEnabled();
-    bool const needsRest = commanderOn && !me->IsInCombat() && NeedsRest();
-    bool const commanderResting = commanderOn && !me->IsInCombat() && IsResting() && !resurrectFirst;
+    bool const needsRest = !me->IsInCombat() && NeedsRest();
+    bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst;
     if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -1811,15 +1676,11 @@ void PartyBotAI::UpdateOutOfCombatAI()
 
 void PartyBotAI::UpdateInCombatAI()
 {
-    // The tank's "defend party members" (switch to the first enemy hitting a member) and its
-    // taunt on its own victim are gone since 2026-11-07: the Commander chooses the tank's targets
-    // (TargetAssigner) and its taunts (team rescue: RescueAssigner / RescueBehavior, Takeover::Taunt).
+    // (the tank's targets and taunts: the Commander, TargetAssigner and the team rescue)
     if (m_role != ROLE_TANK && CrowdControlMarkedTargets())
         return;
 
-    if (CheckForDispelTargets())
-        return;
-
+    // (dispels in combat: the Commander, DispelAssigner / DispelBehavior)
     switch (me->GetClass())
     {
         case CLASS_PALADIN:
@@ -1858,9 +1719,6 @@ void PartyBotAI::UpdateInCombatAI()
 bool PartyBotAI::CheckForDispelTargets()
 {
     if (me->GetShapeshiftForm() != FORM_NONE)
-        return false;
-    // In combat the Commander decides who dispels what (DispelAssigner, Takeover::Dispel).
-    if (IsDispelControlled())
         return false;
 
     switch (me->GetClass())
@@ -2041,38 +1899,14 @@ void PartyBotAI::UpdateOutOfCombatAI_Paladin()
 
 void PartyBotAI::UpdateInCombatAI_Paladin()
 {
-    // Divine Shield, Blessing of Protection, Lay on Hands below a health threshold: the team
-    // rescue decides them while the Commander runs (Takeover::Survival, 2026-11-07).
-    if (m_spells.paladin.pDivineShield && !IsSurvivalControlled() &&
-       (me->GetHealthPercent() < 20.0f) &&
-       (m_role != ROLE_TANK) &&
-        CanTryToCastSpell(me, m_spells.paladin.pDivineShield))
-    {
-        if (DoCastSpell(me, m_spells.paladin.pDivineShield) == SPELL_CAST_OK)
-            return;
-    }
-
+    // (Divine Shield, Blessing of Protection, Lay on Hands: the team rescue, RescueBehavior)
     if (Unit* pFriend = me->FindLowestHpFriendlyUnit(30.0f, 70, true, me))
     {
-        if (m_spells.paladin.pBlessingOfProtection && !IsSurvivalControlled() &&
-           !IsPhysicalDamageClass(pFriend->GetClass()) &&
-            CanTryToCastSpell(pFriend, m_spells.paladin.pBlessingOfProtection))
-        {
-            if (DoCastSpell(pFriend, m_spells.paladin.pBlessingOfProtection) == SPELL_CAST_OK)
-                return;
-        }
         if (m_spells.paladin.pBlessingOfSacrifice &&
            (me->GetHealthPercent() > 80.0f) &&
             CanTryToCastSpell(pFriend, m_spells.paladin.pBlessingOfSacrifice))
         {
             if (DoCastSpell(pFriend, m_spells.paladin.pBlessingOfSacrifice) == SPELL_CAST_OK)
-                return;
-        }
-        if (m_spells.paladin.pLayOnHands && !IsSurvivalControlled() &&
-           (pFriend->GetHealthPercent() < 15.0f) &&
-            CanTryToCastSpell(pFriend, m_spells.paladin.pLayOnHands))
-        {
-            if (DoCastSpell(pFriend, m_spells.paladin.pLayOnHands) == SPELL_CAST_OK)
                 return;
         }
     }
@@ -2101,22 +1935,7 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
 
     if (GetRole() == ROLE_HEALER)
     {
-        // A healer's own Holy Shock with Divine Favor: the Commander heal module's while it
-        // decides heals (Holy Shock is one of its heals, Divine Favor a heal boost).
-        if (m_spells.paladin.pHolyShock && !IsHealingControlled() &&
-            me->GetHealthPercent() < 50.0f &&
-            CanTryToCastSpell(me, m_spells.paladin.pHolyShock))
-        {
-            if (m_spells.paladin.pDivineFavor &&
-                CanTryToCastSpell(me, m_spells.paladin.pDivineFavor))
-            {
-                DoCastSpell(me, m_spells.paladin.pDivineFavor);
-            }
-
-            if (DoCastSpell(me, m_spells.paladin.pHolyShock) == SPELL_CAST_OK)
-                return;
-        }
-
+        // (Holy Shock with Divine Favor on itself: the Commander heal module's)
         if (FindAndHealInjuredAlly(80.0f, 90.0f))
             return;
 
@@ -2125,14 +1944,6 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
     }
     else
     {
-        if (m_spells.paladin.pLayOnHands && !IsSurvivalControlled() &&
-           (me->GetHealthPercent() < 15.0f) &&
-            CanTryToCastSpell(me, m_spells.paladin.pLayOnHands))
-        {
-            if (DoCastSpell(me, m_spells.paladin.pLayOnHands) == SPELL_CAST_OK)
-                return;
-        }
-
         bool const hasSeal = m_spells.paladin.pSeal && me->HasAura(m_spells.paladin.pSeal->Id);
 
         if (!hasSeal &&
@@ -2151,9 +1962,9 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
                 if (DoCastSpell(pVictim, m_spells.paladin.pJudgement) == SPELL_CAST_OK)
                     return;
             }
+            // (on a cast: the Commander interrupt module)
             if (m_spells.paladin.pHammerOfJustice &&
-               ((pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim)) ||
-               (me->GetHealthPercent() < 20.0f && !me->GetAttackers().empty())) &&
+                me->GetHealthPercent() < 20.0f && !me->GetAttackers().empty() &&
                 CanTryToCastSpell(pVictim, m_spells.paladin.pHammerOfJustice))
             {
                 if (DoCastSpell(pVictim, m_spells.paladin.pHammerOfJustice) == SPELL_CAST_OK)
@@ -2252,36 +2063,12 @@ void PartyBotAI::UpdateOutOfCombatAI_Shaman()
 
 void PartyBotAI::UpdateInCombatAI_Shaman()
 {
-    // The Commander gives Mana Tide while it decides party boosts (BoostAssigner, Takeover::Boost).
-    if (m_spells.shaman.pManaTideTotem && !IsBoostControlled() &&
-       (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
-        CanTryToCastSpell(me, m_spells.shaman.pManaTideTotem))
-    {
-        if (DoCastSpell(me, m_spells.shaman.pManaTideTotem) == SPELL_CAST_OK)
-            return;
-    }
-
+    // (Mana Tide: the Commander's party boosts, BoostBehavior; Elemental Mastery: its damage
+    // cooldowns, BurstBehavior; Earth Shock on a cast: its interrupts, InterruptBehavior)
     if (GetRole() != ROLE_HEALER)
     {
         if (Unit* pVictim = me->GetVictim())
         {
-            // The Commander's damage cooldown while it decides them (BurstBehavior, Takeover::Burst).
-            if (m_spells.shaman.pElementalMastery && !IsBurstControlled() &&
-                me->GetAttackers().empty() &&
-                CanTryToCastSpell(me, m_spells.shaman.pElementalMastery))
-            {
-                if (DoCastSpell(me, m_spells.shaman.pElementalMastery) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.shaman.pEarthShock &&
-                pVictim->IsNonMeleeSpellCasted(false, false, true) && !SkipsReflexInterrupt(pVictim) &&
-                CanTryToCastSpell(pVictim, m_spells.shaman.pEarthShock))
-            {
-                if (DoCastSpell(pVictim, m_spells.shaman.pEarthShock) == SPELL_CAST_OK)
-                    return;
-            }
-
             if (m_spells.shaman.pFrostShock &&
                 pVictim->IsMoving() &&
                 CanTryToCastSpell(pVictim, m_spells.shaman.pFrostShock))
@@ -2472,13 +2259,7 @@ void PartyBotAI::UpdateInCombatAI_Hunter()
                     return;
             }
 
-            if (m_spells.hunter.pFeignDeath && !IsSurvivalControlled() &&
-               (me->GetHealthPercent() < 20.0f) &&
-                CanTryToCastSpell(me, m_spells.hunter.pFeignDeath))
-            {
-                if (DoCastSpell(me, m_spells.hunter.pFeignDeath) == SPELL_CAST_OK)
-                    return;
-            }
+            // (Feign Death: the team rescue, RescueBehavior)
         }
 
         if (pVictim->CanReachWithMeleeAutoAttack(me))
@@ -2511,17 +2292,7 @@ void PartyBotAI::UpdateInCombatAI_Hunter()
             }
         }
 
-        if (!me->HasUnitState(UNIT_STATE_ROOT) && !IsMovementHeld() &&
-            (me->GetCombatDistance(pVictim) < 8.0f) &&
-            (GetRole() != ROLE_MELEE_DPS) &&
-             me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE)
-        {
-            if (!me->IsStopped())
-                me->StopMoving();
-            me->GetMotionMaster()->Clear();
-            if (RunAwayFromTarget(pVictim))
-                return;
-        }
+        // (getting away from melee enemies: the Commander escape module, EscapeBehavior)
     }
 }
 
@@ -2621,29 +2392,7 @@ void PartyBotAI::UpdateInCombatAI_Priest()
             return;
     }
 
-    if (!me->GetAttackers().empty() &&
-        m_role != ROLE_TANK)
-    {
-        // The Commander decides Fade (team rescue since 2026-11-07: RescueBehavior, Takeover::ThreatDrop).
-        if (m_spells.priest.pFade && !IsThreatDropControlled() &&
-            CanTryToCastSpell(me, m_spells.priest.pFade))
-        {
-            if (DoCastSpell(me, m_spells.priest.pFade) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.priest.pShackleUndead && !IsCrowdControlControlled())
-        {
-            Unit* pAttacker = *me->GetAttackers().begin();
-            if ((pAttacker->GetHealth() > me->GetHealth()) &&
-                CanTryToCastSpell(pAttacker, m_spells.priest.pShackleUndead) &&
-                CanUseCrowdControl(m_spells.priest.pShackleUndead, pAttacker))
-            {
-                if (DoCastSpell(pAttacker, m_spells.priest.pShackleUndead) == SPELL_CAST_OK)
-                    return;
-            }
-        }
-    }
+    // (Fade: the team rescue, RescueBehavior; Shackle Undead: the Commander crowd control)
 
     // While the Commander heal module decides heals it puts Inner Focus on before a big heal
     // (HealPlanBehavior heal boosts, cooldown doc 2026-11-14).
@@ -2688,14 +2437,6 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        if (m_spells.priest.pSilence &&
-            pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim) &&
-            CanTryToCastSpell(pVictim, m_spells.priest.pSilence))
-        {
-            if (DoCastSpell(pVictim, m_spells.priest.pSilence) == SPELL_CAST_OK)
-                return;
-        }
-
         if (m_spells.priest.pVampiricEmbrace &&
             CanTryToCastSpell(pVictim, m_spells.priest.pVampiricEmbrace))
         {
@@ -2724,15 +2465,8 @@ void PartyBotAI::UpdateInCombatAI_Priest()
                 return;
         }
 
-        // Commander escape module on: no reflex fear, feared enemies run into the next pack
-        // (EscapeBehavior holds with roots / stuns and runs to the tank).
-        if (m_spells.priest.pPsychicScream && !IsEscapeControlled() &&
-            GetAttackersInRangeCount(10.0f) &&
-            CanTryToCastSpell(me, m_spells.priest.pPsychicScream))
-        {
-            if (DoCastSpell(me, m_spells.priest.pPsychicScream) == SPELL_CAST_OK)
-                return;
-        }
+        // (Silence on a cast: the Commander interrupt module. No reflex Psychic Scream: feared
+        // enemies run into the next pack; the escape module holds with roots / stuns.)
 
         if (m_spells.priest.pManaBurn &&
            (pVictim->GetPowerType() == POWER_MANA) &&
@@ -2856,18 +2590,7 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
                 return;
         }
 
-        if (m_spells.warlock.pBanish && !IsCrowdControlControlled() &&
-            me->GetAttackers().size() > 1)
-        {
-            Unit* pAttacker = *me->GetAttackers().begin();
-            if ((pAttacker->GetHealth() > me->GetHealth()) &&
-                CanTryToCastSpell(pAttacker, m_spells.warlock.pBanish))
-            {
-                if (DoCastSpell(pAttacker, m_spells.warlock.pBanish) == SPELL_CAST_OK)
-                    return;
-            }
-        }
-
+        // (Banish, Fear, Howl of Terror: the Commander crowd control)
         // Rain of Fire: the Commander's area phase (Classes/Warlock.cpp ClassKit::AreaDamage).
 
         if (m_spells.warlock.pDemonicSacrifice)
@@ -2920,14 +2643,6 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
                 return;
         }
 
-        if (m_spells.warlock.pFear && !IsCrowdControlControlled() &&
-            pVictim->GetVictim() == me &&
-            CanTryToCastSpell(pVictim, m_spells.warlock.pFear))
-        {
-            if (DoCastSpell(pVictim, m_spells.warlock.pFear) == SPELL_CAST_OK)
-                return;
-        }
-
         if (m_spells.warlock.pCurseofAgony &&
             CanTryToCastSpell(pVictim, m_spells.warlock.pCurseofAgony))
         {
@@ -2939,14 +2654,6 @@ void PartyBotAI::UpdateInCombatAI_Warlock()
             && me->GetDistance(pVictim) > 30.0f)
         {
             BeginChasing(pVictim);
-        }
-
-        if (m_spells.warlock.pHowlofTerror && !IsCrowdControlControlled() &&
-            GetAttackersInRangeCount(10.0f) > 1 &&
-            CanTryToCastSpell(me, m_spells.warlock.pHowlofTerror))
-        {
-            if (DoCastSpell(me, m_spells.warlock.pHowlofTerror) == SPELL_CAST_OK)
-                return;
         }
 
         if (m_spells.warlock.pShadowBolt &&
@@ -3099,7 +2806,7 @@ bool PartyBotAI::CanTryToCastSpellAt(float x, float y, float z, SpellEntry const
         return false;
     if (IsSpellHeld(pSpellEntry))
         return false;
-    if (!me->IsInCombat() || !sCommanderMgr.IsEnabled())
+    if (!me->IsInCombat())
         return true;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     Commander::Position3 const at{ x, y, z };
@@ -3230,24 +2937,9 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
 
     if (Unit* pVictim = me->GetVictim())
     {
-        if (pVictim->IsNonMeleeSpellCasted(false, false, true) && !SkipsReflexInterrupt(pVictim))
-        {
-            if (m_spells.warrior.pPummel &&
-                CanTryToCastSpell(pVictim, m_spells.warrior.pPummel))
-            {
-                if (DoCastSpell(pVictim, m_spells.warrior.pPummel) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.warrior.pShieldBash &&
-                IsWearingShield(me) &&
-                CanTryToCastSpell(pVictim, m_spells.warrior.pShieldBash))
-            {
-                if (DoCastSpell(pVictim, m_spells.warrior.pShieldBash) == SPELL_CAST_OK)
-                    return;
-            }
-        }
-
+        // (Pummel / Shield Bash on a cast: the Commander interrupt module. Last Stand, Shield
+        // Wall: the team rescue. Intimidating Shout: the crowd control. Retaliation, Sweeping
+        // Strikes, Recklessness, Death Wish: the damage cooldowns, BurstBehavior.)
         if (m_spells.warrior.pExecute &&
            (pVictim->GetHealthPercent() < 20.0f) &&
             CanTryToCastSpell(pVictim, m_spells.warrior.pExecute))
@@ -3260,14 +2952,6 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
             CanTryToCastSpell(pVictim, m_spells.warrior.pOverpower))
         {
             if (DoCastSpell(pVictim, m_spells.warrior.pOverpower) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.warrior.pLastStand && !IsSurvivalControlled() &&
-            me->GetHealthPercent() < 20.0f &&
-            CanTryToCastSpell(me, m_spells.warrior.pLastStand))
-        {
-            if (DoCastSpell(me, m_spells.warrior.pLastStand) == SPELL_CAST_OK)
                 return;
         }
 
@@ -3288,14 +2972,6 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
                     CanTryToCastSpell(me, m_spells.warrior.pShieldBlock))
                 {
                     if (DoCastSpell(me, m_spells.warrior.pShieldBlock) == SPELL_CAST_OK)
-                        return;
-                }
-
-                if (m_spells.warrior.pShieldWall && !IsSurvivalControlled() &&
-                   (me->GetHealthPercent() < 40.0f) &&
-                    CanTryToCastSpell(me, m_spells.warrior.pShieldWall))
-                {
-                    if (DoCastSpell(me, m_spells.warrior.pShieldWall) == SPELL_CAST_OK)
                         return;
                 }
             }
@@ -3323,53 +2999,6 @@ void PartyBotAI::UpdateInCombatAI_Warrior()
         {
             if (DoCastSpell(pVictim, m_spells.warrior.pRend) == SPELL_CAST_OK)
                 return;
-        }
-
-        if (m_spells.warrior.pIntimidatingShout && !IsCrowdControlControlled() &&
-           (me->GetHealthPercent() < 30.0f) &&
-           (GetAttackersInRangeCount(10.0f) > 2) &&
-            CanTryToCastSpell(pVictim, m_spells.warrior.pIntimidatingShout))
-        {
-            if (DoCastSpell(pVictim, m_spells.warrior.pIntimidatingShout) == SPELL_CAST_OK)
-                return;
-        }
-
-        // Retaliation, Sweeping Strikes, Recklessness, Death Wish: the Commander's damage
-        // cooldowns while it decides them (BurstBehavior, Takeover::Burst).
-        if (m_spells.warrior.pRetaliation && !IsBurstControlled() &&
-           (GetAttackersInRangeCount(10.0f) > 2) &&
-            CanTryToCastSpell(me, m_spells.warrior.pRetaliation))
-        {
-            if (DoCastSpell(me, m_spells.warrior.pRetaliation) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (m_spells.warrior.pSweepingStrikes && !IsBurstControlled() &&
-            CanTryToCastSpell(me, m_spells.warrior.pSweepingStrikes) &&
-           (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2))
-        {
-            if (DoCastSpell(me, m_spells.warrior.pSweepingStrikes) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (!IsBurstControlled() &&
-            (me->GetHealthPercent() > 60.0f) && (pVictim->GetHealthPercent() > 40.0f) &&
-           !me->HasUnitState(UNIT_STATE_ROOT) &&
-           !me->IsImmuneToMechanic(MECHANIC_FEAR))
-        {
-            if (m_spells.warrior.pRecklessness &&
-                CanTryToCastSpell(me, m_spells.warrior.pRecklessness))
-            {
-                if (DoCastSpell(me, m_spells.warrior.pRecklessness) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.warrior.pDeathWish &&
-                CanTryToCastSpell(me, m_spells.warrior.pDeathWish))
-            {
-                if (DoCastSpell(me, m_spells.warrior.pDeathWish) == SPELL_CAST_OK)
-                    return;
-            }
         }
 
         if (m_spells.warrior.pMortalStrike &&
@@ -3571,29 +3200,8 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
                 }
             }
         }
-        else
-        {
-            if (m_spells.rogue.pVanish && !IsSurvivalControlled() &&
-                (me->GetHealthPercent() < 10.0f))
-            {
-                if (m_spells.rogue.pPreparation &&
-                    !me->IsSpellReady(m_spells.rogue.pVanish) &&
-                    CanTryToCastSpell(me, m_spells.rogue.pPreparation))
-                {
-                    if (DoCastSpell(me, m_spells.rogue.pPreparation) == SPELL_CAST_OK)
-                        return;
-                }
-
-                if (CanTryToCastSpell(me, m_spells.rogue.pVanish))
-                {
-                    if (DoCastSpell(me, m_spells.rogue.pVanish) == SPELL_CAST_OK)
-                    {
-                        if (RunAwayFromTarget(pVictim))
-                            return;
-                    }
-                }
-            }
-        }
+        // (Vanish, Evasion: the team rescue. Blind: the crowd control. Gouge / Kick on a cast: the
+        // interrupt module. Adrenaline Rush, Cold Blood, Blade Flurry: the damage cooldowns.)
 
         if (me->GetComboPoints() > 4)
         {
@@ -3624,74 +3232,6 @@ void PartyBotAI::UpdateInCombatAI_Rogue()
                     if (DoCastSpell(pVictim, pComboSpell) == SPELL_CAST_OK)
                         return;
                 }
-            }
-        }
-
-        if (m_spells.rogue.pBlind && !IsCrowdControlControlled())
-        {
-            if (Unit* pTarget = SelectAttackerDifferentFrom(pVictim))
-            {
-                if (CanTryToCastSpell(pTarget, m_spells.rogue.pBlind) &&
-                    CanUseCrowdControl(m_spells.rogue.pBlind, pTarget))
-                {
-                    // (the victim is unchanged by the cast; the old AttackStop / AttackStart back
-                    // onto it is gone with the original target selection, 2026-11-07)
-                    if (DoCastSpell(pTarget, m_spells.rogue.pBlind) == SPELL_CAST_OK)
-                        return;
-                }
-            }
-        }
-
-        // Adrenaline Rush, Cold Blood, Blade Flurry: the Commander's damage cooldowns while it
-        // decides them (BurstBehavior, Takeover::Burst).
-        if (m_spells.rogue.pAdrenalineRush && !IsBurstControlled() &&
-           !me->GetPower(POWER_ENERGY) &&
-            CanTryToCastSpell(me, m_spells.rogue.pAdrenalineRush))
-        {
-            if (DoCastSpell(me, m_spells.rogue.pAdrenalineRush) == SPELL_CAST_OK)
-                return;
-        }
-
-        if (pVictim->IsNonMeleeSpellCasted() && !SkipsReflexInterrupt(pVictim))
-        {
-            if (m_spells.rogue.pGouge &&
-                CanTryToCastSpell(pVictim, m_spells.rogue.pGouge))
-            {
-                if (DoCastSpell(pVictim, m_spells.rogue.pGouge) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.rogue.pKick &&
-                CanTryToCastSpell(pVictim, m_spells.rogue.pKick))
-            {
-                if (DoCastSpell(pVictim, m_spells.rogue.pKick) == SPELL_CAST_OK)
-                    return;
-            }
-        }
-
-        if (!me->HasAuraType(SPELL_AURA_MOD_STEALTH))
-        {
-            // Evasion: the team rescue's while the Commander decides survival (Takeover::Survival).
-            if (m_spells.rogue.pEvasion && !IsSurvivalControlled() &&
-               (me->GetHealthPercent() < 80.0f) &&
-               ((GetAttackersInRangeCount(10.0f) > 2) || !IsRangedDamageClass(pVictim->GetClass())) &&
-                CanTryToCastSpell(me, m_spells.rogue.pEvasion))
-            {
-                if (DoCastSpell(me, m_spells.rogue.pEvasion) == SPELL_CAST_OK)
-                    return;
-            }
-
-            if (m_spells.rogue.pColdBlood && !IsBurstControlled() &&
-                CanTryToCastSpell(me, m_spells.rogue.pColdBlood))
-            {
-                DoCastSpell(me, m_spells.rogue.pColdBlood);
-            }
-
-            if (m_spells.rogue.pBladeFlurry && !IsBurstControlled() &&
-                CanTryToCastSpell(me, m_spells.rogue.pBladeFlurry))
-            {
-                if (DoCastSpell(me, m_spells.rogue.pBladeFlurry) == SPELL_CAST_OK)
-                    return;
             }
         }
 
@@ -3840,46 +3380,13 @@ void PartyBotAI::UpdateInCombatAI_Druid()
 {
     ShapeshiftForm const form = me->GetShapeshiftForm();
 
-    // Barkskin, Frenzied Regeneration: the team rescue's while the Commander decides survival
-    // (Takeover::Survival).
-    if (m_spells.druid.pBarkskin && !IsSurvivalControlled() &&
-        (form == FORM_NONE || form == FORM_MOONKIN) &&
-        (me->GetHealthPercent() < 50.0f) &&
-        CanTryToCastSpell(me, m_spells.druid.pBarkskin))
-    {
-        if (DoCastSpell(me, m_spells.druid.pBarkskin) == SPELL_CAST_OK)
-            return;
-    }
-
+    // (Barkskin, Frenzied Regeneration: the team rescue. Hibernate: the crowd control.
+    // Innervate: the party boosts, BoostBehavior.)
     if (form == FORM_NONE)
     {
-        if (m_spells.druid.pHibernate && !IsCrowdControlControlled() &&
-            m_role != ROLE_TANK &&
-            !me->GetAttackers().empty())
-        {
-            Unit* pAttacker = *me->GetAttackers().begin();
-            if (CanTryToCastSpell(pAttacker, m_spells.druid.pHibernate) &&
-                CanUseCrowdControl(m_spells.druid.pHibernate, pAttacker))
-            {
-                if (DoCastSpell(pAttacker, m_spells.druid.pHibernate) == SPELL_CAST_OK)
-                    return;
-            }
-        }
-
-        // HoT or direct heal, chosen by ChooseHeal (HealSpells.h). Until 2026-11-01 HoTs at
-        // 80% / 90% first, then direct heals at 60% / 70%, past the Commander's heal veto.
+        // HoT or direct heal, chosen by ChooseHeal (HealSpells.h).
         if (FindAndHealInjuredAlly(80.0f, 90.0f))
             return;
-
-        // The Commander gives Innervate while it decides party boosts (BoostAssigner, Takeover::Boost).
-        if (m_spells.druid.pInnervate && !IsBoostControlled() &&
-           (me->GetHealthPercent() > 40.0f) &&
-           (me->GetPowerPercent(POWER_MANA) < 10.0f) &&
-            CanTryToCastSpell(me, m_spells.druid.pInnervate))
-        {
-            if (DoCastSpell(me, m_spells.druid.pInnervate) == SPELL_CAST_OK)
-                return;
-        }
 
         if (GetRole() == ROLE_HEALER && FindAndPreHealTarget())
             return;
@@ -4012,14 +3519,6 @@ void PartyBotAI::UpdateInCombatAI_Druid()
                     return;
             }
 
-            if (m_spells.druid.pFrenziedRegeneration && !IsSurvivalControlled() &&
-                (me->GetHealthPercent() < 30.0f) &&
-                CanTryToCastSpell(me, m_spells.druid.pFrenziedRegeneration))
-            {
-                if (DoCastSpell(me, m_spells.druid.pFrenziedRegeneration) == SPELL_CAST_OK)
-                    return;
-            }
-
             if (m_spells.druid.pFaerieFireFeral &&
                 CanTryToCastSpell(pVictim, m_spells.druid.pFaerieFireFeral))
             {
@@ -4061,22 +3560,7 @@ void PartyBotAI::UpdateInCombatAI_Druid()
             {
                 BeginChasing(pVictim);
             }
-            // Commander escape module on: it decides Entangling Roots and where to run.
-            else if (pVictim->CanReachWithMeleeAutoAttack(me) &&
-                    (pVictim->GetVictim() == me) && !IsEscapeControlled() &&
-                    !me->HasUnitState(UNIT_STATE_ROOT) &&
-                    (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != DISTANCING_MOTION_TYPE))
-            {
-                if (m_spells.druid.pEntanglingRoots &&
-                    CanTryToCastSpell(pVictim, m_spells.druid.pEntanglingRoots))
-                {
-                    if (DoCastSpell(pVictim, m_spells.druid.pEntanglingRoots) == SPELL_CAST_OK)
-                        return;
-                }
-                me->SetCasterChaseDistance(25.0f);
-                if (RunAwayFromTarget(pVictim))
-                    return;
-            }
+            // (Entangling Roots and where to run from melee: the Commander escape module)
 
             if (m_spells.druid.pFaerieFire &&
                (pVictim->GetClass() == CLASS_ROGUE) &&

@@ -140,13 +140,9 @@ namespace Commander
 
         // Interrupts the Commander assigns (InterruptAssigner, WorldModel interrupt facts).
         virtual std::vector<SpellEntry const*> Interrupts() const { return {}; }
-        // Interrupts the class rotation casts by itself behind PartyBotAI::SkipsReflexInterrupt:
-        // only when the interrupt module does not control the bot (module off, no commander);
-        // VetoChecks::ImmuneToReflexInterrupts checks immunity against these.
-        virtual std::vector<SpellEntry const*> ReflexInterrupts() const { return {}; }
         // Friendly dispels it has learned (best rank, fallbacks when the better spell is not
         // learned yet): what DispelAssigner can give it. Only the Commander casts them in
-        // combat (Takeover::Dispel); out of combat the rotation does.
+        // combat (DispelBehavior); out of combat the rotation does.
         virtual std::vector<SpellEntry const*> Dispels() const { return {}; }
         bool CanDispel() const
         {
@@ -173,7 +169,7 @@ namespace Commander
         // on its target only (rogue Feint, cat Cower). What each does is read from the spell data
         // (WorldModelBuilder fills ThreatDropAbility). Only once an enemy already hits the bot
         // (user 2026-11-14: not before, it would break the damage rhythm); the team rescue
-        // decides which (RescueAssigner "loose enemy", RescueBehavior, Takeover::ThreatDrop).
+        // decides which (RescueAssigner "loose enemy", RescueBehavior).
         virtual std::vector<SpellEntry const*> ThreatDrops() const { return {}; }
         bool HasThreatDrop() const
         {
@@ -186,17 +182,17 @@ namespace Commander
         // last resort while running (RetreatBehavior).
         virtual SpellEntry const* AllyShield() const { return nullptr; }
         // Spells that keep a member about to die alive. Only the Commander casts them
-        // (team rescue: RescueAssigner picks one per member, Takeover::Survival).
+        // (team rescue: RescueAssigner picks one per member, RescueBehavior casts it).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
         // Heal boosts (Inner Focus, Divine Favor, Nature's Swiftness). The heal module puts one
         // on before the heal it suits (a big deficit; an emergency the heal would not reach in
         // time); the rotations do not cast them while it decides heals.
         virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
         // Cooldowns for a party member (Innervate, Power Infusion, Mana Tide Totem): the brain picks
-        // whom (BoostAssigner), BoostBehavior casts them (Takeover::Boost).
+        // whom (BoostAssigner), BoostBehavior casts them; the rotations do not.
         virtual std::vector<AllyBoostSpell> AllyBoosts() const { return {}; }
-        // Damage cooldowns (BurstBehavior, Takeover::Burst): the rotations do not cast them while
-        // the Commander does. Racial ones come from RaceKit (merged in WorldModelBuilder).
+        // Damage cooldowns: only BurstBehavior casts them, the rotations do not. Racial ones
+        // come from RaceKit (merged in WorldModelBuilder).
         virtual std::vector<BurstSpell> Bursts() const { return {}; }
         // A heal on itself that costs no mana (priest Desperate Prayer): the heal module casts it
         // when the bot is hit and misses about that much health (also non-healer bots); the team

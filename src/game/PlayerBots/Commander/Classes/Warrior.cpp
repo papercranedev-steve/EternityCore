@@ -40,12 +40,6 @@ namespace Commander
                 return { m_bot.m_spells.warrior.pIntimidatingShout };
             }
 
-            std::vector<SpellEntry const*> ReflexInterrupts() const override
-            {
-                auto const& s = m_bot.m_spells.warrior;
-                return { s.pPummel, s.pShieldBash };
-            }
-
             // Thunder Clap needs Battle Stance: from Defensive Stance it is cast after a swap
             // (Arbiter -> PartyBotAI::DoCastWithStance), costed by ThreatBehavior.
             std::vector<AreaThreatSpell> AreaThreat() const override

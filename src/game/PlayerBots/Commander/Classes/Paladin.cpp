@@ -15,11 +15,6 @@ namespace Commander
                 return { m_bot.m_spells.paladin.pHammerOfJustice };
             }
 
-            std::vector<SpellEntry const*> ReflexInterrupts() const override
-            {
-                return { m_bot.m_spells.paladin.pHammerOfJustice };
-            }
-
             // Cleanse (Purify until learned).
             std::vector<SpellEntry const*> Dispels() const override
             {

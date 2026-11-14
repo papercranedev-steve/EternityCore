@@ -48,9 +48,7 @@ namespace Commander
     bool CrowdControlBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
                                          TeamPlan const& plan) const
     {
-        if (what == Takeover::Stealth)
-            return IsSapper(bot, plan);
-        return what == Takeover::CrowdControl && bot->me->IsInCombat();
+        return what == Takeover::Stealth && IsSapper(bot, plan);
     }
 
     void CrowdControlBehavior::ProposeSap(PartyBotAI const* bot, TeamPlan const& plan,

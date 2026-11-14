@@ -7,8 +7,8 @@
  * again. In strat-20261101-224637 a mage chased by a Skeletal Berserker and an out-of-mana
  * Skeletal Guardian walked ~100 yd away from the tank into the next pack and died.
  *
- * While this module is on, PartyBotAI::RunAwayFromTarget and the mage's Blink / Frost Nova /
- * run block stand down (TakesOver Takeover::Escape).
+ * The rotations' own escapes (PartyBotAI::RunAwayFromTarget, the mage's Blink / Frost Nova /
+ * run block, Psychic Scream, the druid's roots and run) are gone since 2026-11-14.
  *
  * Chasers: enemies that act, are not crowd controlled, have melee on (EnemyFacts::meleeEnabled),
  * hit this bot and stand within TRIGGER_GAP of it (edge distance).
@@ -100,7 +100,6 @@ namespace Commander
 
         char const* GetId() const override { return "escape"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };

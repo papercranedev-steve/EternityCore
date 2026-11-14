@@ -29,12 +29,6 @@ namespace Commander
         return bot->GetRole() != ROLE_HEALER && HasBursts(bot);
     }
 
-    bool BurstBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                  TeamPlan const& /*plan*/) const
-    {
-        return what == Takeover::Burst;
-    }
-
     void BurstBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {

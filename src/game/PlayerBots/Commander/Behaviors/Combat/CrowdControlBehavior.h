@@ -2,10 +2,10 @@
  * PartyBot Commander layer 3: casts the control spell the brain gave this bot ("cc" module,
  * crowd control doc .kiro/docs/2026-11-07/2026-11-07-crowd-control.md, todo 10b).
  *
- * Takeover::CrowdControl in combat: the rotations' own controls stand down (marked targets,
- * the mage's sheep on a second attacker, Blind, Hibernate, Shackle, Banish, Fear, Howl of
- * Terror, Intimidating Shout; PartyBotAI::IsCrowdControlControlled). Bots without control
- * spells (hunters: Scare Beast) keep theirs. Psychic Scream to save itself is EscapeBehavior's.
+ * Only this module controls: the rotations' own controls (marked targets, the mage's sheep on
+ * a second attacker, Blind, Hibernate, Shackle, Banish, Fear, Howl of Terror, Intimidating
+ * Shout) are gone since 2026-11-14. Spells not in a ClassKit::Controls list (hunters: Scare
+ * Beast, paladins: Turn Evil) are still the rotations'.
  *
  * Propose, for this bot's ControlDuty (TeamPlan::FindControlFor), checked live: the target is
  * alive and not under the same spell any more, in sight, CanTryToCastSpell (range, power,

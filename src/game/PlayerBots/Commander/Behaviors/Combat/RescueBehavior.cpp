@@ -32,22 +32,6 @@ namespace Commander
         return bot->Kit().HasThreatDrop();
     }
 
-    bool RescueBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                   TeamPlan const& /*plan*/) const
-    {
-        switch (what)
-        {
-            case Takeover::Taunt:
-                return bot->GetRole() == ROLE_TANK && !bot->m_spellListTaunt.empty();
-            case Takeover::ThreatDrop:
-                return bot->GetRole() != ROLE_TANK && bot->Kit().HasThreatDrop();
-            case Takeover::Survival:
-                return HasSurvival(bot);
-            default:
-                return false;
-        }
-    }
-
     void RescueBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {

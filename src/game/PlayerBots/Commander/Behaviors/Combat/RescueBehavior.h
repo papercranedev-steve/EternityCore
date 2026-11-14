@@ -2,11 +2,9 @@
  * PartyBot Commander layer 3: carries out the rescue the brain gave this bot (RescueAssigner,
  * todo item 20, .kiro/docs/2026-11-07/2026-11-07-team-rescue.md).
  *
- * Takeovers: Takeover::Taunt (tank bots with a taunt: the shared tank step's own taunts in
- * PartyBotAI::UpdateInCombatAI stand down) and Takeover::ThreatDrop (non-tank bots with a
- * threat drop: the priest rotation's "attacked: Fade"; the cat rotation's Cower was deleted
- * 2026-11-14). Taunts and threat drops are only cast for a rescue duty now (they were
- * ThreatBehavior's own choice until 2026-11-07).
+ * Taunts, threat drops and survival spells (Divine Shield, Ice Block, Shield Wall, Vanish,
+ * Evasion, Barkskin...) are only cast for a rescue duty: the rotations' own uses are gone
+ * (2026-11-14), and so is ThreatBehavior's own choice of taunts and threat drops (2026-11-07).
  *
  * Propose, for this bot's RescueDuty (TeamPlan::FindRescueFor), checked live:
  *   Taunt       the enemy alive, in sight, CanCastWithStance (range, cooldown, rage, stance
@@ -35,7 +33,6 @@ namespace Commander
     public:
         char const* GetId() const override { return "rescue"; }
         bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;

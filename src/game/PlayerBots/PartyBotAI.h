@@ -147,11 +147,7 @@ public:
     Player* SelectResurrectionTarget() const;
     Player* SelectShieldTarget() const;
     Unit* GetMarkedTarget(RaidTargetIcon mark) const;
-    bool CanUseCrowdControl(SpellEntry const* pSpellEntry, Unit* pTarget) const;
     bool ShouldAutoRevive() const;
-    bool IsValidDistancingTarget(Unit* pTarget, Unit* pEnemy);
-    Unit* GetDistancingTarget(Unit* pEnemy);
-    bool RunAwayFromTarget(Unit* pEnemy);
     bool CrowdControlMarkedTargets();
     bool EnterCombatDruidForm();
     bool ShouldEnterStealth() const;
@@ -208,32 +204,14 @@ public:
     // (Commander/Behaviors/Movement/JumpCast.h). False when it is not running a point walk.
     bool OrderJumpCast(SpellEntry const* pSpellEntry, float orientation);
     bool IsJumpCasting() const { return m_jumpCast.active; }
-    bool IsTauntControlled() const;
-    // A Commander module decides how this bot gets away from melee enemies (EscapeBehavior):
-    // RunAwayFromTarget and the mage's Frost Nova / Blink block stand down.
-    bool IsEscapeControlled() const;
-    // The Commander team rescue decides Fade (RescueAssigner / RescueBehavior): the priest rotation's own
-    // "attacked: Fade" stands down.
-    bool IsThreatDropControlled() const;
     // The Commander keeps the Sap controller of a pull in stealth (CrowdControlBehavior,
     // Takeover::Stealth): the rogue rotation's stealth in / cancel stands down.
     bool IsStealthControlled() const;
-    // The Commander team rescue decides who is kept alive and how (RescueBehavior,
-    // Takeover::Survival): the rotations' health threshold Divine Shield, Blessing of
-    // Protection, Lay on Hands, Feign Death, Vanish, Ice Block, Shield Wall, Last Stand stand down.
-    bool IsSurvivalControlled() const;
-    // A Commander module decides the bot's damage cooldowns (BurstBehavior, Takeover::Burst).
-    bool IsBurstControlled() const;
-    // A Commander module decides the bot's cooldowns for party members (BoostBehavior, Takeover::Boost).
-    bool IsBoostControlled() const;
     // Stunned, feared, polymorphed: break out with a trinket, Blink or a shapeshift (CombatBotBaseAI::
     // BreakCrowdControlEffects). Divine Shield / Ice Block only as the team rescue's duty
     // (CastRescueWhileControlled).
     void BreakControl();
     bool CastRescueWhileControlled();
-    // In combat the Commander dispel module decides dispels (DispelAssigner): the rotation's
-    // CheckForDispelTargets stands down. Out of combat it dispels as before.
-    bool IsDispelControlled() const;
     // While the party fights a Commander stance module places this healer, ranged (keeping a
     // caster distance), melee damage bot or tank (Takeover::Stance: HealerStanceBehavior,
     // RangedStanceBehavior, MeleeStanceBehavior, TankStanceBehavior), also before it is in
@@ -266,10 +244,6 @@ public:
     // leader: full at once (it is about to be teleported), false. The Commander decides when a
     // resting bot stands up (the arbiter before any other action, the heal order step).
     bool StartResting();
-    // In combat the Commander crowd control module decides controls (CrowdControlAssigner):
-    // the rotations' own sheep / Blind / Hibernate / Shackle / Banish / Fear / Howl /
-    // Intimidating Shout and marked-target controls stand down.
-    bool IsCrowdControlControlled() const;
     // The Commander crowd control module is on (any time): raid marks are not used for
     // controls, the brain chooses (user, 2026-11-07). Out of combat too, for the marked pull.
     bool IgnoresCrowdControlMarks() const;
@@ -291,8 +265,8 @@ public:
     void StopTakenOverMovement();
     // Swinging at a victim in reach while standing still and not facing it: turn to it (UpdateAI).
     void FaceMeleeVictim(Unit* pVictim);
-    // Follow the leader (UpdateAI): random offset as before; with the Commander on, moved out of
-    // idle creatures' aggro range (Commander/Behaviors/Movement/FollowSpot.h).
+    // Follow the leader (UpdateAI): an offset out of idle creatures' aggro range
+    // (Commander/Behaviors/Movement/FollowSpot.h); on a transport the original random offset.
     void StartFollowing(Unit* pLeader);
     // While following: re-check the follow point after the leader moved or turned enough.
     void KeepFollowSpotSafe(Unit* pLeader);
@@ -317,12 +291,9 @@ public:
     // cast (true when null or already on). False = it could not, the main cast is not made.
     bool CastPrepSpell(SpellEntry const* pPrep);
     // Heal choice (CombatBotBaseAI::ChooseHeal) and shields use the Commander's measured
-    // damage on the target (Value::IncomingOn) when it is on; else the base melee estimate.
+    // damage on the target (Value::IncomingOn); the base melee estimate while the target is
+    // not in the snapshot yet.
     float GetIncomingDps(Unit const* pTarget) const override;
-    // The class rotations' reflex interrupts ask this first: true while the Commander interrupt
-    // module controls this bot's interrupts (BotDirectives::IsTakenOver, Takeover::Interrupt), or when
-    // `pVictim` is immune to all of them.
-    bool SkipsReflexInterrupt(Unit const* pVictim) const;
     // Hides CombatBotBaseAI::IsValidHostileTarget (all callers are in PartyBotAI.cpp): a party
     // member mind controlled by a creature is not attacked (Commander::VetoChecks); the bot the
     // Commander sent to wake the last controlled enemy may attack it (IsAssignedToBreakControl).

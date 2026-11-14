@@ -16,11 +16,6 @@ namespace Commander
                 return { m_bot.m_spells.mage.pCounterspell };
             }
 
-            std::vector<SpellEntry const*> ReflexInterrupts() const override
-            {
-                return { m_bot.m_spells.mage.pCounterspell };
-            }
-
             std::vector<SpellEntry const*> Dispels() const override
             {
                 return { m_bot.m_spells.mage.pRemoveLesserCurse };

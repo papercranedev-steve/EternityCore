@@ -1,7 +1,6 @@
 /*
- * PartyBot Commander: where a bot runs when it gets away from a melee enemy
- * (PartyBotAI::RunAwayFromTarget: mage Frost Nova + run, priest / hunter / druid / healer
- * distancing, rogue Vanish).
+ * PartyBot Commander: where a bot runs when it gets away from a melee enemy (EscapeBehavior,
+ * RunToTank). Until 2026-11-14 also the rotations' own run away (PartyBotAI::RunAwayFromTarget).
  *
  * The original move goes 15 yd straight away from the enemy. In the first Stockade test run
  * (2026-11-01, combat recording stockade-20261101-133307) the enemies came from the party's

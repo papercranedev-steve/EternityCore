@@ -20,15 +20,10 @@ namespace VetoChecks
     // (urgent heal order, or hand-written dispel policy never / after combat).
     bool HasAllowedDebuff(PartyBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell);
 
-    // One aura: may the rotation not dispel it? Hand-written policy never / after combat, and
-    // every non-control aura while the bot holds an urgent heal order. (Arbiter dispel vetoes
-    // are gone since 2026-11-03: in combat the dispel module takes dispels over.)
+    // One aura: may the rotation not dispel it (out of combat; in combat the dispel module
+    // decides)? Hand-written policy never / after combat, and every non-control aura while the
+    // bot holds an urgent heal order.
     bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
-
-    // `enemy` is immune to every interrupt / stun / silence the bot's class rotation would use
-    // on it (ClassKit::ReflexInterrupts). Only matters while the interrupt module does not
-    // control the bot's interrupts (PartyBotAI::SkipsReflexInterrupt).
-    bool ImmuneToReflexInterrupts(PartyBotAI const* bot, Unit const* enemy);
 
     // Healing `target` now would pull aggro and is not needed yet (ThreatBehavior).
     bool IsHealVetoed(PartyBotAI const* bot, Unit const* target);

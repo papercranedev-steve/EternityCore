@@ -9,22 +9,21 @@
  * In combat, in this order:
  *   1. Back to Defensive Stance when out of it (x1.3 threat; Taunt, Revenge and Shield Block need
  *      it). Not while a swap for a Commander cast is waiting (PartyBotAI::DoCastWithStance).
- *   2. Shield Bash on a cast, behind the interrupt veto (as the other rotations' reflex interrupts).
- *   3. Revenge (5 rage, the most threat per rage).
- *   4. Shield Block: attacked, shield, below SHIELD_BLOCK_HEALTH_PCT (strat-20261101-210522: with
+ *   2. Revenge (5 rage, the most threat per rage).
+ *   3. Shield Block: attacked, shield, below SHIELD_BLOCK_HEALTH_PCT (strat-20261101-210522: with
  *      "or 2+ attackers" it took the rage Sunder and Shield Slam needed).
- *   5. Shield Slam, 6. Sunder Armor.
- *   7. Rage above RAGE_DUMP: Cleave (2+ enemies next to the victim) or Heroic Strike, on the next swing.
+ *   4. Shield Slam, 5. Sunder Armor.
+ *   6. Rage above RAGE_DUMP: Cleave (2+ enemies next to the victim) or Heroic Strike, on the next swing.
  *
  * Decisions the rotation no longer makes (user, 2026-11-02), and who makes them:
  *   Charge                 the pull module (PullBehavior, ClassKit::OpenerCharge); the old
  *                          rotation charged every victim out of combat, so stood in Battle Stance.
  *   Thunder Clap opener    the threat module's area threat (ThreatBehavior, stance swap costed).
  *   Demoralizing Shout     the threat module's area threat (ClassKit::AreaThreat).
- *   Concussion Blow        the interrupt module (ClassKit::Interrupts); the old rotation stunned
- *                          on any cast without the interrupt veto, on moving targets, below 50%.
- *   Shield Wall, Last Stand  nobody for now: a Commander survival decision is planned (user).
- *   Taunts                 the team rescue (RescueAssigner / RescueBehavior, Takeover::Taunt).
+ *   Shield Bash,           the interrupt module (InterruptBehavior, ClassKit::Interrupts); the old
+ *   Concussion Blow        rotation stunned on any cast, on moving targets, below 50%.
+ *   Shield Wall, Last Stand  the team rescue (RescueAssigner / RescueBehavior).
+ *   Taunts                 the team rescue (RescueAssigner / RescueBehavior).
  */
 
 #include "Rotations/ClassRotation.h"
@@ -75,10 +74,6 @@ namespace
                 return;
 
             bool const shield = bot.IsWearingShield(me);
-
-            if (shield && pVictim->IsNonMeleeSpellCasted(false, false, true) && !bot.SkipsReflexInterrupt(pVictim) &&
-                Cast(pVictim, w.pShieldBash))
-                return;
 
             if (Cast(pVictim, w.pRevenge))
                 return;

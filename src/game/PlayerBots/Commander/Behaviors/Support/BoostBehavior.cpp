@@ -26,12 +26,6 @@ namespace Commander
         return HasBoosts(bot);
     }
 
-    bool BoostBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
-                                  TeamPlan const& /*plan*/) const
-    {
-        return what == Takeover::Boost;
-    }
-
     void BoostBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {

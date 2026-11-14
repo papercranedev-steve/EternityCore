@@ -10,8 +10,8 @@
  *            taunts, area threat, stop hitting (HoldFire), Fade and pets.
  *  Team rescue (2026-11-07, todo 20): taking ONE loose enemy off its victim (taunt, winning it
  *            back with threat, the victim's Fade) is the brain's (Coordination/Duties/RescueAssigner.h,
- *            values in Perception/Values/RescueValue.h); RescueBehavior casts the taunt and Fade and
- *            takes Takeover::Taunt / ThreatDrop over. This module no longer taunts single
+ *            values in Perception/Values/RescueValue.h); RescueBehavior casts the taunt and Fade
+ *            (nobody else does). This module no longer taunts single
  *            enemies or fades.
  *  Tank    - area threat on several loose or thinly held enemies around it. Loose enemies the
  *            brain gave someone else (the priest fades it) are not counted. Taunts without
