@@ -3,7 +3,8 @@
 --
 -- Line types:
 --   begin   {type, t, label, file, members=[{guid,name,class,role,level}]}
---   snap    {type, t, party=[info], enemies=[info + threat=[{g,v}]]}   every rec.interval ms
+--   snap    {type, t, party=[info], enemies=[info + threat=[{g,v}]]}   every rec.interval ms;
+--           info without the unit line's fields (name, class, level, maxhp, ...)
 --   ev      {type, t, ev, src, dst, spell, amount, extra, school, crit} from the server hooks
 --           ev: dmg (extra = damage type), heal (extra = effective heal), cast, go, cancel
 --               (extra = cast time left), fail (cast refused by the spell checks: extra =
@@ -33,10 +34,19 @@
 --           full input of a pure calculation (FightLoad: fightload(json) re-runs it), inRef =
 --           id of an earlier trace line of this file with the same input; pin = "pull" /
 --           "pullcheck" for the planning sets (written when the pull line is). Whole trees only.
---   end     {type, t, duration, result, stats={guid={...}}, names={guid=name},
+--           A subtree equal to the last one at the same place: {type, t, id, parent, kind, same}
+--           (same = id of the written one).
+--   unit    {type, t, guid, g, name, class, level, entry, map, maxhp, maxpower, ptype, player, role}
+--           the fields of a snap row that rarely change, before the snap that first has the unit
+--           and again when they changed (snap rows don't repeat them); g = full guid without 0x
+--   end     {type, t, duration, result, stats={id={...}}, names={id=name}, guids={id=guid without 0x},
 --           spells={id=name} (every spell in the ev lines), anomalies={kind=count}, dropped}
 --
 -- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
+-- Since 2026-11-14 the lines are compacted (see "compact output" below): units are short ids of
+-- the file (a party member's name, "#134BB" for a creature), false / "" / empty-guid fields are
+-- left out, numbers have at most 2 decimals, and a dec line equal to the bot's previous one is
+-- folded into {type="dec", t, bot, rep=n}.
 
 rec = rec or {}
 rec.dir = rec.dir or "../logs/combat"
@@ -59,10 +69,128 @@ local function ensureDir(dir)
     os.execute('if not exist "' .. win .. '" mkdir "' .. win .. '"')
 end
 
+---------------------------------------------------------------------------
+-- compact output (2026-11-14: the files were read by the AI and cost too many tokens)
+---------------------------------------------------------------------------
+-- Applied to the JSON text of every line, so the server-side objects (review.lua works on them)
+-- keep their full guids:
+--   * unit ids: a guid "0x0000000000000005" / "0xF1300006AB0134BB" is written as a short id of
+--     this file: a player by name ("Ki"), a creature "#" + its spawn counter ("#134BB"), a pet
+--     "pet#..", anything else "x#.."; a clash gets "_2", "_3". The empty guid is left out.
+--     unit lines and end.guids give the full guid of an id (without "0x").
+--   * fields whose value is false, "" or the empty guid are left out (missing = false / none).
+--   * numbers: at most 2 decimals, "12.0" -> "12" (not in a trace's `in`: re-run exactly).
+--   * " spell0" (no spell) in the decision texts is left out.
+local EMPTY_GUID = "0x0000000000000000"
+local GUID_PATTERN = "0x(" .. string.rep("%x", 16) .. ")%f[^%w]"
+
+local function shortId(w, hex)
+    hex = hex:upper()
+    local id = w.ids[hex]
+    if id then return id end
+    local high = hex:sub(1, 4)
+    local low = hex:sub(-6):gsub("^0+", "")
+    if low == "" then low = "0" end
+    local name = w.names["0x" .. hex]
+    if high == "0000" and name and not name:find("[^%w]") and not w.idGuid[name] then id = name
+    elseif high == "0000" then id = "p#" .. (hex:sub(5):gsub("^0+", ""))
+    elseif high == "F130" then id = "#" .. low
+    elseif high == "F140" then id = "pet#" .. low
+    else id = "x#" .. (hex:sub(5):gsub("^0+", "")) end
+    if w.idGuid[id] then
+        local n = 2
+        while w.idGuid[id .. "_" .. n] do n = n + 1 end
+        id = id .. "_" .. n
+    end
+    w.ids[hex] = id
+    w.idGuid[id] = hex
+    return id
+end
+
+local DEFAULT_VALUES = { "false", '""', '"' .. EMPTY_GUID .. '"' }
+
+local function dropDefaults(text)
+    for _, v in ipairs(DEFAULT_VALUES) do
+        text = text:gsub(',"[%w_]+":' .. v .. "%f[,}]", "")
+                   :gsub('{"[%w_]+":' .. v .. ",", "{")
+                   :gsub('{"[%w_]+":' .. v .. "}", "{}")
+    end
+    return text
+end
+
+local function roundNumber(num, exp)
+    if exp ~= "" then return num .. exp end      -- 1.23457e+06: %.6g already
+    local s = string.format("%.2f", tonumber(num)):gsub("0+$", ""):gsub("%.$", "")
+    if s == "-0" then s = "0" end
+    return s
+end
+
+local function compact(w, text, exact)
+    text = dropDefaults(text)
+    text = text:gsub(GUID_PATTERN, function(hex) return shortId(w, hex) end)
+    if not exact then text = text:gsub("(%-?%d+%.%d%d%d+)([eE]?)", roundNumber) end
+    text = text:gsub("(%d)%.0+([,}%]])", "%1%2")
+    return (text:gsub(" spell0([\" ])", "%1"))
+end
+
+local function writeText(w, text)
+    if w.file then w.file:write(compact(w, text), "\n") end
+end
+
 local function write(w, obj)
-    if w.file then w.file:write(json(obj), "\n") end
+    if w.file then writeText(w, json(obj)) end
 end
 rec.writeLine = write
+
+-- Snap rows without the fields that rarely change (name, class, level, maxhp, ...): those go in
+-- a unit line {type, t, guid, g, <static fields>} before the snap, when first seen or changed.
+local STATIC_FIELDS = { name = true, class = true, level = true, entry = true, map = true, maxhp = true,
+                        maxpower = true, ptype = true, player = true, role = true }
+
+local function snapRows(w, rows)
+    local out = {}
+    for _, i in ipairs(rows) do
+        local static, live = {}, {}
+        for k, v in pairs(i) do
+            if STATIC_FIELDS[k] then static[k] = v else live[k] = v end
+        end
+        local key = json(static)
+        if i.guid and w.unitStatic[i.guid] ~= key then
+            w.unitStatic[i.guid] = key
+            static.type = "unit"
+            static.t = now()
+            static.guid = i.guid
+            static.g = i.guid:sub(3)
+            write(w, static)
+        end
+        out[#out + 1] = live
+    end
+    return out
+end
+
+-- Decision lines: the same decision of a bot again (same candidates, scores and results) is not
+-- written; when it changes (or the fight ends) one {type="dec", t, bot, rep=n} line says the
+-- previous one was made n more times, the last at t.
+local function flushDecRun(w, bot)
+    local run = w.decRuns[bot]
+    if run and run.n > 0 then
+        write(w, { type = "dec", t = run.t, bot = bot, rep = run.n })
+        run.n = 0
+    end
+end
+
+local function writeDec(w, d)
+    local key = json(d.cands)
+    local run = w.decRuns[d.bot]
+    if run and run.key == key then
+        run.n = run.n + 1
+        run.t = d.t
+        return
+    end
+    flushDecRun(w, d.bot)
+    write(w, d)
+    w.decRuns[d.bot] = { key = key, n = 0, t = d.t }
+end
 
 local function memberRows(members)
     return map(members, function(m)
@@ -112,24 +240,56 @@ end
 -- calculation trace
 ---------------------------------------------------------------------------
 
--- One trace line: the JSON texts of data and input go in as they are.
+-- One trace line: the JSON texts of data and input go in as they are (compacted; the input
+-- without rounding, fightload() re-runs it).
 local function writeTrace(w, r, pin)
     if not w.file then return end
     local head = { type = "trace", t = r.t, id = r.id, parent = r.parent, kind = r.kind, label = r.label, pin = pin }
-    local text = json(head)
+    local text = compact(w, json(head))
     local extra = {}
-    if r.data then extra[#extra + 1] = '"data":' .. r.data end
+    if r.data then extra[#extra + 1] = '"data":' .. compact(w, r.data) end
     if r.input then
         local ref = w.traceInputs[r.input]
         if ref then
             extra[#extra + 1] = '"inRef":' .. ref
         else
             w.traceInputs[r.input] = r.id
-            extra[#extra + 1] = '"in":' .. r.input
+            extra[#extra + 1] = '"in":' .. compact(w, r.input, true)
         end
     end
     if #extra > 0 then text = text:sub(1, -2) .. "," .. table.concat(extra, ",") .. "}" end
     w.file:write(text, "\n")
+end
+
+-- Values that differ every time without changing what was decided: left out of the comparison
+-- below (the position field's build time).
+local function sigText(kind, text)
+    if kind == "field" then text = text:gsub(",? %d+ us$", ""):gsub('"micros":%d+,?', "") end
+    return text
+end
+
+-- Signature of a subtree: kinds, labels, data and inputs of it and its children (ids and times
+-- left out).
+local function treeSig(kids, r)
+    local parts = { r.kind or "", sigText(r.kind, r.label or ""), sigText(r.kind, r.data or ""), r.input or "" }
+    for _, c in ipairs(kids[r.id] or {}) do parts[#parts + 1] = "(" .. treeSig(kids, c) .. ")" end
+    return table.concat(parts, "\1")
+end
+
+-- A tree, parents first. A subtree equal to the last one written at the same place (same path of
+-- kinds and labels) is one line {type, t, id, parent, kind, same = id of that one}: most of a
+-- brain refresh is the same as 200 ms before.
+local function writeTree(w, kids, r, path)
+    local key = path .. "/" .. (r.kind or "") .. "|" .. sigText(r.kind, r.label or "")
+    local sig = treeSig(kids, r)
+    local prev = w.traceSigs[key]
+    if prev and prev.sig == sig then
+        writeText(w, json({ type = "trace", t = r.t, id = r.id, parent = r.parent, kind = r.kind, same = prev.id }))
+        return
+    end
+    w.traceSigs[key] = { sig = sig, id = r.id }
+    writeTrace(w, r)
+    for _, c in ipairs(kids[r.id] or {}) do writeTree(w, kids, c, key) end
 end
 
 -- Poll the leader's trace (arms it) into w.traceBuf; trees by root id.
@@ -177,11 +337,23 @@ local function writeTraceWindows(w)
             end
         end
     end
-    -- children before their parents, as added (buffer order)
+    -- the chosen trees, parents first, children in id order
+    local kids, rootList = {}, {}
     for _, r in ipairs(buf.list) do
         local root = rootOf(buf, r)
-        if roots[root.id] then writeTrace(w, r) end
+        if roots[root.id] then
+            if r == root then
+                rootList[#rootList + 1] = r
+            else
+                local list = kids[r.parent]
+                if not list then list = {} kids[r.parent] = list end
+                list[#list + 1] = r
+            end
+        end
     end
+    for _, list in pairs(kids) do table.sort(list, function(a, b) return a.id < b.id end) end
+    table.sort(rootList, function(a, b) return a.id < b.id end)
+    for _, r in ipairs(rootList) do writeTree(w, kids, r, "") end
     for id in pairs(roots) do w.traceDone[id] = true end
     local still = {}
     for _, win in ipairs(open) do if t <= win.to then still[#still + 1] = win end end
@@ -229,6 +401,11 @@ local function beginFight(w, members)
     w.traceDone = {}
     w.traceWindows = {}
     w.pinVersion = {}
+    w.traceSigs = {}
+    w.ids = {}
+    w.idGuid = {}
+    w.unitStatic = {}
+    w.decRuns = {}
     w.anomaliesSeen = 0
     openTraceWindow(w, w.fightStart - 1000, w.fightStart + rec.traceStartMs)
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
@@ -250,6 +427,14 @@ local function endFight(w, members, reason)
         write(w, e)
         account(w, e)
     end
+    for bot in pairs(w.decRuns) do flushDecRun(w, bot) end
+    -- every unit of the end line has its id before end.guids is written
+    for _, list in ipairs({ w.names, w.stats }) do
+        for g in pairs(list) do
+            local hex = type(g) == "string" and g:match("^0x(%x+)$")
+            if hex and #hex == 16 then shortId(w, hex) end
+        end
+    end
     local alive = 0
     for _, m in ipairs(members) do if m:exists() and m:alive() then alive = alive + 1 end end
     local result = (reason == "stopped") and "stopped" or ((alive == 0) and "wipe" or "ok")
@@ -261,7 +446,7 @@ local function endFight(w, members, reason)
     for id, n in pairs(w.spellNames) do spells[tostring(id)] = n end
     write(w, { type = "end", t = now(), duration = now() - w.fightStart, reason = reason,
                result = result, aliveMembers = alive, aggroLost = counts.aggro or 0, anomalies = counts,
-               stats = w.stats, names = w.names, spells = spells, dropped = combatlog.dropped() })
+               stats = w.stats, names = w.names, spells = spells, dropped = combatlog.dropped(), guids = w.idGuid })
     w.file:close()
     w.file = nil
     rec.lastSummary = { file = w.path, duration = now() - w.fightStart, anomalies = counts, result = result }
@@ -342,7 +527,10 @@ local function tick(w)
     local plan = leader.plan and leader:plan()
     local pull = leader.pull and leader:pull()
 
-    write(w, { type = "snap", t = now(), party = party, enemies = enemyRows })
+    -- (copies: review.observe below reads the full rows)
+    local partyLive = snapRows(w, party)
+    local enemyLive = snapRows(w, enemyRows)
+    write(w, { type = "snap", t = now(), party = partyLive, enemies = enemyLive })
     review.observe(w, { leader = leader, members = members, party = party, enemies = enemies,
                         enemyRows = enemyRows, evs = evs, decs = decs, plan = plan, pull = pull, now = now() })
 
@@ -355,7 +543,7 @@ local function tick(w)
     w.anomaliesSeen = #found
 
     for _, g in ipairs(gaps) do write(w, { type = "gap", t = now(), bot = g, what = "dec" }) end
-    for _, d in ipairs(decs) do write(w, d) end
+    for _, d in ipairs(decs) do writeDec(w, d) end
 
     -- Commander notes to the leader since the last tick, and the plan state when it changed
     for _, n in ipairs(notes) do

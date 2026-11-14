@@ -261,6 +261,10 @@ local function step(job)
         if kind then
             local r = jsondecode(line)
             if r and r.type == kind then handlers[kind](job, p, r) end
+        elseif not job.ended and line:find('"type":"unit"', 1, true) then
+            -- (compact recordings, 2026-11-14: names are in the unit lines, not in the snaps)
+            local u = jsondecode(line)
+            if u and u.guid and not job.names[u.guid] then unitIdx(job, p, u.guid, u.name, u.class, u.role) end
         elseif not job.ended and line:find('"type":"snap"', 1, true) then
             snapNames(job, p, line)
         end
