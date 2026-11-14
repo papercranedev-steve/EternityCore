@@ -305,6 +305,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/BurstValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Values/BoostValue.h
+  ${COMMANDER_DIR}/Perception/Values/BoostValue.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h

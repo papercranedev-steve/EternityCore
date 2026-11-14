@@ -311,6 +311,11 @@ bool PartyBotAI::IsBurstControlled() const
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Burst, WorldTimer::getMSTime());
 }
 
+bool PartyBotAI::IsBoostControlled() const
+{
+    return m_directives && m_directives->IsTakenOver(Commander::Takeover::Boost, WorldTimer::getMSTime());
+}
+
 void PartyBotAI::BreakControl()
 {
     // Divine Shield / Ice Block lift a stun too, but they are the bot's emergency cooldowns: the
@@ -2270,7 +2275,8 @@ void PartyBotAI::UpdateOutOfCombatAI_Shaman()
 
 void PartyBotAI::UpdateInCombatAI_Shaman()
 {
-    if (m_spells.shaman.pManaTideTotem &&
+    // The Commander gives Mana Tide while it decides party boosts (BoostAssigner, Takeover::Boost).
+    if (m_spells.shaman.pManaTideTotem && !IsBoostControlled() &&
        (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
         CanTryToCastSpell(me, m_spells.shaman.pManaTideTotem))
     {
@@ -3901,7 +3907,8 @@ void PartyBotAI::UpdateInCombatAI_Druid()
         if (FindAndHealInjuredAlly(80.0f, 90.0f))
             return;
 
-        if (m_spells.druid.pInnervate &&
+        // The Commander gives Innervate while it decides party boosts (BoostAssigner, Takeover::Boost).
+        if (m_spells.druid.pInnervate && !IsBoostControlled() &&
            (me->GetHealthPercent() > 40.0f) &&
            (me->GetPowerPercent(POWER_MANA) < 10.0f) &&
             CanTryToCastSpell(me, m_spells.druid.pInnervate))

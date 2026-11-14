@@ -48,6 +48,7 @@ namespace Commander
         Rescue,         // RescueAssigner: get an enemy off a member who is not a tank
         Save,           // RescueAssigner: keep a member who is about to die alive (Shield Wall, a shield)
         FleeStop,       // FleeStopAssigner: stun / root / slow an enemy running away (a reservation until it is due)
+        Boost,          // BoostAssigner: a cooldown on a party member (Innervate, Power Infusion, Mana Tide)
     };
 
     // Needs of different kinds that solve the same problem (team rescue, 2026-11-07): a need is

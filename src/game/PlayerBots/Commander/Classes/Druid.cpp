@@ -91,6 +91,15 @@ namespace Commander
                 regen.selfOnly = true;
                 return { bark, regen };
             }
+
+            // Innervate (6 min): +400% mana regeneration, all of it while casting, 20 s.
+            std::vector<AllyBoostSpell> AllyBoosts() const override
+            {
+                AllyBoostSpell b;
+                b.spell = m_bot.m_spells.druid.pInnervate;
+                b.kind = AllyBoostKind::Mana;
+                return { b };
+            }
         };
     }
 

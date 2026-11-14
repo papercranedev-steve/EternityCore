@@ -40,6 +40,20 @@ namespace Commander
                 return { b };
             }
 
+            // Mana Tide Totem (talent, 5 min): every party member within 20 yd gets mana 4 times in
+            // 12 s (the totem's spell 16191 / 17355 / 17360: 170 / 230 / 290 each time).
+            std::vector<AllyBoostSpell> AllyBoosts() const override
+            {
+                SpellEntry const* totem = m_bot.m_spells.shaman.pManaTideTotem;
+                AllyBoostSpell b;
+                b.spell = totem;
+                b.kind = AllyBoostKind::PartyMana;
+                b.radius = 20.0f;
+                if (totem)
+                    b.manaPerTarget = 4.0f * (totem->Id == 17359 ? 290.0f : totem->Id == 17354 ? 230.0f : 170.0f);
+                return { b };
+            }
+
             // Elemental Mastery (talent, 3 min): the next spell crits and costs no mana, used for
             // Chain Lightning (Lightning Bolt until learned).
             std::vector<BurstSpell> Bursts() const override

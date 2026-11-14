@@ -148,6 +148,9 @@ namespace Commander
         // Death Wish, Retaliation, Sweeping Strikes, Adrenaline Rush, Cold Blood, Blade Flurry,
         // Elemental Mastery, Combustion, Arcane Power, Presence of Mind stand down.
         Burst,
+        // Cooldowns for a party member (BoostAssigner / BoostBehavior, cooldown doc 2026-11-14):
+        // the rotations' Innervate and Mana Tide Totem stand down.
+        Boost,
         Count
     };
 

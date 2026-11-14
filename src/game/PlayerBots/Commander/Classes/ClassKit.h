@@ -116,6 +116,22 @@ namespace Commander
         bool thenNotOnTarget = false;   // pairing with a curse: not while the bot's curse is up (Amplify Curse)
     };
 
+    // A cooldown cast on a party member to help it (BoostAssigner, cooldown doc 2026-11-14 4).
+    enum class AllyBoostKind : uint8
+    {
+        Mana,       // its mana regenerates faster (Innervate)
+        Power,      // its spells do more (Power Infusion)
+        PartyMana,  // mana for every member around the caster (Mana Tide Totem)
+    };
+
+    struct AllyBoostSpell
+    {
+        SpellEntry const* spell = nullptr;
+        AllyBoostKind kind = AllyBoostKind::Mana;
+        float manaPerTarget = 0.0f;     // PartyMana: mana each member gets over its duration
+        float radius = 0.0f;            // PartyMana: around the caster
+    };
+
     class ClassKit
     {
     public:
@@ -176,6 +192,9 @@ namespace Commander
         // on before the heal it suits (a big deficit; an emergency the heal would not reach in
         // time); the rotations do not cast them while it decides heals.
         virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
+        // Cooldowns for a party member (Innervate, Power Infusion, Mana Tide Totem): the brain picks
+        // whom (BoostAssigner), BoostBehavior casts them (Takeover::Boost).
+        virtual std::vector<AllyBoostSpell> AllyBoosts() const { return {}; }
         // Damage cooldowns (BurstBehavior, Takeover::Burst): the rotations do not cast them while
         // the Commander does. Racial ones come from RaceKit (merged in WorldModelBuilder).
         virtual std::vector<BurstSpell> Bursts() const { return {}; }

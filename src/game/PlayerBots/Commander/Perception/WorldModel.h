@@ -185,6 +185,22 @@ namespace Commander
         bool ready = false;
     };
 
+    // A cooldown a bot casts on a party member (ClassKit::AllyBoosts); Perception/Values/
+    // BoostValue.h values it per target. kind = ClassKit's AllyBoostKind (Mana, Power, PartyMana).
+    struct AllyBoostAbility
+    {
+        uint32 spellId = 0;
+        uint8 kind = 0;
+        float maxRange = 0.0f;
+        float radius = 0.0f;            // PartyMana: around the caster
+        float manaPerTarget = 0.0f;     // PartyMana
+        float durationSec = 0.0f;
+        uint32 cooldownMs = 0;
+        uint32 manaCost = 0;
+        bool gcd = false;
+        bool ready = false;             // off cooldown, the mana, can act and cast
+    };
+
     // The control effect an enemy is under now (the one lasting longest). A party member's
     // control cast that is done and on its way (Spell in SPELL_STATE_DELAYED: the server lands
     // it a few hundred ms later) counts as on, at its full duration: seeing nothing there
@@ -387,6 +403,12 @@ namespace Commander
         std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
         std::vector<BurstAbility> bursts;           // bots only
+        std::vector<AllyBoostAbility> allyBoosts;   // bots only
+        // Every member (BoostAssigner): its mana regeneration is boosted now
+        // (SPELL_AURA_MOD_POWER_REGEN_PERCENT: Innervate), its spells are (Power Infusion,
+        // Arcane Power: they do not stack).
+        bool manaBoosted = false;
+        bool powerBoosted = false;
         std::vector<FleeStopAbility> fleeStops;     // bots only
         // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,

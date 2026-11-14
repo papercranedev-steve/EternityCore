@@ -221,6 +221,8 @@ public:
     bool IsSurvivalControlled() const;
     // A Commander module decides the bot's damage cooldowns (BurstBehavior, Takeover::Burst).
     bool IsBurstControlled() const;
+    // A Commander module decides the bot's cooldowns for party members (BoostBehavior, Takeover::Boost).
+    bool IsBoostControlled() const;
     // Stunned, feared, polymorphed: break out with a trinket, Blink or a shapeshift (CombatBotBaseAI::
     // BreakCrowdControlEffects). Divine Shield / Ice Block only as the team rescue's duty
     // (CastRescueWhileControlled); in a duel the original reflex.

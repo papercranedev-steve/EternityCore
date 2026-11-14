@@ -78,6 +78,15 @@ namespace Commander
                 return { b };
             }
 
+            // Power Infusion (talent, 3 min): +20% spell damage and healing for 15 s.
+            std::vector<AllyBoostSpell> AllyBoosts() const override
+            {
+                AllyBoostSpell b;
+                b.spell = m_bot.m_spells.priest.pPowerInfusion;
+                b.kind = AllyBoostKind::Power;
+                return { b };
+            }
+
             // Desperate Prayer: no mana cost, 10 min cooldown (spell_template, 1.12).
             SpellEntry const* FreeSelfHeal() const override
             {

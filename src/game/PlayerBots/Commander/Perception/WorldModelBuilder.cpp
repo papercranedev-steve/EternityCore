@@ -54,6 +54,8 @@ namespace WorldModelBuilder
         }
 
         uint32 const SPELL_RIGHTEOUS_FURY = 25780;     // the aura (spell_template: aura 42 / 10)
+        uint32 const SPELL_POWER_INFUSION = 10060;
+        uint32 const SPELL_ARCANE_POWER = 12042;
 
         // PartyMemberFacts::healThreat: the biggest heal of `rates` (hps x time per cast) as
         // threat (Spell.cpp heal effect: x 0.5, paladins 0.25; then the healer's threat modifiers).
@@ -146,6 +148,9 @@ namespace WorldModelBuilder
             for (uint32 mechanic : { uint32(MECHANIC_SHIELD), uint32(MECHANIC_IMMUNE_SHIELD) })
                 if (unit->IsImmuneToMechanic(Mechanics(mechanic)))
                     f.immuneMechanics |= 1u << mechanic;
+            // Ally boosts (BoostAssigner): what is up already.
+            f.manaBoosted = unit->HasAuraType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
+            f.powerBoosted = unit->HasAura(SPELL_POWER_INFUSION) || unit->HasAura(SPELL_ARCANE_POWER);
 
             DamageIntake::Stats const taken = DamageIntake::Query(f.guid, WorldTimer::getMSTime());
             f.takenDps = taken.dps;
@@ -866,6 +871,32 @@ namespace WorldModelBuilder
             }
         }
 
+        // Cooldowns for a party member: ClassKit::AllyBoosts.
+        void FillAllyBoosts(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (AllyBoostSpell const& s : ai->Kit().AllyBoosts())
+            {
+                SpellEntry const* spell = s.spell;
+                if (!spell)
+                    continue;
+                AllyBoostAbility a;
+                a.spellId = spell->Id;
+                a.kind = uint8(s.kind);
+                a.maxRange = std::max(CombatBotBaseAI::SpellMaxRange(me, spell), 5.0f);
+                a.radius = s.radius;
+                a.manaPerTarget = s.manaPerTarget;
+                a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+                a.cooldownMs = spell->GetRecoveryTime();
+                if (Powers(spell->powerType) == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.gcd = spell->StartRecoveryTime > 0;
+                a.ready = f.CanAct() && !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
+                          ai->IsReadyWithStance(spell);
+                f.allyBoosts.push_back(a);
+            }
+        }
+
         // Damage cooldowns: ClassKit::Bursts and the racial ones (RaceKit::Bursts).
         void FillBursts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -1213,6 +1244,7 @@ namespace WorldModelBuilder
                         FillThreatDrops(ai, f);
                         FillSurvival(ai, f);
                         FillBursts(ai, f);
+                        FillAllyBoosts(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillAreaPotential(ai, f);
                         FillAreaPhase(ai, f);

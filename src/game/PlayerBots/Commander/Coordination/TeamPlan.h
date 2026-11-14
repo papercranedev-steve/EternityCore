@@ -680,6 +680,16 @@ namespace Commander
         float triggerPct = 0.0f;     // hold: cast from this health percent on (also once it runs)
     };
 
+    // A cooldown for a party member (BoostAssigner, cooldown doc 2026-11-14): `bot` casts
+    // `spellId` on `target` (Mana Tide Totem: on itself). BoostBehavior casts it.
+    struct BoostDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid target;
+        uint32 spellId = 0;
+        float points = 0.0f;         // net worth (Perception/Values/BoostValue.h)
+    };
+
     // Only controlled enemies are left (ControlledEndAssigner): the tank wakes the first one
     // (attacks it, PartyBotAI::IsAssignedToBreakControl), after waiting for mana only when the
     // fight would be too hard now.
@@ -1076,6 +1086,7 @@ namespace Commander
         std::vector<ControlDuty> controls;
         std::vector<RescueDuty> rescues;
         std::vector<FleeStopDuty> fleeStops;
+        std::vector<BoostDuty> boosts;
         // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
         // ThreatBehavior): enemies about to get a control that breaks on damage
         // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
@@ -1123,6 +1134,14 @@ namespace Commander
         RescueDuty const* FindRescueFor(ObjectGuid bot) const
         {
             for (RescueDuty const& d : rescues)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        BoostDuty const* FindBoostFor(ObjectGuid bot) const
+        {
+            for (BoostDuty const& d : boosts)
                 if (d.bot == bot)
                     return &d;
             return nullptr;
