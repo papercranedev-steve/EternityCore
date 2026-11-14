@@ -61,7 +61,22 @@ namespace Commander
                 loh.spell = s.pLayOnHands;
                 loh.effect = SurvivalEffect::Heal;
                 loh.allMana = true;
-                return { shield, bop, loh };
+                // Divine Protection: immune 6 / 8 s, Forbearance like Divine Shield (cooldown doc).
+                SurvivalSpell protection;
+                protection.spell = s.pDivineProtection;
+                protection.effect = SurvivalEffect::Immune;
+                protection.selfOnly = true;
+                protection.notOnTank = true;
+                return { shield, bop, loh, protection };
+            }
+
+            // Divine Favor: the next heal crits (spell 20216).
+            std::vector<HealBoostSpell> HealBoosts() const override
+            {
+                HealBoostSpell b;
+                b.spell = m_bot.m_spells.paladin.pDivineFavor;
+                b.critChance = 1.0f;
+                return { b };
             }
         };
     }

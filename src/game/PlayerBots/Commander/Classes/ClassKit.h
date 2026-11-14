@@ -80,6 +80,17 @@ namespace Commander
         bool allMana = false;       // costs all the caster's mana (Lay on Hands)
     };
 
+    // An instant off the global cooldown that makes the next heal better (HealPlanBehavior,
+    // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7.1): put on right before it
+    // (BotAction::prepSpell).
+    struct HealBoostSpell
+    {
+        SpellEntry const* spell = nullptr;
+        bool free = false;          // the next spell costs no mana (Inner Focus)
+        float critChance = 0.0f;    // added to the next heal's crit chance (Inner Focus 0.25, Divine Favor 1)
+        bool instant = false;       // the next heal with a cast time is instant (Nature's Swiftness)
+    };
+
     class ClassKit
     {
     public:
@@ -136,6 +147,14 @@ namespace Commander
         // Spells that keep a member about to die alive. Only the Commander casts them
         // (team rescue: RescueAssigner picks one per member, Takeover::Survival).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
+        // Heal boosts (Inner Focus, Divine Favor, Nature's Swiftness). The heal module puts one
+        // on before the heal it suits (a big deficit; an emergency the heal would not reach in
+        // time); the rotations do not cast them while it decides heals.
+        virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
+        // A heal on itself that costs no mana (priest Desperate Prayer): the heal module casts it
+        // when the bot is hit and misses about that much health (also non-healer bots); the team
+        // rescue may pick it for a bot about to die (it is in Survival too).
+        virtual SpellEntry const* FreeSelfHeal() const { return nullptr; }
         // Area damage spells the Commander casts on packs (the brain's area phase decides who,
         // which, where and when, Coordination/Doctrine/AreaPhase.h; AreaDamageBehavior casts it; the
         // rotations do not cast them).

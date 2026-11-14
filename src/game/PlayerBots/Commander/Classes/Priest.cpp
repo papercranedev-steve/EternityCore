@@ -55,12 +55,33 @@ namespace Commander
             }
 
             // Power Word: Shield on whoever is about to die (Weakened Soul: the spell's mechanic).
+            // Desperate Prayer (human, dwarf): a free instant heal on itself.
             std::vector<SurvivalSpell> Survival() const override
             {
                 SurvivalSpell s;
                 s.spell = m_bot.m_spells.priest.pPowerWordShield;
                 s.effect = SurvivalEffect::Absorb;
-                return { s };
+                SurvivalSpell prayer;
+                prayer.spell = m_bot.m_spells.priest.pDesperatePrayer;
+                prayer.effect = SurvivalEffect::Heal;
+                prayer.selfOnly = true;
+                return { s, prayer };
+            }
+
+            // Inner Focus: the next spell costs no mana, +25% crit chance (spell 14751).
+            std::vector<HealBoostSpell> HealBoosts() const override
+            {
+                HealBoostSpell b;
+                b.spell = m_bot.m_spells.priest.pInnerFocus;
+                b.free = true;
+                b.critChance = 0.25f;
+                return { b };
+            }
+
+            // Desperate Prayer: no mana cost, 10 min cooldown (spell_template, 1.12).
+            SpellEntry const* FreeSelfHeal() const override
+            {
+                return m_bot.m_spells.priest.pDesperatePrayer;
             }
         };
     }

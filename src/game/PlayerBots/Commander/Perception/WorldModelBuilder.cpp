@@ -12,6 +12,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "DamageSpells.h"
+#include "HealSpells.h"
 #include "RoleCapability.h"
 #include "World.h"
 #include "PartyBotAI.h"
@@ -826,7 +827,10 @@ namespace WorldModelBuilder
                                 a.amount = std::max(0.0f, 1.0f + spell->CalculateSimpleValue(SpellEffectIndex(i)) / 100.0f);
                         break;
                     case SurvivalEffect::Heal:
-                        a.amount = float(me->GetMaxHealth());
+                        // Lay on Hands: the caster's maximum health (SPELL_EFFECT_HEAL_MAX_HEALTH);
+                        // a plain heal (Desperate Prayer): its amount with the caster's bonuses.
+                        a.amount = spell->HasEffect(SPELL_EFFECT_HEAL) ?
+                            HealSpells::Estimate(me, me, spell).direct : float(me->GetMaxHealth());
                         break;
                     case SurvivalEffect::ExtraHealth:
                         a.amount = s.fraction * float(me->GetMaxHealth());

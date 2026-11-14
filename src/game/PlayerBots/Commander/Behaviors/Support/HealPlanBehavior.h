@@ -40,6 +40,19 @@
  * so a priest does not shield a tank that walls); until then this module also shielded an
  * emergency its heal would not reach in time.
  *
+ * Heal boosts (ClassKit::HealBoosts, cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7.1,
+ * user 2026-11-14): Inner Focus and Divine Favor wait for a deficit one big heal fills
+ * (HealPlan::PickBoosted), then go on right before that heal (BotAction::prepSpell);
+ * Nature's Swiftness makes the biggest heal instant in an emergency the picked heal would not
+ * reach in time. The rotations' own Inner Focus and Divine Favor stand down while this module
+ * decides heals.
+ *
+ * Free self heal (ClassKit::FreeSelfHeal, Desperate Prayer; user 2026-11-14): when the bot is hit
+ * and misses at least its amount x (1 - OVERHEAL_MAX), it is cast first (a Replace proposal),
+ * unless another member needs an emergency heal. Also for bots that are not healers (shadow
+ * priests: ControlsSelfHealOf); nothing else of this module runs for them. Not among the
+ * heals Pick chooses from.
+ *
  * Inputs: Value::TakenDps (measured damage or the enemy melee prediction, whichever is larger),
  * PartyMemberFacts::takenBurst for the reserve, mana regeneration and the ManaBudget tension.
  */
@@ -68,6 +81,8 @@ namespace Commander
 
         // The module is on and decides this healer's heals now (other modules check this).
         static bool ControlsHealingOf(PartyBotAI const* bot, WorldModel const& world);
+        // The module is on and decides this bot's free self heal now (any role).
+        static bool ControlsSelfHealOf(PartyBotAI const* bot, WorldModel const& world);
     };
 }
 

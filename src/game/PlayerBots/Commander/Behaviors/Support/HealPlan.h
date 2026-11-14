@@ -107,6 +107,31 @@ namespace HealPlan
 
     // Index of the heal to cast, -1 = none. Fills Option::effective.
     int Pick(Target const& t, Healer const& h, Assessment const& a, std::vector<Option>& options);
+
+    // A heal boost that is ready (ClassKit::HealBoostSpell, cooldown doc
+    // .kiro/docs/2026-11-14-cooldowns.md 7.1). Heal crits are x CRIT_MULT.
+    struct Boost
+    {
+        bool free = false;          // no mana (Inner Focus)
+        float critChance = 0.0f;    // added crit chance (Inner Focus 0.25, Divine Favor 1)
+        bool instant = false;       // the heal lands at once (Nature's Swiftness)
+    };
+    static constexpr float CRIT_MULT = 1.5f;
+
+    // The heal to cast with the boost, -1 = keep the boost for later. After Pick (`picked`, its
+    // choice; options' `effective` and `pulls` filled). Only heals that do not pull aggro.
+    //   instant  only in an emergency the picked heal does not reach in time (it lands at
+    //            timeToDie - LANDING_MARGIN_SEC or later, or none was picked): the biggest heal
+    //            with a cast time, landing now.
+    //   other    the biggest heal; only when the health missing when it lands is at least its
+    //            boosted amount (heal x (1 + min(1, critChance) x (CRIT_MULT - 1))) x
+    //            (1 - OVERHEAL_MAX): the boost waits for a deficit that one big heal fills
+    //            (user 2026-11-14: Inner Focus waits for a big gap, then one big heal). In an
+    //            emergency also only when it lands in time; otherwise only for a lift or chain.
+    int PickBoosted(Target const& t, Assessment const& a, std::vector<Option> const& options, int picked,
+                    Boost const& b);
+    // Expected heal of `o` with the boost's crit chance.
+    float BoostedHeal(Option const& o, Boost const& b);
 }
 }
 

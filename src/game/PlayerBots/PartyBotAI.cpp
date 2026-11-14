@@ -2114,7 +2114,9 @@ void PartyBotAI::UpdateInCombatAI_Paladin()
 
     if (GetRole() == ROLE_HEALER)
     {
-        if (m_spells.paladin.pHolyShock &&
+        // A healer's own Holy Shock with Divine Favor: the Commander heal module's while it
+        // decides heals (Holy Shock is one of its heals, Divine Favor a heal boost).
+        if (m_spells.paladin.pHolyShock && !IsHealingControlled() &&
             me->GetHealthPercent() < 50.0f &&
             CanTryToCastSpell(me, m_spells.paladin.pHolyShock))
         {
@@ -2654,7 +2656,9 @@ void PartyBotAI::UpdateInCombatAI_Priest()
         }
     }
 
-    if (m_spells.priest.pInnerFocus &&
+    // While the Commander heal module decides heals it puts Inner Focus on before a big heal
+    // (HealPlanBehavior heal boosts, cooldown doc 2026-11-14).
+    if (m_spells.priest.pInnerFocus && !IsHealingControlled() &&
        (me->GetPowerPercent(POWER_MANA) < 50.0f) &&
         CanTryToCastSpell(me, m_spells.priest.pInnerFocus))
     {

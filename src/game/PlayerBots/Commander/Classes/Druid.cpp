@@ -61,6 +61,15 @@ namespace Commander
             {
                 return { m_bot.m_spells.druid.pHibernate };
             }
+
+            // Nature's Swiftness: the next nature spell with a cast time is instant.
+            std::vector<HealBoostSpell> HealBoosts() const override
+            {
+                HealBoostSpell b;
+                b.spell = m_bot.m_spells.druid.pNaturesSwiftness;
+                b.instant = true;
+                return { b };
+            }
         };
     }
 

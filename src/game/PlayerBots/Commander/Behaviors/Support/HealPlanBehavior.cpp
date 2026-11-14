@@ -3,6 +3,8 @@
 #include "Commander/Behaviors/Support/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
@@ -95,6 +97,64 @@ namespace Commander
             return true;
         }
 
+        // The free self heal (Desperate Prayer, see the header): hit, and missing at least about
+        // its amount. Not while another member needs an emergency heal (it takes a GCD).
+        bool ProposeFreeSelfHeal(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+                                 bool otherEmergency, std::vector<Proposal>& out)
+        {
+            SpellEntry const* spell = bot->Kit().FreeSelfHeal();
+            if (!spell || otherEmergency || !self.CanAct())
+                return false;
+            Player* me = bot->me;
+            if (Value::TakenDps(world, self.guid) <= 0.0f)
+                return false;
+            if (!me->IsSpellReady(spell) || !bot->CanTryToCastSpell(me, spell))
+                return false;
+            float const heal = HealSpells::Estimate(me, me, spell).direct;
+            float const missing = float(me->GetMaxHealth()) - float(me->GetHealth());
+            if (heal <= 0.0f || missing < heal * (1.0f - HealPlan::OVERHEAL_MAX))
+                return false;
+
+            Proposal p;
+            p.tier = SurvivalValue::Of(world, self).InDanger() ? ProposalTier::Urgent : ProposalTier::Assigned;
+            p.source = "heal";
+            p.reason = "hit, free self heal fits";
+            p.action.type = BotActionType::Cast;
+            p.action.target = self.guid;
+            p.action.spell = spell;
+            float const effective = std::min(heal, missing);
+            p.SetValue(Value::Points(world, effective), Value::Points(world, heal - effective));
+            out.push_back(p);
+            return true;
+        }
+
+        // A ready heal boost that suits this heal (HealPlan::PickBoosted): the option to cast
+        // with it, and the boost; -1 = none.
+        int PickBoost(PartyBotAI const* bot, Candidate const& c, int picked,
+                      SpellEntry const*& boostSpell, HealPlan::Boost& boost)
+        {
+            Player* me = bot->me;
+            for (HealBoostSpell const& s : bot->Kit().HealBoosts())
+            {
+                if (!s.spell)
+                    continue;
+                // Already on (put up in a tick whose heal did not go out): counts as ready.
+                if (!me->HasAura(s.spell->Id) && (!me->IsSpellReady(s.spell) || !bot->CanTryToCastSpell(me, s.spell)))
+                    continue;
+                HealPlan::Boost b;
+                b.free = s.free;
+                b.critChance = s.critChance;
+                b.instant = s.instant;
+                int const index = HealPlan::PickBoosted(c.target, c.assessment, c.options, picked, b);
+                if (index < 0)
+                    continue;
+                boostSpell = s.spell;
+                boost = b;
+                return index;
+            }
+            return -1;
+        }
+
         char const* ReasonOf(HealPlan::Need need)
         {
             switch (need)
@@ -108,7 +168,13 @@ namespace Commander
 
     bool HealPlanBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        return bot->GetRole() == ROLE_HEALER;
+        return bot->GetRole() == ROLE_HEALER || bot->Kit().FreeSelfHeal();
+    }
+
+    bool HealPlanBehavior::ControlsSelfHealOf(PartyBotAI const* bot, WorldModel const& world)
+    {
+        return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
+               !bot->IsInDuel() && world.HasPartyEnemy();
     }
 
     bool HealPlanBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
@@ -126,16 +192,22 @@ namespace Commander
     void HealPlanBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
-        if (!ControlsHealingOf(bot, world))
-            return;
-
         Player* me = bot->me;
-        // Still out of combat and held by the pull's opening (PullOpening.h: healing starts last,
-        // its threat lands on every enemy at once): emergencies only.
-        bool const heldByPull = !me->IsInCombat() && plan.pull.HoldsWaiting(true);
         PartyMemberFacts const* myFacts = world.FindMember(me->GetObjectGuid());
         if (!myFacts)
             return;
+        if (!ControlsHealingOf(bot, world))
+        {
+            // A bot that is not a healer: only its free self heal (user 2026-11-14).
+            if (ControlsSelfHealOf(bot, world))
+                ProposeFreeSelfHeal(bot, world, *myFacts, false, out);
+            return;
+        }
+
+        // Still out of combat and held by the pull's opening (PullOpening.h: healing starts last,
+        // its threat lands on every enemy at once): emergencies only.
+        bool const heldByPull = !me->IsInCombat() && plan.pull.HoldsWaiting(true);
+        SpellEntry const* freeSelfHeal = bot->Kit().FreeSelfHeal();
 
         uint32 const now = WorldTimer::getMSTime();
         uint32 const tickMs = sCommanderMgr.GetBotUpdateInterval();
@@ -175,7 +247,8 @@ namespace Commander
             c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
             for (HealSpells::Option const& o : choice.options)
             {
-                if (o.amount.direct <= 0.0f)
+                // The free self heal has its own rule (ProposeFreeSelfHeal).
+                if (o.amount.direct <= 0.0f || o.spell == freeSelfHeal)
                     continue;
                 HealPlan::Option p;
                 p.heal = o.amount.direct;
@@ -197,6 +270,12 @@ namespace Commander
 
         std::stable_sort(candidates.begin(), candidates.end(), IsMoreUrgent);
 
+        // The free self heal first, unless someone else needs an emergency heal (user 2026-11-14).
+        bool const otherEmergency = std::any_of(candidates.begin(), candidates.end(), [me](Candidate const& c)
+            { return c.unit != me && c.assessment.need == HealPlan::Need::Emergency; });
+        if (!heldByPull && ProposeFreeSelfHeal(bot, world, *myFacts, otherEmergency, out))
+            return;
+
         bool const checkAggro = sCommanderMgr.IsModuleEnabled("threat");
         for (Candidate& c : candidates)
         {
@@ -208,28 +287,50 @@ namespace Commander
                 for (size_t i = 0; i < c.options.size(); ++i)
                     c.options[i].pulls = ThreatBehavior::HealPullLoss(bot, world, c.unit, c.spells[i]) > 0.0f;
 
-            int const index = HealPlan::Pick(c.target, healer, c.assessment, c.options);
+            int index = HealPlan::Pick(c.target, healer, c.assessment, c.options);
             if (ProposeShield(bot, world, c.unit, *c.facts, c.target, c.assessment,
                               index >= 0 ? &c.options[index] : nullptr, out))
                 return;
+
+            // A ready heal boost that suits this heal: cast with the heal it waits for.
+            SpellEntry const* boostSpell = nullptr;
+            HealPlan::Boost boost;
+            int const boosted = PickBoost(bot, c, index, boostSpell, boost);
+            if (boosted >= 0)
+                index = boosted;
             if (index < 0)
                 continue;
 
             HealPlan::Option const& o = c.options[index];
+            float heal = o.heal;
+            float effective = o.effective;
+            float castSec = o.castSec;
+            if (boostSpell)
+            {
+                castSec = boost.instant ? 0.0f : o.castSec;
+                heal = HealPlan::BoostedHeal(o, boost);
+                float const missing = std::max(0.0f, c.target.maxHealth - c.target.health);
+                effective = std::min(heal, std::min(c.target.maxHealth, missing + c.target.intake * castSec));
+            }
             Proposal p;
             p.kind = ProposalKind::HealOrder;
             p.tier = emergency ? ProposalTier::Urgent : ProposalTier::Assigned;
             p.source = "heal";
-            p.reason = ReasonOf(c.assessment.need);
+            p.reason = boostSpell ? (boost.instant ? "emergency: boost, instant big heal" : "big deficit: boost, big heal")
+                                  : ReasonOf(c.assessment.need);
             p.action.type = BotActionType::Cast;
             p.action.target = c.facts->guid;
             p.action.spell = c.spells[index];
+            p.action.prepSpell = boostSpell;
             // Benefit: the health it restores, plus the death it prevents when the target would
-            // not last until the next chance to heal it. Cost: the overheal.
-            float benefit = Value::Points(world, o.effective);
-            if (emergency && c.assessment.timeToDie < std::max(HealPlan::GCD_SEC, o.castSec) + healer.tickSec * 2.0f)
+            // not last until the next chance to heal it, plus the mana a free boost saves.
+            // Cost: the overheal.
+            float benefit = Value::Points(world, effective);
+            if (emergency && c.assessment.timeToDie < std::max(HealPlan::GCD_SEC, castSec) + healer.tickSec * 2.0f)
                 benefit += Value::DeathPenalty(*c.facts);
-            p.SetValue(benefit, Value::Points(world, o.heal - o.effective));
+            if (boostSpell && boost.free)
+                benefit += ManaWorth::Points(world, *myFacts, o.mana);
+            p.SetValue(benefit, Value::Points(world, heal - effective));
             out.push_back(p);
             return;
         }

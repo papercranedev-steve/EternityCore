@@ -196,5 +196,46 @@ namespace HealPlan
         }
         return best;
     }
+
+    float BoostedHeal(Option const& o, Boost const& b)
+    {
+        return o.heal * (1.0f + std::min(1.0f, std::max(0.0f, b.critChance)) * (CRIT_MULT - 1.0f));
+    }
+
+    int PickBoosted(Target const& t, Assessment const& a, std::vector<Option> const& options, int picked,
+                    Boost const& b)
+    {
+        bool const emergency = a.need == Need::Emergency;
+        if (!emergency && a.need != Need::Lift && a.need != Need::Chain)
+            return -1;
+
+        // The biggest heal that does not pull (with a cast time for an instant boost).
+        int big = -1;
+        for (size_t i = 0; i < options.size(); ++i)
+        {
+            Option const& o = options[i];
+            if (o.pulls || o.heal <= 0.0f || (b.instant && o.castSec <= 0.0f))
+                continue;
+            if (big < 0 || o.heal > options[big].heal)
+                big = int(i);
+        }
+        if (big < 0)
+            return -1;
+        Option const& o = options[big];
+
+        if (b.instant)
+        {
+            if (!emergency)
+                return -1;
+            bool const pickedInTime = picked >= 0 &&
+                options[picked].castSec + LANDING_MARGIN_SEC < a.timeToDie;
+            return pickedInTime ? -1 : big;
+        }
+
+        if (emergency && o.castSec + LANDING_MARGIN_SEC >= a.timeToDie)
+            return -1;
+        float const missingAtLanding = std::min(t.maxHealth, Missing(t) + t.intake * o.castSec);
+        return missingAtLanding >= BoostedHeal(o, b) * (1.0f - OVERHEAL_MAX) ? big : -1;
+    }
 }
 }
