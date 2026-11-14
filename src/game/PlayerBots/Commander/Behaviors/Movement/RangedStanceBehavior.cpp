@@ -11,6 +11,7 @@
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Behaviors/Movement/SpotRejects.h"
+#include "Commander/Behaviors/Movement/JoinGamble.h"
 #include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -315,7 +316,7 @@ namespace Commander
                 SafeRoute::Verdict verdict;
                 if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR, nullptr, nullptr, &verdict))
                 {
-                    why.Path(verdict);
+                    why.Path(verdict, s.pos);
                     sight.MarkPathFailed(me, s.pos, tight);
                     continue;
                 }
@@ -360,6 +361,10 @@ namespace Commander
                 return;
             }
         }
+        // The last way in: past the idle creature that blocked the first path, when its join is
+        // worth it (JoinGamble.h, 2026-11-15).
+        if (!prepare && !inReach && !placed && JoinGamble::Propose(me, world, *self, why, at, "rangedstance", out))
+            return;
         // Out of the victim's range or sight and no spot: the only record of why it stands.
         if (!prepare && !inReach && Trace::On())
             Trace::Emit("stance", Trace::Format("%s: no spot for %s (ranged)", me->GetName(), mayTighten ? "the victim, hard line too" : "the victim"),

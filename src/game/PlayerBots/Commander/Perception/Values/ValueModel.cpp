@@ -93,6 +93,16 @@ namespace Value
         return EstimatedDps(world);
     }
 
+    float ActingDps(WorldModel const& world)
+    {
+        float perDealer = FightMeasured(world) ? world.rates.fightDpsPerDealer : 0.0f;
+        if (world.rates.lastFightDps > 0.0f && world.rates.lastFightDealers)
+            perDealer = std::max(perDealer, world.rates.lastFightDps / float(world.rates.lastFightDealers));
+        if (perDealer <= 0.0f || !world.rates.damageDealers)
+            return CapacityDps(world);
+        return std::max(1.0f, perDealer * float(world.rates.damageDealers));
+    }
+
     char const* CapacityDpsSource(WorldModel const& world)
     {
         if (FightMeasured(world))

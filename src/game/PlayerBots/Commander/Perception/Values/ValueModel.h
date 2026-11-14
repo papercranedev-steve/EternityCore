@@ -67,6 +67,13 @@ namespace Commander
         float CapacityDps(WorldModel const& world);
         // Where CapacityDps comes from now: "this fight", "last fight" or "gear estimate".
         char const* CapacityDpsSource(WorldModel const& world);
+        // CapacityDps with every damage dealer acting (2026-11-15, user): per dealer the larger
+        // of this fight's and the last fight's, x the damage dealers that can act. This fight's
+        // pace counts a dealer stuck out of reach as 0 (stockade-20261115-012103: 116/s with the
+        // mage in the corridor, the last fights 210/s and more); a forecast of what happens once
+        // it walks in must not price it at that pace. The gear estimate is not taken (it ran
+        // twice the real damage). Nothing measured: CapacityDps.
+        float ActingDps(WorldModel const& world);
         // Seconds until all current enemies are dead at the current rate.
         float FightRemainingSec(WorldModel const& world);
         // Points lost when the fight lasts `seconds` longer (incoming damage during that time).

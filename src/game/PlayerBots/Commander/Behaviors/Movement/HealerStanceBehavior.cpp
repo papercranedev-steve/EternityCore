@@ -13,6 +13,7 @@
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Behaviors/Movement/SpotRejects.h"
+#include "Commander/Behaviors/Movement/JoinGamble.h"
 #include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -483,7 +484,7 @@ namespace Commander
                 SafeRoute::Verdict verdict;
                 if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR, nullptr, nullptr, &verdict))
                 {
-                    why.Path(verdict);
+                    why.Path(verdict, s.pos);
                     sight->MarkPathFailed(me, s.pos, tight);
                     continue;
                 }
@@ -512,6 +513,12 @@ namespace Commander
                 SafeRoute::PathIsSafe(me, pathIdle, ctx.anchor, MAX_PATH_DETOUR, nullptr, nullptr, &anchorVerdict);
             if (wantsAnchor && !anchorIdle && !anchorPath)
             {
+                // (the join gamble below may walk to the tank past this one: JoinGamble.h)
+                if (!why.blockerUnit && anchorVerdict.blocker)
+                {
+                    why.blockerUnit = anchorVerdict.blocker;
+                    why.blockedAt = ctx.anchor;
+                }
                 anchorWhy = anchorVerdict.why;
                 if (anchorVerdict.blocker)
                     anchorBlocker = Trace::Format("%s %s", anchorVerdict.blocker->GetName(),
@@ -531,6 +538,10 @@ namespace Commander
                 return;
             }
         }
+        // The last way in: past the idle creature that blocked the first path (a cell, or the
+        // tank), when its join is worth it (JoinGamble.h, 2026-11-15).
+        if (!ctx.prepare && !anchorOk && JoinGamble::Propose(me, world, *ctx.self, why, ctx.anchor, "stance", out))
+            return;
         // The tank out of reach or sight and no way to it: the only record of why it stands.
         if (!ctx.prepare && !anchorOk && Trace::On())
             Trace::Emit("stance", Trace::Format("%s: no spot for the tank (healer)%s", me->GetName(), mayTighten ? ", hard line too" : ""),

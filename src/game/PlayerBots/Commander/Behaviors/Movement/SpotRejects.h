@@ -44,14 +44,23 @@ namespace Commander
         }
         char const* pathWhy = "";
         std::string blocker;
+        // The first cell whose path only an idle creature blocked, and that creature (the
+        // stances' join gamble: JoinRisk.h). Same update only (a creature pointer).
+        Creature const* blockerUnit = nullptr;
+        Position3 blockedAt;
 
-        void Path(SafeRoute::Verdict const& v)
+        void Path(SafeRoute::Verdict const& v, Position3 const& at)
         {
             if (!path++)
             {
                 pathWhy = v.why;
                 if (v.blocker)
                     blocker = Trace::Format("%s %s", v.blocker->GetName(), Trace::Guid(v.blocker->GetObjectGuid()).c_str());
+            }
+            if (!blockerUnit && v.blocker)
+            {
+                blockerUnit = v.blocker;
+                blockedAt = at;
             }
         }
 

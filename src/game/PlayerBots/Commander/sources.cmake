@@ -117,6 +117,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/ValueModel.cpp
   ${COMMANDER_DIR}/Perception/Values/Exposure.h
   ${COMMANDER_DIR}/Perception/Values/Exposure.cpp
+  ${COMMANDER_DIR}/Perception/Values/JoinRisk.h
+  ${COMMANDER_DIR}/Perception/Values/JoinRisk.cpp
   ${COMMANDER_DIR}/Perception/Values/SightMargin.h
   ${COMMANDER_DIR}/Perception/Values/SightMargin.cpp
   ${COMMANDER_DIR}/Perception/Values/SpotCost.h
@@ -279,6 +281,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/SpotRejects.h
+  ${COMMANDER_DIR}/Behaviors/Movement/JoinGamble.h
+  ${COMMANDER_DIR}/Behaviors/Movement/JoinGamble.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/MeleeStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/TankStanceBehavior.h
