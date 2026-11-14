@@ -53,7 +53,7 @@ namespace Commander
             if (c.hereFlee > 0.0f)
                 add("a runner would bring more from here");
             if (c.bestArea < 0.0f)
-                add("the area caster has more room there");
+                add(c.channel ? "more of the enemies in the area spell there" : "the area caster has more room there");
             if (c.bestTeam < 0.0f)
                 add("the healers and ranged stand better there");
             return out.empty() ? std::string("a better spot") : out;
@@ -230,7 +230,8 @@ namespace Commander
         // While the pull places the tank, only patrols coming soon count (judged again later).
         float const within = plan.pull.PlacesTank() ? PULL_PLACING_DEFER_SEC : FLT_MAX;
         FightSpot::Choice const c = FightSpot::Choose(world, plan, *tank, FightSpot::InFight(world, *tank, within));
-        if (c.hereLoss <= 0.0f)
+        // (nothing lost here can still gain: a channel with enemies outside its circle)
+        if (c.hereLoss <= 0.0f && c.spots.empty())
         {
             m.lastNote.clear();
             return;

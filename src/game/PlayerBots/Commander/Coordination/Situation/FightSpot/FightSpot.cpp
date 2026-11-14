@@ -94,9 +94,18 @@ namespace FightSpot
             bool on = false;
             AreaValue::Request request;
             float hereNet = 0.0f;
+            uint32 outside = 0;         // the tank's enemies (acting, not controlled) outside the circle now
+
+            // A tank's cell `s` inside the circle (the pile around it is then mostly in it).
+            bool Inside(Position3 const& s) const
+            {
+                Position3 const& c = request.centre;
+                float const dx = s.x - c.x, dy = s.y - c.y;
+                return dx * dx + dy * dy <= request.spell->radius * request.spell->radius;
+            }
         };
 
-        Channel MakeChannel(WorldModel const& world, TeamPlan const& plan)
+        Channel MakeChannel(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& tank)
         {
             Channel ch;
             for (PartyMemberFacts const& m : world.party)
@@ -116,6 +125,16 @@ namespace FightSpot
                 r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
                 AreaValue::Result const v = AreaValue::Evaluate(world, r);
                 ch.hereNet = v.valid ? std::max(0.0f, v.net) : 0.0f;
+                float const radius = spell->radius;
+                for (EnemyFacts const& e : world.enemies)
+                {
+                    if (e.victim != tank.guid || !e.acting || e.crowdControlled || !e.health || plan.KeepsUnbroken(e))
+                        continue;
+                    float const dx = e.pos.x - r.centre.x, dy = e.pos.y - r.centre.y;
+                    float const edge = std::sqrt(dx * dx + dy * dy) - e.boundingRadius;
+                    if (edge > radius)
+                        ++ch.outside;
+                }
                 ch.on = true;
                 return ch;
             }
@@ -123,8 +142,9 @@ namespace FightSpot
         }
 
         // The channel's loss with the enemies on the tank around S (each keeps its place
-        // relative to the tank) and the tank busy walking there. `moved` is a copy of the world
-        // whose enemy positions are rewritten.
+        // relative to the tank) and the tank busy walking there; negative: more of them in the
+        // circle at S than here (a gain). `moved` is a copy of the world whose enemy positions
+        // are rewritten.
         float ChannelLoss(WorldModel const& world, WorldModel& moved, Channel const& ch, PartyMemberFacts const& tank,
                           Position3 const& at, Position3 const& s)
         {
@@ -142,7 +162,7 @@ namespace FightSpot
             AreaValue::Request r = ch.request;
             r.turn.busyTanks.push_back(tank.guid);
             AreaValue::Result const v = AreaValue::Evaluate(moved, r);
-            return std::max(0.0f, ch.hereNet - (v.valid ? std::max(0.0f, v.net) : 0.0f));
+            return ch.hereNet - (v.valid ? std::max(0.0f, v.net) : 0.0f);
         }
 
         // Header "flee": the creatures on the tank (before the fight: the pull's) that run for
@@ -360,10 +380,15 @@ namespace FightSpot
         float const margin = Value::LostAction(world, tank, MARGIN_SEC);
         if (!world.field)
             return c;
-        // Before the fight the caster's room can make another cell better (a gain); in the
-        // fight the area term is only a loss of moving: nothing to gain here, no search.
+        // Before the fight the caster's room can make another cell better (a gain). In the fight
+        // a channel running gains when some of the tank's enemies are outside its circle
+        // (strat-20261114-172715: the tank moved the pile off a Blizzard for a shackle and,
+        // the loss here gone, stood at the circle's edge with half of them out); else nothing
+        // to gain here, no search.
         Room const room = r.walkFromAt ? MakeRoom(world, plan, r) : Room();
-        if (c.hereLoss <= margin && !r.walkFromAt)
+        Channel const channel = r.walkFromAt ? Channel() : MakeChannel(world, plan, tank);
+        c.channel = channel.on;
+        if (c.hereLoss <= margin && !r.walkFromAt && channel.outside == 0)
             return c;
         float const hereRoom = room.on ? room.Loss(r.at) : 0.0f;
 
@@ -388,13 +413,26 @@ namespace FightSpot
         std::stable_sort(scored.begin(), scored.end(), [](Scored const& a, Scored const& b) { return a.Total() < b.Total(); });
 
         // The channel running (in the fight) and the party's places: the best MAX_VALUED cells
-        // by the other terms only (doc 9, answer 5).
-        Channel const channel = r.walkFromAt ? Channel() : MakeChannel(world, plan);
+        // by the other terms only (doc 9, answer 5), and with a channel also the best
+        // MAX_VALUED inside its circle (the nearest cells by walk may all be outside it).
         Team team = scored.empty() ? Team() : MakeTeam(world, plan, tank, r);
         if ((channel.on || team.on) && !scored.empty())
         {
             if (scored.size() > MAX_VALUED)
-                scored.resize(MAX_VALUED);
+            {
+                std::vector<Scored> kept(scored.begin(), scored.begin() + MAX_VALUED);
+                if (channel.on)
+                {
+                    size_t inside = 0;
+                    for (size_t i = MAX_VALUED; i < scored.size() && inside < MAX_VALUED; ++i)
+                        if (channel.Inside(scored[i].pos))
+                        {
+                            kept.push_back(scored[i]);
+                            ++inside;
+                        }
+                }
+                scored.swap(kept);
+            }
             WorldModel moved;
             if (channel.on)
                 moved = world;
@@ -407,8 +445,12 @@ namespace FightSpot
             }
             std::stable_sort(scored.begin(), scored.end(), [](Scored const& a, Scored const& b) { return a.Total() < b.Total(); });
         }
+        // Searched for the channel alone: only a cell with more of them in it moves the tank (the
+        // team term prices the cells, it does not start a move, as without a channel).
+        bool const channelOnly = !r.walkFromAt && c.hereLoss <= margin;
         scored.erase(std::remove_if(scored.begin(), scored.end(),
-            [&](Scored const& x) { return x.Total() >= c.hereLoss - margin; }), scored.end());
+            [&](Scored const& x) { return x.Total() >= c.hereLoss - margin || (channelOnly && x.area >= 0.0f); }),
+            scored.end());
 
         for (size_t i = 0; i < scored.size() && i < MAX_SPOTS; ++i)
             c.spots.push_back(scored[i].pos);
@@ -419,17 +461,18 @@ namespace FightSpot
             c.bestTeam = scored.front().team;
             c.bestWalk = scored.front().walk;
         }
-        char buf[260];
-        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f, flee %.1f); best %s %.1f (area %+.1f, party %+.1f) + walk %.1f",
-            c.hereLoss, c.herePatrols, c.hereHolds, c.hereFlee, scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea,
-            c.bestTeam, c.bestWalk);
+        char buf[300];
+        snprintf(buf, sizeof(buf), "here %.1f (patrols %.1f, holds %.1f, flee %.1f%s); best %s %.1f (area %+.1f, party %+.1f) + walk %.1f",
+            c.hereLoss, c.herePatrols, c.hereHolds, c.hereFlee,
+            channel.outside ? Trace::Format(", %u outside the channel", channel.outside).c_str() : "",
+            scored.empty() ? "none" : "spot", c.bestLoss, c.bestArea, c.bestTeam, c.bestWalk);
         c.why = buf;
         if (scope.On())
         {
             scope.Label("%s", c.why.c_str());
             scope.Data(Trace::Format("{\"candidates\":%u,\"held\":%u,\"clearYd\":%.1f,\"room\":%s,\"hereRoom\":%.1f,"
-                "\"channel\":%s,\"channelNet\":%.1f}", uint32(scored.size()), uint32(held.size()), clearYd,
-                room.on ? "true" : "false", hereRoom, channel.on ? "true" : "false", channel.hereNet));
+                "\"channel\":%s,\"channelNet\":%.1f,\"outside\":%u}", uint32(scored.size()), uint32(held.size()), clearYd,
+                room.on ? "true" : "false", hereRoom, channel.on ? "true" : "false", channel.hereNet, channel.outside));
         }
         return c;
     }

@@ -480,6 +480,16 @@ namespace Commander
                     continue;
                 }
                 bool const ground = spell.onTarget && spell.channel;
+                // The tank taking the pile elsewhere: a circle put on it now is left behind
+                // (strat-20261114-172715: a Blizzard cast while the tank walked 6 yd off for a
+                // shackle hit 2 of 4 for its last ticks). Started once it is there. Reads
+                // plan.fightSpot: this refresh's (FightSpotAssigner runs before) or, in another
+                // order, the last one's; both are right.
+                if (ground && plan.fightSpot.moving)
+                {
+                    TraceCandidate(m, spell, nullptr, "the tank moves the fight", nullptr);
+                    continue;
+                }
                 std::vector<EnemyFacts const*> centres;
                 if (ground && !runners.empty())
                     centres.push_back(runners.front().facts);
