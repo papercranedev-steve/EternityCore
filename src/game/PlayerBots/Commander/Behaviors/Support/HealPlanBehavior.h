@@ -42,7 +42,9 @@
  *
  * Heal boosts (ClassKit::HealBoosts, cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7.1,
  * user 2026-11-14): Inner Focus and Divine Favor wait for a deficit one big heal fills
- * (HealPlan::PickBoosted), then go on right before that heal (BotAction::prepSpell);
+ * (HealPlan::PickBoosted), then go on right before that heal (BotAction::prepSpell). While
+ * Inner Focus (free) is ready the lifts themselves wait for that deficit (Target::waitDeficit,
+ * never past the safe deficit), so the gap comes;
  * Nature's Swiftness makes the biggest heal instant in an emergency the picked heal would not
  * reach in time. The rotations' own Inner Focus and Divine Favor stand down while this module
  * decides heals.

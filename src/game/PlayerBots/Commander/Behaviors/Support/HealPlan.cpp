@@ -103,6 +103,8 @@ namespace HealPlan
         float const lead = t.intake * (e.castSec + h.tickSec);
         float const maxDeficit = std::max(minDeficit, t.maxHealth - a.reserve - lead);
         a.deficit = minDeficit + (maxDeficit - minDeficit) * h.manaWeight;
+        if (t.waitDeficit > 0.0f)
+            a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
 
         if (t.chained)
             a.need = Need::Chain;

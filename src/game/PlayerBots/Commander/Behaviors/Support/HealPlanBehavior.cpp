@@ -128,6 +128,28 @@ namespace Commander
             return true;
         }
 
+        // A free heal boost is ready (Inner Focus): the deficit the lift waits for, so the boosted
+        // biggest heal fills it (HealPlan::Target::waitDeficit). 0 = none ready.
+        float FreeBoostWait(PartyBotAI const* bot, std::vector<HealPlan::Option> const& options)
+        {
+            Player* me = bot->me;
+            for (HealBoostSpell const& s : bot->Kit().HealBoosts())
+            {
+                if (!s.spell || !s.free)
+                    continue;
+                if (!me->HasAura(s.spell->Id) && (!me->IsSpellReady(s.spell) || !bot->CanTryToCastSpell(me, s.spell)))
+                    continue;
+                HealPlan::Boost b;
+                b.free = true;
+                b.critChance = s.critChance;
+                float biggest = 0.0f;
+                for (HealPlan::Option const& o : options)
+                    biggest = std::max(biggest, HealPlan::BoostedHeal(o, b));
+                return biggest * (1.0f - HealPlan::OVERHEAL_MAX);
+            }
+            return 0.0f;
+        }
+
         // A ready heal boost that suits this heal (HealPlan::PickBoosted): the option to cast
         // with it, and the boost; -1 = none.
         int PickBoost(PartyBotAI const* bot, Candidate const& c, int picked,
@@ -260,6 +282,7 @@ namespace Commander
                 c.options.push_back(p);
                 c.spells.push_back(o.spell);
             }
+            c.target.waitDeficit = FreeBoostWait(bot, c.options);
             c.assessment = HealPlan::Assess(c.target, healer, c.options);
             if (c.assessment.need == HealPlan::Need::None || c.assessment.need == HealPlan::Need::Rest)
                 continue;

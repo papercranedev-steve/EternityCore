@@ -15,6 +15,8 @@
  *             Mana plentiful (weight 0): heal as soon as one efficient heal fits. Mana scarce
  *             (weight 1): let the target sink to the reserve, then lift it in one go and rest
  *             longer (fewer five second rule restarts, more spirit regeneration).
+ *             A free heal boost ready (Target::waitDeficit, Inner Focus): at least the boosted
+ *             biggest heal x (1 - OVERHEAL_MAX), at most max (2026-11-14).
  *   chain     the last heal went to this target and ended just now: keep healing it until the
  *             next heal would overheal by more than OVERHEAL_MAX, then rest.
  *
@@ -59,6 +61,10 @@ namespace HealPlan
         float intake = 0.0f;        // damage per second expected (Value::TakenDps)
         float burst = 0.0f;         // biggest recent spike (PartyMemberFacts::takenBurst)
         bool chained = false;       // the healer's last heal went here and just ended
+        // A free heal boost is ready (Inner Focus): the lift waits until this much is missing,
+        // so one boosted big heal fills it (user 2026-11-14), but never past the safe deficit
+        // (max health - reserve - incoming during the heal). 0 = no wait.
+        float waitDeficit = 0.0f;
     };
 
     struct Healer

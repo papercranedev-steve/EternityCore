@@ -91,6 +91,7 @@ namespace Commander
                 sweep.spell = s.pSweepingStrikes;
                 sweep.damageMult = 0.5f;
                 sweep.minEnemiesNear = 2;
+                sweep.notTank = true;   // Battle Stance: a tank would leave Defensive Stance
                 BurstSpell reck;
                 reck.spell = s.pRecklessness;
                 reck.damageMult = 0.5f;
@@ -100,6 +101,7 @@ namespace Commander
                 retaliation.spell = s.pRetaliation;
                 retaliation.damageMult = 0.3f;
                 retaliation.minAttackersOnSelf = 3;
+                retaliation.notTank = true;     // Battle Stance, as Sweeping Strikes
                 return { wish, sweep, reck, retaliation };
             }
         };
