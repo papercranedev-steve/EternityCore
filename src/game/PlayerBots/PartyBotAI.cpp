@@ -1235,6 +1235,11 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
             
             return;
         }
+        // (acknowledged below) A bot does not fall from the teleport point by itself.
+        case SMSG_NEW_WORLD:
+        case MSG_MOVE_TELEPORT_ACK:
+            Commander::Landing::OnTeleport(m_landing);
+            break;
     }
 
     CombatBotBaseAI::OnPacketReceived(packet);
@@ -1269,6 +1274,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     Commander::JumpCast::Update(this, m_jumpCast);
     // Commander leader trail walk: the next leg as soon as one ends.
     Commander::TrailFollow::Update(this, m_trailFollow);
+    // Commander drop to the ground after a teleport (the point may be in the air).
+    Commander::Landing::Update(this, m_landing);
 
     // Warrior stance swap (DoCastWithStance): cast the spell as soon as the stance is up, every
     // frame, so the bot stays in the other stance for one spell update instead of a bot interval.
@@ -1384,7 +1391,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     sCommanderMgr.OnBotUpdate(this);
 
     // Dropping down on the leader's trail: a cast (buff, heal) would stop the fall in the air.
-    if (Commander::TrailFollow::IsFalling(me, m_trailFollow))
+    if (Commander::TrailFollow::IsFalling(me, m_trailFollow) || Commander::Landing::IsFalling(me, m_landing))
         return;
 
     if (pLeader->IsTaxiFlying())

@@ -28,6 +28,7 @@
 #include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/Behaviors/Movement/TrailFollow.h"
 #include "Commander/Behaviors/Movement/Arrival.h"
+#include "Commander/Behaviors/Movement/Landing.h"
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include <memory>
@@ -376,6 +377,9 @@ public:
     Commander::JumpCastState m_jumpCast;
     // Commander leader trail walk (Commander/Behaviors/Movement/TrailFollow.h), every frame in UpdateAI.
     Commander::TrailFollowState m_trailFollow;
+    // Commander drop to the ground after a teleport (Commander/Behaviors/Movement/Landing.h),
+    // every frame in UpdateAI.
+    Commander::LandingState m_landing;
     // Dead: the corpse run (Commander/Behaviors/Support/CorpseRun.h); back alive: the walk to
     // the leader (Commander/Behaviors/Movement/Arrival.h).
     Commander::CorpseRunState m_corpseRun;
