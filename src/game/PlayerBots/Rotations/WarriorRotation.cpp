@@ -2,16 +2,19 @@
  * Damage warrior rotation (moved out of PartyBotAI.cpp 2026-11-14). Tanks:
  * Rotations/WarriorTankRotation.cpp.
  *
- * Out of combat: Battle Stance, Battle Shout (Bloodrage for the rage), Charge an opener victim.
+ * Out of combat: Battle Stance, Charge an opener victim. Battle Shout and Bloodrage moved into
+ * the fight (user, 2026-11-15): out of combat they were cast after every fight.
  *
  * In combat:
+ *   0. Bloodrage below 20 rage and above 50% health (no GCD).
  *   1. Execute below 20%, Overpower, Concussion Blow (victim moving or the warrior below 50%).
  *   2. Defensive Stance with a shield: Shield Block when attacked, Shield Slam.
  *   3. Hamstring on a moving victim not already slowed, Rend, Mortal Strike, Bloodthirst.
+ *   3b. Battle Shout when missing and rage above 30.
  *   4. Defensive Stance below 20% health, Berserker Stance otherwise.
  *   5. Intercept, Whirlwind, Disarm a melee class.
  *   6. Rage above 30: Cleave (2+ enemies next to the victim) or Heroic Strike.
- *   No victim: Battle Shout.
+ *   No victim: Battle Shout when missing.
  *
  * The Commander decides: Pummel, Shield Bash, Concussion Blow on a cast (InterruptBehavior; the
  * rotation's "victim casting" condition went 2026-11-14), Last Stand, Shield Wall (team rescue),
@@ -28,6 +31,8 @@ namespace
 {
     uint32 const RAGE_DUMP = 300;               // 30 rage
     float const CLEAVE_RADIUS = 8.0f;
+    uint32 const BLOODRAGE_BELOW_RAGE = 200;    // 20 rage
+    float const BLOODRAGE_MIN_HEALTH_PCT = 50.0f;
 
     class WarriorRotation : public ClassRotation
     {
@@ -43,9 +48,8 @@ namespace
             if (Cast(me, w.pBattleStance))
                 return;
 
-            if (w.pBattleShout && !me->HasAura(w.pBattleShout->Id) && !Cast(me, w.pBattleShout) &&
-                me->GetPower(POWER_RAGE) < 100)
-                Cast(me, w.pBloodrage);
+            // No Battle Shout / Bloodrage here (user, 2026-11-15): rage decays out of combat, so every
+            // shout that ran out cost a Bloodrage between fights. Both moved into the fight.
 
             if (Unit* pVictim = me->GetVictim())
                 Cast(pVictim, w.pCharge);
@@ -57,12 +61,22 @@ namespace
             Player* me = bot.me;
             auto const& w = bot.m_spells.warrior;
 
+            bool const shoutMissing = w.pBattleShout && !me->HasAura(w.pBattleShout->Id);
+
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
             {
-                Cast(me, w.pBattleShout);
+                if (shoutMissing)
+                    Cast(me, w.pBattleShout);
                 return;
             }
+
+            uint32 const rage = me->GetPower(POWER_RAGE);
+
+            // Bloodrage: no global cooldown, rage for the opening. Not when low (it costs health).
+            if (rage < BLOODRAGE_BELOW_RAGE && me->GetHealthPercent() > BLOODRAGE_MIN_HEALTH_PCT &&
+                Cast(me, w.pBloodrage))
+                return;
 
             if (pVictim->GetHealthPercent() < 20.0f && Cast(pVictim, w.pExecute))
                 return;
@@ -89,6 +103,11 @@ namespace
             if (Cast(pVictim, w.pBloodthirst))
                 return;
 
+            // Battle Shout after the main strikes, only with rage to spare (the Heroic Strike line),
+            // so it never takes the rage Mortal Strike / Bloodthirst need.
+            if (shoutMissing && rage > RAGE_DUMP && Cast(me, w.pBattleShout))
+                return;
+
             // (no return: the stance goes off on the next spell update)
             Cast(me, me->GetHealthPercent() < 20.0f ? w.pDefensiveStance : w.pBerserkerStance);
 
@@ -102,7 +121,7 @@ namespace
             // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander
             // melee stance module chases)
 
-            if (me->GetPower(POWER_RAGE) > RAGE_DUMP)
+            if (rage > RAGE_DUMP)
             {
                 SpellEntry const* pDump = (w.pCleave && me->GetEnemyCountInRadiusAround(pVictim, CLEAVE_RADIUS) > 1) ?
                                            w.pCleave : w.pHeroicStrike;
