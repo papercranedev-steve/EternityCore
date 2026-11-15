@@ -69,10 +69,18 @@ namespace HealSpells
         float periodicSec = 0.0f;   // duration of the periodic part
     };
 
+    // The heal Flash of Light's ranks trigger (all ranks, its base points carried over).
+    constexpr uint32 FLASH_OF_LIGHT_HEAL = 19993;
+
     // The spell whose effects heal when `spell` is cast on a friendly unit: Holy Shock's
     // learned ranks are a dummy that casts a separate heal (spell_paladin.cpp
-    // PaladinHolyShockScript, triggered: no mana, no GCD of its own). Any other spell: itself.
+    // PaladinHolyShockScript, triggered: no mana, no GCD of its own); Flash of Light's are a
+    // script effect that casts FLASH_OF_LIGHT_HEAL with the rank's base (SpellEffects.cpp,
+    // until 2026-11-16 the bots did not see Flash of Light as a heal). Any other spell: itself.
     SpellEntry const* HealingPart(SpellEntry const* spell);
+    // Base points `spell` hands to its HealingPart instead of the heal's own (Flash of Light:
+    // the rank's base plus librams); < 0 = none, the heal uses its own.
+    float CarriedBase(Unit const* healer, SpellEntry const* spell);
     // Healing `spell` cast by `healer` does on `target` (bonuses included, see header; a
     // dummy like Holy Shock: its HealingPart).
     Amount Estimate(Unit* healer, Unit const* target, SpellEntry const* spell);

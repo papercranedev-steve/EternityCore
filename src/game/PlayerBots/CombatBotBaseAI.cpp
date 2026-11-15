@@ -1629,7 +1629,8 @@ void CombatBotBaseAI::PopulateSpellData()
         {
             switch (pSpellEntry->Effect[i])
             {
-                case SPELL_EFFECT_DUMMY:
+                case SPELL_EFFECT_DUMMY:            // Holy Shock
+                case SPELL_EFFECT_SCRIPT_EFFECT:    // Flash of Light
                     if (i == 0 && HealSpells::HealingPart(pSpellEntry) != pSpellEntry)
                         m_spellListIndirectHeal.push_back(pSpellEntry);
                     break;

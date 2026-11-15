@@ -336,8 +336,9 @@ public:
     std::vector<SpellEntry const*> m_spellListTaunt;
     std::set<SpellEntry const*, HealAuraCompare> m_spellListPeriodicHeal;
     std::set<SpellEntry const*, HealSpellCompare> m_spellListDirectHeal;
-    // Single-target heals cast through a dummy that triggers the heal (Holy Shock, all ranks;
-    // HealSpells::HealingPart). Not in m_spellListDirectHeal: its order sums heal effects.
+    // Single-target heals cast through a dummy or script effect that triggers the heal (Holy
+    // Shock, Flash of Light, all ranks; HealSpells::HealingPart). Not in m_spellListDirectHeal:
+    // its order sums heal effects.
     std::vector<SpellEntry const*> m_spellListIndirectHeal;
     union
     {

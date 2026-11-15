@@ -27,24 +27,50 @@ namespace HealSpells
         }
     }
 
+    static bool IsFlashOfLight(SpellEntry const* spell)
+    {
+        return spell->SpellFamilyName == SPELLFAMILY_PALADIN && spell->SpellIconID == 242 &&
+               spell->Effect[EFFECT_INDEX_0] == SPELL_EFFECT_SCRIPT_EFFECT;
+    }
+
     SpellEntry const* HealingPart(SpellEntry const* spell)
     {
         if (!spell)
             return spell;
         uint32 healId = 0;
-        switch (spell->Id)
+        if (IsFlashOfLight(spell))
+            healId = FLASH_OF_LIGHT_HEAL;
+        else
         {
-            case 20473: healId = 25914; break;     // Holy Shock rank 1
-            case 20929: healId = 25913; break;     // rank 2
-            case 20930: healId = 25903; break;     // rank 3
-            default: return spell;
+            switch (spell->Id)
+            {
+                case 20473: healId = 25914; break;     // Holy Shock rank 1
+                case 20929: healId = 25913; break;     // rank 2
+                case 20930: healId = 25903; break;     // rank 3
+                default: return spell;
+            }
         }
         SpellEntry const* heal = sSpellMgr.GetSpellEntry(healId);
         return heal ? heal : spell;
     }
 
+    float CarriedBase(Unit const* healer, SpellEntry const* spell)
+    {
+        if (!spell || !IsFlashOfLight(spell))
+            return -1.0f;
+        // Spell::EffectScriptEffect (SpellEffects.cpp, Flash of Light): the rank's rolled base
+        // plus the librams, passed to the triggered heal as its base points.
+        float base = AverageBase(spell, EFFECT_INDEX_0);
+        if (healer->HasAura(28853))
+            base += 53.0f;      // Libram of Divinity
+        if (healer->HasAura(28851))
+            base += 83.0f;      // Libram of Light
+        return base;
+    }
+
     Amount Estimate(Unit* healer, Unit const* target, SpellEntry const* spell)
     {
+        float const carried = CarriedBase(healer, spell);
         spell = HealingPart(spell);
         Amount out;
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
@@ -52,7 +78,7 @@ namespace HealSpells
             SpellEffectIndex const idx = SpellEffectIndex(i);
             if (spell->Effect[i] == SPELL_EFFECT_HEAL)
             {
-                float value = AverageBase(spell, i);
+                float value = carried >= 0.0f ? carried : AverageBase(spell, i);
                 value = healer->SpellHealingBonusDone(target, spell, idx, value, SPELL_DIRECT_DAMAGE);
                 value = target->SpellHealingBonusTaken(healer, spell, idx, value, SPELL_DIRECT_DAMAGE);
                 out.direct += std::max(0.0f, value);

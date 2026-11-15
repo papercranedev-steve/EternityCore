@@ -11,6 +11,11 @@ namespace HealCapacity
 {
     namespace
     {
+        bool HasCooldown(SpellEntry const* spell)
+        {
+            return spell->RecoveryTime > 0 || spell->CategoryRecoveryTime > 0;
+        }
+
         void AddRate(Player* me, SpellEntry const* spell, std::vector<HealRate>& rates)
         {
             if (!spell || !HealSpells::IsSingleTargetHeal(spell))
@@ -35,6 +40,10 @@ namespace HealCapacity
         std::vector<HealRate> rates;
         for (SpellEntry const* spell : bot->m_spellListDirectHeal)
             AddRate(bot->me, spell, rates);
+        // Flash of Light (HealSpells::HealingPart); Holy Shock has a cooldown, no steady rate.
+        for (SpellEntry const* spell : bot->m_spellListIndirectHeal)
+            if (!HasCooldown(spell))
+                AddRate(bot->me, spell, rates);
         return rates;
     }
 
@@ -47,7 +56,12 @@ namespace HealCapacity
                 continue;
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(known.first);
             if (!spell || spell->HasAttribute(SPELL_ATTR_PASSIVE) || spell->HasAttribute(SPELL_ATTR_DO_NOT_DISPLAY) ||
-                !spell->HasEffect(SPELL_EFFECT_HEAL) || spell->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_SWIFTMEND>())
+                spell->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_SWIFTMEND>())
+                continue;
+            // A plain heal, or one triggered without a cooldown (Flash of Light).
+            bool const triggered = HealSpells::HealingPart(spell) != spell;
+            if (triggered ? HasCooldown(spell) || !HealSpells::HealingPart(spell)->HasEffect(SPELL_EFFECT_HEAL)
+                          : !spell->HasEffect(SPELL_EFFECT_HEAL))
                 continue;
             AddRate(player, spell, rates);
         }
