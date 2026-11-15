@@ -486,6 +486,23 @@ void PartyBotAI::UpdateHumanFollow(Unit* pLeader, bool follows)
     IssueFollow(pLeader, heading);
 }
 
+bool PartyBotAI::WaitForDeadLeader(Player* pLeader)
+{
+    if (!pLeader->IsDead())
+        return false;
+    // (MoveFollow is only the leader's follow, IssueFollow)
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+    {
+        me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
+    if (IsTrailFollowing())
+        Commander::TrailFollow::Stop(this, m_trailFollow);
+    m_followChecked = false;
+    return true;
+}
+
 void PartyBotAI::BeginChasing(Unit* pVictim) const
 {
     if (IsMovementHeld())
@@ -1502,11 +1519,15 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
         // Back from a corpse run away from the leader: walk to him, no teleport. Not while a
         // resurrection here is about to be cast (the walk or the teleport would cancel it).
-        if (!resurrectFirst && Commander::Arrival::Update(this, m_arrival, pLeader))
+        // Not to a dead leader (WaitForDeadLeader).
+        if (!resurrectFirst && !pLeader->IsDead() && Commander::Arrival::Update(this, m_arrival, pLeader))
             return;
 
-        // Teleport to leader if too far away.
-        if (!resurrectFirst && !me->IsWithinDistInMap(pLeader, 100.0f))
+        // Teleport to leader if too far away. Fix: not to a dead leader: after a wipe the
+        // surviving bots were teleported to the player's ghost at the graveyard, fell behind on
+        // its run back and were teleported again every 100 yd. They wait where they are, by
+        // the corpse the ghost runs to.
+        if (!resurrectFirst && !pLeader->IsDead() && !me->IsWithinDistInMap(pLeader, 100.0f))
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -1558,6 +1579,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // The leader's way when the navmesh has none or only a long detour (a drop, a jump):
         // Commander/Behaviors/Movement/TrailFollow.h.
         bool const follows = !me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
+            !WaitForDeadLeader(pLeader) &&
             !Commander::TrailFollow::Consider(this, m_trailFollow, pLeader);
         if (follows)
             KeepFollowSpotSafe(pLeader);
@@ -1636,7 +1658,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // put them while the party fights, in combat themselves or not yet: following the leader walked the
             // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
             // that had not healed yet with the player while the tank fought further away.
-            if (!IsStanceControlled() && !IsTrailFollowing() &&
+            if (!IsStanceControlled() && !IsTrailFollowing() && !pLeader->IsDead() &&
                 me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
                 StartFollowing(pLeader);
         }

@@ -278,6 +278,9 @@ public:
     void IssueFollow(Unit* pLeader, float heading);
     // Every update with a leader: HumanFollow::Tick (drift, idle look / step / sit).
     void UpdateHumanFollow(Unit* pLeader, bool follows);
+    // A dead leader (a body, or a ghost on its corpse run): stops the follow and the trail walk
+    // and returns true, so the bot waits where it is (by the corpse) instead of going after him.
+    bool WaitForDeadLeader(Player* pLeader);
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
