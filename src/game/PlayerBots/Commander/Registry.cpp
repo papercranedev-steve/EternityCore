@@ -59,6 +59,7 @@
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Situation/Crisis/CrisisAssigner.h"
+#include "Commander/Coordination/Situation/Crisis/RunAwayAssigner.h"
 #include "Commander/Coordination/Situation/RoleAssigner.h"
 
 namespace Commander
@@ -127,6 +128,8 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CurseAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ControlledEndAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrisisAssigner>()));
+        // Reads this refresh's crisis; RetreatPlanner::Step starts what it asks for.
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RunAwayAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FightSpotAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));

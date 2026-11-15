@@ -13,6 +13,7 @@
 #include "Commander/Perception/Spatial/MeleeRoutes.h"
 #include "Commander/Perception/Spatial/PositionFieldBuilder.h"
 #include "Commander/Perception/Forecast/FleePredictor.h"
+#include "Commander/Perception/Spatial/LeaderRun.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
 #include "Commander/Encounters/IEncounter.h"
@@ -121,6 +122,7 @@ namespace Commander
         MeleeRoutes m_meleeRoutes;
         PositionFieldBuilder m_positionField;
         FleePredictor m_fleePredictor;
+        LeaderRun m_leaderRun;
         ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh
 

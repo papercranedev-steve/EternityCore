@@ -9,9 +9,12 @@
  * from where it entered combat (Creature::GetCombatStartPosition), and its leash was not
  * extended for 12 seconds (hit, crowd controlled, or caught a target standing still for 5 s).
  *
- * RetreatPlanner::Start - world thread (GM command, maps idle): picks a rally point out of
- *                         every enemy's threat area, interrupts bot casts, stops pull / clear.
+ * RetreatPlanner::Start - world thread (GM command, maps idle), or the map thread (Step, the
+ *                         leader on this map): picks a rally point out of every enemy's threat
+ *                         area, interrupts bot casts, stops pull / clear. In a dungeon:
+ *                         StartDoor (out through the door the party came in by).
  * RetreatPlanner::Stop  - `.partybot ai retreat stop`.
+ * RetreatPlanner::Step  - map thread: the retreat RunAwayAssigner asked for (the player runs).
  * RetreatAssigner       - pure; ends the retreat (done / timeout) and, while no retreat runs,
  *                         sends one "consider retreating" hint per fight.
  */
@@ -25,6 +28,8 @@
 #include <vector>
 
 class Player;
+class PartyBotAI;
+class Map;
 
 namespace Commander
 {
@@ -58,10 +63,30 @@ namespace Commander
         // a bending corridor all of them can be walls (Start runs once per command, not per tick).
         uint32 const MAX_PATH_CHECKS = 16;
 
-        // Leader = the player who gave the command. False with the reason in `report`.
+        // Leader = the player who gave the command. In a dungeon: StartDoor. False with the
+        // reason in `report`.
         bool Start(Player* leader, PartyCommander& commander, std::vector<std::string>& report);
         // Ends a running retreat and lets the bots move on their own again.
         void Stop(Player* leader, PartyCommander& commander, std::string const& why);
+
+        // In a dungeon (user 2026-11-15): out through the door along the leader's way in
+        // (Perception/Spatial/WayIn.h). Only when every living member joins that way, it has no
+        // drop to climb, the door is at most MAX_DOOR_YD back for each, and none would die on the
+        // way: a member that enemies hit for `dps` (their melee and ranged damage, acting, not
+        // controlled) lives health / dps, the run takes walk / RUN_YD_PER_SEC x RUN_MARGIN.
+        // Farther or slower: the door is no way out (the wipe protection comes later). `map`:
+        // the leader may have left it already (out through the door himself).
+        bool StartDoor(Map* map, PartyCommander& commander, std::vector<std::string>& report);
+        float const MAX_DOOR_YD = 120.0f;
+        float const RUN_YD_PER_SEC = 7.0f;
+        float const RUN_MARGIN = 1.5f;
+        // A bot this close to the door end steps out (TeleportTo the dungeon's outside point:
+        // bots send no area trigger packet, the walk through the portal is done for them).
+        float const DOOR_REACH_YD = 4.0f;
+
+        // Map step after the assigners (PartyCommander::Update): starts a retreat RunAwayAssigner
+        // asked for (and tells the leader, or why it cannot), steps door runners out.
+        void Step(PartyBotAI* bot, PartyCommander& commander);
     }
 
     class RetreatAssigner : public IAssigner

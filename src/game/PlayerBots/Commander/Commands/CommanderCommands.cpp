@@ -32,7 +32,9 @@
  *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
  *                                    n mobs per pull), waiting until ready in between; "clear stop"
  *   .partybot ai retreat [stop]      whole party stops attacking and runs to a point out of every
- *                                    enemy's threat area until they give up (outdoors only)
+ *                                    enemy's threat area until they give up; in a dungeon out
+ *                                    through the door along the way in (also when you run away
+ *                                    yourself: RunAwayAssigner)
  *   .partybot ai healsim <n> [name]  predicted threat if the healer heals your selection for n
  *
  * GM commands run on the world thread while map threads are idle (MapManager::Update
@@ -302,7 +304,8 @@ namespace
             handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
                 plan.clear.radius, plan.clear.maxMobs, plan.clear.cleared, plan.clear.skippedPacks);
         if (plan.retreat.active)
-            handler->PSendSysMessage("Retreat: to (%.1f, %.1f, %.1f), %.0f yd from you, for %.1fs, %u enemies left",
+            handler->PSendSysMessage("Retreat%s%s: to (%.1f, %.1f, %.1f), %.0f yd from you, for %.1fs, %u enemies left",
+                plan.retreat.toDoor ? " out through the door" : "", plan.retreat.automatic ? " (you ran)" : "",
                 plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z,
                 player->GetDistance(plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z),
                 WorldTimer::getMSTimeDiffToNow(plan.retreat.startedMs) / 1000.0f, uint32(world.enemies.size()));

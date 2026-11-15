@@ -16,6 +16,8 @@
  *    if the cast fails the arbiter runs the Retreat action in the same tick.
  *  - At the point, a bot an enemy is chasing keeps moving across the point: a chaser that
  *    reaches a target standing still for 5 s extends its leash (TargetedMovementGenerator ~390).
+ *  - In a dungeon (RetreatPlan::toDoor, user 2026-11-15): back along the way in to the door,
+ *    no heals on the way (a cast stops the run); RetreatPlanner::Step steps it out there.
  */
 
 #ifndef MANGOS_COMMANDER_RETREAT_BEHAVIOR_H
@@ -41,6 +43,10 @@ namespace Commander
         static constexpr float RETREAT_HEAL_PCT = 60.0f;
         static constexpr float RETREAT_HEAL_ENEMY_CLEARANCE = 30.0f;
         static constexpr float HEAL_SCORE = 2.0f;     // Retreat action has 1
+        // Out through the door (RetreatPlan::toDoor): farther than this from the way, walk to it
+        // first; on it, aim this many points on (WayIn::POINT_SPACING_YD each).
+        static constexpr float DOOR_JOIN_YD = 4.0f;
+        static constexpr size_t DOOR_LOOKAHEAD = 2;
 
         char const* GetId() const override { return "retreat"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

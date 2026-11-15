@@ -2,6 +2,7 @@
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Spatial/WayIn.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -56,7 +57,21 @@ namespace Commander
 
         Position3 dest = r.point;
         bool move = Dist3(here, r.point) > RetreatAssigner::ARRIVED_DISTANCE;
-        if (!move)
+        if (r.toDoor)
+        {
+            // Back along the way in (WayIn.h): to the point it joins first when off it, else a
+            // few points on towards the door; at the door RetreatPlanner::Step steps it out.
+            dest = r.point;
+            move = Dist3(here, r.point) > 1.0f;
+            WayBack const back = WayIn::Back(r.doorWay, here);
+            if (back.found)
+            {
+                size_t const at = back.joinYd > DOOR_JOIN_YD ? back.joinIndex
+                                : back.joinIndex > DOOR_LOOKAHEAD ? back.joinIndex - DOOR_LOOKAHEAD : 0;
+                dest = r.doorWay.points[at].pos;
+            }
+        }
+        else if (!move)
         {
             // Standing still next to a chaser for 5 s extends its leash (scenario 11, 1.5,
             // "caught up"): step to the far side of the point. The chaser follows, the bot
@@ -96,7 +111,7 @@ namespace Commander
         // holdMs = 0: stand at the point, still not attacking.
         out.push_back(p);
 
-        if (!move)
+        if (!move && !r.toDoor)
             ProposeHeal(bot, world, out);
     }
 

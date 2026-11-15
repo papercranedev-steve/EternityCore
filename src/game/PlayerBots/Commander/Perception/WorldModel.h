@@ -981,6 +981,17 @@ namespace Commander
         uint32 damageDealers = 0;       // members that can act and are not healers (tanks included)
     };
 
+    // The leader running away from the party's fight (Perception/Spatial/LeaderRun.h).
+    struct LeaderRunFacts
+    {
+        bool onMap = true;          // the leader is on this map (false: zoned out, a dungeon door)
+        bool leftInFight = false;   // ... and left it while the party fought
+        bool running = false;       // moving away from the fight, not casting
+        uint32 runMs = 0;           // for this long
+        float gainYd = 0.0f;        // farther from the fight than where the run started
+        float fromFightYd = 0.0f;   // from the fight's centre now
+    };
+
     struct WorldModel
     {
         uint32 version = 0;          // +1 on every refresh
@@ -988,6 +999,7 @@ namespace Commander
         uint32 packsRefreshedAtMs = 0;
 
         ObjectGuid leader;           // party leader (the player)
+        LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
         std::vector<PartyMemberFacts> party;
         // Dead members with their body or corpse on this map (a released one's ghost is not in
         // `party` when it waits on another map).

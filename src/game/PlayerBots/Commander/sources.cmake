@@ -221,6 +221,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderRun.h
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderRun.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.h

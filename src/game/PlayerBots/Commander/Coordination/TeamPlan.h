@@ -14,6 +14,7 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Profiles/StandIn.h"
+#include "Commander/Perception/Spatial/WayIn.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -406,13 +407,25 @@ namespace Commander
         Stopped,    // `.partybot ai retreat stop`, or the module was switched off
     };
 
-    // `.partybot ai retreat` (RetreatPlanner). Only the player's command starts it: the player
-    // is not controlled by us, bots running on their own would leave the player alone
-    // (combat scenario 11, T+18s).
+    // `.partybot ai retreat` (RetreatPlanner). The player starts it: by the command, or by
+    // running away himself (RunAwayAssigner, user 2026-11-15: the bots read the player); bots
+    // never run on their own, that would leave the player alone (combat scenario 11, T+18s).
     struct RetreatPlan
     {
         bool active = false;
-        Position3 point;                    // rally point, out of every enemy's threat area
+        Position3 point;                    // rally point, out of every enemy's threat area (outdoors)
+        // In a dungeon (creatures never give up there): out through the door along the way the
+        // leader came in (Perception/Spatial/WayIn.h), the door end first. Every bot walks it
+        // back from where it joins it; at the door it steps out (RetreatPlanner::Step).
+        bool toDoor = false;
+        Way doorWay;                        // point = its first point (the door end)
+        bool declineNoted = false;          // "we cannot retreat" said this fight
+        // RunAwayAssigner: the leader runs away, start a retreat (the map step RetreatPlanner::Step
+        // does, it needs the map). `automatic`: this retreat was started that way.
+        bool requested = false;
+        std::string requestWhy;
+        bool automatic = false;
+        uint32 declinedAtMs = 0;            // the last request that could not start (no retry for a while)
         uint32 startedMs = 0;
         uint32 enemiesAtStart = 0;
         RetreatOutcome lastOutcome = RetreatOutcome::None;

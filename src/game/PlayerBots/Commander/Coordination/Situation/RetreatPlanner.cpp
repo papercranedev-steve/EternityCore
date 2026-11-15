@@ -5,6 +5,8 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/HealCapacity.h"
 #include "Commander/Perception/Forecast/ManaBudget.h"
+#include "Commander/Perception/Spatial/TravelTime.h"
+#include "Commander/Perception/Spatial/WayIn.h"
 #include "PartyBotAI.h"
 #include "Creature.h"
 #include "Group.h"
@@ -191,12 +193,9 @@ namespace Commander
             WorldModel const& world = commander.GetWorld();
 
             // IsOutOfThreatArea returns false in dungeons: running only drags the pack along
-            // (combat scenario 12, T+18s).
+            // (combat scenario 12, T+18s). The door is the way out there.
             if (map->IsDungeon())
-            {
-                report.push_back("No retreat in instances: creatures there never give up by distance.");
-                return false;
-            }
+                return StartDoor(map, commander, report);
             if (!world.HasPartyEnemy())
             {
                 report.push_back("Your party is not fighting anything.");
@@ -371,6 +370,160 @@ namespace Commander
             return true;
         }
 
+        bool StartDoor(Map* map, PartyCommander& commander, std::vector<std::string>& report)
+        {
+            WorldModel const& world = commander.GetWorld();
+            if (!world.HasPartyEnemy())
+            {
+                report.push_back("Your party is not fighting anything.");
+                return false;
+            }
+            Way const way = WayIn::Copy(world.leader, map->GetId(), map->GetInstanceId());
+            if (way.points.empty() || !way.fromEntrance)
+            {
+                report.push_back("No way back to the door is known (the way in was not recorded from the door).");
+                return false;
+            }
+            auto nameOf = [map](ObjectGuid g)
+            {
+                Player const* p = map->GetPlayer(g);
+                return std::string(p ? p->GetName() : "a party member");
+            };
+
+            float longest = 0.0f;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (m.isPet || !m.alive)
+                    continue;
+                WayBack const back = WayIn::Back(way, m.pos);
+                if (!back.found)
+                {
+                    report.push_back(nameOf(m.guid) + " is not near the way we came in: no run for the door.");
+                    return false;
+                }
+                if (back.oneWays)
+                {
+                    report.push_back(nameOf(m.guid) + " would have to climb back up a drop: no run for the door.");
+                    return false;
+                }
+                if (back.lengthYd > MAX_DOOR_YD)
+                {
+                    report.push_back(Format("The door is %.0f yd back for %s: too far to outrun them.", back.lengthYd,
+                        nameOf(m.guid).c_str()));
+                    return false;
+                }
+                float dps = 0.0f;
+                for (EnemyFacts const& e : world.enemies)
+                    if (e.victim == m.guid && e.acting && !e.control.spellId)
+                        dps += std::max(e.meleeDps, e.rangedDps);
+                float const runSec = back.lengthYd / RUN_YD_PER_SEC;
+                if (dps > 0.0f && float(m.health) / dps < runSec * RUN_MARGIN)
+                {
+                    report.push_back(Format("%s would not make it to the door (%.0f yd, about %.0f s, dies in about %.0f s).",
+                        nameOf(m.guid).c_str(), back.lengthYd, runSec, float(m.health) / dps));
+                    return false;
+                }
+                longest = std::max(longest, back.lengthYd);
+            }
+
+            TeamPlan& plan = commander.GetPlanMutable();
+            RetreatPlan& r = plan.retreat;
+            bool const keepAdvice = r.adviceSent;
+            r = RetreatPlan();
+            r.adviceSent = keepAdvice;
+            r.active = true;
+            r.toDoor = true;
+            r.doorWay = way;
+            r.point = way.points.front().pos;
+            r.startedMs = WorldTimer::getMSTime();
+            r.enemiesAtStart = uint32(world.enemies.size());
+            for (PartyMemberFacts const& m : world.party)
+                if (!m.isPet)
+                    r.names.push_back({ m.guid, nameOf(m.guid) });
+            if (plan.pull.phase != PullPhase::None)
+            {
+                plan.pull = PullPlan();
+                plan.lastPullOutcome = PullOutcome::None;
+                plan.notes.push_back("Pull cancelled: retreating.");
+            }
+            ClearPlanner::Stop(commander, "retreating.");
+
+            // (see Start: a cast in progress would keep the bot standing)
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet)
+                    continue;
+                Player* bot = map->GetPlayer(m.guid);
+                if (!bot || !bot->IsAlive())
+                    continue;
+                bot->InterruptNonMeleeSpells(false);
+                if (bot->GetVictim())
+                    bot->AttackStop();
+            }
+            report.push_back(Format("Out through the door: up to %.0f yd back the way we came in. Bots stop attacking, "
+                "run it and step out at the door. '.partybot ai retreat stop' to fight again.", longest));
+            return true;
+        }
+
+        void Step(PartyBotAI* bot, PartyCommander& commander)
+        {
+            TeamPlan& plan = commander.GetPlanMutable();
+            WorldModel const& world = commander.GetWorld();
+            RetreatPlan& r = plan.retreat;
+            Map* map = bot->me->GetMap();
+            if (!world.HasPartyEnemy())
+                r.declineNoted = false;
+
+            if (r.requested)
+            {
+                r.requested = false;
+                std::string const why = r.requestWhy;
+                std::vector<std::string> report;
+                bool ok = false;
+                if (map->IsDungeon())
+                    ok = StartDoor(map, commander, report);
+                else if (Player* leader = map->GetPlayer(world.leader))
+                    ok = Start(leader, commander, report);
+                else
+                    report.push_back("you are not here.");
+                if (ok)
+                {
+                    r.automatic = true;
+                    std::string text = "Running with you (" + why + ").";
+                    for (std::string const& line : report)
+                        text += " " + line;
+                    plan.notes.push_back(text);
+                }
+                else
+                {
+                    r.declinedAtMs = world.refreshedAtMs;
+                    if (!r.declineNoted)
+                    {
+                        r.declineNoted = true;
+                        std::string text = "You run (" + why + "), but we cannot retreat:";
+                        for (std::string const& line : report)
+                            text += " " + line;
+                        plan.notes.push_back(text + " Fighting on.");
+                    }
+                }
+            }
+
+            if (!r.active || !r.toDoor)
+                return;
+            // Bots at the door end step out (header DOOR_REACH_YD).
+            WorldLocation outside;
+            if (!TravelTime::OutsidePoint(WorldLocation(map->GetId(), r.point.x, r.point.y, r.point.z), outside))
+                return;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || !m.alive || Dist3(m.pos, r.point) > DOOR_REACH_YD)
+                    continue;
+                Player* p = map->GetPlayer(m.guid);
+                if (p && p->IsAlive() && !p->IsBeingTeleported())
+                    p->TeleportTo(outside);
+            }
+        }
+
         void Stop(Player* leader, PartyCommander& commander, std::string const& why)
         {
             RetreatPlan& r = commander.GetPlanMutable().retreat;
@@ -453,7 +606,7 @@ namespace Commander
         if (sustained && WorldTimer::getMSTimeDiff(r.dangerSinceMs, now) < DANGER_SUSTAIN_MS)
             return;
         r.adviceSent = true;
-        plan.notes.push_back("Danger: " + reason + ". Consider '.partybot ai retreat' (outdoors only). "
+        plan.notes.push_back("Danger: " + reason + ". Run away (we follow you) or use '.partybot ai retreat'. "
             "Bots do not run on their own.");
     }
 
@@ -473,6 +626,18 @@ namespace Commander
             r.lastOutcome = outcome;
             plan.notes.push_back(text);
         };
+
+        // Out through the door: done once nobody here fights any more (the ones still here
+        // shook them off, the others are outside).
+        if (r.toDoor)
+        {
+            if (!world.HasPartyEnemy())
+                finish(RetreatOutcome::Done, "Retreat done: out of the fight.");
+            else if (WorldTimer::getMSTimeDiff(r.startedMs, now) > TIMEOUT_MS)
+                finish(RetreatOutcome::TimedOut, Format("Retreat ended after %u s: %u enemies still fighting us. "
+                    "Bots fight normally again.", TIMEOUT_MS / 1000, uint32(world.enemies.size())));
+            return;
+        }
 
         // Everyone alive at the point: the leash only breaks once the victim is out of the area too.
         std::string missing;

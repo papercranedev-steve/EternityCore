@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolPlanner.h"
 #include "Commander/Coordination/Situation/Los/CasterLurePlanner.h"
 #include "Commander/Encounters/EncounterRegistry.h"
@@ -61,6 +62,7 @@ namespace Commander
         CasterLurePlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op without a lure searching
         ApplyEmergencyRoles(bot);
         ApplyRoles(bot);
+        RetreatPlanner::Step(bot, *this);       // a retreat the player's run asked for, door steps
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         FlushNotes(bot);
@@ -304,6 +306,7 @@ namespace Commander
         WorldModelBuilder::RefreshCombat(bot, m_world);
         m_threatHistory.Annotate(m_world, previous, nowMs);
         m_combatRates.Annotate(m_world, nowMs);
+        m_leaderRun.Annotate(m_world, nowMs);
 
         if (m_world.version == 0 || WorldTimer::getMSTimeDiff(m_world.packsRefreshedAtMs, nowMs) >= PACK_REFRESH_MS)
         {
