@@ -23,6 +23,8 @@
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Behaviors/Combat/FleeStopBehavior.h"
 #include "Commander/Behaviors/Combat/BurstBehavior.h"
+#include "Commander/Behaviors/Combat/HarvestBehavior.h"
+#include "Commander/Behaviors/Support/HealthTradeBehavior.h"
 #include "Commander/Behaviors/Combat/FinishCastBehavior.h"
 #include "Commander/Behaviors/Support/BoostBehavior.h"
 #include "Commander/Coordination/Duties/BoostAssigner.h"
@@ -62,6 +64,8 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealthTradeBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HarvestBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealPlanBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RetreatBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));

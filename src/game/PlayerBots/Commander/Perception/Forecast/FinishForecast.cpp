@@ -109,6 +109,24 @@ namespace FinishForecast
         return 0;
     }
 
+    uint32 DeathMsOwnHitOnly(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 horizonMs)
+    {
+        if (!enemy.acting || !enemy.health)
+            return 0;
+        PartyMemberFacts const* me = world.FindMember(self);
+        PendingHit const* own = me && me->pendingHit.target == enemy.guid ? &me->pendingHit : nullptr;
+        float const needed = float(enemy.health) * COVER_MARGIN;
+        for (uint32 t = DEATH_STEP_MS; t <= horizonMs; t += DEATH_STEP_MS)
+        {
+            float damage = OthersWithin(world, enemy, self, t);
+            if (own && own->landMs <= t)
+                damage += own->damage;
+            if (damage >= needed)
+                return t;
+        }
+        return 0;
+    }
+
     bool Finished(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 landMs)
     {
         if (!enemy.acting || !enemy.health || !landMs)

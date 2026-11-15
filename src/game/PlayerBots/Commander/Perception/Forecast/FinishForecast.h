@@ -57,6 +57,12 @@ namespace FinishForecast
     uint32 DeathMs(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 selfFromMs, uint32 horizonMs);
     // The others kill `enemy` before `self`'s hit landing `landMs` after the refresh.
     bool Finished(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 landMs);
+
+    // When `enemy` dies, ms after the refresh, within `horizonMs` (0 = not by then; steps of
+    // DEATH_STEP_MS), while `self` adds nothing but its hit already on the way (its
+    // PartyMemberFacts::pendingHit on it: the bolt in the air): OthersWithin plus that hit.
+    // For a channel that has to be running on it when it dies (Drain Soul, HarvestBehavior).
+    uint32 DeathMsOwnHitOnly(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 horizonMs);
 }
 }
 

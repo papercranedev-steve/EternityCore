@@ -37,6 +37,18 @@ namespace Commander
                 return m_bot.m_spells.warlock.pLifeTap;
             }
 
+            SpellEntry const* DrainHeal() const override
+            {
+                return m_bot.m_spells.warlock.pDrainLife;
+            }
+
+            // Drain Soul: a Soul Shard when the target dies while it channels (Shadowburn's
+            // shards come from here; Shadowburn gives its own back on a kill within 5 s).
+            SpellEntry const* DeathHarvest() const override
+            {
+                return m_bot.m_spells.warlock.pDrainSoul;
+            }
+
             // Amplify Curse (talent, 3 min): the next Curse of Agony does 50% more, when the
             // warlock's Agony is not up on its victim.
             std::vector<BurstSpell> Bursts() const override

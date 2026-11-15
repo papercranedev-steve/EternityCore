@@ -219,6 +219,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.cpp
   ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/HealthTradeBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/HealthTradeBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.h
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.h
@@ -339,6 +341,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/BurstValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/HarvestBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/HarvestBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/BoostValue.h
   ${COMMANDER_DIR}/Perception/Values/BoostValue.cpp
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.h

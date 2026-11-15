@@ -1074,6 +1074,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.warlock.pDrainLife))
                         m_spells.warlock.pDrainLife = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Drain Soul") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.warlock.pDrainSoul))
+                        m_spells.warlock.pDrainSoul = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Siphon Life") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.warlock.pSiphonLife))
@@ -2525,9 +2530,14 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (me->GetPetGuid() || me->GetCharmGuid())
             return;
 
-        std::vector<uint32> vSummons;
+        // The Imp (Blood Pact for the party): the bot specs keep their pet and do not sacrifice
+        // it (user 2026-11-15). Before: a random demon of those learned.
         if (me->HasSpell(SPELL_SUMMON_IMP))
-            vSummons.push_back(SPELL_SUMMON_IMP);
+        {
+            me->CastSpell(me, SPELL_SUMMON_IMP, true);
+            return;
+        }
+        std::vector<uint32> vSummons;
         if (me->HasSpell(SPELL_SUMMON_VOIDWALKER))
             vSummons.push_back(SPELL_SUMMON_VOIDWALKER);
         if (me->HasSpell(SPELL_SUMMON_FELHUNTER))
