@@ -247,6 +247,14 @@ namespace DevConsole
     }
     static int U_name(lua_State* L) { lua_pushstring(L, LuaUnit_Check(L, 1)->GetName()); return 1; }
     static int U_entry(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetEntry()); return 1; }
+    // `creature`.guid of a static spawn; 0 for players and summoned / temporary creatures
+    static int U_dbguid(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        Creature* c = u->ToCreature();
+        lua_pushinteger(L, (c && c->HasStaticDBSpawnData()) ? c->GetDBTableGUIDLow() : 0);
+        return 1;
+    }
     static int U_level(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetLevel()); return 1; }
     static int U_class(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetClass()); return 1; }
     static int U_race(lua_State* L) { lua_pushinteger(L, LuaUnit_Check(L, 1)->GetRace()); return 1; }
@@ -1865,7 +1873,7 @@ namespace DevConsole
     void LuaUnit_Register(lua_State* L)
     {
         static luaL_Reg const methods[] = {
-            { "exists", U_exists }, { "guid", U_guid }, { "name", U_name }, { "entry", U_entry },
+            { "exists", U_exists }, { "guid", U_guid }, { "name", U_name }, { "entry", U_entry }, { "dbguid", U_dbguid },
             { "level", U_level }, { "class", U_class }, { "race", U_race }, { "isplayer", U_isplayer },
             { "isbot", U_isbot }, { "headless", U_headless }, { "alive", U_alive }, { "incombat", U_incombat }, { "hp", U_hp },
             { "maxhp", U_maxhp }, { "hppct", U_hppct }, { "power", U_power }, { "maxpower", U_maxpower },

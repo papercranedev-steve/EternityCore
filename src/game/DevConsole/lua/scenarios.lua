@@ -16,6 +16,12 @@
 --   bots               default lineup { {class=, role=, items=}, ... } (1-4 bots)
 --                      items: { {itemId, count}, ... } extra items for a bot of this class and
 --                      role, added after the premade gear and the class ammo (classItems)
+--   spotOf             id whose recorded spot (.scenario setspot) this scenario shares
+--   respawn            what to respawn on load: radius around 'pack' (default 120), or a list of
+--                      `creature` guids (bosses whose hall the tester cleared by hand)
+--   cleared            `creature` guids killed on load and never respawned (mobs the party is
+--                      assumed to have cleared on the way, e.g. one standing on the spot)
+--   commands           GM commands the leader runs once the party is in place (event triggers)
 --
 -- Lineup: ".scenario <id> [class:role ...]" replaces the default bots, e.g.
 -- ".scenario stockade paladin:tank rogue:meleedps hunter:rangedps druid:healer". The last lineup is
@@ -102,6 +108,237 @@ scenario.list = {
         bots = {
             -- the tank's premade crossbow (Blackcrow) gets its arrows from classItems: tests the
             -- ranged pull with ammo
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 34: the pack is 33-34 (premade = the 29 templates; try 39 if they are too weak)
+        -- Pack: creature_groups 40048 (Scarlet Adept 40051 healer/Holy Smite + Gallants 40048, 40052).
+        -- Entrance (areatrigger 614) is ~85 yd away through the first hall. No closer pack with the
+        -- same mechanics: 40057 (Adept + Gallant, 38 yd from the door) has 40064 19 yd and 40061 13 yd away.
+        id = "library", title = "血色修道院图书馆 施法者和治疗怪（场景 2）", level = 34,
+        entry = { map = 189, x = 253.67, y = -206.62, z = 18.68, o = 4.712 },
+        pack = { x = 220.7, y = -286.9, z = 19.3 },
+        -- No computed spot: patrol 40047 walks the corridor 20 yd west of the pack, groups 40073
+        -- (19.5 yd), 40045 (25 yd), singles 40049/40077/40080 (25-38 yd). Record one.
+        needsRecordedSpot = true,
+        approach = { min = 24, max = 34, clear = 22 },
+        bots = {
+            -- Kick / Counterspell lock the Holy school (Smite + Heal); the priest dispels Hammer of Justice
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 20: the pack is 19-20 (premade = the 19 templates)
+        -- Pack: creature_groups 27369 (Druids of the Fang 27369, 27371 + Deviate Viper 27372),
+        -- ~265 yd from areatrigger 228; the near-door druid groups have one druid each and
+        -- ungrouped Shamblers / Ectoplasm / Venomwings 6-25 yd away.
+        id = "wc", title = "哀嚎洞穴 尖牙德鲁伊（场景 3）", level = 20,
+        entry = { map = 43, x = -158.44, y = 131.60, z = -74.26, o = 5.847 },
+        pack = { x = -45.3, y = 371.4, z = -59.7 },
+        -- Computed spot: within 60 yd only Ectoplasm 27379 (30 yd), a snake (36 yd), Viper 27378
+        -- (41 yd), Druid 27384 (52 yd), all north; the water mobs are 46 yd below.
+        approach = { min = 24, max = 34, clear = 22 },
+        bots = {
+            -- priest: the only magic dispel at 20 (Slumber). No Counterspell yet (24): Kick and Shield Bash
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 52: the pack is 50-52 (premade = the 49 templates; 60 if they are too weak)
+        -- Pack: creature_groups 45906 (Fireguards 45906, 45907 + Anvilrage Guardsman 47819 + Footman
+        -- 90872). Every Fireguard is 180+ yd from areatrigger 1466: no closer elemental pack.
+        id = "brd", title = "黑石深渊 火焰元素（场景 5）", level = 52,
+        entry = { map = 230, x = 456.93, y = 34.09, z = -68.09, o = 4.712 },
+        pack = { x = 660.2, y = -155.7, z = -73.3 },
+        -- No computed spot: Footman 47821 wanders at 24.7 yd, groups 47816 (25-29 yd), 45899 (34 yd),
+        -- 90653 (35 yd). Record one.
+        needsRecordedSpot = true,
+        approach = { min = 24, max = 32, clear = 22 },
+        bots = {
+            -- warlock instead of mage: Fireguards are fire immune and Polymorph does not work on
+            -- elementals; Banish does
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "warlock", role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 21: VanCleef is 21, the Blackguards 19-20 (premade = the 19 templates)
+        -- Pack = the boss: creature_groups 79336 (VanCleef 79336 + stealthed Blackguards 79383, 79368).
+        -- The ship is at the far end (entrance = areatrigger 78). Clear the deck by hand first:
+        -- Greenskin patrol 79333 (+79334, 79335), group 79309 (+79327), Pirates 79321, 79328, 79329,
+        -- Shipbuilder 79319 on the lower deck. Only the boss group is respawned, the deck stays clear.
+        id = "vancleef", title = "死亡矿井 范克里夫（场景 6）", level = 21,
+        entry = { map = 36, x = -14.57, y = -385.48, z = 62.46, o = 1.571 },
+        pack = { x = -87.4, y = -819.9, z = 39.3 },
+        respawn = { 79336, 79383, 79368 },
+        -- No computed spot: the deck is tight and the Greenskin patrol is inside 12-31 yd. Record one.
+        needsRecordedSpot = true,
+        approach = { min = 22, max = 30, clear = 20 },
+        bots = {
+            -- rogue: a stun at 50% stops the add summon (spell 5200)
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 42 = both bosses (hall trash 34-39; premade = the 39 templates)
+        -- Mograine 40029 (1153.9, 1398.4); Whitemane 39946 behind door GO 104600, joins in phase 1.
+        -- Entry: areatrigger 610. The courtyard (~30 elites) and the hall (49 mobs within 100 yd,
+        -- none grouped, some patrol) are in the way, and the pull sends every live chaplain / wizard /
+        -- centurion / champion / abbot / monk within 82 yd at the party: clear the hall first. Only
+        -- the two bosses are respawned. The event runs once per instance: rerun = .instance unbind.
+        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩（场景 7）", level = 42,
+        entry = { map = 189, x = 853.18, y = 1319.18, z = 18.67, o = 1.571 },
+        pack = { x = 1153.9, y = 1398.4, z = 32.6 },
+        respawn = { 40029, 39946 },
+        -- No computed spot: clear the hall, then record one (e.g. the hall door, ~1100, 1398).
+        needsRecordedSpot = true,
+        approach = { min = 30, max = 45, clear = 22 },
+        bots = {
+            -- priest: Dispel Magic (Hammer of Justice, Mind Control on a party member)
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 34 = Thermaplugg (bombs 30; premade = the 29 templates)
+        -- Thermaplugg 30139 (boss_thermaplugg); the door GO 142207 locks when the fight starts.
+        -- 5 Leprous Machinesmiths, a Guardian and a Nullifier wander 60 yd west, inside the door.
+        -- Entry: inside the room on the east side, between bomb buttons 3 and 4, 32 yd from the boss
+        -- (both instance entrances are ~700 yd away). Untested ground: setspot if it fails.
+        id = "thermaplugg", title = "诺莫瑞根 瑟玛普拉格（场景 8）", level = 34,
+        entry = { map = 90, x = -499.3, y = 664.6, z = -325.2, o = 2.968 },
+        pack = { x = -531.3, y = 670.2, z = -325.2 },
+        respawn = { 30139 },
+        approach = { min = 26, max = 34, clear = 24 },
+        bots = {
+            -- mage: Frost Nova / Cone of Cold to stop bombs; rogue: Kidney Shot
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 49: waves are 42-47 (Sezz'ziz 47 elite); 49 for the 49 premade gear, 39 gear is too weak
+        -- for ~55 mobs in a row.
+        -- Trigger: open any Troll Cage (GO 141070-141074, ~1886, 1297, 48.3) with Executioner's Key
+        -- 8444 (given by 'commands'). The prisoners walk to the stair top, waves 1-3 run on timers
+        -- (instance_zulfarrak). Waves are summoned; nothing to respawn. Static mobs at the stair
+        -- foot (55-80 yd) are out of aggro range, the prisoners walk into them in wave 3.
+        -- The event runs once per instance: rerun = .instance unbind.
+        -- Spot fixed: the prisoners' stair-top home; they count as live units for the clear check.
+        id = "zfstairs", title = "祖尔法拉克 台阶事件（场景 9）", level = 49,
+        entry = { map = 209, x = 1887.2, y = 1264.5, z = 42.0, o = 1.571 },
+        spot = { x = 1887.2, y = 1264.5, z = 42.0, o = 1.571 },
+        pack = { x = 1886.6, y = 1297.5, z = 48.3 },
+        respawn = {},
+        commands = { ".additem 8444" },
+        approach = { min = 24, max = 34, clear = 22 },
+        bots = {
+            -- priest: Dispel Magic (Shadow Word: Pain), Cure Disease (Fevered Plague)
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 60 = max level (Gandling 61)
+        -- Gandling is summoned at (180.8, -5.4, 75.6) once the six room bosses are DONE; 'commands'
+        -- sets them, the last one summons him at once. Wipe: he walks home (data 0 = FAIL), stays.
+        -- Rerun after a kill: .instance setdata 0 0 by hand, never while he is alive (two Gandlings).
+        -- Entry: the hall itself (the instance entrance is several floors up, full of packs).
+        id = "gandling", title = "通灵学院 黑暗院长加丁（场景 10）", level = 60,
+        entry = { map = 289, x = 180.8, y = -5.4, z = 75.6, o = 1.292 },
+        pack = { x = 180.8, y = -5.4, z = 75.6 },
+        respawn = {},
+        commands = {
+            ".instance setdata 1 3", ".instance setdata 2 3", ".instance setdata 3 3",
+            ".instance setdata 4 3", ".instance setdata 5 3", ".instance setdata 6 3",
+        },
+        -- No computed spot: rats 16-20 yd from the centre count as live units, the hall is ~45 yd
+        -- across. Record one in the hall.
+        needsRecordedSpot = true,
+        approach = { min = 22, max = 30, clear = 20 },
+        bots = {
+            -- Risen Guardians are undead (no Polymorph): priest Shackle Undead, Dispel Magic
+            -- (Shadow Shield). Gandling is immune to interrupts.
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 44: party level of the doc (premade = the 39 templates)
+        -- Stranglethorn, Mosh'Ogg camp. Pack: Shaman 624 + Spellcrafter 628 (9.8 yd apart, no
+        -- creature_groups). Patrols Mauler 853 (walks through the spot) and Spellcrafter 528 (passes
+        -- the Shaman at 0.7 yd) are part of the test.
+        -- Entry = the spot: the leader is in GM mode while setting up.
+        id = "openelite", title = "荆棘谷 Mosh'Ogg 精英与巡逻（场景 11）", level = 44,
+        entry = { map = 0, x = -12349.0, y = -1020.0, z = 8.5, o = 4.53 },
+        spot = { x = -12349.0, y = -1020.0, z = 8.5, o = 4.53 },
+        pack = { x = -12354.9, y = -1052.8, z = 4.9 },
+        -- the doc's party came down from the north: Mauler 755 (on the spot), Mauler 854, Shaman 855
+        cleared = { 755, 854, 855 },
+        approach = { min = 26, max = 38, clear = 20 },
+        bots = {
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- Scenario 12: the "strat" pack and spot (creature_groups 52157); 52158 (24-33 yd east) is the
+        -- doc's adjacent pack. Own id so the recordings are tankdeath-*.jsonl.
+        -- The tester kills the tank mid-fight, e.g.
+        --   wowdbg.ps1 "filter(me():group(), function(m) return m:isbot() and m:ai() and m:ai().role == 'tank' end)[1]:sethp(1)"
+        -- (sethp(1): the next hit kills it, a real death with a killer; kill(): dies on the spot)
+        id = "tankdeath", title = "斯坦索姆 坦克阵亡与灭团（场景 12）", level = 60,
+        entry = { map = 329, x = 3392.92, y = -3395.03, z = 143.14, o = 1.57 },
+        pack = { x = 3687.0, y = -3597.0, z = 138.0 },
+        spotOf = "strat",
+        needsRecordedSpot = true,
+        approach = { min = 26, max = 38, clear = 24 },
+        bots = {
+            { class = "warrior", role = "tank" },
+            { class = "rogue",   role = "meleedps" },
+            { class = "mage",    role = "rangedps" },
+            { class = "priest",  role = "healer" },
+        },
+    },
+    {
+        -- 20: party level of the doc (premade = the 19 templates)
+        -- Fixed spot S from the doc: ".partybot ai clear" (radius 40, nearest pack first) needs the
+        -- player standing here; the path from the entrance crosses the Defias / goblin packs.
+        -- After "ready": stand still and type .partybot ai clear; order R -> A -> C -> F -> D.
+        -- Not checked in game: 79242 is 18 yd from S (aggro ~19 yd), the upper corridor Wizard /
+        -- Taskmasters are 38 yd away 32 yd above. Re-record with setspot once a good point is found.
+        id = "chainclear", title = "死亡矿井 熔炉连续清怪（场景 13）", level = 20,
+        entry = { map = 36, x = -14.57, y = -385.48, z = 62.46, o = 1.57 },
+        spot = { x = -225.0, y = -600.0, z = 19.8, o = 0.73 },
+        -- rough centre of packs R/A/C/F/D; the default 120 yd respawn covers the whole foundry
+        pack = { x = -210.2, y = -586.8, z = 22.0 },
+        approach = { min = 20, max = 40, clear = 18 },
+        bots = {
             { class = "warrior", role = "tank" },
             { class = "rogue",   role = "meleedps" },
             { class = "mage",    role = "rangedps" },
@@ -269,15 +506,45 @@ local function computeSpot(leader, s)
     return nil, "no clear spot on the path"
 end
 
-local function respawnPack(leader, s, radius)
+local function guidSet(list)
+    local set = {}
+    for _, g in ipairs(list or {}) do set[g] = true end
+    return set
+end
+
+-- s.respawn: radius around the pack (default 120) or a list of `creature` guids; s.cleared stays dead
+local function respawnPack(leader, s)
+    local cleared = guidSet(s.cleared)
+    local only = type(s.respawn) == "table" and guidSet(s.respawn)
+    local radius = type(s.respawn) == "number" and s.respawn or 120
     local n = 0
-    for _, c in ipairs(leader:nearby(radius or 120, "dead")) do
-        if not c:isplayer() then
+    for _, c in ipairs(leader:nearby(only and 250 or radius, "dead")) do
+        if not c:isplayer() and not cleared[c:dbguid()] then
             local p = c:pos()
-            if math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2) < (radius or 120) then
+            local want
+            if only then
+                want = only[c:dbguid()]
+            else
+                want = math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2) < radius
+            end
+            if want then
                 c:respawn()
                 n = n + 1
             end
+        end
+    end
+    return n
+end
+
+-- s.cleared: kill these spawns (while the leader is still in GM mode, so nothing aggroes)
+local function killCleared(leader, s)
+    if not s.cleared then return 0 end
+    local cleared = guidSet(s.cleared)
+    local n = 0
+    for _, c in ipairs(leader:nearby(250, "alive")) do
+        if not c:isplayer() and cleared[c:dbguid()] then
+            c:kill()
+            n = n + 1
         end
     end
     return n
@@ -334,11 +601,16 @@ local function finish(leader, s)
         local ang = back + (i - (#bots + 1) / 2) * 0.6
         b:tp(spot.x + math.cos(ang) * 3.0, spot.y + math.sin(ang) * 3.0, spot.z, spot.o)
     end
+    killCleared(leader, s)
     leader:gm(false)
     leader:refill()
     leader:resetcd()
     local respawned = respawnPack(leader, s)
     rec.watch(leader, s.id)
+    for _, c in ipairs(s.commands or {}) do
+        leader:select(leader)
+        leader:cmd(c)
+    end
     scenario.running = nil
     scenario.current = s.id
     local names = map(bots, function(b) return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. ")" end)
@@ -383,7 +655,7 @@ end
 -- search again from there; nearby enemies are only known once their grid is loaded anyway.
 local function placeLeader(leader, s, hops)
     hops = hops or 0
-    local spot = scenario.spots[s.id] or s.spot
+    local spot = scenario.spots[s.spotOf or s.id] or s.spot
     if not spot and s.needsRecordedSpot then
         return fail(leader, "这个场景还没有站位：走到想开怪的位置，输入 .scenario setspot " .. s.id .. "，再点一次场景")
     end
@@ -520,7 +792,7 @@ function scenario.command(leader, args)
         local p = leader:pos()
         if p.map ~= s.entry.map then return say(leader, "你不在这个场景的地图里") end
         if not leader:alive() or leader:incombat() then return say(leader, "活着且不在战斗中才能记录站位") end
-        scenario.spots[s.id] = { map = p.map, x = p.x, y = p.y, z = p.z + 0.5, o = p.o }
+        scenario.spots[s.spotOf or s.id] = { map = p.map, x = p.x, y = p.y, z = p.z + 0.5, o = p.o }
         saveSpots()
         say(leader, string.format("%s 的站位已保存（%.1f, %.1f, %.1f），下次点这个场景会传到这里", s.title, p.x, p.y, p.z))
     elseif args == "stop" then
