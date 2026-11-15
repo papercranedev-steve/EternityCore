@@ -94,9 +94,10 @@
  * Nothing found and the anchor out of reach, or the healer in an idle creature's reach: walk
  * to the anchor itself if it stands outside every idle reach and that path is safe.
  *
- * Value (points): benefit - cost, horizon H = min(HORIZON_SEC, fight remaining), at least 1 s.
- *  benefit = Value::LostAction(healer, H) when the anchor is out of reach (the healer cannot do
- *            its job), plus StayLoss(here) - StayLoss(there) (the order's terms).
+ * Value (points): benefit - cost.
+ *  benefit = SpotCost::OutOfReach(healer) when the anchor is out of reach (the healer cannot do
+ *            its job for the fight left; before 2026-11-15 an 8 s horizon, a longer walk never
+ *            went), plus StayLoss(here) - StayLoss(there) (the order's terms).
  * Within DANGER_ENEMY_GAP of an enemy's edge (2026-11-10, the priest stood in the pile next to
  * the tank and died when one turned): tier Urgent, score -walk seconds, like the idle reach
  * (the tier only; where to go is the same order).
@@ -140,7 +141,6 @@ namespace Commander
         // the move is Urgent (2026-11-10; the tier only, not where to go).
         static constexpr float DANGER_ENEMY_GAP = 8.0f;
 
-        static constexpr float HORIZON_SEC = StandLoss::HORIZON_SEC;
         static constexpr float URGENT_HEALTH_PCT = 35.0f;
         static constexpr float INJURED_PCT = StandLoss::INJURED_PCT;
         static constexpr float IDLE_COST_FACTOR = StandLoss::IDLE_COST_FACTOR;

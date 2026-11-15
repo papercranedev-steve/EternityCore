@@ -203,7 +203,6 @@ namespace Commander
         {
             RangedSpot::Spot const& s = found.spot;
             float const walkSec = s.walkSec;
-            float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
             Proposal p;
             p.source = "rangedstance";
             p.action.type = BotActionType::MoveTo;
@@ -234,8 +233,9 @@ namespace Commander
                 p.reason = inDeadZone ? "inside the minimum range of its attack" :
                            !inReach ? (found.tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
                            sightHere - s.sight > exposureHere - s.exposure ? "sees the victim only narrowly" : "too close to the enemies";
-                // Out of reach: it cannot do its job. Plus the exposure and sight margin the walk saves.
-                float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
+                // Out of reach: it cannot do its job for the rest of the fight (SpotCost::OutOfReach).
+                // Plus the exposure and sight margin the walk saves.
+                float benefit = inReach ? 0.0f : SpotCost::OutOfReach(world, *self);
                 benefit += std::max(0.0f, lossHere - s.exposure - s.sight);
                 p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
             }

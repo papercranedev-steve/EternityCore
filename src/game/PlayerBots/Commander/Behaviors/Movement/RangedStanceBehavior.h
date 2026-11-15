@@ -18,8 +18,10 @@
  *    walked to the edge of its circle (SafeRoute::IdleCreatures::Near; tier Urgent), or the
  *    victim is farther than CAST_RANGE (to its edge) or out of line of sight, or nearer than
  *    the bot's dead zone (ClassKit::MinAttackRange, hunter Auto Shot 8 yd; 2026-11-15: cells
- *    start DEAD_ZONE_MARGIN beyond it) (tier Assigned, benefit = the bot's lost action over
- *    HORIZON_SEC: it cannot do its job). Then the best cell that passes the live checks.
+ *    start DEAD_ZONE_MARGIN beyond it) (tier Assigned, benefit = SpotCost::OutOfReach, the
+ *    bot's action for the fight left: it cannot do its job; before 2026-11-15 an 8 s horizon,
+ *    a walk longer than that never went, library-20261115-220153). Then the best cell that
+ *    passes the live checks.
  *  - otherwise: loss here = Exposure::LossAt(here) (Perception/Values/Exposure.h, the enemies
  *    that fight someone else turning to the bot; the walk here is 0). A cell is taken when its
  *    loss (SpotCost::Walk + Exposure::LossAt) is lower by more than SpotCost::Walk(
@@ -107,7 +109,6 @@ namespace Commander
         // Real line of sight checks not in the sight cache yet, per tick (path checks, detour
         // and walk factor: RangedSpot.h).
         static constexpr uint32 MAX_SIGHT_CHECKS = 48;
-        static constexpr float HORIZON_SEC = 8.0f;
         // Cells start this far beyond the bot's dead zone (ClassKit::MinAttackRange): the victim
         // shifts a little in the fight, a spot right on the line would be left again.
         static constexpr float DEAD_ZONE_MARGIN = 3.0f;

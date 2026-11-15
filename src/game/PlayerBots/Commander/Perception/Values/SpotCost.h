@@ -9,6 +9,12 @@
  * horizon H (seconds the member stays there).
  *
  * Walk(member, sec)       = Value::LostAction(member, sec): a cast-time spell stops the walk.
+ * OutOfReach(member)      = Value::LostAction(member, fight remaining, at least 1 s): standing
+ *                           where it cannot do its job (victim or anchor out of range or sight)
+ *                           loses its action for the rest of the fight, so a walk in is worth it
+ *                           whenever it is shorter than the fight left. (Before 2026-11-15 the
+ *                           stances capped this at 8 s: library-20261115-220153, the mage's walk
+ *                           down the corridor took ~12 s, it stood 100 s and dealt nothing.)
  *
  * Hazard zones (HazardZones.h), moved from PositioningBehavior (2026-11-11, step 1):
  *  ZoneHits(zone, H, leaveSec):
@@ -52,6 +58,7 @@ namespace SpotCost
     };
 
     float Walk(WorldModel const& world, PartyMemberFacts const& member, float walkSec);
+    float OutOfReach(WorldModel const& world, PartyMemberFacts const& member);
 
     // A walk of `leaveSec` gets out before the cast in progress lands.
     bool Dodges(HazardZone const& zone, float leaveSec);

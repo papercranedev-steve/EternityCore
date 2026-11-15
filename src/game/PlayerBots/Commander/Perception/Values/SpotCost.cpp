@@ -16,6 +16,11 @@ namespace SpotCost
         return Value::LostAction(world, member, std::max(0.0f, walkSec));
     }
 
+    float OutOfReach(WorldModel const& world, PartyMemberFacts const& member)
+    {
+        return Value::LostAction(world, member, std::max(1.0f, Value::FightRemainingSec(world)));
+    }
+
     bool Dodges(HazardZone const& zone, float leaveSec)
     {
         return zone.casting && leaveSec + DODGE_SLACK_SEC <= zone.castRemainingSec;

@@ -222,9 +222,8 @@ namespace Commander
                 p.SetValue(Value::ContributionPerSecAt(world, self, incoming) * walkSec, 0.0f);
                 return;
             }
-            float const horizon = std::max(1.0f, std::min(HS::HORIZON_SEC, Value::FightRemainingSec(world)));
-
-            float benefit = anchorOk ? 0.0f : Value::LostAction(world, self, horizon);
+            // Anchor out of reach: no heals for the rest of the fight (SpotCost::OutOfReach).
+            float benefit = anchorOk ? 0.0f : SpotCost::OutOfReach(world, self);
             // Members in reach and the enemies' exposure (the same terms as the order).
             benefit += std::max(0.0f, staySaved);
             float cost = SpotCost::Walk(world, self, walkSec);
