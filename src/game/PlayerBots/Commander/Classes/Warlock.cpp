@@ -1,5 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
+#include "SpellMgr.h"
 
 namespace Commander
 {
@@ -49,18 +50,17 @@ namespace Commander
                 return m_bot.m_spells.warlock.pDrainSoul;
             }
 
-            // Amplify Curse (talent, 3 min): the next Curse of Agony does 50% more, when the
-            // warlock's Agony is not up on its victim.
-            std::vector<BurstSpell> Bursts() const override
+            // Phase Shift (Imp, 4511, one rank): it keeps its Blood Pact for the party.
+            SpellEntry const* PetStandAside() const override
             {
-                auto const& s = m_bot.m_spells.warlock;
-                BurstSpell amplify;
-                amplify.spell = s.pAmplifyCurse;
-                amplify.then = s.pCurseofAgony;
-                amplify.extraSec = 2.0f;
-                amplify.thenNotOnTarget = true;
-                return { amplify };
+                return sSpellMgr.GetSpellEntry(SPELL_PHASE_SHIFT);
             }
+
+            // No bursts: Amplify Curse paired only with Curse of Agony, which the warlocks do not
+            // cast any more (user 2026-11-15).
+
+        private:
+            static constexpr uint32 SPELL_PHASE_SHIFT = 4511;
         };
     }
 

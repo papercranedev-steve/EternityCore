@@ -532,6 +532,10 @@ namespace Commander
         PartyMemberFacts const* petFacts = world.FindMember(petGuid);
         if (!petFacts)
             return;
+        // A pet kept out of the fight (ClassKit::PetStandAside: the phased Imp) is never sent in.
+        if (SpellEntry const* aside = bot->Kit().PetStandAside())
+            if (pet->HasSpell(aside->Id))
+                return;
 
         // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
         // again without one. Proposed only while it differs, so once per change.

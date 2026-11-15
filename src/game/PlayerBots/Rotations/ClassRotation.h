@@ -57,8 +57,12 @@ protected:
     // A caster standing idle more than 30 yd from its victim walks closer (BeginChasing honours
     // the Commander's movement hold and stance takeover).
     void ChaseWhenOutOfRange(Unit* pVictim);
-    // An idle pet (hunter, warlock) attacks `pVictim`.
+    // An idle pet (hunter, warlock) attacks `pVictim`; not a pet kept aside (KeepPetAside).
     void SendPetAt(Unit* pVictim);
+    // The pet knows the kit's ClassKit::PetStandAside spell (the Imp's Phase Shift): passive,
+    // called back, every autocast off but its party auras (Blood Pact), and the spell cast once
+    // those are up. Costs the bot nothing (the pet casts). True = the pet is kept aside.
+    bool KeepPetAside();
 
     PartyBotAI& m_bot;
 

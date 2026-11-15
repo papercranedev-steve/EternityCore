@@ -238,6 +238,11 @@ namespace Commander
         // Soul Shard; the item is the spell's SPELL_AURA_CHANNEL_DEATH_ITEM effect). Only
         // HarvestBehavior casts it, on an enemy about to die; the rotation does not.
         virtual SpellEntry const* DeathHarvest() const { return nullptr; }
+        // A spell the pet casts on itself to stay out of the fight while its party aura still
+        // helps (warlock Imp: Phase Shift, user 2026-11-15: the Imp does no damage, so it does
+        // not die). While the pet knows it, the rotation keeps it on (ClassRotation::
+        // KeepPetAside) and nothing sends the pet at an enemy (ThreatBehavior::ProposePet).
+        virtual SpellEntry const* PetStandAside() const { return nullptr; }
         // A jump forward the way it faces (mage Blink): the area caster gets room from what
         // runs at it (AreaRoomBehavior, doc .kiro/docs/2026-11-12-mage-hold.md 3.4).
         virtual SpellEntry const* Leap() const { return nullptr; }

@@ -5,6 +5,8 @@
 #include "Spell.h"
 #include "Pet.h"
 #include "CreatureAI.h"
+#include "SpellMgr.h"
+#include "Commander/Classes/ClassKit.h"
 
 bool ClassRotation::Cast(Unit* pTarget, SpellEntry const* pSpell)
 {
@@ -74,8 +76,42 @@ void ClassRotation::ChaseWhenOutOfRange(Unit* pVictim)
         m_bot.BeginChasing(pVictim);
 }
 
+bool ClassRotation::KeepPetAside()
+{
+    SpellEntry const* pAside = m_bot.Kit().PetStandAside();
+    Pet* pPet = m_bot.me->GetPet();
+    if (!pAside || !pPet || !pPet->IsAlive() || !pPet->GetCharmInfo() || !pPet->HasSpell(pAside->Id))
+        return false;
+    CharmInfo* pCharmInfo = pPet->GetCharmInfo();
+    if (!pPet->HasReactState(REACT_PASSIVE))
+        pPet->SetReactState(REACT_PASSIVE);
+    if (pPet->GetVictim())
+        pPet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
+
+    // Autocasts (Firebolt) would end the phase; party auras (Blood Pact) stay on and go up first.
+    bool auraPending = false;
+    std::vector<uint32> const autos = pPet->m_autospells;
+    for (uint32 spellId : autos)
+    {
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(spellId);
+        if (pSpell && pSpell->HasEffect(SPELL_EFFECT_APPLY_AREA_AURA_PARTY))
+        {
+            if (!pPet->HasAura(spellId))
+                auraPending = true;
+            continue;
+        }
+        pPet->ToggleAutocast(spellId, false);
+        pCharmInfo->SetSpellAutocast(spellId, false);
+    }
+    if (!auraPending && !pPet->HasAura(pAside->Id) && !pPet->IsNonMeleeSpellCasted(false))
+        pPet->CastSpell(pPet, pAside->Id, false);
+    return true;
+}
+
 void ClassRotation::SendPetAt(Unit* pVictim)
 {
+    if (KeepPetAside())
+        return;
     Pet* pPet = m_bot.me->GetPet();
     if (!pPet || pPet->GetVictim())
         return;
