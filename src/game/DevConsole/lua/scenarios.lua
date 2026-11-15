@@ -1,8 +1,8 @@
--- Test scenarios: .scenario <id> builds a fixed party at a fixed place for the TEST account.
+-- Test scenarios: .scenario <id> builds a party at a fixed place for the TEST account.
 --
 -- The leader (the player) gets the scenario level, a premade spec and premade gear for its class.
--- Bots are temporary party bots with fixed class/role, premade spec and premade gear, so every run
--- starts the same. The recorder (recorder.lua) is started for the party.
+-- Bots are temporary party bots with the lineup's class/role, premade spec and premade gear, so
+-- every run with the same lineup starts the same. The recorder (recorder.lua) is started for the party.
 --
 -- Messages to the player: plain text for the chat window, and "PBSCN;..." lines for the addon.
 --
@@ -13,9 +13,13 @@
 --   spot               {x, y, z, o}       where the party waits; nil = computed from 'pack'
 --   pack               {x, y, z}          centre of the target pack (for spot search and respawn)
 --   approach           min/max distance of the computed spot from the pack centre
---   bots               { {class=, role=, items=}, ... }
---                      items: { {itemId, count}, ... } added after the premade gear (bags are
---                      cleared first), e.g. ammo; the bot equips ammo itself out of combat
+--   bots               default lineup { {class=, role=, items=}, ... } (1-4 bots)
+--                      items: { {itemId, count}, ... } extra items for a bot of this class and
+--                      role, added after the premade gear and the class ammo (classItems)
+--
+-- Lineup: ".scenario <id> [class:role ...]" replaces the default bots, e.g.
+-- ".scenario stockade paladin:tank rogue:meleedps hunter:rangedps druid:healer". The last lineup is
+-- kept for ".scenario reset" unless reset gets its own.
 
 scenario = scenario or {}
 
@@ -23,6 +27,47 @@ local LEADER_ROLE = {
     [1] = "meleedps", [2] = "meleedps", [3] = "rangedps", [4] = "meleedps", [5] = "rangedps",
     [7] = "meleedps", [8] = "rangedps", [9] = "rangedps", [11] = "meleedps",
 }
+
+local CLASS_ID = {
+    warrior = 1, paladin = 2, hunter = 3, rogue = 4, priest = 5, shaman = 7, mage = 8, warlock = 9, druid = 11,
+}
+
+-- same as the addon's CLASS_ROLES ("auto" is always allowed)
+local CLASS_ROLES = {
+    warrior = { tank = true, meleedps = true },
+    paladin = { tank = true, healer = true, meleedps = true },
+    hunter  = { rangedps = true },
+    rogue   = { meleedps = true },
+    priest  = { healer = true, rangedps = true },
+    shaman  = { healer = true, meleedps = true, rangedps = true },
+    mage    = { rangedps = true },
+    warlock = { rangedps = true },
+    druid   = { tank = true, healer = true, meleedps = true, rangedps = true },
+}
+
+local HORDE_RACES = { [2] = true, [5] = true, [6] = true, [8] = true }
+local FACTION_CLASS = { paladin = "alliance", shaman = "horde" }
+
+-- Arrows and bullets for classes that can use a bow, gun or crossbow: the premade ranged weapon
+-- decides which one the bot equips (EquipAmmoFromBags picks the matching type out of combat).
+local AMMO = { -- min level, arrow, bullet
+    { 40, 11285, 11284 }, { 25, 3030, 3033 }, { 10, 2515, 2519 }, { 1, 2512, 2516 },
+}
+local AMMO_CLASSES = { warrior = true, rogue = true, hunter = true }
+
+local function classItems(class, level)
+    if not AMMO_CLASSES[class] then return {} end
+    for _, a in ipairs(AMMO) do
+        if level >= a[1] then return { { a[2], 200 }, { a[3], 200 } } end
+    end
+    return {}
+end
+
+local function lineupText(lineup)
+    local parts = {}
+    for _, b in ipairs(lineup) do parts[#parts + 1] = b.class .. ":" .. (b.role or "auto") end
+    return table.concat(parts, ",")
+end
 
 scenario.list = {
     {
@@ -55,8 +100,9 @@ scenario.list = {
         needsRecordedSpot = true,
         approach = { min = 26, max = 38, clear = 24 },
         bots = {
-            -- Jagged Arrows for the premade crossbow (Blackcrow): tests the ranged pull with ammo
-            { class = "warrior", role = "tank", items = { { 11285, 200 } } },
+            -- the tank's premade crossbow (Blackcrow) gets its arrows from classItems: tests the
+            -- ranged pull with ammo
+            { class = "warrior", role = "tank" },
             { class = "rogue",   role = "meleedps" },
             { class = "mage",    role = "rangedps" },
             { class = "priest",  role = "healer" },
@@ -97,6 +143,28 @@ function scenario.find(id)
     end
 end
 
+-- "class:role class:role ..." (spaces or commas; role may be left out = auto) -> lineup, or nil, error.
+-- Empty text -> nil, nil (use the default).
+local function parseLineup(leader, text)
+    local lineup = {}
+    local faction = HORDE_RACES[leader:race()] and "horde" or "alliance"
+    for token in (text or ""):gmatch("[^%s,]+") do
+        local class, role = token:lower():match("^(%a+):?(%a*)$")
+        if not class or not CLASS_ID[class] then return nil, "未知职业：" .. token end
+        role = (role ~= "") and role or "auto"
+        if role ~= "auto" and not CLASS_ROLES[class][role] then
+            return nil, class .. " 不能当 " .. role
+        end
+        if FACTION_CLASS[class] and FACTION_CLASS[class] ~= faction then
+            return nil, class .. " 不是你这个阵营的职业"
+        end
+        lineup[#lineup + 1] = { class = class, role = role }
+    end
+    if #lineup == 0 then return nil, nil end
+    if #lineup > 4 then return nil, "最多 4 个队友" end
+    return lineup
+end
+
 local function say(p, text)
     p:tell("|cff66ccff[场景]|r " .. text)
 end
@@ -132,6 +200,21 @@ local function applyPremades(u, level, role, gm)
     gm:select(u)
     gm:cmd(".maxskill")
     return spec, gear
+end
+
+-- what to tell the player when a premade template does not fit the wanted role
+local function premadeWarnings(u, role, spec, gear)
+    local out = {}
+    local function check(kind, t)
+        if not t then
+            out[#out + 1] = u:name() .. " 没有" .. kind .. "模板"
+        elseif role ~= "auto" and t.role ~= role then
+            out[#out + 1] = string.format("%s 的%s用了 %d 级 %s 模板", u:name(), kind, t.level, t.role)
+        end
+    end
+    check("天赋", spec)
+    check("装备", gear)
+    return out
 end
 
 local function botsOf(leader)
@@ -207,16 +290,35 @@ end
 local function finish(leader, s)
     local bots = botsOf(leader)
     local spot = scenario.spot
-    for i, b in ipairs(bots) do
-        local want = s.bots[i]
-        local role = (b:ai() and b:ai().role) or (want and want.role) or "auto"
-        applyPremades(b, s.level, role, leader)
-        -- group order need not follow s.bots: the items go to the entry with this bot's role
-        local items
-        for _, w in ipairs(s.bots) do
-            if w.role == role and w.items then items = w.items end
+    local lineup = scenario.lineup
+    local used, warnings = {}, {}
+    -- group order need not follow the lineup: match each bot to an unused entry of its class,
+    -- preferring the same role
+    local function entryFor(b, role)
+        local best
+        for i, w in ipairs(lineup) do
+            if not used[i] and CLASS_ID[w.class] == b:class() then
+                if w.role == role or w.role == "auto" then best = i break end
+                best = best or i
+            end
         end
-        for _, it in ipairs(items or {}) do
+        if best then used[best] = true end
+        return best and lineup[best]
+    end
+    for i, b in ipairs(bots) do
+        local role = (b:ai() and b:ai().role) or "auto"
+        local want = entryFor(b, role)
+        local spec, gear = applyPremades(b, s.level, role, leader)
+        for _, w in ipairs(premadeWarnings(b, role, spec, gear)) do warnings[#warnings + 1] = w end
+        local items = classItems(want and want.class or "", s.level)
+        -- extra items: from the scenario's default entry with this class and role
+        for _, w in ipairs(s.bots) do
+            if want and w.class == want.class and w.role == role then
+                for _, it in ipairs(w.items or {}) do items[#items + 1] = it end
+                break
+            end
+        end
+        for _, it in ipairs(items) do
             leader:select(b)
             leader:cmd(string.format(".additem %d %d", it[1], it[2] or 1))
         end
@@ -238,6 +340,7 @@ local function finish(leader, s)
     local names = map(bots, function(b) return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. ")" end)
     say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪。战斗会自动录制。",
         s.title, s.level, table.concat(names, " "), respawned))
+    for _, w in ipairs(warnings) do say(leader, "|cffffcc00注意|r：" .. w) end
     status(leader, "ready", s.id)
 end
 
@@ -252,13 +355,14 @@ local function spawnBots(leader, s)
     end
     -- bots go where the leader actually stands
     scenario.spot = { x = scenario.spot.x, y = scenario.spot.y, z = here.z + 0.5, o = scenario.spot.o }
-    for _, b in ipairs(s.bots) do
+    local lineup = scenario.lineup
+    for _, b in ipairs(lineup) do
         addbot(leader, b.class, b.role, s.level)
     end
-    say(leader, "正在生成队友 ...")
+    say(leader, "正在生成队友：" .. lineupText(lineup))
     waitfor(function()
         local bots = botsOf(leader)
-        if #bots < #s.bots then return false end
+        if #bots < #lineup then return false end
         for _, b in ipairs(bots) do
             local ai = b:ai()
             if not ai or not ai.initialized then return false end
@@ -315,11 +419,13 @@ local function placeLeader(leader, s, hops)
     end)
 end
 
-function scenario.load(leader, id)
+-- lineup: { {class=, role=}, ... } or nil = the scenario's default bots
+function scenario.load(leader, id, lineup)
     local s = scenario.find(id)
     if not s then return fail(leader, "没有这个场景：" .. tostring(id)) end
     if scenario.running then return say(leader, "上一个场景还在准备中，请稍等") end
     scenario.running = s.id
+    scenario.lineup = lineup or s.bots
     rec.stop()
     status(leader, "loading", s.id)
     say(leader, "准备 " .. s.title .. " ...")
@@ -362,9 +468,10 @@ function scenario.load(leader, id)
 end
 
 -- Reload the last scenario (after a wipe).
-function scenario.reset(leader)
+-- Reload the last scenario (after a wipe), with 'lineup' or the last one.
+function scenario.reset(leader, lineup)
     if not scenario.current then return say(leader, "还没有加载过场景") end
-    scenario.load(leader, scenario.current)
+    scenario.load(leader, scenario.current, lineup or scenario.lineup)
 end
 
 function scenario.stop(leader)
@@ -375,18 +482,24 @@ function scenario.stop(leader)
     status(leader, "stopped", "")
 end
 
--- .scenario [list | <id> | reset | stop | status | setspot <id> | mark [text] | rec list | rec open <file>]
+-- .scenario [list | <id> [lineup] | reset [lineup] | stop | status | setspot <id> | mark [text]
+--            | rec list | rec open <file>]      lineup: class:role ... (see the top of this file)
 -- (rec: the addon's fight log window, recview.lua)
+-- list replies: PBSCN;L;<id>;<title>;<level>  PBSCN;B;<id>;<default lineup>  ...  PBSCN;E;<current id>
 function scenario.command(leader, args)
     args = (args or ""):match("^%s*(.-)%s*$")
     if args == "" or args == "list" then
         for _, s in ipairs(scenario.list) do
             leader:tell("PBSCN;L;" .. s.id .. ";" .. s.title .. ";" .. s.level)
+            leader:tell("PBSCN;B;" .. s.id .. ";" .. lineupText(s.bots))
         end
         leader:tell("PBSCN;E;" .. (scenario.current or ""))
         if args == "" then
-            for _, s in ipairs(scenario.list) do say(leader, ".scenario " .. s.id .. "  " .. s.title) end
-            say(leader, ".scenario reset  重开当前场景    .scenario stop  结束")
+            for _, s in ipairs(scenario.list) do
+                say(leader, ".scenario " .. s.id .. "  " .. s.title .. "（默认 " .. lineupText(s.bots) .. "）")
+            end
+            say(leader, ".scenario <id> 职业:职责 ...  换阵容，例如 .scenario stockade paladin:tank rogue hunter druid:healer")
+            say(leader, ".scenario reset [阵容]  重开当前场景    .scenario stop  结束")
             say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
             say(leader, ".scenario mark [说明]  战斗中觉得不对时标记这一刻（记下现场，复盘时看）")
             say(leader, "战斗录像：插件的“战斗录像”窗口（/pbr）")
@@ -406,14 +519,25 @@ function scenario.command(leader, args)
         scenario.spots[s.id] = { map = p.map, x = p.x, y = p.y, z = p.z + 0.5, o = p.o }
         saveSpots()
         say(leader, string.format("%s 的站位已保存（%.1f, %.1f, %.1f），下次点这个场景会传到这里", s.title, p.x, p.y, p.z))
-    elseif args == "reset" then
-        scenario.reset(leader)
     elseif args == "stop" then
         scenario.stop(leader)
     elseif args == "status" then
         local st = rec.status()
-        say(leader, "当前场景：" .. (scenario.current or "无") .. "，录制：" .. (st.recording and "进行中" or (st.watching and "等待战斗" or "关闭")))
+        say(leader, "当前场景：" .. (scenario.current or "无") .. "，阵容：" .. (scenario.lineup and lineupText(scenario.lineup) or "无")
+            .. "，录制：" .. (st.recording and "进行中" or (st.watching and "等待战斗" or "关闭")))
     else
-        scenario.load(leader, args)
+        -- <id> [lineup] | reset [lineup]
+        local id, rest = args:match("^(%S+)%s*(.*)$")
+        local lineup, err = parseLineup(leader, rest)
+        if err then
+            -- not fail(): a scenario that is still loading must keep its 'running' flag
+            say(leader, "阵容不对：" .. err)
+            return status(leader, "error", err)
+        end
+        if id == "reset" then
+            scenario.reset(leader, lineup)
+        else
+            scenario.load(leader, id, lineup)
+        end
     end
 end
