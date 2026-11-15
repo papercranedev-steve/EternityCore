@@ -63,7 +63,16 @@ namespace Commander
                 evasion.effect = SurvivalEffect::ReducePhysical;
                 evasion.fraction = 0.5f;
                 evasion.selfOnly = true;
+                evasion.renewWhileHit = true;
                 return { vanish, evasion };
+            }
+
+            // Preparation resets every rogue cooldown; it is spent on Vanish and Evasion only
+            // (user 2026-11-15: not on Sprint).
+            SpellEntry const* CooldownReset(SpellEntry const* spell) const override
+            {
+                auto const& s = m_bot.m_spells.rogue;
+                return spell && (spell == s.pVanish || spell == s.pEvasion) ? s.pPreparation : nullptr;
             }
 
             // Adrenaline Rush (5 min): energy twice as fast. Blade Flurry (2 min): the hits also

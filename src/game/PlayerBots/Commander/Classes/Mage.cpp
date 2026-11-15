@@ -103,6 +103,14 @@ namespace Commander
                 return { block };
             }
 
+            // Cold Snap resets every frost cooldown; only Ice Block's is worth it for now
+            // (user 2026-11-15).
+            SpellEntry const* CooldownReset(SpellEntry const* spell) const override
+            {
+                auto const& s = m_bot.m_spells.mage;
+                return spell && spell == s.pIceBlock ? s.pColdSnap : nullptr;
+            }
+
             // Combustion (3 min): fire crits climb until 3 crits. Arcane Power (3 min): +30%
             // damage, +30% mana cost (above half mana, as in the original rotation). Presence of
             // Mind (3 min): the next cast is instant, used for Pyroblast (6 s cast).

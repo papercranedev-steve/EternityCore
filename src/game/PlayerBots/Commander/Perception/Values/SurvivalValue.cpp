@@ -194,6 +194,7 @@ namespace SurvivalValue
         if (a.targetStops && !self && (member.role == ROLE_MELEE_DPS || member.role == ROLE_TANK))
             o.cost += Value::LostAction(world, member, a.durationSec);
         o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC);
+        o.cost += Value::ResetCost(world, caster, a.reset, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC);
         if (a.effect == SurvivalAbility::Effect::DropThreat)
         {
             for (EnemyFacts const& e : world.enemies)

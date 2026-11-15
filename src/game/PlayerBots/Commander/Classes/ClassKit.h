@@ -81,6 +81,10 @@ namespace Commander
         bool casterStops = false;   // the caster cannot act while it lasts (Ice Block)
         bool targetStops = false;   // the target cannot attack while it lasts (Blessing of Protection)
         bool allMana = false;       // costs all the caster's mana (Lay on Hands)
+        // Put on again with its cooldown reset (ClassKit::CooldownReset) when it ran out while
+        // melee enemies still hit the caster (Evasion while the rogue tanks, user 2026-11-15;
+        // RenewSurvivalBehavior).
+        bool renewWhileHit = false;
     };
 
     // An instant off the global cooldown that makes the next heal better (HealPlanBehavior,
@@ -196,6 +200,11 @@ namespace Commander
         // Spells that keep a member about to die alive. Only the Commander casts them
         // (team rescue: RescueAssigner picks one per member, RescueBehavior casts it).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
+        // The spell that ends `spell`'s cooldown (cooldown doc .kiro/docs/2026-11-14-cooldown-spells.md
+        // 10, user 2026-11-15): Cold Snap for Ice Block, Preparation for Vanish and Evasion;
+        // nullptr = none. A survival spell or threat drop on cooldown with its reset ready is
+        // offered as "reset, then cast" (WorldModel CooldownResetFacts, BotAction::prepResets).
+        virtual SpellEntry const* CooldownReset(SpellEntry const* /*spell*/) const { return nullptr; }
         // Heal boosts (Inner Focus, Divine Favor, Nature's Swiftness). The heal module puts one
         // on before the heal it suits (a big deficit; an emergency the heal would not reach in
         // time); the rotations do not cast them while it decides heals.

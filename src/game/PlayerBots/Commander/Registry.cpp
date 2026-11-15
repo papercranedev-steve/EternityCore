@@ -29,6 +29,8 @@
 #include "Commander/Behaviors/Combat/FinishCastBehavior.h"
 #include "Commander/Behaviors/Support/BoostBehavior.h"
 #include "Commander/Behaviors/Combat/MitigationBehavior.h"
+#include "Commander/Behaviors/Combat/StoneformBehavior.h"
+#include "Commander/Behaviors/Combat/RenewSurvivalBehavior.h"
 #include "Commander/Behaviors/Combat/CurseBehavior.h"
 #include "Commander/Coordination/Duties/CurseAssigner.h"
 #include "Commander/Coordination/Duties/BoostAssigner.h"
@@ -64,6 +66,8 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<DispelBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CrowdControlBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RescueBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RenewSurvivalBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<StoneformBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FleeStopBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BoostBehavior>()));

@@ -33,6 +33,15 @@ namespace Value
         return COOLDOWN_POINTS_PER_MIN * std::min(cooldownSec, std::max(0.0f, horizonSec)) / 60.0f;
     }
 
+    float ResetCost(WorldModel const& world, PartyMemberFacts const& caster,
+                    CooldownResetFacts const& reset, float horizonSec)
+    {
+        if (!reset.spellId)
+            return 0.0f;
+        return CooldownPoints(reset.cooldownMs / 1000.0f, horizonSec) +
+               (reset.gcd ? LostAction(world, caster, GCD_SEC) : 0.0f);
+    }
+
     float DeathPenalty(PartyMemberFacts const& member)
     {
         if (member.isBot && member.role == ROLE_HEALER)

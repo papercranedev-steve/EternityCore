@@ -25,6 +25,9 @@ namespace Commander
         // Breaks a fear or charm on itself (Will of the Forsaken, 2 min): hands and feet, cast as
         // soon as the bot is feared or charmed (PartyBotAI::BreakControl). Null = none.
         SpellEntry const* FearBreak(PartyBotAI const& bot);
+        // Stoneform also removes a poison, disease or bleed on itself: cast as soon as one is
+        // on (StoneformBehavior, user 2026-11-15). Null = not a dwarf.
+        SpellEntry const* Stoneform(PartyBotAI const& bot);
     }
 }
 

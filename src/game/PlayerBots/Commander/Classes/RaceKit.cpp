@@ -50,10 +50,15 @@ namespace Commander
         return Known(bot, WILL_OF_THE_FORSAKEN);
     }
 
+    SpellEntry const* RaceKit::Stoneform(PartyBotAI const& bot)
+    {
+        return Known(bot, STONEFORM);
+    }
+
     std::vector<SurvivalSpell> RaceKit::Survival(PartyBotAI const& bot)
     {
         std::vector<SurvivalSpell> out;
-        if (SpellEntry const* spell = Known(bot, STONEFORM))
+        if (SpellEntry const* spell = Stoneform(bot))
         {
             SurvivalSpell s;
             s.spell = spell;

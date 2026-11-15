@@ -923,6 +923,26 @@ namespace WorldModelBuilder
         // Death: its aura (Unit::SetFeignDeath deletes every hostile reference). Feint, Cower:
         // SPELL_EFFECT_THREAT with a negative amount on the target (Spell::EffectThreat ->
         // AddThreat: the caster's threat modifiers apply, ThreatCalcHelper::CalcThreat).
+        // `spell` is on cooldown and its reset (ClassKit::CooldownReset) is ready: the reset's
+        // facts; otherwise none (spellId 0). Only its cooldown keeps `spell`: its power is there.
+        // The caster able to act and not silenced for the reset is the caller's.
+        CooldownResetFacts ResetFor(PartyBotAI const* ai, PartyMemberFacts const& f, SpellEntry const* spell)
+        {
+            CooldownResetFacts r;
+            Player* me = ai->me;
+            SpellEntry const* reset = ai->Kit().CooldownReset(spell);
+            if (!reset || me->IsSpellReady(spell) || !ai->IsReadyWithStance(reset) ||
+                (f.silenced && reset->PreventionType == SPELL_PREVENTION_TYPE_SILENCE))
+                return r;
+            Powers const powerType = Powers(spell->powerType);
+            if (powerType != POWER_HEALTH && me->GetPower(powerType) < uint32(Spell::CalculatePowerCost(spell, me)))
+                return r;
+            r.spellId = reset->Id;
+            r.cooldownMs = reset->GetRecoveryTime();
+            r.gcd = reset->StartRecoveryTime > 0;
+            return r;
+        }
+
         void FillThreatDrops(PartyBotAI const* ai, PartyMemberFacts& f)
         {
             if (ai->GetRole() == ROLE_TANK)
@@ -964,6 +984,11 @@ namespace WorldModelBuilder
                 // Facts only (not CanTryToCastSpell: the brain's constraints are the brain's).
                 // The form (cat Cower) is checked by IsReadyWithStance.
                 a.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(spell);
+                if (!a.ready && f.CanAct() && !f.silenced)
+                {
+                    a.reset = ResetFor(ai, f, spell);
+                    a.ready = a.reset.spellId != 0;
+                }
                 f.threatDrops.push_back(a);
             }
         }
@@ -1027,9 +1052,16 @@ namespace WorldModelBuilder
                 // Divine Shield, Ice Block: castable while stunned or feared, they lift it
                 // (Spell::CheckCasterAuras; PartyBotAI::CastRescueWhileControlled casts them).
                 bool const liftsControl = spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT);
-                a.ready = (f.CanAct() || (f.alive && liftsControl)) && ai->IsReadyWithStance(spell) &&
-                          !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
-                          (!s.needsShield || ai->IsWearingShield(me));
+                bool const castable = !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
+                                      (!s.needsShield || ai->IsWearingShield(me));
+                a.ready = castable && (f.CanAct() || (f.alive && liftsControl)) && ai->IsReadyWithStance(spell);
+                // A reset (Cold Snap, Preparation) is cast first: not while controlled.
+                if (!a.ready && castable && f.CanAct())
+                {
+                    a.reset = ResetFor(ai, f, spell);
+                    a.ready = a.reset.spellId != 0;
+                }
+                a.renewWhileHit = s.renewWhileHit;
                 f.survival.push_back(a);
             }
         }
@@ -1469,6 +1501,25 @@ namespace WorldModelBuilder
                 f.debuffs.push_back(d);
             }
         }
+
+        // Poison, disease, bleed on `member` from any caster (Stoneform: StoneformBehavior).
+        void FillAfflictions(Player const* member, PartyMemberFacts& f)
+        {
+            if (!member->IsAlive())
+                return;
+            for (auto const& itr : member->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                if (holder->IsPositive())
+                    continue;
+                SpellEntry const* spell = holder->GetSpellProto();
+                f.poisoned |= spell->Dispel == DISPEL_POISON;
+                f.diseased |= spell->Dispel == DISPEL_DISEASE;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX && !f.bleeding; ++i)
+                    if (holder->GetAuraByEffectIndex(SpellEffectIndex(i)))
+                        f.bleeding = spell->GetEffectMechanic(SpellEffectIndex(i)) == MECHANIC_BLEED;
+            }
+        }
     }
 
     void RefreshCombat(PartyBotAI* bot, WorldModel& world)
@@ -1504,6 +1555,7 @@ namespace WorldModelBuilder
             FillPendingHeal(member, f);
             f.cap = RoleCapabilities::Assess(member);
             FillDebuffs(member, f);
+            FillAfflictions(member, f);
             FillPaladinBuffsOn(member, f);
             if (member->AI())
             {

@@ -36,7 +36,8 @@
  *           healthstones) [+ LostAction(caster, d): Ice Block]
  *           [+ LostAction(target, d) for a melee target that cannot attack: Blessing of Protection]
  *           + ManaWorth::Points(mana) + cooldown points (Value::CooldownPoints over
- *           fight left + NEXT_FIGHTS_SEC: a long cooldown is also missing in the next pulls) [+ DropThreat: what the enemies' next holders take on top of it,
+ *           fight left + NEXT_FIGHTS_SEC: a long cooldown is also missing in the next pulls)
+ *           [+ Value::ResetCost: a spell on cooldown cast after its reset, Cold Snap / Preparation] [+ DropThreat: what the enemies' next holders take on top of it,
  *           Value::MoveLoss, for the horizon]
  * Not offered: not ready, out of range (ally spells), a target immune to the spell's mechanic
  * (Weakened Soul, Forbearance), a tank target for notOnTank spells, self-only spells on others.

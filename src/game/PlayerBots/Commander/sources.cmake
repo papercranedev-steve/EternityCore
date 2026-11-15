@@ -365,6 +365,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/MitigationValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/StoneformBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/StoneformBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/RenewSurvivalBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/RenewSurvivalBehavior.cpp
   ${COMMANDER_DIR}/Perception/Profiles/WarlockCurses.h
   ${COMMANDER_DIR}/Perception/Profiles/WarlockCurses.cpp
   ${COMMANDER_DIR}/Perception/Values/CurseValue.h

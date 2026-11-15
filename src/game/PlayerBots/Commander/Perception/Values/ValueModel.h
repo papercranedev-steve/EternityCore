@@ -16,6 +16,7 @@ namespace Commander
     struct WorldModel;
     struct PartyMemberFacts;
     struct EnemyFacts;
+    struct CooldownResetFacts;
 
     namespace Value
     {
@@ -44,6 +45,11 @@ namespace Commander
         // of a GCD or less. The one place long cooldowns are judged "worth saving".
         static constexpr float COOLDOWN_POINTS_PER_MIN = 3.0f;
         float CooldownPoints(float cooldownSec, float horizonSec);
+        // What casting the reset of an option first adds (CooldownResetFacts: Cold Snap,
+        // Preparation): its cooldown points up to `horizonSec`, and one action when it starts
+        // the global cooldown. 0 without a reset.
+        float ResetCost(WorldModel const& world, PartyMemberFacts const& caster,
+                        CooldownResetFacts const& reset, float horizonSec);
 
         // Armor mitigation of melee hits, vanilla formula (Unit::CalcArmorReducedDamage), max 75%.
         float ArmorReduction(uint32 armor, uint32 attackerLevel);

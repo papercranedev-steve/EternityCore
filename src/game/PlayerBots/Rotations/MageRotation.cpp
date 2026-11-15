@@ -7,8 +7,7 @@
  * a mana gem when it has none (ConjureManaGem).
  *
  * In combat, in this order:
- *   1. Ice Barrier when attacked (no mana per absorbed point, unlike Mana Shield). Cold Snap
- *      resets it when attacked, below COLD_SNAP_HEALTH_PCT and nothing absorbs.
+ *   1. Ice Barrier when attacked (no mana per absorbed point, unlike Mana Shield).
  *      Mana Shield is not cast here: EscapeBehavior proposes it when the hits are dangerous.
  *   2. No area spells (user, 2026-11-02): the Commander area damage module decides when, which
  *      and where (Commander/Behaviors/Combat/AreaDamageBehavior.h).
@@ -16,7 +15,7 @@
  *      of Mind is on.
  *   4. The filler (ClassKit::Filler: Frostbolt, Fireball for a fire build).
  *   5. Wand when out of mana.
- * The Commander decides: Ice Block (team rescue), Blink / Frost Nova / running from melee
+ * The Commander decides: Ice Block, and Cold Snap only to reset it (team rescue), Blink / Frost Nova / running from melee
  * (EscapeBehavior), Counterspell (InterruptBehavior), Polymorph (crowd control), Combustion,
  * Arcane Power, Presence of Mind + Pyroblast (BurstBehavior).
  * No Fire Blast (user 2026-11-14, strat-20261114-180150: "while moving" took the GCD just as
@@ -34,7 +33,6 @@
 
 namespace
 {
-    float const COLD_SNAP_HEALTH_PCT = 40.0f;
     float const WAND_MANA_PCT = 5.0f;
     float const CONJURE_MIN_MANA_PCT = 50.0f;
 
@@ -111,13 +109,6 @@ namespace
             bool const attacked = !me->GetAttackers().empty();
 
             if (attacked && s.pIceBarrier && Cast(me, s.pIceBarrier))
-                return;
-
-            if (attacked && s.pColdSnap && s.pIceBarrier &&
-                me->GetHealthPercent() < COLD_SNAP_HEALTH_PCT &&
-               !me->IsSpellReady(s.pIceBarrier) &&
-               !me->HasAuraType(SPELL_AURA_SCHOOL_ABSORB) &&
-                Cast(me, s.pColdSnap))
                 return;
 
             ChaseWhenOutOfRange(pVictim);

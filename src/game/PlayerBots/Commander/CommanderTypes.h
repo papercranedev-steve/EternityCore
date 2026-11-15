@@ -102,6 +102,9 @@ namespace Commander
         // Swiftness before a heal; Cold Blood, Presence of Mind, Elemental Mastery before a hit;
         // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7). Not cast when `spell` cannot be.
         SpellEntry const* prepSpell = nullptr;
+        // `prepSpell` ends `spell`'s cooldown (Cold Snap before Ice Block, Preparation before
+        // Vanish / Evasion; ClassKit::CooldownReset): `spell` is checked after it, not before.
+        bool prepResets = false;
         // UseItem: the item entry.
         uint32 itemId = 0;
     };

@@ -22,6 +22,18 @@ namespace Commander
                     return true;
             return !RaceKit::Survival(*bot).empty() || ItemKit::HoldsAny(*bot, ItemKit::Use::Heal);
         }
+
+        // The duty's spell is on cooldown, its reset ready (CooldownResetFacts): cast the reset
+        // first (BotAction::prepResets; the arbiter checks the spell after it).
+        bool SetReset(PartyBotAI const* bot, BotAction& action, CooldownResetFacts const& reset)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(reset.spellId);
+            if (!spell || bot->me->IsSpellReady(action.spell) || !bot->CanTryToCastSpell(bot->me, spell))
+                return false;
+            action.prepSpell = spell;
+            action.prepResets = true;
+            return true;
+        }
     }
 
     bool RescueBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -85,10 +97,15 @@ namespace Commander
             // On the member about to die, or on itself (Shield Wall, Ice Block, Vanish): a
             // warrior swaps to Defensive Stance first (the arbiter, DoCastWithStance).
             Unit* target = me->GetMap()->GetUnit(duty->victim);
-            if (!target || !target->IsAlive() || (target != me && !me->IsWithinLOSInMap(target)) ||
-                !bot->CanCastWithStance(target, spell))
+            if (!target || !target->IsAlive() || (target != me && !me->IsWithinLOSInMap(target)))
                 return;
-            p.reason = "rescue: about to die, save";
+            auto const own = std::find_if(self->survival.begin(), self->survival.end(),
+                                          [&](SurvivalAbility const& a) { return !a.itemId && a.spellId == duty->spellId; });
+            // Facts a tick old may still ask for the reset just cast: then the spell itself.
+            bool const reset = own != self->survival.end() && own->reset.spellId && SetReset(bot, p.action, own->reset);
+            if (!reset && !bot->CanCastWithStance(target, spell))
+                return;
+            p.reason = p.action.prepResets ? "rescue: about to die, reset and save" : "rescue: about to die, save";
             p.action.target = duty->victim;
         }
         else
@@ -105,11 +122,13 @@ namespace Commander
             }
             else
             {
-                if (!bot->CanTryToCastSpell(me, spell))
+                bool const reset = drop != self->threatDrops.end() && drop->reset.spellId &&
+                                   SetReset(bot, p.action, drop->reset);
+                if (!reset && !bot->CanTryToCastSpell(me, spell))
                     return;
                 p.action.target = me->GetObjectGuid();
             }
-            p.reason = "rescue: attacked, drop threat";
+            p.reason = p.action.prepResets ? "rescue: attacked, reset and drop threat" : "rescue: attacked, drop threat";
         }
         float const cost = Value::LostAction(world, *self, Value::GCD_SEC);
         p.SetValue(duty->points + cost, cost);

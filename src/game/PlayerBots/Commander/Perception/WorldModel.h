@@ -129,6 +129,17 @@ namespace Commander
         bool ready = false;             // off cooldown, enough power (PartyBotAI::IsReadyWithStance), can act
     };
 
+    // A spell on cooldown that its reset makes castable again (ClassKit::CooldownReset: Cold Snap
+    // before Ice Block, Preparation before Vanish / Evasion). spellId 0 = the spell is ready by
+    // itself (or no reset). The option's value pays the reset too: its cooldown points and, when
+    // it starts the global cooldown (Preparation), one action.
+    struct CooldownResetFacts
+    {
+        uint32 spellId = 0;
+        uint32 cooldownMs = 0;
+        bool gcd = false;
+    };
+
     // A non-tank bot's own threat drop (ClassKit::ThreatDrops), one entry per spell:
     //   wipe      off every threat list for good (Vanish, Feign Death); drop, durationSec unused
     //   onTarget  `drop` off its target's list for good (Feint, Cower: SPELL_EFFECT_THREAT < 0)
@@ -146,7 +157,9 @@ namespace Commander
         float maxRange = 0.0f;          // onTarget: yards to the enemy's edge
         uint32 manaCost = 0;
         uint32 cooldownMs = 0;
-        bool ready = false;             // off cooldown, enough mana, can act and cast
+        // Off cooldown (or its reset ready: `reset`), enough mana, can act and cast.
+        bool ready = false;
+        CooldownResetFacts reset;
     };
 
     // A bot spell that keeps a member about to die alive (ClassKit::Survival, team rescue).
@@ -176,9 +189,12 @@ namespace Commander
         // 0 = a spell; else the item whose on-use spell `spellId` is (ItemKit: healthstone,
         // healing potion), used with BotActionType::UseItem.
         uint32 itemId = 0;
-        // Off cooldown, enough power (stance swap counted), can act (or controlled and the spell
-        // lifts it: Divine Shield, Ice Block), a shield if needed.
+        // Off cooldown (or its reset ready, the caster able to act: `reset`), enough power
+        // (stance swap counted), can act (or controlled and the spell lifts it: Divine Shield,
+        // Ice Block), a shield if needed.
         bool ready = false;
+        CooldownResetFacts reset;
+        bool renewWhileHit = false;     // SurvivalSpell::renewWhileHit (Evasion)
     };
 
     // A consumable of a bot that restores its own mana (ItemKit::Use::Mana: mana potions, mana
@@ -611,6 +627,11 @@ namespace Commander
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
         std::vector<DebuffFacts> debuffs;           // players only
+        // Harmful auras of any caster on it (players only), what Stoneform removes: a poison,
+        // a disease (SpellEntry::Dispel), a bleed (MECHANIC_BLEED on the spell or an effect).
+        bool poisoned = false;
+        bool diseased = false;
+        bool bleeding = false;
         // Damage actually taken (Perception/Forecast/DamageIntake.h): per second over the last few
         // seconds, and the biggest spike within a short window. Value::TakenDps combines the
         // rate with the prediction from enemy melee.

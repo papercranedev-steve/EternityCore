@@ -140,6 +140,7 @@ namespace RescueValue
             }
             o.cost = Value::LostAction(world, victim, Value::GCD_SEC);
             o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world) + WIPE_NEXT_FIGHTS_SEC);
+            o.cost += Value::ResetCost(world, victim, a.reset, Value::FightRemainingSec(world) + WIPE_NEXT_FIGHTS_SEC);
             float const incoming = Value::IncomingOn(world, victim.guid);
             o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;
             return o;
@@ -182,6 +183,7 @@ namespace RescueValue
 
         o.cost = Value::LostAction(world, victim, Value::GCD_SEC) + ManaWorth::Points(world, victim, float(a.manaCost));
         o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world));
+        o.cost += Value::ResetCost(world, victim, a.reset, Value::FightRemainingSec(world));
 
         float const incoming = Value::IncomingOn(world, victim.guid);
         o.urgent = incoming > 0.0f && float(victim.health) / incoming < FADE_URGENT_SEC;

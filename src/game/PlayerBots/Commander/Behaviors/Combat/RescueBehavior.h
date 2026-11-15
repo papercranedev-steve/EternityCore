@@ -13,6 +13,9 @@
  *   ThreatDrop  CanTryToCastSpell on itself (Fade, Feign Death, Vanish), or on the enemy in
  *               sight (ThreatDropAbility::onTarget: Feint, Cower).
  *   Threat      nothing here: TargetBehavior attacks it.
+ * A Save or ThreatDrop spell on cooldown whose reset is ready (CooldownResetFacts: Cold Snap
+ * before Ice Block, Preparation before Vanish / Evasion; user 2026-11-15): the reset goes on
+ * first, in the same cast (BotAction::prepResets).
  * Tier Urgent when the duty is (the victim dies within the horizon), else Assigned;
  * value = the duty's net + one global cooldown, cost = that global cooldown (as the crowd
  * control behavior: the arbiter compares by net).
