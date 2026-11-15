@@ -49,6 +49,12 @@
  *   PlayerTarget  a player hits it (also NoMez: it would break anyway).
  *   NoHold     Tier Fodder or a trap swarm, not a self-destruct: damage dealers do not wait
  *              for the tank's threat on it.
+ *   AreaMayWake  Area tactic, InCluster, held by a bot's control that breaks on damage: the
+ *              area spells are not kept off it (TeamPlan::AreaKeepsUnbroken). Hit, it wakes and
+ *              joins the pile; missed, it sleeps until only controlled enemies are left
+ *              (ControlledEnd.h). Nobody wakes it on purpose (user 2026-11-15; before, the tank
+ *              was sent to wake it at once: strat-20261115-134307, it walked off the pile while
+ *              no area spell was coming and the ghoul went to the mage).
  *   The groups are stamps too, for the display.
  * Reads the pull and the retreat as their modules left them (this or the
  * last refresh: one refresh late does not matter here).

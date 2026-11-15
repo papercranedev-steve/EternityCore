@@ -23,12 +23,11 @@
  *   within W + that fight
  * Decided once per enemy (kept while it sleeps); notes tell the leader. The crowd control
  * assigner gives nobody a control on it meanwhile (no recast while waiting to wake it).
- * Area pile (since 2026-11-09, doctrine doc .kiro/docs/2026-11-09-doctrine 9): the doctrine
- * (TacticalDoctrine.h, registered before this module; a refresh late would do) chose Area for
- * the pile and is in Clash, and a pile enemy is held by a bot's control that breaks on damage
- * (a shackle from before the pull): the area spell avoids it as long as it sleeps. The main tank
- * wakes it now (the one nearest the tank first), no waiting. Taken before the case above.
- * A player's control is left alone.
+ * Area pile: nobody wakes a controlled enemy in it on purpose (user 2026-11-15). The doctrine
+ * stamps it AreaMayWake (TacticalDoctrine.h): the area spells go on, hit it wakes and joins
+ * the pile, missed it sleeps until the case above. From 2026-11-09 to 2026-11-15 the main tank
+ * was sent to wake it at once (strat-20261115-134307: it left the pile while no area spell was
+ * coming, and the woken ghoul went to the mage).
  * Execution: TargetAssigner gives the tank the enemy (forced, ControlEndPlan::why);
  * PartyBotAI::IsAssignedToBreakControl lets the tank (only the tank, only that enemy) pick it.
  */

@@ -208,7 +208,7 @@ namespace Commander
         {
             Unit* victim = bot->me->GetVictim();
             // Damage breaks crowd control (Polymorph, Sap, Shackle) on enemies around the tank:
-            // the plan's constraint (TeamPlan::KeepsUnbroken: breakable controls on them, or
+            // the plan's constraint (TeamPlan::AreaKeepsUnbroken: breakable controls on them, or
             // about to be put on them). A stun or fear that damage does not end is no reason.
             bool crowdControlNear = false;
             Position3 myPos;
@@ -217,7 +217,7 @@ namespace Commander
             myPos.z = bot->me->GetPositionZ();
             for (EnemyFacts const& e : world.enemies)
                 crowdControlNear = crowdControlNear ||
-                    (plan.KeepsUnbroken(e) && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
+                    (plan.AreaKeepsUnbroken(e) && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
             // A warrior's Thunder Clap from Defensive Stance is cast after a stance swap
             // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
             for (GroupThreatOption const& o : bot->Kit().AreaThreat())

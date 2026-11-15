@@ -122,13 +122,13 @@ namespace FightSpot
                 r.from = m.pos;
                 r.ticks = m.areaChannel.ticksLeft;
                 r.paid = true;
-                r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+                r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
                 AreaValue::Result const v = AreaValue::Evaluate(world, r);
                 ch.hereNet = v.valid ? std::max(0.0f, v.net) : 0.0f;
                 float const radius = spell->radius;
                 for (EnemyFacts const& e : world.enemies)
                 {
-                    if (e.victim != tank.guid || !e.acting || e.crowdControlled || !e.health || plan.KeepsUnbroken(e))
+                    if (e.victim != tank.guid || !e.acting || e.crowdControlled || !e.health || plan.AreaKeepsUnbroken(e))
                         continue;
                     float const dx = e.pos.x - r.centre.x, dy = e.pos.y - r.centre.y;
                     float const edge = std::sqrt(dx * dx + dy * dy) - e.boundingRadius;

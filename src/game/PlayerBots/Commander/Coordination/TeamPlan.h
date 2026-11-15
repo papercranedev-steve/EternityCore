@@ -946,6 +946,12 @@ namespace Commander
         // self-destruct, its own stamps decide): damage dealers hit it without waiting for the
         // tank's threat (DamageTargets::ThreatAllows, ThreatBehavior's stop).
         STAMP_NO_HOLD       = 1 << 19,
+        // Area pile (user 2026-11-15, strat-20261115-134307): held by a bot's control that breaks
+        // on damage, in the pile under the Area tactic. The area spells (and splash, chained hits)
+        // go on as if it were awake: hit, it wakes and joins the pile; missed, it sleeps until
+        // only controlled enemies are left (ControlledEnd.h). Single target damage still leaves
+        // it alone (TeamPlan::AreaKeepsUnbroken).
+        STAMP_AREA_MAY_WAKE = 1 << 20,
     };
 
     // An enemy the doctrine holds under a control so the fight is bearable (TacticCheck.h).
@@ -1250,6 +1256,12 @@ namespace Commander
             if (e.control.spellId && e.control.breaksOnDamage)
                 return true;
             return std::find(protectedEnemies.begin(), protectedEnemies.end(), e.guid) != protectedEnemies.end();
+        }
+        // The same for an area spell, a melee splash or a chained hit: the doctrine's area pile
+        // lets them wake a bot's control (STAMP_AREA_MAY_WAKE).
+        bool AreaKeepsUnbroken(EnemyFacts const& e) const
+        {
+            return KeepsUnbroken(e) && !doctrine.Has(e.guid, STAMP_AREA_MAY_WAKE);
         }
 
         // ---- Constraints (directive types doc, .kiro/docs/2026-11-07/2026-11-07-directive-types.md).

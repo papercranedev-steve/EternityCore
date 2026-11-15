@@ -258,7 +258,7 @@ namespace Commander
                 r.centre = spell->onTarget ? at : m->pos;
                 r.from = m->pos;
                 r.settle = false;
-                r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+                r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
 
                 // Its spot (a ground channel).
                 if (spell->onTarget && spell->channel)
@@ -631,7 +631,7 @@ namespace Commander
         std::vector<ObjectGuid> busy;
         if (plan.fightSpot.moving)
             busy.push_back(plan.fightSpot.tank);
-        std::function<bool(EnemyFacts const&)> const forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+        std::function<bool(EnemyFacts const&)> const forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
         Planned planned;
 
         // 1. The channels running: each one is its caster's spell.

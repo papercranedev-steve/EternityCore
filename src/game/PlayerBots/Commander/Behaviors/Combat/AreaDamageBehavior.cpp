@@ -107,7 +107,7 @@ namespace Commander
             r.paid = true;
             if (plan.fightSpot.moving)
                 r.turn.busyTanks.push_back(plan.fightSpot.tank);
-            r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+            r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
             out = AreaValue::Evaluate(world, r);
             return out.valid;
         }

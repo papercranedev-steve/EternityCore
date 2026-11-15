@@ -397,7 +397,14 @@ namespace Commander
                     x.noMezWhy = why;
             };
             if (d.tactic == PileTactic::Area && (x.stamps & STAMP_IN_CLUSTER))
+            {
                 noMez("area pile");
+                // Not woken on purpose: the area spells may take it (a player's sheep is kept).
+                if (e->control.spellId && e->control.breaksOnDamage)
+                    if (PartyMemberFacts const* caster = world.FindMember(e->control.caster))
+                        if (caster->isBot)
+                            x.stamps |= STAMP_AREA_MAY_WAKE;
+            }
             if (Tier(x.tier) == Tier::Fodder)
                 noMez("fodder");
             if (d.phase == FightPhase::Cleanup)
@@ -506,6 +513,7 @@ namespace Commander
         if (d.stamps & STAMP_DPS_ONLY)      s += ", left to the damage dealers";
         if (d.stamps & STAMP_MUST_CONTROL)  s += ", must be held (not bearable otherwise)";
         if (d.stamps & STAMP_NO_HOLD)       s += ", no tank hold";
+        if (d.stamps & STAMP_AREA_MAY_WAKE) s += ", area spells may wake it";
         return s;
     }
 }

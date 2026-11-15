@@ -34,7 +34,8 @@ namespace Commander
             return p;
         }
 
-        // An enemy the plan keeps within `radius` of `centre` (its edge), `except` left out.
+        // An enemy the plan keeps from area hits (TeamPlan::AreaKeepsUnbroken) within `radius`
+        // of `centre` (its edge), `except` left out.
         bool KeptNear(WorldModel const& world, TeamPlan const& plan, ObjectGuid self, Position3 const& centre,
                       float radius, ObjectGuid except, uint32 nowMs)
         {
@@ -42,7 +43,7 @@ namespace Commander
             {
                 if (!e.acting || e.guid == except || PackResolver::Distance(centre, e.pos) - e.boundingRadius > radius)
                     continue;
-                if (WakesKept(plan, self, e, nowMs))
+                if (plan.AreaKeepsUnbroken(e) && !plan.controlEnd.Breaks(self, e.guid, nowMs))
                     return true;
             }
             return false;
