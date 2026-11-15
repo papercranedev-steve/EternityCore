@@ -40,9 +40,6 @@ namespace Commander
             float const gain = self.tapManaPerCast;
             if (float(self.maxMana) - mana < gain)
                 return;
-            float const manaPct = mana * 100.0f / float(self.maxMana);
-            if (manaPct >= (healed ? HealthTradeBehavior::TAP_MANA_PCT : HealthTradeBehavior::TAP_MANA_ALONE_PCT))
-                return;
 
             float const fillerCost = DamageSpells::ManaCost(me, filler);
             bool const dry = mana < fillerCost;
@@ -61,16 +58,15 @@ namespace Commander
             if (!bot->CanTryToCastSpell(me, tap))
                 return;
 
-            // Seconds of filler casting the mana pays for.
+            // Seconds of filler casting the mana adds before the fight ends: nothing while the
+            // mana it has lasts the fight (tap when it is needed, not to keep it topped).
             float const spend = fillerCost / DamageSpells::BusySec(me, filler) - self.manaRegenCasting;
             if (spend <= 0.0f)
                 return;
-            float paidSec = gain / spend;
-            if (!healed)
-            {
-                float const fightSec = Value::FightRemainingSec(world);
-                paidSec = std::max(0.0f, std::min(fightSec, (mana + gain) / spend) - std::min(fightSec, mana / spend));
-            }
+            float const fightSec = Value::FightRemainingSec(world);
+            float const paidSec = std::min(fightSec, (mana + gain) / spend) - std::min(fightSec, mana / spend);
+            if (paidSec <= 0.0f)
+                return;
 
             Proposal p;
             p.tier = ProposalTier::Routine;
