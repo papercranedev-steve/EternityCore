@@ -405,9 +405,13 @@ namespace Commander
                         if (caster->isBot)
                             x.stamps |= STAMP_AREA_MAY_WAKE;
             }
+            uint32 const othersFree = free - (IsFree(*e) ? 1 : 0);
             if (Tier(x.tier) == Tier::Fodder)
                 noMez("fodder");
-            if (d.phase == FightPhase::Cleanup)
+            // A doctrine hold (TacticCheck.h) stays while another enemy is still fought: holding
+            // it is what brought the fight down to cleanup (log 11-15 183927: the hold dropped the
+            // moment its shackle landed). The last one left is fought.
+            if (d.phase == FightPhase::Cleanup && !(prev.HoldOn(x.guid) && othersFree > 0))
                 noMez("cleanup");
             for (PartyMemberFacts const& m : world.party)
                 if (!m.isBot && !m.isPet && m.alive && m.victim == e->guid)
@@ -418,7 +422,6 @@ namespace Commander
             RoleStamps::Apply(world, *e, x);
             if ((Tier(x.tier) == Tier::Fodder || (x.stamps & STAMP_SWARM)) && !(x.stamps & STAMP_SELF_DESTRUCT))
                 x.stamps |= STAMP_NO_HOLD;
-            uint32 const othersFree = free - (IsFree(*e) ? 1 : 0);
             if (!(x.stamps & STAMP_NO_MEZ) && othersFree > 0 && HeldByBot(world, *e))
                 x.stamps |= STAMP_COMMITTED;
         }

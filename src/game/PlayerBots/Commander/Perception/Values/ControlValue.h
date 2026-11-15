@@ -139,6 +139,9 @@ namespace ControlValue
         uint32 castMs = 0;
         bool ready = false;
         bool areaDealer = false;    // the bot has area spells (the doctrine prefers other controllers)
+        // ControlAbility::holding: a one target spell on (or landing on) this enemy now; cast on
+        // another one it frees this one.
+        ObjectGuid holding;
     };
     std::vector<Option> OptionsFor(WorldModel const& world, uint32 entry, uint32 creatureTypeMask);
 

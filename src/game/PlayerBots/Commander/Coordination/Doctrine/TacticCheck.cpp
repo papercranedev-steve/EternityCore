@@ -162,7 +162,11 @@ namespace TacticCheck
                             for (ControlValue::Option const& o : ControlValue::OptionsFor(world, e->entry, e->creatureTypeMask))
                             {
                                 PartyMemberFacts const* b = world.FindMember(o.bot);
-                                if (!o.ready || o.areaDealer != areaDealers || o.kind == ControlKind::Fear ||
+                                // A one target spell already on another enemy: casting it here frees
+                                // that one, which the estimate does not count (log 11-15 183927: the
+                                // shackle went from the banshee to a gargoyle, the banshee came out).
+                                bool const busy = !o.holding.IsEmpty() && o.holding != e->guid;
+                                if (!o.ready || busy || o.areaDealer != areaDealers || o.kind == ControlKind::Fear ||
                                     (noMez && o.kind != ControlKind::Hold) || !b || Tanks::IsTank(*b) || d.HoldBy(o.bot))
                                     continue;
                                 Pick p;

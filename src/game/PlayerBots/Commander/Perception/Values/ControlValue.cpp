@@ -309,6 +309,8 @@ namespace ControlValue
                 o.castMs = a.castMs;
                 o.ready = a.ready && m.CanAct();
                 o.areaDealer = !m.areaSpells.empty();
+                if (a.oneTarget)
+                    o.holding = a.holding;
                 out.push_back(o);
             }
         }

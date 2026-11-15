@@ -7,7 +7,8 @@
  * Kept holds (from the last refresh): dropped when the enemy is gone (a planned patrol hold:
  * also while it is still walking, WorldModel::patrols), the controller cannot act or no longer
  * has the spell, or the enemy is stamped NoMez and the hold is not a Hold kind control (it walked
- * into the area pile, a player hits it). A resisted cast is not a drop: the controller casts again
+ * into the area pile, a player hits it; cleanup only once no other enemy is free, TacticalDoctrine
+ * stamps). A resisted cast is not a drop: the controller casts again
  * (it is its task). A drop is a reselect event.
  *
  * The check, at a reselect event (first choice, an enemy not known before, a dropped hold):
@@ -15,7 +16,8 @@
  *   done. Else, one at a time, the hold that raises FightLoad::Score the most, until bearable:
  *   enemies   acting, free, no hold yet; not a swarm, a self-destruct, fodder or a player's target;
  *   controls  ControlValue::OptionsFor: ready, not a fear (it scatters the fight), not the tank's,
- *             at most one hold per bot; on an enemy stamped NoMez (the area pile) only a Hold kind
+ *             at most one hold per bot, not a one target spell that holds another enemy now (it
+ *             would free that one); on an enemy stamped NoMez (the area pile) only a Hold kind
  *             (stun, banish: damage does not end it);
  *   who       bots without area spells first; the area dealers only when none of those helps
  *             (user 2026-11-13);
