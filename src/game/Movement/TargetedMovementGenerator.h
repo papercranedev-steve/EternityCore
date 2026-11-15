@@ -21,6 +21,7 @@
 
 #include "MovementGenerator.h"
 #include "FollowerReference.h"
+#include "FollowStyle.h"
 #include "PathFinder.h"
 #include "Unit.h"
 
@@ -137,7 +138,19 @@ class FollowMovementGenerator : public TargetedMovementGeneratorMedium<T, Follow
             : TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >(target){}
         FollowMovementGenerator(Unit &target, float offset, float angle)
             : TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >(target, offset, angle) {}
+        // FollowStyle.h: human-like start, stop and facing.
+        FollowMovementGenerator(Unit &target, float offset, float angle, FollowStyle const& style)
+            : TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >(target, offset, angle),
+              m_style(style), m_styled(true), m_heading(style.heading),
+              m_headingX(target.GetPositionX()), m_headingY(target.GetPositionY()) {}
         ~FollowMovementGenerator() {}
+
+        bool HasStyle() const { return m_styled; }
+        // The leader's direction of travel the offset angle is measured from (with a style).
+        float GetHeading() const { return m_heading; }
+        float GetOffset() const { return m_fOffset; }
+        float GetAngle() const { return m_fAngle; }
+        bool IsFarEnoughToMoveStationaryFollower(T &) const;
 
         MovementGeneratorType GetMovementGeneratorType() const { return FOLLOW_MOTION_TYPE; }
 
@@ -156,6 +169,22 @@ class FollowMovementGenerator : public TargetedMovementGeneratorMedium<T, Follow
     private:
         void _updateSpeed(T &u);
         void _setTargetLocation(T &) final;
+        // FollowStyle: track the leader's direction of travel, delay a standing start, turn
+        // a standing follower to the leader.
+        void UpdateHeading();
+        // Called every update; `targetMoved` on the distance checks that saw the leader move.
+        bool StartNow(T &, uint32 diff, bool targetMoved);
+        void UpdateIdleFacing(T &, uint32 diff);
+
+        FollowStyle m_style;
+        bool m_styled = false;
+        bool m_forceMove = false;   // first move of this generator
+        bool m_noEarlyStop = false; // that move runs to its end (the caller moved the offset)
+        float m_heading = 0.0f;
+        float m_headingX = 0.0f;
+        float m_headingY = 0.0f;
+        int32 m_reactLeftMs = -1;   // -1: not waiting
+        int32 m_faceLeftMs = -1;
 
         // Needed to compile with gcc for some reason.
         using TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >::i_target;

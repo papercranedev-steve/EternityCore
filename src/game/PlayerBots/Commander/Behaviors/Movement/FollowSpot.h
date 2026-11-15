@@ -9,10 +9,10 @@
  *
  * An offset is safe when, for every idle creature's aggro range + FOLLOW_MARGIN (SafeRoute /
  * AggroRange.h, line of sight included), none covers:
- *  - the follow point (leader position, offset at leader facing + angle, as
+ *  - the follow point (leader position, offset at heading + angle, as
  *    FollowMovementGenerator computes it, on the ground there) and SPOT_SPREAD around it (line
  *    of sight changes within a step at a cell door; the margin only widens the distance);
- *  - while the leader moves, the follow points every LEAD_STEP_SEC along its facing up to
+ *  - while the leader moves, the follow points every LEAD_STEP_SEC along the heading up to
  *    `lookaheadSec` (one bot update plus the generator's FOLLOW_EXTRAPOLATION_SEC: the bot
  *    runs to where the leader will be);
  *  - the walk from the bot to the current follow point, every PATH_SAMPLE_STEP: the straight
@@ -33,7 +33,7 @@
  * Cost: one grid scan around the leader, then per tested point a cell lookup, a distance check
  * per idle creature and a line of sight check only for creatures in range, and at most
  * MAX_PATH_CHECKS pathfinding calls. PartyBotAI calls it when it starts following and then each
- * bot update while the leader moved FOLLOW_RECHECK_DIST or turned FOLLOW_RECHECK_TURN since the
+ * bot update while the leader moved FOLLOW_RECHECK_DIST or its heading turned FOLLOW_RECHECK_TURN since the
  * last check, or NeedsRecheck (a patrol coming to the follow point of a leader standing still).
  * Candidates are only tried when the current offset is unsafe. Map thread of the bot.
  */
@@ -79,7 +79,9 @@ namespace FollowSpot
     float const STRAIGHT_WALK_DIST = 8.0f;
     uint32 const MAX_PATH_CHECKS = 4;
 
-    // MoveFollow parameters: distance from the leader and angle from its facing.
+    // MoveFollow parameters: distance from the leader and angle from `heading`, the direction
+    // the generator measures it from (HumanFollow::Heading: the leader's direction of travel
+    // with a FollowStyle, its facing without).
     struct Offset
     {
         float dist = 0.0f;
@@ -87,14 +89,14 @@ namespace FollowSpot
     };
 
     // Where FollowMovementGenerator sends `me` for this offset with the leader where it is now.
-    Position3 PointOf(Player const* me, Unit const* leader, Offset const& o);
+    Position3 PointOf(Player const* me, Unit const* leader, Offset const& o, float heading);
 
     // `current` when it is safe; else the safe candidate closest in angle; else behind the leader.
-    Offset Choose(Player* me, Unit const* leader, Offset const& current, float lookaheadSec);
+    Offset Choose(Player* me, Unit const* leader, Offset const& current, float lookaheadSec, float heading);
 
     // The follow point of `current` (leader where it is now) is not clear in the party's
     // position field: Choose again even though the leader did not move.
-    bool NeedsRecheck(Player const* me, Unit const* leader, Offset const& current);
+    bool NeedsRecheck(Player const* me, Unit const* leader, Offset const& current, float heading);
 
     // Smallest difference between two angles, 0..pi.
     float AngleGap(float a, float b);

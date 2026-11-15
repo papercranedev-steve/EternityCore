@@ -394,6 +394,7 @@ set (game_SRCS
     Movement/FleeingMovementGenerator.h
     Movement/FollowerReference.h
     Movement/FollowerRefManager.h
+    Movement/FollowStyle.h
     Movement/HomeMovementGenerator.h
     Movement/IdleMovementGenerator.h
     Movement/MotionMaster.h

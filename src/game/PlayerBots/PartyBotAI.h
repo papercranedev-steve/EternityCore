@@ -252,13 +252,15 @@ public:
     void StopTakenOverMovement();
     // Swinging at a victim in reach while standing still and not facing it: turn to it (UpdateAI).
     void FaceMeleeVictim(Unit* pVictim);
-    // Follow the leader (UpdateAI): an offset out of idle creatures' aggro range
-    // (Commander/Behaviors/Movement/FollowSpot.h); on a transport the original random offset.
+    // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/
+    // HumanFollow.h), moved out of idle creatures' aggro range (FollowSpot.h); on a transport
+    // the original random offset.
     void StartFollowing(Unit* pLeader);
-    // While following: re-check the follow point after the leader moved or turned enough.
+    // While following: re-check the follow point after the leader moved or its heading turned enough.
     void KeepFollowSpotSafe(Unit* pLeader);
     bool UsesSafeFollow() const;
-    Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader);
+    Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader, float heading);
+    void IssueFollow(Unit* pLeader, float heading);
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
@@ -326,7 +328,7 @@ public:
         bool returned = false;      // seen inside again after the hold: no more out-of-reach steps
     };
     mutable HazardGiveUp m_hazardGiveUp;
-    // Follow offset given to MoveFollow, and the leader position / facing of its last safety check.
+    // Follow offset given to MoveFollow, and the leader position / heading of its last safety check.
     Commander::FollowSpot::Offset m_followOffset;
     float m_followCheckX = 0.0f;
     float m_followCheckY = 0.0f;

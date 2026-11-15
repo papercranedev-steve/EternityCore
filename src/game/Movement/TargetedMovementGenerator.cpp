@@ -39,6 +39,14 @@ bool TargetedMovementGeneratorMedium<T, D>::IsFarEnoughToMoveStationaryFollower(
     return !i_target->IsWithinDist(&owner, 1.4f * m_fOffset);
 }
 
+template<class T>
+bool FollowMovementGenerator<T>::IsFarEnoughToMoveStationaryFollower(T &owner) const
+{
+    if (!m_styled)
+        return TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >::IsFarEnoughToMoveStationaryFollower(owner);
+    return !i_target->IsWithinDist(&owner, m_fOffset + m_style.startSlack);
+}
+
 template<>
 void TargetedMovementGeneratorMedium<Player, ChaseMovementGenerator<Player> >::UpdateFinalDistance(float /*fDistance*/)
 {
@@ -605,8 +613,14 @@ void FollowMovementGenerator<T>::_setTargetLocation(T &owner)
 
 
     // prevent redundant micro-movement for pets, other followers.
-    if (!i_target->IsMoving() && owner.movespline->Finalized() && !this->IsFarEnoughToMoveStationaryFollower(owner))
+    // (FollowStyle: a standing follower also stays while a moving leader is within the band,
+    // except for the first move of the generator)
+    bool const forced = m_forceMove;
+    m_forceMove = false;
+    if (!forced && (!i_target->IsMoving() || m_styled) && owner.movespline->Finalized() && !this->IsFarEnoughToMoveStationaryFollower(owner))
         return;
+    if (forced)
+        m_noEarlyStop = true;
 
     // to at m_fOffset distance from target and m_fAngle from target facing
     float srcX, srcY, srcZ;
@@ -629,6 +643,8 @@ void FollowMovementGenerator<T>::_setTargetLocation(T &owner)
             i_target->GetPosition(x, y, z);
             o = i_target->GetOrientation();
         }
+        if (m_styled)
+            o = m_heading;
 
         i_target->GetNearPointAroundPosition(&owner, x, y, z, owner.GetObjectBoundingRadius(), m_fOffset, o + m_fAngle);
     }
@@ -686,9 +702,67 @@ void FollowMovementGenerator<T>::_setTargetLocation(T &owner)
     else
         init.SetWalk(dist < 2.0f);
 
-    init.SetFacing(i_target->GetOrientation());
+    // (FollowStyle with a face arc: the follower keeps the direction it ran in, UpdateIdleFacing)
+    if (!m_styled || m_style.faceArc <= 0.0f)
+        init.SetFacing(i_target->GetOrientation());
     init.Launch();
     m_checkDistanceTimer.Reset(500);
+}
+
+template<class T>
+void FollowMovementGenerator<T>::UpdateHeading()
+{
+    float const dx = i_target->GetPositionX() - m_headingX;
+    float const dy = i_target->GetPositionY() - m_headingY;
+    if (dx * dx + dy * dy < FollowStyle::HEADING_STEP * FollowStyle::HEADING_STEP)
+        return;
+    m_heading = std::atan2(dy, dx);
+    m_headingX = i_target->GetPositionX();
+    m_headingY = i_target->GetPositionY();
+}
+
+template<class T>
+bool FollowMovementGenerator<T>::StartNow(T &owner, uint32 diff, bool targetMoved)
+{
+    // A follower already moving keeps up at once; a standing one waits for the leader to leave
+    // the band, then reacts after its delay.
+    if (!owner.movespline->Finalized())
+    {
+        m_reactLeftMs = -1;
+        return targetMoved;
+    }
+    if (m_reactLeftMs < 0)
+    {
+        if (targetMoved && this->IsFarEnoughToMoveStationaryFollower(owner))
+            m_reactLeftMs = int32(m_style.reactionMs * frand(1.0f - FollowStyle::REACTION_JITTER, 1.0f + FollowStyle::REACTION_JITTER));
+        return false;
+    }
+    m_reactLeftMs -= int32(diff);
+    if (m_reactLeftMs > 0)
+        return false;
+    m_reactLeftMs = -1;
+    return true;
+}
+
+template<class T>
+void FollowMovementGenerator<T>::UpdateIdleFacing(T &owner, uint32 diff)
+{
+    Unit const* leader = i_target.getTarget();
+    if (owner.HasInArc(leader, m_style.faceArc) || owner.IsWithinDist(leader, 0.5f))
+    {
+        m_faceLeftMs = -1;
+        return;
+    }
+    if (m_faceLeftMs < 0)
+    {
+        m_faceLeftMs = int32(m_style.turnDelayMs * frand(1.0f - FollowStyle::REACTION_JITTER, 1.0f + FollowStyle::REACTION_JITTER));
+        return;
+    }
+    m_faceLeftMs -= int32(diff);
+    if (m_faceLeftMs > 0)
+        return;
+    m_faceLeftMs = -1;
+    owner.SetFacingToObject(leader);
 }
 
 template<class T>
@@ -722,24 +796,34 @@ bool FollowMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
         return true;
     }
 
+    if (m_styled)
+        UpdateHeading();
+
     bool interrupted = false;
+    bool targetMoved = false;
     m_checkDistanceTimer.Update(time_diff);
     if (m_checkDistanceTimer.Passed())
     {
         m_checkDistanceTimer.Reset(100);
+        float const stopDist = m_fOffset + owner.GetObjectBoundingRadius() + i_target->GetObjectBoundingRadius() +
+                               (m_styled ? m_style.stopSlack : 0.5f);
+        // FollowStyle: once the leader stops, stop wherever within the band, not on the point
+        // (unless this is the move to a new offset).
+        bool const styledStop = m_styled && !m_noEarlyStop && !owner.movespline->Finalized() &&
+                                !i_target->IsMoving() && i_target->movespline->Finalized() &&
+                                Geometry::GetDistance3D(owner.GetPosition(), i_target->GetPosition()) <= stopDist;
         //More distance let have better performance, less distance let have more sensitive reaction at target move.
-        if (!owner.movespline->Finalized() &&
+        if (styledStop || (!owner.movespline->Finalized() &&
                  ((!m_fOffset && i_target->IsWithinDist(&owner, 0.0f)) ||
                  (i_target->IsPlayer() && !i_target->IsMoving() &&
-                 Geometry::GetDistance3D(owner.movespline->FinalDestination(), i_target->GetPosition()) > (m_fOffset + owner.GetObjectBoundingRadius() + i_target->GetObjectBoundingRadius() + 0.5f) &&
-                 Geometry::GetDistance3D(owner.GetPosition(), i_target->GetPosition()) <= (m_fOffset + owner.GetObjectBoundingRadius() + i_target->GetObjectBoundingRadius() + 0.5f))))
+                 Geometry::GetDistance3D(owner.movespline->FinalDestination(), i_target->GetPosition()) > stopDist &&
+                 Geometry::GetDistance3D(owner.GetPosition(), i_target->GetPosition()) <= stopDist))))
         {
             owner.movespline->_Interrupt();
             interrupted = true;
         }
         else
         {
-            bool targetMoved = false;
             G3D::Vector3 dest(m_fTargetLastX, m_fTargetLastY, m_fTargetLastZ);
             if (GenericTransport* ownerTransport = owner.GetTransport())
             {
@@ -758,7 +842,7 @@ bool FollowMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
             if (!targetMoved && owner.movespline->Finalized())
                 targetMoved = this->IsFarEnoughToMoveStationaryFollower(owner);
 
-            if (targetMoved)
+            if (targetMoved && !m_styled)
             {
                 m_bRecalculateTravel = true;
                 owner.GetMotionMaster()->SetNeedAsyncUpdate();
@@ -766,11 +850,21 @@ bool FollowMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
         }
     }
 
+    // (FollowStyle: a standing follower reacts after its delay; StartNow counts it every update)
+    if (m_styled && !interrupted && StartNow(owner, time_diff, targetMoved))
+    {
+        m_bRecalculateTravel = true;
+        owner.GetMotionMaster()->SetNeedAsyncUpdate();
+    }
+
     if (owner.movespline->Finalized())
     {
         MovementInform(owner);
+        m_noEarlyStop = false;
 
-        if (m_fAngle == 0.f && !owner.HasInArc(i_target.getTarget(), 0.01f))
+        if (m_styled && m_style.faceArc > 0.0f)
+            UpdateIdleFacing(owner, time_diff);
+        else if (m_fAngle == 0.f && !owner.HasInArc(i_target.getTarget(), 0.01f))
             owner.SetInFront(i_target.getTarget());
 
         if (!m_bTargetReached)
@@ -821,6 +915,7 @@ void FollowMovementGenerator<Player>::Initialize(Player &owner)
 {
     owner.AddUnitState(UNIT_STATE_FOLLOW | UNIT_STATE_FOLLOW_MOVE);
     _updateSpeed(owner);
+    m_forceMove = m_styled;
     _setTargetLocation(owner);
 }
 
@@ -829,6 +924,7 @@ void FollowMovementGenerator<Creature>::Initialize(Creature &owner)
 {
     owner.AddUnitState(UNIT_STATE_FOLLOW | UNIT_STATE_FOLLOW_MOVE);
     _updateSpeed(owner);
+    m_forceMove = m_styled;
     _setTargetLocation(owner);
 }
 

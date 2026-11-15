@@ -23,12 +23,12 @@ namespace FollowSpot
             float x, y, z, o;
         };
 
-        // Where the leader is now and, while it moves, every LEAD_STEP_SEC along its facing
+        // Where the leader is now and, while it moves, every LEAD_STEP_SEC along `heading`
         // up to `lookaheadSec` (the follow generator runs ahead of a moving leader too).
-        std::vector<LeaderAt> LeaderTrack(Unit const* leader, float lookaheadSec)
+        std::vector<LeaderAt> LeaderTrack(Unit const* leader, float lookaheadSec, float heading)
         {
             std::vector<LeaderAt> track;
-            LeaderAt const now{ leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), leader->GetOrientation() };
+            LeaderAt const now{ leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), heading };
             track.push_back(now);
             // (movement flags: a client; spline: a character moved by the server)
             if (!leader->IsMoving() && leader->movespline->Finalized())
@@ -135,10 +135,10 @@ namespace FollowSpot
         // cells CELL_MIN_DIST..CELL_MAX_DIST from the leader that are clear (FieldClear,
         // standable), closest to straight behind first. Without: the fixed CANDIDATE_STEPS x
         // CANDIDATE_DISTS behind the leader.
-        std::vector<Offset> Candidates(Player const* me, Unit const* leader, FieldView const& view)
+        std::vector<Offset> Candidates(Player const* me, Unit const* leader, FieldView const& view, float heading)
         {
             std::vector<Offset> out;
-            float const lx = leader->GetPositionX(), ly = leader->GetPositionY(), lo = leader->GetOrientation();
+            float const lx = leader->GetPositionX(), ly = leader->GetPositionY(), lo = heading;
             if (view.field)
             {
                 struct Cell
@@ -206,20 +206,20 @@ namespace FollowSpot
         return d > float(M_PI) ? 2.0f * float(M_PI) - d : d;
     }
 
-    Position3 PointOf(Player const* me, Unit const* leader, Offset const& o)
+    Position3 PointOf(Player const* me, Unit const* leader, Offset const& o, float heading)
     {
-        LeaderAt const at{ leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), leader->GetOrientation() };
+        LeaderAt const at{ leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), heading };
         return PointAt(me, leader, at, o);
     }
 
-    Offset Choose(Player* me, Unit const* leader, Offset const& current, float lookaheadSec)
+    Offset Choose(Player* me, Unit const* leader, Offset const& current, float lookaheadSec, float heading)
     {
         FieldView const view = ViewOf(me);
         SafeRoute::IdleCreatures const idle(me, leader, FOLLOW_MARGIN);
         // (a patrol far off is not an idle creature near us yet, but its route may be)
         if (idle.Empty() && !view.field)
             return current;
-        std::vector<LeaderAt> const track = LeaderTrack(leader, lookaheadSec);
+        std::vector<LeaderAt> const track = LeaderTrack(leader, lookaheadSec, heading);
         uint32 pathChecks = 0;
         if (PointsAreSafe(me, leader, track, idle, view, current) &&
             WalkIsSafe(me, leader, track, idle, current, pathChecks))
@@ -228,7 +228,7 @@ namespace FollowSpot
         // Behind the leader first, then turning to the sides: the leader has just walked
         // there, ahead nobody has looked yet.
         uint32 tried = 0;
-        for (Offset const& o : Candidates(me, leader, view))
+        for (Offset const& o : Candidates(me, leader, view, heading))
         {
             if (pathChecks >= MAX_PATH_CHECKS || tried >= MAX_CANDIDATES)
                 break;
@@ -239,10 +239,10 @@ namespace FollowSpot
         return Offset{ FALLBACK_DIST, float(M_PI) };
     }
 
-    bool NeedsRecheck(Player const* me, Unit const* leader, Offset const& current)
+    bool NeedsRecheck(Player const* me, Unit const* leader, Offset const& current, float heading)
     {
         FieldView const view = ViewOf(me);
-        return view.field && !FieldClear(view, PointOf(me, leader, current));
+        return view.field && !FieldClear(view, PointOf(me, leader, current, heading));
     }
 }
 }

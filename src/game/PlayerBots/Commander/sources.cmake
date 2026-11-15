@@ -276,6 +276,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/SapValue.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/FollowSpot.h
   ${COMMANDER_DIR}/Behaviors/Movement/FollowSpot.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/HumanFollow.h
+  ${COMMANDER_DIR}/Behaviors/Movement/HumanFollow.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/HealerStanceBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/HealerStanceBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RangedStanceBehavior.h

@@ -38,6 +38,7 @@
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
+#include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
@@ -374,27 +375,44 @@ bool PartyBotAI::UsesSafeFollow() const
     return !me->GetTransport();
 }
 
-Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader)
+Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader, float heading)
 {
     // The next check is one bot update away, and the follow generator runs ahead of the leader.
     float const lookaheadSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f + Commander::FollowSpot::FOLLOW_EXTRAPOLATION_SEC;
-    return Commander::FollowSpot::Choose(me, pLeader, m_followOffset, lookaheadSec);
+    return Commander::FollowSpot::Choose(me, pLeader, m_followOffset, lookaheadSec, heading);
+}
+
+void PartyBotAI::IssueFollow(Unit* pLeader, float heading)
+{
+    // (on a transport: the original follow, the offset at the leader's facing)
+    if (UsesSafeFollow())
+        me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle,
+                                          Commander::HumanFollow::StyleOf(me, heading));
+    else
+        me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle);
 }
 
 void PartyBotAI::StartFollowing(Unit* pLeader)
 {
-    m_followOffset.dist = urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
-    m_followOffset.angle = frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE);
     m_followChecked = false;
+    float const heading = Commander::HumanFollow::Heading(me, pLeader);
     if (UsesSafeFollow())
     {
-        m_followOffset = ChooseFollowOffset(pLeader);
+        // Fix: a random 3-6 yd at a random angle all around the leader (also in front of him)
+        // and the same start, stop and turn for every bot: the bot's own place behind him.
+        m_followOffset = Commander::HumanFollow::Of(me).offset;
+        m_followOffset = ChooseFollowOffset(pLeader, heading);
         m_followCheckX = pLeader->GetPositionX();
         m_followCheckY = pLeader->GetPositionY();
-        m_followCheckO = pLeader->GetOrientation();
+        m_followCheckO = heading;
         m_followChecked = true;
     }
-    me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle);
+    else
+    {
+        m_followOffset.dist = urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
+        m_followOffset.angle = frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE);
+    }
+    IssueFollow(pLeader, heading);
 }
 
 void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
@@ -408,6 +426,7 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
         return;
     }
 
+    float const heading = Commander::HumanFollow::Heading(me, pLeader);
     if (m_followChecked)
     {
         float const dx = pLeader->GetPositionX() - m_followCheckX;
@@ -415,21 +434,21 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
         float const recheck = Commander::FollowSpot::FOLLOW_RECHECK_DIST;
         // (a leader standing still: a patrol may still come to the follow point)
         if (dx * dx + dy * dy < recheck * recheck &&
-            Commander::FollowSpot::AngleGap(pLeader->GetOrientation(), m_followCheckO) < Commander::FollowSpot::FOLLOW_RECHECK_TURN &&
-            !Commander::FollowSpot::NeedsRecheck(me, pLeader, m_followOffset))
+            Commander::FollowSpot::AngleGap(heading, m_followCheckO) < Commander::FollowSpot::FOLLOW_RECHECK_TURN &&
+            !Commander::FollowSpot::NeedsRecheck(me, pLeader, m_followOffset, heading))
             return;
     }
 
     m_followCheckX = pLeader->GetPositionX();
     m_followCheckY = pLeader->GetPositionY();
-    m_followCheckO = pLeader->GetOrientation();
+    m_followCheckO = heading;
     m_followChecked = true;
 
-    Commander::FollowSpot::Offset const o = ChooseFollowOffset(pLeader);
+    Commander::FollowSpot::Offset const o = ChooseFollowOffset(pLeader, heading);
     if (o.dist == m_followOffset.dist && o.angle == m_followOffset.angle)
         return;
     m_followOffset = o;
-    me->GetMotionMaster()->MoveFollow(pLeader, o.dist, o.angle);
+    IssueFollow(pLeader, heading);
 }
 
 void PartyBotAI::BeginChasing(Unit* pVictim) const

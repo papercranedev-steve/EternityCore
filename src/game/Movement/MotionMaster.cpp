@@ -463,6 +463,22 @@ void MotionMaster::MoveFollow(Unit* target, float dist, float angle)
         Mutate(new FollowMovementGenerator<Creature>(*target, dist, angle));
 }
 
+void MotionMaster::MoveFollow(Unit* target, float dist, float angle, FollowStyle const& style)
+{
+    if (m_owner->HasUnitState(UNIT_STATE_LOST_CONTROL))
+        return;
+
+    Clear();
+
+    if (!target)
+        return;
+
+    if (m_owner->IsPlayer())
+        Mutate(new FollowMovementGenerator<Player>(*target, dist, angle, style));
+    else
+        Mutate(new FollowMovementGenerator<Creature>(*target, dist, angle, style));
+}
+
 void MotionMaster::MovePoint(uint32 id, float x, float y, float z, uint32 options, float speed, float finalOrientation)
 {
     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted point (Id: %u X: %f Y: %f Z: %f)", m_owner->GetGuidStr().c_str(), id, x, y, z);
