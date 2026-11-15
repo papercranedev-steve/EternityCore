@@ -75,6 +75,12 @@ public:
     // Role changed by the party assignment (stays unlocked). Spell data rebuilt on the next tick.
     void AssignRole(CombatBotRoles role);
     bool IsRoleLocked() const { return m_roleLocked; }
+    // Contingencies (Commander CrisisAssigner, user 2026-11-15): a role for the rest of this
+    // fight (a stand-in tank, a spare healer), also over a locked role; the role before is kept
+    // and given back by RestoreRole (the lock is never touched). Spell data rebuilt next tick.
+    void SetEmergencyRole(CombatBotRoles role);
+    void RestoreRole();
+    bool HasEmergencyRole() const { return m_roleBeforeEmergency != ROLE_INVALID; }
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
     // Seconds until CanTryToCastSpell would pass when only the spell's cooldown, the global
@@ -335,6 +341,8 @@ public:
     // The role was chosen by the user (.partybot setrole / load / add with a role, addbot with a
     // role); false = auto, the Commander party assignment may change it.
     bool m_roleLocked = false;
+    // The role before SetEmergencyRole, ROLE_INVALID = no emergency role.
+    CombatBotRoles m_roleBeforeEmergency = ROLE_INVALID;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
     // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.

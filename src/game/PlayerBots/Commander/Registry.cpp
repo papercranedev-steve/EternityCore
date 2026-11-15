@@ -58,6 +58,7 @@
 #include "Commander/Coordination/Duties/TargetAssigner.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
+#include "Commander/Coordination/Situation/Crisis/CrisisAssigner.h"
 #include "Commander/Coordination/Situation/RoleAssigner.h"
 
 namespace Commander
@@ -125,6 +126,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<JudgementAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CurseAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ControlledEndAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrisisAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FightSpotAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));

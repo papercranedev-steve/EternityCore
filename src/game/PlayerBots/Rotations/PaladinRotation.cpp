@@ -80,6 +80,11 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
+            // Made the tank in the fight (a stand-in: Commander CrisisAssigner): Righteous Fury
+            // was only cast out of combat.
+            if (bot.m_role == ROLE_TANK && Cast(me, s.pRighteousFury))
+                return;
+
             if (!me->GetAttackers().empty())
             {
                 if (Cast(me, s.pHolyShield))

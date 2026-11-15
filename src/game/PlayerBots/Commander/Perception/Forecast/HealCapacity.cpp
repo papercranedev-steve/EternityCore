@@ -2,24 +2,23 @@
 #include "PartyBotAI.h"
 #include "HealSpells.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include <algorithm>
 
 namespace Commander
 {
 namespace HealCapacity
 {
-    std::vector<HealRate> Rates(PartyBotAI const* bot)
+    namespace
     {
-        std::vector<HealRate> rates;
-        Player* me = bot->me;
-        for (SpellEntry const* spell : bot->m_spellListDirectHeal)
+        void AddRate(Player* me, SpellEntry const* spell, std::vector<HealRate>& rates)
         {
             if (!spell || !HealSpells::IsSingleTargetHeal(spell))
-                continue;
+                return;
             float const heal = HealSpells::Estimate(me, me, spell).direct;
             float const cost = HealSpells::ManaCost(me, spell);
             if (heal <= 0.0f || cost <= 0.0f)
-                continue;
+                return;
             float const crit = std::min(100.0f, std::max(0.0f, me->GetSpellCritPercent(SpellSchools(spell->School)))) / 100.0f;
             float const expected = heal * (1.0f + CRIT_BONUS * crit);
             float const busySec = std::max(HealSpells::GCD_SEC, float(spell->GetCastTime(me)) / 1000.0f);
@@ -28,6 +27,29 @@ namespace HealCapacity
             r.perMana = expected / cost;
             r.castSec = float(spell->GetCastTime(me)) / 1000.0f;
             rates.push_back(r);
+        }
+    }
+
+    std::vector<HealRate> Rates(PartyBotAI const* bot)
+    {
+        std::vector<HealRate> rates;
+        for (SpellEntry const* spell : bot->m_spellListDirectHeal)
+            AddRate(bot->me, spell, rates);
+        return rates;
+    }
+
+    std::vector<HealRate> PlayerRates(Player* player)
+    {
+        std::vector<HealRate> rates;
+        for (auto const& known : player->GetSpellMap())
+        {
+            if (known.second.disabled || known.second.state == PLAYERSPELL_REMOVED)
+                continue;
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(known.first);
+            if (!spell || spell->HasAttribute(SPELL_ATTR_PASSIVE) || spell->HasAttribute(SPELL_ATTR_DO_NOT_DISPLAY) ||
+                !spell->HasEffect(SPELL_EFFECT_HEAL) || spell->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_SWIFTMEND>())
+                continue;
+            AddRate(player, spell, rates);
         }
         return rates;
     }

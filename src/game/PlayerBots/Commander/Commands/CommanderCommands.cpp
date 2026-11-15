@@ -21,6 +21,8 @@
  *   .partybot ai packs               out-of-combat packs within PACK_SCAN_RADIUS (80 yards)
  *   .partybot ai field               position field (PositionField.h): size, build cost, the
  *                                    cell you stand on and each member's grid walk to it
+ *   .partybot ai wayin               the way you came into this dungeon (WayIn.h): points, length,
+ *                                    and each member's walk back to the door along it
  *   .partybot ai plan                team plan: pull state, focus and intercepts, interrupt abilities and duties
  *   .partybot ai ready               who is not ready to pull (hp, mana, distance, dead)
  *   .partybot ai pull [now|cancel]   bots plan and pull your selection's pack (or the nearest
@@ -53,6 +55,7 @@
 #include "Commander/Commands/ProfileCommands.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/WayIn.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Creature.h"
 #include <algorithm>
@@ -303,6 +306,27 @@ namespace
                 plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z,
                 player->GetDistance(plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z),
                 WorldTimer::getMSTimeDiffToNow(plan.retreat.startedMs) / 1000.0f, uint32(world.enemies.size()));
+
+        // Contingencies (CrisisAssigner): every option with its forecast, * = best.
+        if (plan.crisis.lost)
+        {
+            handler->PSendSysMessage("Crisis: %s%s for %.1fs",
+                (plan.crisis.lost & Commander::CRISIS_TANK) ? "tank down " : "",
+                (plan.crisis.lost & Commander::CRISIS_HEALER) ? "healer down " : "",
+                WorldTimer::getMSTimeDiffToNow(plan.crisis.sinceMs) / 1000.0f);
+            for (size_t i = 0; i < plan.crisis.options.size(); ++i)
+            {
+                Commander::CrisisOption const& o = plan.crisis.options[i];
+                std::string healers;
+                for (ObjectGuid g : o.healers)
+                    healers += (healers.empty() ? "" : ", ") + NameOf(map, g);
+                handler->PSendSysMessage("  %s%s%s%s: %s, %s",
+                    int(i) == plan.crisis.best ? "* " : "  ",
+                    o.standIn.IsEmpty() ? "tank as is" : (NameOf(map, o.standIn) + " " + Commander::StandIn::Describe(o.way)).c_str(),
+                    healers.empty() ? "" : " + heals: ", healers.c_str(),
+                    o.bearable ? "bearable" : "NOT bearable", o.forecast.c_str());
+            }
+        }
 
         // Focus and intercepts (FocusAssigner). Score = harm rate / kill time.
         if (plan.focus.enemy.IsEmpty())
@@ -793,6 +817,53 @@ namespace
         return true;
     }
 
+    // .partybot ai wayin
+    bool ShowWayIn(ChatHandler* handler, Player* player)
+    {
+        if (!player->GetMap()->IsDungeon())
+        {
+            handler->SendSysMessage("Not in a dungeon: no way in is recorded here.");
+            return true;
+        }
+        Commander::Way const way = Commander::WayIn::Copy(player->GetObjectGuid(), player->GetMapId(), player->GetInstanceId());
+        if (way.points.empty())
+        {
+            handler->SendSysMessage("No way in recorded for you on this map (Commander off, no group, or not moved yet).");
+            return true;
+        }
+        uint32 oneWays = 0, gaps = 0;
+        for (Commander::WayPoint const& p : way.points)
+        {
+            oneWays += p.oneWay ? 1 : 0;
+            gaps += p.gap ? 1 : 0;
+        }
+        handler->PSendSysMessage("Way in: %u points, %.0f yd, %u drops, %u gaps, recorded for %u s; %s (start %.0f yd from the zone-in)",
+            uint32(way.points.size()), Commander::WayIn::LengthBack(way, way.points.size() - 1), oneWays, gaps,
+            WorldTimer::getMSTimeDiffToNow(way.startedMs) / 1000,
+            way.fromEntrance ? "from the door" : "NOT from the door", way.startToEntranceYd);
+
+        auto showBack = [&](std::string const& name, Commander::Position3 const& at)
+        {
+            Commander::WayBack const back = Commander::WayIn::Back(way, at);
+            if (!back.found)
+                handler->PSendSysMessage("  %s: not near the way", name.c_str());
+            else
+                handler->PSendSysMessage("  %s: joins point %u (%.1f yd), %.0f yd to the first point, %u drops, %u gaps%s",
+                    name.c_str(), uint32(back.joinIndex), back.joinYd, back.lengthYd, back.oneWays, back.gaps,
+                    back.ToDoor(way) ? ", walkable to the door" : "");
+        };
+        Commander::Position3 here;
+        here.x = player->GetPositionX();
+        here.y = player->GetPositionY();
+        here.z = player->GetPositionZ();
+        showBack("you", here);
+        if (auto commander = sCommanderMgr.FindCommander(player))
+            for (Commander::PartyMemberFacts const& m : commander->GetWorld().party)
+                if (!m.isPet && m.guid != player->GetObjectGuid())
+                    showBack(NameOf(player->GetMap(), m.guid), m.pos);
+        return true;
+    }
+
     // .partybot ai healsim <amount> [healer]   heal target = your selection, or yourself
     bool HealSim(ChatHandler* handler, Player* player, uint32 amount, char const* healerName, Unit* target)
     {
@@ -1077,11 +1148,13 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
-        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field"))
+        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field") || !strcmp(sub, "wayin"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
-        if (!strcmp(sub, "field"))
+        if (!strcmp(sub, "wayin"))
+            ok = ShowWayIn(this, player);
+        else if (!strcmp(sub, "field"))
             ok = ShowField(this, player);
         else if (!strcmp(sub, "pullmethod"))
             ok = SetPullMethod(this, player, ExtractLiteralArg(&args));
@@ -1126,7 +1199,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

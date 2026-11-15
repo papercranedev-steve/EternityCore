@@ -411,7 +411,8 @@ namespace FightLoad
 
         bool StartInput(WorldModel const& world, Input& out, PartyMemberFacts const*& tank)
         {
-            tank = Tanks::Main(world);
+            if (!tank)
+                tank = Tanks::Main(world);
             if (!tank || !tank->alive)
                 return false;
             out = Input();
@@ -448,7 +449,27 @@ namespace FightLoad
 
     bool FromWorld(WorldModel const& world, Input& out)
     {
+        return FromWorld(world, Lineup(), out);
+    }
+
+    bool FromWorld(WorldModel const& world, Lineup const& lineup, Input& out)
+    {
         PartyMemberFacts const* tank = nullptr;
+        // The stand-in with its armor once set up (a copy: the facts stay as they are).
+        PartyMemberFacts standIn;
+        if (!lineup.tank.IsEmpty())
+        {
+            PartyMemberFacts const* m = world.FindMember(lineup.tank);
+            if (!m || !m->CanAct())
+                return false;
+            tank = m;
+            if (lineup.tankArmorMult != 1.0f)
+            {
+                standIn = *m;
+                standIn.armor = uint32(float(m->armor) * std::max(0.0f, lineup.tankArmorMult));
+                tank = &standIn;
+            }
+        }
         if (!StartInput(world, out, tank))
             return false;
         for (EnemyFacts const& e : world.enemies)
@@ -473,6 +494,24 @@ namespace FightLoad
             AddSpawns(out, e.guid, e.entry, false, *tank);
         }
         AddHealers(world, out);
+        for (ObjectGuid g : lineup.spareHealers)
+        {
+            PartyMemberFacts const* m = world.FindMember(g);
+            if (!m || !m->CanAct() || m->spareHealRates.empty() || !m->UsesMana())
+                continue;
+            // Healing instead of hitting: its own damage leaves the party's.
+            out.partyDps = std::max(1.0f, out.partyDps - m->soloDps);
+            Healer h;
+            h.rates = m->spareHealRates;
+            if (!m->isBot)
+                for (HealRate& r : h.rates)
+                    r.hps *= PLAYER_HEAL_SHARE;
+            h.mana = float(m->mana);
+            h.maxMana = float(m->maxMana);
+            h.regenPerSec = m->manaRegenCasting;
+            h.restRegenPerSec = m->manaRegen;
+            out.healers.push_back(std::move(h));
+        }
         return true;
     }
 

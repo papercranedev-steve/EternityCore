@@ -13,6 +13,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Forecast/ThreatRunway.h"
+#include "Commander/Perception/Profiles/StandIn.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -1350,6 +1351,49 @@ namespace Commander
         }
     };
 
+    // ---- Contingencies (Coordination/Situation/Crisis/CrisisAssigner.h, user 2026-11-15): the
+    // tank or the healers are gone in a fight, and who could carry it.
+    enum CrisisLoss : uint8
+    {
+        CRISIS_TANK   = 1 << 0,     // every tank is dead
+        CRISIS_HEALER = 1 << 1,     // every healer is dead or out of mana
+    };
+
+    // One way to go on: a stand-in tank (tank loss) and who heals (healer loss), with the fight
+    // forecast for it (FightLoad::Lineup).
+    struct CrisisOption
+    {
+        ObjectGuid standIn;             // empty: the tank as it is (healer loss only)
+        StandInWay way = StandInWay::None;
+        std::vector<ObjectGuid> healers;    // spare healers healing too (PartyMemberFacts::spareHealRates)
+        bool bearable = false;          // FightLoad::Bearable
+        float score = 0.0f;             // FightLoad::Score
+        std::string forecast;           // FightLoad::Describe
+    };
+
+    struct CrisisPlan
+    {
+        uint8 lost = 0;                 // CrisisLoss bits, 0 = no contingency
+        uint32 sinceMs = 0;             // world refresh time `lost` became what it is
+        std::vector<CrisisOption> options;
+        int best = -1;                  // index into options, -1 = none can be run
+        ObjectGuid lastStandIn;         // the last best option (sticky, CrisisAssigner::STICKY_SCORE)
+        size_t lastHealers = 0;
+        // What the last note said (loss, chosen stand-in, healers, bearable): a new note only
+        // when it changes, not for every new forecast number.
+        std::string notedKey;
+    };
+
+    // A bot given another role for the rest of the fight (CrisisAssigner: the best option's
+    // stand-in tank, its spare healers). PartyCommander::ApplyEmergencyRoles sets it on the bot
+    // (PartyBotAI::SetEmergencyRole) and gives the old role back once the fight is over.
+    struct EmergencyRole
+    {
+        ObjectGuid bot;
+        uint8 role = 0;                 // CombatBotRoles
+        StandInWay way = StandInWay::None;  // a tank: how it holds (the note)
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
@@ -1384,6 +1428,8 @@ namespace Commander
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         RetreatPlan retreat;
+        CrisisPlan crisis;
+        std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)
         FightSpotPlan fightSpot;
         PatrolGuardPlan patrolGuard;
         CasterLurePlan casterLure;

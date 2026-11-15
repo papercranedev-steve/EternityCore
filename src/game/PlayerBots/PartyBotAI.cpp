@@ -367,6 +367,7 @@ void PartyBotAI::AutoAssignRole()
 
 void PartyBotAI::SetRole(CombatBotRoles role)
 {
+    m_roleBeforeEmergency = ROLE_INVALID;   // the user's choice ends an emergency role
     m_roleLocked = role != ROLE_INVALID;
     m_role = role;
     if (role == ROLE_INVALID)
@@ -376,10 +377,32 @@ void PartyBotAI::SetRole(CombatBotRoles role)
 
 void PartyBotAI::AssignRole(CombatBotRoles role)
 {
-    if (m_roleLocked || role == ROLE_INVALID || role == m_role)
+    if (m_roleLocked || HasEmergencyRole() || role == ROLE_INVALID || role == m_role)
         return;
     m_role = role;
     m_resetSpellData = true;
+}
+
+void PartyBotAI::SetEmergencyRole(CombatBotRoles role)
+{
+    if (role == ROLE_INVALID || role == m_role)
+        return;
+    if (!HasEmergencyRole())
+        m_roleBeforeEmergency = m_role;
+    m_role = role;
+    m_resetSpellData = true;
+}
+
+void PartyBotAI::RestoreRole()
+{
+    if (!HasEmergencyRole())
+        return;
+    if (m_role != m_roleBeforeEmergency)
+    {
+        m_role = m_roleBeforeEmergency;
+        m_resetSpellData = true;
+    }
+    m_roleBeforeEmergency = ROLE_INVALID;
 }
 
 bool PartyBotAI::UsesSafeFollow() const

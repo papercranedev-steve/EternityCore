@@ -103,6 +103,17 @@ namespace
             Player* me = bot.me;
             ShapeshiftForm const form = me->GetShapeshiftForm();
 
+            // A role changed in the fight (a stand-in tank, a spare healer: Commander
+            // CrisisAssigner): out of a form that does not fit first. A healer used to stand
+            // idle in it; a tank from cat form kept clawing. Bear Form follows from caster form.
+            if (form != FORM_NONE && me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT) &&
+               (bot.GetRole() == ROLE_HEALER ||
+               (bot.m_role == ROLE_TANK && form != FORM_BEAR && form != FORM_DIREBEAR)))
+            {
+                me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+                return;
+            }
+
             if (form == FORM_NONE)
             {
                 // A tank out of its form (rooted, a caster form spell of the Commander) goes back

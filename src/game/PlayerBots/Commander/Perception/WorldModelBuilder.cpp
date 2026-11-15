@@ -1750,6 +1750,8 @@ namespace WorldModelBuilder
                         f.healRates = HealCapacity::Rates(ai);
                         f.healThreat = HealThreat(member, f.healRates);
                     }
+                    else if (member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
+                        f.spareHealRates = HealCapacity::Rates(ai);
                     for (RaidTargetIcon mark : ai->m_marksToFocus)
                     {
                         ObjectGuid const marked = group->GetTargetWithIcon(mark);
@@ -1770,6 +1772,8 @@ namespace WorldModelBuilder
             }
             if (!f.isBot && member->IsAlive())
                 f.soloDps = SoloDps(member, nullptr);
+            if (!f.isBot && member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
+                f.spareHealRates = HealCapacity::PlayerRates(member);
             world.party.push_back(f);
             partyUnits.push_back(member);
 

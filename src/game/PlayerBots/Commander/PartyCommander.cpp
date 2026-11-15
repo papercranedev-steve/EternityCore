@@ -59,6 +59,7 @@ namespace Commander
             m_activeEncounter->AdjustPlan(m_world, m_plan);
         PatrolPlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op unless guarding off a patrol
         CasterLurePlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op without a lure searching
+        ApplyEmergencyRoles(bot);
         ApplyRoles(bot);
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
@@ -151,6 +152,45 @@ namespace Commander
                     m_plan.notes.push_back(std::string(member->GetName()) + ": " + RoleText(before) + " -> " +
                                            RoleText(ai->m_role) + " (" + d.reason + ")");
                 break;
+            }
+        }
+    }
+
+    void PartyCommander::ApplyEmergencyRoles(PartyBotAI* bot)
+    {
+        Group* group = bot->me->GetGroup();
+        if (!group)
+            return;
+        bool const fighting = m_world.HasPartyEnemy();
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        {
+            Player* member = itr->getSource();
+            if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
+                continue;
+            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            if (!ai)
+                continue;
+            EmergencyRole const* given = nullptr;
+            for (EmergencyRole const& r : m_plan.emergencyRoles)
+                if (r.bot == member->GetObjectGuid())
+                    given = &r;
+            if (given)
+            {
+                if (uint8(ai->m_role) == given->role)
+                    continue;
+                CombatBotRoles const before = ai->m_role;
+                ai->SetEmergencyRole(CombatBotRoles(given->role));
+                m_plan.notes.push_back(std::string(member->GetName()) + ": " + RoleText(before) + " -> " +
+                    RoleText(ai->m_role) + (given->role == ROLE_TANK
+                        ? std::string(" for this fight, takes over as ") + StandIn::Describe(given->way) + "."
+                        : std::string(" for this fight.")));
+            }
+            else if (ai->HasEmergencyRole() && !fighting)
+            {
+                CombatBotRoles const before = ai->m_role;
+                ai->RestoreRole();
+                if (ai->m_role != before)
+                    m_plan.notes.push_back(std::string(member->GetName()) + ": back to " + RoleText(ai->m_role) + ".");
             }
         }
     }

@@ -183,6 +183,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/SurvivalValue.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.h
   ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/StandIn.h
+  ${COMMANDER_DIR}/Perception/Profiles/StandIn.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.h
   ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.h
@@ -217,6 +219,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/PatrolTracker.cpp
   ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.h
   ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.h
@@ -328,6 +332,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/JumpCast.cpp
   ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.h
   ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/WayIn.h
+  ${COMMANDER_DIR}/Perception/Spatial/WayIn.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.h
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.h

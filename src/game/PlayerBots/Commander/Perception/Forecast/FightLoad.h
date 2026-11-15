@@ -160,6 +160,22 @@ namespace FightLoad
     // The current fight from the facts only (pure): every acting enemy of ours; one under a
     // control effect joins when it ends (sameFight).
     bool FromWorld(WorldModel const& world, Input& out);
+
+    // Who carries the current fight, when it is not the party as it stands (user 2026-11-15,
+    // contingencies: the tank or the healer is gone, can someone else carry it?).
+    struct Lineup
+    {
+        ObjectGuid tank;                // empty: the main tank (Tanks::Main)
+        // The stand-in's armor once set up (a druid's bear form; Perception/Profiles/StandIn.h).
+        float tankArmorMult = 1.0f;
+        // Members with PartyMemberFacts::spareHealRates who heal too (hybrids, players); their
+        // soloDps leaves the party's damage. A player's heals count PLAYER_HEAL_SHARE: other
+        // roles may fail (ai-architecture rule).
+        std::vector<ObjectGuid> spareHealers;
+    };
+    float const PLAYER_HEAL_SHARE = 0.5f;
+    // FromWorld with that lineup. False: the tank is not there, dead or cannot act.
+    bool FromWorld(WorldModel const& world, Lineup const& lineup, Input& out);
     // `enemy` held by the off-tank `holder` (header "off-tanks"; the brain's choice, the caller
     // passes it). False: the enemy is not in the input or not in the facts.
     bool PutOn(WorldModel const& world, Input& in, ObjectGuid enemy, PartyMemberFacts const& holder);

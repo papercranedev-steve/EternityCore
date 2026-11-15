@@ -68,6 +68,15 @@ namespace
                 Cast(me, s.pPowerWordShield))
                 return;
 
+            // Made a healer in the fight (a spare healer: Commander CrisisAssigner): no holy
+            // spell in Shadowform.
+            if (bot.GetRole() == ROLE_HEALER && me->GetShapeshiftForm() == FORM_SHADOW &&
+                me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT))
+            {
+                me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+                return;
+            }
+
             if (!healPlanned && me->GetPowerPercent(POWER_MANA) < 50.0f && s.pInnerFocus &&
                 bot.CanTryToCastSpell(me, s.pInnerFocus))
                 bot.DoCastSpell(me, s.pInnerFocus);

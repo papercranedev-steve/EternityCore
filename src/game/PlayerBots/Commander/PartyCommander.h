@@ -102,6 +102,10 @@ namespace Commander
         // After the assigners: gives the bots of this map the roles of TeamPlan::roles
         // (RoleAssigner), out of combat only, and tells the leader.
         void ApplyRoles(PartyBotAI* bot);
+        // After the assigners, before ApplyRoles: gives the bots of this map their
+        // TeamPlan::emergencyRoles (CrisisAssigner, a stand-in tank, a spare healer), and the
+        // old role back to a bot no longer listed once the party is out of the fight.
+        void ApplyEmergencyRoles(PartyBotAI* bot);
         // Last step of a refresh, in combat: the other bots of the party on this map that a
         // behavior has urgent work for (IBehavior::WantsTickNow) run their next update in the
         // next frame (PartyBotAI::WakeUp) instead of after the rest of their bot interval.
