@@ -359,6 +359,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Tanks.cpp
   ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.cpp
+  ${COMMANDER_DIR}/Perception/Values/MitigationValue.h
+  ${COMMANDER_DIR}/Perception/Values/MitigationValue.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolPlanner.h

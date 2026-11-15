@@ -28,6 +28,7 @@
 #include "Commander/Behaviors/Support/HealthTradeBehavior.h"
 #include "Commander/Behaviors/Combat/FinishCastBehavior.h"
 #include "Commander/Behaviors/Support/BoostBehavior.h"
+#include "Commander/Behaviors/Combat/MitigationBehavior.h"
 #include "Commander/Coordination/Duties/BoostAssigner.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/Duties/CrowdControlAssigner.h"
@@ -63,6 +64,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BoostBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<MitigationBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealthTradeBehavior>()));

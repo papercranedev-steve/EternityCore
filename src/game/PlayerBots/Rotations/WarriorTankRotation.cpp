@@ -21,7 +21,8 @@
  *   Charge                 the pull module (PullBehavior, ClassKit::OpenerCharge); the old
  *                          rotation charged every victim out of combat, so stood in Battle Stance.
  *   Thunder Clap opener    the threat module's area threat (ThreatBehavior, stance swap costed).
- *   Demoralizing Shout     the threat module's area threat (ClassKit::AreaThreat).
+ *   Demoralizing Shout     the threat module's area threat (ClassKit::AreaThreat); kept up for
+ *                          its damage reduction by the mitigation module (MitigationBehavior).
  *   Shield Bash,           the interrupt module (InterruptBehavior, ClassKit::Interrupts); the old
  *   Concussion Blow        rotation stunned on any cast, on moving targets, below 50%.
  *   Shield Wall, Last Stand  the team rescue (RescueAssigner / RescueBehavior).

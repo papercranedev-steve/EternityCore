@@ -490,6 +490,23 @@ namespace WorldModelBuilder
         }
 
         void FillEnemy(Creature* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
+        // Melee attack power as Creature::UpdateDamagePhysical scales the damage with it, and the
+        // strongest attack power debuff on it (Perception/Values/MitigationValue.h).
+        void FillAttackPower(Creature* creature, EnemyFacts& e)
+        {
+            if (CreatureClassLevelStats const* cls = creature->GetClassLevelStats())
+                e.apDb = float(cls->attack_power);
+            e.apNow = creature->GetTotalAttackPowerValue(BASE_ATTACK);
+            for (Aura const* aura : creature->GetAurasByType(SPELL_AURA_MOD_ATTACK_POWER))
+            {
+                float const off = -float(aura->GetModifier()->m_amount);
+                if (off <= e.apDebuff)
+                    continue;
+                e.apDebuff = off;
+                e.apDebuffMs = uint32(std::max(0, aura->GetAuraDuration()));
+            }
+        }
+
         {
             e.guid = creature->GetObjectGuid();
             e.entry = creature->GetEntry();
@@ -526,6 +543,7 @@ namespace WorldModelBuilder
                     }
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
             if (!e.meleeEnabled)
+            FillAttackPower(creature, e);
                 e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(e.entry))
             {
@@ -850,6 +868,35 @@ namespace WorldModelBuilder
         }
 
         // ClassKit::ThreatDrops of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
+        // ClassKit::AttackPowerDebuffs of a tank bot: the SPELL_AURA_MOD_ATTACK_POWER amount
+        // below 0, its duration and radius from the spell data.
+        void FillMitigations(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            if (ai->GetRole() != ROLE_TANK)
+                return;
+            Player* me = ai->me;
+            for (SpellEntry const* spell : ai->Kit().AttackPowerDebuffs())
+            {
+                if (!spell)
+                    continue;
+                MitigationAbility a;
+                a.spellId = spell->Id;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_ATTACK_POWER)
+                        a.reduction = std::max(a.reduction, -float(spell->CalculateSimpleValue(SpellEffectIndex(i))));
+                a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+                a.radius = SpellTags::AreaRadius(spell);
+                if (a.reduction <= 0.0f || a.durationSec <= 0.0f || a.radius <= 0.0f)
+                    continue;
+                if (Powers(spell->powerType) == POWER_RAGE)
+                    a.rageCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.stanceSwap = ai->StanceSwapFor(spell) != nullptr;
+                a.ready = f.CanAct() && ai->IsReadyWithStance(spell) &&
+                          !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
+                f.mitigations.push_back(a);
+            }
+        }
+
         // negative amount on every threat list for the aura's duration. Vanish: a sanctuary
         // effect (Spell::EffectSanctuary removes the rogue from every threat list); Feign
         // Death: its aura (Unit::SetFeignDeath deletes every hostile reference). Feint, Cower:
@@ -1438,6 +1485,7 @@ namespace WorldModelBuilder
 
             if (Pet* pet = member->GetPet())
             {
+                        FillMitigations(ai, f);
                 if (pet->IsInWorld() && pet->GetMap() == map)
                 {
                     PartyMemberFacts pf;

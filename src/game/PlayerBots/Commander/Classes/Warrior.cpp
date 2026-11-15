@@ -57,6 +57,12 @@ namespace Commander
                          { s.pChallengingShout, 0.0f, true, false, false } };
             }
 
+            // Demoralizing Shout: any stance, 10 rage, 30 s.
+            std::vector<SpellEntry const*> AttackPowerDebuffs() const override
+            {
+                return { m_bot.m_spells.warrior.pDemoralizingShout };
+            }
+
             // Shield Wall (-75% damage, Defensive Stance: swapped to, a shield). Last Stand: +30%
             // of maximum health for 20 s (the triggered spell 12976 is scripted, its data says 0).
             // Both were taken out of the tank rotation 2026-11-02 for this decision.

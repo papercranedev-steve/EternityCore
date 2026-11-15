@@ -205,7 +205,9 @@ namespace
         }
 
         // Tank: Enrage when short of rage, Faerie Fire (Feral), Maul. Swipe, Demoralizing Roar and
-        // Challenging Roar are the threat module's (ClassKit::AreaThreat), Growl the team rescue's.
+        // Challenging Roar are the threat module's (ClassKit::AreaThreat), Growl the team rescue's,
+        // Demoralizing Roar kept up for its damage reduction the mitigation module's
+        // (ClassKit::AttackPowerDebuffs, MitigationBehavior).
         void BearTank(Unit* pVictim)
         {
             PartyBotAI& bot = m_bot;

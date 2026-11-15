@@ -115,6 +115,20 @@ namespace Commander
         bool ready = false;
     };
 
+    // An attack power debuff a tank bot keeps on the enemies around it (ClassKit::
+    // AttackPowerDebuffs: Demoralizing Shout / Roar), numbers from the spell data. Valued by
+    // Perception/Values/MitigationValue.h, cast by MitigationBehavior.
+    struct MitigationAbility
+    {
+        uint32 spellId = 0;
+        float reduction = 0.0f;         // attack power taken off each enemy (positive)
+        float durationSec = 0.0f;
+        float radius = 0.0f;            // around the caster
+        uint32 rageCost = 0;            // power units (10 per rage point), with the caster's talents
+        bool stanceSwap = false;        // needs a warrior stance swap first (PartyBotAI::StanceSwapFor)
+        bool ready = false;             // off cooldown, enough power (PartyBotAI::IsReadyWithStance), can act
+    };
+
     // A non-tank bot's own threat drop (ClassKit::ThreatDrops), one entry per spell:
     //   wipe      off every threat list for good (Vanish, Feign Death); drop, durationSec unused
     //   onTarget  `drop` off its target's list for good (Feint, Cower: SPELL_EFFECT_THREAT < 0)
@@ -500,6 +514,7 @@ namespace Commander
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,
         // and mechanics it is immune to as 1 << mechanic (Weakened Soul: MECHANIC_SHIELD,
         // Forbearance: MECHANIC_IMMUNE_SHIELD).
+        std::vector<MitigationAbility> mitigations; // tank-role bots only
         float absorb = 0.0f;
         float damageTakenMult = 1.0f;
         bool immunePhysical = false;
@@ -663,6 +678,15 @@ namespace Commander
         // Every periodic damage effect of ours on it (partyDotMs is the longest one's time left).
         std::vector<PartyDot> partyDots;
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
+        // Melee attack power now and the creature_classlevelstats one: the weapon damage scales
+        // by 0.7 + 0.3 x apNow / apDb (Creature::UpdateDamagePhysical). apDb 0 = attack power
+        // does not change its damage. Perception/Values/MitigationValue.h.
+        float apNow = 0.0f;
+        float apDb = 0.0f;
+        // The strongest attack power debuff on it, anyone's (Demoralizing Shout / Roar do not
+        // stack: SPELL_AURA_MOD_ATTACK_POWER below 0): attack power it takes off, ms left.
+        float apDebuff = 0.0f;
+        uint32 apDebuffMs = 0;
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.

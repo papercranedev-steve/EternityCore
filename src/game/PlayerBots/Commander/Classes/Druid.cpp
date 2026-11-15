@@ -33,6 +33,12 @@ namespace Commander
                          { s.pChallengingRoar, 0.0f, true, false, false } };
             }
 
+            // Demoralizing Roar: (Dire) Bear Form (CanTryToCastSpell checks the form), 10 rage, 30 s.
+            std::vector<SpellEntry const*> AttackPowerDebuffs() const override
+            {
+                return { m_bot.m_spells.druid.pDemoralizingRoar };
+            }
+
             // Caster form only (CanTryToCastSpell checks the form); 1.5 s cast.
             std::vector<SpellEntry const*> HoldSpells() const override
             {

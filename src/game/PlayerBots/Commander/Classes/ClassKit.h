@@ -166,6 +166,10 @@ namespace Commander
         virtual std::vector<SpellEntry const*> Controls() const { return {}; }
         // Area threat abilities, strongest first (ThreatBehavior group threat).
         virtual std::vector<AreaThreatSpell> AreaThreat() const { return {}; }
+        // Attack power debuffs around the caster a tank keeps up for the damage they take off
+        // (Demoralizing Shout / Roar; MitigationBehavior, Perception/Values/MitigationValue.h).
+        // Numbers are read from the spell data (WorldModelBuilder FillMitigations).
+        virtual std::vector<SpellEntry const*> AttackPowerDebuffs() const { return {}; }
         // Roots / stuns that stop a melee enemy chasing the bot (EscapeBehavior; what each spell
         // does is read from its data there).
         virtual std::vector<SpellEntry const*> HoldSpells() const { return {}; }
