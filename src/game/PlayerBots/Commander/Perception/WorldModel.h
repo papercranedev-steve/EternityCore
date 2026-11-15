@@ -290,6 +290,14 @@ namespace Commander
         uint8 kind = 0;
     };
 
+    // A party totem a shaman bot has learned, best rank (ClassKit::Totems). kind = TotemKind
+    // (Perception/Profiles/ShamanTotems.h).
+    struct TotemAbility
+    {
+        uint32 spellId = 0;
+        uint8 kind = 0;
+    };
+
     // A damage curse on an enemy, anyone's (CurseKind).
     struct CurseOnFacts
     {
@@ -590,6 +598,8 @@ namespace Commander
         std::vector<PaladinBuffAbility> judgementSeals;
         // Warlock bots: the damage curses it knows (CurseAssigner).
         std::vector<CurseAbility> curseSpells;
+        // Shaman bots: the party totems it knows (kind = TotemKind; TotemAssigner).
+        std::vector<TotemAbility> totemSpells;
         // Every member (players, not pets): paladin blessings on it. Paladins: the party aura it
         // keeps up itself (PaladinAuraKind, 0 = none): a player paladin's is left to it.
         std::vector<BlessingOnFacts> blessingsOn;

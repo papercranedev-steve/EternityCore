@@ -193,7 +193,11 @@ public:
     // healer role, ranged damage class, not in a form that overrides attack speed, and mana
     // above 10% or a ranged weapon.
     bool UsesCasterChase() const;
-    bool SummonShamanTotems();
+    // Keeps `spell` up in `slot` (one cast, true): drops it when the slot is empty, its totem
+    // is farther than SHAMAN_TOTEM_RANGE_YD, or it holds another totem without a cooldown (one
+    // with a cooldown, Mana Tide, was put down on purpose and stays until it ends).
+    static constexpr float SHAMAN_TOTEM_RANGE_YD = 20.0f;
+    bool KeepShamanTotem(TotemSlot slot, SpellEntry const* spell);
     SpellCastResult CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot);
     bool UseTrinketEffects(bool onlyToBreakCC = false);
     bool UseItemEffect(Item* pItem, bool onlyToBreakCC = false);
@@ -379,10 +383,17 @@ public:
             SpellEntry const* pGhostWolf;
             SpellEntry const* pCureDisease;
             SpellEntry const* pCurePoison;
-            SpellEntry const* pAirTotem;
-            SpellEntry const* pEarthTotem;
-            SpellEntry const* pFireTotem;
-            SpellEntry const* pWaterTotem;
+            // Party totems (best rank). Which one each shaman keeps up: the brain
+            // (Commander/Coordination/Duties/TotemAssigner.h), ShamanRotation drops them.
+            // Until 2026-11-15 one random totem per element (Earthbind, Fire Nova, Searing...).
+            SpellEntry const* pManaSpringTotem;
+            SpellEntry const* pHealingStreamTotem;
+            SpellEntry const* pStrengthOfEarthTotem;
+            SpellEntry const* pStoneskinTotem;
+            SpellEntry const* pWindfuryTotem;
+            SpellEntry const* pGraceOfAirTotem;
+            SpellEntry const* pTranquilAirTotem;
+            SpellEntry const* pFlametongueTotem;
             SpellEntry const* pManaTideTotem;
             SpellEntry const* pWeaponBuff;
             SpellEntry const* pNaturesSwiftness;

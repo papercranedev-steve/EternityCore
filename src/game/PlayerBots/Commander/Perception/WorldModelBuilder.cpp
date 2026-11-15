@@ -10,6 +10,7 @@
 #include "Commander/Perception/Profiles/PetTaunt.h"
 #include "Commander/Perception/Profiles/PaladinBuffs.h"
 #include "Commander/Perception/Profiles/WarlockCurses.h"
+#include "Commander/Perception/Profiles/ShamanTotems.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
@@ -1251,6 +1252,17 @@ namespace WorldModelBuilder
             }
         }
 
+        // Party totems: ClassKit::Totems.
+        void FillTotems(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            for (SpellEntry const* spell : ai->Kit().Totems())
+            {
+                TotemKind const kind = ShamanTotems::KindOf(spell);
+                if (kind != TotemKind::None)
+                    f.totemSpells.push_back({ spell->Id, uint8(kind) });
+            }
+        }
+
         // Damage cooldowns: ClassKit::Bursts and the racial ones (RaceKit::Bursts).
         void FillBursts(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -1660,6 +1672,7 @@ namespace WorldModelBuilder
                         FillCombatRes(ai, f);
                         FillPaladinBuffs(ai, f);
                         FillCurses(ai, f);
+                        FillTotems(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         if (SpellEntry const* filler = ai->Kit().Filler())
                         {

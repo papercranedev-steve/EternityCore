@@ -13,6 +13,7 @@
 #include "CharacterDatabaseCache.h"
 #include "DBCStores.h"
 #include "Pet.h"
+#include "Totem.h"
 #include "SpellMgr.h"
 #include "Utilities/Random.h"
 
@@ -144,34 +145,6 @@ void CombatBotBaseAI::PopulateSpellData()
     SpellEntry const* pSealOfRighteousness = nullptr;
     SpellEntry const* pSealOfCommand = nullptr;
     SpellEntry const* pSealOfFury = nullptr;
-
-    // Air Totems
-    SpellEntry const* pGraceOfAirTotem = nullptr;
-    SpellEntry const* pNatureResistanceTotem = nullptr;
-    SpellEntry const* pWindfuryTotem = nullptr;
-    SpellEntry const* pWindwallTotem = nullptr;
-    SpellEntry const* pTranquilAirTotem = nullptr;
-
-    // Earth Totems
-    SpellEntry const* pEarthbindTotem = nullptr;
-    SpellEntry const* pStoneclawtotem = nullptr;
-    SpellEntry const* pStoneskinTotem = nullptr;
-    SpellEntry const* pStrengthOfEarthTotem = nullptr;
-    SpellEntry const* pTremorTotem = nullptr;
-
-    // Fire Totems
-    SpellEntry const* pFireNovaTotem = nullptr;
-    SpellEntry const* pMagmaTotem = nullptr;
-    SpellEntry const* pSearingTotem = nullptr;
-    SpellEntry const* pFlametongueTotem = nullptr;
-    SpellEntry const* pFrostResistanceTotem = nullptr;
-
-    // Water Totems
-    SpellEntry const* pFireResistanceTotem = nullptr;
-    SpellEntry const* pDiseaseCleansingTotem = nullptr;
-    SpellEntry const* pHealingStreamTotem = nullptr;
-    SpellEntry const* pManaSpringTotem = nullptr;
-    SpellEntry const* pPoisonCleansingTotem = nullptr;
 
     // Shaman Weapon Buffs
     SpellEntry const* pFrostbrandWeapon = nullptr;
@@ -503,105 +476,49 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(pWindfuryWeapon))
                         pWindfuryWeapon = pSpellEntry;
                 }
+                // Party totems the brain chooses from (TotemAssigner). Not learned here any more
+                // (2026-11-15, the random pick is gone): Earthbind, Stoneclaw, Fire Nova, Magma,
+                // Searing (they hit or pull enemies: a control breaks), Tremor, the resistance
+                // and cleansing totems, Windwall (situational, no module yet).
                 else if (pSpellEntry->SpellName[0].find("Grace of Air Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pGraceOfAirTotem))
-                        pGraceOfAirTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Nature Resistance Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pNatureResistanceTotem))
-                        pNatureResistanceTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pGraceOfAirTotem))
+                        m_spells.shaman.pGraceOfAirTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Windfury Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pWindfuryTotem))
-                        pWindfuryTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Windwall Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pWindwallTotem))
-                        pWindwallTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pWindfuryTotem))
+                        m_spells.shaman.pWindfuryTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Tranquil Air Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pTranquilAirTotem))
-                        pTranquilAirTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Earthbind Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pEarthbindTotem))
-                        pEarthbindTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Stoneclaw Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pStoneclawtotem))
-                        pStoneclawtotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pTranquilAirTotem))
+                        m_spells.shaman.pTranquilAirTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Stoneskin Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pStoneskinTotem))
-                        pStoneskinTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pStoneskinTotem))
+                        m_spells.shaman.pStoneskinTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Strength of Earth Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pStrengthOfEarthTotem))
-                        pStrengthOfEarthTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Tremor Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pTremorTotem))
-                        pTremorTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Fire Nova Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pFireNovaTotem))
-                        pFireNovaTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Magma Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pMagmaTotem))
-                        pMagmaTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Searing Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pSearingTotem))
-                        pSearingTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pStrengthOfEarthTotem))
+                        m_spells.shaman.pStrengthOfEarthTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Flametongue Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pFlametongueTotem))
-                        pFlametongueTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Frost Resistance Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pFrostResistanceTotem))
-                        pFrostResistanceTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Fire Resistance Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pFireResistanceTotem))
-                        pFireResistanceTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Disease Resistance Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pDiseaseCleansingTotem))
-                        pDiseaseCleansingTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pFlametongueTotem))
+                        m_spells.shaman.pFlametongueTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Healing Stream Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pHealingStreamTotem))
-                        pHealingStreamTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pHealingStreamTotem))
+                        m_spells.shaman.pHealingStreamTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Mana Spring Totem") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pManaSpringTotem))
-                        pManaSpringTotem = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Poison Cleansing Totem") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(pPoisonCleansingTotem))
-                        pPoisonCleansingTotem = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.shaman.pManaSpringTotem))
+                        m_spells.shaman.pManaSpringTotem = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Mana Tide Totem") != std::string::npos)
                 {
@@ -1767,62 +1684,6 @@ void CombatBotBaseAI::PopulateSpellData()
         }
         case CLASS_SHAMAN:
         {
-            std::vector<SpellEntry const*> airTotems;
-            if (pGraceOfAirTotem)
-                airTotems.push_back(pGraceOfAirTotem);
-            if (pNatureResistanceTotem)
-                airTotems.push_back(pNatureResistanceTotem);
-            if (pWindfuryTotem)
-                airTotems.push_back(pWindfuryTotem);
-            if (pWindwallTotem)
-                airTotems.push_back(pWindwallTotem);
-            if (pTranquilAirTotem)
-                airTotems.push_back(pTranquilAirTotem);
-            if (!airTotems.empty())
-                m_spells.shaman.pAirTotem = SelectRandomContainerElement(airTotems);
-
-            std::vector<SpellEntry const*> earthTotems;
-            if (pEarthbindTotem)
-                earthTotems.push_back(pEarthbindTotem);
-            if (pStoneclawtotem)
-                earthTotems.push_back(pStoneclawtotem);
-            if (pStoneskinTotem)
-                earthTotems.push_back(pStoneskinTotem);
-            if (pStrengthOfEarthTotem)
-                earthTotems.push_back(pStrengthOfEarthTotem);
-            if (pTremorTotem)
-                earthTotems.push_back(pTremorTotem);
-            if (!earthTotems.empty())
-                m_spells.shaman.pEarthTotem = SelectRandomContainerElement(earthTotems);
-
-            std::vector<SpellEntry const*> fireTotems;
-            if (pFireNovaTotem)
-                fireTotems.push_back(pFireNovaTotem);
-            if (pMagmaTotem)
-                fireTotems.push_back(pMagmaTotem);
-            if (pSearingTotem)
-                fireTotems.push_back(pSearingTotem);
-            if (pFlametongueTotem)
-                fireTotems.push_back(pFlametongueTotem);
-            if (pFrostResistanceTotem)
-                fireTotems.push_back(pFrostResistanceTotem);
-            if (!fireTotems.empty())
-                m_spells.shaman.pFireTotem = SelectRandomContainerElement(fireTotems);
-
-            std::vector<SpellEntry const*> waterTotems;
-            if (pFireResistanceTotem)
-                waterTotems.push_back(pFireResistanceTotem);
-            if (pDiseaseCleansingTotem)
-                waterTotems.push_back(pDiseaseCleansingTotem);
-            if (pHealingStreamTotem)
-                waterTotems.push_back(pHealingStreamTotem);
-            if (pManaSpringTotem)
-                waterTotems.push_back(pManaSpringTotem);
-            if (pPoisonCleansingTotem)
-                waterTotems.push_back(pPoisonCleansingTotem);
-            if (!waterTotems.empty())
-                m_spells.shaman.pWaterTotem = SelectRandomContainerElement(waterTotems);
-
             if (pWindfuryWeapon && m_role == ROLE_MELEE_DPS)
                 m_spells.shaman.pWeaponBuff = pWindfuryWeapon;
             else
@@ -3461,41 +3322,28 @@ void CombatBotBaseAI::BeginChasing(Unit* pVictim) const
     me->GetMotionMaster()->MoveChase(pVictim, 1.0f, m_role == ROLE_MELEE_DPS ? M_PI_F : 0.0f);
 }
 
-bool CombatBotBaseAI::SummonShamanTotems()
+bool CombatBotBaseAI::KeepShamanTotem(TotemSlot slot, SpellEntry const* spell)
 {
-    if (m_spells.shaman.pAirTotem &&
-        !me->GetTotem(TOTEM_SLOT_AIR) &&
-        CanTryToCastSpell(me, m_spells.shaman.pAirTotem))
+    if (!spell)
+        return false;
+    if (Totem* totem = me->GetTotem(slot))
     {
-        if (DoCastSpell(me, m_spells.shaman.pAirTotem) == SPELL_CAST_OK)
-            return true;
+        uint32 const createdBy = totem->GetUInt32Value(UNIT_CREATED_BY_SPELL);
+        if (createdBy == spell->Id)
+        {
+            // Mine and the right one: only when the party left it behind.
+            if (me->IsWithinDist(totem, SHAMAN_TOTEM_RANGE_YD))
+                return false;
+        }
+        else if (SpellEntry const* other = sSpellMgr.GetSpellEntry(createdBy))
+        {
+            if (other->GetRecoveryTime() > 0)
+                return false;   // a cooldown totem (Mana Tide): it stays until it ends
+        }
     }
-
-    if (m_spells.shaman.pEarthTotem &&
-        !me->GetTotem(TOTEM_SLOT_EARTH) &&
-        CanTryToCastSpell(me, m_spells.shaman.pEarthTotem))
-    {
-        if (DoCastSpell(me, m_spells.shaman.pEarthTotem) == SPELL_CAST_OK)
-            return true;
-    }
-
-    if (m_spells.shaman.pFireTotem &&
-        !me->GetTotem(TOTEM_SLOT_FIRE) &&
-        CanTryToCastSpell(me, m_spells.shaman.pFireTotem))
-    {
-        if (DoCastSpell(me, m_spells.shaman.pFireTotem) == SPELL_CAST_OK)
-            return true;
-    }
-
-    if (m_spells.shaman.pWaterTotem &&
-        !me->GetTotem(TOTEM_SLOT_WATER) &&
-        CanTryToCastSpell(me, m_spells.shaman.pWaterTotem))
-    {
-        if (DoCastSpell(me, m_spells.shaman.pWaterTotem) == SPELL_CAST_OK)
-            return true;
-    }
-
-    return false;
+    if (!CanTryToCastSpell(me, spell))
+        return false;
+    return DoCastSpell(me, spell) == SPELL_CAST_OK;
 }
 
 SpellCastResult CombatBotBaseAI::CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot)

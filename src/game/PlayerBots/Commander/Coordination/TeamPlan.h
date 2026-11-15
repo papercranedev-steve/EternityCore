@@ -9,6 +9,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "SharedDefines.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Forecast/ThreatRunway.h"
@@ -1205,6 +1206,29 @@ namespace Commander
         }
     };
 
+    // Shaman totems: which one each shaman bot keeps up per element (TotemAssigner.h).
+    // ShamanRotation drops them in combat.
+    struct TotemDuty
+    {
+        ObjectGuid bot;
+        uint32 spellIds[MAX_TOTEM_SLOT] = {};   // by TotemSlot, 0 = none in that element
+    };
+
+    struct TotemPlan
+    {
+        bool active = false;    // the module ran (off: the rotation picks on its own)
+        std::vector<TotemDuty> duties;
+
+        // 0 = nothing in that element.
+        uint32 TotemFor(ObjectGuid bot, TotemSlot slot) const
+        {
+            for (TotemDuty const& d : duties)
+                if (d.bot == bot)
+                    return d.spellIds[slot];
+            return 0;
+        }
+    };
+
     // Warlock damage curses: which one each warlock bot keeps on its victim (CurseAssigner.h).
     // CurseBehavior casts it when CurseValue says it pays.
     struct CurseDuty
@@ -1255,6 +1279,7 @@ namespace Commander
         uint32 version = 0;
         std::vector<RoleDuty> roles;
         BlessingPlan blessings;
+        TotemPlan totems;
         JudgementPlan judgements;
         CursePlan curses;
         std::vector<InterruptDuty> interrupts;

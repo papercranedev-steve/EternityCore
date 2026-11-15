@@ -355,10 +355,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Duties/BlessingAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/BlessingAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/TotemAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/TotemAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.h
   ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/ShamanTotems.h
+  ${COMMANDER_DIR}/Perception/Profiles/ShamanTotems.cpp
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/ResurrectValue.h

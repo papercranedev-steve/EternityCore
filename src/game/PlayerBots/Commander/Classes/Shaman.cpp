@@ -35,6 +35,13 @@ namespace Commander
                 return { b };
             }
 
+            std::vector<SpellEntry const*> Totems() const override
+            {
+                auto const& s = m_bot.m_spells.shaman;
+                return { s.pManaSpringTotem, s.pHealingStreamTotem, s.pStrengthOfEarthTotem, s.pStoneskinTotem,
+                         s.pWindfuryTotem, s.pGraceOfAirTotem, s.pTranquilAirTotem, s.pFlametongueTotem };
+            }
+
             // Mana Tide Totem (talent, 5 min): every party member within 20 yd gets mana 4 times in
             // 12 s (the totem's spell 16191 / 17355 / 17360: 170 / 230 / 290 each time).
             std::vector<AllyBoostSpell> AllyBoosts() const override

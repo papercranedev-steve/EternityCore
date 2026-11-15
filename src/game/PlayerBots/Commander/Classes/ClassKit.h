@@ -221,6 +221,10 @@ namespace Commander
         // WorldModel facts PartyMemberFacts::blessingSpells / auraSpells); the rotation casts.
         virtual std::vector<SpellEntry const*> Blessings() const { return {}; }
         virtual std::vector<SpellEntry const*> PartyAuras() const { return {}; }
+        // Shaman party totems it has learned (best rank, nullptr = not learned). Which one per
+        // element: the brain (Coordination/Duties/TotemAssigner.h, PartyMemberFacts::totemSpells);
+        // ShamanRotation drops them.
+        virtual std::vector<SpellEntry const*> Totems() const { return {}; }
         // Seals judged for a debuff that helps whoever hits the victim (Seal of Wisdom / Light).
         // Which one a paladin keeps up: the brain (Coordination/Duties/JudgementAssigner.h).
         virtual std::vector<SpellEntry const*> JudgementSeals() const { return {}; }
