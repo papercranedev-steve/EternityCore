@@ -38,7 +38,6 @@
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
-#include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
@@ -448,6 +447,27 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
     if (o.dist == m_followOffset.dist && o.angle == m_followOffset.angle)
         return;
     m_followOffset = o;
+    IssueFollow(pLeader, heading);
+}
+
+void PartyBotAI::UpdateHumanFollow(Unit* pLeader, bool follows)
+{
+    // Drift while walking, look around / step / sit while the leader stands:
+    // Commander/Behaviors/Movement/HumanFollow.h.
+    follows = follows && UsesSafeFollow() &&
+              me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE;
+    Commander::FollowSpot::Offset next;
+    if (!Commander::HumanFollow::Tick(me, pLeader, m_humanIdle, follows, next))
+        return;
+
+    // The new place only where FollowSpot allows it (else its choice).
+    float const heading = Commander::HumanFollow::Heading(me, pLeader);
+    m_followOffset = next;
+    m_followOffset = ChooseFollowOffset(pLeader, heading);
+    m_followCheckX = pLeader->GetPositionX();
+    m_followCheckY = pLeader->GetPositionY();
+    m_followCheckO = heading;
+    m_followChecked = true;
     IssueFollow(pLeader, heading);
 }
 
@@ -1477,9 +1497,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // (also while walking: the follow point moves with the leader)
         // The leader's way when the navmesh has none or only a long detour (a drop, a jump):
         // Commander/Behaviors/Movement/TrailFollow.h.
-        if (!me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
-            !Commander::TrailFollow::Consider(this, m_trailFollow, pLeader))
+        bool const follows = !me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
+            !Commander::TrailFollow::Consider(this, m_trailFollow, pLeader);
+        if (follows)
             KeepFollowSpotSafe(pLeader);
+        UpdateHumanFollow(pLeader, follows);
 
         // Fix: a healer that was following when the fight started kept following until it stood
         // still: the priest walked 15 yd behind the player into Magistrate Barthilas' Crowd

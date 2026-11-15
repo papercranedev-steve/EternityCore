@@ -853,6 +853,9 @@ bool FollowMovementGenerator<T>::Update(T &owner, uint32 const&  time_diff)
     // (FollowStyle: a standing follower reacts after its delay; StartNow counts it every update)
     if (m_styled && !interrupted && StartNow(owner, time_diff, targetMoved))
     {
+        // Rise before walking (a follower sat down while the leader stood: HumanFollow idle).
+        if (owner.IsSittingDown())
+            owner.SetStandState(UNIT_STAND_STATE_STAND);
         m_bRecalculateTravel = true;
         owner.GetMotionMaster()->SetNeedAsyncUpdate();
     }

@@ -25,6 +25,7 @@
 #include "Commander/Behaviors/Movement/Backpedal.h"
 #include "Commander/Behaviors/Movement/JumpCast.h"
 #include "Commander/Behaviors/Movement/FollowSpot.h"
+#include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/Behaviors/Movement/TrailFollow.h"
 #include <memory>
 
@@ -261,6 +262,8 @@ public:
     bool UsesSafeFollow() const;
     Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader, float heading);
     void IssueFollow(Unit* pLeader, float heading);
+    // Every update with a leader: HumanFollow::Tick (drift, idle look / step / sit).
+    void UpdateHumanFollow(Unit* pLeader, bool follows);
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
@@ -334,6 +337,7 @@ public:
     float m_followCheckY = 0.0f;
     float m_followCheckO = 0.0f;
     bool m_followChecked = false;
+    Commander::HumanFollow::IdleState m_humanIdle;
     // The last OrderChase (Commander melee stance): victim and angle. Cleared by an original
     // chase (BeginChasing, const).
     mutable ObjectGuid m_chaseVictim;

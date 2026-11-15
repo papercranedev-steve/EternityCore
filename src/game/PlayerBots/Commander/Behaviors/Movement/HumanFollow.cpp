@@ -2,6 +2,10 @@
 #include "MotionMaster.h"
 #include "Player.h"
 #include "TargetedMovementGenerator.h"
+#include "MoveSpline.h"
+#include "Timer.h"
+#include "Utilities/Random.h"
+#include <algorithm>
 #include <cmath>
 
 namespace Commander
@@ -44,7 +48,100 @@ namespace HumanFollow
         p.stopSlack = dice.Range(STOP_SLACK_MIN, STOP_SLACK_MAX);
         p.faceArc = dice.Next() < ATTENTIVE_SHARE ? ATTENTIVE_ARC : LAZY_ARC;
         p.turnDelayMs = uint32(dice.Range(float(TURN_DELAY_MIN_MS), float(TURN_DELAY_MAX_MS)));
+        p.idleAfterMs = uint32(dice.Range(float(IDLE_AFTER_MIN_MS), float(IDLE_AFTER_MAX_MS)));
         return p;
+    }
+
+    namespace
+    {
+        FollowSpot::Offset Drifted(Personality const& p)
+        {
+            FollowSpot::Offset o;
+            o.dist = std::max(DIST_MIN, std::min(DIST_MAX, p.offset.dist + frand(-DRIFT_DIST, DRIFT_DIST)));
+            o.angle = p.offset.angle + frand(-DRIFT_ANGLE, DRIFT_ANGLE);
+            return o;
+        }
+
+        bool IsStill(Unit const* u)
+        {
+            return !u->IsMoving() && u->movespline->Finalized();
+        }
+
+        bool Due(uint32 now, uint32 at)
+        {
+            return int32(now - at) >= 0;
+        }
+    }
+
+    bool Tick(Player* bot, Unit const* leader, IdleState& s, bool following, FollowSpot::Offset& next)
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        if (!following || bot->IsInCombat() || leader->IsInCombat())
+        {
+            if (s.sat && bot->IsSittingDown())
+                bot->SetStandState(UNIT_STAND_STATE_STAND);
+            s = IdleState();
+            return false;
+        }
+
+        // Where the leader stands, and since when.
+        bool const still = IsStill(leader) &&
+            (!s.leaderStill || leader->GetDistance2d(s.stillX, s.stillY) <= STILL_YD);
+        if (!still)
+            s.leaderStill = false;
+        else if (!s.leaderStill)
+        {
+            s.leaderStill = true;
+            s.stillSinceMs = now;
+            s.stillX = leader->GetPositionX();
+            s.stillY = leader->GetPositionY();
+            s.nextActMs = 0;
+        }
+        if (!bot->IsSittingDown())
+            s.sat = false;
+
+        Personality const p = Of(bot);
+        if (!s.leaderStill)
+        {
+            if (!s.nextActMs)
+                s.nextActMs = now + urand(DRIFT_EVERY_MIN_MS, DRIFT_EVERY_MAX_MS);
+            if (!Due(now, s.nextActMs))
+                return false;
+            s.nextActMs = 0;
+            next = Drifted(p);
+            return true;
+        }
+
+        uint32 const stood = WorldTimer::getMSTimeDiff(s.stillSinceMs, now);
+        if (stood < p.idleAfterMs)
+            return false;
+        if (!s.nextActMs)
+        {
+            s.nextActMs = now + urand(IDLE_EVERY_MIN_MS, IDLE_EVERY_MAX_MS);
+            return false;
+        }
+        if (!Due(now, s.nextActMs))
+            return false;
+        s.nextActMs = now + urand(IDLE_EVERY_MIN_MS, IDLE_EVERY_MAX_MS);
+
+        // Only a bot standing on its own: not walking, casting or already sitting (eating).
+        if (!IsStill(bot) || bot->IsNonMeleeSpellCasted(false) || bot->IsSittingDown())
+            return false;
+
+        uint32 const roll = urand(0, 99);
+        if (roll < LOOK_CHANCE)
+        {
+            bot->SetFacingTo(bot->GetAngle(leader) + frand(-LOOK_TURN, LOOK_TURN));
+            return false;
+        }
+        if (roll < LOOK_CHANCE + STEP_CHANCE || stood < SIT_AFTER_MS)
+        {
+            next = Drifted(p);
+            return true;
+        }
+        bot->SetStandState(UNIT_STAND_STATE_SIT);
+        s.sat = true;
+        return false;
     }
 
     float Heading(Player const* bot, Unit const* leader)
