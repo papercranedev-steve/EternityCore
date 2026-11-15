@@ -9,8 +9,12 @@
  * every healer bot that can act, has mana and is within HEAL_RANGE_YD, its best HealRate x
  * this member's share of the damage the members in its range take (Demand: one healer does
  * not heal everyone at full rate), the first landing after its cast time (+ what it casts
- * now). Time to die ttd: (health + absorb) under the full dps until the first heal, then
- * dps - heal (no limit when the heals keep up). In danger: ttd < DANGER_SEC (the heal
+ * now). Heals being cast on it now (PendingHealOn, any member's PartyMemberFacts::pendingHeal):
+ * one that lands before the member would die adds its amount (capped at the health missing
+ * when it lands) to its health; HealOn's rate starts after it. Since 2026-11-15
+ * (strat-20261115-173647: the tank at 1500 Shield Walled 0.6 s before a 3800 Greater Heal).
+ * Time to die ttd: (health + absorb + pending heals) under the full dps until the first heal,
+ * then dps - heal (no limit when the heals keep up). In danger: ttd < DANGER_SEC (the heal
  * module's emergency, HealPlan). Since 2026-11-08 (strat-20261108-161025: a mage at 8% under
  * seven enemies was not "in danger", each healer's whole rate counted on him from now on).
  *
@@ -62,6 +66,7 @@ namespace Commander
             float enemyDps = 0.0f;      // of which from enemies whose victim it is (predicted)
             float heal = 0.0f;          // heals per second the healer bots can put on it (HealOn)
             float healDelaySec = 0.0f;  // until the first of them lands
+            float pendingHeal = 0.0f;   // heals being cast on it that land before it dies (PendingHealOn)
             float ttd = 0.0f;           // seconds to die, infinity when the heals keep up
             bool InDanger() const { return ttd < DANGER_SEC; }
         };
@@ -76,6 +81,10 @@ namespace Commander
             float delaySec = 0.0f;
         };
         HealIn HealOn(WorldModel const& world, PartyMemberFacts const& member, float demand);
+        // Health the heals being cast on `member` (PartyMemberFacts::pendingHeal, players too)
+        // add: each that lands before `health` runs out under `dps`, capped at the health
+        // missing then (header).
+        float PendingHealOn(WorldModel const& world, PartyMemberFacts const& member, float health, float dps);
         // Damage per second a member takes now (predicted from the enemies on it, or measured).
         float Demand(WorldModel const& world, PartyMemberFacts const& member);
         // Seconds `health` lasts under `dps` with `heal` coming.

@@ -402,6 +402,16 @@ namespace Commander
         uint32 nextTickMs = 0;      // from the refresh
         uint32 remainingMs = 0;
 
+    // A member's single target direct heal being cast (PartyMemberFacts::pendingHeal):
+    // SurvivalValue::Of counts it on its target when it lands.
+    struct PendingHeal
+    {
+        ObjectGuid target;          // empty = none (may be the caster itself)
+        uint32 spellId = 0;
+        uint32 landMs = 0;          // from WorldModel::refreshedAtMs until it lands
+        float amount = 0.0f;        // HealSpells::Estimate direct part (no crit)
+    };
+
         uint32 TicksLeft() const
         {
             if (!periodMs || nextTickMs > remainingMs)
@@ -479,6 +489,8 @@ namespace Commander
         std::vector<BurstAbility> bursts;           // bots only
         std::vector<AllyBoostAbility> allyBoosts;   // bots only
         // Every member (BoostAssigner): its mana regeneration is boosted now
+        // Its single target direct heal being cast (players too): SurvivalValue::Of counts it.
+        PendingHeal pendingHeal;
         // (SPELL_AURA_MOD_POWER_REGEN_PERCENT: Innervate), its spells are (Power Infusion,
         // Arcane Power: they do not stack).
         bool manaBoosted = false;

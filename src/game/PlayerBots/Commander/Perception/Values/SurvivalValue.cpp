@@ -54,8 +54,28 @@ namespace SurvivalValue
         d.heal = in.hps;
         d.healDelaySec = in.delaySec;
         if (d.dps > 0.0f)
-            d.ttd = TimeToDie(float(member.health) + member.absorb, d.dps, in.delaySec, d.dps - in.hps);
+        {
+            float const health = float(member.health) + member.absorb;
+            d.pendingHeal = PendingHealOn(world, member, health, d.dps);
+            d.ttd = TimeToDie(health + d.pendingHeal, d.dps, in.delaySec, d.dps - in.hps);
+        }
         return d;
+    }
+
+    float PendingHealOn(WorldModel const& world, PartyMemberFacts const& member, float health, float dps)
+    {
+        float total = 0.0f;
+        for (PartyMemberFacts const& h : world.party)
+        {
+            PendingHeal const& p = h.pendingHeal;
+            if (p.target != member.guid || p.amount <= 0.0f)
+                continue;
+            float const left = health - std::max(0.0f, dps) * p.landMs / 1000.0f;
+            if (left <= 0.0f)
+                continue;
+            total += std::min(p.amount, std::max(0.0f, float(member.maxHealth) - left));
+        }
+        return total;
     }
 
     float Demand(WorldModel const& world, PartyMemberFacts const& m)
@@ -160,7 +180,7 @@ namespace SurvivalValue
                 break;
         }
 
-        float const health = float(member.health) + member.absorb + extra;
+        float const health = float(member.health) + member.absorb + danger.pendingHeal + extra;
         float const ttd = TimeToDie(health, dps * factor - heal, sec, dps - heal);
         float kept = dps * (1.0f - factor) * sec + healUsed;
         if (a.effect == SurvivalAbility::Effect::Absorb || a.effect == SurvivalAbility::Effect::ExtraHealth)

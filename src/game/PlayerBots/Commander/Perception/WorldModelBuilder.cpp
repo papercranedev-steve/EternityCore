@@ -223,6 +223,27 @@ namespace WorldModelBuilder
         }
 
         void FillPlayerRoles(WorldModel& world)
+        // PartyMemberFacts::pendingHeal: a single target direct heal with a cast time in
+        // progress (strat-20261115-173647: the tank used Shield Wall 0.6 s before a Greater Heal
+        // for 3800 landed on him, the heal in progress counted as a delay only).
+        void FillPendingHeal(Unit* unit, PartyMemberFacts& f)
+        {
+            Spell const* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (!spell || !spell->m_spellInfo || spell->getState() != SPELL_STATE_PREPARING ||
+                spell->GetCastTime() <= 0 || !HealSpells::IsSingleTargetHeal(spell->m_spellInfo))
+                return;
+            Unit const* target = spell->m_targets.getUnitTarget();
+            if (!target)
+                return;
+            float const amount = HealSpells::Estimate(unit, target, spell->m_spellInfo).direct;
+            if (amount <= 0.0f)
+                return;
+            f.pendingHeal.target = target->GetObjectGuid();
+            f.pendingHeal.spellId = spell->m_spellInfo->Id;
+            f.pendingHeal.landMs = uint32(std::max(0, int32(spell->GetCastedTime())));
+            f.pendingHeal.amount = amount;
+        }
+
         {
             bool botTank = false;
             for (PartyMemberFacts const& m : world.party)
@@ -1443,6 +1464,7 @@ namespace WorldModelBuilder
         // refresh, and non-party creatures on our enemies' threat lists (an ally that just joined
         // our fight is seen at once). All re-checked here, so the 1 s scan only delays allies
         // that fight something we are not fighting yet.
+            FillPendingHeal(member, f);
         Player* leader = bot->GetPartyLeader();
         Unit* reference = (leader && leader->IsInWorld() && leader->GetMap() == map) ? static_cast<Unit*>(leader) : me;
         std::vector<ObjectGuid> allyGuids = world.allyCandidates;
