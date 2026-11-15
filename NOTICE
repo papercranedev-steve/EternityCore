@@ -1,0 +1,21 @@
+EternityCore
+============
+
+EternityCore is a derivative work based on vMaNGOS (https://github.com/vmangos/core),
+which is itself a continuation of the MaNGOS, Elysium, and LightsHope projects.
+
+License
+-------
+This project is licensed under the GNU General Public License v2.0 (GPL-2.0).
+See the LICENSE file in the root directory for the full license text.
+
+All original vMaNGOS, MaNGOS, and third-party library copyrights remain with
+their respective authors and contributors.
+
+Trademark & Educational Disclaimer
+----------------------------------
+World of Warcraft(R) is a registered trademark of Blizzard Entertainment, Inc.
+EternityCore is an independent, non-commercial, open-source research and
+educational emulator project. It is not affiliated with, endorsed by, or
+supported by Blizzard Entertainment, Inc. No copyrighted game client assets
+are distributed with this repository.

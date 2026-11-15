@@ -1,66 +1,24 @@
-# Effective Bug Reporting
+# Contributing to EternityCore
 
-**Please note that the bug tracker does not accept reports on account or
-character issues that are unrelated to the server's development. You should open
-a ticket in game and wait for the response of a gamemaster. They may redirect
-you to this bug tracker if they believe there's a server issue that they cannot
-help you with.**
+Thank you for your interest in contributing to **EternityCore**!
 
-Before opening any issues on the bug tracker, use the search feature to locate
-any potential duplicates or related issues. If you find any matches, update the
-existing issue if you have additional relevant information that could help the
-developers in resolving the bug.
+## Scope
 
-If you didn't find any duplicate reports, the next step is to try to do some
-research to confirm that the current behaviour is incorrect. We receive a number
-of false reports that could be have been avoided if the user had used the
-sources below to confirm that a problem existed before opening a bug report.
+- **AI & Single-Player Features**: Issues, discussions, and pull requests related to the Commander AI (`src/game/PlayerBots/Commander/`), PartyBot behavior, dungeon boss AI, and solo-play improvements are very welcome.
+- **Core Vanilla Mechanics**: For general 1.12.1 world/spell/quest emulation bugs unrelated to AI bots, please check whether the issue also exists in upstream [vMaNGOS](https://github.com/vmangos/core).
 
-## Sources
+## Reporting AI Bugs
 
-Any links that you can provide that demonstrate that the information in your bug
-report is accurate will go a long way to helping the developers fix the
-problem. Although finding data from over a decade ago can be tricky, there are
-still avenues that are worth exploring.
+When reporting an AI behavior issue (e.g., wipe, bad pull, aggro loss, healing gap, or stuck movement), please include:
 
-* The official patch notes are usually the first port of call for finding
-  evidence of game mechanic and item changes. However, many changes will not be
-  documented.
+1. **Scenario**: Dungeon/zone name, mob/boss name, and party composition (classes, specs, levels).
+2. **Expected vs. Actual Behavior**: What a human player would do vs. what the bots did.
+3. **Diagnostic Output** (if available):
+   - Output from `.partybot ai plan`, `.partybot ai threat`, or `.partybot ai bot`
+   - Any relevant combat log / `.partybot ai say on` party chat notes
 
-* Through searching, you can often find lists of unofficial patch notes that
-  document changes that were not detailed in the official notes.
+## Submitting Pull Requests
 
-* Using relevant keywords in Google while restricting the time range will often
-  find old, useful forum posts that describe mechanics/boss strategies.
-
-* YouTube and Warcraftmovies can be a good source of old gameplay recordings.
-
-* Make good use of the Internet Archive's Wayback Machine to browse older data
-  mining website such as Thottbot and Allakhazam. You may also be able to find
-  some content on archived versions of ElitistJerks.
-
-* WoW BlueTracker (http://blue.cardplace.com/search.html) contains a wealth of
-  older blue posts that can often by useful for finding evidence of various
-  minor changes and mechanic hotfixes.
-
-* Wikis can be a good source of information if all else fails. Try looking
-  through the edit history of relevant articles to find evidence.
-
-In general, private servers and forums posts from their communities are not
-considered to be a reliable source of information.
-
-## Opening a report
-
-Having done the above, if you have a new bug to report, please ensure that you
-include the following information at a minimum:
-
-* The server or game patch that your issue pertains to (e.g. Anathema, patch 1.10).
-
-* A clear, concise description of the current behaviour.
-
-* A description of the expected behaviour.
-
-* Where applicable, provide relevant sources that show or describe the correct
-  behaviour.
-
-Thank you!
+1. Keep changes focused and well-scoped; follow the existing code style (`.clang-format` / `.editorconfig`).
+2. Avoid modifying unrelated core vMaNGOS systems unless required by an AI feature.
+3. All contributions are licensed under the **GNU General Public License v2.0** ([LICENSE](LICENSE)).
