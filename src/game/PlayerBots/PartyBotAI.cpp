@@ -1469,7 +1469,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     EndRestWhenFull();
     bool const needsRest = !me->IsInCombat() && NeedsRest();
     bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst;
-    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting)
+    // (also not a bot sitting idle while the leader stands, HumanFollow: it rises when it
+    // follows again or the fight comes)
+    bool const idleSitting = m_humanIdle.sat && !me->IsInCombat() && !resurrectFirst;
+    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting && !idleSitting)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
     if (me->GetSheath() == SHEATH_STATE_UNARMED && !me->IsMounted())
