@@ -457,16 +457,27 @@ namespace FightLoad
         PartyMemberFacts const* tank = nullptr;
         // The stand-in with its armor once set up (a copy: the facts stay as they are).
         PartyMemberFacts standIn;
+        auto risen = [&lineup](ObjectGuid g)
+        {
+            return std::find(lineup.risen.begin(), lineup.risen.end(), g) != lineup.risen.end();
+        };
         if (!lineup.tank.IsEmpty())
         {
             PartyMemberFacts const* m = world.FindMember(lineup.tank);
-            if (!m || !m->CanAct())
+            bool const rises = m && !m->alive && m->selfRes && risen(m->guid);
+            if (!m || (!m->CanAct() && !rises))
                 return false;
             tank = m;
-            if (lineup.tankArmorMult != 1.0f)
+            if (lineup.tankArmorMult != 1.0f || rises)
             {
                 standIn = *m;
                 standIn.armor = uint32(float(m->armor) * std::max(0.0f, lineup.tankArmorMult));
+                if (rises)
+                {
+                    standIn.alive = true;
+                    standIn.controlled = false;
+                    standIn.health = std::max(1u, m->riseHealth);
+                }
                 tank = &standIn;
             }
         }
@@ -507,6 +518,19 @@ namespace FightLoad
                 for (HealRate& r : h.rates)
                     r.hps *= PLAYER_HEAL_SHARE;
             h.mana = float(m->mana);
+            h.maxMana = float(m->maxMana);
+            h.regenPerSec = m->manaRegenCasting;
+            h.restRegenPerSec = m->manaRegen;
+            out.healers.push_back(std::move(h));
+        }
+        for (ObjectGuid g : lineup.risen)
+        {
+            PartyMemberFacts const* m = world.FindMember(g);
+            if (!m || m->alive || !m->selfRes || m->spareHealRates.empty() || !m->UsesMana())
+                continue;
+            Healer h;
+            h.rates = m->spareHealRates;
+            h.mana = float(m->riseMana);
             h.maxMana = float(m->maxMana);
             h.regenPerSec = m->manaRegenCasting;
             h.restRegenPerSec = m->manaRegen;

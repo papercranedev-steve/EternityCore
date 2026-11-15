@@ -712,6 +712,11 @@ namespace Commander
         bool selfRes = false;
         bool resurrects = false;
         uint32 soulstoneItem = 0;
+        // Dead with selfRes: the health and mana it rises with (Spell::EffectSelfResurrect: the
+        // Soulstone's flat amounts, Reincarnation's percent). A dead healer bot with selfRes has
+        // its heals in spareHealRates (FightLoad::Lineup::risen).
+        uint32 riseHealth = 0;
+        uint32 riseMana = 0;
 
         bool CanAct() const { return alive && !controlled; }
         bool UsesMana() const { return maxMana > 0; }

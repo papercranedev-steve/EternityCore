@@ -75,6 +75,9 @@ public:
     // Role changed by the party assignment (stays unlocked). Spell data rebuilt on the next tick.
     void AssignRole(CombatBotRoles role);
     bool IsRoleLocked() const { return m_roleLocked; }
+    // `player` can resurrect others out of combat: a bot by its resurrection spell, a player
+    // by class and level (priests from 10, paladins and shamans from 12).
+    static bool CanResurrectOthers(Player const* player);
     // Contingencies (Commander CrisisAssigner, user 2026-11-15): a role for the rest of this
     // fight (a stand-in tank, a spare healer), also over a locked role; the role before is kept
     // and given back by RestoreRole (the lock is never touched). Spell data rebuilt next tick.

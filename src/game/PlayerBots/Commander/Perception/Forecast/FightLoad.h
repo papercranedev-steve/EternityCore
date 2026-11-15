@@ -172,6 +172,10 @@ namespace FightLoad
         // soloDps leaves the party's damage. A player's heals count PLAYER_HEAL_SHARE: other
         // roles may fail (ai-architecture rule).
         std::vector<ObjectGuid> spareHealers;
+        // Dead members with PartyMemberFacts::selfRes that rise now with riseHealth / riseMana
+        // (the in-fight rise, Coordination/Situation/Crisis/SelfRiseAssigner.h): `tank` may be
+        // one of them; a healer heals with its spareHealRates from the start.
+        std::vector<ObjectGuid> risen;
     };
     float const PLAYER_HEAL_SHARE = 0.5f;
     // FromWorld with that lineup. False: the tank is not there, dead or cannot act.

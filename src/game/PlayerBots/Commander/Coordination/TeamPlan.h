@@ -1474,6 +1474,9 @@ namespace Commander
         CrisisPlan crisis;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)
         WipePlan wipe;
+        // Dead bots that use their self resurrection now, in the fight (SelfRiseAssigner;
+        // CorpseRun carries it out). Cleared when the fight is over.
+        std::vector<ObjectGuid> rises;
         FightSpotPlan fightSpot;
         PatrolGuardPlan patrolGuard;
         CasterLurePlan casterLure;

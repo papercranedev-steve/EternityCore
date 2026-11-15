@@ -1209,27 +1209,40 @@ namespace WorldModelBuilder
         // PartyMemberFacts::selfRes and resurrects, every member (wipe protection).
         void FillRevive(Player const* member, PartyBotAI const* ai, PartyMemberFacts& f)
         {
+            uint32 riseSpell = 0;
             if (member->IsAlive())
                 f.selfRes = member->SelectResurrectionSpellId() != 0;
             else
+            {
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_6_1
-                f.selfRes = member->GetUInt32Value(PLAYER_SELF_RES_SPELL) != 0;
+                riseSpell = member->GetUInt32Value(PLAYER_SELF_RES_SPELL);
+                f.selfRes = riseSpell != 0;
 #else
+                riseSpell = member->GetResurrectionSpellId();
                 f.selfRes = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_CAN_SELF_RESURRECT);
 #endif
-            if (ai)
-                f.resurrects = ai->m_resurrectionSpell != nullptr;
-            else
-            {
-                uint32 const level = member->GetLevel();
-                switch (member->GetClass())
-                {
-                    case CLASS_PRIEST:  f.resurrects = level >= 10; break;
-                    case CLASS_PALADIN:
-                    case CLASS_SHAMAN:  f.resurrects = level >= 12; break;
-                    default: break;
-                }
             }
+            f.resurrects = PartyBotAI::CanResurrectOthers(member);
+            // As Spell::EffectSelfResurrect.
+            if (SpellEntry const* spell = f.selfRes ? sSpellMgr.GetSpellEntry(riseSpell) : nullptr)
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (spell->Effect[i] != SPELL_EFFECT_SELF_RESURRECT)
+                        continue;
+                    int32 const amount = spell->CalculateSimpleValue(SpellEffectIndex(i));
+                    if (amount < 0)
+                    {
+                        f.riseHealth = uint32(-amount);
+                        f.riseMana = uint32(std::max(0, spell->EffectMiscValue[i]));
+                    }
+                    else
+                    {
+                        f.riseHealth = uint32(amount / 100.0f * member->GetMaxHealth());
+                        f.riseMana = uint32(amount / 100.0f * member->GetMaxPower(POWER_MANA));
+                    }
+                    f.riseHealth = std::min(f.riseHealth, member->GetMaxHealth());
+                    break;
+                }
         }
 
         // PartyMemberFacts::soulstoneItem: a warlock bot's Soulstone in its bags, its use ready
@@ -1802,6 +1815,8 @@ namespace WorldModelBuilder
                     }
                     else if (member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
                         f.spareHealRates = HealCapacity::Rates(ai);
+                    else if (!member->IsAlive() && f.selfRes && f.role == ROLE_HEALER)
+                        f.spareHealRates = HealCapacity::Rates(ai);     // its heals once it rises
                     for (RaidTargetIcon mark : ai->m_marksToFocus)
                     {
                         ObjectGuid const marked = group->GetTargetWithIcon(mark);

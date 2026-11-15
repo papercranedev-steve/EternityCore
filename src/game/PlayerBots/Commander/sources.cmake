@@ -223,6 +223,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/SelfRiseAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Crisis/SelfRiseAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/WipeAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/WipeAssigner.cpp
   ${COMMANDER_DIR}/Behaviors/Support/WipeBehavior.h

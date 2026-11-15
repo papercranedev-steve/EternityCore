@@ -8,7 +8,8 @@
  *     idle enemy with the body in its aggro range + RISE_AGGRO_MARGIN: after a wipe they walk
  *     home, often to where the party fell), as the release dialog's button does
  *     (WorldSession::HandleSelfResOpcode). Idle enemies in the way for RISE_IDLE_WAIT_MS: the
- *     spirit is released after all;
+ *     spirit is released after all. In the fight only when the brain says so (TeamPlan::rises,
+ *     SelfRiseAssigner: rising wins it);
  *   - else the spirit is released at once (WorldSession::HandleRepopRequestOpcode). A released
  *     corpse can still be resurrected: the bots cast at it (PartyBotAI::SelectReleasedCorpse),
  *     a player too; the ghost accepts (CombatBotBaseAI::OnPacketReceived) and the run ends.

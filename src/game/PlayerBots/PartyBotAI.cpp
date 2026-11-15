@@ -1048,9 +1048,59 @@ bool PartyBotAI::IsClothCaster() const
     }
 }
 
+bool PartyBotAI::CanResurrectOthers(Player const* player)
+{
+    // (Player::AI is not const)
+    if (PlayerAI const* pAI = const_cast<Player*>(player)->AI())
+        if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(pAI))
+            return ai->m_resurrectionSpell != nullptr;
+    uint32 const level = player->GetLevel();
+    switch (player->GetClass())
+    {
+        case CLASS_PRIEST:  return level >= 10;
+        case CLASS_PALADIN:
+        case CLASS_SHAMAN:  return level >= 12;
+        default:            return false;
+    }
+}
+
+namespace
+{
+    // Who is resurrected first (user 2026-11-15, after a wipe): one who resurrects others (two
+    // casting at once), then a healer, then a tank, then the rest.
+    int ResurrectRank(Player const* pMember)
+    {
+        int rank = PartyBotAI::CanResurrectOthers(pMember) ? 4 : 0;
+        CombatBotRoles role = ROLE_INVALID;
+        if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(const_cast<Player*>(pMember)->AI()))
+            role = ai->GetRole();
+        else
+            role = RoleCapabilities::Assess(pMember).Best();
+        if (role == ROLE_HEALER)
+            rank += 2;
+        else if (role == ROLE_TANK)
+            rank += 1;
+        return rank;
+    }
+
+    // A bot's body that keeps a self resurrection rises by itself (CorpseRun): not first.
+    bool RisesByItself(Player const* pMember)
+    {
+        if (!dynamic_cast<PartyBotAI const*>(const_cast<Player*>(pMember)->AI()))
+            return false;
+#if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_6_1
+        return pMember->GetUInt32Value(PLAYER_SELF_RES_SPELL) != 0;
+#else
+        return pMember->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_CAN_SELF_RESURRECT);
+#endif
+    }
+}
+
 Player* PartyBotAI::SelectResurrectionTarget() const
 {
     Group* pGroup = me->GetGroup();
+    Player* pBest = nullptr;
+    int bestRank = -1;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         if (Player* pMember = itr->getSource())
@@ -1070,17 +1120,28 @@ Player* PartyBotAI::SelectResurrectionTarget() const
             if (!me->IsWithinLOSInMap(pMember))
                 continue;
 
-            if (m_resurrectionSpell->IsTargetInRange(me, pMember))
-                return pMember;
+            if (!m_resurrectionSpell->IsTargetInRange(me, pMember))
+                continue;
+
+            // Fix: the first in the group order came first; now ResurrectRank, and a bot that
+            // rises by itself last.
+            int const rank = RisesByItself(pMember) ? 0 : ResurrectRank(pMember) + 1;
+            if (rank > bestRank)
+            {
+                pBest = pMember;
+                bestRank = rank;
+            }
         }
     }
 
-    return nullptr;
+    return pBest;
 }
 
 Corpse* PartyBotAI::SelectReleasedCorpse() const
 {
     Group* pGroup = me->GetGroup();
+    Corpse* pBest = nullptr;
+    int bestRank = -1;
     for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* pMember = itr->getSource();
@@ -1097,11 +1158,17 @@ Corpse* PartyBotAI::SelectReleasedCorpse() const
         if (!pCorpse->IsWithinLOSInMap(me))
             continue;
 
-        if (m_resurrectionSpell->IsTargetInRange(me, pCorpse))
-            return pCorpse;
+        if (!m_resurrectionSpell->IsTargetInRange(me, pCorpse))
+            continue;
+        int const rank = ResurrectRank(pMember);     // (as SelectResurrectionTarget)
+        if (rank > bestRank)
+        {
+            pBest = pCorpse;
+            bestRank = rank;
+        }
     }
 
-    return nullptr;
+    return pBest;
 }
 
 bool PartyBotAI::CastResurrection(SpellEntry const* pSpell, ObjectGuid deadGuid)

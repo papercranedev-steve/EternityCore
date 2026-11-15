@@ -189,8 +189,13 @@ namespace Commander
         }
 
         // Header "Takeover": the best option's bots take their roles for the rest of the fight.
+        // Not while one of ours is rising (SelfRiseAssigner, before this): it comes back itself.
         if (c.best < 0)
             return;
+        for (ObjectGuid g : plan.rises)
+            if (PartyMemberFacts const* m = world.FindMember(g))
+                if (!m->alive)
+                    return;
         CrisisOption const& best = c.options[c.best];
         auto give = [&](ObjectGuid bot, CombatBotRoles role, StandInWay way)
         {

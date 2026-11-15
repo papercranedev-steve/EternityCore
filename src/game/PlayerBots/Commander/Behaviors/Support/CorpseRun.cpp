@@ -1,6 +1,8 @@
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Movement/Arrival.h"
 #include "Commander/Perception/Spatial/TravelTime.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
 #include "PartyBotAI.h"
 #include "Player.h"
 #include "Corpse.h"
@@ -76,6 +78,17 @@ namespace CorpseRun
                         me->IsWithinDistInMap(c, c->GetAttackDistance(me) + RISE_AGGRO_MARGIN))
                         return RiseCheck::Idle;
             return RiseCheck::Safe;
+        }
+
+        // TeamPlan::rises (SelfRiseAssigner) names this bot. Same map as the bot: the commander
+        // belongs to this map thread.
+        bool RiseOrdered(Player* me)
+        {
+            std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return false;
+            std::vector<ObjectGuid> const& rises = commander->GetPlan().rises;
+            return std::find(rises.begin(), rises.end(), me->GetObjectGuid()) != rises.end();
         }
 
         WorldLocation Here(WorldObject const* obj)
@@ -190,6 +203,13 @@ namespace CorpseRun
         {
             if (HasSelfRes(me))
             {
+                // The brain lets it rise in the fight: that wins it (SelfRiseAssigner).
+                if (RiseOrdered(me))
+                {
+                    state.idleSinceMs = 0;
+                    UseSelfRes(me);
+                    return;
+                }
                 RiseCheck const check = SafeToRise(me);
                 if (check == RiseCheck::Safe)
                 {
