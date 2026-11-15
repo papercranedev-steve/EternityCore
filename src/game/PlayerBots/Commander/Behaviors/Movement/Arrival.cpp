@@ -36,9 +36,12 @@ namespace Arrival
             return false;
         }
 
-        // The leader runs his own corpse: wait here, as a player does at the entrance. The
-        // walk's clocks start again when he is back.
-        if (!leader->IsAlive())
+        // The leader runs his own corpse (a ghost): wait here, as a player does at the entrance.
+        // The walk's clocks start again when he is back.
+        // Fix (user, 2026-11-15): only a ghost. A leader whose body lies unreleased waits for a
+        // resurrection: the bots waited at the entrance forever, and this return came before
+        // the resurrection; the walk goes to the body instead (the dead leader's position).
+        if (!leader->IsAlive() && leader->GetDeathState() != CORPSE)
         {
             bot->EndRestWhenFull();
             if (!bot->IsResting() && bot->NeedsRest())

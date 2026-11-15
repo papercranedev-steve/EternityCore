@@ -5,7 +5,8 @@
  * from another map.
  *
  * Update (bot update, out of combat, in place of the 100 yd teleport and the follow):
- *   - the leader dead (his own corpse run): the bot waits where it is, and eats or drinks;
+ *   - the leader a ghost (his own corpse run): the bot waits where it is, and eats or drinks;
+ *     his body lying unreleased: the bot walks to it (the resurrection there, ResurrectApproach);
  *   - the leader alive on another map or instance: the walk ends (the original teleport);
  *   - else a navmesh walk (MovePoint with pathfinding: long paths are cut, so it is made again
  *     every REPATH_MS from where the bot got to, or when the leader moved REPATH_MOVED_YD);

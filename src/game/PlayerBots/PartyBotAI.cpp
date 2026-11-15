@@ -1415,6 +1415,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // tick so UpdateOutOfCombatAI() can cast it. Targets with a pending request are ignored so
     // the bot does not stand up again and again.
     bool resurrectFirst = false;
+    // The resurrection could be cast now if a body were in range and sight.
+    bool const canResurrect = !me->IsInCombat() && m_resurrectionSpell && !me->IsMounted() &&
+        me->IsSpellReady(m_resurrectionSpell) &&
+        me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me);
+    if (me->IsInCombat())
+        m_resurrectApproach = Commander::ResurrectApproachState();
     if (!me->IsInCombat())
     {
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
@@ -1475,12 +1481,20 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
         // (eating and drinking: the Commander rest module, RestBehavior, through the hook below)
 
-        // Back from a corpse run away from the leader: walk to him, no teleport.
-        if (Commander::Arrival::Update(this, m_arrival, pLeader))
+        // A dead member out of range or sight: walk to the body first (as a player does). One in
+        // range and sight: no walk (UpdateOutOfCombatAI below casts it).
+        if (resurrectFirst || !canResurrect || (commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
+            Commander::ResurrectApproach::Stop(me, m_resurrectApproach);
+        else if (Commander::ResurrectApproach::Update(this, m_resurrectApproach, m_resurrectionSpell))
+            return;
+
+        // Back from a corpse run away from the leader: walk to him, no teleport. Not while a
+        // resurrection here is about to be cast (the walk or the teleport would cancel it).
+        if (!resurrectFirst && Commander::Arrival::Update(this, m_arrival, pLeader))
             return;
 
         // Teleport to leader if too far away.
-        if (!me->IsWithinDistInMap(pLeader, 100.0f))
+        if (!resurrectFirst && !me->IsWithinDistInMap(pLeader, 100.0f))
         {
             if (!me->IsStopped())
                 me->StopMoving();

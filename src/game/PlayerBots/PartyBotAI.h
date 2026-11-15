@@ -29,6 +29,7 @@
 #include "Commander/Behaviors/Movement/TrailFollow.h"
 #include "Commander/Behaviors/Movement/Arrival.h"
 #include "Commander/Behaviors/Support/CorpseRun.h"
+#include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -371,6 +372,9 @@ public:
     // the leader (Commander/Behaviors/Movement/Arrival.h).
     Commander::CorpseRunState m_corpseRun;
     Commander::ArrivalState m_arrival;
+    // Out of combat: the walk to a dead member out of range or sight of the resurrection
+    // (Commander/Behaviors/Support/ResurrectApproach.h).
+    Commander::ResurrectApproachState m_resurrectApproach;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;
