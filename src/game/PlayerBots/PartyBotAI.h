@@ -25,6 +25,7 @@
 #include "Commander/Behaviors/Movement/Backpedal.h"
 #include "Commander/Behaviors/Movement/JumpCast.h"
 #include "Commander/Behaviors/Movement/FollowSpot.h"
+#include "Commander/Behaviors/Movement/TrailFollow.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -186,6 +187,8 @@ public:
     // (Commander/Behaviors/Movement/JumpCast.h). False when it is not running a point walk.
     bool OrderJumpCast(SpellEntry const* pSpellEntry, float orientation);
     bool IsJumpCasting() const { return m_jumpCast.active; }
+    // Walking the leader's recorded trail (Commander/Behaviors/Movement/TrailFollow.h).
+    bool IsTrailFollowing() const { return m_trailFollow.active; }
     // The Commander keeps the Sap controller of a pull in stealth (CrowdControlBehavior,
     // Takeover::Stealth): the rogue rotation's stealth in / cancel stands down.
     bool IsStealthControlled() const;
@@ -343,6 +346,8 @@ public:
     Commander::BackpedalState m_backpedal;
     // Commander jump turn cast (Commander/Behaviors/Movement/JumpCast.h), every frame in UpdateAI.
     Commander::JumpCastState m_jumpCast;
+    // Commander leader trail walk (Commander/Behaviors/Movement/TrailFollow.h), every frame in UpdateAI.
+    Commander::TrailFollowState m_trailFollow;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

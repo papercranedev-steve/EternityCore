@@ -299,6 +299,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/RunToTank.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/JumpCast.h
   ${COMMANDER_DIR}/Behaviors/Movement/JumpCast.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.h
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.h
+  ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp

@@ -37,6 +37,7 @@
 #include "MovementPacketSender.h"
 #include "MoveSpline.h"
 #include "Geometry.h"
+#include "PlayerBots/Commander/Perception/Spatial/LeaderTrail.h"
 
 void WorldSession::HandleMoveWorldportAckOpcode(NullClientPacket const& /*packet*/)
 {
@@ -345,6 +346,11 @@ void WorldSession::HandleMovementOpcodes(WorldPackets::Movement::MovementPacket 
     }
 
     HandleMoverRelocation(pMover, const_cast<MovementInfo&>(packet.movementInfo));
+
+    // PartyBot Commander: the way a player in a group went, for bots that cannot path after it
+    // (PlayerBots/Commander/Perception/Spatial/LeaderTrail.h).
+    if (pPlayerMover)
+        Commander::LeaderTrail::OnMove(pPlayerMover, opcode);
 
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
     // this is here to accommodate 1.14 client behavior

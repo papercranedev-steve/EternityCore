@@ -192,6 +192,7 @@ void PartyBotAI::ClearMovementHold()
     if (m_directives)
         m_directives->ReleaseMovement();
     Commander::Backpedal::Stop(me, m_backpedal);
+    Commander::TrailFollow::Stop(this, m_trailFollow);
 }
 
 bool PartyBotAI::OrderJumpCast(SpellEntry const* pSpellEntry, float orientation)
@@ -1157,6 +1158,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     Commander::Backpedal::Update(this, m_backpedal, diff);
     // Commander jump turn cast: the jump's position and facing every frame.
     Commander::JumpCast::Update(this, m_jumpCast);
+    // Commander leader trail walk: the next leg as soon as one ends.
+    Commander::TrailFollow::Update(this, m_trailFollow);
 
     // Warrior stance swap (DoCastWithStance): cast the spell as soon as the stance is up, every
     // frame, so the bot stays in the other stance for one spell update instead of a bot interval.
@@ -1270,6 +1273,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         return;
 
     sCommanderMgr.OnBotUpdate(this);
+
+    // Dropping down on the leader's trail: a cast (buff, heal) would stop the fall in the air.
+    if (Commander::TrailFollow::IsFalling(me, m_trailFollow))
+        return;
 
     if (pLeader->IsTaxiFlying())
     {
@@ -1449,7 +1456,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // group of seven came (strat-20261107-164236).
     {
         // (also while walking: the follow point moves with the leader)
-        if (!me->GetVictim() && !IsMovementHeld() && !IsStanceControlled())
+        // The leader's way when the navmesh has none or only a long detour (a drop, a jump):
+        // Commander/Behaviors/Movement/TrailFollow.h.
+        if (!me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
+            !Commander::TrailFollow::Consider(this, m_trailFollow, pLeader))
             KeepFollowSpotSafe(pLeader);
 
         // Fix: a healer that was following when the fight started kept following until it stood
@@ -1525,7 +1535,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // put them while the party fights, in combat themselves or not yet: following the leader walked the
             // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
             // that had not healed yet with the player while the tank fought further away.
-            if (!IsStanceControlled() &&
+            if (!IsStanceControlled() && !IsTrailFollowing() &&
                 me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
                 StartFollowing(pLeader);
         }
