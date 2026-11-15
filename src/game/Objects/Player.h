@@ -2434,6 +2434,10 @@ class Player final: public Unit
         GroupReference m_originalGroup;
         Group* m_groupInvite;
         uint32 m_groupUpdateMask;
+        bool m_groupShown = false;
+        uint32 m_groupShownZoneId = 0;
+        float m_groupShownX = 0.0f;
+        float m_groupShownY = 0.0f;
         uint64 m_auraUpdateMask;
         uint32 m_LFGAreaId;
     public:
@@ -2446,6 +2450,14 @@ class Player final: public Unit
         uint8 GetSubGroup() const { return m_group.getSubGroup(); }
         uint32 GetGroupUpdateFlag() const { return m_groupUpdateMask; }
         void SetGroupUpdateFlag(uint32 flag) { m_groupUpdateMask |= flag; }
+        // Where the party frames and the map show this player instead of where it is: a party
+        // bot's simulated corpse run (PlayerBots/Commander/Behaviors/Support/CorpseRun.h).
+        // Unset: its own zone and position.
+        void SetGroupShownPosition(uint32 zoneId, float x, float y);
+        void ClearGroupShownPosition();
+        uint32 GetGroupShownZoneId() const { return m_groupShown ? m_groupShownZoneId : GetCachedZoneId(); }
+        float GetGroupShownX() const { return m_groupShown ? m_groupShownX : GetPositionX(); }
+        float GetGroupShownY() const { return m_groupShown ? m_groupShownY : GetPositionY(); }
         uint64 const& GetAuraUpdateMask() const { return m_auraUpdateMask; }
         void SetAuraUpdateSlot(uint8 slot) { m_auraUpdateMask |= (uint64(1) << slot); }
         void SetAuraUpdateMask(uint64 mask) { m_auraUpdateMask = mask; }

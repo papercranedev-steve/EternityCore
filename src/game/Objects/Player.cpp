@@ -19206,6 +19206,27 @@ void Player::SendUpdateToOutOfRangeGroupMembers()
         pet->ResetAuraUpdateMask();
 }
 
+void Player::SetGroupShownPosition(uint32 zoneId, float x, float y)
+{
+    // The packet carries whole yards (int16): flag only what the members would see change.
+    if (!m_groupShown || int16(m_groupShownX) != int16(x) || int16(m_groupShownY) != int16(y))
+        SetGroupUpdateFlag(GROUP_UPDATE_FLAG_POSITION);
+    if (!m_groupShown || m_groupShownZoneId != zoneId)
+        SetGroupUpdateFlag(GROUP_UPDATE_FLAG_ZONE);
+    m_groupShown = true;
+    m_groupShownZoneId = zoneId;
+    m_groupShownX = x;
+    m_groupShownY = y;
+}
+
+void Player::ClearGroupShownPosition()
+{
+    if (!m_groupShown)
+        return;
+    m_groupShown = false;
+    SetGroupUpdateFlag(GROUP_UPDATE_FLAG_POSITION | GROUP_UPDATE_FLAG_ZONE);
+}
+
 void Player::SendTransferAborted(uint8 reason) const
 {
     auto packet = std::make_unique<WorldPackets::Misc::TransferAborted>();

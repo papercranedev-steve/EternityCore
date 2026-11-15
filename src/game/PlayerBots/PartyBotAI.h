@@ -27,9 +27,12 @@
 #include "Commander/Behaviors/Movement/FollowSpot.h"
 #include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/Behaviors/Movement/TrailFollow.h"
+#include "Commander/Behaviors/Movement/Arrival.h"
+#include "Commander/Behaviors/Support/CorpseRun.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
+class Corpse;
 class ClassRotation;
 
 class PartyBotAI : public CombatBotBaseAI
@@ -148,9 +151,16 @@ public:
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
+    // A member whose body lies here unreleased (CORPSE) in range and sight of the resurrection.
     Player* SelectResurrectionTarget() const;
+    // The corpse on this map of a member that released its spirit (a ghost, maybe elsewhere),
+    // in range and sight: resurrections are cast at the corpse, as a client does.
+    Corpse* SelectReleasedCorpse() const;
+    // The resurrection spell at a released corpse (SpellCastTargets corpse target). True: cast.
+    bool CastResurrectionAtCorpse(Corpse* pCorpse);
     Player* SelectShieldTarget() const;
-    bool ShouldAutoRevive() const;
+    // Back alive away from the leader, walking to him (Commander/Behaviors/Movement/Arrival.h).
+    bool IsArriving() const { return m_arrival.active; }
 
     // Out of combat: the class kit's friendly dispels (ClassKit::Dispels) on the party, in
     // caster form only. In combat the Commander dispels (DispelBehavior).
@@ -357,6 +367,10 @@ public:
     Commander::JumpCastState m_jumpCast;
     // Commander leader trail walk (Commander/Behaviors/Movement/TrailFollow.h), every frame in UpdateAI.
     Commander::TrailFollowState m_trailFollow;
+    // Dead: the corpse run (Commander/Behaviors/Support/CorpseRun.h); back alive: the walk to
+    // the leader (Commander/Behaviors/Movement/Arrival.h).
+    Commander::CorpseRunState m_corpseRun;
+    Commander::ArrivalState m_arrival;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

@@ -311,6 +311,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.h
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/TravelTime.h
+  ${COMMANDER_DIR}/Perception/Spatial/TravelTime.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/Arrival.h
+  ${COMMANDER_DIR}/Behaviors/Movement/Arrival.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/CorpseRun.h
+  ${COMMANDER_DIR}/Behaviors/Support/CorpseRun.cpp
   ${COMMANDER_DIR}/Classes/ClassKit.h
   ${COMMANDER_DIR}/Classes/ClassKit.cpp
   ${COMMANDER_DIR}/Classes/Warrior.cpp
@@ -324,8 +330,6 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Classes/Hunter.cpp
   ${COMMANDER_DIR}/Classes/RaceKit.h
   ${COMMANDER_DIR}/Classes/RaceKit.cpp
-  ${COMMANDER_DIR}/Classes/ItemKit.h
-  ${COMMANDER_DIR}/Classes/ItemKit.cpp
   ${COMMANDER_DIR}/Perception/Values/BurstValue.h
   ${COMMANDER_DIR}/Perception/Values/BurstValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/BurstBehavior.h

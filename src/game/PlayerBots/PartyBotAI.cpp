@@ -16,6 +16,7 @@
 
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Corpse.h"
 #include "CreatureAI.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
@@ -59,9 +60,6 @@ enum PartyBotSpells
 #define PB_MAX_FOLLOW_DIST 6.0f
 #define PB_MIN_FOLLOW_ANGLE 0.0f
 #define PB_MAX_FOLLOW_ANGLE 6.0f
-// No auto revive while an enemy this close is still fighting (a rogue's Vanish or a Feign Death
-// drops the last member out of combat, the fight goes on).
-#define PB_REVIVE_ENEMY_COMBAT_RADIUS 40.0f
 
 bool PartyBotAI::OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess)
 {
@@ -711,7 +709,7 @@ bool PartyBotAI::StartResting()
 
     // Far behind the leader (it is about to be teleported there): full at once, as before.
     Player* pLeader = GetPartyLeader();
-    if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f))
+    if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f) && !IsArriving())
     {
         me->SetHealth(me->GetMaxHealth());
         if (me->GetPowerType() == POWER_MANA)
@@ -755,48 +753,6 @@ void PartyBotAI::EndRestWhenFull()
         !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE_PERCENT) &&
         !me->HasAuraType(SPELL_AURA_PERIODIC_LEECH))
         me->RemoveAurasDueToSpell(PB_SPELL_FOOD);
-}
-
-bool PartyBotAI::ShouldAutoRevive() const
-{
-    if (me->GetDeathState() == DEAD)
-        return true;
-
-    bool alivePlayerNearby = false;
-    Group* pGroup = me->GetGroup();
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
-    {
-        if (Player* pMember = itr->getSource())
-        {
-            if (pMember == me)
-                continue;
-
-            if (pMember->IsInCombat())
-                return false;
-
-            if (pMember->IsAlive())
-            {
-                if (IsHealerClass(pMember->GetClass()))
-                    return false;
-
-                if (me->IsWithinDistInMap(pMember, 15.0f))
-                    alivePlayerNearby = true;
-            }
-        }
-    }
-
-    if (!alivePlayerNearby)
-        return false;
-
-    std::list<Unit*> enemies;
-    me->GetEnemyListInRadiusAround(me, PB_REVIVE_ENEMY_COMBAT_RADIUS, enemies);
-    for (Unit const* pEnemy : enemies)
-    {
-        if (pEnemy->IsInCombat())
-            return false;
-    }
-
-    return true;
 }
 
 bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
@@ -1068,6 +1024,57 @@ Player* PartyBotAI::SelectResurrectionTarget() const
     }
 
     return nullptr;
+}
+
+Corpse* PartyBotAI::SelectReleasedCorpse() const
+{
+    Group* pGroup = me->GetGroup();
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pMember = itr->getSource();
+        if (!pMember || pMember == me || pMember->GetDeathState() != DEAD || pMember->IsRessurectRequested())
+            continue;
+
+        // The ghost may be on another map (its graveyard); the corpse must be on this one.
+        Corpse* pCorpse = sObjectAccessor.GetCorpseForPlayerGUID(pMember->GetObjectGuid());
+        if (!pCorpse || pCorpse->GetType() == CORPSE_BONES ||
+            me->GetMap()->GetCorpse(pCorpse->GetObjectGuid()) != pCorpse)
+            continue;
+
+        // (as Spell::CheckCast for a corpse target)
+        if (!pCorpse->IsWithinLOSInMap(me))
+            continue;
+
+        if (m_resurrectionSpell->IsTargetInRange(me, pCorpse))
+            return pCorpse;
+    }
+
+    return nullptr;
+}
+
+bool PartyBotAI::CastResurrectionAtCorpse(Corpse* pCorpse)
+{
+    SpellEntry const* pSpellEntry = m_resurrectionSpell;
+    if (m_preventCasting || !pSpellEntry || !me->IsSpellReady(pSpellEntry) || me->HasGCD(pSpellEntry))
+        return false;
+    if (me->GetPower(Powers(pSpellEntry->powerType)) < Spell::CalculatePowerCost(pSpellEntry, me))
+        return false;
+    if (pSpellEntry->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) != SPELL_CAST_OK)
+        return false;
+
+    if (!me->IsStopped())
+        me->StopMoving();
+    me->SetFacingTo(me->GetAngle(pCorpse));
+    if (me->IsMounted())
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+
+    // SpellCaster::CastSpell takes only a unit or object target: the corpse target as a
+    // client sends it (Spell::FillTargetMap resurrects the corpse's owner).
+    Spell* pSpell = new Spell(me, pSpellEntry, false);
+    SpellCastTargets targets;
+    targets.setCorpseTarget(pCorpse);
+    targets.m_targetMask = TARGET_FLAG_CORPSE_ALLY;
+    return pSpell->prepare(std::move(targets)) == SPELL_CAST_OK;
 }
 
 Player* PartyBotAI::SelectShieldTarget() const
@@ -1352,15 +1359,13 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         return;
     }
 
+    // Dead: release and run the corpse like a player (Commander/Behaviors/Support/CorpseRun.h).
     if (me->IsDead())
     {
-        if (ShouldAutoRevive())
-        {
-            me->ResurrectPlayer(0.5f);
-            me->SpawnCorpseBones();
-        }
+        Commander::CorpseRun::Update(this, m_corpseRun, m_arrival);
         return;
     }
+    Commander::CorpseRun::OnAlive(me, m_corpseRun);
 
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
     {
@@ -1414,7 +1419,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
         {
-            if (Player* pDead = SelectResurrectionTarget())
+            // An unreleased body, else the corpse of a member that released (a ghost).
+            Player* pDead = SelectResurrectionTarget();
+            Corpse* pReleased = pDead ? nullptr : SelectReleasedCorpse();
+            ObjectGuid const deadGuid = pDead ? pDead->GetObjectGuid() :
+                                        pReleased ? pReleased->GetOwnerGuid() : ObjectGuid();
+            if (!deadGuid.IsEmpty())
             {
                 if (me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me))
                 {
@@ -1426,17 +1436,18 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                     // as the target and each switch restarted it, so the bot never drank.
                     // Switching corpses restarts it only when the last one was resurrected.
                     uint32 const now = WorldTimer::getMSTime();
-                    if (m_resurrectTryGuid != pDead->GetObjectGuid())
+                    if (m_resurrectTryGuid != deadGuid)
                     {
                         bool restart = m_resurrectTryGuid.IsEmpty();
                         if (!restart)
                         {
-                            Player* pLast = me->GetMap()->GetPlayer(m_resurrectTryGuid);
+                            // (any map: a ghost waits at its graveyard)
+                            Player* pLast = sObjectAccessor.FindPlayer(m_resurrectTryGuid);
                             restart = pLast && (pLast->IsAlive() || pLast->IsRessurectRequested());
                         }
                         if (restart)
                             m_resurrectTryMs = now;
-                        m_resurrectTryGuid = pDead->GetObjectGuid();
+                        m_resurrectTryGuid = deadGuid;
                     }
                     if (WorldTimer::getMSTimeDiff(m_resurrectTryMs, now) >= PB_RESURRECT_TRY_MS + PB_RESURRECT_BACKOFF_MS)
                         m_resurrectTryMs = now;
@@ -1452,7 +1463,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 for (GroupReference* itr = me->GetGroup()->GetFirstMember(); itr && !corpseLeft; itr = itr->next())
                 {
                     Player* pMember = itr->getSource();
-                    corpseLeft = pMember && pMember != me && pMember->GetDeathState() == CORPSE &&
+                    // (DEAD: released, its corpse may be here)
+                    corpseLeft = pMember && pMember != me &&
+                                 (pMember->GetDeathState() == CORPSE || pMember->GetDeathState() == DEAD) &&
                                  !pMember->IsRessurectRequested();
                 }
                 if (!corpseLeft)
@@ -1461,6 +1474,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
 
         // (eating and drinking: the Commander rest module, RestBehavior, through the hook below)
+
+        // Back from a corpse run away from the leader: walk to him, no teleport.
+        if (Commander::Arrival::Update(this, m_arrival, pLeader))
+            return;
 
         // Teleport to leader if too far away.
         if (!me->IsWithinDistInMap(pLeader, 100.0f))
@@ -1650,10 +1667,19 @@ void PartyBotAI::FaceMeleeVictim(Unit* pVictim)
 void PartyBotAI::UpdateOutOfCombatAI()
 {
     if (m_resurrectionSpell)
+    {
         if (Player* pTarget = SelectResurrectionTarget())
+        {
             if (CanTryToCastSpell(pTarget, m_resurrectionSpell))
                 if (DoCastSpell(pTarget, m_resurrectionSpell) == SPELL_CAST_OK)
                     return;
+        }
+        else if (Corpse* pCorpse = SelectReleasedCorpse())
+        {
+            if (CastResurrectionAtCorpse(pCorpse))
+                return;
+        }
+    }
 
     if (DispelOutOfCombat())
         return;
