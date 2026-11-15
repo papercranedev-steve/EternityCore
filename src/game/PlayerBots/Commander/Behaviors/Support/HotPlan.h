@@ -2,13 +2,24 @@
  * PartyBot Commander: HoTs and the spell that eats them (druid Rejuvenation, Swiftmend), pure
  * arithmetic for HealPlanBehavior (user 2026-11-15).
  *
- * HoT rank (PickHot): the healer's HoT goes on a member being hit that has none of the
- * healer's own (one at a time, never refreshed early). Each rank fills
- *   need = missing health + damage expected over its duration x HealSpells::HOT_INCOMING_SHARE
- * and qualifies when it overheals at most HealPlan::OVERHEAL_MAX of its total and heals at
- * least MIN_RANK_SHARE of the biggest rank (no tiny ranks for a scratch). Of those: the
- * biggest when the healer can eat the HoT later (Swiftmend heals for the HoT's ticks: a higher
- * rank is a bigger free heal), else the least mana per health healed (ties: the bigger one).
+ * HoT rank (PickHot, user 2026-11-15): the healer's HoT goes on a member being hit that has
+ * none of the healer's own (one at a time, never refreshed early). Each rank fills
+ *   need = missing health + damage expected over its duration x MATCH_SHARE
+ * and qualifies when it overheals at most HealPlan::OVERHEAL_MAX of its total. Of those:
+ *   a party member   the biggest: a HoT that keeps up with the damage or a little below it, so
+ *                    the target needs fewer casts. Light damage: a mid rank; heavy damage: the
+ *                    top rank once even it does not overheal, the casts (and Swiftmend before
+ *                    the last tick) fill the rest.
+ *   a pet            (not holding an enemy for the party) the least mana per health healed
+ *                    (ties: the bigger one): a low rank.
+ * A tank (role tank or an off-tank, doctrine OffTank.h) also needs at least TANK_MIN_RANK_SHARE
+ * of the biggest rank: the lowest ranks (Rejuvenation 1-2 with healing gear) heal too little
+ * against a tank's damage to be worth the global cooldown. Out of combat (no enemy) this
+ * module does not heal; CombatBotBaseAI::ChooseHeal takes the cheapest rank that fits, so the
+ * low ranks top the party up there.
+ * Swiftmend no longer asks for the biggest rank (until 2026-11-15): with healing gear the top
+ * Rejuvenation heals about half as much per mana as rank 4 (Xisu: 3.6 against 5.6), and the
+ * eat it prepared often never came (strat-20261115-231212).
  *
  * Eating a HoT (Swiftmend). It eats the eatable HoT with the least time left (anyone's,
  * spell_druid.cpp) and heals for its ticks x HotConsumeTicks now; the ticks it still had are
@@ -35,9 +46,11 @@ namespace Commander
 {
 namespace HotPlan
 {
-    // A rank below this share of the biggest one is not worth its global cooldown (and the
-    // five second rule it restarts): the target gets no HoT rather than a tiny one.
-    static constexpr float MIN_RANK_SHARE = 0.4f;
+    // On a tank a rank below this share of the biggest one is not worth its global cooldown:
+    // it gets no HoT rather than a tiny one (Rejuvenation 1-2 out, 3 in with +500 healing).
+    static constexpr float TANK_MIN_RANK_SHARE = 0.3f;
+    // The share of the expected damage a HoT may cover: a little below it, the casts heal too.
+    static constexpr float MATCH_SHARE = 0.8f;
 
     struct HotOption
     {
@@ -46,8 +59,15 @@ namespace HotPlan
         float mana = 0.0f;
     };
 
+    enum class HotTarget : uint8
+    {
+        Member,     // the biggest rank that fits
+        Tank,       // the same, no rank below TANK_MIN_RANK_SHARE
+        Pet,        // the least mana per health healed
+    };
+
     // Index of the rank to cast, -1 = none fits.
-    int PickHot(std::vector<HotOption> const& options, bool preferBig);
+    int PickHot(std::vector<HotOption> const& options, HotTarget target);
 
     // The HoT the eat spell would take off the target.
     struct Eat

@@ -6,18 +6,19 @@ namespace Commander
 {
 namespace HotPlan
 {
-    int PickHot(std::vector<HotOption> const& options, bool preferBig)
+    int PickHot(std::vector<HotOption> const& options, HotTarget target)
     {
         float biggest = 0.0f;
         for (HotOption const& o : options)
             biggest = std::max(biggest, o.total);
+        float const minTotal = target == HotTarget::Tank ? TANK_MIN_RANK_SHARE * biggest : 0.0f;
 
         int best = -1;
         float bestRate = 0.0f;
         for (size_t i = 0; i < options.size(); ++i)
         {
             HotOption const& o = options[i];
-            if (o.total <= 0.0f || o.total < MIN_RANK_SHARE * biggest)
+            if (o.total <= 0.0f || o.total < minTotal)
                 continue;
             float const effective = std::min(o.total, std::max(0.0f, o.need));
             if (o.total - effective > HealPlan::OVERHEAL_MAX * o.total)
@@ -27,7 +28,7 @@ namespace HotPlan
             {
                 HotOption const& b = options[best];
                 bool better;
-                if (preferBig)
+                if (target != HotTarget::Pet)
                     better = o.total > b.total;
                 else if (std::fabs(rate - bestRate) <= HealPlan::TIE_FRACTION * std::max(rate, bestRate))
                     better = o.total > b.total;

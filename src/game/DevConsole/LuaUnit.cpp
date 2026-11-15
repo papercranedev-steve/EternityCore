@@ -1784,7 +1784,9 @@ namespace DevConsole
             if (itr.second.state == PLAYERSPELL_REMOVED || itr.second.disabled || !itr.second.active)
                 continue;
             SpellEntry const* e = sSpellMgr.GetSpellEntry(itr.first);
-            if (!e || e->IsPassiveSpell() || !HealSpells::IsSingleTargetHeal(e))
+            // Swiftmend heals for the eaten HoT, not its own base points.
+            if (!e || e->IsPassiveSpell() || !HealSpells::IsSingleTargetHeal(e) ||
+                e->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_SWIFTMEND>())
                 continue;
             HealSpells::Amount const a = HealSpells::Estimate(p, target, e);
             if (a.direct <= 0.0f && a.periodic <= 0.0f)

@@ -102,6 +102,9 @@ namespace HealSpells
             return false;
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
         {
+            // A party aura that heals (Tranquility): a group heal.
+            if (spell->Effect[i] == SPELL_EFFECT_APPLY_AREA_AURA_PARTY && spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
+                return false;
             if (spell->Effect[i] != SPELL_EFFECT_HEAL &&
                 !(spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL))
                 continue;

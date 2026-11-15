@@ -86,6 +86,9 @@ namespace Commander
         static constexpr uint32 CHAIN_GAP_MS = 500;
         // The healer shields itself before a cast-time heal when hit below this (no pushback).
         static constexpr float SHIELD_SELF_PCT = 50.0f;
+        // A pet that holds no enemy gets no HoT from this mana weight on (HealPlan::ManaWeight,
+        // 0 plentiful .. 1 scarce).
+        static constexpr float PET_HOT_MAX_MANA_WEIGHT = 0.5f;
 
         char const* GetId() const override { return "heal"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

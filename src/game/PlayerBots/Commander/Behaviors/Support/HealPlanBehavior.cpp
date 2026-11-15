@@ -31,6 +31,7 @@ namespace Commander
             // Healed after the players (a pet), unless it holds an enemy for the party (an
             // off-tank, doctrine OffTank.h).
             bool last = false;
+            HotPlan::HotTarget hotTarget = HotPlan::HotTarget::Member;     // its HoT rank (HotPlan::PickHot)
             HealPlan::Target target;
             HealPlan::Assessment assessment;
             std::vector<HealPlan::Option> options;
@@ -106,18 +107,16 @@ namespace Commander
             out.push_back(p);
         }
 
-        // The healer's HoT on a member being hit (HotPlan::PickHot). False = none fits.
-        bool ProposeHot(PartyBotAI const* bot, WorldModel const& world, Candidate const& c,
-                        std::vector<Proposal>& out)
+        // The healer's HoT on a member being hit (HotPlan::PickHot). False = none fits. A pet
+        // that holds no enemy for the party gets none while mana is scarce (HealPlan::ManaWeight
+        // at PET_HOT_MAX_MANA_WEIGHT or more): its health matters least.
+        bool ProposeHot(WorldModel const& world, Candidate const& c, float manaWeight, std::vector<Proposal>& out)
         {
             if (c.hots.empty() || c.target.intake <= 0.0f)
                 return false;
-            // A HoT the healer can eat later: the biggest that fits (a bigger free heal).
-            bool preferBig = false;
-            if (bot->Kit().HotConsumer())
-                for (SpellEntry const* spell : c.hotSpells)
-                    preferBig = preferBig || bot->Kit().HotConsumeTicks(spell) > 0;
-            int const index = HotPlan::PickHot(c.hots, preferBig);
+            if (c.hotTarget == HotPlan::HotTarget::Pet && manaWeight >= HealPlanBehavior::PET_HOT_MAX_MANA_WEIGHT)
+                return false;
+            int const index = HotPlan::PickHot(c.hots, c.hotTarget);
             if (index < 0)
                 return false;
             HotPlan::HotOption const& o = c.hots[index];
@@ -372,7 +371,10 @@ namespace Commander
             Candidate c;
             c.unit = unit;
             c.facts = &m;
-            c.last = m.isPet && plan.doctrine.OffTankEnemyOf(m.guid).IsEmpty();
+            bool const offTank = !plan.doctrine.OffTankEnemyOf(m.guid).IsEmpty();
+            c.last = m.isPet && !offTank;
+            c.hotTarget = c.last ? HotPlan::HotTarget::Pet :
+                          (offTank || m.role == ROLE_TANK) ? HotPlan::HotTarget::Tank : HotPlan::HotTarget::Member;
             c.target.health = float(unit->GetHealth());
             c.target.maxHealth = float(unit->GetMaxHealth());
             // Damage the HoTs already on it do not cover.
@@ -395,7 +397,7 @@ namespace Commander
                         continue;
                     HotPlan::HotOption h;
                     h.total = o.amount.periodic;
-                    h.need = c.Missing() + c.target.intake * o.amount.periodicSec * HealSpells::HOT_INCOMING_SHARE;
+                    h.need = c.Missing() + c.target.intake * o.amount.periodicSec * HotPlan::MATCH_SHARE;
                     h.mana = o.mana;
                     c.hots.push_back(h);
                     c.hotSpells.push_back(o.spell);
@@ -452,7 +454,7 @@ namespace Commander
                 ProposeEat(bot, world, c, eatUse, healer.tickSec, out);
                 return;
             }
-            if (!emergency && ProposeHot(bot, world, c, out))
+            if (!emergency && ProposeHot(world, c, healer.manaWeight, out))
                 return;
             // Emergencies prefer heals that do not pull, but take one that does (HealPlan::Pick).
             if (checkAggro && c.unit->GetHealthPercent() >= ThreatBehavior::HEAL_IGNORE_THREAT_PCT)
@@ -516,7 +518,13 @@ namespace Commander
         for (Candidate& c : all)
             others.push_back(&c);
         std::stable_sort(others.begin(), others.end(),
-                         [](Candidate const* a, Candidate const* b) { return a->target.intake > b->target.intake; });
+                         [](Candidate const* a, Candidate const* b)
+                         {
+                             // Pets after the players (Candidate::last), then most damage taken.
+                             if (a->last != b->last)
+                                 return !a->last;
+                             return a->target.intake > b->target.intake;
+                         });
         for (Candidate* pc : others)
         {
             HotPlan::EatUse const eatUse = HotPlan::Decide(pc->eat, pc->Missing(), pc->assessment.need);
@@ -525,7 +533,7 @@ namespace Commander
                 ProposeEat(bot, world, *pc, eatUse, healer.tickSec, out);
                 return;
             }
-            if (ProposeHot(bot, world, *pc, out))
+            if (ProposeHot(world, *pc, healer.manaWeight, out))
                 return;
         }
     }
