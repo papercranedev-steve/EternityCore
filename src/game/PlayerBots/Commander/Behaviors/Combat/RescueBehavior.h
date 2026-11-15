@@ -21,6 +21,8 @@
  * A Save or ThreatDrop spell on cooldown whose reset is ready (CooldownResetFacts: Cold Snap
  * before Ice Block, Preparation before Vanish / Evasion; user 2026-11-15): the reset goes on
  * first, in the same cast (BotAction::prepResets).
+ * The bot's pet's own duty (its facts: Shell Shield, Cower; user 2026-11-15, the pet as an
+ * off-tank): the pet casts it (BotActionType::PetCast, besides the bot's own action).
  * Tier Urgent when the duty is (the victim dies within the horizon), else Assigned;
  * value = the duty's net + one global cooldown, cost = that global cooldown (as the crowd
  * control behavior: the arbiter compares by net); 0 for a spell off the global cooldown
@@ -45,6 +47,10 @@ namespace Commander
         void Propose(PartyBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+
+    private:
+        void ProposePet(PartyBotAI const* bot, WorldModel const& world,
+                        TeamPlan const& plan, std::vector<Proposal>& out) const;
     };
 }
 

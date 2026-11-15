@@ -77,6 +77,10 @@ namespace Commander
         PetFollow,
         PetAutocastOn,  // turn autocast of the pet's `spell` on
         PetAutocastOff, // turn autocast of the pet's `spell` off
+        // The pet casts its `spell` on `target` (empty = itself), as the pet bar's spell button
+        // (WorldSession::HandlePetCastSpellOpcode): Shell Shield, Cower, Charge, Dash. At most
+        // one per tick (the pet's global cooldown); not skipped during a retreat.
+        PetCast,
     };
 
     struct BotAction

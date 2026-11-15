@@ -12,12 +12,14 @@
 #include "Commander/Perception/Forecast/ThreatRoom.h"
 #include "Commander/Perception/Values/ThreatRisk.h"
 #include "Commander/Perception/Profiles/PetTaunt.h"
+#include "Commander/Perception/Profiles/PetAbilities.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
 #include "HealSpells.h"
+#include "DBCStores.h"
 #include "Map.h"
 #include "Pet.h"
 #include "Spell.h"
@@ -532,6 +534,105 @@ namespace Commander
         return ThreatRoom::Stop(world, who, enemy, sCommanderMgr.GetBotUpdateInterval() / 1000.0f);
     }
 
+    namespace
+    {
+        // A pet's area damage (Thunderstomp) reaches past its radius from where the pet stands
+        // now: it moves with its victim.
+        constexpr float PET_AREA_MARGIN_YD = 2.0f;
+        // ChargeMovementGenerator: four times the run speed, at most 24 yd/s.
+        constexpr float CHARGE_MAX_SPEED = 24.0f;
+
+        // The pet's area damage on autocast would wake a control that must hold (the bots' own
+        // area spells' rule, TeamPlan::AreaKeepsUnbroken, as Constraints' KeptNear): PetAI casts
+        // its autocasts without looking.
+        bool PetAreaWakes(WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& pet, SpellEntry const* spell)
+        {
+            float const radius = SpellTags::AreaRadius(spell) + PET_AREA_MARGIN_YD;
+            uint32 const now = WorldTimer::getMSTime();
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (!e.acting || PackResolver::Distance(pet.pos, e.pos) - e.boundingRadius > radius)
+                    continue;
+                if (plan.AreaKeepsUnbroken(e) && !plan.controlEnd.Breaks(pet.guid, e.guid, now))
+                    return true;
+            }
+            return false;
+        }
+
+        bool PetCanCast(Pet* pet, SpellEntry const* spell)
+        {
+            Powers const power = Powers(spell->powerType);
+            return pet->IsSpellReady(spell) && !pet->HasGCD(spell) &&
+                   (power == POWER_HEALTH || pet->GetPower(power) >= Spell::CalculatePowerCost(spell, pet));
+        }
+
+        // Seconds `gap` yards take at `run` yd/s with `pct` more speed for its first `sec` seconds.
+        float SpedUpSec(float gap, float run, float pct, float sec)
+        {
+            float const fast = run * (1.0f + pct);
+            return gap <= fast * sec ? gap / fast : sec + (gap - fast * sec) / run;
+        }
+
+        // Charge or Dash on the pet's way to the enemy it must take (an off-tank's job, user
+        // 2026-11-15): arriving sooner saves the enemy's hits on its victim meanwhile
+        // (Value::HitLoss over the seconds saved); the cost is the spell's cooldown.
+        void ProposePetReach(WorldModel const& world, TeamPlan const& plan, Pet* pet,
+                             PartyMemberFacts const& petFacts, EnemyFacts const& job, std::vector<Proposal>& out)
+        {
+            Unit* enemy = pet->GetMap()->GetUnit(job.guid);
+            PartyMemberFacts const* hurt = world.FindMember(job.victim);
+            if (!enemy || !enemy->IsAlive() || !hurt || hurt->guid == petFacts.guid ||
+                pet->CanReachWithMeleeAutoAttack(enemy) || pet->HasUnitState(UNIT_STATE_ROOT))
+                return;
+            float const gap = pet->GetDistance(enemy);
+            float const run = pet->GetSpeed(MOVE_RUN);
+            if (run <= 0.0f)
+                return;
+            float const walkSec = gap / run;
+            float const horizon = Value::FightRemainingSec(world);
+
+            if (SpellEntry const* charge = PetAbilities::First(pet, PetAbilities::Kind::Charge))
+            {
+                SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(charge->rangeIndex);
+                if (range && gap >= range->minRange && gap <= range->maxRange && PetCanCast(pet, charge) &&
+                    !plan.ForbidsGapCloser(petFacts.guid) && pet->IsWithinLOSInMap(enemy))
+                {
+                    float const saved = walkSec - gap / std::min(run * 4.0f, CHARGE_MAX_SPEED);
+                    float const benefit = Value::HitLoss(world, job, *hurt, saved);
+                    float const cost = Value::CooldownPoints(charge->GetRecoveryTime() / 1000.0f, horizon);
+                    if (benefit > cost)
+                    {
+                        Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetCast, job.guid, charge);
+                        p.reason = "off-tank: charge its enemy";
+                        p.SetValue(benefit, cost);
+                        out.push_back(p);
+                        return;
+                    }
+                }
+            }
+
+            if (SpellEntry const* dash = PetAbilities::First(pet, PetAbilities::Kind::Speed))
+            {
+                if (!PetCanCast(pet, dash) || pet->HasAura(dash->Id))
+                    return;
+                float pct = 0.0f;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (dash->EffectApplyAuraName[i] == SPELL_AURA_MOD_INCREASE_SPEED)
+                        pct = std::max(pct, dash->CalculateSimpleValue(SpellEffectIndex(i)) / 100.0f);
+                float const sec = std::max(0, dash->GetDuration()) / 1000.0f;
+                float const saved = walkSec - SpedUpSec(gap, run, pct, sec);
+                float const benefit = Value::HitLoss(world, job, *hurt, saved);
+                float const cost = Value::CooldownPoints(dash->GetRecoveryTime() / 1000.0f, horizon);
+                if (pct <= 0.0f || benefit <= cost)
+                    return;
+                Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetCast, ObjectGuid(), dash);
+                p.reason = "off-tank: dash to its enemy";
+                p.SetValue(benefit, cost);
+                out.push_back(p);
+            }
+        }
+    }
+
     // Pet of this bot (hunter, warlock): threat-behavior doc 4.7.
     void ThreatBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     std::vector<Proposal>& out) const
@@ -578,13 +679,32 @@ namespace Commander
             out.push_back(p);
         }
 
+        // Area damage autocast (Thunderstomp, user 2026-11-15): off while a control that must
+        // hold is within its reach of the pet, on again once none is (CombatBotBaseAI::
+        // TrainHunterPet turns it on).
+        std::vector<SpellEntry const*> areas;
+        PetAbilities::Learned(pet, PetAbilities::Kind::AreaDamage, areas);
+        for (SpellEntry const* spell : areas)
+        {
+            if (!spell->IsAutocastable())
+                continue;
+            bool const wakes = PetAreaWakes(world, plan, *petFacts, spell);
+            if (PetAbilities::IsAutocast(pet, spell) != wakes)
+                continue;
+            Proposal p = MakeProposal(ProposalTier::Assigned,
+                wakes ? BotActionType::PetAutocastOff : BotActionType::PetAutocastOn, ObjectGuid(), spell);
+            p.reason = wakes ? "control near, pet area damage off" : "no control near, pet area damage on";
+            out.push_back(p);
+        }
+
         if (world.enemies.empty())
             return;
 
         // Off-tank: on its enemy and nothing else (the switch and stop rules below are for a pet
-        // that only adds damage).
+        // that only adds damage). Charge or Dash on the way there.
         if (job)
         {
+            ProposePetReach(world, plan, pet, *petFacts, *job, out);
             Unit const* victim = pet->GetVictim();
             if (victim && victim->GetObjectGuid() == job->guid)
                 return;
@@ -669,6 +789,28 @@ namespace Commander
         float const ttd = Value::EnemyTimeToDie(world, *e);
         float const avoided = holding ? Value::HitLoss(world, *e, *petFacts, std::min(reclaimSec, ttd)) :
                                         PullLoss(world, *e, *petFacts, std::min(reclaimSec, ttd));
+
+        // Near aggro, not hit yet: a threat drop on its target (Cower, the pet's facts; user
+        // 2026-11-15) that gives back the room the stop rule wants keeps the pet hitting its
+        // enemy, for one pet global cooldown instead of a switch or the walk back. Hit already:
+        // the brain's rescue (its Cower is a candidate there).
+        if (!holding)
+        {
+            float const needed = NeededHeadroom(world, petGuid, *e) - ThreatView::Headroom(*e, petGuid);
+            float const cost = Value::LostAction(world, *petFacts, Value::GCD_SEC);
+            for (ThreatDropAbility const& a : petFacts->threatDrops)
+            {
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                if (!spell || !a.ready || !a.onTarget || a.drop < needed || pet->GetDistance(aim) > a.maxRange ||
+                    avoided <= cost || cost > Value::LostAction(world, *petFacts, SWITCH_TARGET_SEC))
+                    continue;
+                Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetCast, e->guid, spell);
+                p.reason = "pet near aggro, cower";
+                p.SetValue(avoided, cost);
+                out.push_back(p);
+                return;
+            }
+        }
 
         // A safe enemy, the tank's target first: the pet then fights next to the tank, and an
         // enemy hitting the pet follows it there.

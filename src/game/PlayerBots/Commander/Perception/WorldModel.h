@@ -535,8 +535,8 @@ namespace Commander
         bool isPet = false;
         // Can hold an enemy for the party besides the main tank (an off-tank, the doctrine's
         // OffTank.h): a bot's pet with a threat ability it uses on its own target (Growl,
-        // Torment). No taunt, no survival spells, no area threat: what it can do is in its
-        // other facts (taunts, survival, health, armor), the same as for a tank.
+        // Torment). No taunt, no area threat: what it can do is in its other facts (survival:
+        // Shell Shield, threat drops: Cower, health, armor), the same as for a tank.
         bool canOffTank = false;
         bool alive = false;
         // CombatBotRoles. Bots: PartyBotAI::m_role. Players: the role they chose, else from
@@ -596,8 +596,8 @@ namespace Commander
         std::vector<ControlAbility> controls;       // bots only
         std::vector<TauntAbility> taunts;           // tank-role bots only
         std::vector<MitigationAbility> mitigations; // tank-role bots only
-        std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
-        std::vector<SurvivalAbility> survival;      // bots only
+        std::vector<ThreatDropAbility> threatDrops; // non-tank bots and bots' pets (Cower)
+        std::vector<SurvivalAbility> survival;      // bots and bots' pets (Shell Shield)
         std::vector<ManaItemAbility> manaItems;     // bots with a mana pool only
         std::vector<BurstAbility> bursts;           // bots only
         std::vector<AllyBoostAbility> allyBoosts;   // bots only

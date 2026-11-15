@@ -159,7 +159,8 @@ namespace Commander
             // The victim's own threat drops (Fade, Feint, Cower, Feign Death, Vanish): only now
             // that the enemy hits it (user 2026-11-14: not while it is merely close to the
             // holder's threat, that is ThreatRoom's stop / switch).
-            if (victim->isBot)
+            // A bot's pet too (Cower, WorldModelBuilder's pet facts): its owner has it cast.
+            if (victim->isBot || victim->isPet)
                 for (ThreatDropAbility const& a : victim->threatDrops)
                     add(victim->guid, a.spellId, RescueValue::ThreatDrop(world, e, *victim, a));
 
@@ -170,7 +171,9 @@ namespace Commander
         // 2. Members about to die (Perception/Values/SurvivalValue.h): one spell to keep each alive.
         for (PartyMemberFacts const& m : world.party)
         {
-            if (m.isPet || !m.alive)
+            // Pets: only one that holds enemies for the party (an off-tank, user 2026-11-15:
+            // the hunter's pet is half a tank); another pet's death costs a revive, not the fight.
+            if ((m.isPet && !m.canOffTank) || !m.alive)
                 continue;
             SurvivalValue::Danger const danger = SurvivalValue::Of(world, m);
             if (!danger.InDanger())
@@ -185,7 +188,8 @@ namespace Commander
             need.marks = { { DutyKeyKind::Saved, m.guid } };
             for (PartyMemberFacts const& b : world.party)
             {
-                if (!b.isBot || b.isPet)
+                // Bots, and bots' pets (Shell Shield on itself: the owner has it cast).
+                if (!b.isBot && !b.isPet)
                     continue;
                 for (SurvivalAbility const& a : b.survival)
                 {

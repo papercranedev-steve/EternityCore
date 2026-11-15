@@ -1,4 +1,5 @@
 #include "Commander/Perception/Profiles/PetTaunt.h"
+#include "Commander/Perception/Profiles/PetAbilities.h"
 #include "Pet.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
@@ -10,18 +11,9 @@ namespace PetTaunt
 {
     bool IsTauntSpell(SpellEntry const* spell)
     {
-        if (!spell->IsAutocastable())
-            return false;
-        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-        {
-            if (spell->Effect[i] == SPELL_EFFECT_ATTACK_ME)
-                return true;
-            if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT)
-                return true;
-            if (spell->Effect[i] == SPELL_EFFECT_THREAT && spell->CalculateSimpleValue(SpellEffectIndex(i)) > 0)
-                return true;
-        }
-        return false;
+        // Only the threat itself (PetAbilities::Kind::Threat): Scorpid Poison's threat rides on
+        // its damage and the Intimidation stun's on a stun, neither is a pet's threat spell.
+        return spell->IsAutocastable() && PetAbilities::Of(spell) == PetAbilities::Kind::Threat;
     }
 
     void Spells(Pet const* pet, std::vector<SpellEntry const*>& out)

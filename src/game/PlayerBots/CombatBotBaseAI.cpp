@@ -16,6 +16,7 @@
 #include "Totem.h"
 #include "SpellMgr.h"
 #include "Utilities/Random.h"
+#include "Commander/Perception/Profiles/PetAbilities.h"
 
 #include <algorithm>
 #include <map>
@@ -2432,42 +2433,60 @@ void CombatBotBaseAI::LearnDemonSpells(Pet* pPet)
 namespace
 {
     // What a hunter pet ability is to a pet that holds enemies (TrainHunterPet), in the order
-    // its training points go.
+    // its training points go: what it holds and hits with, its survival, armor and health, then
+    // with what is left what the Commander uses (Charge and Dash to reach its enemy, Cower).
     enum class PetTraining : uint8
     {
         Taunt,      // Growl
-        Damage,     // Bite, Claw, Thunderstomp: on autocast
+        Damage,     // Bite, Claw, Thunderstomp, Scorpid Poison: on autocast
+        Survival,   // Shell Shield (PetAbilities::Kind::Survival)
         Armor,      // Natural Armor
         Stamina,    // Great Stamina
-        Other,      // Charge, Shell Shield, Dash: with what is left
-        Skip,       // Cower (drops threat), resistances
+        Reach,      // Charge
+        ThreatDrop, // Cower
+        Speed,      // Dash, Dive
+        Other,      // Harass, Furious Howl, Prowl
+        Skip,       // resistances; untrainable (the Intimidation talent's spells)
     };
 
     PetTraining TrainingOf(SpellEntry const* pSpell)
     {
-        bool const passive = pSpell->IsPassiveSpell();
-        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        // A pet learns from the trainer or Beast Training only what costs training points (in
+        // some skill line): the Intimidation spells in the general pet line cost none.
+        bool trainable = false;
+        SkillLineAbilityMapBounds const bounds = sSpellMgr.GetSkillLineAbilityMapBoundsBySpellId(pSpell->Id);
+        for (auto itr = bounds.first; itr != bounds.second; ++itr)
+            trainable = trainable || itr->second->reqtrainpoints > 0;
+        if (!trainable)
+            return PetTraining::Skip;
+
+        if (pSpell->IsPassiveSpell())
         {
-            switch (pSpell->Effect[i])
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
             {
-                case SPELL_EFFECT_THREAT:
-                    return pSpell->EffectBasePoints[i] > 0 ? PetTraining::Taunt : PetTraining::Skip;
-                case SPELL_EFFECT_SCHOOL_DAMAGE:
-                    return passive ? PetTraining::Skip : PetTraining::Damage;
-                case SPELL_EFFECT_APPLY_AURA:
-                    if (!passive)
-                        break;
-                    if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_RESISTANCE &&
-                        (pSpell->EffectMiscValue[i] & SPELL_SCHOOL_MASK_NORMAL))
-                        return PetTraining::Armor;
-                    if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_STAT && pSpell->EffectMiscValue[i] == STAT_STAMINA)
-                        return PetTraining::Stamina;
-                    break;
-                default:
-                    break;
+                if (pSpell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
+                    continue;
+                if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_RESISTANCE &&
+                    (pSpell->EffectMiscValue[i] & SPELL_SCHOOL_MASK_NORMAL))
+                    return PetTraining::Armor;
+                if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_STAT && pSpell->EffectMiscValue[i] == STAT_STAMINA)
+                    return PetTraining::Stamina;
             }
+            return PetTraining::Skip;
         }
-        return passive ? PetTraining::Skip : PetTraining::Other;
+
+        using Kind = Commander::PetAbilities::Kind;
+        switch (Commander::PetAbilities::Of(pSpell))
+        {
+            case Kind::Threat:     return PetTraining::Taunt;
+            case Kind::Damage:
+            case Kind::AreaDamage: return PetTraining::Damage;
+            case Kind::Survival:   return PetTraining::Survival;
+            case Kind::Charge:     return PetTraining::Reach;
+            case Kind::ThreatDrop: return PetTraining::ThreatDrop;
+            case Kind::Speed:      return PetTraining::Speed;
+            default:               return PetTraining::Other;
+        }
     }
 }
 
@@ -2525,8 +2544,9 @@ void CombatBotBaseAI::TrainHunterPet(Pet* pPet)
 
     // Highest affordable rank of each chain, in PetTraining order; paid as the trainer does
     // (Spell::EffectLearnPetSpell).
-    for (PetTraining want : { PetTraining::Taunt, PetTraining::Damage, PetTraining::Armor,
-                              PetTraining::Stamina, PetTraining::Other })
+    for (PetTraining want : { PetTraining::Taunt, PetTraining::Damage, PetTraining::Survival, PetTraining::Armor,
+                              PetTraining::Stamina, PetTraining::Reach, PetTraining::ThreatDrop,
+                              PetTraining::Speed, PetTraining::Other })
     {
         for (auto& chain : chains)
         {
@@ -2551,7 +2571,9 @@ void CombatBotBaseAI::TrainHunterPet(Pet* pPet)
     }
 
     // Damage abilities on autocast, as a player sets them (learned ones start off). Growl is
-    // ThreatBehavior's (off while a tank holds), Charge and the rest stay off.
+    // ThreatBehavior's (off while a tank holds), as is an area one near a control that must
+    // hold (Thunderstomp); Charge, Dash, Cower and Shell Shield stay off, the Commander casts
+    // them (PetCast).
     CharmInfo* pCharmInfo = pPet->GetCharmInfo();
     for (auto const& itr : pPet->m_petSpells)
     {

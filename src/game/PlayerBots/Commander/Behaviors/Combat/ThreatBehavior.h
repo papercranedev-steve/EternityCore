@@ -40,10 +40,15 @@
  *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.
  *            No tank and the pet has a taunt: it is a holder (damage dealers leave room under
  *            it) and is left alone. Otherwise, near the holder's threat (same rule as damage
- *            dealers): attack a safe enemy (the tank's target first) or come back (PetFollow).
+ *            dealers): Cower on its enemy when that gives the room back (BotActionType::
+ *            PetCast), else attack a safe enemy (the tank's target first) or come back (PetFollow).
  *            Holding an enemy itself while a tank bot is there: switch to a safe enemy only
  *            (running back would bring the enemy to the owner). The tank treats enemies on
  *            pets as loose (taunt / win back, valued like any member).
+ *            Off-tank job (doctrine OffTank.h, a Threat rescue): on its enemy, Charge or Dash
+ *            on the way when the hits saved on the victim beat the cooldown (user 2026-11-15).
+ *            Area damage autocast (Thunderstomp): off while a control that must hold
+ *            (TeamPlan::AreaKeepsUnbroken) is within its radius of the pet, else on.
  */
 
 #ifndef MANGOS_COMMANDER_THREAT_BEHAVIOR_H

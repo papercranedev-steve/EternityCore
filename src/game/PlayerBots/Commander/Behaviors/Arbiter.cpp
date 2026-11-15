@@ -43,6 +43,7 @@ namespace Commander
                 case BotActionType::PetFollow: return "pet-follow";
                 case BotActionType::PetAutocastOn: return "pet-autocast-on";
                 case BotActionType::PetAutocastOff: return "pet-autocast-off";
+                case BotActionType::PetCast: return "pet-cast";
             }
             return "?";
         }
@@ -64,6 +65,7 @@ namespace Commander
                 case BotActionType::PetFollow:
                 case BotActionType::PetAutocastOn:
                 case BotActionType::PetAutocastOff:
+                case BotActionType::PetCast:
                     return true;
                 default:
                     return false;
@@ -460,22 +462,25 @@ namespace Commander
         // command that executes. During a retreat RetreatBehavior calls the pet back itself.
         bool const retreating = !replace.empty() && replace.front().tier == ProposalTier::Override;
         bool petCommanded = false;
+        bool petCast = false;       // one cast per tick: the pet's global cooldown
         for (Proposal const& p : petActions)
         {
             record.candidates.push_back(MakeRecord(Describe(bot, p), p));
             CandidateRecord& r = record.candidates.back();
             bool const command = IsPetCommand(p.action.type);
+            bool const cast = p.action.type == BotActionType::PetCast;
             if (command && retreating)
             {
                 r.result = CandidateRecord::Result::LowerTier;
                 continue;
             }
-            if (command && petCommanded)
+            if ((command && petCommanded) || (cast && petCast))
                 continue;   // NotTried
             if (Execute(bot, p))
             {
                 r.result = CandidateRecord::Result::Executed;
                 petCommanded = petCommanded || command;
+                petCast = petCast || cast;
             }
             else
                 r.result = CandidateRecord::Result::Failed;
@@ -718,6 +723,7 @@ namespace Commander
             case BotActionType::PetFollow:
             case BotActionType::PetAutocastOn:
             case BotActionType::PetAutocastOff:
+            case BotActionType::PetCast:
                 return ExecutePetAction(bot, action, pTarget);
         }
 
@@ -766,6 +772,35 @@ namespace Commander
                 bool const on = action.type == BotActionType::PetAutocastOn;
                 pet->ToggleAutocast(action.spell->Id, on);
                 charmInfo->SetSpellAutocast(action.spell->Id, on);
+                return true;
+            }
+            case BotActionType::PetCast:
+            {
+                SpellEntry const* spell = action.spell;
+                if (!spell || !pet->HasSpell(spell->Id) || spell->IsPassiveSpell() || !pet->IsSpellReady(spell))
+                    return false;
+                Unit* target = pTarget ? pTarget : pet;
+                // On an enemy: attack it first, as a player presses Attack before Charge or Cower
+                // (Charge's MoveCharge runs over the chase and the pet fights on after it).
+                if (target != pet && pet->GetVictim() != target)
+                {
+                    if (!bot->IsValidHostileTarget(target))
+                        return false;
+                    pet->HandlePetCommand(COMMAND_ATTACK, target);
+                }
+                // The pet bar's spell button (WorldSession::HandlePetCastSpellOpcode).
+                Spell* cast = new Spell(pet, spell, false);
+                SpellCastTargets targets;
+                targets.setUnitTarget(target);
+                cast->m_targets = std::move(targets);
+                if (cast->CheckPetCast(nullptr) != SPELL_CAST_OK)
+                {
+                    cast->finish(false);
+                    cast->Delete();
+                    return false;
+                }
+                pet->SendPetAIReaction();
+                cast->prepare();
                 return true;
             }
             default:

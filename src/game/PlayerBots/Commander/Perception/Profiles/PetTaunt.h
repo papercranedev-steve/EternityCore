@@ -17,7 +17,8 @@ namespace Commander
     namespace PetTaunt
     {
         // A pet spell that makes enemies attack the pet: positive threat (Growl, Torment,
-        // Suffering) or a taunt. Cower and Soothing Kiss lower threat (negative value): not taunts.
+        // Suffering) or a taunt, and nothing else (PetAbilities::Kind::Threat). No 1.12 pet has
+        // a real taunt. Cower and Soothing Kiss lower threat (negative value): not taunts.
         bool IsTauntSpell(SpellEntry const* spell);
         // Taunt spells the pet has learned (pets keep only the highest rank).
         void Spells(Pet const* pet, std::vector<SpellEntry const*>& out);

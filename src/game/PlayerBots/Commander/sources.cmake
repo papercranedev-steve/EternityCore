@@ -183,6 +183,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/SurvivalValue.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.h
   ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.h
+  ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.h
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/ControlledEnd.h

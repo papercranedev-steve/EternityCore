@@ -8,6 +8,7 @@
 #include "Commander/Perception/Profiles/CreatureProfile.h"
 #include "Commander/Perception/Forecast/HealCapacity.h"
 #include "Commander/Perception/Profiles/PetTaunt.h"
+#include "Commander/Perception/Profiles/PetAbilities.h"
 #include "Commander/Perception/Profiles/PaladinBuffs.h"
 #include "Commander/Perception/Profiles/WarlockCurses.h"
 #include "Commander/Perception/Profiles/ShamanTotems.h"
@@ -1102,6 +1103,59 @@ namespace WorldModelBuilder
             }
         }
 
+        // A bot's pet (the off-tank, user 2026-11-15): its own survival spell (Shell Shield) and
+        // threat drop (Cower), read from its learned spells (PetAbilities), the same facts as a
+        // bot's. The owner's RescueBehavior has the pet cast them (BotActionType::PetCast).
+        void FillPetAbilities(Pet* pet, PartyMemberFacts& f)
+        {
+            auto ready = [pet, &f](SpellEntry const* spell)
+            {
+                Powers const power = Powers(spell->powerType);
+                return f.CanAct() && pet->IsSpellReady(spell) &&
+                       !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
+                       (power == POWER_HEALTH || pet->GetPower(power) >= Spell::CalculatePowerCost(spell, pet));
+            };
+
+            std::vector<SpellEntry const*> spells;
+            PetAbilities::Learned(pet, PetAbilities::Kind::Survival, spells);
+            for (SpellEntry const* spell : spells)
+            {
+                SurvivalAbility a;
+                a.spellId = spell->Id;
+                a.effect = SurvivalAbility::Effect::Reduce;
+                a.amount = 1.0f;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN)
+                        a.amount = std::max(0.0f, 1.0f + spell->CalculateSimpleValue(SpellEffectIndex(i)) / 100.0f);
+                a.durationSec = std::max(0, spell->GetDuration()) / 1000.0f;
+                a.cooldownMs = spell->GetRecoveryTime();
+                a.mechanic = spell->Mechanic;
+                a.selfOnly = true;
+                a.gcd = spell->StartRecoveryTime > 0;
+                a.ready = ready(spell);
+                f.survival.push_back(a);
+            }
+
+            spells.clear();
+            PetAbilities::Learned(pet, PetAbilities::Kind::ThreatDrop, spells);
+            for (SpellEntry const* spell : spells)
+            {
+                ThreatDropAbility a;
+                a.spellId = spell->Id;
+                a.onTarget = true;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (spell->Effect[i] == SPELL_EFFECT_THREAT)
+                        a.drop = pet->ApplyTotalThreatModifier(-float(spell->CalculateSimpleValue(SpellEffectIndex(i))),
+                                                               spell->GetSpellSchoolMask());
+                if (a.drop <= 0.0f)
+                    continue;
+                a.maxRange = AbilityRange(pet, spell, 5.0f);
+                a.cooldownMs = spell->GetRecoveryTime();
+                a.ready = ready(spell);
+                f.threatDrops.push_back(a);
+            }
+        }
+
         // Mana potions, mana gems and runes in the bags (ItemKit::Use::Mana).
         void FillManaItems(PartyBotAI const* ai, PartyMemberFacts& f)
         {
@@ -1736,6 +1790,8 @@ namespace WorldModelBuilder
                         std::vector<SpellEntry const*> threatSpells;
                         PetTaunt::Spells(pet, threatSpells);
                         pf.canOffTank = !threatSpells.empty();
+                        if (pet->IsAlive())
+                            FillPetAbilities(pet, pf);
                     }
                     world.party.push_back(pf);
                     partyUnits.push_back(pet);

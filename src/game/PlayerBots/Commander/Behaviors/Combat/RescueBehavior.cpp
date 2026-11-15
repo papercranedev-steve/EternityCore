@@ -9,6 +9,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Map.h"
+#include "Pet.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 #include "Timer.h"
@@ -72,9 +73,47 @@ namespace Commander
         return bot->Kit().HasThreatDrop();
     }
 
+    // The brain gave the bot's pet a rescue of its own spells (WorldModelBuilder's pet facts):
+    // Shell Shield on itself about to die, Cower on the enemy hitting it. The pet casts it
+    // (BotActionType::PetCast), the bot's own action is not taken.
+    void RescueBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world,
+                                    TeamPlan const& plan, std::vector<Proposal>& out) const
+    {
+        Pet* pet = bot->me->GetPet();
+        if (!pet || !pet->IsAlive() || pet->IsCharmed())
+            return;
+        RescueDuty const* duty = plan.FindRescueFor(pet->GetObjectGuid());
+        if (!duty || (duty->way != RescueWay::Save && duty->way != RescueWay::ThreatDrop))
+            return;
+        PartyMemberFacts const* self = world.FindMember(pet->GetObjectGuid());
+        SpellEntry const* spell = sSpellMgr.GetSpellEntry(duty->spellId);
+        if (!self || !self->CanAct() || !spell || !pet->HasSpell(spell->Id) || !pet->IsSpellReady(spell))
+            return;
+
+        Proposal p;
+        p.tier = duty->urgent ? ProposalTier::Urgent : ProposalTier::Assigned;
+        p.source = "rescue";
+        p.action.type = BotActionType::PetCast;
+        p.action.spell = spell;
+        if (duty->way == RescueWay::ThreatDrop)
+        {
+            Unit* enemy = pet->GetMap()->GetUnit(duty->enemy);
+            if (!enemy || !enemy->IsAlive() || !pet->IsWithinLOSInMap(enemy))
+                return;
+            p.action.target = duty->enemy;
+            p.reason = "rescue: pet attacked, drop threat";
+        }
+        else
+            p.reason = "rescue: pet about to die, save";
+        float const cost = spell->StartRecoveryTime > 0 ? Value::LostAction(world, *self, Value::GCD_SEC) : 0.0f;
+        p.SetValue(duty->points + cost, cost);
+        out.push_back(p);
+    }
+
     void RescueBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
+        ProposePet(bot, world, plan, out);
         Player* me = bot->me;
         RescueDuty const* duty = plan.FindRescueFor(me->GetObjectGuid());
         if (!duty || duty->way == RescueWay::Threat)
@@ -174,6 +213,10 @@ namespace Commander
     bool RescueBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         RescueDuty const* duty = plan.FindRescueFor(bot->me->GetObjectGuid());
+        // The pet's own (Shell Shield, Cower; its Threat way is ThreatBehavior's).
+        if (!duty)
+            if (Pet const* pet = bot->me->GetPet())
+                duty = plan.FindRescueFor(pet->GetObjectGuid());
         // Also for Threat: TargetBehavior switches the tank's target on that tick.
         return world.HasPartyEnemy() && duty;
     }
