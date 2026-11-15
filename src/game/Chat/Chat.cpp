@@ -121,6 +121,9 @@ ChatCommand * ChatHandler::getCommandTable()
         { "chars",      SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCharsCommand,       "", nullptr },
         { "remove",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRemoveCommand,      "", nullptr },
         { "ai",         SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotAiCommand,          "", nullptr },
+        { "talents",    SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTalentsCommand,     "", nullptr },
+        { "learntalent",SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotLearnTalentCommand, "", nullptr },
+        { "talentdebug",SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTalentDebugCommand, "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

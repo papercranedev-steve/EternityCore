@@ -185,6 +185,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/ControlledEnd.cpp
   ${COMMANDER_DIR}/Commands/ProfileCommands.h
   ${COMMANDER_DIR}/Commands/ProfileCommands.cpp
+  ${COMMANDER_DIR}/Commands/TalentCommands.cpp
   ${COMMANDER_DIR}/Encounters/IEncounter.h
   ${COMMANDER_DIR}/Encounters/EncounterRegistry.h
   ${COMMANDER_DIR}/Encounters/EncounterRegistry.cpp

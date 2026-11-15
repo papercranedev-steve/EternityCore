@@ -3227,6 +3227,13 @@ AHBuyer.MaxMarkup = 50
 #        Default: 0 (restricted)
 #                 1 (no restrictions)
 #
+#    PartyBot.TalentDebug
+#        Debug talent commands for the PartyBot addon's talent panel: free reset, remove one rank,
+#        apply the premade spec template of the bot's role (.partybot talentdebug).
+#        Viewing and spending free points (.partybot talents / learntalent) work either way.
+#        Default: 0 - off
+#                 1 - on
+#
 #    PartyBot.AutoEquip
 #        What gear will new partybots spawn with.
 #        Default: 1 (random items)
@@ -3323,6 +3330,7 @@ PlayerBot.ShowInWhoList = 0
 
 PartyBot.MaxBots = 0
 PartyBot.SkipChecks = 0
+PartyBot.TalentDebug = 0
 PartyBot.AutoEquip = 1
 PartyBot.RandomGearLevelDifference = 10
 PartyBot.Commander.Enable = 1
