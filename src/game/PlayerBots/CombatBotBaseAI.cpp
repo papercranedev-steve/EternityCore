@@ -2992,12 +2992,32 @@ SpellCastResult CombatBotBaseAI::DoCastFacing(float orientation, SpellEntry cons
     if (!me->IsStopped())
         me->StopMoving();
     // Unit::SetFacingTo turns through a facing spline, on the next movement update: too late
-    // for a spell cast now. Set it first, then tell the observers.
-    me->SetOrientation(orientation);
-    me->SetFacingTo(orientation);
+    // for a spell cast now (FaceTo).
+    FaceTo(orientation);
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
     return me->CastSpell(me, pSpellEntry, false);
+}
+
+void CombatBotBaseAI::FaceTo(float orientation)
+{
+    me->SetOrientation(orientation);
+    me->m_movementInfo.ChangeOrientation(orientation);
+    me->SendMovementPacket(MSG_MOVE_SET_FACING, false);
+}
+
+void CombatBotBaseAI::FaceTarget(Unit const* pTarget)
+{
+    FaceTo(me->GetAngle(pTarget));
+}
+
+void CombatBotBaseAI::FaceForSpell(Unit const* pTarget, SpellEntry const* pSpellEntry)
+{
+    if (!pTarget || pTarget == me || !pSpellEntry->IsNeedFaceTarget() || me->IsFacingTarget(pTarget))
+        return;
+    if (!me->IsStopped())
+        me->StopMoving();
+    FaceTarget(pTarget);
 }
 
 SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry)
@@ -3012,14 +3032,7 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         // spells, SPELL_CUSTOM_FACE_TARGET: Spell::CheckRange) then failed with
         // SPELL_FAILED_UNIT_NOT_INFRONT, e.g. a tank's Taunt while chasing
         // (strat-20261101-224637). Stop and turn now, as a player turns while running.
-        bool const needsFacing = pSpellEntry->rangeIndex == SPELL_RANGE_IDX_COMBAT ||
-                                 (pSpellEntry->Custom & SPELL_CUSTOM_FACE_TARGET);
-        if (needsFacing && !me->IsFacingTarget(pTarget))
-        {
-            if (!me->IsStopped())
-                me->StopMoving();
-            me->SetInFront(pTarget);
-        }
+        FaceForSpell(pTarget, pSpellEntry);
         me->SetFacingToObject(pTarget);
     }
 

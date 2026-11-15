@@ -11,7 +11,9 @@
  * run block, Psychic Scream, the druid's roots and run) are gone since 2026-11-14.
  *
  * Chasers: enemies that act, are not crowd controlled, have melee on (EnemyFacts::meleeEnabled),
- * hit this bot and stand within TRIGGER_GAP of it (edge distance).
+ * hit this bot and stand within TRIGGER_GAP of it (edge distance). Not one the tank waits to
+ * taunt (RescueDuty::waitUntilMs, RescueAssigner::TauntWaitSec): it is taunted before it gets
+ * here and copies this bot's threat, so the bot keeps casting.
  * Danger (user, 2026-11-01: "many mobs, or a few hits kill it"):
  *   survive = (health + active absorbs) / Value::IncomingOn(bot), no heals; absorbs = Power
  *   Word: Shield, Ice Barrier, Mana Shield up to the mana left. Dangerous = survive < DANGER_SEC

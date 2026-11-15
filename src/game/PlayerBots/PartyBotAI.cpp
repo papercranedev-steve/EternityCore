@@ -1721,27 +1721,47 @@ void PartyBotAI::UpdateAI(uint32 const diff)
              (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsValidHostileTarget(pVictim))
         me->Attack(pVictim, true);
 
-    FaceMeleeVictim(pVictim);
+    KeepFacing(pVictim);
 
     if (me->IsInCombat())
         UpdateInCombatAI();
 }
 
-void PartyBotAI::FaceMeleeVictim(Unit* pVictim)
+void PartyBotAI::KeepFacing(Unit* pVictim)
 {
+    // A walk (chase, backpedal, jump turn) faces by itself; a controlled bot cannot turn.
+    if (me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) || me->IsMoving() ||
+        IsBackpedaling() || IsJumpCasting())
+        return;
+
+    // A cast in progress or an auto-repeat shot on a unit, whose spell checks facing (Frostbolt,
+    // Auto Shot, Shoot: CombatBotBaseAI::FaceTo): the server checks again when the cast ends
+    // and before every shot (Spell::cast, Unit::UpdateAutoRepeatSpell). An enemy walking
+    // around the standing caster made the cast fail, and the auto-repeat stop.
+    for (CurrentSpellTypes slot : { CURRENT_GENERIC_SPELL, CURRENT_AUTOREPEAT_SPELL })
+    {
+        Spell const* spell = me->GetCurrentSpell(slot);
+        if (!spell || !spell->m_spellInfo || !spell->m_spellInfo->IsNeedFaceTarget() ||
+            (slot == CURRENT_GENERIC_SPELL && spell->getState() != SPELL_STATE_PREPARING))
+            continue;
+        Unit const* target = spell->m_targets.getUnitTarget();
+        if (target && target != me && target->IsAlive() && !me->IsFacingTarget(target))
+        {
+            FaceTarget(target);
+            return;
+        }
+    }
+
     // Fix: only the chase movement turned a melee bot to its victim. Since the stance modules
     // hold it on a spot (TankStanceBehavior: "it comes to the tank", already in reach), it kept
     // the facing it had: the guardian it faced died, the cadaver hitting it from the side got no
     // swing for 8 s (bad facing), no rage, no ability, and Dazed from behind
-    // (strat-20261114-173302). Turn as a player does; a walk (chase, backpedal, jump turn) faces
-    // by itself.
+    // (strat-20261114-173302). Turn as a player does.
     if (!pVictim || !pVictim->IsAlive() || !me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) ||
-        me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) || me->IsMoving() ||
-        IsBackpedaling() || IsJumpCasting() || !me->CanReachWithMeleeAutoAttack(pVictim) ||
+        !me->CanReachWithMeleeAutoAttack(pVictim) ||
         me->HasInArc(pVictim, 2 * M_PI_F / 3))     // Unit::CanAutoAttackTarget's facing arc
         return;
-    me->SetInFront(pVictim);
-    me->SendMovementPacket(MSG_MOVE_SET_FACING, false);
+    FaceTarget(pVictim);
 }
 
 

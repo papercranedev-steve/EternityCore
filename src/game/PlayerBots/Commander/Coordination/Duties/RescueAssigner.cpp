@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Duties/RescueAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Forecast/TauntWindow.h"
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/RescueValue.h"
@@ -21,6 +22,35 @@ namespace Commander
                 return d.bot == bot && d.enemy == enemy && d.spellId == spellId;
             });
         }
+    }
+
+    float RescueAssigner::TauntWaitSec(WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e,
+                                       PartyMemberFacts const& tank, uint32 spellId, bool urgent, float* gain)
+    {
+        if (gain)
+            *gain = 0.0f;
+        if (urgent || !spellId || !e.meleeEnabled || e.crowdControlled)
+            return 0.0f;
+        // Ranged damage dealers only (user 2026-11-15): on a melee or a healer every second is hits.
+        PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
+        if (!victim || victim->isPet || victim->role != ROLE_RANGE_DPS || plan.area.CastBy(victim->guid))
+            return 0.0f;
+        auto const taunt = std::find_if(tank.taunts.begin(), tank.taunts.end(),
+                                        [spellId](TauntAbility const& t) { return t.spellId == spellId; });
+        if (taunt == tank.taunts.end() || !taunt->ready || taunt->holdSec > 0.0f || !e.InSightOf(tank.guid))
+            return 0.0f;
+        TauntWindow::Window const w = TauntWindow::Of(e, *victim, tank, *taunt);
+        if (w.reachLeftSec <= 0.0f)
+            return 0.0f;
+        float const sec = std::min({ w.arriveSec, w.reachLeftSec, WAIT_MAX_SEC }) - WAIT_LEAD_SEC;
+        if (sec < WAIT_MIN_SEC)
+            return 0.0f;
+        float const added = TauntWindow::ThreatGain(w, sec);
+        if (added <= 0.0f || added < WAIT_MIN_GAIN_SHARE * w.threatNow)
+            return 0.0f;
+        if (gain)
+            *gain = added;
+        return sec;
     }
 
     void RescueAssigner::Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const
@@ -194,7 +224,15 @@ namespace Commander
             else if (d.bot == d.victim)
                 d.way = RescueWay::ThreatDrop;
             else
+            {
                 d.way = RescueWay::Taunt;
+                if (PartyMemberFacts const* tank = world.FindMember(d.bot))
+                {
+                    float const wait = TauntWaitSec(world, plan, *e, *tank, d.spellId, d.urgent, &d.waitGain);
+                    if (wait > 0.0f)
+                        d.waitUntilMs = world.refreshedAtMs + uint32(wait * 1000.0f);
+                }
+            }
             rescues.push_back(d);
         }
         plan.rescues = std::move(rescues);

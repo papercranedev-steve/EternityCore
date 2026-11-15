@@ -691,6 +691,12 @@ namespace Commander
         uint32 spellId = 0;          // Taunt, ThreatDrop
         float points = 0.0f;         // net worth (Perception/Values/RescueValue.h)
         bool urgent = false;         // the victim dies within the horizon: Urgent tier
+        // Taunt: wait until then (WorldTimer ms; 0 = taunt now, RescueAssigner::TauntWaitSec):
+        // the enemy runs at a ranged victim who keeps adding threat the taunt copies. The tank
+        // keeps it in reach meanwhile (TankTargets), RescueBehavior taunts earlier when it is
+        // about to reach its victim or leave the reach, the victim keeps casting (EscapeBehavior).
+        uint32 waitUntilMs = 0;
+        float waitGain = 0.0f;       // threat the wait is expected to copy on top (display)
     };
 
     // A stun, root or slow kept for an enemy about to run away (FleeStopAssigner, todo 13): a
@@ -1375,6 +1381,15 @@ namespace Commander
         {
             for (RescueDuty const& d : rescues)
                 if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        // The rescue of loose enemy `enemy` (whoever does it), or null.
+        RescueDuty const* FindRescueOf(ObjectGuid enemy) const
+        {
+            for (RescueDuty const& d : rescues)
+                if (!d.enemy.IsEmpty() && d.enemy == enemy)
                     return &d;
             return nullptr;
         }

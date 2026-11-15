@@ -271,8 +271,9 @@ public:
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).
     void StopTakenOverMovement();
-    // Swinging at a victim in reach while standing still and not facing it: turn to it (UpdateAI).
-    void FaceMeleeVictim(Unit* pVictim);
+    // Standing still (UpdateAI): turn to the unit of a cast in progress or an auto-repeat shot
+    // whose spell checks facing, else to a melee victim in reach outside the swing arc.
+    void KeepFacing(Unit* pVictim);
     // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/
     // HumanFollow.h), moved out of idle creatures' aggro range (FollowSpot.h); on a transport
     // the original random offset.

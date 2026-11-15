@@ -30,19 +30,27 @@ namespace TankTargets
                 EnemyFacts const* e = ctx.Find(r.target);
                 if (!e || !ctx.Hittable(*e, tank))
                     return TargetPick();
+                bool const urgent = (r.detail & RescueAssigner::DETAIL_URGENT) != 0;
+                char const* reason = r.primarySpellId ? "rescue: walk into taunt range" : "rescue: win back a loose enemy";
                 if (r.primarySpellId)
                 {
                     float const distance = PackResolver::Distance(tank.pos, e->pos) - e->boundingRadius;
                     for (TauntAbility const& t : tank.taunts)
                         if (t.spellId == r.primarySpellId && distance <= t.maxRange && e->InSightOf(tank.guid))
-                            return TargetPick();
+                        {
+                            // A waiting taunt (RescueAssigner::TauntWaitSec): it runs at its
+                            // ranged victim, the tank runs after it to keep it in reach.
+                            if (RescueAssigner::TauntWaitSec(world, ctx.plan, *e, tank, r.primarySpellId, urgent) <= 0.0f)
+                                return TargetPick();
+                            reason = "rescue: keep in taunt reach, taunt when it pays most";
+                        }
                 }
                 TargetPick p;
                 p.enemy = e;
                 p.cost = e->guid == tank.victim ? 0.0f : SwitchCost::Of(world, tank, *e, MELEE_REACH);
                 p.benefit = r.points + p.cost;
-                p.urgent = (r.detail & RescueAssigner::DETAIL_URGENT) != 0;
-                p.reason = r.primarySpellId ? "rescue: walk into taunt range" : "rescue: win back a loose enemy";
+                p.urgent = urgent;
+                p.reason = reason;
                 return p;
             }
             return TargetPick();

@@ -19,9 +19,24 @@
  * fading, within RescueValue::FADE_URGENT_SEC).
  * Apply: plan.rescues (TeamPlan::RescueDuty, the way from the chosen spell).
  *
- * Who executes: RescueBehavior casts the taunt / Fade (and takes both over from the rotations);
- * TargetAssigner gives the tank the enemy when it wins it back with threat, or must walk into
- * taunt range first (TankTargets.cpp).
+ * Waiting taunt (TauntWaitSec, user 2026-11-15): Taunt / Growl give the tank the victim's threat
+ * when they land (Spell::EffectTaunt). An enemy running at a ranged damage dealer who pulled it
+ * hits nobody until it gets there, and every bolt the caster lands meanwhile is copied too. So
+ * the taunt waits, when all of these hold: the duty is not urgent; the victim is a ranged damage
+ * dealer (role, players too; not a pet; not the area phase's caster, AreaRoomBehavior holds its
+ * runners itself); the taunt copies threat (TauntAbility::holdSec 0) and is ready; the enemy
+ * runs in melee (melee on, not crowd controlled); the tank has it in reach now. The wait =
+ * min(arrival at the victim, the time it stays in the tank's reach, WAIT_MAX_SEC)
+ * - WAIT_LEAD_SEC (perception/brain refresh, the bot tick and the spell batch before the taunt
+ * lands), at least WAIT_MIN_SEC, and only when the victim is expected to add at least
+ * WAIT_MIN_GAIN_SHARE of its threat by then (Perception/Forecast/TauntWindow.h). Recomputed each
+ * refresh; RescueDuty::waitUntilMs. Melee and healer victims: at once (the hits on them are real).
+ *
+ * Who executes: RescueBehavior casts the taunt / Fade (and takes both over from the rotations;
+ * a waiting taunt when its time is up, or earlier when live the enemy is about to reach its
+ * victim or leave the reach); TargetAssigner gives the tank the enemy when it wins it back with
+ * threat, must walk into taunt range first, or keeps a waiting taunt's enemy in reach
+ * (TankTargets.cpp); EscapeBehavior lets the victim keep casting instead of running to the tank.
  *
  * Not yet (doc section 5): a shield on the victim, the victim running to the tank
  * (EscapeBehavior still decides that by itself, it only makes the tank's walk shorter), and
@@ -35,6 +50,9 @@
 
 namespace Commander
 {
+    struct EnemyFacts;
+    struct PartyMemberFacts;
+
     class RescueAssigner : public IAssigner
     {
     public:
@@ -46,6 +64,17 @@ namespace Commander
         static constexpr uint8 DETAIL_URGENT = 1;
         // Subtracted from a consumable's rank in a Save need: every spell candidate comes first.
         static constexpr float CONSUMABLE_RANK_OFFSET = 1.0e6f;
+        // Waiting taunt (header). Lead: a refresh (0.2 s) + a bot tick (0.2 s) + a spell batch
+        // (0.4 s) between a decision on these facts and the taunt landing.
+        static constexpr float WAIT_LEAD_SEC = 0.8f;
+        static constexpr float WAIT_MIN_SEC = 0.3f;
+        static constexpr float WAIT_MAX_SEC = 4.0f;
+        static constexpr float WAIT_MIN_GAIN_SHARE = 0.05f;
+
+        // Seconds `tank` waits before taunting `e` with `spellId` (0 = now); `gain` gets the
+        // threat the wait is expected to copy. Shared with TankTargets (it runs before Apply).
+        static float TauntWaitSec(WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e,
+                                  PartyMemberFacts const& tank, uint32 spellId, bool urgent, float* gain = nullptr);
 
         // Same id as RescueBehavior: `.partybot ai module rescue off` switches both.
         char const* GetId() const override { return "rescue"; }

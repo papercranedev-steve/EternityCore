@@ -225,6 +225,8 @@ namespace WorldModelBuilder
             f.pendingHit.spellId = info->Id;
             f.pendingHit.landMs = landMs;
             f.pendingHit.damage = DamageSpells::EstimateDirect(unit, target, info);
+            f.pendingHit.threat = unit->ApplyTotalThreatModifier(f.pendingHit.damage * sSpellMgr.GetSpellThreatMultiplier(info),
+                                                                 info->GetSpellSchoolMask());
         }
 
         // PartyMemberFacts::pendingHeal: a single target direct heal with a cast time in
@@ -892,6 +894,7 @@ namespace WorldModelBuilder
                 t.cooldownMs = spell->GetRecoveryTime();
                 t.holdSec = RescueValue::TemporaryTauntSec(spell);
                 t.stanceSwap = ai->StanceSwapFor(spell) != nullptr;
+                t.gcd = spell->StartRecoveryCategory > 0;
                 t.ready = f.CanAct() && ai->IsReadyWithStance(spell);
                 f.taunts.push_back(t);
             }

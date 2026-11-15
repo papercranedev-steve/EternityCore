@@ -65,7 +65,12 @@ void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)
        !me->IsMoving() &&
         me->GetPowerPercent(POWER_MANA) < manaPct &&
        !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+    {
+        // Shoot checks the facing (SPELL_CUSTOM_FACE_TARGET): turn first.
+        if (!me->IsFacingTarget(pVictim))
+            m_bot.FaceTarget(pVictim);
         me->CastSpell(pVictim, ClassRotations::SPELL_SHOOT_WAND, false);
+    }
 }
 
 void ClassRotation::ChaseWhenOutOfRange(Unit* pVictim)

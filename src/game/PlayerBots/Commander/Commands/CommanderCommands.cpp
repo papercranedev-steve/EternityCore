@@ -462,6 +462,9 @@ namespace
                 handler->PSendSysMessage("    |cffffcc00%s|r on %s: %s, %s%s (%.1f pt%s)",
                     d.enemy.IsEmpty() ? "(about to die)" : NameOf(map, d.enemy).c_str(), NameOf(map, d.victim).c_str(), NameOf(map, d.bot).c_str(), way,
                     d.spellId ? (" " + SpellName(d.spellId)).c_str() : "", d.points, d.urgent ? ", urgent" : "");
+                if (d.waitUntilMs)
+                    handler->PSendSysMessage("        waits %.1f s for its victim's threat (+%.0f expected)",
+                        std::max(0, int32(d.waitUntilMs - WorldTimer::getMSTime())) / 1000.0f, d.waitGain);
                 for (Commander::DutyResult const& r : plan.duties)
                     if ((r.kind == Commander::DutyKind::Rescue && r.target == d.enemy) ||
                         (r.kind == Commander::DutyKind::Save && d.way == Commander::RescueWay::Save && r.target == d.victim))

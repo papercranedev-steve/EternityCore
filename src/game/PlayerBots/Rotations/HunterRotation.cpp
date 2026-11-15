@@ -130,6 +130,9 @@ namespace
             if (!me->HasSpell(ClassRotations::SPELL_AUTO_SHOT) || me->IsMoving() ||
                 me->GetCombatDistance(pVictim) <= MIN_SHOT_RANGE || me->IsNonMeleeSpellCasted())
                 return;
+            // Auto Shot checks the facing (SPELL_CUSTOM_FACE_TARGET): turn first.
+            if (!me->IsFacingTarget(pVictim))
+                m_bot.FaceTarget(pVictim);
             switch (me->CastSpell(pVictim, ClassRotations::SPELL_AUTO_SHOT, false))
             {
                 case SPELL_FAILED_NEED_AMMO:

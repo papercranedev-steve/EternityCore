@@ -150,6 +150,19 @@ public:
     int32 GetIncomingdamage(Unit const* pTarget) const;
     bool AreOthersOnSameTarget(ObjectGuid guid, bool checkMelee = true, bool checkSpells = true) const;
 
+    // Facing, one way for every bot action. The server checks the caster's orientation at once:
+    // spells with combat range or SPELL_CUSTOM_FACE_TARGET (Taunt, Sunder, Frostbolt, Auto Shot,
+    // Shoot: Spell::CheckRange, at the cast start, its end and before every auto-repeat shot),
+    // melee swings within a 120 degree arc (Unit::CanAutoAttackTarget). Unit::SetFacingTo turns
+    // through a facing spline only on the next movement update, SetFacingToObject not at all
+    // while moving. FaceTo sets the orientation now and tells the observers, as a player turns;
+    // a running spline would turn it back (FaceForSpell stops first).
+    void FaceTo(float orientation);
+    void FaceTarget(Unit const* pTarget);
+    // `pSpellEntry` checks the caster's facing (SpellEntry::IsNeedFaceTarget) and the bot does
+    // not face `pTarget`: stop moving and turn to it.
+    void FaceForSpell(Unit const* pTarget, SpellEntry const* pSpellEntry);
+
     SpellCastResult DoCastSpell(Unit* pTarget, SpellEntry const* pSpellEntry);
     // A ground area spell (Blizzard, Rain of Fire) at the point x/y/z, as a player clicks the
     // ground: turns to it when standing, stops for a cast time or a channel.

@@ -17,7 +17,7 @@
  *             a temporary taunt (holdSec, Mocking Blow) also the hits after it fades until the
  *             tank's threat closes the gap. x the creature's taunt weight; not on taunt immune
  *             creatures, not without line of sight (EnemyFacts::InSightOf).
- *             cost = LostAction(GCD + walk) + reserve (share of its cooldown in
+ *             cost = LostAction(GCD when it has one + walk) + reserve (share of its cooldown in
  *             RESERVE_HORIZON_SEC x Points(the next enemy's damage per second x TAUNT_RESERVE_SEC,
  *             NextTauntDps): a taunt used now is not there for the next one) + LostAction(STANCE_SWAP_COST_SEC) when it
  *             needs a stance swap.

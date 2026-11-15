@@ -2,14 +2,18 @@
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/RaceKit.h"
 #include "Commander/Classes/ItemKit.h"
+#include "Commander/Coordination/Duties/RescueAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
+#include "Timer.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -33,6 +37,29 @@ namespace Commander
             action.prepSpell = spell;
             action.prepResets = true;
             return true;
+        }
+
+        // A waiting taunt (RescueDuty::waitUntilMs, RescueAssigner::TauntWaitSec) is due: its
+        // time is up, or, checked live, within RescueAssigner::WAIT_LEAD_SEC the enemy is on its
+        // victim or out of the tank's reach (`reach`: TauntAbility::maxRange, from its edge).
+        bool TauntDue(PartyBotAI const* bot, RescueDuty const& duty, Unit const* enemy, float reach)
+        {
+            if (!duty.waitUntilMs || int32(WorldTimer::getMSTime() - duty.waitUntilMs) >= 0)
+                return true;
+            Player* me = bot->me;
+            Unit const* victim = me->GetMap()->GetUnit(duty.victim);
+            if (!victim || !victim->IsAlive() || enemy->GetVictim() != victim ||
+                enemy->CanReachWithMeleeAutoAttack(victim))
+                return true;
+            float const lead = RescueAssigner::WAIT_LEAD_SEC;
+            float const speed = enemy->GetSpeed(MOVE_RUN);
+            if (enemy->GetDistance(victim) <= RescueValue::MELEE_REACH + speed * lead)
+                return true;
+            float const dx = me->GetPositionX() - enemy->GetPositionX();
+            float const dy = me->GetPositionY() - enemy->GetPositionY();
+            float const gap = std::sqrt(dx * dx + dy * dy) - enemy->GetObjectBoundingRadius();
+            float const apart = std::max(0.0f, speed - me->GetSpeed(MOVE_RUN));
+            return gap + apart * lead >= reach;
         }
     }
 
@@ -64,7 +91,7 @@ namespace Commander
         p.source = "rescue";
         p.action.type = BotActionType::Cast;
         p.action.spell = spell;
-        bool gcd = true;
+        bool const gcd = spell->StartRecoveryCategory > 0;
         if (duty->way == RescueWay::Save)
         {
             // A healthstone or healing potion (ItemKit): its spell is the duty's.
@@ -89,7 +116,15 @@ namespace Commander
             Unit* enemy = me->GetMap()->GetUnit(duty->enemy);
             if (!enemy || !enemy->IsAlive() || !me->IsWithinLOSInMap(enemy) || !bot->CanCastWithStance(enemy, spell))
                 return;
-            p.reason = "rescue: taunt loose enemy";
+            // A waiting taunt: the tank keeps after it (TankTargets) and fights until it is due.
+            if (duty->waitUntilMs)
+            {
+                auto const taunt = std::find_if(self->taunts.begin(), self->taunts.end(),
+                                                [&](TauntAbility const& t) { return t.spellId == duty->spellId; });
+                if (taunt != self->taunts.end() && !TauntDue(bot, *duty, enemy, taunt->maxRange))
+                    return;
+            }
+            p.reason = duty->waitUntilMs ? "rescue: taunt loose enemy after its victim's threat" : "rescue: taunt loose enemy";
             p.action.target = duty->enemy;
         }
         else if (duty->way == RescueWay::Save)
@@ -130,7 +165,8 @@ namespace Commander
             }
             p.reason = p.action.prepResets ? "rescue: attacked, reset and drop threat" : "rescue: attacked, drop threat";
         }
-        float const cost = Value::LostAction(world, *self, Value::GCD_SEC);
+        // Off the global cooldown (Taunt, Growl, Vanish): no action lost.
+        float const cost = gcd ? Value::LostAction(world, *self, Value::GCD_SEC) : 0.0f;
         p.SetValue(duty->points + cost, cost);
         out.push_back(p);
     }

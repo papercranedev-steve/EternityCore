@@ -110,6 +110,9 @@ namespace Commander
         // its aura fades: seconds it holds. 0 = the threat stays (RescueValue::TemporaryTauntSec).
         float holdSec = 0.0f;
         bool stanceSwap = false;        // needs a warrior stance swap first (PartyBotAI::StanceSwapFor)
+        // On the global cooldown (StartRecoveryCategory): Mocking Blow, the area taunts. Taunt
+        // and Growl are not: they cost the tank no action.
+        bool gcd = false;
         // Off cooldown and enough power, after the stance swap if one is needed
         // (PartyBotAI::IsReadyWithStance). Range and sight are per enemy.
         bool ready = false;
@@ -470,6 +473,9 @@ namespace Commander
         uint32 spellId = 0;
         uint32 landMs = 0;          // from WorldModel::refreshedAtMs until it hits
         float damage = 0.0f;        // DamageSpells::EstimateDirect (no crit, no resistance)
+        // Threat it adds on the target when it hits (the spell's threat multiplier and the
+        // caster's modifiers: Unit::ApplyTotalThreatModifier). Not on the list before then.
+        float threat = 0.0f;
     };
 
     // A member's single target direct heal being cast (PartyMemberFacts::pendingHeal):

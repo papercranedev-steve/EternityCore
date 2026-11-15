@@ -101,7 +101,8 @@ namespace RescueValue
         float const onVictim = std::min(v.horizon, walkSec + TauntSecOnVictim(v.gap, tankRate, taunt.holdSec, v.horizon));
         o.benefit = (v.lossNothing - LooseEnemy::Loss(world, e, victim, tank, onVictim)) * mult;
         float const share = std::min(1.0f, (taunt.cooldownMs / 1000.0f) / RESERVE_HORIZON_SEC);
-        o.cost = Value::LostAction(world, tank, Value::GCD_SEC + walkSec) +
+        // Taunt and Growl are off the global cooldown (TauntAbility::gcd): only the walk.
+        o.cost = Value::LostAction(world, tank, (taunt.gcd ? Value::GCD_SEC : 0.0f) + walkSec) +
                  share * Value::Points(world, enemyDps * TAUNT_RESERVE_SEC);
         if (taunt.stanceSwap)
             o.cost += Value::LostAction(world, tank, STANCE_SWAP_COST_SEC);

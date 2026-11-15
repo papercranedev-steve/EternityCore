@@ -10,6 +10,11 @@
  *   Taunt       the enemy alive, in sight, CanCastWithStance (range, cooldown, rage, stance
  *               swap; the arbiter swaps stance first). Out of range or sight: nothing here,
  *               TargetAssigner gives the tank the enemy and it walks over (TankTargets.cpp).
+ *               A waiting taunt (RescueDuty::waitUntilMs: the enemy runs at a ranged victim
+ *               who keeps adding threat the taunt copies): nothing until it is due, i.e. the
+ *               time is up, or live within RescueAssigner::WAIT_LEAD_SEC the enemy is in melee
+ *               reach of its victim or out of the tank's reach (it outruns the tank), or it
+ *               turned to someone else.
  *   ThreatDrop  CanTryToCastSpell on itself (Fade, Feign Death, Vanish), or on the enemy in
  *               sight (ThreatDropAbility::onTarget: Feint, Cower).
  *   Threat      nothing here: TargetBehavior attacks it.
@@ -18,7 +23,8 @@
  * first, in the same cast (BotAction::prepResets).
  * Tier Urgent when the duty is (the victim dies within the horizon), else Assigned;
  * value = the duty's net + one global cooldown, cost = that global cooldown (as the crowd
- * control behavior: the arbiter compares by net).
+ * control behavior: the arbiter compares by net); 0 for a spell off the global cooldown
+ * (Taunt, Growl, Vanish).
  * WantsTickNow while the bot has any rescue duty (for Threat the target switch happens on that
  * tick): the bot reacts at the refresh that saw the loose enemy (was ThreatBehavior's wake-up
  * on "a non-tank is hit").

@@ -273,6 +273,11 @@ namespace Commander
                 continue;
             if (Distance2d(here, e.pos) - e.boundingRadius > TRIGGER_GAP)
                 continue;
+            // The tank taunts it before it gets here, after this bot's hits (a waiting taunt,
+            // RescueAssigner::TauntWaitSec): keep casting, running would end the casts it copies.
+            if (RescueDuty const* r = plan.FindRescueOf(e.guid))
+                if (r->way == RescueWay::Taunt && r->waitUntilMs && r->victim == self->guid)
+                    continue;
             Unit* unit = map->GetUnit(e.guid);
             if (!unit || !unit->IsAlive())
                 continue;
