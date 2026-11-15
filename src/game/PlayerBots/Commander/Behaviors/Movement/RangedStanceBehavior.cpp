@@ -1,16 +1,14 @@
 #include "Commander/Behaviors/Movement/RangedStanceBehavior.h"
+#include "Commander/Behaviors/Movement/RangedSpot.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
-#include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/Exposure.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Perception/Spatial/PositionField.h"
-#include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
-#include "Commander/Behaviors/Movement/SpotRejects.h"
 #include "Commander/Behaviors/Movement/JoinGamble.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Trace/Trace.h"
@@ -18,13 +16,11 @@
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
-#include <memory>
 
 namespace Commander
 {
     namespace
     {
-        using RS = RangedStanceBehavior;
         using SafeRoute::Distance2d;
 
         Position3 PositionOf(WorldObject const* obj)
@@ -34,83 +30,6 @@ namespace Commander
             p.y = obj->GetPositionY();
             p.z = obj->GetPositionZ();
             return p;
-        }
-
-        struct Spot
-        {
-            Position3 pos;
-            float walkSec = 0.0f;
-            float exposure = 0.0f;  // points: Exposure::LossAt there
-            float sight = 0.0f;     // points: SightMargin::LossAt there
-            float loss = 0.0f;      // points: SpotCost::Walk + exposure + sight, lower first
-            bool viewed = false;    // PositionField::SeesEstimate from the victim
-            bool taken = false;     // FieldSpots::Spot::taken
-            bool reached = true;    // FieldSpots::Spot::reached
-
-            // Cells estimated in sight first (header "Where"), then the loss.
-            float Key() const { return loss + (viewed ? 0.0f : FieldSpots::HIDDEN_KEY); }
-        };
-
-        // Cells the grid walk reaches first, then the others (header "Where"); each part by Key,
-        // PreferFree within a part only.
-        void SortSpots(WorldModel const& world, PartyMemberFacts const& self, float speed, std::vector<Spot>& spots)
-        {
-            auto const firstUnreached = std::stable_partition(spots.begin(), spots.end(), [](Spot const& s) { return s.reached; });
-            size_t const reachedCount = size_t(firstUnreached - spots.begin());
-            // Equally good: within one cell of walk.
-            float const tie = SpotCost::Walk(world, self, PositionField::CELL_YD * RS::PATH_FACTOR / speed);
-            std::vector<Spot> rest(spots.begin() + reachedCount, spots.end());
-            spots.resize(reachedCount);
-            for (std::vector<Spot>* part : { &spots, &rest })
-            {
-                std::stable_sort(part->begin(), part->end(), [](Spot const& a, Spot const& b) { return a.Key() < b.Key(); });
-                FieldSpots::PreferFree(*part, [](Spot const& s) { return s.Key(); }, [](Spot const& s) { return s.taken; }, tie);
-            }
-            spots.insert(spots.end(), rest.begin(), rest.end());
-        }
-
-        // Field cells up to MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the victim's
-        // edge, outside areas dangerous to ranged; estimated in sight first, then the lowest loss
-        // (header "Where"). The field drops cells off the ground, under an idle creature, on a
-        // patrol's way before `staySec`, and cells the bot cannot walk to. `turnable` empty: the
-        // walk alone; `points` empty: no sight margin.
-        std::vector<Spot> Candidates(WorldModel const& world, PartyMemberFacts const& self,
-                                     std::vector<HazardZone> const& zones, Position3 const& victim,
-                                     float victimReach, bool prepare, float staySec, float speed,
-                                     std::vector<EnemyFacts const*> const& turnable,
-                                     std::vector<Position3> const& points, bool tight, float deadZone)
-        {
-            PositionField const& field = *world.field;
-            std::vector<Spot> spots;
-            FieldSpots::Query q;
-            q.center = victim;
-            q.minYd = deadZone > 0.0f ? deadZone + RS::DEAD_ZONE_MARGIN + victimReach : 0.0f;
-            q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
-            q.patrolBeforeSec = staySec;
-            q.tight = tight;
-            // In the fight: circles covering the victim's spot as the fight there (FieldSpots.h).
-            q.hasFight = !prepare;
-            q.fightAt = victim;
-            // In the fight also the cells the grid walk misses: their path check is the only way
-            // to a blocker for the join gamble (FieldSpots::Query::keepUnreached).
-            q.keepUnreached = !prepare;
-            for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
-            {
-                if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
-                    continue;
-                Spot s;
-                s.pos = c.pos;
-                s.walkSec = c.WalkEstimate(RS::PATH_FACTOR) / speed;
-                s.exposure = Exposure::LossAt(world, self, turnable, c.pos);
-                s.sight = SightMargin::LossAt(world, self, field, points, c.pos);
-                s.loss = SpotCost::Walk(world, self, s.walkSec) + s.exposure + s.sight;
-                s.viewed = field.SeesEstimate(victim, c.pos);
-                s.taken = c.taken;
-                s.reached = c.reached;
-                spots.push_back(s);
-            }
-            SortSpots(world, self, speed, spots);
-            return spots;
         }
     }
 
@@ -204,7 +123,7 @@ namespace Commander
                     victim = me->GetMap()->GetUnit(duty->enemy);
             if (!victim || !victim->IsAlive())
                 return;
-            // It comes for the bot: running from melee is the escape module's job.
+            // It comes for the bot: running from melee is the escape and kite modules' job.
             if (victim->GetVictim() == me)
                 return;
             at = PositionOf(victim);
@@ -233,7 +152,6 @@ namespace Commander
         float const exposureHere = Exposure::LossAt(world, *self, turnable, here);
         if (!world.field || !world.field->sight)
             return;     // built while the party fights or a pull runs (PositionFieldBuilder)
-        SightCache& sight = *world.field->sight;
         // Sight checks not kept yet, this tick (cells and the margin's points together).
         uint32 budget = MAX_SIGHT_CHECKS;
         // How narrowly a spot sees the victim (Perception/Values/SightMargin.h, 2026-11-14), in
@@ -256,144 +174,80 @@ namespace Commander
             return;
         }
 
-        std::vector<HazardZone> const& zones = HazardZones::Get(world);
-        float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+        // The spot search (RangedSpot.h, the order of the header's "Where").
+        RangedSpot::Query q;
+        q.at = at;
+        // Cells from the victim's edge: beyond the dead zone (DEAD_ZONE_MARGIN), up to MAX_RADIUS.
+        q.minYd = deadZone > 0.0f ? deadZone + DEAD_ZONE_MARGIN + atReach : 0.0f;
+        q.maxYd = (prepare ? PREPARE_MAX_RADIUS : MAX_RADIUS) + atReach;
+        q.prepare = prepare;
         // (how long we stay: before the fight the pull's estimate, RouteGuard.h)
-        float const staySec = RouteGuard::StaySec(world, plan);
+        q.staySec = RouteGuard::StaySec(world, plan);
+        q.turnable = &turnable;
+        q.points = &points;
+        q.unsafe = unsafe;
         // The hard line (SafeRoute::TIGHT_MARGIN): in the fight, the victim out of range or sight
         // and no cell on the preferred line (stockade-20261114-203133: the mage stood in the
         // corridor while the tank fought in a cell, the opposite cell's margin closed its door).
         // A spot taken on the hard line is in the margin (`unsafe` next tick): the walk out goes
-        // only to a cell that still sees the victim (GeometryOk), so it does not walk back out.
-        bool const mayTighten = !prepare && !inReach && !placed;
-        uint32 checked = 0;
-        size_t found = 0;
-        SpotRejects why;
-        std::unique_ptr<SafeRoute::IdleCreatures> idleTight;
-        for (bool const tight : { false, true })
+        // only to a cell that still sees the victim, so it does not walk back out.
+        q.mayTighten = !prepare && !inReach && !placed;
+        q.hereValid = hereValid;
+        q.lossHere = lossHere;
+        q.margin = margin;
+        RangedSpot::Result found;
+        if (RangedSpot::Find(me, world, *self, idle, q, budget, found))
         {
-            if (tight && !mayTighten)
-                break;
-            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, points, tight, deadZone);
-            found += spots.size();
-            // This bot's own idle scan on the pass's line (scanned again only for the hard line).
-            if (tight)
-                idleTight.reset(new SafeRoute::IdleCreatures(me, nullptr, SafeRoute::TIGHT_MARGIN));
-            SafeRoute::IdleCreatures const& own = tight ? *idleTight : idle;
-            // The walk out of an idle creature's reach starts inside it. In the fight, a circle
-            // that covers the victim's spot counts only closer to its home than the victim (the
-            // fight is there and nothing came: MeleeRoutes.h, the melee's walk in;
-            // stockade-20261115-002203: every walk into the tank's cell failed on such a circle).
-            SafeRoute::IdleCreatures pathIdle = unsafe ? own.LeavingFrom(here) : own;
-            if (!prepare)
-                pathIdle = pathIdle.ArrivingAt(at);
-            // The spot itself by the same rule (stockade-20261115-012103, FieldSpots.h).
-            SafeRoute::IdleCreatures const endIdle = prepare ? own : own.ArrivingAt(at);
-            // One pass in order (header "Where": every cell's loss is known, cells estimated in
-            // sight first). Each cell: this bot's idle scan, the real line (sight cache, budget),
-            // the path (failures kept a while: SightCache::PathFailed). The first that passes all
-            // is taken. (Before 2026-11-15 the cells were probed nearest first with the real line
-            // only: the cells behind a wall used the budget, stockade-20261115-002203.)
-            uint32 checks = 0;
-            for (Spot const& s : spots)
+            RangedSpot::Spot const& s = found.spot;
+            float const walkSec = s.walkSec;
+            float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
+            Proposal p;
+            p.source = "rangedstance";
+            p.action.type = BotActionType::MoveTo;
+            p.action.x = s.pos.x;
+            p.action.y = s.pos.y;
+            p.action.z = s.pos.z;
+            p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
+            if (unsafe || danger)
             {
-                if (hereValid && lossHere - s.loss <= margin)
-                {
-                    if (s.viewed)
-                        continue;   // (further down an estimate in sight may still pay)
-                    break;
-                }
-                if (endIdle.Near(s.pos))
-                {
-                    ++why.idle;
-                    continue;
-                }
-                if (sight.PathFailed(me, s.pos, tight))
-                {
-                    ++why.pathKept;
-                    continue;
-                }
-                ++checked;
-                SightCache::Sight const v = sight.Cells(me, s.pos, at, budget);
-                if (v == SightCache::Sight::Unknown)
-                {
-                    why.budget = true;
-                    break;      // out of budget: the next ticks go on (the answers are kept)
-                }
-                why.Real(s.viewed, v == SightCache::Sight::Yes);
-                if (v == SightCache::Sight::No)
-                {
-                    ++why.hidden;
-                    continue;
-                }
-                ++why.seen;
-                if (checks >= MAX_GEOMETRY_CHECKS)
-                    break;
-                ++checks;
-                // The kept answer is from the cells' centres: the spell's line now, then the path.
-                if (!SightCache::Live(me, s.pos, at))
-                {
-                    ++why.live;
-                    continue;
-                }
-                SafeRoute::Verdict verdict;
-                if (!SafeRoute::PathIsSafe(me, pathIdle, s.pos, MAX_PATH_DETOUR, nullptr, nullptr, &verdict))
-                {
-                    why.Path(verdict, s.pos);
-                    sight.MarkPathFailed(me, s.pos, tight);
-                    continue;
-                }
-
-                float const walkSec = s.walkSec;
-                float const horizon = std::max(1.0f, std::min(HORIZON_SEC, Value::FightRemainingSec(world)));
-                Proposal p;
-                p.source = "rangedstance";
-                p.action.type = BotActionType::MoveTo;
-                p.action.x = s.pos.x;
-                p.action.y = s.pos.y;
-                p.action.z = s.pos.z;
-                p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
-                if (unsafe || danger)
-                {
-                    // A constraint: never stand where an idle pack would come, nor in the enemies'
-                    // melee (their cleaves and area spells, an instant hit when one turns).
-                    p.tier = ProposalTier::Urgent;
-                    p.reason = unsafe ? "an idle creature would attack here" : "standing in the enemies' melee";
-                    p.score = -walkSec;
-                }
-                else if (prepare)
-                {
-                    // Nothing to do before the fight: the walk costs nothing now and saves walking
-                    // it once the fight is on (its part of the planned fight, FightLoad estimate).
-                    float const incoming = std::max(world.rates.incomingDps, plan.pull.expectedIncomingDps);
-                    p.tier = ProposalTier::Assigned;
-                    p.reason = "take a place for the planned fight";
-                    p.SetValue(Value::ContributionPerSecAt(world, *self, incoming) * walkSec, 0.0f);
-                }
-                else
-                {
-                    p.tier = ProposalTier::Assigned;
-                    p.reason = inDeadZone ? "inside the minimum range of its attack" :
-                               !inReach ? (tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
-                               sightHere - s.sight > exposureHere - s.exposure ? "sees the victim only narrowly" : "too close to the enemies";
-                    // Out of reach: it cannot do its job. Plus the exposure and sight margin the walk saves.
-                    float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
-                    benefit += std::max(0.0f, lossHere - s.exposure - s.sight);
-                    p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
-                }
-                out.push_back(p);
-                return;
+                // A constraint: never stand where an idle pack would come, nor in the enemies'
+                // melee (their cleaves and area spells, an instant hit when one turns).
+                p.tier = ProposalTier::Urgent;
+                p.reason = unsafe ? "an idle creature would attack here" : "standing in the enemies' melee";
+                p.score = -walkSec;
             }
+            else if (prepare)
+            {
+                // Nothing to do before the fight: the walk costs nothing now and saves walking
+                // it once the fight is on (its part of the planned fight, FightLoad estimate).
+                float const incoming = std::max(world.rates.incomingDps, plan.pull.expectedIncomingDps);
+                p.tier = ProposalTier::Assigned;
+                p.reason = "take a place for the planned fight";
+                p.SetValue(Value::ContributionPerSecAt(world, *self, incoming) * walkSec, 0.0f);
+            }
+            else
+            {
+                p.tier = ProposalTier::Assigned;
+                p.reason = inDeadZone ? "inside the minimum range of its attack" :
+                           !inReach ? (found.tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
+                           sightHere - s.sight > exposureHere - s.exposure ? "sees the victim only narrowly" : "too close to the enemies";
+                // Out of reach: it cannot do its job. Plus the exposure and sight margin the walk saves.
+                float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);
+                benefit += std::max(0.0f, lossHere - s.exposure - s.sight);
+                p.SetValue(benefit, SpotCost::Walk(world, *self, walkSec));
+            }
+            out.push_back(p);
+            return;
         }
         // The last way in: past the idle creature that blocked the first path, when its join is
         // worth it (JoinGamble.h, 2026-11-15).
-        if (!prepare && !inReach && !placed && JoinGamble::Propose(me, world, *self, why, at, "rangedstance", out))
+        if (!prepare && !inReach && !placed && JoinGamble::Propose(me, world, *self, found.why, at, "rangedstance", out))
             return;
         // Out of the victim's range or sight and no spot: the only record of why it stands.
         if (!prepare && !inReach && Trace::On())
-            Trace::Emit("stance", Trace::Format("%s: no spot for %s (ranged)", me->GetName(), mayTighten ? "the victim, hard line too" : "the victim"),
+            Trace::Emit("stance", Trace::Format("%s: no spot for %s (ranged)", me->GetName(), q.mayTighten ? "the victim, hard line too" : "the victim"),
                 Trace::Format("{\"bot\":\"%s\",\"cells\":%u,\"checked\":%u,\"tight\":%s,%s}",
-                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found), checked, mayTighten ? "true" : "false",
-                    why.Json().c_str()));
+                    Trace::Guid(me->GetObjectGuid()).c_str(), uint32(found.cells), found.checked, q.mayTighten ? "true" : "false",
+                    found.why.Json().c_str()));
     }
 }

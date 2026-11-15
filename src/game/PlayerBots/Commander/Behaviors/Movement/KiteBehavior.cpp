@@ -1,9 +1,13 @@
 #include "Commander/Behaviors/Movement/KiteBehavior.h"
-#include "Commander/Behaviors/Movement/FleePoint.h"
+#include "Commander/Behaviors/Movement/RangedSpot.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
+#include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Values/Exposure.h"
+#include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "PartyBotAI.h"
@@ -149,27 +153,46 @@ namespace Commander
         float const arrive = deadZone + ARRIVE_MARGIN + e.boundingRadius + myRadius;
         float const meleeGap = MELEE_GAP + e.boundingRadius + myRadius;
 
-        // 1. Held or slow enough: run out of the dead zone.
+        // 1. Held or slow enough: run out of the dead zone, to a spot the ranged stance would
+        // take too (RangedSpot.h: idle packs, patrols, hazards, exposure, sight of the chaser).
         float const ratio = chaser.held ? 0.0f : e.speed / speed;
         if (ratio <= MAX_SPEED_RATIO)
         {
-            FleePoint::Options options;
-            options.toAllies = false;
-            options.minEnemyGap = Gap(arrive, nowGap, ratio);
-            Position3 to;
-            if (!FleePoint::Find(me, chaser.unit, &world, to.x, to.y, to.z, options))
+            if (!world.field || !world.field->sight)
                 return;
-            float const walkSec = Distance2d(here, to) * PATH_FACTOR / speed;
             float const chaserSpeed = chaser.held ? 0.0f : e.speed;
-            float const arriveGap = Distance2d(to, e.pos) - chaserSpeed * walkSec;
+            SafeRoute::IdleCreatures const idle(me);
+            std::vector<EnemyFacts const*> const turnable = Exposure::Turnable(world, self->guid);
+            std::vector<Position3> const points = SightMargin::Points(world, e.pos, e.guid, self->guid);
+            RangedSpot::Query q;
+            q.at = e.pos;
+            q.minYd = Gap(arrive, nowGap, ratio);
+            q.maxYd = q.minYd + BAND_YD;
+            q.staySec = RouteGuard::StaySec(world, plan);
+            q.turnable = &turnable;
+            q.points = &points;
+            q.unsafe = idle.ArrivingAt(e.pos).Near(here);
+            // The bot gets there ARRIVE_MARGIN beyond its dead zone while the chaser follows,
+            // and on its own side of the chaser (not past it).
+            q.keep = [&](RangedSpot::Spot const& s)
+            {
+                float const gap = Distance2d(s.pos, e.pos);
+                return gap - chaserSpeed * s.walkSec >= arrive && Distance2d(here, s.pos) < gap;
+            };
+            uint32 budget = MAX_SIGHT_CHECKS;
+            RangedSpot::Result found;
+            if (!RangedSpot::Find(me, world, *self, idle, q, budget, found))
+                return;
+            RangedSpot::Spot const& s = found.spot;
+            float const arriveGap = Distance2d(s.pos, e.pos) - chaserSpeed * s.walkSec;
             Proposal p = Make(chaser.held ? "melee enemy held: out of the dead zone" : "melee enemy slowed: out of the dead zone");
             p.action.type = BotActionType::MoveTo;
-            p.action.x = to.x;
-            p.action.y = to.y;
-            p.action.z = to.z;
-            p.action.holdMs = uint32(walkSec * 1000.0f) + HOLD_EXTRA_MS;
-            p.SetValue(Saved(world, chaser, *self, FreeSec(world, chaser, walkSec, arriveGap, meleeGap, chaserSpeed)),
-                       Value::LostAction(world, *self, walkSec));
+            p.action.x = s.pos.x;
+            p.action.y = s.pos.y;
+            p.action.z = s.pos.z;
+            p.action.holdMs = uint32(s.walkSec * 1000.0f) + HOLD_EXTRA_MS;
+            p.SetValue(Saved(world, chaser, *self, FreeSec(world, chaser, s.walkSec, arriveGap, meleeGap, chaserSpeed)),
+                       Value::LostAction(world, *self, s.walkSec) + std::max(0.0f, s.exposure + s.sight));
             out.push_back(p);
             return;
         }

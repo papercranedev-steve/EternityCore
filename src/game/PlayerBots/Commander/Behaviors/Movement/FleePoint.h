@@ -70,19 +70,8 @@ namespace Commander
         float const ENEMY_RUN_SPEED = 7.0f;     // enemy without facts or speed
         float const PATH_FACTOR = 1.2f;
 
-        struct Options
-        {
-            // Run to party members (tanks without the gap rules); false = field cells only
-            // (KiteBehavior: the hunter keeps the enemy and shoots it, it does not bring it to
-            // someone).
-            bool toAllies = true;
-            // The spot's distance from the enemy (centre to centre) at least this.
-            float minEnemyGap = MIN_ENEMY_GAP;
-        };
-
         // `world`: the party's world model (who the tanks are, Perception/Tanks.h); may be null.
-        bool Find(Player* me, Unit* enemy, WorldModel const* world, float& x, float& y, float& z,
-                  Options const& options = Options());
+        bool Find(Player* me, Unit* enemy, WorldModel const* world, float& x, float& y, float& z);
     }
 }
 

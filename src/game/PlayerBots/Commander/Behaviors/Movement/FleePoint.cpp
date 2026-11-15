@@ -47,8 +47,7 @@ namespace Commander
 
 namespace FleePoint
 {
-    bool Find(Player* me, Unit* enemy, WorldModel const* world, float& outX, float& outY, float& outZ,
-              Options const& options)
+    bool Find(Player* me, Unit* enemy, WorldModel const* world, float& outX, float& outY, float& outZ)
     {
         Map* map = me->GetMap();
         Position3 const here = PointOf(me);
@@ -96,7 +95,7 @@ namespace FleePoint
         auto const score = [&](Position3 const& p, bool toTank, Candidate& c) -> bool
         {
             float const gap = Distance2d(p, foe);
-            if (!toTank && (gap < options.minEnemyGap || gap < nowGap + MIN_GAIN))
+            if (!toTank && (gap < MIN_ENEMY_GAP || gap < nowGap + MIN_GAIN))
                 return false;
             c.pos = p;
             if (!valued)
@@ -113,8 +112,6 @@ namespace FleePoint
         // Party members: ground near the bot's height.
         for (auto const& ally : allies)
         {
-            if (!options.toAllies)
-                break;
             Position3 p = ally.first;
             float const ground = map->GetHeight(p.x, p.y, here.z + MAX_HEIGHT_DIFFERENCE, true, 2.0f * MAX_HEIGHT_DIFFERENCE);
             if (ground <= INVALID_HEIGHT || std::fabs(ground - here.z) > MAX_HEIGHT_DIFFERENCE)

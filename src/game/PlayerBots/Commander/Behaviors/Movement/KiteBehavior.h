@@ -8,14 +8,17 @@
  *
  * Per tick, one of:
  *  1. Run: the chaser is held (root, stun) or slow enough (speed <= MAX_SPEED_RATIO x the
- *     bot's run speed). Destination FleePoint::Find with field cells only (no running to a
- *     party member: the bot keeps the enemy and shoots it) and a spot at least `gap` from the
- *     chaser (centre to centre), gap such that the bot arrives `ARRIVE_MARGIN` beyond its dead
- *     zone while the chaser follows at its speed (Gap()). MoveTo, tier Assigned.
+ *     bot's run speed). Destination: RangedSpot::Find around the chaser, the search the ranged
+ *     stance uses (position field cells: no idle pack, no patrol before the fight ends, no
+ *     hazard, exposure to the other enemies and sight margin in the loss, line of sight to the
+ *     chaser and a safe path checked), cells Gap()..Gap() + BAND_YD from it, kept only when
+ *     the bot gets there ARRIVE_MARGIN beyond its dead zone while the chaser follows at its
+ *     speed (the cell's walk estimate), and on the bot's side of the chaser. No running to a
+ *     party member: the bot keeps the enemy and shoots it. MoveTo, tier Assigned.
  *       benefit = Value::HitLoss + Value::HarassLoss over the free seconds: the walk plus the
  *                 time the chaser needs from the arrival gap back to melee, at most FREE_CAP_SEC
  *                 and the chaser's time to die
- *       cost    = Value::LostAction(bot, walk)
+ *       cost    = Value::LostAction(bot, walk) + the spot's exposure and sight margin
  *  2. Slow: a kit slow (ClassKit::KiteSlows, Wing Clip) castable on the chaser that would make
  *     it slow enough (the spell's SPELL_AURA_MOD_DECREASE_SPEED, the chaser not immune). Cast,
  *     tier Assigned; benefit = the run's benefit at the slowed speed, cost = LostAction(GCD) +
@@ -55,6 +58,10 @@ namespace Commander
         // Melee reach of a chaser (edge distance) for the free seconds after the arrival.
         static constexpr float MELEE_GAP = 2.0f;
         static constexpr float FREE_CAP_SEC = 6.0f;
+        // Cells this far beyond the nearest gap that works (more walk, little more time).
+        static constexpr float BAND_YD = 8.0f;
+        // New sight checks per tick for the run's spot (the ranged stance has its own).
+        static constexpr uint32 MAX_SIGHT_CHECKS = 24;
         static constexpr float PATH_FACTOR = 1.2f;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 

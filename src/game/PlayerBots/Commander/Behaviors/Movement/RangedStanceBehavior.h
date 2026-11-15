@@ -44,7 +44,8 @@
  * escape module's job), or a MoveTo is under way (then Hold so the rotation's first cast does
  * not stop the walk).
  *
- * Where (since 2026-11-10, position field step C): cells of the position field
+ * Where (since 2026-11-10, position field step C; the search itself is RangedSpot::Find since
+ * 2026-11-15, shared with KiteBehavior): cells of the position field
  * (FieldSpots::Collect) up to MAX_RADIUS from the victim's edge (no inner limit since
  * 2026-11-11: near cells lose on exposure; MAX_RADIUS < CAST_RANGE leaves room for the victim
  * to move before the spot is out of range) (before the fight out to
@@ -62,7 +63,7 @@
  * moment ago skipped (SightCache::PathFailed), the real line of sight from the field's sight
  * cache (SightCache.h, kept per pair of cells, at most MAX_SIGHT_CHECKS new checks per tick),
  * then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at most
- * MAX_GEOMETRY_CHECKS cells; the first that passes is taken. In the fight the walk counts a
+ * RangedSpot::MAX_GEOMETRY_CHECKS cells; the first that passes is taken. In the fight the walk counts a
  * circle covering the victim's spot only closer than the victim (ArrivingAt, MeleeRoutes.h).
  * (Before: cells probed nearest first with the real line only, those behind a wall used the
  * budget and the path checks, stockade-20261115-002203.) In the fight the cells the grid walk
@@ -103,15 +104,13 @@ namespace Commander
         // A valid spot is left only for a cell that saves more than this many seconds of the
         // bot's action (doc 2026-11-11-spot-scoring.md section 5.3; noise, the walk is in the loss).
         static constexpr float MOVE_MARGIN_SEC = 1.0f;
-        static constexpr uint32 MAX_GEOMETRY_CHECKS = 6;    // pathfinding, cells that passed the sight check
-        // Real line of sight checks not in the sight cache yet, per tick.
+        // Real line of sight checks not in the sight cache yet, per tick (path checks, detour
+        // and walk factor: RangedSpot.h).
         static constexpr uint32 MAX_SIGHT_CHECKS = 48;
-        static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
         // Cells start this far beyond the bot's dead zone (ClassKit::MinAttackRange): the victim
         // shifts a little in the fight, a spot right on the line would be left again.
         static constexpr float DEAD_ZONE_MARGIN = 3.0f;
-        static constexpr float PATH_FACTOR = StandLoss::RANGED_PATH_FACTOR;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "rangedstance"; }
