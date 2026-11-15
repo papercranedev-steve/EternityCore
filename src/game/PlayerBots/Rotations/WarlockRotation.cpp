@@ -3,9 +3,10 @@
  * 22/3/26 spec with Siphon Life, Improved Imp and Ruin, user: no pet sacrifice for now).
  *
  * Out of combat: Detect Invisibility on the party, Demon Armor; with a victim (an opener): the
- * combat steps. The pet (the Imp, every ability its level allows) is summoned by
- * PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded): resting and the walk back after a
- * corpse run skip the rotation. The Imp stays in Phase Shift, in and
+ * combat steps; without one: a Soulstone on the party's healer (Soulstone: create it, use it).
+ * The pet (the Imp, every ability its level allows) is summoned by PartyBotAI::UpdateAI out of
+ * combat (SummonPetIfNeeded), not only here: resting and the walk back after a corpse run skip
+ * the rotation, and the next pull came first. The Imp stays in Phase Shift, in and
  * out of combat (KeepPetAside, user 2026-11-15: no damage from it, so it does not die; its
  * Blood Pact stays).
  *
@@ -31,7 +32,11 @@
 #include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
 #include "DamageSpells.h"
+#include "RoleCapability.h"
 #include "Player.h"
+#include "Group.h"
+#include "ObjectMgr.h"
+#include "SpellMgr.h"
 
 namespace
 {
@@ -66,6 +71,7 @@ namespace
             {
                 // (the pet is summoned in PartyBotAI::UpdateAI, SummonPetIfNeeded)
                 KeepPetAside();
+                Soulstone();
                 return;
             }
             SendPetAt(pVictim);
@@ -108,6 +114,81 @@ namespace
         }
 
     private:
+        // Out of combat, nothing else to do (user 2026-11-15, cooldown doc 2026-11-14-cooldown-spells.md
+        // 10): the party's healer without a Soulstone Resurrection gets one. With the stone in the
+        // bags: use it on the healer (its 30 min cooldown is the warlock's); without: create the
+        // best one it knows (a Soul Shard, SHARD_RESERVE is kept for this) while it and the
+        // leader stand still out of combat.
+        bool Soulstone()
+        {
+            PartyBotAI& bot = m_bot;
+            Player* me = bot.me;
+            SpellEntry const* pCreate = bot.m_spells.warlock.pCreateSoulstone;
+            if (!pCreate || me->IsInCombat())
+                return false;
+            uint32 stone = 0;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (pCreate->Effect[i] == SPELL_EFFECT_CREATE_ITEM)
+                    stone = uint32(pCreate->EffectItemType[i]);
+            ItemPrototype const* pProto = stone ? sObjectMgr.GetItemPrototype(stone) : nullptr;
+            SpellEntry const* pUse = pProto ? sSpellMgr.GetSpellEntry(pProto->Spells[0].SpellId) : nullptr;
+            if (!pUse || !me->IsSpellReady(pUse, pProto))
+                return false;
+            Player* pHealer = SoulstoneTarget(pUse);
+            if (!pHealer)
+                return false;
+            if (me->HasItemCount(stone, 1))
+                return me->IsWithinLOSInMap(pHealer) && pUse->IsTargetInRange(me, pHealer) &&
+                       bot.UseBagItem(stone, pHealer);
+            if (me->IsMoving())
+                return false;
+            for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                if (pCreate->Reagent[i] > 0 && !me->HasItemCount(uint32(pCreate->Reagent[i]), pCreate->ReagentCount[i]))
+                    return false;
+            if (Player* pLeader = bot.GetPartyLeader())
+                if (pLeader != me && (pLeader->IsMoving() || pLeader->IsInCombat()))
+                    return false;
+            return Cast(me, pCreate);
+        }
+
+        // A healer of the party (a healer bot; a player whose best role is healing,
+        // RoleCapabilities) without a Soulstone Resurrection (any rank: the stone's on-use aura
+        // or another warlock's).
+        Player* SoulstoneTarget(SpellEntry const* pUse) const
+        {
+            Player* me = m_bot.me;
+            Group* pGroup = me->GetGroup();
+            if (!pGroup)
+                return nullptr;
+            Player* pPlayerHealer = nullptr;
+            for (GroupReference* itr = pGroup->GetFirstMember(); itr; itr = itr->next())
+            {
+                Player* pMember = itr->getSource();
+                if (!pMember || !pMember->IsAlive() || pMember->GetMap() != me->GetMap() || HasSoulstone(pMember, pUse))
+                    continue;
+                if (PartyBotAI const* pAI = pMember->AI() ? dynamic_cast<PartyBotAI const*>(pMember->AI()) : nullptr)
+                {
+                    if (pAI->GetRole() == ROLE_HEALER)
+                        return pMember;
+                }
+                else if (!pPlayerHealer && RoleCapabilities::Assess(pMember).Best() == ROLE_HEALER)
+                    pPlayerHealer = pMember;
+            }
+            return pPlayerHealer;
+        }
+
+        static bool HasSoulstone(Player const* pMember, SpellEntry const* pUse)
+        {
+            // Soulstone Resurrection, ranks 1-5 (Player::SelectResurrectionSpellId).
+            static uint32 const RANKS[] = { 20707, 20762, 20763, 20764, 20765 };
+            if (pMember->HasAura(pUse->Id))
+                return true;
+            for (uint32 id : RANKS)
+                if (pMember->HasAura(id))
+                    return true;
+            return false;
+        }
+
         // Step 2: spare shards, and its average direct damage takes the victim's whole health.
         bool KillsWithShadowburn(Unit* pVictim) const
         {

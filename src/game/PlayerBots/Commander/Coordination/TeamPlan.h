@@ -678,6 +678,9 @@ namespace Commander
         float holdSec = 0.0f;
         bool needsCombo = false;     // a finisher: its other finishers are held too
         float triggerPct = 0.0f;     // hold: cast from this health percent on (also once it runs)
+        // Sprint / Dash on itself (FleeStopAbility::speedPct): cast while it runs and the bot is
+        // out of melee reach of it.
+        bool catchUp = false;
     };
 
     // A cooldown for a party member (BoostAssigner, cooldown doc 2026-11-14): `bot` casts
@@ -688,6 +691,16 @@ namespace Commander
         ObjectGuid target;
         uint32 spellId = 0;
         float points = 0.0f;         // net worth (Perception/Values/BoostValue.h)
+    };
+
+    // A resurrection in combat (ResurrectAssigner, user 2026-11-15): `bot` casts `spellId`
+    // (Rebirth) on the dead member `target`. ResurrectBehavior casts it.
+    struct ResurrectDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid target;
+        uint32 spellId = 0;
+        float points = 0.0f;         // net worth (Perception/Values/ResurrectValue.h)
     };
 
     // Only controlled enemies are left (ControlledEndAssigner): the tank wakes the first one
@@ -1260,6 +1273,7 @@ namespace Commander
         std::vector<RescueDuty> rescues;
         std::vector<FleeStopDuty> fleeStops;
         std::vector<BoostDuty> boosts;
+        std::vector<ResurrectDuty> resurrections;
         // Constraint for every area spell (AreaDamageBehavior, the tank's area threat in
         // ThreatBehavior): enemies about to get a control that breaks on damage
         // (CrowdControlAssigner). Enemies already under one are kept by KeepsUnbroken from the facts.
@@ -1315,6 +1329,14 @@ namespace Commander
         BoostDuty const* FindBoostFor(ObjectGuid bot) const
         {
             for (BoostDuty const& d : boosts)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+
+        ResurrectDuty const* FindResurrectFor(ObjectGuid bot) const
+        {
+            for (ResurrectDuty const& d : resurrections)
                 if (d.bot == bot)
                     return &d;
             return nullptr;

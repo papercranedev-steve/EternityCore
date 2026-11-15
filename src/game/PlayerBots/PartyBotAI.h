@@ -157,8 +157,13 @@ public:
     // The corpse on this map of a member that released its spirit (a ghost, maybe elsewhere),
     // in range and sight: resurrections are cast at the corpse, as a client does.
     Corpse* SelectReleasedCorpse() const;
-    // The resurrection spell at a released corpse (SpellCastTargets corpse target). True: cast.
-    bool CastResurrectionAtCorpse(Corpse* pCorpse);
+    // The resurrection spell (or `pSpell`: Rebirth in combat) at a released corpse
+    // (SpellCastTargets corpse target). True: cast.
+    bool CastResurrectionAtCorpse(Corpse* pCorpse, SpellEntry const* pSpell = nullptr);
+    // Commander::BotActionType::Resurrect: `pSpell` on the dead member `deadGuid`, its body here
+    // (not released) or its corpse on this map (a ghost anywhere); in range and sight, not
+    // asked already. True: cast.
+    bool CastResurrection(SpellEntry const* pSpell, ObjectGuid deadGuid);
     Player* SelectShieldTarget() const;
     // Back alive away from the leader, walking to him (Commander/Behaviors/Movement/Arrival.h).
     bool IsArriving() const { return m_arrival.active; }

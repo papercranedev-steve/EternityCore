@@ -6,6 +6,8 @@
  *                       and the party still kills it within holdSec from its live health
  *                       (Value::DealtDps): otherwise the stun only delays the run
  *   slow                the enemy runs
+ *   catch-up            the enemy runs, is still the bot's victim and out of its melee reach
+ *                       (Sprint, Dash on itself)
  * and the enemy is not under a stun / root already. Then cast the spell on it (an area spell
  * around the bot: in its radius). Assigned tier, value = the duty's net + one global cooldown,
  * cost = that global cooldown (as the rescue and crowd control behaviors).

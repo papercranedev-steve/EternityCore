@@ -45,9 +45,11 @@ namespace Commander
                 return { m_bot.m_spells.druid.pEntanglingRoots };
             }
 
+            // Dash (cat form, the facts check the form): to catch a runner it chases (user
+            // 2026-11-15), as the rogue's Sprint.
             std::vector<SpellEntry const*> FleeStoppers() const override
             {
-                return { m_bot.m_spells.druid.pEntanglingRoots };
+                return { m_bot.m_spells.druid.pEntanglingRoots, m_bot.m_spells.druid.pDash };
             }
 
             // Cat form (CanTryToCastSpell checks the form).
@@ -103,6 +105,13 @@ namespace Commander
 
             // Barkskin (1 min, caster and moonkin form; the form is read through
             // IsReadyWithStance): -20% physical damage taken (the reduction is not in its data).
+            // Rebirth (30 min, a reagent): out of combat it is also the druid's plain resurrection
+            // (CombatBotBaseAI::m_resurrectionSpell).
+            SpellEntry const* CombatResurrection() const override
+            {
+                return m_bot.m_spells.druid.pRebirth;
+            }
+
             // Frenzied Regeneration (bear, 3 min): rage into health over 10 s, about 20% of
             // maximum health (untested guess: the heal is scripted from the rage spent).
             std::vector<SurvivalSpell> Survival() const override

@@ -249,6 +249,31 @@ namespace Commander
         bool ready = false;             // off cooldown, the mana, can act and cast
     };
 
+    // A resurrection a bot may cast in combat (ClassKit::CombatResurrection: Rebirth).
+    // spellId 0 = none.
+    struct CombatResAbility
+    {
+        uint32 spellId = 0;
+        float maxRange = 0.0f;
+        uint32 castMs = 0;
+        uint32 cooldownMs = 0;
+        uint32 manaCost = 0;
+        // Off cooldown, the mana and the reagent, can act, castable in its form, not silenced.
+        bool ready = false;
+    };
+
+    // A dead party member whose body or corpse is on this map (the ghost may be elsewhere):
+    // what a resurrection in combat needs (ResurrectAssigner).
+    struct CorpseFacts
+    {
+        ObjectGuid guid;                // the member
+        Position3 pos;                  // its body, or its corpse once released
+        uint8 role = 0;                 // CombatBotRoles (bots: theirs; players: as PartyMemberFacts::role)
+        bool isBot = false;
+        bool released = false;          // a ghost: resurrected at its corpse
+        bool resRequested = false;      // a resurrection waits for its answer
+    };
+
     // A paladin blessing or party aura a bot has learned, best rank (ClassKit::Blessings /
     // PartyAuras). kind = BlessingKind or PaladinAuraKind (Perception/Profiles/PaladinBuffs.h).
     struct PaladinBuffAbility
@@ -294,13 +319,18 @@ namespace Commander
         bool fear = false;
     };
 
-    // A stun, root or slow a bot can put on an enemy running away (ClassKit::FleeStoppers,
-    // flee interception todo 13). Read from the spell data.
+    // A stun, root or slow a bot can put on an enemy running away, or a run speed boost on
+    // itself to catch it (Sprint, Dash: user 2026-11-15) (ClassKit::FleeStoppers, flee
+    // interception todo 13). Read from the spell data.
     struct FleeStopAbility
     {
         uint32 spellId = 0;
         float holdSec = 0.0f;           // stun or root: seconds it stands still (0 = a slow)
         float slowPct = 0.0f;           // slow: speed taken off, 0..1
+        // Catch-up (SPELL_AURA_MOD_INCREASE_SPEED on itself): run speed added (0.7 = +70%)
+        // for speedSec; the bot keeps hitting the runner once it is back in melee reach.
+        float speedPct = 0.0f;
+        float speedSec = 0.0f;
         float maxRange = 0.0f;          // yards (melee abilities: 5)
         float radius = 0.0f;            // around the caster (Frost Nova, Piercing Howl), 0 = on a target
         uint32 castMs = 0;
@@ -552,6 +582,7 @@ namespace Commander
         std::vector<ManaItemAbility> manaItems;     // bots with a mana pool only
         std::vector<BurstAbility> bursts;           // bots only
         std::vector<AllyBoostAbility> allyBoosts;   // bots only
+        CombatResAbility combatRes;                 // bots only
         // Paladin bots: blessings and party auras it knows (BlessingAssigner).
         std::vector<PaladinBuffAbility> blessingSpells;
         std::vector<PaladinBuffAbility> auraSpells;
@@ -932,6 +963,9 @@ namespace Commander
 
         ObjectGuid leader;           // party leader (the player)
         std::vector<PartyMemberFacts> party;
+        // Dead members with their body or corpse on this map (a released one's ghost is not in
+        // `party` when it waits on another map).
+        std::vector<CorpseFacts> corpses;
         // Creatures with a party member or pet on their threat list, then (onAllyOnly = true)
         // creatures fighting one of `allies` only.
         std::vector<EnemyFacts> enemies;

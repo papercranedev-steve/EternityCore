@@ -26,7 +26,8 @@
  * The Commander decides: Vanish, Evasion, Feint (team rescue), Blind and Sap (crowd control;
  * Sap's stealth: Takeover::Stealth), Kick and Gouge (InterruptBehavior), Adrenaline Rush, Cold
  * Blood, Blade Flurry (BurstBehavior), Eviscerate before a target switch (TargetBehavior),
- * Kidney Shot on a runner (flee interception).
+ * Kidney Shot on a runner and Sprint to catch one (flee interception), Preparation (team rescue,
+ * RenewSurvivalBehavior).
  */
 
 #include "Rotations/ClassRotation.h"

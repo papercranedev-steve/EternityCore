@@ -97,6 +97,10 @@ namespace Commander
         static float HealthAtRun(EnemyFacts const& e);
         // Seconds the party needs to kill it while it runs (header), FleeFacts::runKillSec.
         static float RunKillSec(WorldModel const& world, EnemyFacts const& e, float fleeSec);
+        // The same with one chaser back on it (Sprint, Dash: FleeStopValue) adding `chaserDps`
+        // from `contactSec` to `contactEndSec` (seconds from now) on top of the ranged damage.
+        static float ChasedKillSec(WorldModel const& world, EnemyFacts const& e, float fleeSec,
+                                   float chaserDps, float contactSec, float contactEndSec);
         static float FleeSec();
 
     private:

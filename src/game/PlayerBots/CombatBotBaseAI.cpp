@@ -1016,6 +1016,13 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.warlock.pDeathCoil))
                         m_spells.warlock.pDeathCoil = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Create Soulstone") != std::string::npos &&
+                         pSpellEntry->HasEffect(SPELL_EFFECT_CREATE_ITEM))
+                {
+                    // No ranks: Minor 693 < Lesser 20752 < 20755 < Greater 20756 < Major 20757 by id.
+                    if (IsHigherRankSpell(m_spells.warlock.pCreateSoulstone))
+                        m_spells.warlock.pCreateSoulstone = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Detect Invisibility") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.warlock.pDetectInvisibility))

@@ -55,12 +55,21 @@ namespace Commander
                 {
                     if (!a.ready)
                         continue;
-                    // A slow is for a runner: before that the focused kill may do.
+                    // A slow or a catch-up is for a runner: before that the focused kill may do.
                     if (a.holdSec <= 0.0f && !f.fleeing)
                         continue;
-                    float const range = a.radius > 0.0f ? a.radius : a.maxRange;
-                    if (distance > range + RESERVE_SLACK_YD)
-                        continue;
+                    if (a.speedPct > 0.0f)
+                    {
+                        // Catch-up: the bot chases it already (its victim); the value counts the gap.
+                        if (m.victim != e.guid)
+                            continue;
+                    }
+                    else
+                    {
+                        float const range = a.radius > 0.0f ? a.radius : a.maxRange;
+                        if (distance > range + RESERVE_SLACK_YD)
+                            continue;
+                    }
                     if (a.needsCombo && !(m.comboTarget == e.guid && m.comboPoints > 0) && m.victim != e.guid)
                         continue;
                     FleeStopValue::Worth const w = FleeStopValue::Of(world, m, a, e);
@@ -97,6 +106,7 @@ namespace Commander
             d.points = r.points;
             d.hold = a->holdSec > 0.0f;
             d.holdSec = a->holdSec;
+            d.catchUp = a->speedPct > 0.0f;
             d.needsCombo = a->needsCombo;
             d.triggerPct = e->flee.atPct + TRIGGER_MARGIN_PCT;
             duties.push_back(d);

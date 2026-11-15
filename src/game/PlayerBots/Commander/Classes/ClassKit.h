@@ -200,6 +200,9 @@ namespace Commander
         // Spells that keep a member about to die alive. Only the Commander casts them
         // (team rescue: RescueAssigner picks one per member, RescueBehavior casts it).
         virtual std::vector<SurvivalSpell> Survival() const { return {}; }
+        // A resurrection it may cast in combat (druid Rebirth): the brain picks a dead healer or
+        // tank (ResurrectAssigner, user 2026-11-15). nullptr = none.
+        virtual SpellEntry const* CombatResurrection() const { return nullptr; }
         // The spell that ends `spell`'s cooldown (cooldown doc .kiro/docs/2026-11-14-cooldown-spells.md
         // 10, user 2026-11-15): Cold Snap for Ice Block, Preparation for Vanish and Evasion;
         // nullptr = none. A survival spell or threat drop on cooldown with its reset ready is
@@ -258,8 +261,9 @@ namespace Commander
         // bot is feared (PartyBotAI::BreakControl), after the racial one (RaceKit::FearBreak).
         virtual SpellEntry const* FearBreak() const { return nullptr; }
         // Stuns, roots and slows that keep an enemy running away at low health from getting
-        // far (flee interception, FleeStopAssigner, todo 13). What each does (stun / root
-        // duration, slow percent, range) is read from the spell data (WorldModelBuilder fills
+        // far (flee interception, FleeStopAssigner, todo 13), and run speed boosts on itself to
+        // catch one it chases (Sprint, Dash). What each does (stun / root duration, slow
+        // percent, speed, range) is read from the spell data (WorldModelBuilder fills
         // FleeStopAbility). Only the Commander casts them for that: the rotations keep their
         // own uses, except while the plan holds the spell (TeamPlan::HoldsSpell).
         virtual std::vector<SpellEntry const*> FleeStoppers() const { return {}; }

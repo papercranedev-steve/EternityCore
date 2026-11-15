@@ -1081,9 +1081,29 @@ Corpse* PartyBotAI::SelectReleasedCorpse() const
     return nullptr;
 }
 
-bool PartyBotAI::CastResurrectionAtCorpse(Corpse* pCorpse)
+bool PartyBotAI::CastResurrection(SpellEntry const* pSpell, ObjectGuid deadGuid)
 {
-    SpellEntry const* pSpellEntry = m_resurrectionSpell;
+    Player* pDead = pSpell ? sObjectAccessor.FindPlayer(deadGuid) : nullptr;
+    if (!pDead || pDead == me || pDead->IsAlive() || pDead->IsRessurectRequested())
+        return false;
+    if (pDead->GetDeathState() == CORPSE)
+    {
+        if (pDead->GetMap() != me->GetMap() || !me->IsWithinLOSInMap(pDead) || !pSpell->IsTargetInRange(me, pDead) ||
+            !CanTryToCastSpell(pDead, pSpell))
+            return false;
+        return DoCastSpell(pDead, pSpell) == SPELL_CAST_OK;
+    }
+    // Released: its corpse (as SelectReleasedCorpse).
+    Corpse* pCorpse = sObjectAccessor.GetCorpseForPlayerGUID(deadGuid);
+    if (!pCorpse || pCorpse->GetType() == CORPSE_BONES || me->GetMap()->GetCorpse(pCorpse->GetObjectGuid()) != pCorpse ||
+        !pCorpse->IsWithinLOSInMap(me) || !pSpell->IsTargetInRange(me, pCorpse))
+        return false;
+    return CastResurrectionAtCorpse(pCorpse, pSpell);
+}
+
+bool PartyBotAI::CastResurrectionAtCorpse(Corpse* pCorpse, SpellEntry const* pResurrection)
+{
+    SpellEntry const* pSpellEntry = pResurrection ? pResurrection : m_resurrectionSpell;
     if (m_preventCasting || !pSpellEntry || !me->IsSpellReady(pSpellEntry) || me->HasGCD(pSpellEntry))
         return false;
     if (me->GetPower(Powers(pSpellEntry->powerType)) < Spell::CalculatePowerCost(pSpellEntry, me))

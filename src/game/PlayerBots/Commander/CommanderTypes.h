@@ -65,6 +65,9 @@ namespace Commander
         // The consumables used are off the global cooldown: the original rotation still runs
         // in the same tick.
         UseItem,
+        // Cast `spell` (a resurrection: Rebirth in combat) on the dead member `target`: its body
+        // here, or its corpse here when it released (PartyBotAI::CastResurrection).
+        Resurrect,
         // Pet actions command the bot's pet, not the bot. The arbiter executes them besides the
         // bot's own action (the rotation still runs): every autocast toggle, and the best pet
         // command (PetAttack / PetFollow). Pet commands are skipped during a retreat (Override).

@@ -25,10 +25,11 @@ namespace Commander
                 return { s.pSap, s.pBlind };
             }
 
-            // Kidney Shot: a finisher, needs combo points on the target.
+            // Kidney Shot: a finisher, needs combo points on the target. Sprint: to catch a
+            // runner it chases (user 2026-11-15: not for its own escape).
             std::vector<SpellEntry const*> FleeStoppers() const override
             {
-                return { m_bot.m_spells.rogue.pKidneyShot };
+                return { m_bot.m_spells.rogue.pKidneyShot, m_bot.m_spells.rogue.pSprint };
             }
 
             SpellEntry const* ComboFinisher() const override

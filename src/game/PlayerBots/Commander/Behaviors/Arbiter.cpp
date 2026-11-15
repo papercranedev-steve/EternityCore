@@ -38,6 +38,7 @@ namespace Commander
                 case BotActionType::Retreat: return "retreat";
                 case BotActionType::UseObject: return "use";
                 case BotActionType::UseItem: return "use-item";
+                case BotActionType::Resurrect: return "resurrect";
                 case BotActionType::PetAttack: return "pet-attack";
                 case BotActionType::PetFollow: return "pet-follow";
                 case BotActionType::PetAutocastOn: return "pet-autocast-on";
@@ -524,6 +525,9 @@ namespace Commander
         // The target is a gameobject, not a unit: handled before the unit lookup below.
         if (action.type == BotActionType::UseObject)
             return ExecuteUseObject(bot, action);
+        // The target is dead (maybe a ghost elsewhere, its corpse here).
+        if (action.type == BotActionType::Resurrect)
+            return bot->CastResurrection(action.spell, action.target);
 
         Unit* pTarget = nullptr;
         if (!action.target.IsEmpty())

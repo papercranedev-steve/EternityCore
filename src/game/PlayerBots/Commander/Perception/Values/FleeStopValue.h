@@ -11,10 +11,15 @@
  *                       (that run never happens); else 0
  *   slow                benefit = focusedPoints - PointsWithin(run speed x (1 - slowPct) x
  *                       runKillSec): the focused run gets shorter
+ *   catch-up            (Sprint, Dash on itself, user 2026-11-15; only once it runs) the bot
+ *                       closes the gap (distance - CATCH_REACH_YD) at RUN_YARDS_PER_SEC x
+ *                       (1 + speedPct) - its run speed, then adds its soloDps until speedSec:
+ *                       benefit = focusedPoints - PointsWithin(run speed x FleePredictor::
+ *                       ChasedKillSec); 0 when it does not catch it before the boost ends
  * Cost:
  *   action    Value::LostAction(max(cast time, GCD))
  *   reach     LostAction(walk into range / run speed), walk = distance - range (0 in range;
- *             an area spell around the caster: its radius)
+ *             an area spell around the caster: its radius; a catch-up: 0)
  *   mana      ManaWorth::Points(mana cost)
  *   cooldown  Value::CooldownPoints(cooldown, fight left)
  * Holding the spell until the trigger (TeamPlan::HoldsSpell) is not counted.
@@ -30,6 +35,9 @@ namespace Commander
 {
 namespace FleeStopValue
 {
+    // Catch-up: in melee reach this close to the runner's edge.
+    static constexpr float CATCH_REACH_YD = 5.0f;
+
     struct Worth
     {
         float benefit = 0.0f;

@@ -496,6 +496,7 @@ public:
             SpellEntry const* pCurseofExhaustion;
             SpellEntry const* pLifeTap;
             SpellEntry const* pAmplifyCurse;
+            SpellEntry const* pCreateSoulstone;     // the best Create Soulstone (Minor .. Major)
         } warlock;
         struct
         {

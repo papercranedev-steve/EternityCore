@@ -164,6 +164,12 @@ namespace Commander
 
     float FleePredictor::RunKillSec(WorldModel const& world, EnemyFacts const& e, float fleeSec)
     {
+        return ChasedKillSec(world, e, fleeSec, 0.0f, 0.0f, 0.0f);
+    }
+
+    float FleePredictor::ChasedKillSec(WorldModel const& world, EnemyFacts const& e, float fleeSec,
+                                       float chaserDps, float contactSec, float contactEndSec)
+    {
         uint32 ranged = 0;
         for (PartyMemberFacts const& m : world.party)
             if (!m.isPet && m.CanAct() && IsRanged(m))
@@ -177,9 +183,24 @@ namespace Commander
             health -= (dps - rangedDps) * MELEE_CONTACT_SEC;
         if (health <= 0.0f)
             return 0.0f;
+        // Up to the chaser's contact the ranged alone, then with the chaser, then the ranged again.
+        float t = 0.0f;
+        if (chaserDps > 0.0f && contactEndSec > contactSec && contactSec < fleeSec)
+        {
+            float const before = rangedDps * contactSec;
+            if (rangedDps > 0.0f && health <= before)
+                return health / rangedDps;
+            health -= before;
+            float const both = rangedDps + chaserDps;
+            float const during = std::min(contactEndSec, fleeSec) - contactSec;
+            if (health <= both * during)
+                return contactSec + health / both;
+            health -= both * during;
+            t = contactSec + during;
+        }
         if (rangedDps <= 0.0f)
             return fleeSec;
-        return std::min(fleeSec, health / rangedDps);
+        return std::min(fleeSec, t + health / rangedDps);
     }
 
     float FleePredictor::PointsWithin(WorldModel const& world, EnemyFacts const& e, float reachYd)

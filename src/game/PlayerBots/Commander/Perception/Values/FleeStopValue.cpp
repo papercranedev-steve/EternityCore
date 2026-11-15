@@ -25,6 +25,20 @@ namespace FleeStopValue
             return w;
         if (a.holdSec > 0.0f)
             w.benefit = KillsInHold(world, e, a) ? f.focusedPoints : 0.0f;
+        else if (a.speedPct > 0.0f)
+        {
+            // Catch-up: closes the gap at its boosted speed minus the runner's, then hits it
+            // until the boost ends.
+            float const closing = CastValues::RUN_YARDS_PER_SEC * (1.0f + a.speedPct) - f.runSpeed;
+            float const gap = std::max(0.0f, PackResolver::Distance(member.pos, e.pos) - e.boundingRadius - CATCH_REACH_YD);
+            float const contactSec = closing > 0.0f ? gap / closing : a.speedSec;
+            if (!f.fleeing || contactSec >= a.speedSec)
+                return w;
+            float const dps = member.soloDps > 0.0f ? member.soloDps : Value::FALLBACK_DPS_PER_LEVEL * float(member.level);
+            float const killSec = FleePredictor::ChasedKillSec(world, e, FleePredictor::FleeSec(), dps, contactSec, a.speedSec);
+            float const reach = std::min(f.reachYd, f.runSpeed * std::min(killSec, f.runKillSec));
+            w.benefit = std::max(0.0f, f.focusedPoints - FleePredictor::PointsWithin(world, e, reach));
+        }
         else if (a.slowPct > 0.0f)
         {
             float const reach = std::min(f.reachYd, f.runSpeed * (1.0f - a.slowPct) * f.runKillSec);
@@ -36,7 +50,7 @@ namespace FleeStopValue
         w.action = Value::LostAction(world, member, std::max(a.castMs / 1000.0f, Value::GCD_SEC));
         float const range = a.radius > 0.0f ? a.radius : a.maxRange;
         float const walk = std::max(0.0f, PackResolver::Distance(member.pos, e.pos) - e.boundingRadius - range);
-        if (walk > 0.0f)
+        if (walk > 0.0f && a.speedPct <= 0.0f)  // a catch-up is cast where it stands
             w.reach = Value::LostAction(world, member, walk / CastValues::RUN_YARDS_PER_SEC);
         if (a.manaCost)
             w.mana = ManaWorth::Points(world, member, float(a.manaCost));

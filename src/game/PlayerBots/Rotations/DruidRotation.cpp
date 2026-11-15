@@ -11,7 +11,8 @@
  *   Caster form: heals (the Commander heal module while the party fights), then into the
  *   combat form. Rooted in a form (not a tank in reach): leave the form.
  *   Cat: stealthed Pounce / Ravage / Tiger's Fury; 5 combo points Ferocious Bite, Rip; out of
- *   reach Faerie Fire (Feral), Dash on a moving victim; Shred, Rake, Claw.
+ *   reach Faerie Fire (Feral); Shred, Rake, Claw. (Dash: the flee interception, to catch a
+ *   runner, user 2026-11-15; until then on any moving victim out of reach.)
  *   Bear tank: back to bear before any heal; Enrage below 20 rage (above 60% health, attacked),
  *   Faerie Fire (Feral), Maul (with 2+ enemies at the victim only when Swipe's rage is left
  *   too, so the threat module's Swipe is not starved by the next swing).
@@ -186,8 +187,6 @@ namespace
             if (!me->CanReachWithMeleeAutoAttack(pVictim))
             {
                 if (Cast(pVictim, s.pFaerieFireFeral))
-                    return;
-                if (pVictim->IsMoving() && Cast(me, s.pDash))
                     return;
             }
 

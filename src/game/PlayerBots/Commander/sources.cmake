@@ -361,6 +361,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.cpp
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Values/ResurrectValue.h
+  ${COMMANDER_DIR}/Perception/Values/ResurrectValue.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/ResurrectAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/ResurrectAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/ResurrectBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/ResurrectBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/MitigationValue.h
   ${COMMANDER_DIR}/Perception/Values/MitigationValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.h

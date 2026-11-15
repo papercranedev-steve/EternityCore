@@ -143,7 +143,7 @@ namespace CurrentAction
         {
             // An item's spell ends a running cast too (SpellCaster::SetCurrentCastedSpell).
             bool const ends = action.type == BotActionType::Cast || action.type == BotActionType::UseItem ||
-                              action.type == BotActionType::Rest ||
+                              action.type == BotActionType::Resurrect || action.type == BotActionType::Rest ||
                               (state.movementEnds && WalkAction(action.type));
             if (ends && state.keep > 0.0f)
             {
@@ -151,7 +151,8 @@ namespace CurrentAction
                 what = state.channel ? "ends the channel" : "ends the cast";
             }
         }
-        if (state.walkKeep > 0.0f && action.type == BotActionType::Cast && NeedsStandingStill(bot, action.spell))
+        if (state.walkKeep > 0.0f && (action.type == BotActionType::Cast || action.type == BotActionType::Resurrect) &&
+            NeedsStandingStill(bot, action.spell))
         {
             cost += state.walkKeep;
             what = *what ? "ends the cast and the walk" : "stops the walk";

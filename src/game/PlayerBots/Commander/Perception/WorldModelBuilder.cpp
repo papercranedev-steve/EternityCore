@@ -28,6 +28,8 @@
 #include "Pet.h"
 #include "TemporarySummon.h"
 #include "Player.h"
+#include "Corpse.h"
+#include "ObjectAccessor.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "SpellMgr.h"
 #include "Spell.h"
@@ -836,6 +838,10 @@ namespace WorldModelBuilder
                         case SPELL_AURA_MOD_DECREASE_SPEED:
                             a.slowPct = std::max(a.slowPct, std::min(1.0f, -float(spell->CalculateSimpleValue(SpellEffectIndex(i))) / 100.0f));
                             break;
+                        case SPELL_AURA_MOD_INCREASE_SPEED:
+                            if (spell->rangeIndex == SPELL_RANGE_IDX_SELF_ONLY)
+                                a.speedPct = std::max(a.speedPct, float(spell->CalculateSimpleValue(SpellEffectIndex(i))) / 100.0f);
+                            break;
                         default: break;
                     }
                     if (spell->EffectRadiusIndex[i])
@@ -847,7 +853,9 @@ namespace WorldModelBuilder
                     a.holdSec = sec;
                 else if (root || stun)
                     a.holdSec = std::min(sec, FLEE_ROOT_HOLD_SEC);
-                if (a.holdSec <= 0.0f && a.slowPct <= 0.0f)
+                if (a.speedPct > 0.0f)
+                    a.speedSec = sec;
+                if (a.holdSec <= 0.0f && a.slowPct <= 0.0f && a.speedPct <= 0.0f)
                     continue;
                 if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY)
                     a.radius = 0.0f;
@@ -1113,6 +1121,73 @@ namespace WorldModelBuilder
                 a.cooldownMs = c.cooldownMs;
                 a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
                 f.manaItems.push_back(a);
+            }
+        }
+
+        // ClassKit::CombatResurrection (Rebirth): its reagent is checked here, the server only
+        // refuses the cast (Spell::CheckItems).
+        void FillCombatRes(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            SpellEntry const* spell = ai->Kit().CombatResurrection();
+            if (!spell)
+                return;
+            Player* me = ai->me;
+            CombatResAbility& a = f.combatRes;
+            a.spellId = spell->Id;
+            a.maxRange = std::max(CombatBotBaseAI::SpellMaxRange(me, spell), 5.0f);
+            a.castMs = spell->GetCastTime(me);
+            a.cooldownMs = spell->GetRecoveryTime();
+            if (Powers(spell->powerType) == POWER_MANA)
+                a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+            bool reagents = true;
+            for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
+                if (spell->Reagent[i] > 0 && !me->HasItemCount(uint32(spell->Reagent[i]), spell->ReagentCount[i]))
+                    reagents = false;
+            a.ready = reagents && f.CanAct() && ai->IsReadyWithStance(spell) &&
+                      !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
+        }
+
+        // Dead members whose body (not released) or corpse (released) is on `map`.
+        void FillCorpses(Group* group, Map* map, WorldModel& world)
+        {
+            for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            {
+                Player* member = itr->getSource();
+                if (!member || member->IsAlive())
+                    continue;
+                CorpseFacts c;
+                c.guid = member->GetObjectGuid();
+                c.released = member->GetDeathState() == DEAD;
+                c.resRequested = member->IsRessurectRequested();
+                if (!c.released)
+                {
+                    if (!member->IsInWorld() || member->GetMap() != map)
+                        continue;
+                    c.pos = PositionOf(member);
+                }
+                else
+                {
+                    Corpse* corpse = sObjectAccessor.GetCorpseForPlayerGUID(c.guid);
+                    if (!corpse || corpse->GetType() == CORPSE_BONES || map->GetCorpse(corpse->GetObjectGuid()) != corpse)
+                        continue;
+                    c.pos = PositionOf(corpse);
+                }
+                if (PartyMemberFacts const* f = world.FindMember(c.guid))
+                {
+                    c.role = f->role;
+                    c.isBot = f->isBot;
+                }
+                else if (PartyBotAI const* ai = member->AI() ? dynamic_cast<PartyBotAI const*>(member->AI()) : nullptr)
+                {
+                    c.role = uint8(ai->m_role);
+                    c.isBot = true;
+                }
+                else
+                {
+                    uint8 const chosen = sCommanderMgr.GetPlayerRole(c.guid);
+                    c.role = chosen != ROLE_INVALID ? chosen : uint8(RoleCapabilities::Assess(member).Best());
+                }
+                world.corpses.push_back(c);
             }
         }
 
@@ -1529,6 +1604,7 @@ namespace WorldModelBuilder
         Group* group = me->GetGroup();
 
         world.party.clear();
+        world.corpses.clear();
         world.enemies.clear();
         world.targeted.clear();
         world.leader = group ? group->GetLeaderGuid() : ObjectGuid();
@@ -1581,6 +1657,7 @@ namespace WorldModelBuilder
                         FillManaItems(ai, f);
                         FillBursts(ai, f);
                         FillAllyBoosts(ai, f);
+                        FillCombatRes(ai, f);
                         FillPaladinBuffs(ai, f);
                         FillCurses(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
@@ -1643,6 +1720,7 @@ namespace WorldModelBuilder
         }
 
         FillPlayerRoles(world);
+        FillCorpses(group, map, world);
 
         // Every creature that has one of us on its threat list.
         std::vector<Creature*> enemies;

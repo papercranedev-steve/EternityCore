@@ -56,7 +56,13 @@ namespace Commander
 
         bool const aroundMe = spell->rangeIndex == SPELL_RANGE_IDX_SELF_ONLY;
         Unit* target = aroundMe ? me : enemy;
-        if (aroundMe)
+        if (duty->catchUp)
+        {
+            // Sprint, Dash: only while it is out of reach (in reach the boost is wasted).
+            if (me->CanReachWithMeleeAutoAttack(enemy) || me->GetVictim() != enemy)
+                return;
+        }
+        else if (aroundMe)
         {
             float radius = 0.0f;
             for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
@@ -73,7 +79,8 @@ namespace Commander
         Proposal p;
         p.tier = ProposalTier::Assigned;
         p.source = "fleestop";
-        p.reason = duty->hold ? "flee stop: hold it while it dies" : "flee stop: slow the runner";
+        p.reason = duty->hold ? "flee stop: hold it while it dies" :
+                   duty->catchUp ? "flee stop: run after the runner" : "flee stop: slow the runner";
         p.action.type = BotActionType::Cast;
         p.action.target = target->GetObjectGuid();
         p.action.spell = spell;
