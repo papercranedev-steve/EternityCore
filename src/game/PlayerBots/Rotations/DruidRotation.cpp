@@ -12,8 +12,11 @@
  *   combat form. Rooted in a form (not a tank in reach): leave the form.
  *   Cat: stealthed Pounce / Ravage / Tiger's Fury; 5 combo points Ferocious Bite, Rip; out of
  *   reach Faerie Fire (Feral), Dash on a moving victim; Shred, Rake, Claw.
- *   Bear: Faerie Fire (Feral), Demoralizing Roar and Swipe (not a tank: on 2+ attackers or 80
- *   rage), Maul.
+ *   Bear tank: back to bear before any heal; Enrage below 20 rage (above 60% health, attacked),
+ *   Faerie Fire (Feral), Maul (with 2+ enemies at the victim only when Swipe's rage is left
+ *   too, so the threat module's Swipe is not starved by the next swing).
+ *   Bear damage: Faerie Fire (Feral), Demoralizing Roar and Swipe (on 2+ attackers or 80 rage),
+ *   Maul.
  *   Caster / moonkin damage: walk closer, Insect Swarm, Moonfire, Starfire (victim above 50%),
  *   Wrath.
  *
@@ -29,9 +32,14 @@
 #include "PartyBotAI.h"
 #include "Player.h"
 #include "MotionMaster.h"
+#include "Spell.h"
 
 namespace
 {
+    uint32 const ENRAGE_BELOW_RAGE = 200;       // 20 rage
+    float const ENRAGE_MIN_HEALTH_PCT = 60.0f;
+    float const SWIPE_RADIUS = 8.0f;            // as the warrior tank's Cleave check
+
     class DruidRotation : public ClassRotation
     {
     public:
@@ -91,6 +99,10 @@ namespace
 
             if (form == FORM_NONE)
             {
+                // A tank out of its form (rooted, a caster form spell of the Commander) goes back
+                // to bear first: healing from caster form leaves the enemies loose on the party.
+                if (bot.m_role == ROLE_TANK && EnterCombatForm())
+                    return;
                 // HoT or direct heal, chosen by ChooseHeal (HealSpells.h).
                 if (bot.FindAndHealInjuredAlly(80.0f, 90.0f))
                     return;
@@ -185,16 +197,56 @@ namespace
 
         void Bear(Unit* pVictim)
         {
+            MeleeChaseDistance();
+            if (m_bot.m_role == ROLE_TANK)
+                BearTank(pVictim);
+            else
+                BearDamage(pVictim);
+        }
+
+        // Tank: Enrage when short of rage, Faerie Fire (Feral), Maul. Swipe, Demoralizing Roar and
+        // Challenging Roar are the threat module's (ClassKit::AreaThreat), Growl the team rescue's.
+        void BearTank(Unit* pVictim)
+        {
+            PartyBotAI& bot = m_bot;
+            Player* me = bot.me;
+            auto const& s = bot.m_spells.druid;
+            uint32 const rage = me->GetPower(POWER_RAGE);
+
+            // Enrage (1 min): 20 rage over 10 s, as the warrior tank's Bloodrage. Not when low:
+            // it lowers armor while it runs.
+            if (rage < ENRAGE_BELOW_RAGE && me->GetHealthPercent() > ENRAGE_MIN_HEALTH_PCT &&
+                !me->GetAttackers().empty() && Cast(me, s.pEnrage))
+                return;
+
+            // No rage, 6 s cooldown: free threat and armor reduction.
+            if (Cast(pVictim, s.pFaerieFireFeral))
+                return;
+
+            // Maul is the bear's main threat skill (not a rage dump like Heroic Strike): queued
+            // whenever it can be paid. With 2+ enemies next to the victim the threat module may
+            // want Swipe (global cooldown, the next swing would eat its rage first), so Maul only
+            // with the rage of both.
+            if (!s.pMaul)
+                return;
+            uint32 reserve = 0;
+            if (s.pSwipe && me->GetEnemyCountInRadiusAround(pVictim, SWIPE_RADIUS) > 1)
+                reserve = Spell::CalculatePowerCost(s.pSwipe, me);
+            if (rage >= Spell::CalculatePowerCost(s.pMaul, me) + reserve)
+                Cast(pVictim, s.pMaul);
+        }
+
+        // Melee damage without cat form: Swipe and Demoralizing Roar on 2+ attackers or 80 rage.
+        void BearDamage(Unit* pVictim)
+        {
             PartyBotAI& bot = m_bot;
             auto const& s = bot.m_spells.druid;
-            MeleeChaseDistance();
 
             if (Cast(pVictim, s.pFaerieFireFeral))
                 return;
 
-            if (bot.m_role != ROLE_TANK &&
-               (bot.me->GetPower(POWER_RAGE) > 800 || bot.GetAttackersInRangeCount(10.0f) > 1) &&
-               (Cast(pVictim, s.pDemoralizingRoar) || Cast(pVictim, s.pSwipe)))
+            if ((bot.me->GetPower(POWER_RAGE) > 800 || bot.GetAttackersInRangeCount(10.0f) > 1) &&
+                (Cast(pVictim, s.pDemoralizingRoar) || Cast(pVictim, s.pSwipe)))
                 return;
 
             Cast(pVictim, s.pMaul);
