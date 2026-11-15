@@ -129,8 +129,8 @@ public:
     // Another group member is already casting this buff (any rank, or the more powerful version)
     // on pMember, or the group version on pMember's subgroup. An instant buff is only cast on
     // the caster's next update, so until then the target shows no aura and a second buffer of
-    // the same class would pick the same target.
-    bool IsBuffPendingFromOther(Player const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const;
+    // the same class would pick the same target. pMember may be a pet (no subgroup check).
+    bool IsBuffPendingFromOther(Unit const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const;
     bool IsValidHealTarget(Unit const* pTarget, float healthPercent = 100.0f) const;
     bool IsValidHostileTarget(Unit const* pTarget) const;
     // IsValidHostileTarget without "not under a control that breaks on damage" (PartyBotAI:

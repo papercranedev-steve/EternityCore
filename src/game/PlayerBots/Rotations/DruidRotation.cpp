@@ -3,7 +3,8 @@
  * picks the form (cat: melee damage, bear: tank or melee without cat, moonkin: ranged damage),
  * the form picks the steps.
  *
- * Out of combat: healer leaves its form; Mark / Gift of the Wild, Thorns, Nature's Grasp;
+ * Out of combat: healer leaves its form; Mark / Gift of the Wild, Thorns (only tanks, hunter
+ * pets and taunting pets, user 2026-11-15), Nature's Grasp;
  * caster form: into the combat form, heals above 80% mana; cat: Prowl (ClassRotation::
  * KeepStealth); with a victim (an opener): the combat steps.
  *
@@ -34,6 +35,10 @@
 #include "Player.h"
 #include "MotionMaster.h"
 #include "Spell.h"
+#include "Map.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/Tanks.h"
 
 namespace
 {
@@ -66,7 +71,7 @@ namespace
                     return;
 
             if (s.pThorns)
-                if (Player* pTarget = bot.SelectBuffTarget(s.pThorns))
+                if (Unit* pTarget = SelectThornsTarget(s.pThorns))
                     if (Buff(pTarget, s.pThorns))
                         return;
 
@@ -144,6 +149,31 @@ namespace
         }
 
     private:
+        // Thorns only on the melee front (Tanks::IsMeleeFront: tanks, hunter pets, taunting
+        // pets): on a damage dealer or a healer its damage is threat the tank must pull back.
+        // Without a Commander (no party snapshot): nobody.
+        Unit* SelectThornsTarget(SpellEntry const* pThorns) const
+        {
+            Player* me = m_bot.me;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return nullptr;
+            Commander::WorldModel const& world = commander->GetWorld();
+            for (Commander::PartyMemberFacts const& m : world.party)
+            {
+                if (!m.alive || !Commander::Tanks::IsMeleeFront(world, m))
+                    continue;
+                Unit* pTarget = me->GetMap()->GetUnit(m.guid);
+                if (!pTarget || !pTarget->IsInWorld() || !me->IsValidHelpfulTarget(pTarget) ||
+                    !m_bot.IsValidBuffTarget(pTarget, pThorns) ||
+                    m_bot.IsBuffPendingFromOther(pTarget, pThorns, nullptr) ||
+                    !me->IsWithinDist(pTarget, 30.0f) || !me->IsWithinLOSInMap(pTarget))
+                    continue;
+                return pTarget;
+            }
+            return nullptr;
+        }
+
         // Cat for melee damage, bear for a tank (or melee without cat), moonkin for ranged damage.
         bool EnterCombatForm()
         {

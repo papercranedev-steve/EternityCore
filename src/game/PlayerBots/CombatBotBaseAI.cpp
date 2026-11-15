@@ -2174,7 +2174,7 @@ namespace
     }
 }
 
-bool CombatBotBaseAI::IsBuffPendingFromOther(Player const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const
+bool CombatBotBaseAI::IsBuffPendingFromOther(Unit const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const
 {
     Group* pGroup = me->GetGroup();
     if (!pGroup)
@@ -2198,7 +2198,8 @@ bool CombatBotBaseAI::IsBuffPendingFromOther(Player const* pMember, SpellEntry c
         if (pGroupSpellEntry && IsSameSpellChain(pGroupSpellEntry, pPending))
         {
             Player const* pTargetPlayer = pTarget->ToPlayer();
-            if (pTargetPlayer && pGroup->SameSubGroup(pTargetPlayer, pMember))
+            Player const* pMemberPlayer = pMember->ToPlayer();
+            if (pTargetPlayer && pMemberPlayer && pGroup->SameSubGroup(pTargetPlayer, pMemberPlayer))
                 return true;
         }
         else if (pTarget == pMember &&

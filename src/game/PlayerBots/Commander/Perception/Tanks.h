@@ -36,6 +36,11 @@ namespace Commander
         // Holds enemies it is hit by, so damage dealers leave room under its threat: a player
         // (whatever his role) or a tank (bot or player). Pets: no (ThreatBehavior judges pets live).
         inline bool IsHolder(PartyMemberFacts const& m) { return !m.isPet && (!m.isBot || IsTank(m)); }
+        // Meant to be hit in melee: a tank, a hunter's pet, or a pet that taunts (Voidwalker,
+        // a bot pet that can off-tank). Damage shields (Thorns) go only to them: on a damage
+        // dealer or a healer the reflected damage is threat the tank must pull back
+        // (user 2026-11-15).
+        bool IsMeleeFront(WorldModel const& world, PartyMemberFacts const& m);
     }
 }
 

@@ -40,6 +40,16 @@ namespace Tanks
         return false;
     }
 
+    bool IsMeleeFront(WorldModel const& world, PartyMemberFacts const& m)
+    {
+        if (!m.isPet)
+            return IsTank(m);
+        if (m.tauntsItself || m.canOffTank)
+            return true;
+        PartyMemberFacts const* owner = world.FindMember(m.ownerGuid);
+        return owner && owner->classId == CLASS_HUNTER;
+    }
+
     bool Any(WorldModel const& world)
     {
         if (Main(world))
