@@ -183,3 +183,22 @@ function around(u, radius, what)
                  hp = n:hppct(), alive = n:alive(), combat = n:incombat() }
     end)
 end
+
+-- Every heal rank of a healer as text rows (u:healranks, the bots' own estimate), e.g.
+-- healtable(player('Fa'), player('Tank')). heal = average with crits (x1.5 on the direct part),
+-- mana = real cost (talents), busy = max(cast, 1.5) for direct heals, the duration for HoTs.
+-- hps = heal / busy, hpm = heal / mana.
+function healtable(u, target)
+    local r = u:healranks(target)
+    local crit = math.min(100, math.max(0, r.crit)) / 100
+    local rows = { string.format("+heal %d  crit %.1f%%  mana %d/%d", r.bonus, r.crit, u:power(), u:maxpower()),
+                   string.format("%-20s %3s %6s %6s %5s %5s %6s %5s", "spell", "rk", "direct", "hot", "mana", "cast", "hps", "hpm") }
+    for _, s in ipairs(r.ranks) do
+        local heal = s.direct * (1 + 0.5 * crit) + s.periodic
+        local busy = s.direct > 0 and math.max(1.5, s.cast) or math.max(1.5, s.periodicSec)
+        local mana = s.manaMod > 0 and s.manaMod or s.mana
+        rows[#rows + 1] = string.format("%-20s %3d %6d %6d %5d %5.1f %6.1f %5.2f", s.name, s.rank,
+            math.floor(s.direct), math.floor(s.periodic), mana, s.cast, heal / busy, mana > 0 and heal / mana or 0)
+    end
+    return table.concat(rows, "\n")
+end

@@ -32,6 +32,7 @@
 #include "PathFinder.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
+#include "HealSpells.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
@@ -1767,6 +1768,60 @@ namespace DevConsole
         }
         return 1;
     }
+    // u:healranks([target]) -> { bonus, crit, ranks = {{id, name, rank, direct, periodic, periodicSec,
+    // mana, manaMod, cast}, ...} }: every known single-target heal with the numbers the bots value
+    // it by (HealSpells::Estimate on target, default self: gear, coefficients, low-rank penalty,
+    // talents). mana = HealSpells::ManaCost (what the bots use), manaMod = with SPELLMOD_COST
+    // talents (what the cast really costs). bonus = +healing (nature), crit = nature spell crit %.
+    static int U_healranks(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        Unit* target = lua_isnoneornil(L, 2) ? p : LuaUnit_Check(L, 2);
+        struct Row { SpellEntry const* e; uint8 rank; };
+        std::vector<Row> rows;
+        for (auto const& itr : p->GetSpellMap())
+        {
+            if (itr.second.state == PLAYERSPELL_REMOVED || itr.second.disabled || !itr.second.active)
+                continue;
+            SpellEntry const* e = sSpellMgr.GetSpellEntry(itr.first);
+            if (!e || e->IsPassiveSpell() || !HealSpells::IsSingleTargetHeal(e))
+                continue;
+            HealSpells::Amount const a = HealSpells::Estimate(p, target, e);
+            if (a.direct <= 0.0f && a.periodic <= 0.0f)
+                continue;
+            rows.push_back({ e, sSpellMgr.GetSpellRank(itr.first) });
+        }
+        std::sort(rows.begin(), rows.end(), [](Row const& a, Row const& b)
+        {
+            return a.e->SpellName[0] != b.e->SpellName[0] ? a.e->SpellName[0] < b.e->SpellName[0] : a.rank < b.rank;
+        });
+
+        lua_createtable(L, 0, 3);
+        lua_pushnumber(L, p->SpellBaseHealingBonusDone(SPELL_SCHOOL_MASK_NATURE)); lua_setfield(L, -2, "bonus");
+        lua_pushnumber(L, p->GetSpellCritPercent(SPELL_SCHOOL_NATURE)); lua_setfield(L, -2, "crit");
+        lua_createtable(L, int(rows.size()), 0);
+        lua_Integer i = 0;
+        for (Row const& r : rows)
+        {
+            HealSpells::Amount const a = HealSpells::Estimate(p, target, r.e);
+            float const mana = HealSpells::ManaCost(p, r.e);
+            int32 manaMod = int32(mana);
+            p->ApplySpellMod(r.e->Id, SPELLMOD_COST, manaMod, nullptr, false);
+            lua_createtable(L, 0, 9);
+            lua_pushinteger(L, r.e->Id); lua_setfield(L, -2, "id");
+            lua_pushstring(L, r.e->SpellName[0].c_str()); lua_setfield(L, -2, "name");
+            lua_pushinteger(L, r.rank); lua_setfield(L, -2, "rank");
+            lua_pushnumber(L, a.direct); lua_setfield(L, -2, "direct");
+            lua_pushnumber(L, a.periodic); lua_setfield(L, -2, "periodic");
+            lua_pushnumber(L, a.periodicSec); lua_setfield(L, -2, "periodicSec");
+            lua_pushnumber(L, mana); lua_setfield(L, -2, "mana");
+            lua_pushinteger(L, manaMod); lua_setfield(L, -2, "manaMod");
+            lua_pushnumber(L, float(r.e->GetCastTime(p)) / 1000.0f); lua_setfield(L, -2, "cast");
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "ranks");
+        return 1;
+    }
     static int U_setrole(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
@@ -1897,7 +1952,7 @@ namespace DevConsole
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
-            { "face", U_face }, { "spells", U_spells },
+            { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },
             { nullptr, nullptr }
         };
 
