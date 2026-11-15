@@ -112,7 +112,7 @@ namespace Commander
             return out.valid;
         }
 
-        void ProposeAllyShield(PartyBotAI const* bot, WorldModel const& world, AreaPlan const& a,
+        void ProposeAllyShield(PartyBotAI const* bot, WorldModel const& world, AreaCast const& a,
                                PartyMemberFacts const& self, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -170,16 +170,16 @@ namespace Commander
             return false;
         }
 
-        void ProposePrepShield(PartyBotAI const* bot, AreaPlan const& a, std::vector<Proposal>& out);
+        void ProposePrepShield(PartyBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out);
 
-        // The brain's prep step (AreaPlan::prep*): before the phase, while the party holds or
+        // The brain's prep step (AreaPlan::preps): before the phase, while the party holds or
         // the phase waits, walk to the cast spot, then put the shield up. The shield's gain is
         // net of the mana; nothing else is lost (the caster waits). Out of combat the walk costs
         // nothing either (as the stance modules' places before the fight).
-        void ProposePrep(PartyBotAI const* bot, WorldModel const& world, AreaPlan const& a, std::vector<Proposal>& out)
+        void ProposePrep(PartyBotAI const* bot, WorldModel const& world, AreaPrep const& a, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
-            if (!a.prepSpots.empty() && !AtSpot(PositionOf(me), a.prepSpots) &&
+            if (!a.spots.empty() && !AtSpot(PositionOf(me), a.spots) &&
                 !me->HasUnitState(UNIT_STATE_ROOT) && !me->IsNonMeleeSpellCasted(false, false, true))
             {
                 if (bot->IsMovementHeld() && me->IsMoving())
@@ -189,23 +189,23 @@ namespace Commander
                     hold.source = "aoe";
                     hold.reason = "area phase prep: walking to the cast spot";
                     hold.action.type = BotActionType::Hold;
-                    hold.SetValue(a.prepMoveGain, 0.0f);
+                    hold.SetValue(a.moveGain, 0.0f);
                     out.push_back(hold);
                     return;
                 }
-                float const cost = me->IsInCombat() ? a.prepMoveCost : 0.0f;
-                if (ProposeWalk(me, world, a.prepCentre, a.prepSpots, a.prepMoveGain, cost,
+                float const cost = me->IsInCombat() ? a.moveCost : 0.0f;
+                if (ProposeWalk(me, world, a.centre, a.spots, a.moveGain, cost,
                                 "area phase prep: stand at the cast spot first", out))
                     return;
             }
-            if (a.prepShieldId)
+            if (a.shieldId)
                 ProposePrepShield(bot, a, out);
         }
 
-        void ProposePrepShield(PartyBotAI const* bot, AreaPlan const& a, std::vector<Proposal>& out)
+        void ProposePrepShield(PartyBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
-            SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.prepShieldId);
+            SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.shieldId);
             if (!shield || me->HasAura(shield->Id) || !bot->CanTryToCastSpell(me, shield))
                 return;
             Proposal p;
@@ -215,7 +215,7 @@ namespace Commander
             p.action.type = BotActionType::Cast;
             p.action.spell = shield;
             p.action.target = me->GetObjectGuid();
-            p.SetValue(a.prepGain, 0.0f);
+            p.SetValue(a.gain, 0.0f);
             out.push_back(p);
         }
     }
@@ -246,26 +246,31 @@ namespace Commander
                                      TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
-        AreaPlan const& a = plan.area;
+        AreaPlan const& plans = plan.area;
         ObjectGuid const guid = me->GetObjectGuid();
-        // 0. Before the phase: to its spot, its shield up (AreaPhase prep; the caster need not
+        AreaCast const* mine = plans.CastOf(guid);
+        // 0. Before its spell: to its spot, its shield up (AreaPhase prep; the caster need not
         // be in combat yet).
-        if (a.prepCaster == guid && !a.active)
-        {
-            if (!me->GetTransport())
-                ProposePrep(bot, world, a, out);
-            return;
-        }
-        if (!a.active || !me->IsInCombat())
+        if (!mine)
+            if (AreaPrep const* prep = plans.PrepOf(guid))
+            {
+                if (!me->GetTransport())
+                    ProposePrep(bot, world, *prep, out);
+                return;
+            }
+        if (!plans.Active() || !me->IsInCombat())
             return;
         PartyMemberFacts const* self = world.FindMember(guid);
         if (!self || !self->CanAct())
             return;
 
-        if (a.allyShieldBot == guid && a.allyShieldSpellId)
-            ProposeAllyShield(bot, world, a, *self, out);
-        if (!a.CastBy(guid) || a.step == AreaStep::Channel)
+        // A healer's shield on a caster (each cast names its own).
+        for (AreaCast const& c : plans.casts)
+            if (c.allyShieldBot == guid && c.allyShieldSpellId)
+                ProposeAllyShield(bot, world, c, *self, out);
+        if (!mine || mine->step == AreaStep::Channel)
             return;
+        AreaCast const& a = *mine;
         SpellEntry const* spell = KitSpell(bot, a.spellId);
         if (!spell)
             return;

@@ -132,7 +132,7 @@ namespace Commander
         bool Build(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, Line& line, SpellEntry const*& nova)
         {
             Player* me = bot->me;
-            if (plan.area.roomCaster != me->GetObjectGuid())
+            if (!plan.area.KeepsRoom(me->GetObjectGuid()))
                 return false;
             PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
             if (!self || !self->CanAct())
@@ -344,9 +344,10 @@ namespace Commander
         {
             AreaRound::Result none;
             none.why = "the area phase plans no new ground channel for it";
-            AreaPlan const& a = plan.area;
-            if (!a.CastBy(self.guid) || a.step == AreaStep::Channel)
+            AreaCast const* mine = plan.area.CastOf(self.guid);
+            if (!mine || mine->step == AreaStep::Channel)
                 return none;
+            AreaCast const& a = *mine;
             AreaSpellFacts const* spell = AreaValue::SpellOf(self, a.spellId);
             if (!spell || !spell->onTarget || !spell->channel)
                 return none;

@@ -710,9 +710,9 @@ namespace Commander
         }
     };
 
-    // The area phase (Coordination/Doctrine/AreaPhase.h, .kiro/docs/2026-11-08-aoe-phase.md): one area
-    // damage spell the party goes for now, who casts it, where from, and what is done first.
-    // A reservation for the caster: AreaDamageBehavior walks, shields and casts in that order.
+    // The area phase (Coordination/Doctrine/AreaPhase.h, .kiro/docs/2026-11-08-aoe-phase.md): the area
+    // damage spells the party goes for now, who casts each, where from, and what is done first.
+    // A reservation for each caster: AreaDamageBehavior walks, shields and casts in that order.
     enum class AreaStep : uint8
     {
         Move,       // walk to `spot` (farther from the pack: the enemies it turns take longer to come)
@@ -728,9 +728,9 @@ namespace Commander
         Shield,     // the caster's shield comes off cooldown
     };
 
-    struct AreaPlan
+    // One caster's area spell in the phase (AreaPhase.h): which spell, where, from where, what first.
+    struct AreaCast
     {
-        bool active = false;
         AreaStep step = AreaStep::Cast;
         ObjectGuid caster;
         uint32 spellId = 0;
@@ -754,63 +754,143 @@ namespace Commander
         float benefit = 0.0f;        // of the whole spell from `spot` (or here)
         float cost = 0.0f;
         float net = 0.0f;
-        // What ending the phase now loses (a tank sent elsewhere: Stragglers pays it; the fight
+        // What ending this spell now loses (a tank sent elsewhere: Stragglers pays it; the fight
         // spot values the channel with the pile moved itself, FightSpot.h).
         float endCost = 0.0f;
-        // The phase counts on the tanks' taunts for the enemies it turns: what it loses
+        // The spell counts on the tanks' taunts for the enemies it turns: what it loses
         // without them (RescueAssigner adds it to a taunt spent on another enemy).
         float tauntReserve = 0.0f;
         std::vector<ObjectGuid> targets;
         uint32 sinceMs = 0;
 
-        // Not started (active false): the best spell is worth more a little later (AreaPhase
-        // step 3): the tank first gives the enemies it would turn a runway through it, or the
-        // caster's shield is off cooldown first. waitGain = later - now (points).
+        bool Targets(ObjectGuid enemy) const
+        {
+            return std::find(targets.begin(), targets.end(), enemy) != targets.end();
+        }
+    };
+
+    // A caster whose best spell is worth more a little later (AreaPhase step 3): the tank first
+    // gives the enemies it would turn a runway through it, or its shield is off cooldown first.
+    // gain = later - now (points).
+    struct AreaWaitPlan
+    {
         AreaWait wait = AreaWait::None;
-        ObjectGuid waitCaster;
-        float waitSec = 0.0f;
-        float waitGain = 0.0f;
-        float waitShortfall = 0.0f;  // Tank: the threat the tank lacks on them in total
-        uint32 waitSinceMs = 0;
-        uint32 waitProgressMs = 0;   // Tank: last time waitShortfall shrank (AreaPhase::TANK_STALL_MS)
+        ObjectGuid caster;
+        float sec = 0.0f;
+        float gain = 0.0f;
+        float shortfall = 0.0f;      // Tank: the threat the tank lacks on them in total
+        uint32 sinceMs = 0;
+        uint32 progressMs = 0;       // Tank: last time shortfall shrank (AreaPhase::TANK_STALL_MS)
+    };
 
-        // No phase yet (the pull holds the party, or the phase waits): the
-        // caster the Area tactic counts on gets ready (AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md
-        // 4.4, 4.5, 8): it walks to its cast spot (prepSpots, best first; centre prepCentre) and
-        // puts its shield up (prepShieldId, by the opening's estimate); the ranged stance leaves
-        // it alone.
-        ObjectGuid prepCaster;
-        uint32 prepShieldId = 0;
-        float prepGain = 0.0f;       // the shield's, net of its mana
-        std::vector<Position3> prepSpots;
-        Position3 prepCentre;
-        float prepMoveGain = 0.0f;   // the spot's over here, before the walk
-        float prepMoveCost = 0.0f;   // the walk (in combat; nothing is lost before the fight)
+    // A caster getting ready while it has no spell of the phase yet (the pull holds the party,
+    // or it waits; AreaPhase, doc .kiro/docs/2026-11-11-aoe-threat.md 4.4, 4.5, 8): it walks to
+    // its cast spot (spots, best first; centre) and puts its shield up (shieldId, by the
+    // opening's estimate); the ranged stance leaves it alone.
+    struct AreaPrep
+    {
+        ObjectGuid caster;
+        uint32 shieldId = 0;
+        float gain = 0.0f;           // the shield's, net of its mana
+        std::vector<Position3> spots;
+        Position3 centre;
+        float moveGain = 0.0f;       // the spot's over here, before the walk
+        float moveCost = 0.0f;       // the walk (in combat; nothing is lost before the fight)
+    };
 
-        // The area caster that keeps its own room (AreaPhase.h "room"; doc
+    // A reservation (AreaPhase.h "Reservation"): a caster the phase is about to use. It starts
+    // no spell with a cast or channel time but its area spells meanwhile (TeamPlan::
+    // ForbidsLongCast). atMs = the last refresh that named it.
+    struct AreaReservation
+    {
+        ObjectGuid caster;
+        uint32 atMs = 0;
+    };
+
+    // The area phase of the party: every area damage dealer bot has its own part (a spell
+    // going, a wait, the prep, a reservation, its room); several may cast at once (user
+    // 2026-11-15: two mages, only one ever cast Blizzard and put its Ice Barrier up first).
+    struct AreaPlan
+    {
+        std::vector<AreaCast> casts;
+        std::vector<AreaWaitPlan> waits;
+        std::vector<AreaPrep> preps;
+        std::vector<AreaReservation> reserved;
+        // The area casters that keep their own room (AreaPhase.h "room"; doc
         // .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4): AreaRoomBehavior decides when it Frost
         // Novas the enemies running at it and goes away or to the tank; EscapeBehavior only puts
-        // up its danger shield. Empty = none.
-        ObjectGuid roomCaster;
+        // up its danger shield.
+        std::vector<ObjectGuid> roomCasters;
 
-        // A reservation (AreaPhase.h "Reservation"): the caster the phase is about to use. It
-        // starts no spell with a cast or channel time but its area spells meanwhile
-        // (TeamPlan::ForbidsLongCast). reservedAtMs = the last refresh that named it.
-        ObjectGuid reserved;
-        uint32 reservedAtMs = 0;
+        bool Active() const { return !casts.empty(); }
 
-        bool Reserves(ObjectGuid bot) const { return !reserved.IsEmpty() && reserved == bot; }
+        AreaCast const* CastOf(ObjectGuid bot) const
+        {
+            for (AreaCast const& c : casts)
+                if (c.caster == bot)
+                    return &c;
+            return nullptr;
+        }
+        AreaWaitPlan const* WaitOf(ObjectGuid bot) const
+        {
+            for (AreaWaitPlan const& w : waits)
+                if (w.caster == bot)
+                    return &w;
+            return nullptr;
+        }
+        AreaPrep const* PrepOf(ObjectGuid bot) const
+        {
+            for (AreaPrep const& p : preps)
+                if (p.caster == bot)
+                    return &p;
+            return nullptr;
+        }
+        AreaReservation const* ReservationOf(ObjectGuid bot) const
+        {
+            for (AreaReservation const& r : reserved)
+                if (r.caster == bot)
+                    return &r;
+            return nullptr;
+        }
+
+        bool CastBy(ObjectGuid bot) const { return CastOf(bot) != nullptr; }
+        bool Reserves(ObjectGuid bot) const { return !bot.IsEmpty() && ReservationOf(bot) != nullptr; }
+        bool KeepsRoom(ObjectGuid bot) const
+        {
+            return std::find(roomCasters.begin(), roomCasters.end(), bot) != roomCasters.end();
+        }
+        // A caster of the phase or one getting ready (its place is the area phase's).
+        bool IsCaster(ObjectGuid bot) const { return CastBy(bot) || PrepOf(bot) != nullptr; }
 
         // The stance modules leave `bot`'s place to the area phase (AreaSpot.h).
         bool PlacesCaster(ObjectGuid bot) const
         {
-            return CastBy(bot) || (prepCaster == bot && !prepSpots.empty());
+            AreaPrep const* p = PrepOf(bot);
+            return CastBy(bot) || (p && !p->spots.empty());
         }
 
-        bool CastBy(ObjectGuid bot) const { return active && caster == bot; }
         bool Targets(ObjectGuid enemy) const
         {
-            return active && std::find(targets.begin(), targets.end(), enemy) != targets.end();
+            return std::any_of(casts.begin(), casts.end(), [enemy](AreaCast const& c) { return c.Targets(enemy); });
+        }
+
+        // What ending the phase now loses: every spell's.
+        float EndCost() const
+        {
+            float sum = 0.0f;
+            for (AreaCast const& c : casts)
+                sum += c.endCost;
+            return sum;
+        }
+
+        // The taunts the spells that do not hit `enemy` count on (a taunt spent on it pays them).
+        float TauntReserveOutside(ObjectGuid enemy) const
+        {
+            float sum = 0.0f;
+            for (AreaCast const& c : casts)
+                if (!c.Targets(enemy))
+                    sum += c.tauntReserve;
+            return sum;
         }
     };
 

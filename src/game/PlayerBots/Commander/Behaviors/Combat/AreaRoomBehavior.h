@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 3: the area caster keeps its own room from the enemies running at
  * it ("aoe-room" module; doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4). Only for the bot the
- * brain names (AreaPlan::roomCaster); EscapeBehavior then only puts up its danger shield.
+ * brain names (AreaPlan::roomCasters); EscapeBehavior then only puts up its danger shield.
  *
  * User 2026-11-12: do not run or stop the Blizzard as soon as something comes; wait until it
  * is about to hit, by the caster's own danger, not by seconds; even take a hit or two so the

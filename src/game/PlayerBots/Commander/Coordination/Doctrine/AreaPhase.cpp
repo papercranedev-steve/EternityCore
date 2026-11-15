@@ -49,7 +49,7 @@ namespace Commander
         }
 
         // Points a healer bot's shield on the caster adds to `v` (and who), 0 = none worth it.
-        void AllyShield(WorldModel const& world, AreaValue::Request r, AreaValue::Result const& v, AreaPlan& a)
+        void AllyShield(WorldModel const& world, AreaValue::Request r, AreaValue::Result const& v, AreaCast& a)
         {
             if (!v.valid || v.turnLoss <= 0.0f)
                 return;
@@ -82,10 +82,10 @@ namespace Commander
             }
         }
 
-        // What the phase loses with every tank busy, and without the taunts.
+        // What the spell loses with every tank busy, and without the taunts.
         // `walkCost`: already in v.net (a spot to walk to), not in the requests' results.
         void Reserves(WorldModel const& world, AreaValue::Request const& r, AreaValue::Result const& v,
-                      float walkCost, std::vector<ObjectGuid> const& tanks, AreaPlan& a)
+                      float walkCost, std::vector<ObjectGuid> const& tanks, AreaCast& a)
         {
             float const net = std::max(0.0f, v.net);
             AreaValue::Request busy = r;
@@ -113,6 +113,23 @@ namespace Commander
             std::vector<Position3> spots;   // move: AreaSpot's cells, best first
         };
 
+        // What the casts planned so far put on the enemies (header "Several casters"): their
+        // damage (AreaValue::Request::others) and their threat (the tank's wait).
+        struct Planned
+        {
+            std::vector<AreaValue::OtherDamage> damage;
+            std::vector<PlannedThreat> threat;
+
+            void Add(AreaCast const& c, AreaSpellFacts const& spell)
+            {
+                if (spell.periodSec <= 0.0f)
+                    return;
+                for (ObjectGuid e : c.targets)
+                    damage.push_back({ e, spell.perTick / spell.periodSec });
+                threat.push_back({ c.caster, spell.tickThreat / spell.periodSec });
+            }
+        };
+
         std::string Text(char const* fmt, float a, float b = 0.0f)
         {
             char buf[200];
@@ -120,31 +137,36 @@ namespace Commander
             return buf;
         }
 
-        // The last refresh's spot of `m` for `centre` (the area plan's Move, or its prep spot).
+        // The last refresh's spot of `m` for `centre` (its spell's Move, or its prep spot).
         Position3 const* PrevSpot(AreaPlan const& prev, ObjectGuid m, Position3 const& centre, ObjectGuid centreGuid,
                                   uint32 spellId)
         {
-            if (prev.active && prev.caster == m && prev.step == AreaStep::Move && prev.spellId == spellId &&
-                prev.centre == centreGuid)
-                return &prev.spot;
-            if (prev.prepCaster == m && !prev.prepSpots.empty() &&
-                PackResolver::Distance(centre, prev.prepCentre) <= 2.0f * PositionField::CELL_YD)
-                return &prev.prepSpots.front();
+            if (AreaCast const* c = prev.CastOf(m))
+                if (c->step == AreaStep::Move && c->spellId == spellId && c->centre == centreGuid)
+                    return &c->spot;
+            if (AreaPrep const* p = prev.PrepOf(m))
+                if (!p->spots.empty() && PackResolver::Distance(centre, p->centre) <= 2.0f * PositionField::CELL_YD)
+                    return &p->spots.front();
             return nullptr;
+        }
+
+        AreaPrep& PrepFor(AreaPlan& a, ObjectGuid caster)
+        {
+            for (AreaPrep& p : a.preps)
+                if (p.caster == caster)
+                    return p;
+            a.preps.emplace_back();
+            a.preps.back().caster = caster;
+            return a.preps.back();
         }
 
         void SetPrepSpot(AreaPlan& a, ObjectGuid caster, Position3 const& centre, AreaSpot::Choice const& ch)
         {
-            a.prepCaster = caster;
-            a.prepCentre = centre;
-            a.prepSpots = ch.spots;
-            a.prepMoveGain = std::max(0.0f, ch.gain + ch.walkCost);
-            a.prepMoveCost = ch.walkCost;
-        }
-
-        PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan)
-        {
-            return AreaIntent::PlannedCaster(world, plan);
+            AreaPrep& p = PrepFor(a, caster);
+            p.centre = centre;
+            p.spots = ch.spots;
+            p.moveGain = std::max(0.0f, ch.gain + ch.walkCost);
+            p.moveCost = ch.walkCost;
         }
 
         // It can hold what runs at it around itself (Frost Nova: FleeStopAbility with a radius).
@@ -161,33 +183,50 @@ namespace Commander
                                [m](EnemyFacts const& e) { return e.acting && e.health && e.victim == m; });
         }
 
-        // Header "room": the area caster now, else the one waiting or getting ready, else the
-        // one the tactic counts on; the last refresh's one keeps it while chased.
-        ObjectGuid RoomCaster(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan const& a)
+        // Header "room": the area casters now, waiting or getting ready; the last refresh's
+        // ones keep it while chased; none of them: the ones the tactic counts on.
+        std::vector<ObjectGuid> RoomCasters(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev,
+                                            AreaPlan const& a)
         {
-            ObjectGuid g = a.active ? a.caster : !a.waitCaster.IsEmpty() ? a.waitCaster : a.prepCaster;
-            if (g.IsEmpty() && !prev.roomCaster.IsEmpty() && Chased(world, prev.roomCaster))
-                g = prev.roomCaster;
-            if (g.IsEmpty())
-                if (PartyMemberFacts const* m = PlannedCaster(world, plan))
-                    g = m->guid;
-            PartyMemberFacts const* m = g.IsEmpty() ? nullptr : world.FindMember(g);
-            return m && m->isBot && !m->isPet && m->alive && HoldsAround(*m) ? g : ObjectGuid();
+            std::vector<ObjectGuid> named;
+            auto const add = [&named](ObjectGuid g)
+            {
+                if (!g.IsEmpty() && std::find(named.begin(), named.end(), g) == named.end())
+                    named.push_back(g);
+            };
+            for (AreaCast const& c : a.casts)
+                add(c.caster);
+            for (AreaWaitPlan const& w : a.waits)
+                add(w.caster);
+            for (AreaPrep const& p : a.preps)
+                add(p.caster);
+            for (ObjectGuid g : prev.roomCasters)
+                if (Chased(world, g))
+                    add(g);
+            if (named.empty())
+                for (PartyMemberFacts const* m : AreaIntent::PlannedCasters(world, plan))
+                    add(m->guid);
+            std::vector<ObjectGuid> out;
+            for (ObjectGuid g : named)
+            {
+                PartyMemberFacts const* m = world.FindMember(g);
+                if (m && m->isBot && !m->isPet && m->alive && HoldsAround(*m))
+                    out.push_back(g);
+            }
+            return out;
         }
 
-        // While the pull holds the party (not a retreat): the caster the Area
-        // tactic counts on gets ready (header "While the pull holds").
+        // While the pull holds the party (not a retreat): every caster the Area tactic counts
+        // on gets ready (header "While the pull holds").
         void Prepare(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, AreaPlan& a)
         {
             if (plan.retreat.active)
                 return;
-            PullPlan const& pull = plan.pull;
-            PartyMemberFacts const* m = PlannedCaster(world, plan);
-            AreaSpellFacts const* spell = m ? AreaIntent::BestSpell(*m) : nullptr;
-            if (!spell)
+            std::vector<PartyMemberFacts const*> const casters = AreaIntent::PlannedCasters(world, plan);
+            if (casters.empty())
                 return;
 
-            // Where the spell will go: the enemy on the main tank nearest it, else the planned spot.
+            // Where the spells will go: the enemy on the main tank nearest it, else the planned spot.
             PartyMemberFacts const* tank = Tanks::Main(world, true);
             EnemyFacts const* centre = nullptr;
             float nearest = 0.0f;
@@ -208,46 +247,52 @@ namespace Commander
             else if (!plan.PlannedFightSpot(at))
                 return;
 
-            AreaValue::Request r;
-            r.caster = m;
-            r.spell = spell;
-            r.centre = spell->onTarget ? at : m->pos;
-            r.from = m->pos;
-            r.settle = false;
-            r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
-
-            // Its spot (a ground channel).
-            if (spell->onTarget && spell->channel)
+            for (PartyMemberFacts const* m : casters)
             {
-                AreaSpot::Choice const ch = AreaSpot::Pick(world, plan, r, centre != nullptr,
-                    PrevSpot(prev, m->guid, r.centre, centre ? centre->guid : ObjectGuid(), spell->spellId));
-                if (ch.move)
-                {
-                    SetPrepSpot(a, m->guid, r.centre, ch);
-                    r.from = ch.spots.front();
-                }
-            }
+                AreaSpellFacts const* spell = AreaIntent::BestSpell(*m);
+                if (!spell)
+                    continue;
+                AreaValue::Request r;
+                r.caster = m;
+                r.spell = spell;
+                r.centre = spell->onTarget ? at : m->pos;
+                r.from = m->pos;
+                r.settle = false;
+                r.forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
 
-            // Its shield, whenever it is ready (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md
-            // 3.6: on cooldown in the area tactic; until then only when the spell valued with
-            // it gained more than its mana). Worth the health it takes.
-            SelfShieldFacts const& sh = m->selfShield;
-            if (!sh.spellId || !sh.ready || sh.up)
-                return;
-            a.prepCaster = m->guid;
-            a.prepShieldId = sh.spellId;
-            a.prepGain = Value::Points(world, sh.absorb);
+                // Its spot (a ground channel).
+                if (spell->onTarget && spell->channel)
+                {
+                    AreaSpot::Choice const ch = AreaSpot::Pick(world, plan, r, centre != nullptr,
+                        PrevSpot(prev, m->guid, r.centre, centre ? centre->guid : ObjectGuid(), spell->spellId));
+                    if (ch.move)
+                        SetPrepSpot(a, m->guid, r.centre, ch);
+                }
+
+                // Its shield, whenever it is ready (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md
+                // 3.6: on cooldown in the area tactic; until then only when the spell valued with
+                // it gained more than its mana). Worth the health it takes.
+                SelfShieldFacts const& sh = m->selfShield;
+                if (!sh.spellId || !sh.ready || sh.up)
+                    continue;
+                AreaPrep& p = PrepFor(a, m->guid);
+                p.shieldId = sh.spellId;
+                p.gain = Value::Points(world, sh.absorb);
+            }
         }
+
         // Seconds the main tank needs to give every enemy `c` turns a runway through the whole
-        // spell (ThreatRunway shortfalls with the spell's threat, one after another at
-        // ThreatGap::FillRate), and their total. False: no main tank, or one is not on it.
-        bool TankFill(WorldModel const& world, Candidate const& c, float& sec, float& total)
+        // spell (ThreatRunway shortfalls with the spell's threat and the planned casts', one
+        // after another at ThreatGap::FillRate), and their total. False: no main tank, or one is
+        // not on it.
+        bool TankFill(WorldModel const& world, Candidate const& c, Planned const& planned, float& sec, float& total)
         {
             PartyMemberFacts const* tank = Tanks::Main(world, true);
             AreaSpellFacts const& s = *c.request.spell;
             if (!tank || !tank->CanAct() || c.value.turning.empty() || s.periodSec <= 0.0f)
                 return false;
-            std::vector<PlannedThreat> const planned{ { c.request.caster->guid, s.tickThreat / s.periodSec } };
+            std::vector<PlannedThreat> threat = planned.threat;
+            threat.push_back({ c.request.caster->guid, s.tickThreat / s.periodSec });
             float const spellSec = float(s.ticks) * s.periodSec;
             total = 0.0f;
             for (ObjectGuid g : c.value.turning)
@@ -255,7 +300,7 @@ namespace Commander
                 EnemyFacts const* e = world.FindEnemy(g);
                 if (!e || e->victim != tank->guid)
                     return false;
-                total += ThreatRunway::Of(world, *e, tank->guid, planned, spellSec).shortfall;
+                total += ThreatRunway::Of(world, *e, tank->guid, threat, spellSec).shortfall;
             }
             sec = total / ThreatGap::FillRate(world, *tank);
             return true;
@@ -267,9 +312,9 @@ namespace Commander
         //   Tank    nobody turns (net + turn loss) once the tank has filled their shortfalls;
         //           not when the total did not shrink for TANK_STALL_MS.
         //   Shield  the caster's shield (on cooldown now) first, as in step 2.
-        // Writes the wait into `a` (active stays false); a note when it starts.
-        bool Waits(WorldModel const& world, Candidate const& c, AreaPlan const& prev, AreaPlan& a,
-                   std::vector<std::string>& notes)
+        // Adds the caster's wait to `a.waits`; a note when it starts.
+        bool Waits(WorldModel const& world, Candidate const& c, Planned const& planned, AreaPlan const& prev,
+                   AreaPlan& a, std::vector<std::string>& notes)
         {
             AreaSpellFacts const& s = *c.request.spell;
             PartyMemberFacts const& m = *c.request.caster;
@@ -278,17 +323,18 @@ namespace Commander
                 return false;
             float const now = c.value.net + c.shieldGain;
             uint32 const nowMs = world.refreshedAtMs;
-            bool const waitedTank = prev.wait == AreaWait::Tank && prev.waitCaster == m.guid;
+            AreaWaitPlan const* before = prev.WaitOf(m.guid);
+            bool const waitedTank = before && before->wait == AreaWait::Tank;
 
             AreaWait wait = AreaWait::None;
             float gain = 0.0f;
             float sec = 0.0f;
             float fillSec = 0.0f;
             float total = 0.0f;
-            if (TankFill(world, c, fillSec, total))
+            if (TankFill(world, c, planned, fillSec, total))
             {
-                bool const stalled = waitedTank && total >= prev.waitShortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN &&
-                                     WorldTimer::getMSTimeDiff(prev.waitProgressMs, nowMs) > AreaPhaseAssigner::TANK_STALL_MS;
+                bool const stalled = waitedTank && total >= before->shortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN &&
+                                     WorldTimer::getMSTimeDiff(before->progressMs, nowMs) > AreaPhaseAssigner::TANK_STALL_MS;
                 float const later = c.value.net + c.value.turnLoss;
                 float const g = later - std::max(0.0f, later) * fillSec / spellSec - now;
                 if (!stalled && g > gain)
@@ -321,19 +367,21 @@ namespace Commander
             if (wait == AreaWait::None)
                 return false;
 
-            bool const same = prev.wait == wait && prev.waitCaster == m.guid;
-            a.wait = wait;
-            a.waitCaster = m.guid;
-            a.waitSec = sec;
-            a.waitGain = gain;
-            a.waitSinceMs = same ? prev.waitSinceMs : nowMs;
+            bool const same = before && before->wait == wait;
+            AreaWaitPlan w;
+            w.wait = wait;
+            w.caster = m.guid;
+            w.sec = sec;
+            w.gain = gain;
+            w.sinceMs = same ? before->sinceMs : nowMs;
             if (wait == AreaWait::Tank)
             {
                 // Progress: the smallest total so far and when it shrank.
-                bool const progress = !waitedTank || total < prev.waitShortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN;
-                a.waitShortfall = progress ? total : prev.waitShortfall;
-                a.waitProgressMs = progress ? nowMs : prev.waitProgressMs;
+                bool const progress = !waitedTank || total < before->shortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN;
+                w.shortfall = progress ? total : before->shortfall;
+                w.progressMs = progress ? nowMs : before->progressMs;
             }
+            a.waits.push_back(w);
             if (!same)
                 notes.push_back(wait == AreaWait::Tank
                     ? Text("Area spell waits ~%.0f s: the tank first gives the %.0f enemies it would turn a runway through it.",
@@ -342,28 +390,36 @@ namespace Commander
             return true;
         }
 
-        // Header "Reservation": the caster this refresh names (a phase to start, a wait, the
-        // prep), else the last one for RESERVE_HOLD_MS while it can still cast an area spell.
+        // Header "Reservation": the casters this refresh names (a spell to start, a wait, the
+        // prep), and the last ones for RESERVE_HOLD_MS while they can still cast an area spell.
         void Reserve(WorldModel const& world, AreaPlan const& prev, AreaPlan& a)
         {
-            ObjectGuid const named = a.active ? (a.step == AreaStep::Channel ? ObjectGuid() : a.caster)
-                                   : !a.waitCaster.IsEmpty() ? a.waitCaster : a.prepCaster;
-            if (!named.IsEmpty())
+            auto const add = [&a](ObjectGuid g, uint32 atMs)
             {
-                a.reserved = named;
-                a.reservedAtMs = world.refreshedAtMs;
+                if (!g.IsEmpty() && !a.Reserves(g))
+                    a.reserved.push_back({ g, atMs });
+            };
+            for (AreaCast const& c : a.casts)
+                if (c.step != AreaStep::Channel)
+                    add(c.caster, world.refreshedAtMs);
+            for (AreaWaitPlan const& w : a.waits)
+                add(w.caster, world.refreshedAtMs);
+            for (AreaPrep const& p : a.preps)
+                add(p.caster, world.refreshedAtMs);
+            if (!world.HasPartyEnemy())
                 return;
+            for (AreaReservation const& r : prev.reserved)
+            {
+                // Its channel running is its spell itself; after it the next refresh decides afresh.
+                if (a.Reserves(r.caster) || a.CastBy(r.caster) ||
+                    WorldTimer::getMSTimeDiff(r.atMs, world.refreshedAtMs) > AreaPhaseAssigner::RESERVE_HOLD_MS)
+                    continue;
+                PartyMemberFacts const* m = world.FindMember(r.caster);
+                if (!m || !m->CanAct() ||
+                    std::none_of(m->areaSpells.begin(), m->areaSpells.end(), [](AreaSpellFacts const& s) { return s.ready; }))
+                    continue;
+                a.reserved.push_back(r);
             }
-            // A channel running is the phase itself; after it the next refresh decides afresh.
-            if (a.active || prev.reserved.IsEmpty() || !world.HasPartyEnemy() ||
-                WorldTimer::getMSTimeDiff(prev.reservedAtMs, world.refreshedAtMs) > AreaPhaseAssigner::RESERVE_HOLD_MS)
-                return;
-            PartyMemberFacts const* m = world.FindMember(prev.reserved);
-            if (!m || !m->CanAct() ||
-                std::none_of(m->areaSpells.begin(), m->areaSpells.end(), [](AreaSpellFacts const& s) { return s.ready; }))
-                return;
-            a.reserved = prev.reserved;
-            a.reservedAtMs = prev.reservedAtMs;
         }
 
         // The calculation trace: one step-2 candidate (or why there is none for it).
@@ -386,90 +442,15 @@ namespace Commander
             }
             Trace::Emit("areacand", label, data + "}");
         }
-    }
 
-    void AreaPhaseAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
-    {
-        Trace::Scope scope("area");
-        AreaPlan const prev = plan.area;
-        char const* const outcome = Plan(world, plan, prev);
-        AreaPlan& a = plan.area;
-        // Reads the last refresh's own roomCaster (RoomCaster), not another module's.
-        a.roomCaster = world.HasPartyEnemy() ? RoomCaster(world, plan, prev, a) : ObjectGuid();
-        // Reads the last refresh's own reservation.
-        Reserve(world, prev, a);
-        if (scope.On())
+        // Step 2 for one caster: its best paying candidate (every ready area spell, every
+        // centre), valued with the casts planned so far. False: none pays.
+        bool BestOf(WorldModel const& world, TeamPlan const& plan, AreaPlan const& prev, PartyMemberFacts const& m,
+                    Planned const& planned, std::vector<ObjectGuid> const& busy,
+                    std::function<bool(EnemyFacts const&)> const& forbidden, Candidate& best)
         {
-            scope.SetLabel(outcome);
-            scope.Data(Trace::Format("{\"active\":%s,\"caster\":\"%s\",\"spell\":%u,\"net\":%.2f,\"wait\":%u,"
-                                     "\"waitGain\":%.2f,\"waitSec\":%.1f,\"prep\":\"%s\",\"reserved\":\"%s\",\"reservedAgoMs\":%u}",
-                a.active ? "true" : "false", Trace::Guid(a.caster).c_str(), a.spellId, a.net, uint32(a.wait),
-                a.waitGain, a.waitSec, Trace::Guid(a.prepCaster).c_str(), Trace::Guid(a.reserved).c_str(),
-                a.reserved.IsEmpty() ? 0u : WorldTimer::getMSTimeDiff(a.reservedAtMs, world.refreshedAtMs)));
-        }
-    }
-
-    char const* AreaPhaseAssigner::Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev)
-    {
-        AreaPlan& a = plan.area;
-        a = AreaPlan();
-        if (!world.HasPartyEnemy())
-            return "no fight";
-        if (PartyHolds(plan))
-        {
-            Prepare(world, plan, prev, a);
-            return "the party holds: prep";
-        }
-
-        std::vector<ObjectGuid> const tanks = AllTanks(world);
-        // Tanks moving the fight (FightSpotAssigner, this refresh: it runs before).
-        std::vector<ObjectGuid> busy;
-        if (plan.fightSpot.moving)
-            busy.push_back(plan.fightSpot.tank);
-        auto const forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
-
-        // 1. A channel running.
-        for (PartyMemberFacts const& m : world.party)
-        {
-            if (!m.isBot || m.isPet || !m.areaChannel.spellId)
-                continue;
-            AreaSpellFacts const* spell = AreaValue::SpellOf(m, m.areaChannel.spellId);
-            if (!spell)
-                continue;
-            AreaValue::Request r;
-            r.caster = &m;
-            r.spell = spell;
-            r.centre = m.areaChannel.centre;
-            r.from = m.pos;
-            r.ticks = m.areaChannel.ticksLeft;
-            r.paid = true;
-            r.turn.busyTanks = busy;
-            r.forbidden = forbidden;
-            AreaValue::Result const v = AreaValue::Evaluate(world, r);
-            a.active = true;
-            a.step = AreaStep::Channel;
-            a.caster = m.guid;
-            a.spellId = m.areaChannel.spellId;
-            a.centrePos = m.areaChannel.centre;
-            a.benefit = v.benefit;
-            a.cost = v.cost;
-            a.net = v.net;
-            a.netHere = v.net;
-            a.targets = v.targets;
-            a.sinceMs = prev.CastBy(m.guid) ? prev.sinceMs : world.refreshedAtMs;
-            Reserves(world, r, v, 0.0f, tanks, a);
-            AllyShield(world, r, v, a);
-            return "a channel runs";
-        }
-
-        // 2. Who starts which one, where.
-        Candidate best;
-        bool found = false;
-        for (PartyMemberFacts const& m : world.party)
-        {
-            if (!m.isBot || m.isPet || !m.CanAct() || m.areaSpells.empty() ||
-                (m.role != ROLE_RANGE_DPS && m.role != ROLE_MELEE_DPS))
-                continue;
+            bool found = false;
+            AreaCast const* prevCast = prev.CastOf(m.guid);
             // Enemies running at it: a ground channel goes ahead of the first (AreaPlace.h).
             std::vector<Runners::Runner> const runners = Runners::Of(world, m.guid, m.pos);
             for (AreaSpellFacts const& spell : m.areaSpells)
@@ -511,6 +492,7 @@ namespace Commander
                     c.request.centre = e ? e->pos : m.pos;
                     c.request.turn.busyTanks = busy;
                     c.request.forbidden = forbidden;
+                    c.request.others = planned.damage;
                     c.centre = e ? e->guid : ObjectGuid();
                     if (e && ground)
                     {
@@ -579,8 +561,8 @@ namespace Commander
                     }
 
                     c.score = c.value.net + c.shieldGain;
-                    if (prev.active && prev.caster == m.guid && prev.spellId == spell.spellId && prev.centre == c.centre)
-                        c.score += STICKY_POINTS;
+                    if (prevCast && prevCast->spellId == spell.spellId && prevCast->centre == c.centre)
+                        c.score += AreaPhaseAssigner::STICKY_POINTS;
                     bool const pays = c.value.net + c.shieldGain > 0.0f;
                     TraceCandidate(m, spell, e, pays ? "pays" : "does not pay", &c);
                     if (pays && (!found || c.score > best.score))
@@ -590,50 +572,183 @@ namespace Commander
                     }
                 }
             }
+            return found;
         }
-        if (!found)
-            return "none: no area spell pays";
+    }
 
-        // 3. Or a little later.
-        if (Waits(world, best, prev, a, plan.notes))
+    void AreaPhaseAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
+    {
+        Trace::Scope scope("area");
+        AreaPlan const prev = plan.area;
+        char const* const outcome = Plan(world, plan, prev);
+        AreaPlan& a = plan.area;
+        // Reads the last refresh's own roomCasters (RoomCasters), not another module's.
+        a.roomCasters = world.HasPartyEnemy() ? RoomCasters(world, plan, prev, a) : std::vector<ObjectGuid>();
+        // Reads the last refresh's own reservations.
+        Reserve(world, prev, a);
+        if (scope.On())
         {
-            // Meanwhile it walks to where it will cast from.
-            if (best.move)
+            scope.SetLabel(outcome);
+            std::string data = "{\"casts\":[";
+            for (size_t i = 0; i < a.casts.size(); ++i)
             {
-                AreaSpot::Choice ch;
-                ch.spots = best.spots;
-                ch.walkCost = best.moveCost;
-                ch.gain = best.moveBenefit - best.moveCost;
-                SetPrepSpot(a, best.request.caster->guid, best.request.centre, ch);
+                AreaCast const& c = a.casts[i];
+                data += Trace::Format("%s{\"caster\":\"%s\",\"spell\":%u,\"step\":%u,\"net\":%.2f}", i ? "," : "",
+                    Trace::Guid(c.caster).c_str(), c.spellId, uint32(c.step), c.net);
             }
-            return a.wait == AreaWait::Tank ? "waits: the tank first" : "waits: the shield first";
+            data += "],\"waits\":[";
+            for (size_t i = 0; i < a.waits.size(); ++i)
+            {
+                AreaWaitPlan const& w = a.waits[i];
+                data += Trace::Format("%s{\"caster\":\"%s\",\"wait\":%u,\"gain\":%.2f,\"sec\":%.1f}", i ? "," : "",
+                    Trace::Guid(w.caster).c_str(), uint32(w.wait), w.gain, w.sec);
+            }
+            data += "],\"prep\":[";
+            for (size_t i = 0; i < a.preps.size(); ++i)
+                data += Trace::Format("%s\"%s\"", i ? "," : "", Trace::Guid(a.preps[i].caster).c_str());
+            data += "],\"reserved\":[";
+            for (size_t i = 0; i < a.reserved.size(); ++i)
+                data += Trace::Format("%s{\"caster\":\"%s\",\"agoMs\":%u}", i ? "," : "",
+                    Trace::Guid(a.reserved[i].caster).c_str(), WorldTimer::getMSTimeDiff(a.reserved[i].atMs, world.refreshedAtMs));
+            scope.Data(data + "]}");
+        }
+    }
+
+    char const* AreaPhaseAssigner::Plan(WorldModel const& world, TeamPlan& plan, AreaPlan const& prev)
+    {
+        AreaPlan& a = plan.area;
+        a = AreaPlan();
+        if (!world.HasPartyEnemy())
+            return "no fight";
+        if (PartyHolds(plan))
+        {
+            Prepare(world, plan, prev, a);
+            return "the party holds: prep";
         }
 
-        PartyMemberFacts const& m = *best.request.caster;
-        a.active = true;
-        a.caster = m.guid;
-        a.spellId = best.request.spell->spellId;
-        a.centre = best.centre;
-        a.centrePos = best.request.centre;
-        a.spot = best.request.from;
-        a.spots = best.spots;
-        a.moveBenefit = best.moveBenefit;
-        a.moveCost = best.moveCost;
-        a.netHere = best.netHere;
-        a.benefit = best.value.benefit;
-        a.cost = best.value.cost;
-        a.net = best.value.net + best.shieldGain;
-        a.targets = best.value.targets;
-        if (best.shield)
+        std::vector<ObjectGuid> const tanks = AllTanks(world);
+        // Tanks moving the fight (FightSpotAssigner, this refresh: it runs before).
+        std::vector<ObjectGuid> busy;
+        if (plan.fightSpot.moving)
+            busy.push_back(plan.fightSpot.tank);
+        std::function<bool(EnemyFacts const&)> const forbidden = [&plan](EnemyFacts const& e) { return plan.KeepsUnbroken(e); };
+        Planned planned;
+
+        // 1. The channels running: each one is its caster's spell.
+        for (PartyMemberFacts const& m : world.party)
         {
-            a.shieldSpellId = m.selfShield.spellId;
-            a.shieldGain = best.shieldGain;
+            if (!m.isBot || m.isPet || !m.areaChannel.spellId)
+                continue;
+            AreaSpellFacts const* spell = AreaValue::SpellOf(m, m.areaChannel.spellId);
+            if (!spell)
+                continue;
+            AreaValue::Request r;
+            r.caster = &m;
+            r.spell = spell;
+            r.centre = m.areaChannel.centre;
+            r.from = m.pos;
+            r.ticks = m.areaChannel.ticksLeft;
+            r.paid = true;
+            r.turn.busyTanks = busy;
+            r.forbidden = forbidden;
+            r.others = planned.damage;
+            AreaValue::Result const v = AreaValue::Evaluate(world, r);
+            AreaCast c;
+            c.step = AreaStep::Channel;
+            c.caster = m.guid;
+            c.spellId = m.areaChannel.spellId;
+            c.centrePos = m.areaChannel.centre;
+            c.benefit = v.benefit;
+            c.cost = v.cost;
+            c.net = v.net;
+            c.netHere = v.net;
+            c.targets = v.targets;
+            AreaCast const* before = prev.CastOf(m.guid);
+            c.sinceMs = before ? before->sinceMs : world.refreshedAtMs;
+            Reserves(world, r, v, 0.0f, tanks, c);
+            AllyShield(world, r, v, c);
+            a.casts.push_back(c);
+            planned.Add(a.casts.back(), *spell);
         }
-        a.step = best.move ? AreaStep::Move : best.shield ? AreaStep::Shield : AreaStep::Cast;
-        a.sinceMs = (prev.active && prev.caster == m.guid && prev.spellId == a.spellId) ? prev.sinceMs : world.refreshedAtMs;
-        Reserves(world, best.request, best.value, best.moveCost, tanks, a);
-        AllyShield(world, best.request, best.value, a);
-        return a.step == AreaStep::Move ? "start: walk to the spot" : a.step == AreaStep::Shield ? "start: shield first" : "start: cast";
+
+        // 2. Every other area dealer, the best paying spell first, each valued with the ones
+        // planned before it (header "Several casters"); 3. or it waits.
+        for (;;)
+        {
+            Candidate best;
+            bool found = false;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || !m.CanAct() || m.areaSpells.empty() ||
+                    (m.role != ROLE_RANGE_DPS && m.role != ROLE_MELEE_DPS) ||
+                    a.CastBy(m.guid) || a.WaitOf(m.guid))
+                    continue;
+                Candidate c;
+                if (BestOf(world, plan, prev, m, planned, busy, forbidden, c) && (!found || c.score > best.score))
+                {
+                    best = c;
+                    found = true;
+                }
+            }
+            if (!found)
+                break;
+
+            PartyMemberFacts const& m = *best.request.caster;
+            if (Waits(world, best, planned, prev, a, plan.notes))
+            {
+                // Meanwhile it walks to where it will cast from.
+                if (best.move)
+                {
+                    AreaSpot::Choice ch;
+                    ch.spots = best.spots;
+                    ch.walkCost = best.moveCost;
+                    ch.gain = best.moveBenefit - best.moveCost;
+                    SetPrepSpot(a, m.guid, best.request.centre, ch);
+                }
+                continue;
+            }
+
+            AreaCast c;
+            c.caster = m.guid;
+            c.spellId = best.request.spell->spellId;
+            c.centre = best.centre;
+            c.centrePos = best.request.centre;
+            c.spot = best.request.from;
+            c.spots = best.spots;
+            c.moveBenefit = best.moveBenefit;
+            c.moveCost = best.moveCost;
+            c.netHere = best.netHere;
+            c.benefit = best.value.benefit;
+            c.cost = best.value.cost;
+            c.net = best.value.net + best.shieldGain;
+            c.targets = best.value.targets;
+            if (best.shield)
+            {
+                c.shieldSpellId = m.selfShield.spellId;
+                c.shieldGain = best.shieldGain;
+            }
+            c.step = best.move ? AreaStep::Move : best.shield ? AreaStep::Shield : AreaStep::Cast;
+            AreaCast const* before = prev.CastOf(m.guid);
+            c.sinceMs = (before && before->spellId == c.spellId) ? before->sinceMs : world.refreshedAtMs;
+            Reserves(world, best.request, best.value, best.moveCost, tanks, c);
+            AllyShield(world, best.request, best.value, c);
+            a.casts.push_back(c);
+            planned.Add(a.casts.back(), *best.request.spell);
+        }
+
+        if (a.casts.empty())
+        {
+            if (a.waits.empty())
+                return "none: no area spell pays";
+            return a.waits.front().wait == AreaWait::Tank ? "waits: the tank first" : "waits: the shield first";
+        }
+        switch (a.casts.back().step)
+        {
+            case AreaStep::Move:    return "start: walk to the spot";
+            case AreaStep::Shield:  return "start: shield first";
+            case AreaStep::Cast:    return "start: cast";
+            default:                return "a channel runs";
+        }
     }
 
     void AreaPhaseAssigner::Clear(TeamPlan& plan) const

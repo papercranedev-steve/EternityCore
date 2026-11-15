@@ -11,10 +11,17 @@
  * Tanks sent elsewhere (TeamPlan::fightSpot moving: the tank takes the pile to another spot;
  * read as FightSpotAssigner left it this refresh) take nothing back: AggroTurnCost::Options::busyTanks.
  *
- * 1. A bot channelling an area spell (PartyMemberFacts::areaChannel): the phase is its channel
+ * Several casters (user 2026-11-15: with two mages only one ever cast Blizzard and put its Ice
+ * Barrier up first): every area dealer bot has its own part of the plan (TeamPlan::AreaPlan:
+ * casts, waits, preps, reservations, room casters). The casts are planned one after another,
+ * the best first; each later one is valued with the damage the earlier ones put on the same
+ * enemies (AreaValue "Others") and the tank's wait with their threat too. A second spell on
+ * the same pile only goes when it still pays.
+ *
+ * 1. Each bot channelling an area spell (PartyMemberFacts::areaChannel): its spell is its channel
  *    (step Channel), valued by AreaValue on the ticks left (paid). endCost = its net now -
  *    its net with every tank busy (what sending the tank away costs, Stragglers pays it).
- * 2. Otherwise every damage dealer bot, every ready area spell (AreaSpellFacts), every centre
+ * 2. Then, over and over, every other damage dealer bot, every ready area spell (AreaSpellFacts), every centre
  *    (ground spell: each acting enemy within range; else around the caster), valued by
  *    AreaValue for the whole spell (never "start and stop after a few ticks"):
  *      here   cast from where it stands (in range);
@@ -29,9 +36,10 @@
  *             (user 2026-11-12, doc .kiro/docs/2026-11-12-mage-hold.md 3.6: on cooldown
  *             before every area spell); the value is with the absorb, the score adds
  *             max(0, net with - net without - LostAction(GCD) - ManaWorth(its mana)).
- *    The best positive net wins; the one of the last refresh gets STICKY_POINTS.
- * 3. Or it waits (2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.3 / 4.4; AreaPlan::wait,
- *    the phase is not active): when starting later is worth more than now, a wait of `sec`
+ *    The best positive net wins (the caster's spell of the last refresh gets STICKY_POINTS);
+ *    its caster is done, the others go round again until none pays.
+ * 3. Or that caster waits (2026-11-12, doc .kiro/docs/2026-11-11-aoe-threat.md 4.3 / 4.4;
+ *    AreaPlan::waits, no spell for it): when starting later is worth more than now, a wait of `sec`
  *    costing net(later) x sec / the spell's length:
  *      Tank    every enemy it would turn is on the main tank: later nobody turns (net + turn
  *              loss), sec = their ThreatRunway shortfalls through the spell / ThreatGap::
@@ -40,11 +48,11 @@
  *      Shield  its shield is on cooldown: later with it (as the shield step), sec = the cooldown.
  *    Meanwhile its spot is the prep spot below (it walks there while it waits).
  * While the pull holds the party (the "not while" above, not a retreat), the
- * caster gets ready (AreaPlan::prep*; doc 4.4, 4.5, 8, user 2026-11-12: stand there first, a
+ * casters get ready (AreaPlan::preps; doc 4.4, 4.5, 8, user 2026-11-12: stand there first, a
  * turn predicted is too late):
- *   who     under the Area tactic the caster it counts on (DoctrinePlan::areaThreat); before
+ *   who     under the Area tactic every caster it counts on (DoctrinePlan::areaThreat); before
  *           the fight (no tactic yet) the area dealers when the pull expects at least
- *           TacticalDoctrine::AREA_MIN enemies; the most threat per second (AreaIntent);
+ *           TacticalDoctrine::AREA_MIN enemies (AreaIntent::PlannedCasters);
  *   centre  the enemy on the main tank nearest it, else the planned fight spot (PullPlan::
  *           PlannedFightSpot);
  *   spot    AreaSpot for that centre (AreaValue only with enemies there);
@@ -55,22 +63,21 @@
  *   GCD) + ManaWorth(healer, mana) (user 2026-11-08: the party protects the caster).
  *   tauntReserve = net - net without the tanks' taunts (RescueAssigner charges it to a taunt
  *   spent on an enemy outside the area).
- * Room (AreaPlan::roomCaster, doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4): the area
- *   caster keeps its own room from what runs at it (AreaRoomBehavior): the caster of the phase,
- *   else the one waiting or getting ready, else the last refresh's while an enemy is on it,
- *   else the one the tactic counts on; a bot that can hold enemies around itself (a flee stop
- *   with a radius: Frost Nova).
+ * Room (AreaPlan::roomCasters, doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4): the area
+ *   casters keep their own room from what runs at them (AreaRoomBehavior): the casters of the
+ *   phase, waiting or getting ready, and the last refresh's while an enemy is on them; none of
+ *   them: the ones the tactic counts on; each a bot that can hold enemies around itself (a flee
+ *   stop with a radius: Frost Nova).
  * Reservation (AreaPlan::reserved, 2026-11-13, a 预约: the condition is checked every
- *   refresh, the caster gets ready now): the caster of a phase to start (Move, Shield, Cast),
- *   of a wait or of the prep; when this refresh names none, the last one for RESERVE_HOLD_MS
- *   while it can act and has an area spell ready. Not during a channel (that is the phase).
+ *   refresh, the caster gets ready now): each caster of a spell to start (Move, Shield, Cast),
+ *   of a wait or of the prep; one this refresh does not name keeps the last one for
+ *   RESERVE_HOLD_MS while it can act and has an area spell ready. Not during its channel (that is its spell).
  *   It starts no spell with a cast or channel time but its area spells (TeamPlan::
  *   ForbidsLongCast): the step is re-judged every refresh and dropped for one or a few now and
  *   then; a 2.5 s Frostbolt the rotation began in such a gap went on while the brain wanted
  *   the Blizzard (a cast is never re-judged), twice in strat-20261113-235712 (4.6 s).
  * Calculation trace: scope "area" (label = what came of it, data = the plan and the
  *   reservation), one "areacand" per step 2 candidate with its value or why it has none.
- * One area phase per party at a time.
  * Pure (facts and plan).
  */
 

@@ -15,7 +15,7 @@
  *                      hurt  VictimDamage::Of(its victim, its kill time: health / Value::DealtDps)
  *                      cost  LostAction(tank, GCD) for the taunt, + LostAction(tank, the walk
  *                            into the tank's longest taunt range at RUN_YARDS_PER_SEC) and,
- *                            when it has to walk, the area phase's end cost (plan.area.endCost,
+ *                            when it has to walk, the area phase's end cost (plan.area.EndCost(),
  *                            the area phase of the last refresh: AreaPhase runs after this);
  *                    the tank leaves it to the damage dealers (no rescue, RescueAssigner). A
  *                    caster that hurts (hybrids, archers) is rescued as any loose enemy.

@@ -45,6 +45,9 @@
  * the shield put up first) do not take whole cuts the channel's end (Spell::DelayedChannel).
  * The share of the n ticks lost x (benefit - time cost) is added to the turn loss. This is
  * what Ice Barrier keeps ("While the shield holds, spells will not be interrupted").
+ * Others (2026-11-15, several casters in one phase): the damage per second other area spells of
+ * the phase put on an enemy is taken off its health first, tick by tick (the worst case for
+ * this spell): what this one does to it and the tick that kills it come sooner.
  * Value of n ticks: benefit = LostAction(damage(n) / filler damage per second) [+ paid: the
  * filler's mana for that time, ManaWorth], cost = LostAction(n x period) + turn loss(n).
  *   not paid  the whole spell is judged (user 2026-11-08: a Blizzard is paid in full at the
@@ -69,6 +72,12 @@ namespace Commander
     {
         static constexpr float MELEE_REACH = 5.0f;
 
+        struct OtherDamage
+        {
+            ObjectGuid enemy;
+            float perSec = 0.0f;
+        };
+
         struct Request
         {
             PartyMemberFacts const* caster = nullptr;
@@ -80,6 +89,10 @@ namespace Commander
             bool settle = true;             // false: a new enemy does not stop it (what a control gives up over its duration)
             AggroTurnCost::Options turn;    // extraAbsorb (a shield first), busyTanks
             std::function<bool(EnemyFacts const&)> forbidden;
+            // Other area spells of the phase on the same enemies (AreaPhase: the casters planned
+            // before this one): damage per second each enemy takes from them. This spell only
+            // counts what they leave of its health (header "Others").
+            std::vector<OtherDamage> others;
         };
 
         struct Result

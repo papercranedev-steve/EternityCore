@@ -59,8 +59,8 @@ namespace Commander
             // Doctrine HoldPile (Area tactic, TankJob): the tank protects the area caster (the
             // area phase of this refresh's situation step). Which way (taunt, threat, its own
             // threat drop) is still the points'; that it is done first is the doctrine's: Urgent.
-            bool const protects = plan.doctrine.tankJob == TankJob::HoldPile && plan.area.active &&
-                                  plan.area.caster == victim->guid;
+            bool const protects = plan.doctrine.tankJob == TankJob::HoldPile &&
+                                  plan.area.CastBy(victim->guid);
             if (protects)
             {
                 need.detail |= DETAIL_URGENT;
@@ -68,7 +68,7 @@ namespace Commander
             }
             // The area phase counts on the tanks' taunts for the enemies it turns (AreaPhase,
             // this refresh's situation step): a taunt spent outside its area pays that.
-            float const areaReserve = plan.area.active && !plan.area.Targets(e.guid) ? plan.area.tauntReserve : 0.0f;
+            float const areaReserve = plan.area.TauntReserveOutside(e.guid);
             auto const add = [&](ObjectGuid bot, uint32 spellId, RescueValue::Option o)
             {
                 if (spellId && bot != victim->guid)

@@ -340,7 +340,7 @@ namespace Commander
 
         // The area caster keeps its own room (AreaRoomBehavior: when to Frost Nova, then away
         // or to the tank; doc .kiro/docs/2026-11-12-mage-hold.md 3.3.1, 3.4).
-        if (plan.area.roomCaster == self->guid)
+        if (plan.area.KeepsRoom(self->guid))
             return;
 
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns,

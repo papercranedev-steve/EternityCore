@@ -50,24 +50,28 @@ namespace AreaIntent
         d.areaThreat = Of(world, &d.areaSec);
     }
 
-    PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan)
+    std::vector<PartyMemberFacts const*> PlannedCasters(WorldModel const& world, TeamPlan const& plan)
     {
         DoctrinePlan const& d = plan.doctrine;
         PullPlan const& pull = plan.pull;
         // Before the fight there is no tactic yet; a pull of AREA_MIN or more counts as Area.
-        std::vector<PlannedThreat> const casters = d.tactic == PileTactic::Area ? d.areaThreat
+        std::vector<PlannedThreat> casters = d.tactic == PileTactic::Area ? d.areaThreat
             : (pull.phase != PullPhase::None && pull.expected.size() >= TacticalDoctrine::AREA_MIN)
                 ? Of(world, nullptr) : std::vector<PlannedThreat>();
-        PartyMemberFacts const* m = nullptr;
-        float bestRate = 0.0f;
+        std::stable_sort(casters.begin(), casters.end(),
+                         [](PlannedThreat const& a, PlannedThreat const& b) { return a.perSec > b.perSec; });
+        std::vector<PartyMemberFacts const*> out;
         for (PlannedThreat const& p : casters)
             if (PartyMemberFacts const* f = world.FindMember(p.member))
-                if (f->CanAct() && p.perSec > bestRate)
-                {
-                    m = f;
-                    bestRate = p.perSec;
-                }
-        return m;
+                if (f->CanAct() && p.perSec > 0.0f)
+                    out.push_back(f);
+        return out;
+    }
+
+    PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan)
+    {
+        std::vector<PartyMemberFacts const*> const all = PlannedCasters(world, plan);
+        return all.empty() ? nullptr : all.front();
     }
 }
 }

@@ -391,9 +391,9 @@ namespace Commander
 
         // Doctrine HoldPile (Area tactic, TankJob): two or more enemies turned onto the area caster
         // make the group threat (Challenging Shout) Urgent; its worth is still the points below.
-        bool const protects = plan.doctrine.tankJob == TankJob::HoldPile && plan.area.active &&
+        bool const protects = plan.doctrine.tankJob == TankJob::HoldPile && plan.area.Active() &&
             std::count_if(loose.begin(), loose.end(),
-                [&plan](LooseEntry const& l) { return l.victim->guid == plan.area.caster; }) >= 2;
+                [&plan](LooseEntry const& l) { return plan.area.CastBy(l.victim->guid); }) >= 2;
 
         // 1b. Enemies still on the tank at risk of being taken off it (Perception/Values/ThreatRisk.h,
         // with the area spell the doctrine counts on; user 2026-11-13, doc

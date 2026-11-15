@@ -35,10 +35,12 @@ namespace Commander
         // Fills d.areaThreat and d.areaSec (d.tactic is Area).
         void Fill(WorldModel const& world, DoctrinePlan& d);
 
-        // The caster the Area tactic counts on (the one with the most threat per second of the
-        // list), null = none. Before the fight (no tactic yet) a pull of
-        // TacticalDoctrine::AREA_MIN or more counts as Area. (Was AreaPhase's until 2026-11-14;
-        // the fight spot asks it too.)
+        // The casters the Area tactic counts on (the list, that can act, the most threat per
+        // second first), empty = none. Before the fight (no tactic yet) a pull of
+        // TacticalDoctrine::AREA_MIN or more counts as Area. (Was AreaPhase's until 2026-11-14.)
+        std::vector<PartyMemberFacts const*> PlannedCasters(WorldModel const& world, TeamPlan const& plan);
+
+        // The first of them (the fight spot's room is judged for it), null = none.
         PartyMemberFacts const* PlannedCaster(WorldModel const& world, TeamPlan const& plan);
     }
 }

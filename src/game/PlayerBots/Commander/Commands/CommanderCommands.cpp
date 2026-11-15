@@ -436,9 +436,8 @@ namespace
         }
 
         // Area phase (AreaPhaseAssigner): who casts which area spell, from where, what first.
-        if (plan.area.active)
+        for (Commander::AreaCast const& a : plan.area.casts)
         {
-            Commander::AreaPlan const& a = plan.area;
             static char const* const steps[] = { "walk to spot", "shield first", "cast", "channelling" };
             handler->PSendSysMessage("Area phase: %s, %s on |cffffcc00%s|r, %s (net %.1f, here %.1f, end costs %.1f, taunts kept %.1f)",
                 NameOf(map, a.caster).c_str(), SpellName(a.spellId).c_str(),

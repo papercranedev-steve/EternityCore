@@ -994,46 +994,65 @@ namespace DevConsole
             lua_setfield(L, -2, "controls");
         }
         // Area phase (Coordination/Doctrine/AreaPhase.h). No points (they change every refresh).
-        if (plan.area.active)
+        // One entry per caster (2026-11-15: several casters at once): `area` its spell,
+        // `areaWait` a wait (AreaPlan::waits) or its prep while the party holds (AreaPlan::preps).
+        Commander::AreaPlan const& area = plan.area;
+        if (area.Active())
         {
-            Commander::AreaPlan const& a = plan.area;
             static char const* const steps[] = { "move", "shield", "cast", "channel" };
-            lua_createtable(L, 0, 6);
-            SetFieldG(L, "caster", a.caster);
-            SetField(L, "spell", a.spellId);
-            SetFieldS(L, "step", steps[uint8(a.step)]);
-            if (!a.centre.IsEmpty())
-                SetFieldG(L, "centre", a.centre);
-            if (a.shieldSpellId)
-                SetField(L, "shield", a.shieldSpellId);
-            if (!a.allyShieldBot.IsEmpty())
-                SetFieldG(L, "allyShield", a.allyShieldBot);
+            lua_createtable(L, int(area.casts.size()), 0);
+            int i = 0;
+            for (Commander::AreaCast const& a : area.casts)
+            {
+                lua_createtable(L, 0, 6);
+                SetFieldG(L, "caster", a.caster);
+                SetField(L, "spell", a.spellId);
+                SetFieldS(L, "step", steps[uint8(a.step)]);
+                if (!a.centre.IsEmpty())
+                    SetFieldG(L, "centre", a.centre);
+                if (a.shieldSpellId)
+                    SetField(L, "shield", a.shieldSpellId);
+                if (!a.allyShieldBot.IsEmpty())
+                    SetFieldG(L, "allyShield", a.allyShieldBot);
+                lua_rawseti(L, -2, ++i);
+            }
             lua_setfield(L, -2, "area");
         }
-        // Not started yet: the phase waits (AreaPlan::wait), or the caster's shield goes up
-        // while the party holds (AreaPlan::prep*).
-        else if (plan.area.wait != Commander::AreaWait::None || !plan.area.prepCaster.IsEmpty())
+        if (!area.waits.empty() || !area.preps.empty())
         {
-            Commander::AreaPlan const& a = plan.area;
-            lua_createtable(L, 0, 3);
-            if (a.wait != Commander::AreaWait::None)
+            lua_createtable(L, int(area.waits.size() + area.preps.size()), 0);
+            int i = 0;
+            for (Commander::AreaWaitPlan const& w : area.waits)
             {
-                SetFieldS(L, "wait", a.wait == Commander::AreaWait::Tank ? "tank" : "shield");
-                SetFieldG(L, "caster", a.waitCaster);
+                lua_createtable(L, 0, 2);
+                SetFieldS(L, "wait", w.wait == Commander::AreaWait::Tank ? "tank" : "shield");
+                SetFieldG(L, "caster", w.caster);
+                lua_rawseti(L, -2, ++i);
             }
-            if (!a.prepCaster.IsEmpty())
+            for (Commander::AreaPrep const& p : area.preps)
             {
-                SetFieldG(L, "prep", a.prepCaster);
-                if (a.prepShieldId)
-                    SetField(L, "shield", a.prepShieldId);
-                if (!a.prepSpots.empty())
+                lua_createtable(L, 0, 3);
+                SetFieldG(L, "prep", p.caster);
+                if (p.shieldId)
+                    SetField(L, "shield", p.shieldId);
+                if (!p.spots.empty())
                     SetFieldB(L, "spot", true);
+                lua_rawseti(L, -2, ++i);
             }
             lua_setfield(L, -2, "areaWait");
         }
-        // The caster the area phase reserves (no cast or channel time but its area spells).
-        if (!plan.area.reserved.IsEmpty())
-            SetFieldG(L, "areaReserved", plan.area.reserved);
+        // The casters the area phase reserves (no cast or channel time but their area spells).
+        if (!area.reserved.empty())
+        {
+            lua_createtable(L, int(area.reserved.size()), 0);
+            int i = 0;
+            for (Commander::AreaReservation const& r : area.reserved)
+            {
+                lua_pushstring(L, GuidToString(r.caster).c_str());
+                lua_rawseti(L, -2, ++i);
+            }
+            lua_setfield(L, -2, "areaReserved");
+        }
         // Doctrine (Coordination/Doctrine/TacticalDoctrine.h): how the fight is fought and every
         // enemy's tags and stamps as text (TacticalDoctrine::Describe), so the review shows each
         // enemy's role. A plan line is written when any of it changes.

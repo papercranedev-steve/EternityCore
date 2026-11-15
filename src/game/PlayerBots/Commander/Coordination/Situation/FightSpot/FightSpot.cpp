@@ -326,7 +326,7 @@ namespace FightSpot
                     (m.role != ROLE_HEALER && m.role != ROLE_RANGE_DPS))
                     continue;
                 // (the area caster's place is the area term's)
-                if (m.guid == plan.area.caster || m.guid == plan.area.prepCaster)
+                if (plan.area.IsCaster(m.guid))
                     continue;
                 Team::Member x;
                 x.facts = &m;

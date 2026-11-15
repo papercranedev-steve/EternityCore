@@ -21,7 +21,7 @@ namespace Stragglers
         float const walkSec = std::max(0.0f, PackResolver::Distance(tank.pos, e.pos) - e.boundingRadius - range) /
                               RUN_YARDS_PER_SEC;
         v.cost = Value::LostAction(world, tank, Value::GCD_SEC) + Value::LostAction(world, tank, walkSec) +
-                 (walkSec > 0.0f && plan.area.active ? plan.area.endCost : 0.0f);
+                 (walkSec > 0.0f ? plan.area.EndCost() : 0.0f);
         return v;
     }
 

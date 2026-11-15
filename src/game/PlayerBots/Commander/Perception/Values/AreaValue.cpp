@@ -244,13 +244,29 @@ namespace AreaValue
         for (Target const& t : targets)
         {
             float const health = float(t.facts->health);
+            // Header "Others": their damage comes off its health first.
+            float otherPerTick = 0.0f;
+            for (OtherDamage const& o : r.others)
+                if (o.enemy == t.facts->guid)
+                    otherPerTick += o.perSec * spell.periodSec;
+            // healthAfter[n - 1]: its health after n ticks (theirs, then mine, each tick).
+            std::vector<float> healthAfter(count, 0.0f);
+            float hp = health;
+            float dealt = 0.0f;
             for (uint32 n = 1; n <= count; ++n)
-                damage[n - 1] += std::min(spell.perTick * float(n), health);
+            {
+                hp = std::max(0.0f, hp - otherPerTick);
+                float const d = std::min(spell.perTick, hp);
+                hp -= d;
+                dealt += d;
+                damage[n - 1] += dealt;
+                healthAfter[n - 1] = hp;
+            }
             if (t.free)
                 continue;
             for (uint32 k = 1; k <= count; ++k)
             {
-                if (health <= spell.perTick * float(k))
+                if (healthAfter[k - 1] <= 0.0f)
                     break;      // the tick that kills it turns nothing
                 float const mine = t.myThreat + float(k) * spell.tickThreat;
                 // The holder adds nothing during the spell: the tank cannot hold (header; until
