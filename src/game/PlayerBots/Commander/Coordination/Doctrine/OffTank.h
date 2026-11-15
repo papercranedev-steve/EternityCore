@@ -27,6 +27,13 @@
  * holders, PutHeld) as is and with that one on the holder (FightLoad::PutOn): saves = Loss as
  * is - Loss handed (penalty: the main tank's DeathPenalty). The holder's lower armor makes
  * every hit bigger, so it only pays when the tank's risk goes down: the tank under pressure.
+ * That is `load`. Threat split (many enemies, the tank cannot keep threat on all): the tank's
+ * threat for the horizon (ThreatGap::FillRate x DoctrinePlan::RunwayHorizon) shared among the
+ * enemies it keeps (ThreatRisk::Counts, not handed), ThreatRisk::Of each with its share (and
+ * the area threat the doctrine counts on); handed: one fewer to share among, plus the handed
+ * one's risk on the holder once it has 110% of the tank's threat on it. split = sum before -
+ * sum after. Rough: an area threat ability does not split (Thunder Clap hits them all), so a
+ * warrior's gain is overstated. saves = load + split.
  * Only one the holder can win within TAKE_MAX_SEC (110% of the tank's threat on it, at the
  * holder's threat rate, plus the walk) and that lives HOLD_MIN_SEC longer. The best above
  * MIN_GAIN is handed: the tank leaves it (TankTargets), the holder goes for it (ThreatBehavior

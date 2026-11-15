@@ -4,6 +4,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/SurvivalValue.h"
+#include "Commander/Perception/Values/ThreatRisk.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Trace/Trace.h"
 #include <algorithm>
@@ -69,6 +70,37 @@ namespace OffTank
             return walk + need / ThreatGap::FillRate(world, holder);
         }
 
+        // Header "Threat split": the main tank's threat risk (ThreatRisk::Of) over the enemies
+        // it keeps, its threat for the horizon shared among them, as is and with `x` handed
+        // (one fewer to share among; `x` on the holder with 110% of the tank's threat).
+        float ThreatSplitGain(WorldModel const& world, DoctrinePlan const& d, PartyMemberFacts const& tank,
+                              PartyMemberFacts const& holder, EnemyFacts const& x)
+        {
+            float const horizon = d.RunwayHorizon();
+            std::vector<EnemyFacts const*> kept;
+            for (EnemyFacts const& e : world.enemies)
+                if (ThreatRisk::Counts(e, tank.guid) && !d.OffTankOf(e.guid))
+                    kept.push_back(&e);
+            if (kept.size() < 2)
+                return 0.0f;
+            float const threat = ThreatGap::FillRate(world, tank) * horizon;
+            float const shareNow = threat / float(kept.size());
+            float const shareAfter = threat / float(kept.size() - 1);
+            float before = 0.0f;
+            float after = 0.0f;
+            for (EnemyFacts const* e : kept)
+            {
+                std::vector<PlannedThreat> const& planned = d.AreaThreatOn(e->guid);
+                before += ThreatRisk::Of(world, *e, tank.guid, planned, horizon, shareNow);
+                if (e->guid != x.guid)
+                    after += ThreatRisk::Of(world, *e, tank.guid, planned, horizon, shareAfter);
+            }
+            ThreatEntry const* own = ThreatView::FindEntry(x, holder.guid);
+            float const taken = std::max(0.0f, x.victimThreat * ThreatView::MELEE_AGGRO_FACTOR - (own ? own->threat : 0.0f));
+            after += ThreatRisk::Of(world, x, holder.guid, d.AreaThreatOn(x.guid), horizon, taken);
+            return before - after;
+        }
+
         // Header "Handed": the enemy on the main tank worth most to `holder`, if any.
         void Hand(WorldModel const& world, TeamPlan& plan, DoctrinePlan& d, PartyMemberFacts const& holder)
         {
@@ -105,11 +137,13 @@ namespace OffTank
                 FightLoad::Input handed = asIs;
                 if (!FightLoad::PutOn(world, handed, candidates[i]->guid, holder))
                     continue;
-                float const gain = base - FightLoad::Loss(world, FightLoad::Simulate(handed, "off-tank: handed"), penalty);
+                float const load = base - FightLoad::Loss(world, FightLoad::Simulate(handed, "off-tank: handed"), penalty);
+                float const split = ThreatSplitGain(world, d, *tank, holder, *candidates[i]);
+                float const gain = load + split;
                 if (Trace::On())
                     Trace::Emit("hand", Trace::Guid(candidates[i]->guid).c_str(),
-                        Trace::Format("{\"holder\":\"%s\",\"gain\":%.2f,\"winSec\":%.1f}", Trace::Guid(holder.guid).c_str(),
-                            gain, winSecs[i]));
+                        Trace::Format("{\"holder\":\"%s\",\"gain\":%.2f,\"load\":%.2f,\"split\":%.2f,\"winSec\":%.1f}",
+                            Trace::Guid(holder.guid).c_str(), gain, load, split, winSecs[i]));
                 if (gain > bestGain)
                 {
                     bestGain = gain;
