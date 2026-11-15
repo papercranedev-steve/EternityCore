@@ -1,5 +1,8 @@
 #include "Commander/Classes/ClassKit.h"
+#include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
+#include "DBCStores.h"
+#include "SpellMgr.h"
 
 namespace Commander
 {
@@ -53,6 +56,29 @@ namespace Commander
                 wrath.damageMult = 0.2f;
                 wrath.needsPet = true;
                 return { rapid, wrath };
+            }
+
+            // Auto Shot's minimum range (8 yd in Spell.dbc 5875), once the hunter has it.
+            float MinAttackRange() const override
+            {
+                if (!m_bot.me->HasSpell(ClassRotations::SPELL_AUTO_SHOT))
+                    return 0.0f;
+                SpellEntry const* autoShot = sSpellMgr.GetSpellEntry(ClassRotations::SPELL_AUTO_SHOT);
+                SpellRangeEntry const* range = autoShot ? sSpellRangeStore.LookupEntry(autoShot->rangeIndex) : nullptr;
+                return range ? range->minRange : 0.0f;
+            }
+
+            // Wing Clip: melee, 50% slower for 10 s (user 2026-11-15: then step back, else the
+            // enemy stays in the hunter's face).
+            std::vector<SpellEntry const*> KiteSlows() const override
+            {
+                return { m_bot.m_spells.hunter.pWingClip };
+            }
+
+            // Intimidation (talent, 1 min): the pet's next hit stuns its target for 3 s.
+            SpellEntry const* PetStun() const override
+            {
+                return m_bot.m_spells.hunter.pIntimidation;
             }
         };
     }

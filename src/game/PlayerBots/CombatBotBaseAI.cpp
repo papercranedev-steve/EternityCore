@@ -231,6 +231,18 @@ void CombatBotBaseAI::PopulateSpellData()
 
             return pSpellEntry->Id > pOldSpell->Id;
         };
+        // For a slot that keeps the cheapest rank (hunter Multi-Shot rank 1).
+        auto IsLowerRankSpell = [pSpellEntry](SpellEntry const* pOldSpell)
+        {
+            if (!pOldSpell)
+                return true;
+
+            uint32 newRank = pSpellEntry->GetRank();
+            if (newRank)
+                return newRank < pOldSpell->GetRank();
+
+            return pSpellEntry->Id < pOldSpell->Id;
+        };
 
         switch (me->GetClass())
         {
@@ -611,30 +623,24 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.hunter.pAspectOfTheHawk))
                         m_spells.hunter.pAspectOfTheHawk = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Aspect of the Monkey") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.hunter.pAspectOfTheMonkey))
-                        m_spells.hunter.pAspectOfTheMonkey = pSpellEntry;
-                }
                 else if (pSpellEntry->SpellName[0].find("Serpent Sting") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.hunter.pSerpentSting))
                         m_spells.hunter.pSerpentSting = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Arcane Shot") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.hunter.pArcaneShot))
-                        m_spells.hunter.pArcaneShot = pSpellEntry;
-                }
                 else if (pSpellEntry->SpellName[0].find("Aimed Shot") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.hunter.pAimedShot))
                         m_spells.hunter.pAimedShot = pSpellEntry;
+                    if (IsLowerRankSpell(m_spells.hunter.pAimedShotRank1))
+                        m_spells.hunter.pAimedShotRank1 = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Multi-Shot") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(m_spells.hunter.pMultiShot))
-                        m_spells.hunter.pMultiShot = pSpellEntry;
+                    // Rank 1 only (user 2026-11-15): rank 5 costs 130 mana more for +150 damage
+                    // per target, the rest is the weapon's damage in both.
+                    if (IsLowerRankSpell(m_spells.hunter.pMultiShotRank1))
+                        m_spells.hunter.pMultiShotRank1 = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Concussive Shot") != std::string::npos)
                 {
@@ -661,11 +667,6 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.hunter.pRaptorStrike))
                         m_spells.hunter.pRaptorStrike = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Disengage") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.hunter.pDisengage))
-                        m_spells.hunter.pDisengage = pSpellEntry;
-                }
                 else if (pSpellEntry->SpellName[0].find("Feign Death") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.hunter.pFeignDeath))
@@ -686,15 +687,10 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.hunter.pDeterrence))
                         m_spells.hunter.pDeterrence = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Scare Beast") != std::string::npos)
+                else if (pSpellEntry->SpellName[0].find("Intimidation") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(m_spells.hunter.pScareBeast))
-                        m_spells.hunter.pScareBeast = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Volley") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.hunter.pVolley))
-                        m_spells.hunter.pVolley = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.hunter.pIntimidation))
+                        m_spells.hunter.pIntimidation = pSpellEntry;
                 }
                 break;
             }

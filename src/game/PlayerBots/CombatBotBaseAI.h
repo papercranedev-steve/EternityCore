@@ -368,24 +368,21 @@ public:
         struct
         {
             SpellEntry const* pAspectOfTheCheetah;
-            SpellEntry const* pAspectOfTheMonkey;
             SpellEntry const* pAspectOfTheHawk;
             SpellEntry const* pSerpentSting;
-            SpellEntry const* pArcaneShot;
             SpellEntry const* pAimedShot;
-            SpellEntry const* pMultiShot;
+            SpellEntry const* pAimedShotRank1;  // lowest rank known: the cheap one when mana runs low
+            SpellEntry const* pMultiShotRank1;  // lowest rank known: most of its damage is the weapon's
             SpellEntry const* pConcussiveShot;
             SpellEntry const* pWingClip;
             SpellEntry const* pHuntersMark;
             SpellEntry const* pMongooseBite;
             SpellEntry const* pRaptorStrike;
-            SpellEntry const* pDisengage;
             SpellEntry const* pFeignDeath;
-            SpellEntry const* pScareBeast;
-            SpellEntry const* pVolley;
             SpellEntry const* pRapidFire;
             SpellEntry const* pBestialWrath;
             SpellEntry const* pDeterrence;
+            SpellEntry const* pIntimidation;
         } hunter;
         struct
         {

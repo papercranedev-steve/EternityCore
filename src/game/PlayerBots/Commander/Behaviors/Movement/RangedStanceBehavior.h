@@ -16,9 +16,10 @@
  * doc .kiro/docs/2026-11-11-spot-scoring.md step 2):
  *  - the spot here is no longer valid: an idle creature would attack it, also once a wanderer
  *    walked to the edge of its circle (SafeRoute::IdleCreatures::Near; tier Urgent), or the
- *    victim is farther than CAST_RANGE (to its edge) or out of line of sight (tier Assigned,
- *    benefit = the bot's lost action over HORIZON_SEC: it cannot do its job). Then the best
- *    cell that passes the live checks.
+ *    victim is farther than CAST_RANGE (to its edge) or out of line of sight, or nearer than
+ *    the bot's dead zone (ClassKit::MinAttackRange, hunter Auto Shot 8 yd; 2026-11-15: cells
+ *    start DEAD_ZONE_MARGIN beyond it) (tier Assigned, benefit = the bot's lost action over
+ *    HORIZON_SEC: it cannot do its job). Then the best cell that passes the live checks.
  *  - otherwise: loss here = Exposure::LossAt(here) (Perception/Values/Exposure.h, the enemies
  *    that fight someone else turning to the bot; the walk here is 0). A cell is taken when its
  *    loss (SpotCost::Walk + Exposure::LossAt) is lower by more than SpotCost::Walk(
@@ -107,6 +108,9 @@ namespace Commander
         static constexpr uint32 MAX_SIGHT_CHECKS = 48;
         static constexpr float MAX_PATH_DETOUR = 1.8f;
         static constexpr float HORIZON_SEC = 8.0f;
+        // Cells start this far beyond the bot's dead zone (ClassKit::MinAttackRange): the victim
+        // shifts a little in the fight, a spot right on the line would be left again.
+        static constexpr float DEAD_ZONE_MARGIN = 3.0f;
         static constexpr float PATH_FACTOR = StandLoss::RANGED_PATH_FACTOR;
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 

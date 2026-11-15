@@ -252,6 +252,16 @@ namespace Commander
         // A slow in a cone in front of it (mage Cone of Cold): the area caster slows what runs
         // at it (AreaRoomBehavior, doc 3.5). Not an area damage spell any more.
         virtual SpellEntry const* SlowCone() const { return nullptr; }
+        // Yards from its victim's edge inside which its attack does not work (hunter Auto Shot,
+        // the dead zone). The ranged stance keeps it out (RangedStanceBehavior), the kite module
+        // gets it out from an enemy on it (KiteBehavior). 0 = none.
+        virtual float MinAttackRange() const { return 0.0f; }
+        // Slows that a melee enemy on the bot gets before the bot runs out of its dead zone
+        // (hunter Wing Clip; KiteBehavior). What each does is read from the spell data.
+        virtual std::vector<SpellEntry const*> KiteSlows() const { return {}; }
+        // Cast on its pet: the pet's next hit stuns the pet's target (hunter Intimidation).
+        // KiteBehavior's fallback when no slow takes.
+        virtual SpellEntry const* PetStun() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;
@@ -262,7 +272,7 @@ namespace Commander
         // The kit for the bot's class (Player::GetClass); the base kit (has nothing) for others.
         std::unique_ptr<ClassKit> Create(PartyBotAI const& bot);
 
-        // One per class file (Classes/<Class>.cpp). Hunters: Feign Death only so far (todo item 18).
+        // One per class file (Classes/<Class>.cpp).
         std::unique_ptr<ClassKit> MakeWarrior(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakePaladin(PartyBotAI const& bot);
         std::unique_ptr<ClassKit> MakeRogue(PartyBotAI const& bot);

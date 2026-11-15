@@ -14,6 +14,7 @@
 #include "Commander/Behaviors/Movement/TankStanceBehavior.h"
 #include "Commander/Behaviors/Support/RestBehavior.h"
 #include "Commander/Behaviors/Movement/EscapeBehavior.h"
+#include "Commander/Behaviors/Movement/KiteBehavior.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Combat/AreaRoomBehavior.h"
 #include "Commander/Behaviors/Movement/PatrolBehavior.h"
@@ -75,6 +76,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TankStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RestBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EscapeBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<KiteBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaDamageBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaRoomBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PatrolBehavior>()));

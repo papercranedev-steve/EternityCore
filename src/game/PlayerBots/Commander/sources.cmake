@@ -302,6 +302,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Support/RestBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/EscapeBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/KiteBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/KiteBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/AreaDamageBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/AreaRoomBehavior.h

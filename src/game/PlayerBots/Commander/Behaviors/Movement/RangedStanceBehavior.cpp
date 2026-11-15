@@ -12,6 +12,7 @@
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Behaviors/Movement/SpotRejects.h"
 #include "Commander/Behaviors/Movement/JoinGamble.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Trace/Trace.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -77,13 +78,13 @@ namespace Commander
                                      std::vector<HazardZone> const& zones, Position3 const& victim,
                                      float victimReach, bool prepare, float staySec, float speed,
                                      std::vector<EnemyFacts const*> const& turnable,
-                                     std::vector<Position3> const& points, bool tight)
+                                     std::vector<Position3> const& points, bool tight, float deadZone)
         {
             PositionField const& field = *world.field;
             std::vector<Spot> spots;
             FieldSpots::Query q;
             q.center = victim;
-            q.minYd = 0.0f;
+            q.minYd = deadZone > 0.0f ? deadZone + RS::DEAD_ZONE_MARGIN + victimReach : 0.0f;
             q.maxYd = (prepare ? RS::PREPARE_MAX_RADIUS : RS::MAX_RADIUS) + victimReach;
             q.patrolBeforeSec = staySec;
             q.tight = tight;
@@ -182,10 +183,15 @@ namespace Commander
         ObjectGuid atGuid;          // the victim (empty before the fight)
         float atReach = 0.0f;
         bool inReach = false;
+        // Its attack's dead zone (hunter Auto Shot, ClassKit::MinAttackRange): a spot this close
+        // to the victim's edge is out of reach too (user 2026-11-15), cells start beyond it.
+        float const deadZone = bot->Kit().MinAttackRange();
+        bool inDeadZone = false;
         if (prepare)
         {
             at = planned;
-            inReach = Distance2d(here, at) <= CAST_RANGE && SightCache::Live(me, here, at);
+            inDeadZone = deadZone > 0.0f && Distance2d(here, at) < deadZone;
+            inReach = Distance2d(here, at) <= CAST_RANGE && !inDeadZone && SightCache::Live(me, here, at);
         }
         else
         {
@@ -205,7 +211,9 @@ namespace Commander
             atGuid = victim->GetObjectGuid();
             atReach = victim->GetCombatReach();
             // (the spell's line: SightCache::Live)
-            inReach = me->GetCombatDistance(victim) <= CAST_RANGE && SightCache::Live(me, here, at);
+            float const distance = me->GetCombatDistance(victim);
+            inDeadZone = deadZone > 0.0f && distance < deadZone;
+            inReach = distance <= CAST_RANGE && !inDeadZone && SightCache::Live(me, here, at);
         }
 
         SafeRoute::IdleCreatures const idle(me);
@@ -266,7 +274,7 @@ namespace Commander
         {
             if (tight && !mayTighten)
                 break;
-            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, points, tight);
+            std::vector<Spot> spots = Candidates(world, *self, zones, at, atReach, prepare, staySec, speed, turnable, points, tight, deadZone);
             found += spots.size();
             // This bot's own idle scan on the pass's line (scanned again only for the hard line).
             if (tight)
@@ -365,7 +373,8 @@ namespace Commander
                 else
                 {
                     p.tier = ProposalTier::Assigned;
-                    p.reason = !inReach ? (tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
+                    p.reason = inDeadZone ? "inside the minimum range of its attack" :
+                               !inReach ? (tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
                                sightHere - s.sight > exposureHere - s.exposure ? "sees the victim only narrowly" : "too close to the enemies";
                     // Out of reach: it cannot do its job. Plus the exposure and sight margin the walk saves.
                     float benefit = inReach ? 0.0f : Value::LostAction(world, *self, horizon);

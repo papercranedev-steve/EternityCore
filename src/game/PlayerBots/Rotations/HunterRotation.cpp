@@ -1,32 +1,48 @@
 /*
- * Hunter rotation (moved out of PartyBotAI.cpp 2026-11-14, same steps).
+ * Hunter rotation (moved out of PartyBotAI.cpp 2026-11-14; shots reworked 2026-11-15 for the
+ * beast mastery spec, user).
  *
  * Out of combat: Aspect of the Hawk; with a victim (an opener): Hunter's Mark, the pet on it,
  * then the combat steps; without one: summon the pet.
  *
  * In combat:
  *   1. Walk closer when idle more than 30 yd away.
- *   2. Volley on 3+ enemies around the victim.
- *   3. Auto Shot beyond 8 yd (ammo added when it has none).
- *   4. Concussive Shot on a victim running at the hunter, Aimed Shot, Arcane Shot, Serpent
- *      Sting, Multi-Shot.
- *   5. An attacker within 8 yd: Scare Beast, Disengage, Aspect of the Monkey.
- *   6. In the victim's melee reach: Wing Clip, Mongoose Bite, Raptor Strike; else back to Hawk.
+ *   2. Auto Shot beyond 8 yd (ammo added when it has none).
+ *   3. Concussive Shot on a victim running at the hunter.
+ *   4. Aimed Shot right after an Auto Shot went off (AimedShotFits): Auto Shot's timer runs on
+ *      during the 3 s cast and the next shot comes at the earliest 0.5 s after it
+ *      (Unit::_UpdateAutoRepeatSpell), so started just after a shot it costs about one second
+ *      of shooting, started just before one a whole shot. Highest rank; rank 1 below
+ *      LOW_MANA_PCT (rank 6: 310 mana, +600 damage; rank 1: 75 mana, +70).
+ *   5. Multi-Shot rank 1 only (pMultiShotRank1).
+ *   6. Serpent Sting above LOW_MANA_PCT (whether it pays before the enemy dies:
+ *      Constraints::WastedCast in the party cast checks).
+ *   7. In the victim's melee reach: Mongoose Bite, Raptor Strike.
  * While Auto Shot runs (UpdateWhileAutoRepeating): stopped inside 8 yd, else the same steps.
  *
+ * Not cast: Arcane Shot (190 mana for 183 damage, the worst shot for mana), Volley, Scare
+ * Beast, Disengage (1.12: threat only, in melee), Aspect of the Monkey (the aspect stays Hawk).
  * The Commander decides: Feign Death and Deterrence (team rescue), Rapid Fire and Bestial
- * Wrath (BurstBehavior), running from melee (EscapeBehavior).
- * Still the rotation's own (doc 2026-11-14-hands-cleanup.md 3): Scare Beast, Disengage, Aspect
- * of the Monkey, Volley (the area phase needs a hunter Filler first).
+ * Wrath (BurstBehavior), Wing Clip / Intimidation and the step out of the dead zone
+ * (KiteBehavior), running to the tank (EscapeBehavior), where it stands (RangedStanceBehavior,
+ * outside the dead zone: ClassKit::MinAttackRange).
  */
 
 #include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Spell.h"
+#include <algorithm>
 
 namespace
 {
     float const MIN_SHOT_RANGE = 8.0f;
+    // Below this mana percent: Aimed Shot rank 1, no Serpent Sting.
+    float const LOW_MANA_PCT = 40.0f;
+    // Aimed Shot starts within this long after an Auto Shot went off (bot ticks are 200 ms).
+    uint32 const AIMED_AFTER_SHOT_MS = 600;
+    // Auto Shot's wind-up after a cast (Unit::_UpdateAutoRepeatSpell).
+    uint32 const AUTO_SHOT_WINDUP_MS = 500;
 
     class HunterRotation : public ClassRotation
     {
@@ -76,37 +92,23 @@ namespace
 
             ChaseWhenOutOfRange(pVictim);
 
-            if (me->GetEnemyCountInRadiusAround(pVictim, 10.0f) > 2 && Cast(pVictim, s.pVolley))
-                return;
-
             AutoShot(pVictim);
 
             if (pVictim->IsMoving() && pVictim->GetVictim() == me && Cast(pVictim, s.pConcussiveShot))
                 return;
-            if (Cast(pVictim, s.pAimedShot))
-                return;
-            if (Cast(pVictim, s.pArcaneShot))
-                return;
-            if (Cast(pVictim, s.pSerpentSting))
-                return;
-            if (Cast(pVictim, s.pMultiShot))
-                return;
 
-            if (bot.GetAttackersInRangeCount(MIN_SHOT_RANGE))
-            {
-                Unit* pAttacker = *me->GetAttackers().begin();
-                if (Cast(pAttacker, s.pScareBeast))
-                    return;
-                if (Cast(pAttacker, s.pDisengage))
-                    return;
-                if (Cast(me, s.pAspectOfTheMonkey))
-                    return;
-            }
+            bool const lowMana = me->GetPowerPercent(POWER_MANA) < LOW_MANA_PCT;
+            SpellEntry const* pAimed = lowMana ? s.pAimedShotRank1 : s.pAimedShot;
+            if (AimedShotFits(pAimed) && Cast(pVictim, pAimed))
+                return;
+            if (Cast(pVictim, s.pMultiShotRank1))
+                return;
+            if (!lowMana && Cast(pVictim, s.pSerpentSting))
+                return;
 
             if (pVictim->CanReachWithMeleeAutoAttack(me))
             {
                 // (no return: melee abilities are on the next swing)
-                Cast(pVictim, s.pWingClip);
                 Cast(pVictim, s.pMongooseBite);
                 Cast(pVictim, s.pRaptorStrike);
             }
@@ -130,6 +132,22 @@ namespace
                 default:
                     break;
             }
+        }
+
+        // Header step 4: no Auto Shot running, an Auto Shot just went off, or the next one is
+        // due after the cast and its wind-up anyway (a slow bow).
+        bool AimedShotFits(SpellEntry const* pAimed) const
+        {
+            if (!pAimed)
+                return false;
+            Player* me = m_bot.me;
+            if (!me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                return true;
+            uint32 const left = me->GetAttackTimer(RANGED_ATTACK);
+            uint32 const cycle = me->GetAttackTime(RANGED_ATTACK);
+            if (left + AIMED_AFTER_SHOT_MS >= cycle)
+                return true;
+            return left >= uint32(std::max(0, int32(pAimed->GetCastTime(me)))) + AUTO_SHOT_WINDUP_MS;
         }
     };
 }
