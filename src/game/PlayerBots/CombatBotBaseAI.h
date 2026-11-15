@@ -103,6 +103,9 @@ public:
     void ResetSpellData();
     void AddAllSpellReagents();
     void SummonPetIfNeeded();
+    // The warlock's demon knows every ability its level allows (a player's Grimoires) and its
+    // party aura (Blood Pact) is on autocast. Once per demon.
+    void LearnDemonSpells(Pet* pPet);
     void LearnArmorProficiencies();
     void LearnPremadeSpecForClass();
     // Spends the free talent points on `spec`'s talents, top row first, as far as they reach.
@@ -637,6 +640,8 @@ public:
     float m_losFailX = 0.0f;
     float m_losFailY = 0.0f;
     bool LosFailedRecently(Unit const* pTarget) const;
+
+    ObjectGuid m_demonSpellsLearnedFor;     // LearnDemonSpells
 };
 
 #endif

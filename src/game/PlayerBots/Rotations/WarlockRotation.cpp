@@ -3,7 +3,9 @@
  * 22/3/26 spec with Siphon Life, Improved Imp and Ruin, user: no pet sacrifice for now).
  *
  * Out of combat: Detect Invisibility on the party, Demon Armor; with a victim (an opener): the
- * combat steps; without one: summon the pet (the Imp). The Imp stays in Phase Shift, in and
+ * combat steps. The pet (the Imp, every ability its level allows) is summoned by
+ * PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded): resting and the walk back after a
+ * corpse run skip the rotation. The Imp stays in Phase Shift, in and
  * out of combat (KeepPetAside, user 2026-11-15: no damage from it, so it does not die; its
  * Blood Pact stays).
  *
@@ -62,7 +64,7 @@ namespace
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
             {
-                bot.SummonPetIfNeeded();
+                // (the pet is summoned in PartyBotAI::UpdateAI, SummonPetIfNeeded)
                 KeepPetAside();
                 return;
             }

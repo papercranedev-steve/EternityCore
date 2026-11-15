@@ -1396,6 +1396,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     }
     Commander::CorpseRun::OnAlive(me, m_corpseRun);
 
+    // The pet (a triggered summon, no cast time): before the walk back, resting and mounting.
+    // From the rotation's out-of-combat step only, a warlock back from a corpse run walked to
+    // the leader, then rested, and the next pull came first: no Imp until the fight was over.
+    if (!me->IsInCombat() && !me->IsMounted())
+        SummonPetIfNeeded();
+
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
     {
         // Auto shot / wand would otherwise skip the Commander hook below (e.g. stop shooting near aggro).

@@ -3,7 +3,7 @@
  * beast mastery spec, user).
  *
  * Out of combat: Aspect of the Hawk; with a victim (an opener): Hunter's Mark, the pet on it,
- * then the combat steps; without one: summon the pet.
+ * then the combat steps. The pet: PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded).
  *
  * In combat:
  *   1. Walk closer when idle more than 30 yd away.
@@ -58,12 +58,10 @@ namespace
             if (Cast(me, s.pAspectOfTheHawk))
                 return;
 
+            // (the pet: PartyBotAI::UpdateAI, SummonPetIfNeeded)
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
-            {
-                bot.SummonPetIfNeeded();
                 return;
-            }
 
             if (Cast(pVictim, s.pHuntersMark))
                 return;

@@ -11,6 +11,9 @@
 #include "SpellAuras.h"
 #include "Chat.h"
 #include "CharacterDatabaseCache.h"
+#include "DBCStores.h"
+#include "Pet.h"
+#include "SpellMgr.h"
 #include "Utilities/Random.h"
 
 #include <random>
@@ -2482,13 +2485,19 @@ void CombatBotBaseAI::SummonPetIfNeeded()
     else if (me->GetClass() == CLASS_WARLOCK)
     {
         if (me->GetPetGuid() || me->GetCharmGuid())
+        {
+            if (Pet* pPet = me->GetPet())
+                LearnDemonSpells(pPet);
             return;
+        }
 
         // The Imp (Blood Pact for the party): the bot specs keep their pet and do not sacrifice
         // it (user 2026-11-15). Before: a random demon of those learned.
         if (me->HasSpell(SPELL_SUMMON_IMP))
         {
             me->CastSpell(me, SPELL_SUMMON_IMP, true);
+            if (Pet* pPet = me->GetPet())
+                LearnDemonSpells(pPet);
             return;
         }
         std::vector<uint32> vSummons;
@@ -2499,7 +2508,55 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (me->HasSpell(SPELL_SUMMON_SUCCUBUS))
             vSummons.push_back(SPELL_SUMMON_SUCCUBUS);
         if (!vSummons.empty())
+        {
             me->CastSpell(me, SelectRandomContainerElement(vSummons), true);
+            if (Pet* pPet = me->GetPet())
+                LearnDemonSpells(pPet);
+        }
+    }
+}
+
+void CombatBotBaseAI::LearnDemonSpells(Pet* pPet)
+{
+    // Once per demon: a bot is not saved, so each summon is a new pet with only its create
+    // spells (the Imp: Firebolt rank 1).
+    if (m_demonSpellsLearnedFor == pPet->GetObjectGuid())
+        return;
+    m_demonSpellsLearnedFor = pPet->GetObjectGuid();
+
+    CreatureInfo const* pInfo = pPet->GetCreatureInfo();
+    CreatureFamilyEntry const* pFamily = pInfo ? sCreatureFamilyStore.LookupEntry(pInfo->pet_family) : nullptr;
+    if (!pFamily)
+        return;
+
+    // A player buys the demon's abilities as Grimoires: here every rank of the demon's skill
+    // lines its level allows (Pet::AddSpell keeps the highest rank). The passives
+    // (spellLevel 0) come with the pet (Pet::LearnPetPassives).
+    for (uint32 i = 0; i < sObjectMgr.GetMaxSkillLineAbilityId(); ++i)
+    {
+        SkillLineAbilityEntry const* pAbility = sObjectMgr.GetSkillLineAbility(i);
+        if (!pAbility || (pAbility->skillId != pFamily->skillLine[0] && pAbility->skillId != pFamily->skillLine[1]))
+            continue;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(pAbility->spellId);
+        if (!pSpell || pSpell->IsPassiveSpell() || !pSpell->spellLevel || pSpell->spellLevel > pPet->GetLevel())
+            continue;
+        pPet->LearnSpell(pSpell->Id);
+    }
+
+    // Party auras (Blood Pact) on autocast, as a player sets them; the rest stays as learned
+    // (off): the rotation decides (ClassRotation::KeepPetAside).
+    CharmInfo* pCharmInfo = pPet->GetCharmInfo();
+    if (!pCharmInfo)
+        return;
+    for (auto const& itr : pPet->m_petSpells)
+    {
+        if (itr.second.state == PETSPELL_REMOVED || itr.second.active == ACT_PASSIVE)
+            continue;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(itr.first);
+        if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_APPLY_AREA_AURA_PARTY))
+            continue;
+        pPet->ToggleAutocast(itr.first, true);
+        pCharmInfo->SetSpellAutocast(itr.first, true);
     }
 }
 
