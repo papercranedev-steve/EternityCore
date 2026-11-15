@@ -39,6 +39,10 @@
  *  w_f t_c - w_c t_f (no target: w_f t_f), times the bot's share 1 / damage dealers;
  *  cost = SwitchCost (reach 5 melee, 30 ranged). The party focus if its net is positive (the
  *  party kills one enemy together), else the best positive one, else the current target.
+ *  Finishing (user 2026-11-15): a ranged bot whose filler has a cast time leaves an enemy the
+ *  others kill before that filler would land on it (Perception/Forecast/FinishForecast.h): its
+ *  current target counts as no target, such an enemy is no candidate. Nothing else to hit: it
+ *  keeps the target (Constraints::WastedCast keeps its cast-time spells off it).
  */
 
 #ifndef MANGOS_COMMANDER_TARGET_RULES_H

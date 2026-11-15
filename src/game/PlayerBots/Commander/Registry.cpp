@@ -23,6 +23,7 @@
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Behaviors/Combat/FleeStopBehavior.h"
 #include "Commander/Behaviors/Combat/BurstBehavior.h"
+#include "Commander/Behaviors/Combat/FinishCastBehavior.h"
 #include "Commander/Behaviors/Support/BoostBehavior.h"
 #include "Commander/Coordination/Duties/BoostAssigner.h"
 #include "Commander/Encounters/EncounterBehavior.h"
@@ -75,6 +76,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PatrolBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<OffRouteBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BlastBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FinishCastBehavior>()));
     }
 
     // One line per team assignment module.

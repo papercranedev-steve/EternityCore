@@ -346,6 +346,23 @@ namespace Commander
         float cooldownSec = 0.0f;
     };
 
+    // A member's direct damage spell on one unit that has not hit yet (PartyMemberFacts::pendingHit).
+    struct PendingHit
+    {
+        ObjectGuid target;          // empty = none
+        uint32 spellId = 0;
+        uint32 landMs = 0;          // from WorldModel::refreshedAtMs until it hits
+        float damage = 0.0f;        // DamageSpells::EstimateDirect (no crit, no resistance)
+    };
+
+    // A party member's (or pet's) damage on one enemy over the last few seconds
+    // (Perception/Forecast/DamageDealt.h, EnemyFacts::dealtBy).
+    struct DealtRate
+    {
+        ObjectGuid source;
+        float dps = 0.0f;
+    };
+
     // A party member or a party member's pet on this map.
     struct PartyMemberFacts
     {
@@ -381,6 +398,14 @@ namespace Commander
         ObjectGuid focusMarkEnemy;
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
         uint32 castRemainingMs = 0; // of that cast or channel
+        // Its direct damage spell on one unit that has not hit yet: the cast in progress (not a
+        // channel), or the bolt in the air. landMs = cast left + flight over the distance now.
+        // Perception/Forecast/FinishForecast.h counts it for the target's other attackers.
+        PendingHit pendingHit;
+        // Bots whose ClassKit::Filler has a cast time: that cast time and its flight speed
+        // (yards per second, 0 = hits at once). FinishForecast::FillerLandMs.
+        uint32 fillerCastMs = 0;
+        float fillerSpeed = 0.0f;
         // Combo points (rogue, cat druid) and the enemy they are on: lost when it switches target.
         uint8 comboPoints = 0;
         ObjectGuid comboTarget;
@@ -568,6 +593,9 @@ namespace Commander
         // WorldTimer ms of the latest snapshot in which it had lost health (ThreatHistory), 0 =
         // not hurt since it was first seen: nobody hits it (Value::EnemyDyingSec).
         uint32 lastHurtMs = 0;
+        // Party members and pets that hit it lately, each with its damage per second
+        // (Perception/Forecast/DamageDealt.h). Who is on it now is PartyMemberFacts::victim.
+        std::vector<DealtRate> dealtBy;
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat

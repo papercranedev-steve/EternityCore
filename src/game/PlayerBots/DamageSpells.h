@@ -26,6 +26,8 @@ namespace DamageSpells
 
     // Damage `spell` cast by `caster` does to one `target` it hits.
     float Estimate(Unit* caster, Unit const* target, SpellEntry const* spell);
+    // Its direct part only (what lands with the hit; periodic ticks left out).
+    float EstimateDirect(Unit* caster, Unit const* target, SpellEntry const* spell);
     // Seconds the caster is busy with `spell`.
     float BusySec(Unit const* caster, SpellEntry const* spell);
     // Mana the spell costs `caster` now; 0 for spells that do not use mana.

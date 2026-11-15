@@ -3,6 +3,7 @@
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/DamageIntake.h"
+#include "Commander/Perception/Forecast/DamageDealt.h"
 #include "Commander/Perception/Spatial/PatrolTracker.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
 #include "Commander/Perception/Forecast/HealCapacity.h"
@@ -168,6 +169,45 @@ namespace WorldModelBuilder
         // tank: a warrior leveling with a shield scores as tank-capable, but with a tank bot in
         // the party he is not tanking, and counting him as a tank would stop the bot from taking
         // enemies off him (Tanks.h).
+        // Flight time of `spell` from `caster` to `target` (Spell.cpp: distance / speed, at least 5 yd).
+        uint32 FlightMs(Unit const* caster, Unit const* target, SpellEntry const* spell)
+        {
+            if (spell->speed <= 0.0f || caster == target)
+                return 0;
+            return uint32(std::max(5.0f, caster->GetDistance(target)) / spell->speed * 1000.0f);
+        }
+
+        // PartyMemberFacts::pendingHit: a direct damage cast in progress (not a channel), or
+        // its bolt in the air (the generic slot in SPELL_STATE_DELAYED).
+        void FillPendingHit(Unit* unit, PartyMemberFacts& f)
+        {
+            Spell const* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (!spell || !spell->m_spellInfo || !SpellTags::DealsDamage(spell->m_spellInfo) ||
+                spell->m_spellInfo->IsAreaOfEffectSpell())
+                return;
+            Unit const* target = spell->m_targets.getUnitTarget();
+            if (!target || target == unit)
+                return;
+            SpellEntry const* info = spell->m_spellInfo;
+            uint32 landMs;
+            if (spell->getState() == SPELL_STATE_PREPARING && spell->GetCastTime() > 0)
+                landMs = uint32(std::max(0, int32(spell->GetCastedTime()))) + FlightMs(unit, target, info);
+            else if (spell->getState() == SPELL_STATE_DELAYED)
+            {
+                // The delay is counted on the caster's event clock from GetDelayStart (0 = just started).
+                uint64 const end = spell->GetDelayStart() + spell->GetDelayMoment();
+                uint64 const now = unit->m_Events.CalculateTime(0);
+                landMs = !spell->GetDelayStart() ? uint32(spell->GetDelayMoment())
+                                                 : (end > now ? uint32(end - now) : 0);
+            }
+            else
+                return;
+            f.pendingHit.target = target->GetObjectGuid();
+            f.pendingHit.spellId = info->Id;
+            f.pendingHit.landMs = landMs;
+            f.pendingHit.damage = DamageSpells::EstimateDirect(unit, target, info);
+        }
+
         void FillPlayerRoles(WorldModel& world)
         {
             bool botTank = false;
@@ -1222,6 +1262,7 @@ namespace WorldModelBuilder
 
             PartyMemberFacts f;
             FillUnitFacts(member, f);
+            FillPendingHit(member, f);
             f.cap = RoleCapabilities::Assess(member);
             FillDebuffs(member, f);
             if (member->AI())
@@ -1246,6 +1287,14 @@ namespace WorldModelBuilder
                         FillBursts(ai, f);
                         FillAllyBoosts(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
+                        if (SpellEntry const* filler = ai->Kit().Filler())
+                        {
+                            if (!filler->IsChanneledSpell() && filler->GetCastTime(member) > 0)
+                            {
+                                f.fillerCastMs = uint32(filler->GetCastTime(member));
+                                f.fillerSpeed = filler->speed;
+                            }
+                        }
                         FillAreaPotential(ai, f);
                         FillAreaPhase(ai, f);
                         if (f.role != ROLE_HEALER)
@@ -1286,6 +1335,7 @@ namespace WorldModelBuilder
                 {
                     PartyMemberFacts pf;
                     FillUnitFacts(pet, pf);
+                    FillPendingHit(pet, pf);
                     pf.isPet = true;
                     pf.ownerGuid = member->GetObjectGuid();
                     pf.tauntsItself = PetTaunt::HasAutocast(pet);
@@ -1368,6 +1418,8 @@ namespace WorldModelBuilder
             EnemyFacts e;
             FillEnemy(enemies[i], partyUnits, e);
             e.onAllyOnly = i >= partyEnemyCount;
+            for (DamageDealt::Rate const& r : DamageDealt::Query(e.guid, WorldTimer::getMSTime()))
+                e.dealtBy.push_back({ r.attacker, r.dps });
             // Line of sight for InterruptAssigner: only casts it may assign (interruptible, on
             // our lists), one check per (bot, caster) per refresh.
             if (e.castingSpellId && e.castInterruptible && !e.onAllyOnly)

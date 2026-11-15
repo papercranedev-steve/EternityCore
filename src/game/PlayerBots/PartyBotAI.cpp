@@ -343,6 +343,17 @@ bool PartyBotAI::IsLongCastHeld(SpellEntry const* pSpell) const
     return commander && Commander::Constraints::LongCastHeld(this, commander->GetPlan(), pSpell) != nullptr;
 }
 
+bool PartyBotAI::IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) const
+{
+    // Cheap tests first: most casts of a tick are instant or not at a creature.
+    if (!pSpell || !pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
+        pSpell->GetCastTime(me) <= 0)
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && Commander::Constraints::WastedCast(this, commander->GetWorld(), pTarget, pSpell,
+                                                           WorldTimer::getMSTime()) != nullptr;
+}
+
 void PartyBotAI::AutoAssignRole()
 {
     // Before: only the 31-point talents counted (Shield Slam, Holy Shield, Shadowform...), so
@@ -881,6 +892,9 @@ bool PartyBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pS
     // The area phase reserves this bot: no cast or channel time but its area spells (a 2.5 s
     // Frostbolt held the Blizzard back, strat-20261113-235712).
     if (IsLongCastHeld(pSpellEntry))
+        return false;
+    // The others kill the target before this cast would land (Commander finishing forecast).
+    if (IsCastWasted(pTarget, pSpellEntry))
         return false;
     // A control the brain keeps unbroken (polymorph, shackle, sap): no damage on it, its area,
     // a chained hit or a melee splash next to it. Every cast of the bot, rotations included.

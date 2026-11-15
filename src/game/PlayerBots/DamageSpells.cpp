@@ -48,6 +48,16 @@ namespace DamageSpells
         return total;
     }
 
+    float EstimateDirect(Unit* caster, Unit const* target, SpellEntry const* spell)
+    {
+        float total = 0.0f;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE)
+                total += std::max(0.0f, caster->SpellDamageBonusDone(target, spell, SpellEffectIndex(i),
+                                                                     AverageBase(spell, i), SPELL_DIRECT_DAMAGE));
+        return total;
+    }
+
     float BusySec(Unit const* caster, SpellEntry const* spell)
     {
         float sec = spell->IsChanneledSpell() ? std::max(0, spell->GetDuration()) / 1000.0f

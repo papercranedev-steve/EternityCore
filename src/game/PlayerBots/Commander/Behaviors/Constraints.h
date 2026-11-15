@@ -22,6 +22,8 @@
  *   Cast with a cast or        TeamPlan::ForbidsLongCast (the area phase's reserved caster,
  *   channel time               AreaPhase.h "Reservation"), except its area spells: LongCastHeld
  *   Rest                       TeamPlan::ForbidsRest
+ *   Cast time damage spell     WastedCast below: not at an enemy the others kill before it lands
+ *                              (every cast of the bot, PartyBotAI::PassesPartyCastChecks)
  * (The threat opening's "everyone but the tank waits" is gone since 2026-11-13: each damage
  * dealer starts when it has threat room on its target, DamageTargets / ThreatRoom; doc
  * .kiro/docs/2026-11-13-tank-threat-priority.md 6.)
@@ -83,6 +85,14 @@ namespace Commander
         // no neutral creature and no kept control within its radius of `centre`.
         char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     Position3 const& centre, SpellEntry const* spell, uint32 nowMs);
+
+        // A fact, not a plan rule (user 2026-11-15): `spell` is a single target damage spell with a
+        // cast time (not a channel, not an auto repeat shot) at an enemy the others kill before it
+        // lands (Perception/Forecast/FinishForecast.h: cast + flight from now). Every cast of the
+        // bot (PartyBotAI::PassesPartyCastChecks): the rotation goes on to an instant spell
+        // (Arcane Shot after the Aimed Shot) or waits.
+        char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
+                               SpellEntry const* spell, uint32 nowMs);
     }
 }
 

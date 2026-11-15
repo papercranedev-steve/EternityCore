@@ -113,6 +113,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/CombatRates.cpp
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.h
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/DamageDealt.h
+  ${COMMANDER_DIR}/Perception/Forecast/DamageDealt.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/FinishForecast.h
+  ${COMMANDER_DIR}/Perception/Forecast/FinishForecast.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/FinishCastBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/FinishCastBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/ValueModel.h
   ${COMMANDER_DIR}/Perception/Values/ValueModel.cpp
   ${COMMANDER_DIR}/Perception/Values/Exposure.h

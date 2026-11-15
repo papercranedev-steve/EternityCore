@@ -4,8 +4,10 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Profiles/Tags.h"
+#include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Timer.h"
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -137,6 +139,28 @@ namespace Commander
                 return "never a neutral creature (area)";
             if (KeptNear(world, plan, bot->me->GetObjectGuid(), centre, radius, ObjectGuid(), nowMs))
                 return "keep the control unbroken (area)";
+            return nullptr;
+        }
+
+        char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
+                               SpellEntry const* spell, uint32 nowMs)
+        {
+            if (!spell || !target || spell->IsChanneledSpell() || spell->IsAutoRepeatRangedSpell() ||
+                spell->IsAreaOfEffectSpell() || !SpellTags::DealsDamage(spell))
+                return nullptr;
+            Player* me = bot->me;
+            int32 const castMs = spell->GetCastTime(me);
+            if (castMs <= 0)
+                return nullptr;
+            EnemyFacts const* enemy = world.FindEnemy(target->GetObjectGuid());
+            PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+            if (!enemy || !self)
+                return nullptr;
+            // Facts are from the refresh: the hit lands this long after it.
+            uint32 const sinceRefresh = WorldTimer::getMSTimeDiff(world.refreshedAtMs, nowMs);
+            uint32 const landMs = sinceRefresh + uint32(castMs) + FinishForecast::FlightMs(self->pos, *enemy, spell->speed);
+            if (FinishForecast::Finished(world, *enemy, self->guid, landMs))
+                return "the others kill it before it lands";
             return nullptr;
         }
 

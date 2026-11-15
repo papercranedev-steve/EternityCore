@@ -4,6 +4,7 @@
 #include "Commander/Perception/Spatial/RouteRisk.h"
 #include "Commander/Perception/Values/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -15,6 +16,18 @@ namespace Commander
 {
 namespace DamageTargets
 {
+    namespace
+    {
+        // A caster bot (filler with a cast time): its next filler on `e` lands after the others
+        // killed it (FinishForecast.h). Melee and instant damage dealers: never.
+        bool FinishedFor(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& e)
+        {
+            if (bot.role != ROLE_RANGE_DPS || !bot.fillerCastMs)
+                return false;
+            return FinishForecast::Finished(world, e, bot.guid, FinishForecast::FillerLandMs(bot, e));
+        }
+    }
+
     bool ThreatAllows(TargetContext const& ctx, PartyMemberFacts const& bot, EnemyFacts const& e, bool staying)
     {
         WorldModel const& world = ctx.world;
@@ -64,7 +77,10 @@ namespace DamageTargets
         // Near aggro on the current target: ThreatBehavior stops hitting it, so staying is worth
         // nothing and any safe enemy is better than standing there.
         bool const stalled = current && !ThreatAllows(ctx, bot, *current, true);
-        FocusScore const* c = current && !stalled ? &ctx.Score(*current) : nullptr;
+        // Its next cast would land on an enemy the others kill first (FinishForecast.h): staying
+        // is worth nothing either, any enemy it can still hurt is better.
+        bool const finished = current && !stalled && FinishedFor(world, bot, *current);
+        FocusScore const* c = current && !stalled && !finished ? &ctx.Score(*current) : nullptr;
         float const share = ctx.Share();
         // Switching from nothing loses nothing: at least one global cooldown of its own output.
         float const idleGain = Value::ContributionPerSec(world, bot) * Value::GCD_SEC;
@@ -138,6 +154,11 @@ namespace DamageTargets
                     skip(*e, "threat room");
                     continue;
                 }
+                if (!killNow && FinishedFor(world, bot, *e))
+                {
+                    skip(*e, "the others kill it before its cast lands");
+                    continue;
+                }
 
                 FocusScore const& f = ctx.Score(*e);
                 float const switchCost = SwitchCost::Of(world, bot, *e, reach);
@@ -178,7 +199,8 @@ namespace DamageTargets
                 else if (!best.enemy || rank > bestRank)
                 {
                     p.reason = tight ? "only walk open, on the hard line" :
-                               c ? "kill it first" : (stalled ? "near aggro, switch" : "first target");
+                               c ? "kill it first" : stalled ? "near aggro, switch" :
+                               finished ? "the others finish its target" : "first target";
                     best = p;
                     bestRank = rank;
                 }
@@ -192,7 +214,8 @@ namespace DamageTargets
         else if (current)
         {
             pick.enemy = current;
-            pick.reason = stalled ? "keep (near aggro, nothing safer)" : "keep";
+            pick.reason = stalled ? "keep (near aggro, nothing safer)" :
+                          finished ? "keep (the others finish it, nothing else)" : "keep";
         }
         else if (straggler)
         {
