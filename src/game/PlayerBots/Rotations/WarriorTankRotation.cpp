@@ -2,17 +2,20 @@
  * Warrior tank rotation (user, 2026-11-02): the class mechanics only, no decisions.
  * Doc: .kiro/docs/2026-11-01-warrior-tank.md. Damage warriors: Rotations/WarriorRotation.cpp.
  *
- * Out of combat: Defensive Stance (the tank's home stance), Battle Shout (Bloodrage for the rage
- * when it has none).
+ * Out of combat: Defensive Stance (the tank's home stance) only. Battle Shout and Bloodrage moved
+ * into the fight (user, 2026-11-15): out of combat they were cast after every fight.
  *
  * In combat, in this order:
  *   1. Back to Defensive Stance when out of it (x1.3 threat; Taunt, Revenge and Shield Block need
  *      it). Not while a swap for a Commander cast is waiting (PartyBotAI::DoCastWithStance).
- *   2. Revenge (5 rage, the most threat per rage).
- *   3. Shield Block: attacked, shield, below SHIELD_BLOCK_HEALTH_PCT (strat-20261101-210522: with
+ *   2. Bloodrage below BLOODRAGE_BELOW_RAGE and above BLOODRAGE_MIN_HEALTH_PCT (no GCD).
+ *   3. Revenge (5 rage, the most threat per rage).
+ *   4. Shield Block: attacked, shield, below SHIELD_BLOCK_HEALTH_PCT (strat-20261101-210522: with
  *      "or 2+ attackers" it took the rage Sunder and Shield Slam needed).
- *   4. Shield Slam, 5. Sunder Armor.
- *   6. Rage above RAGE_DUMP: Cleave (2+ enemies next to the victim) or Heroic Strike, on the next swing.
+ *   5. Shield Slam.
+ *   6. Battle Shout when missing and rage above RAGE_DUMP (spare rage, after the threat skills).
+ *   7. Sunder Armor.
+ *   8. Rage above RAGE_DUMP: Cleave (2+ enemies next to the victim) or Heroic Strike, on the next swing.
  *
  * Decisions the rotation no longer makes (user, 2026-11-02), and who makes them:
  *   Charge                 the pull module (PullBehavior, ClassKit::OpenerCharge); the old
@@ -35,6 +38,8 @@ namespace
     float const SHIELD_BLOCK_HEALTH_PCT = 60.0f;
     uint32 const RAGE_DUMP = 300;               // 30 rage
     float const CLEAVE_RADIUS = 8.0f;
+    uint32 const BLOODRAGE_BELOW_RAGE = 200;    // 20 rage
+    float const BLOODRAGE_MIN_HEALTH_PCT = 50.0f;
 
     class WarriorTankRotation : public ClassRotation
     {
@@ -43,20 +48,10 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
-            Player* me = bot.me;
-            auto const& w = bot.m_spells.warrior;
-
-            if (KeepDefensiveStance())
-                return;
-
-            if (w.pBattleShout && !me->HasAura(w.pBattleShout->Id))
-            {
-                if (Cast(me, w.pBattleShout))
-                    return;
-                if (w.pBloodrage && me->GetPower(POWER_RAGE) < 100 && Cast(me, w.pBloodrage))
-                    return;
-            }
+            // No Battle Shout / Bloodrage here (user, 2026-11-15): rage decays out of combat, so every
+            // shout that ran out cost a Bloodrage (health and its cooldown) between fights. Both moved
+            // into the fight.
+            KeepDefensiveStance();
         }
 
         void UpdateInCombat() override
@@ -73,6 +68,13 @@ namespace
                 return;
 
             bool const shield = bot.IsWearingShield(me);
+            uint32 const rage = me->GetPower(POWER_RAGE);
+
+            // Bloodrage first: no global cooldown, so it costs no threat GCD, and the opening is
+            // where the tank is short of rage for Revenge / Sunder. Not when low (it costs health).
+            if (rage < BLOODRAGE_BELOW_RAGE && me->GetHealthPercent() > BLOODRAGE_MIN_HEALTH_PCT &&
+                Cast(me, w.pBloodrage))
+                return;
 
             if (Cast(pVictim, w.pRevenge))
                 return;
@@ -85,13 +87,20 @@ namespace
             if (shield && Cast(pVictim, w.pShieldSlam))
                 return;
 
+            // Battle Shout below the threat skills: only with rage to spare (the same line as the
+            // Heroic Strike dump), so it never takes the rage or the GCD Sunder needs. Any
+            // warrior's shout of this rank counts.
+            if (w.pBattleShout && rage > RAGE_DUMP && !me->HasAura(w.pBattleShout->Id) &&
+                Cast(me, w.pBattleShout))
+                return;
+
             if (Cast(pVictim, w.pSunderArmor))
                 return;
 
             // (where the tank stands: the Commander tank stance module, TankStanceBehavior)
 
             // Rage left over: on the next swing (no global cooldown).
-            if (me->GetPower(POWER_RAGE) > RAGE_DUMP)
+            if (rage > RAGE_DUMP)
             {
                 SpellEntry const* pDump = (w.pCleave && me->GetEnemyCountInRadiusAround(pVictim, CLEAVE_RADIUS) > 1) ?
                                            w.pCleave : w.pHeroicStrike;
