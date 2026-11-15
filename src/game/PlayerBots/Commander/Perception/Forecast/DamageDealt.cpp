@@ -34,9 +34,9 @@ namespace DamageDealt
         }
     }
 
-    void OnDamage(Unit const* attacker, Unit const* victim, uint32 damage)
+    void OnDamage(Unit const* attacker, Unit const* victim, uint32 damage, bool periodic)
     {
-        if (!damage || !attacker || !victim || attacker == victim || !victim->IsCreature() ||
+        if (!damage || periodic || !attacker || !victim || attacker == victim || !victim->IsCreature() ||
             !sCommanderMgr.IsEnabled() || victim->IsCharmerOrOwnerPlayerOrPlayerItself() ||
             !attacker->IsCharmerOrOwnerPlayerOrPlayerItself())
             return;

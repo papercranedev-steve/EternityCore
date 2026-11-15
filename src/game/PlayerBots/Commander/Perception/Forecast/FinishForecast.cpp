@@ -77,7 +77,36 @@ namespace FinishForecast
                 continue;
             damage += MeasuredDps(enemy, m.guid) * float(landMs - rateFromMs) / 1000.0f * trust;
         }
+        // Periodic damage already on it, also `self`'s own: it ticks whatever anyone does.
+        for (PartyDot const& d : enemy.partyDots)
+        {
+            if (!d.periodMs)
+                continue;
+            uint32 const until = std::min(landMs, d.remainingMs);
+            if (d.nextTickMs > until)
+                continue;
+            uint32 const ticks = 1 + (until - d.nextTickMs) / d.periodMs;
+            damage += d.perTick * float(ticks);
+        }
         return damage;
+    }
+
+    uint32 DeathMs(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 selfFromMs, uint32 horizonMs)
+    {
+        if (!enemy.acting || !enemy.health)
+            return 0;
+        PartyMemberFacts const* me = world.FindMember(self);
+        float const selfDps = me && me->victim == enemy.guid ? MeasuredDps(enemy, self) : 0.0f;
+        float const needed = float(enemy.health) * COVER_MARGIN;
+        for (uint32 t = DEATH_STEP_MS; t <= horizonMs; t += DEATH_STEP_MS)
+        {
+            float damage = OthersWithin(world, enemy, self, t);
+            if (t > selfFromMs)
+                damage += selfDps * float(t - selfFromMs) / 1000.0f;
+            if (damage >= needed)
+                return t;
+        }
+        return 0;
     }
 
     bool Finished(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 landMs)

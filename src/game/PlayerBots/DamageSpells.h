@@ -28,6 +28,16 @@ namespace DamageSpells
     float Estimate(Unit* caster, Unit const* target, SpellEntry const* spell);
     // Its direct part only (what lands with the hit; periodic ticks left out).
     float EstimateDirect(Unit* caster, Unit const* target, SpellEntry const* spell);
+
+    // Its periodic damage auras together: damage per tick (with the DOT bonus), tick period
+    // and ticks (the shortest period of them; ticks 0 = none).
+    struct Periodic
+    {
+        float perTick = 0.0f;
+        uint32 periodMs = 0;
+        uint32 ticks = 0;
+    };
+    Periodic EstimatePeriodic(Unit* caster, Unit const* target, SpellEntry const* spell);
     // Seconds the caster is busy with `spell`.
     float BusySec(Unit const* caster, SpellEntry const* spell);
     // Mana the spell costs `caster` now; 0 for spells that do not use mana.

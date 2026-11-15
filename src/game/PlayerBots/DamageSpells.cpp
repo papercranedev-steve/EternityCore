@@ -58,6 +58,33 @@ namespace DamageSpells
         return total;
     }
 
+    Periodic EstimatePeriodic(Unit* caster, Unit const* target, SpellEntry const* spell)
+    {
+        Periodic p;
+        float total = 0.0f;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            bool const leech = spell->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                               spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_LEECH && spell->EffectAmplitude[i] > 0;
+            if (!IsPeriodicDamage(spell, i) && !leech)
+                continue;
+            uint32 const period = spell->EffectAmplitude[i];
+            int32 const ticks = spell->GetDuration() / int32(period);
+            if (ticks <= 0)
+                continue;
+            float const tick = caster->SpellDamageBonusDone(target, spell, SpellEffectIndex(i), AverageBase(spell, i), DOT);
+            total += std::max(0.0f, tick) * float(ticks);
+            if (!p.periodMs || period < p.periodMs)
+            {
+                p.periodMs = period;
+                p.ticks = uint32(ticks);
+            }
+        }
+        if (p.ticks)
+            p.perTick = total / float(p.ticks);
+        return p;
+    }
+
     float BusySec(Unit const* caster, SpellEntry const* spell)
     {
         float sec = spell->IsChanneledSpell() ? std::max(0, spell->GetDuration()) / 1000.0f

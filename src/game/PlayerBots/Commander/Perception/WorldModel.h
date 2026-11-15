@@ -355,12 +355,23 @@ namespace Commander
         float damage = 0.0f;        // DamageSpells::EstimateDirect (no crit, no resistance)
     };
 
-    // A party member's (or pet's) damage on one enemy over the last few seconds
-    // (Perception/Forecast/DamageDealt.h, EnemyFacts::dealtBy).
+    // A party member's (or pet's) direct damage on one enemy over the last few seconds, periodic
+    // ticks left out (Perception/Forecast/DamageDealt.h, EnemyFacts::dealtBy).
     struct DealtRate
     {
         ObjectGuid source;
         float dps = 0.0f;
+    };
+
+    // One periodic damage effect a party member or pet put on an enemy (EnemyFacts::partyDots).
+    struct PartyDot
+    {
+        ObjectGuid caster;
+        uint32 spellId = 0;
+        float perTick = 0.0f;       // Modifier::m_amount (bonuses included at apply)
+        uint32 periodMs = 0;
+        uint32 nextTickMs = 0;      // from the refresh
+        uint32 remainingMs = 0;
     };
 
     // A party member or a party member's pet on this map.
@@ -596,6 +607,8 @@ namespace Commander
         // Party members and pets that hit it lately, each with its damage per second
         // (Perception/Forecast/DamageDealt.h). Who is on it now is PartyMemberFacts::victim.
         std::vector<DealtRate> dealtBy;
+        // Every periodic damage effect of ours on it (partyDotMs is the longest one's time left).
+        std::vector<PartyDot> partyDots;
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat

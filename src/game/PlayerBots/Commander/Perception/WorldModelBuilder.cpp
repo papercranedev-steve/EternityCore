@@ -408,7 +408,26 @@ namespace WorldModelBuilder
                     bool const ours = std::any_of(partyUnits.begin(), partyUnits.end(),
                         [caster](Unit const* u) { return u->GetObjectGuid() == caster; });
                     if (ours)
+                    {
                         e.partyDotMs = std::max(e.partyDotMs, left);
+                        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                        {
+                            if (spell->EffectApplyAuraName[i] != SPELL_AURA_PERIODIC_DAMAGE &&
+                                spell->EffectApplyAuraName[i] != SPELL_AURA_PERIODIC_LEECH)
+                                continue;
+                            Aura const* aura = holder->GetAuraByEffectIndex(SpellEffectIndex(i));
+                            if (!aura || aura->GetModifier()->periodictime <= 0)
+                                continue;
+                            PartyDot d;
+                            d.caster = caster;
+                            d.spellId = spell->Id;
+                            d.perTick = std::max(0.0f, float(aura->GetModifier()->m_amount));
+                            d.periodMs = uint32(aura->GetModifier()->periodictime);
+                            d.nextTickMs = uint32(std::max(0, aura->GetAuraPeriodicTimer()));
+                            d.remainingMs = left;
+                            e.partyDots.push_back(d);
+                        }
+                    }
                 }
             }
 

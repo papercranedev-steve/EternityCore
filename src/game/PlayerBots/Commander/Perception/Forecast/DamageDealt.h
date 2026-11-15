@@ -36,8 +36,9 @@ namespace DamageDealt
         float dps = 0.0f;
     };
 
-    // Unit::DealDamage hook (any map thread).
-    void OnDamage(Unit const* attacker, Unit const* victim, uint32 damage);
+    // Unit::DealDamage hook (any map thread). Periodic ticks are not logged: they go on after the
+    // attacker turned away, the enemy's auras tell them (EnemyFacts::partyDots).
+    void OnDamage(Unit const* attacker, Unit const* victim, uint32 damage, bool periodic);
 
     // Attackers that hit `victim` within RATE_WINDOW_MS, with their damage per second.
     std::vector<Rate> Query(ObjectGuid victim, uint32 nowMs);

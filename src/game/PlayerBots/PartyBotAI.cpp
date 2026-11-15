@@ -347,7 +347,7 @@ bool PartyBotAI::IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) con
 {
     // Cheap tests first: most casts of a tick are instant or not at a creature.
     if (!pSpell || !pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
-        pSpell->GetCastTime(me) <= 0)
+        !Commander::Constraints::MayBeWasted(this, pSpell))
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && Commander::Constraints::WastedCast(this, commander->GetWorld(), pTarget, pSpell,

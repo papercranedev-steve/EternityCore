@@ -18,8 +18,10 @@
  *                only ranged members count.
  *   players      a player's damage counts PLAYER_TRUST (he may stop or switch; the bots' own
  *                rules are known). His pets too.
- * Finished: that damage reaches COVER_MARGIN x the enemy's health. Periodic damage already on
- * it (a DoT from a member now on another enemy) is not counted.
+ *   dots         every periodic effect of ours on it (EnemyFacts::partyDots, `self`'s too):
+ *                its ticks until `landMs`. Measured rates are direct damage only (DamageDealt),
+ *                so a tick is never counted twice.
+ * Finished: that damage reaches COVER_MARGIN x the enemy's health.
  */
 
 #ifndef MANGOS_COMMANDER_FINISH_FORECAST_H
@@ -43,8 +45,16 @@ namespace FinishForecast
     // Flight of a spell with `speed` (yards per second) from `from` to `enemy`'s edge.
     uint32 FlightMs(Position3 const& from, EnemyFacts const& enemy, float speed);
 
-    // Damage the party but `self` deals on `enemy` within `landMs` (header).
+    // Damage the party but `self` deals on `enemy` within `landMs` (header), plus the ticks of
+    // every periodic effect of ours on it (`self`'s too) until then.
     float OthersWithin(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 landMs);
+
+    // When `enemy` dies, ms after the refresh, within `horizonMs` (0 = not by then; steps of
+    // DEATH_STEP_MS): OthersWithin plus `self`'s own measured rate on it (while it is on it)
+    // from `selfFromMs` (after the spell being judged). For a periodic spell's worth
+    // (Constraints::WastedCast): the ticks it gets in before that.
+    static constexpr uint32 DEATH_STEP_MS = 250;
+    uint32 DeathMs(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 selfFromMs, uint32 horizonMs);
     // The others kill `enemy` before `self`'s hit landing `landMs` after the refresh.
     bool Finished(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 landMs);
 }

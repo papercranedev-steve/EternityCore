@@ -22,7 +22,8 @@
  *   Cast with a cast or        TeamPlan::ForbidsLongCast (the area phase's reserved caster,
  *   channel time               AreaPhase.h "Reservation"), except its area spells: LongCastHeld
  *   Rest                       TeamPlan::ForbidsRest
- *   Cast time damage spell     WastedCast below: not at an enemy the others kill before it lands
+ *   Cast time / periodic       WastedCast below: not at an enemy the others kill before it lands,
+ *   damage spell               no periodic damage on one dying before it pays
  *                              (every cast of the bot, PartyBotAI::PassesPartyCastChecks)
  * (The threat opening's "everyone but the tank waits" is gone since 2026-11-13: each damage
  * dealer starts when it has threat room on its target, DamageTargets / ThreatRoom; doc
@@ -86,13 +87,19 @@ namespace Commander
         char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     Position3 const& centre, SpellEntry const* spell, uint32 nowMs);
 
-        // A fact, not a plan rule (user 2026-11-15): `spell` is a single target damage spell with a
-        // cast time (not a channel, not an auto repeat shot) at an enemy the others kill before it
-        // lands (Perception/Forecast/FinishForecast.h: cast + flight from now). Every cast of the
-        // bot (PartyBotAI::PassesPartyCastChecks): the rotation goes on to an instant spell
-        // (Arcane Shot after the Aimed Shot) or waits.
+        // A fact, not a plan rule (user 2026-11-15). `spell` is a single target damage spell (not a
+        // channel, not an auto repeat shot) at an enemy (Perception/Forecast/FinishForecast.h):
+        //   cast time   the others kill it before it lands (cast + flight from now);
+        //   periodic    (Corruption, Serpent Sting, Immolate's ticks) the ticks it gets in before
+        //               the enemy dies (FinishForecast::DeathMs, the bot's own hits counted after
+        //               the spell's busy time), plus the direct part if it lands, are worth less
+        //               than the bot's own damage over that busy time (PartyMemberFacts::soloDps).
+        // Every cast of the bot (PartyBotAI::PassesPartyCastChecks): the rotation goes on to an
+        // instant spell (Arcane Shot after the Aimed Shot) or waits.
         char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
                                SpellEntry const* spell, uint32 nowMs);
+        // Cheap test before the commander lookup: WastedCast may answer for `spell`.
+        bool MayBeWasted(PartyBotAI const* bot, SpellEntry const* spell);
     }
 }
 

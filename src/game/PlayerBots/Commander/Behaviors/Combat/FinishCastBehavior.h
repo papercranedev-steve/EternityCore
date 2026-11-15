@@ -6,10 +6,12 @@
  *
  *   ContinueValue     0 for such a cast (CurrentAction::keep: stopping it loses nothing), else
  *                     not this module's (-1).
- *   CastBreakBenefit  such a cast while the brain already gave the bot another enemy
- *                     (TargetDuty, DamageTargets "finishing"): the time left of the cast, which
- *                     it would spend for nothing (Value::LostAction). No other enemy: 0, the
- *                     cast goes on (nothing better to do with the time).
+ *   CastBreakBenefit  such a cast: the time left of it, which the bot would spend for nothing
+ *                     (Value::LostAction). Then the arbiter acts at once: the enemy the brain
+ *                     gave it instead (TargetDuty, DamageTargets "finishing"), else the
+ *                     rotation on the same enemy, where Constraints::WastedCast refuses the cast
+ *                     again: an Aimed Shot gives way to an Arcane Shot (auto shot goes on), a
+ *                     Frostbolt with nothing else to do to waiting (mana kept).
  * Starting such a cast is refused by Constraints::WastedCast. Proposes nothing.
  */
 

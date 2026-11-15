@@ -48,13 +48,13 @@ namespace Commander
         if (!wasted)
             return 0.0f;
         ObjectGuid const self = bot->me->GetObjectGuid();
-        TargetDuty const* duty = plan.FindTargetFor(self);
-        if (!duty || duty->enemy.IsEmpty() || duty->enemy == wasted->guid)
-            return 0.0f;
         PartyMemberFacts const* facts = world.FindMember(self);
         if (!facts)
             return 0.0f;
-        reason = "the others kill its target first: on to the next";
+        TargetDuty const* duty = plan.FindTargetFor(self);
+        reason = duty && !duty->enemy.IsEmpty() && duty->enemy != wasted->guid
+            ? "the others kill its target first: on to the next"
+            : "the others kill its target first: an instant spell instead";
         return Value::LostAction(world, *facts, float(castLeftMs) / 1000.0f);
     }
 

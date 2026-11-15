@@ -7,7 +7,9 @@
 #include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/WorldModel.h"
+#include "DamageSpells.h"
 #include "Timer.h"
+#include <algorithm>
 #include "PartyBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -142,25 +144,54 @@ namespace Commander
             return nullptr;
         }
 
+        bool MayBeWasted(PartyBotAI const* bot, SpellEntry const* spell)
+        {
+            if (!spell || spell->IsChanneledSpell() || spell->IsAutoRepeatRangedSpell() ||
+                spell->IsAreaOfEffectSpell() || !SpellTags::DealsDamage(spell))
+                return false;
+            if (spell->GetCastTime(bot->me) > 0)
+                return true;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                    (spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE ||
+                     spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_LEECH))
+                    return true;
+            return false;
+        }
+
         char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
                                SpellEntry const* spell, uint32 nowMs)
         {
-            if (!spell || !target || spell->IsChanneledSpell() || spell->IsAutoRepeatRangedSpell() ||
-                spell->IsAreaOfEffectSpell() || !SpellTags::DealsDamage(spell))
+            if (!MayBeWasted(bot, spell) || !target)
                 return nullptr;
             Player* me = bot->me;
-            int32 const castMs = spell->GetCastTime(me);
-            if (castMs <= 0)
-                return nullptr;
             EnemyFacts const* enemy = world.FindEnemy(target->GetObjectGuid());
             PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
             if (!enemy || !self)
                 return nullptr;
+            int32 const castMs = std::max<int32>(0, int32(spell->GetCastTime(me)));
             // Facts are from the refresh: the hit lands this long after it.
             uint32 const sinceRefresh = WorldTimer::getMSTimeDiff(world.refreshedAtMs, nowMs);
             uint32 const landMs = sinceRefresh + uint32(castMs) + FinishForecast::FlightMs(self->pos, *enemy, spell->speed);
-            if (FinishForecast::Finished(world, *enemy, self->guid, landMs))
+            if (castMs > 0 && FinishForecast::Finished(world, *enemy, self->guid, landMs))
                 return "the others kill it before it lands";
+
+            // A periodic spell pays with the ticks it gets in before the enemy dies; less than
+            // the bot's own damage over the time it spends on it: something else is better.
+            DamageSpells::Periodic const dot = DamageSpells::EstimatePeriodic(me, target, spell);
+            if (!dot.ticks || !dot.periodMs || self->soloDps <= 0.0f)
+                return nullptr;
+            float const busySec = DamageSpells::BusySec(me, spell);
+            uint32 const horizon = landMs + dot.ticks * dot.periodMs;
+            uint32 const deathMs = FinishForecast::DeathMs(world, *enemy, self->guid,
+                                                           sinceRefresh + uint32(busySec * 1000.0f), horizon);
+            if (!deathMs)
+                return nullptr;     // lives through the whole effect
+            uint32 const ticks = deathMs > landMs ? std::min(dot.ticks, (deathMs - landMs) / dot.periodMs) : 0;
+            float const worth = float(ticks) * dot.perTick +
+                                (deathMs > landMs ? DamageSpells::EstimateDirect(me, target, spell) : 0.0f);
+            if (worth < self->soloDps * busySec)
+                return "it dies before the periodic damage pays";
             return nullptr;
         }
 

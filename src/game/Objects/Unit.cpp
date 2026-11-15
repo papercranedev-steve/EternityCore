@@ -665,7 +665,7 @@ uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDa
 {
     DEVCONSOLE_COMBAT_EVENT(OnDamage(this, pVictim, damage, spellProto ? spellProto->Id : 0, uint32(damageSchoolMask), uint32(damagetype)));
     Commander::DamageIntake::OnDamage(pVictim, damage);
-    Commander::DamageDealt::OnDamage(this, pVictim, damage);
+    Commander::DamageDealt::OnDamage(this, pVictim, damage, damagetype == DOT);
 
     // World of Warcraft Client Patch 1.7.0 (2005-09-13)
     // - Fixed bug where self-inflicted damage, like Poisonous Blood, wouldn't
