@@ -188,11 +188,15 @@ end
 -- 'gm' runs .maxskill on u (a GM player; bots have no GM rights). Premade gear teaches missing
 -- weapon proficiencies at skill 1, so without this the warriors missed every swing with the
 -- level 19 template's two-handed mace (first Stockade run, 2026-11-01).
+-- Out of combat first: in combat CanEquipItem only accepts weapons, the armor of the template
+-- lands in the bags and clearbags destroys it. Strat 2026-11-15: the hunter and the resto druid
+-- were flagged in combat with no enemy at finish() and ended up with weapons only.
 local function applyPremades(u, level, role, gm)
     local spec = pickPremade("spec", u:class(), level, role)
     if spec then u:premade("spec", spec.entry) end
     local gear = pickPremade("gear", u:class(), level, role)
     if gear then
+        u:combatstop()
         u:premade("gear", gear.entry)
         u:clearbags()
     end
