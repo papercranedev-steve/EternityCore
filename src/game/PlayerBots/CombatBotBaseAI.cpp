@@ -201,9 +201,6 @@ void CombatBotBaseAI::PopulateSpellData()
 
     bool hasDeadlyPoison = false;
     bool hasInstantPoison = false;
-    bool hasCripplingPoison = false;
-    bool hasWoundPoison = false;
-    bool HasMindNumbingPoison = false;
 
     for (const auto& spell : me->GetSpellMap())
     {
@@ -1465,18 +1462,6 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     hasInstantPoison = true;
                 }
-                else if (pSpellEntry->SpellName[0].find("Crippling Poison") != std::string::npos)
-                {
-                    hasCripplingPoison = true;
-                }
-                else if (pSpellEntry->SpellName[0].find("Wound Poison") != std::string::npos)
-                {
-                    hasWoundPoison = true;
-                }
-                else if (pSpellEntry->SpellName[0].find("Mind-numbing Poison") != std::string::npos)
-                {
-                    HasMindNumbingPoison = true;
-                }
                 break;
             }
             case CLASS_DRUID:
@@ -1911,24 +1896,16 @@ void CombatBotBaseAI::PopulateSpellData()
                 return pHighestRank;
             };
 
-            SpellEntry const* pPoisonSpell = nullptr;
-            std::vector<SpellEntry const*> vPoisons;
-            if (hasDeadlyPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Deadly Poison", me->GetLevel())))
-                vPoisons.push_back(pPoisonSpell);
-            if (hasInstantPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Instant Poison", me->GetLevel())))
-                vPoisons.push_back(pPoisonSpell);
-            if (hasCripplingPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Crippling Poison", me->GetLevel())))
-                vPoisons.push_back(pPoisonSpell);
-            if (hasWoundPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Wound Poison", me->GetLevel())))
-                vPoisons.push_back(pPoisonSpell);
-            if (HasMindNumbingPoison && (pPoisonSpell = GetHighestRankOfPoisonByName("Mind-numbing Poison", me->GetLevel())))
-                vPoisons.push_back(pPoisonSpell);
-
-            if (!vPoisons.empty())
-            {
-                m_spells.rogue.pMainHandPoison = SelectRandomContainerElement(vPoisons);
-                m_spells.rogue.pOffHandPoison = SelectRandomContainerElement(vPoisons);
-            }
+            // Damage poisons only, Instant on both hands, Deadly when Instant is not known. Before:
+            // a random one of all known per hand; Crippling, Wound and Mind-numbing do no damage
+            // and are for players (PvP), wasted on a party's trash and bosses.
+            SpellEntry const* pPoison = nullptr;
+            if (hasInstantPoison)
+                pPoison = GetHighestRankOfPoisonByName("Instant Poison", me->GetLevel());
+            if (!pPoison && hasDeadlyPoison)
+                pPoison = GetHighestRankOfPoisonByName("Deadly Poison", me->GetLevel());
+            m_spells.rogue.pMainHandPoison = pPoison;
+            m_spells.rogue.pOffHandPoison = pPoison;
 
             break;
         }
@@ -2572,44 +2549,52 @@ void CombatBotBaseAI::LearnArmorProficiencies()
 
 void CombatBotBaseAI::LearnPremadeSpecForClass()
 {
-    std::vector<PlayerPremadeSpecTemplate const*> vSpecs;
-    for (const auto& itr : sObjectMgr.GetPlayerPremadeSpecTemplates())
+    // The highest template up to the bot's level, of its role if it has one. Before: without a
+    // role (".partybot add rogue") and no template of exactly its level, a random one of all
+    // lower levels (a level 55 rogue could get the level 19 spec).
+    auto pick = [this](bool above) -> PlayerPremadeSpecTemplate const*
     {
-        if (itr.second.requiredClass == me->GetClass() &&
-            itr.second.level == me->GetLevel())
-            vSpecs.push_back(&itr.second);
-    }
-    // Use lower level spec template if there are no templates for the current level.
-    if (vSpecs.empty())
-    {
+        std::vector<PlayerPremadeSpecTemplate const*> vSpecs;
         for (const auto& itr : sObjectMgr.GetPlayerPremadeSpecTemplates())
         {
-            if (itr.second.requiredClass == me->GetClass() &&
-                itr.second.level < me->GetLevel())
-                vSpecs.push_back(&itr.second);
+            PlayerPremadeSpecTemplate const& spec = itr.second;
+            if (spec.requiredClass != me->GetClass() || (above ? spec.level <= me->GetLevel() : spec.level > me->GetLevel()))
+                continue;
+            vSpecs.push_back(&spec);
         }
-    }
-    if (!vSpecs.empty())
-    {
-        PlayerPremadeSpecTemplate const* pSpec = nullptr;
-        // Try to find a role appropriate gear template.
-        if (m_role != ROLE_INVALID)
+        for (bool anyRole : { false, true })
         {
-            for (const auto itr : vSpecs)
+            if (!anyRole && m_role == ROLE_INVALID)
+                continue;
+            std::vector<PlayerPremadeSpecTemplate const*> best;
+            for (auto pSpec : vSpecs)
             {
-                if (itr->role == m_role &&
-                   (!pSpec || pSpec->level < itr->level))
-                {
-                    pSpec = itr;
-                }
+                if (!anyRole && pSpec->role != m_role)
+                    continue;
+                // below: the highest level; above: the next level up
+                if (!best.empty() && (above ? pSpec->level > best[0]->level : pSpec->level < best[0]->level))
+                    continue;
+                if (!best.empty() && pSpec->level != best[0]->level)
+                    best.clear();
+                best.push_back(pSpec);
             }
+            if (!best.empty())
+                return SelectRandomContainerElement(best);
         }
-        // There is no spec template for this role, pick randomly.
-        if (!pSpec)
-            pSpec = SelectRandomContainerElement(vSpecs);
+        return nullptr;
+    };
+
+    if (PlayerPremadeSpecTemplate const* pSpec = pick(false))
+    {
         sObjectMgr.ApplyPremadeSpecTemplateToPlayer(pSpec->entry, me);
         if (m_role == ROLE_INVALID)
             m_role = pSpec->role;
+
+        // Between two templates (a level 55 bot gets the level 49 one): the points left go the
+        // way of the next template up, row by row, as far as they reach.
+        if (me->GetFreeTalentPoints())
+            if (PlayerPremadeSpecTemplate const* pNext = pick(true))
+                LearnTalentsTowards(*pNext);
     }
     else
     {
@@ -2620,6 +2605,30 @@ void CombatBotBaseAI::LearnPremadeSpecForClass()
         ChatHandler(me).HandleLearnAllTrainerCommand(trainerArgs);
         ChatHandler(me).HandleLearnAllItemsCommand(itemArgs);
     }
+}
+
+void CombatBotBaseAI::LearnTalentsTowards(PlayerPremadeSpecTemplate const& spec)
+{
+    // The template's talents (each spell is the talent's highest rank in it), top row first so
+    // every row's points are spent before the next row needs them.
+    struct Step { TalentEntry const* talent; uint32 rank; };
+    std::vector<Step> steps;
+    for (uint32 spellId : spec.spells)
+        if (TalentSpellPos const* pos = GetTalentSpellPos(spellId))
+            if (TalentEntry const* talent = sTalentStore.LookupEntry(pos->talent_id))
+                steps.push_back({ talent, pos->rank });
+    std::stable_sort(steps.begin(), steps.end(), [](Step const& a, Step const& b)
+    {
+        return a.talent->Row < b.talent->Row;
+    });
+
+    for (Step const& step : steps)
+        for (uint32 rank = 0; rank <= step.rank; ++rank)
+        {
+            if (!me->GetFreeTalentPoints())
+                return;
+            me->LearnTalent(step.talent->TalentID, rank);   // false: already known, or not yet allowed
+        }
 }
 
 void CombatBotBaseAI::LearnRandomTalents()

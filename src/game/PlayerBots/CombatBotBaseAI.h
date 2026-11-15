@@ -6,6 +6,8 @@
 #include "Player.h"
 #include "HealSpells.h"
 
+struct PlayerPremadeSpecTemplate;
+
 // CombatBotBaseAI::ChooseHeal result.
 struct HealChoice
 {
@@ -103,6 +105,8 @@ public:
     void SummonPetIfNeeded();
     void LearnArmorProficiencies();
     void LearnPremadeSpecForClass();
+    // Spends the free talent points on `spec`'s talents, top row first, as far as they reach.
+    void LearnTalentsTowards(PlayerPremadeSpecTemplate const& spec);
     void EquipPremadeGearTemplate();
     void EquipRandomGearInEmptySlots();
     void AutoEquipGear(uint32 option);
