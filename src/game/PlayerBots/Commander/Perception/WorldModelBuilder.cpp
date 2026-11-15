@@ -8,6 +8,8 @@
 #include "Commander/Perception/Profiles/CreatureProfile.h"
 #include "Commander/Perception/Forecast/HealCapacity.h"
 #include "Commander/Perception/Profiles/PetTaunt.h"
+#include "Commander/Perception/Profiles/PaladinBuffs.h"
+#include "Commander/Perception/Profiles/WarlockCurses.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
@@ -222,7 +224,6 @@ namespace WorldModelBuilder
             f.pendingHit.damage = DamageSpells::EstimateDirect(unit, target, info);
         }
 
-        void FillPlayerRoles(WorldModel& world)
         // PartyMemberFacts::pendingHeal: a single target direct heal with a cast time in
         // progress (strat-20261115-173647: the tank used Shield Wall 0.6 s before a Greater Heal
         // for 3800 landed on him, the heal in progress counted as a delay only).
@@ -244,6 +245,7 @@ namespace WorldModelBuilder
             f.pendingHeal.amount = amount;
         }
 
+        void FillPlayerRoles(WorldModel& world)
         {
             bool botTank = false;
             for (PartyMemberFacts const& m : world.party)
@@ -489,7 +491,6 @@ namespace WorldModelBuilder
             }
         }
 
-        void FillEnemy(Creature* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
         // Melee attack power as Creature::UpdateDamagePhysical scales the damage with it, and the
         // strongest attack power debuff on it (Perception/Values/MitigationValue.h).
         void FillAttackPower(Creature* creature, EnemyFacts& e)
@@ -507,6 +508,24 @@ namespace WorldModelBuilder
             }
         }
 
+        // Damage curses on it, anyone's (EnemyFacts::curses).
+        void FillCursesOn(Creature const* creature, EnemyFacts& e)
+        {
+            for (auto const& itr : creature->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                CurseKind const kind = WarlockCurses::KindOf(holder->GetSpellProto());
+                if (kind == CurseKind::None)
+                    continue;
+                CurseOnFacts c;
+                c.kind = uint8(kind);
+                c.caster = holder->GetCasterGuid();
+                c.remainingMs = uint32(std::max(0, holder->GetAuraDuration()));
+                e.curses.push_back(c);
+            }
+        }
+
+        void FillEnemy(Creature* creature, std::vector<Unit*> const& partyUnits, EnemyFacts& e)
         {
             e.guid = creature->GetObjectGuid();
             e.entry = creature->GetEntry();
@@ -542,8 +561,10 @@ namespace WorldModelBuilder
                         e.reflectSpellId = aura->GetId();
                     }
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
-            if (!e.meleeEnabled)
             FillAttackPower(creature, e);
+            e.armor = creature->GetArmor();
+            FillCursesOn(creature, e);
+            if (!e.meleeEnabled)
                 e.meleeDps = 0.0f;     // walking bombs, casters that stand back: no melee to count
             if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(e.entry))
             {
@@ -867,7 +888,6 @@ namespace WorldModelBuilder
             }
         }
 
-        // ClassKit::ThreatDrops of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
         // ClassKit::AttackPowerDebuffs of a tank bot: the SPELL_AURA_MOD_ATTACK_POWER amount
         // below 0, its duration and radius from the spell data.
         void FillMitigations(PartyBotAI const* ai, PartyMemberFacts& f)
@@ -897,6 +917,7 @@ namespace WorldModelBuilder
             }
         }
 
+        // ClassKit::ThreatDrops of a non-tank bot. Fade: SPELL_AURA_MOD_TOTAL_THREAT with a
         // negative amount on every threat list for the aura's duration. Vanish: a sanctuary
         // effect (Spell::EffectSanctuary removes the rogue from every threat list); Feign
         // Death: its aura (Unit::SetFeignDeath deletes every hostile reference). Feint, Cower:
@@ -1086,6 +1107,40 @@ namespace WorldModelBuilder
                 a.ready = f.CanAct() && !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
                           ai->IsReadyWithStance(spell);
                 f.allyBoosts.push_back(a);
+            }
+        }
+
+        // Paladin blessings and party auras: ClassKit::Blessings / PartyAuras.
+        void FillPaladinBuffs(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            for (SpellEntry const* spell : ai->Kit().Blessings())
+            {
+                BlessingKind const kind = PaladinBuffs::BlessingOf(spell);
+                if (kind != BlessingKind::None)
+                    f.blessingSpells.push_back({ spell->Id, uint8(kind) });
+            }
+            for (SpellEntry const* spell : ai->Kit().PartyAuras())
+            {
+                PaladinAuraKind const kind = PaladinBuffs::AuraOf(spell);
+                if (kind != PaladinAuraKind::None)
+                    f.auraSpells.push_back({ spell->Id, uint8(kind) });
+            }
+            for (SpellEntry const* spell : ai->Kit().JudgementSeals())
+            {
+                JudgementKind const kind = PaladinBuffs::SealOf(spell);
+                if (kind != JudgementKind::None)
+                    f.judgementSeals.push_back({ spell->Id, uint8(kind) });
+            }
+        }
+
+        // Damage curses: ClassKit::Curses.
+        void FillCurses(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            for (SpellEntry const* spell : ai->Kit().Curses())
+            {
+                CurseKind const kind = WarlockCurses::KindOf(spell);
+                if (kind != CurseKind::None)
+                    f.curseSpells.push_back({ spell->Id, uint8(kind) });
             }
         }
 
@@ -1357,6 +1412,37 @@ namespace WorldModelBuilder
             return fallback;
         }
 
+        // Paladin blessings on `member`, and the party aura a paladin member keeps up itself.
+        void FillPaladinBuffsOn(Player const* member, PartyMemberFacts& f)
+        {
+            if (!member->IsAlive())
+                return;
+            ObjectGuid const self = member->GetObjectGuid();
+            bool const paladin = member->GetClass() == CLASS_PALADIN;
+            for (auto const& itr : member->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                SpellEntry const* spell = holder->GetSpellProto();
+                if (spell->SpellFamilyName != SPELLFAMILY_PALADIN || !holder->IsPositive())
+                    continue;
+                BlessingKind const blessing = PaladinBuffs::BlessingOf(spell);
+                if (blessing != BlessingKind::None)
+                {
+                    ObjectGuid const caster = holder->GetCasterGuid();
+                    if (std::none_of(f.blessingsOn.begin(), f.blessingsOn.end(), [&](BlessingOnFacts const& b)
+                        { return b.kind == uint8(blessing) && b.caster == caster; }))
+                        f.blessingsOn.push_back({ uint8(blessing), caster });
+                    continue;
+                }
+                if (paladin && holder->GetCasterGuid() == self)
+                {
+                    PaladinAuraKind const aura = PaladinBuffs::AuraOf(spell);
+                    if (aura != PaladinAuraKind::None)
+                        f.ownAura = uint8(aura);
+                }
+            }
+        }
+
         // Harmful dispellable auras creatures put on `member` (players: pets are not dispelled).
         void FillDebuffs(Player const* member, PartyMemberFacts& f)
         {
@@ -1415,8 +1501,10 @@ namespace WorldModelBuilder
             PartyMemberFacts f;
             FillUnitFacts(member, f);
             FillPendingHit(member, f);
+            FillPendingHeal(member, f);
             f.cap = RoleCapabilities::Assess(member);
             FillDebuffs(member, f);
+            FillPaladinBuffsOn(member, f);
             if (member->AI())
             {
                 if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
@@ -1434,12 +1522,15 @@ namespace WorldModelBuilder
                         FillControls(ai, f);
                         FillFleeStops(ai, f);
                         FillTaunts(ai, f);
+                        FillMitigations(ai, f);
                         FillThreatDrops(ai, f);
                         FillSurvival(ai, f);
                         FillItemSurvival(ai, f);
                         FillManaItems(ai, f);
                         FillBursts(ai, f);
                         FillAllyBoosts(ai, f);
+                        FillPaladinBuffs(ai, f);
+                        FillCurses(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         if (SpellEntry const* filler = ai->Kit().Filler())
                         {
@@ -1485,7 +1576,6 @@ namespace WorldModelBuilder
 
             if (Pet* pet = member->GetPet())
             {
-                        FillMitigations(ai, f);
                 if (pet->IsInWorld() && pet->GetMap() == map)
                 {
                     PartyMemberFacts pf;
@@ -1512,7 +1602,6 @@ namespace WorldModelBuilder
         // refresh, and non-party creatures on our enemies' threat lists (an ally that just joined
         // our fight is seen at once). All re-checked here, so the 1 s scan only delays allies
         // that fight something we are not fighting yet.
-            FillPendingHeal(member, f);
         Player* leader = bot->GetPartyLeader();
         Unit* reference = (leader && leader->IsInWorld() && leader->GetMap() == map) ? static_cast<Unit*>(leader) : me;
         std::vector<ObjectGuid> allyGuids = world.allyCandidates;

@@ -546,7 +546,8 @@ bool PartyBotAI::CastHealOrder()
         return false;
     // A pure HoT starts no heal chain: the target is not topped up by it now, the next heal
     // waits for its deficit as usual.
-    if (action.spell->HasEffect(SPELL_EFFECT_HEAL))
+    // (Holy Shock: its triggered heal, HealSpells::HealingPart)
+    if (HealSpells::HealingPart(action.spell)->HasEffect(SPELL_EFFECT_HEAL))
     {
         uint32 const busyMs = std::max(uint32(HealSpells::GCD_SEC * 1000.0f), action.spell->GetCastTime(me));
         m_directives->NoteOrderedHeal(pTarget->GetObjectGuid(), now, busyMs);

@@ -233,6 +233,37 @@ namespace Commander
         bool ready = false;             // off cooldown, the mana, can act and cast
     };
 
+    // A paladin blessing or party aura a bot has learned, best rank (ClassKit::Blessings /
+    // PartyAuras). kind = BlessingKind or PaladinAuraKind (Perception/Profiles/PaladinBuffs.h).
+    struct PaladinBuffAbility
+    {
+        uint32 spellId = 0;
+        uint8 kind = 0;
+    };
+
+    // A damage curse a warlock bot has learned, best rank (ClassKit::Curses). kind = CurseKind
+    // (Perception/Profiles/WarlockCurses.h).
+    struct CurseAbility
+    {
+        uint32 spellId = 0;
+        uint8 kind = 0;
+    };
+
+    // A damage curse on an enemy, anyone's (CurseKind).
+    struct CurseOnFacts
+    {
+        uint8 kind = 0;
+        ObjectGuid caster;
+        uint32 remainingMs = 0;
+    };
+
+    // A paladin blessing on a party member, anyone's (BlessingKind).
+    struct BlessingOnFacts
+    {
+        uint8 kind = 0;
+        ObjectGuid caster;
+    };
+
     // The control effect an enemy is under now (the one lasting longest). A party member's
     // control cast that is done and on its way (Spell in SPELL_STATE_DELAYED: the server lands
     // it a few hundred ms later) counts as on, at its full duration: seeing nothing there
@@ -387,6 +418,16 @@ namespace Commander
         float damage = 0.0f;        // DamageSpells::EstimateDirect (no crit, no resistance)
     };
 
+    // A member's single target direct heal being cast (PartyMemberFacts::pendingHeal):
+    // SurvivalValue::Of counts it on its target when it lands.
+    struct PendingHeal
+    {
+        ObjectGuid target;          // empty = none (may be the caster itself)
+        uint32 spellId = 0;
+        uint32 landMs = 0;          // from WorldModel::refreshedAtMs until it lands
+        float amount = 0.0f;        // HealSpells::Estimate direct part (no crit)
+    };
+
     // A party member's (or pet's) direct damage on one enemy over the last few seconds, periodic
     // ticks left out (Perception/Forecast/DamageDealt.h, EnemyFacts::dealtBy).
     struct DealtRate
@@ -415,16 +456,6 @@ namespace Commander
         uint32 periodMs = 0;
         uint32 nextTickMs = 0;      // from the refresh
         uint32 remainingMs = 0;
-
-    // A member's single target direct heal being cast (PartyMemberFacts::pendingHeal):
-    // SurvivalValue::Of counts it on its target when it lands.
-    struct PendingHeal
-    {
-        ObjectGuid target;          // empty = none (may be the caster itself)
-        uint32 spellId = 0;
-        uint32 landMs = 0;          // from WorldModel::refreshedAtMs until it lands
-        float amount = 0.0f;        // HealSpells::Estimate direct part (no crit)
-    };
 
         uint32 TicksLeft() const
         {
@@ -474,6 +505,8 @@ namespace Commander
         // channel), or the bolt in the air. landMs = cast left + flight over the distance now.
         // Perception/Forecast/FinishForecast.h counts it for the target's other attackers.
         PendingHit pendingHit;
+        // Its single target direct heal being cast (players too): SurvivalValue::Of counts it.
+        PendingHeal pendingHeal;
         // Bots whose ClassKit::Filler has a cast time: that cast time and its flight speed
         // (yards per second, 0 = hits at once). FinishForecast::FillerLandMs.
         uint32 fillerCastMs = 0;
@@ -497,14 +530,24 @@ namespace Commander
         std::vector<DispelAbility> dispels;         // bots only
         std::vector<ControlAbility> controls;       // bots only
         std::vector<TauntAbility> taunts;           // tank-role bots only
+        std::vector<MitigationAbility> mitigations; // tank-role bots only
         std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
         std::vector<ManaItemAbility> manaItems;     // bots with a mana pool only
         std::vector<BurstAbility> bursts;           // bots only
         std::vector<AllyBoostAbility> allyBoosts;   // bots only
+        // Paladin bots: blessings and party auras it knows (BlessingAssigner).
+        std::vector<PaladinBuffAbility> blessingSpells;
+        std::vector<PaladinBuffAbility> auraSpells;
+        // Paladin bots: seals it can judge for a debuff (kind = JudgementKind; JudgementAssigner).
+        std::vector<PaladinBuffAbility> judgementSeals;
+        // Warlock bots: the damage curses it knows (CurseAssigner).
+        std::vector<CurseAbility> curseSpells;
+        // Every member (players, not pets): paladin blessings on it. Paladins: the party aura it
+        // keeps up itself (PaladinAuraKind, 0 = none): a player paladin's is left to it.
+        std::vector<BlessingOnFacts> blessingsOn;
+        uint8 ownAura = 0;
         // Every member (BoostAssigner): its mana regeneration is boosted now
-        // Its single target direct heal being cast (players too): SurvivalValue::Of counts it.
-        PendingHeal pendingHeal;
         // (SPELL_AURA_MOD_POWER_REGEN_PERCENT: Innervate), its spells are (Power Infusion,
         // Arcane Power: they do not stack).
         bool manaBoosted = false;
@@ -514,7 +557,6 @@ namespace Commander
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,
         // and mechanics it is immune to as 1 << mechanic (Weakened Soul: MECHANIC_SHIELD,
         // Forbearance: MECHANIC_IMMUNE_SHIELD).
-        std::vector<MitigationAbility> mitigations; // tank-role bots only
         float absorb = 0.0f;
         float damageTakenMult = 1.0f;
         bool immunePhysical = false;
@@ -656,6 +698,18 @@ namespace Commander
         uint32 reflectMs = 0;
         uint32 reflectSpellId = 0;
         bool meleePhysical = true;      // false: melee is fire/frost/... (armor does not reduce it)
+        // Melee attack power now and the creature_classlevelstats one: the weapon damage scales
+        // by 0.7 + 0.3 x apNow / apDb (Creature::UpdateDamagePhysical). apDb 0 = attack power
+        // does not change its damage. Perception/Values/MitigationValue.h.
+        float apNow = 0.0f;
+        float apDb = 0.0f;
+        // The strongest attack power debuff on it, anyone's (Demoralizing Shout / Roar do not
+        // stack: SPELL_AURA_MOD_ATTACK_POWER below 0): attack power it takes off, ms left.
+        float apDebuff = 0.0f;
+        uint32 apDebuffMs = 0;
+        uint32 armor = 0;               // live armor (Curse of Recklessness: CurseValue.h)
+        // The damage curses on it, anyone's (Perception/Profiles/WarlockCurses.h).
+        std::vector<CurseOnFacts> curses;
         // Main ranged spell damage per second (CreatureProfile::mainRangedSpellId), counted
         // while it stands back casting (melee off). Before resistances.
         float rangedDps = 0.0f;
@@ -678,15 +732,6 @@ namespace Commander
         // Every periodic damage effect of ours on it (partyDotMs is the longest one's time left).
         std::vector<PartyDot> partyDots;
         uint32 rank = 0;                // creature_template.rank (also correct for guardians)
-        // Melee attack power now and the creature_classlevelstats one: the weapon damage scales
-        // by 0.7 + 0.3 x apNow / apDb (Creature::UpdateDamagePhysical). apDb 0 = attack power
-        // does not change its damage. Perception/Values/MitigationValue.h.
-        float apNow = 0.0f;
-        float apDb = 0.0f;
-        // The strongest attack power debuff on it, anyone's (Demoralizing Shout / Roar do not
-        // stack: SPELL_AURA_MOD_ATTACK_POWER below 0): attack power it takes off, ms left.
-        float apDebuff = 0.0f;
-        uint32 apDebuffMs = 0;
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.

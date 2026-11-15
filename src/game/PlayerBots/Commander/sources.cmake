@@ -353,16 +353,30 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/BoostValue.cpp
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/BlessingAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/BlessingAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.h
+  ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.cpp
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/BoostBehavior.cpp
-  ${COMMANDER_DIR}/Perception/Tanks.h
-  ${COMMANDER_DIR}/Perception/Tanks.cpp
-  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h
-  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.cpp
   ${COMMANDER_DIR}/Perception/Values/MitigationValue.h
   ${COMMANDER_DIR}/Perception/Values/MitigationValue.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/MitigationBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/WarlockCurses.h
+  ${COMMANDER_DIR}/Perception/Profiles/WarlockCurses.cpp
+  ${COMMANDER_DIR}/Perception/Values/CurseValue.h
+  ${COMMANDER_DIR}/Perception/Values/CurseValue.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/CurseAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/CurseAssigner.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/CurseBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/CurseBehavior.cpp
+  ${COMMANDER_DIR}/Perception/Tanks.h
+  ${COMMANDER_DIR}/Perception/Tanks.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/RoleAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/PatrolPlanner.h

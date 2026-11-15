@@ -18,7 +18,8 @@
  * Bolt here), Demonic Sacrifice, Life Tap below 10% mana and Drain Life below 30% health,
  * Curse of Agony (user: no curse until the curses are chosen for the party).
  *
- * The Commander decides: Banish, Fear, Howl of Terror (crowd control), Rain of Fire (area
+ * The Commander decides: the damage curse (CurseAssigner picks Elements / Shadow / Recklessness
+ * for the party, CurseBehavior casts it when CurseValue says it pays), Banish, Fear, Howl of Terror (crowd control), Rain of Fire (area
  * phase), Life Tap and Drain Life (HealthTradeBehavior: how
  * much health it spends depends on the healers), Drain Soul on enemies about to die
  * (HarvestBehavior: the Soul Shards).

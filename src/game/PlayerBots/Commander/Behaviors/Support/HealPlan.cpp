@@ -108,6 +108,8 @@ namespace HealPlan
         a.deficit = minDeficit + (maxDeficit - minDeficit) * h.manaWeight;
         if (t.waitDeficit > 0.0f)
             a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
+        if (t.boostDeficit > 0.0f && t.boostDeficit <= maxDeficit)
+            a.deficit = std::max(a.deficit, t.boostDeficit);
 
         if (t.chained)
             a.need = Need::Chain;

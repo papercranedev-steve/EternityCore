@@ -1153,10 +1153,97 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
+    // Paladin blessings and party auras: who gives which (BlessingAssigner.h). The paladin
+    // rotation casts them out of combat.
+    struct BlessingDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid target;
+        uint32 spellId = 0;
+    };
+
+    struct PaladinAuraDuty
+    {
+        ObjectGuid bot;
+        uint32 spellId = 0;
+    };
+
+    struct BlessingPlan
+    {
+        bool active = false;    // the module ran (off: the rotation picks on its own)
+        std::vector<BlessingDuty> blessings;
+        std::vector<PaladinAuraDuty> auras;
+
+        // 0 = nothing for this pair.
+        uint32 BlessingFor(ObjectGuid bot, ObjectGuid target) const
+        {
+            for (BlessingDuty const& d : blessings)
+                if (d.bot == bot && d.target == target)
+                    return d.spellId;
+            return 0;
+        }
+
+        uint32 AuraFor(ObjectGuid bot) const
+        {
+            for (PaladinAuraDuty const& d : auras)
+                if (d.bot == bot)
+                    return d.spellId;
+            return 0;
+        }
+    };
+
+    // Warlock damage curses: which one each warlock bot keeps on its victim (CurseAssigner.h).
+    // CurseBehavior casts it when CurseValue says it pays.
+    struct CurseDuty
+    {
+        ObjectGuid bot;
+        uint32 spellId = 0;
+        uint8 kind = 0;         // CurseKind
+    };
+
+    struct CursePlan
+    {
+        bool active = false;    // the module ran (off: no curses)
+        std::vector<CurseDuty> duties;
+
+        CurseDuty const* For(ObjectGuid bot) const
+        {
+            for (CurseDuty const& d : duties)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+    };
+
+    // The judgement each paladin bot keeps on its victim (JudgementAssigner.h): the seal it
+    // judges for it. PaladinRotation casts it.
+    struct JudgementDuty
+    {
+        ObjectGuid bot;
+        uint32 sealSpellId = 0;
+    };
+
+    struct JudgementPlan
+    {
+        bool active = false;    // the module ran (off: no judgement kept up)
+        std::vector<JudgementDuty> duties;
+
+        uint32 SealFor(ObjectGuid bot) const
+        {
+            for (JudgementDuty const& d : duties)
+                if (d.bot == bot)
+                    return d.sealSpellId;
+            return 0;
+        }
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
         std::vector<RoleDuty> roles;
+        BlessingPlan blessings;
+        JudgementPlan judgements;
+        CursePlan curses;
         std::vector<InterruptDuty> interrupts;
         // Last DutyAllocator result of all duty modules (PartyCommander::RunAssigners), kept for
         // `.partybot ai plan` (who was passed over and why). Modules read their own part above.

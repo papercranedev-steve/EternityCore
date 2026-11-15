@@ -19,7 +19,8 @@
  * spirit regeneration runs. Hybrid heals count their direct part plus
  * HealSpells::HOT_INCOMING_SHARE of the expected damage for the HoT part. The class kit says
  * which heals are used (ClassKit::CombatHealUse, user 2026-11-15): priest Renew never (until
- * then no HoT was used in combat), druid Regrowth only in an emergency. The target's intake is
+ * then no HoT was used in combat), druid Regrowth and paladin Holy Shock (instant, valued by
+ * the heal it triggers: HealSpells::HealingPart; 2026-11-15) only in an emergency. The target's intake is
  * the damage the HoTs on it do not cover (PartyMemberFacts::hots).
  *
  * HoTs and Swiftmend (Behaviors/Support/HotPlan.h, user 2026-11-15): the healer's HoT
@@ -52,8 +53,9 @@
  * Heal boosts (ClassKit::HealBoosts, cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7.1,
  * user 2026-11-14): Inner Focus and Divine Favor wait for a deficit one big heal fills
  * (HealPlan::PickBoosted), then go on right before that heal (BotAction::prepSpell). While
- * Inner Focus (free) is ready the lifts themselves wait for that deficit (Target::waitDeficit,
- * never past the safe deficit), so the gap comes;
+ * one is ready the lifts themselves wait for that deficit (Target::boostDeficit; Divine Favor
+ * too since 2026-11-15, its crit counted: x HealPlan::CRIT_MULT), on targets whose safe deficit
+ * holds it, so the gap comes;
  * Nature's Swiftness makes the biggest heal instant in an emergency the picked heal would not
  * reach in time. The rotations' own Inner Focus and Divine Favor stand down while this module
  * decides heals.

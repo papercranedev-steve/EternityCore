@@ -1,35 +1,57 @@
 /*
  * Paladin rotation (moved out of PartyBotAI.cpp 2026-11-14, same steps).
  *
- * Out of combat: aura, Righteous Fury (tank), blessing on the party, heals (healer).
+ * Out of combat: aura, Righteous Fury (tank), blessings on the party, heals (healer).
+ * Aura and blessings: the brain says which (Commander/Coordination/Duties/BlessingAssigner.h,
+ * TeamPlan::blessings, user 2026-11-15); while that module is off, the same lists without the
+ * other paladins (BlessingAssigner::Order / AuraOrder). Until 2026-11-15 one random blessing
+ * for everyone and one random aura.
  *
  * In combat:
- *   1. Blessing of Sacrifice on an ally below 70% while the paladin is above 80%.
- *   2. Attacked: Holy Shield; Turn Evil on a second undead attacker (not a tank).
- *   3. Healer: heals (the Commander heal module while the party fights).
- *      Others: seal, Judgement, Hammer of Justice below 20% health, Hammer of Wrath on a victim
+ *   1. Attacked: Holy Shield; Turn Evil on a second undead attacker (not a tank).
+ *   2. Healer: heals (the Commander heal module while the party fights).
+ *      Others: the judgement the brain gave it (Commander/Coordination/Duties/
+ *      JudgementAssigner.h: Seal of Wisdom / Light, Judgement, then its own seal again; on a
+ *      victim living JUDGEMENT_MIN_TTD_SEC+ without one of that kind), seal, Judgement, Hammer of Justice below 20% health, Hammer of Wrath on a victim
  *      below 20%, Consecration (not a tank), Holy Shock (+ Divine Favor), Exorcism on undead,
  *      Holy Wrath on undead / demons.
- *   4. Blessing of Freedom when rooted or slowed; a self heal below 30% (not a healer).
+ *   3. Blessing of Freedom when rooted or slowed; a self heal below 30% (not a healer).
+ * Blessing of Sacrifice is not cast (user 2026-11-15: it took a GCD before any heal, even in an
+ * emergency, and moved the damage onto the paladin).
  *
  * The Commander decides: Divine Shield, Blessing of Protection, Lay on Hands (team rescue),
  * Hammer of Justice on a cast (InterruptBehavior), Consecration for a tank (ThreatBehavior,
  * ClassKit::AreaThreat; the rotation cast it on "3 attackers" too until 2026-11-14), dispels
- * in combat (DispelBehavior), Divine Favor before a healer's heal (heal boosts).
+ * in combat (DispelBehavior), a healer's Divine Favor and Holy Shock heals (heal module).
  * Still the rotation's own (no Commander module yet, doc 2026-11-14-hands-cleanup.md 3):
- * Turn Evil, Blessing of Sacrifice, Hammer of Justice at low health.
+ * Turn Evil, Hammer of Justice at low health.
  */
 
 #include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Group.h"
+#include "SpellMgr.h"
+#include "SpellAuras.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Coordination/Duties/BlessingAssigner.h"
+#include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Values/ValueModel.h"
 
 namespace
 {
+    using Commander::BlessingKind;
+    using Commander::PaladinAuraKind;
+
     class PaladinRotation : public ClassRotation
     {
     public:
         using ClassRotation::ClassRotation;
+
+        // A judgement is put on a victim expected to live at least this long (seal + Judgement:
+        // two casts and their mana for a 10 s debuff the melee hits refresh).
+        static constexpr float JUDGEMENT_MIN_TTD_SEC = 15.0f;
 
         void UpdateOutOfCombat() override
         {
@@ -37,18 +59,16 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
-            if (Cast(me, s.pAura))
+            if (Cast(me, ChosenAura()))
                 return;
 
             if (bot.m_role == ROLE_TANK && Cast(me, s.pRighteousFury))
                 return;
 
-            if (s.pBlessingBuff)
-                if (Player* pTarget = bot.SelectBuffTarget(s.pBlessingBuff))
-                    if (Buff(pTarget, s.pBlessingBuff))
-                        return;
+            if (BlessParty())
+                return;
 
-            EndBuffing(s.pBlessingBuff);
+            EndBuffing(m_lastBlessing);
 
             if (bot.m_role == ROLE_HEALER && bot.FindAndHealInjuredAlly())
                 return;
@@ -59,10 +79,6 @@ namespace
             PartyBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
-
-            if (Unit* pFriend = me->FindLowestHpFriendlyUnit(30.0f, 70, true, me))
-                if (s.pBlessingOfSacrifice && me->GetHealthPercent() > 80.0f && Cast(pFriend, s.pBlessingOfSacrifice))
-                    return;
 
             if (!me->GetAttackers().empty())
             {
@@ -96,6 +112,157 @@ namespace
         }
 
     private:
+        SpellEntry const* m_lastBlessing = nullptr;     // EndBuffing
+
+        SpellEntry const* KnownBlessing(BlessingKind kind) const
+        {
+            auto const& s = m_bot.m_spells.paladin;
+            switch (kind)
+            {
+                case BlessingKind::Wisdom:    return s.pBlessingOfWisdom;
+                case BlessingKind::Might:     return s.pBlessingOfMight;
+                case BlessingKind::Kings:     return s.pBlessingOfKings;
+                case BlessingKind::Salvation: return s.pBlessingOfSalvation;
+                case BlessingKind::Light:     return s.pBlessingOfLight;
+                case BlessingKind::Sanctuary: return s.pBlessingOfSanctuary;
+                default:                      return nullptr;
+            }
+        }
+
+        SpellEntry const* KnownAura(PaladinAuraKind kind) const
+        {
+            auto const& s = m_bot.m_spells.paladin;
+            switch (kind)
+            {
+                case PaladinAuraKind::Devotion:         return s.pDevotionAura;
+                case PaladinAuraKind::Concentration:    return s.pConcentrationAura;
+                case PaladinAuraKind::Retribution:      return s.pRetributionAura;
+                case PaladinAuraKind::Sanctity:         return s.pSanctityAura;
+                case PaladinAuraKind::ShadowResistance: return s.pShadowResistanceAura;
+                case PaladinAuraKind::FrostResistance:  return s.pFrostResistanceAura;
+                case PaladinAuraKind::FireResistance:   return s.pFireResistanceAura;
+                default:                                return nullptr;
+            }
+        }
+
+        // The brain's blessing plan, nullptr while the module (or the Commander) is off.
+        std::shared_ptr<Commander::PartyCommander> PlanOwner() const
+        {
+            if (!sCommanderMgr.IsEnabled())
+                return nullptr;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(m_bot.me);
+            return commander && commander->GetPlan().blessings.active ? commander : nullptr;
+        }
+
+        SpellEntry const* ChosenAura() const
+        {
+            if (std::shared_ptr<Commander::PartyCommander> owner = PlanOwner())
+            {
+                uint32 const spellId = owner->GetPlan().blessings.AuraFor(m_bot.me->GetObjectGuid());
+                return spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
+            }
+            for (PaladinAuraKind kind : Commander::BlessingAssigner::AuraOrder())
+                if (SpellEntry const* spell = KnownAura(kind))
+                    return spell;
+            return nullptr;
+        }
+
+        // Module off: the first of the member's list that I know and nobody else gave it.
+        SpellEntry const* OwnBlessingChoice(Player* pMember) const
+        {
+            uint8 role = ROLE_INVALID;
+            if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(pMember->AI()))
+                role = uint8(ai->m_role);
+            ObjectGuid const self = m_bot.me->GetObjectGuid();
+            for (BlessingKind kind : Commander::BlessingAssigner::Order(pMember->GetClass(), role))
+            {
+                SpellEntry const* spell = KnownBlessing(kind);
+                if (!spell)
+                    continue;
+                bool fromOther = false;
+                for (auto const& itr : pMember->GetSpellAuraHolderMap())
+                    if (itr.second->GetCasterGuid() != self &&
+                        Commander::PaladinBuffs::BlessingOf(itr.second->GetSpellProto()) == kind)
+                        fromOther = true;
+                if (!fromOther)
+                    return spell;
+            }
+            return nullptr;
+        }
+
+        // One blessing cast (true) on the first member that misses the one it gets from me.
+        bool BlessParty()
+        {
+            PartyBotAI& bot = m_bot;
+            Player* me = bot.me;
+            Group* pGroup = me->GetGroup();
+            if (!pGroup)
+                return false;
+            std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
+            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                Player* pMember = itr->getSource();
+                if (!pMember || !me->IsValidHelpfulTarget(pMember) || pMember->IsGameMaster() ||
+                    !me->IsWithinLOSInMap(pMember) || !me->IsWithinDist(pMember, 30.0f))
+                    continue;
+                SpellEntry const* spell = nullptr;
+                if (owner)
+                {
+                    if (uint32 const spellId = owner->GetPlan().blessings.BlessingFor(me->GetObjectGuid(), pMember->GetObjectGuid()))
+                        spell = sSpellMgr.GetSpellEntry(spellId);
+                }
+                else
+                    spell = OwnBlessingChoice(pMember);
+                if (!spell || !bot.IsValidBuffTarget(pMember, spell) || bot.IsBuffPendingFromOther(pMember, spell, nullptr))
+                    continue;
+                if (Buff(pMember, spell))
+                {
+                    m_lastBlessing = spell;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        enum class JudgeStep { None, Cast, Waiting };
+
+        // The judgement the brain gave this paladin (JudgementAssigner, user 2026-11-15): on a
+        // victim that lives long enough and has none of that kind from anyone, the seal for it,
+        // then Judgement; the paladin's melee hits keep it up, the own seal comes back after.
+        // Waiting: the seal is up, the Judgement is not cast yet (cooldown, out of its range).
+        JudgeStep KeepJudgement(Unit* pVictim)
+        {
+            PartyBotAI& bot = m_bot;
+            Player* me = bot.me;
+            auto const& s = bot.m_spells.paladin;
+            if (!pVictim || !s.pJudgement || !sCommanderMgr.IsEnabled())
+                return JudgeStep::None;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return JudgeStep::None;
+            uint32 const sealId = commander->GetPlan().judgements.SealFor(me->GetObjectGuid());
+            SpellEntry const* seal = sealId ? sSpellMgr.GetSpellEntry(sealId) : nullptr;
+            if (!seal)
+                return JudgeStep::None;
+
+            Commander::JudgementKind const kind = Commander::PaladinBuffs::SealOf(seal);
+            for (auto const& itr : pVictim->GetSpellAuraHolderMap())
+                if (Commander::PaladinBuffs::JudgementOf(itr.second->GetSpellProto()) == kind)
+                    return JudgeStep::None;     // up (mine, refreshed by my hits, or another paladin's)
+
+            Commander::EnemyFacts const* enemy = commander->GetWorld().FindEnemy(pVictim->GetObjectGuid());
+            if (!enemy || Commander::Value::EnemyTimeToDie(commander->GetWorld(), *enemy) < JUDGEMENT_MIN_TTD_SEC ||
+                me->GetPowerPercent(POWER_MANA) <= 30.0f)
+                return JudgeStep::None;
+
+            bool const sealUp = me->HasAura(seal->Id);
+            if (!me->IsSpellReady(s.pJudgement))
+                return sealUp ? JudgeStep::Waiting : JudgeStep::None;
+            if (!sealUp)
+                return Cast(me, seal) ? JudgeStep::Cast : JudgeStep::None;
+            return Cast(pVictim, s.pJudgement) ? JudgeStep::Cast : JudgeStep::Waiting;
+        }
+
         // True = cast.
         bool Damage()
         {
@@ -103,15 +270,21 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
+            Unit* pVictim = me->GetVictim();
+            JudgeStep const kept = KeepJudgement(pVictim);
+            if (kept == JudgeStep::Cast)
+                return true;
+            // Its seal is up for the judgement still to come: not replaced by the own one.
+            bool const holdSeal = kept == JudgeStep::Waiting;
+
             bool const hasSeal = s.pSeal && me->HasAura(s.pSeal->Id);
-            if (!hasSeal && s.pSeal && bot.CanTryToCastSpell(me, s.pSeal))
+            if (!holdSeal && !hasSeal && s.pSeal && bot.CanTryToCastSpell(me, s.pSeal))
                 me->CastSpell(me, s.pSeal, false);
 
-            Unit* pVictim = me->GetVictim();
             if (!pVictim)
                 return false;
 
-            if (hasSeal && me->GetPowerPercent(POWER_MANA) > 30.0f && Cast(pVictim, s.pJudgement))
+            if (!holdSeal && hasSeal && me->GetPowerPercent(POWER_MANA) > 30.0f && Cast(pVictim, s.pJudgement))
                 return true;
 
             if (me->GetHealthPercent() < 20.0f && !me->GetAttackers().empty() && Cast(pVictim, s.pHammerOfJustice))

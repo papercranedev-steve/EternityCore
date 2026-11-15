@@ -204,6 +204,18 @@ namespace Commander
         // (user 2026-11-15): Renew never (Heal ranks do more per mana), Regrowth only in an
         // emergency (a fast heal: expensive, its HoT is a bonus).
         virtual HealUse CombatHealUse(SpellEntry const* /*heal*/) const { return HealUse::Normal; }
+        // Paladin blessings and party auras it has learned (best rank, nullptr = not learned).
+        // Which one it gives whom is the brain's (Coordination/Duties/BlessingAssigner.h,
+        // WorldModel facts PartyMemberFacts::blessingSpells / auraSpells); the rotation casts.
+        virtual std::vector<SpellEntry const*> Blessings() const { return {}; }
+        virtual std::vector<SpellEntry const*> PartyAuras() const { return {}; }
+        // Seals judged for a debuff that helps whoever hits the victim (Seal of Wisdom / Light).
+        // Which one a paladin keeps up: the brain (Coordination/Duties/JudgementAssigner.h).
+        virtual std::vector<SpellEntry const*> JudgementSeals() const { return {}; }
+        // Curses that raise the party's damage on an enemy (best rank, nullptr = not learned).
+        // Which one each warlock keeps up is the brain's (Coordination/Duties/CurseAssigner.h),
+        // CurseBehavior casts it.
+        virtual std::vector<SpellEntry const*> Curses() const { return {}; }
         // Turns a HoT on the target into an instant heal and removes it (Swiftmend). The heal
         // module casts it: right before the HoT's last tick (nearly free), or in an emergency.
         virtual SpellEntry const* HotConsumer() const { return nullptr; }

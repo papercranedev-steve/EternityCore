@@ -15,8 +15,10 @@
  *             Mana plentiful (weight 0): heal as soon as one efficient heal fits. Mana scarce
  *             (weight 1): let the target sink to the reserve, then lift it in one go and rest
  *             longer (fewer five second rule restarts, more spirit regeneration).
- *             A free heal boost ready (Target::waitDeficit, Inner Focus): at least the boosted
- *             biggest heal x (1 - OVERHEAL_MAX), at most max (2026-11-14).
+ *             A heal boost ready (Target::boostDeficit, Inner Focus, Divine Favor): at least
+ *             the boosted biggest heal x (1 - OVERHEAL_MAX) when that is at most max
+ *             (2026-11-14, Divine Favor 2026-11-15). A HoT Swiftmend is about to eat
+ *             (Target::waitDeficit): at least its deficit, at most max.
  *   chain     the last heal went to this target and ended just now: keep healing it until the
  *             next heal would overheal by more than OVERHEAL_MAX, then rest.
  *
@@ -63,10 +65,16 @@ namespace HealPlan
         float intake = 0.0f;        // damage per second expected (Value::TakenDps)
         float burst = 0.0f;         // biggest recent spike (PartyMemberFacts::takenBurst)
         bool chained = false;       // the healer's last heal went here and just ended
-        // A free heal boost is ready (Inner Focus): the lift waits until this much is missing,
-        // so one boosted big heal fills it (user 2026-11-14), but never past the safe deficit
-        // (max health - reserve - incoming during the heal). 0 = no wait.
+        // The lift waits until this much is missing (a HoT about to be eaten by Swiftmend,
+        // HotPlan::WaitDeficit), but never past the safe deficit (max health - reserve -
+        // incoming during the heal). 0 = no wait.
         float waitDeficit = 0.0f;
+        // A heal boost that makes the next heal bigger or free is ready (Inner Focus, Divine
+        // Favor; users 2026-11-14 / 2026-11-15): the lift waits until this much is missing, so
+        // one boosted big heal (crit counted) fills it. Only when it is within the safe deficit:
+        // a target too small for it is lifted as without the boost (until 2026-11-15 the wait
+        // was capped at the safe deficit, where PickBoosted then still found the gap too small).
+        float boostDeficit = 0.0f;
     };
 
     struct Healer

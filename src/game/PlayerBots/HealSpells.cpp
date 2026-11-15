@@ -2,6 +2,7 @@
 #include "Unit.h"
 #include "Spell.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include <algorithm>
 
 namespace HealSpells
@@ -26,8 +27,25 @@ namespace HealSpells
         }
     }
 
+    SpellEntry const* HealingPart(SpellEntry const* spell)
+    {
+        if (!spell)
+            return spell;
+        uint32 healId = 0;
+        switch (spell->Id)
+        {
+            case 20473: healId = 25914; break;     // Holy Shock rank 1
+            case 20929: healId = 25913; break;     // rank 2
+            case 20930: healId = 25903; break;     // rank 3
+            default: return spell;
+        }
+        SpellEntry const* heal = sSpellMgr.GetSpellEntry(healId);
+        return heal ? heal : spell;
+    }
+
     Amount Estimate(Unit* healer, Unit const* target, SpellEntry const* spell)
     {
+        spell = HealingPart(spell);
         Amount out;
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
         {
@@ -79,6 +97,7 @@ namespace HealSpells
 
     bool IsSingleTargetHeal(SpellEntry const* spell)
     {
+        spell = HealingPart(spell);
         if (spell->IsAreaOfEffectSpell())
             return false;
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)

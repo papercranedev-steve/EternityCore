@@ -228,23 +228,27 @@ namespace Commander
             return true;
         }
 
-        // A free heal boost is ready (Inner Focus): the deficit the lift waits for, so the boosted
-        // biggest heal fills it (HealPlan::Target::waitDeficit). 0 = none ready.
-        float FreeBoostWait(PartyBotAI const* bot, std::vector<HealPlan::Option> const& options)
+        // A heal boost that makes the next heal bigger or free is ready (Inner Focus, Divine
+        // Favor; user 2026-11-15: Divine Favor as Inner Focus): the deficit the lift waits for,
+        // so the boosted biggest heal (crit counted) fills it (HealPlan::Target::boostDeficit).
+        // Not Nature's Swiftness (instant: emergencies only). 0 = none ready.
+        float BoostWait(PartyBotAI const* bot, std::vector<HealPlan::Option> const& options)
         {
             Player* me = bot->me;
             for (HealBoostSpell const& s : bot->Kit().HealBoosts())
             {
-                if (!s.spell || !s.free)
+                if (!s.spell || s.instant)
                     continue;
                 if (!me->HasAura(s.spell->Id) && (!me->IsSpellReady(s.spell) || !bot->CanTryToCastSpell(me, s.spell)))
                     continue;
                 HealPlan::Boost b;
-                b.free = true;
+                b.free = s.free;
                 b.critChance = s.critChance;
+                // The heals PickBoosted takes outside an emergency.
                 float biggest = 0.0f;
                 for (HealPlan::Option const& o : options)
-                    biggest = std::max(biggest, HealPlan::BoostedHeal(o, b));
+                    if (!o.emergencyOnly)
+                        biggest = std::max(biggest, HealPlan::BoostedHeal(o, b));
                 return biggest * (1.0f - HealPlan::OVERHEAL_MAX);
             }
             return 0.0f;
@@ -404,7 +408,8 @@ namespace Commander
                 c.spells.push_back(o.spell);
             }
             c.eat = EatOf(bot, unit, m);
-            c.target.waitDeficit = std::max(FreeBoostWait(bot, c.options), HotPlan::WaitDeficit(c.eat));
+            c.target.waitDeficit = HotPlan::WaitDeficit(c.eat);
+            c.target.boostDeficit = BoostWait(bot, c.options);
             c.assessment = HealPlan::Assess(c.target, healer, c.options);
             all.push_back(std::move(c));
         }

@@ -56,6 +56,13 @@ namespace Commander
                 return sSpellMgr.GetSpellEntry(SPELL_PHASE_SHIFT);
             }
 
+            // Damage curses, one per warlock chosen for the party (CurseAssigner).
+            std::vector<SpellEntry const*> Curses() const override
+            {
+                auto const& s = m_bot.m_spells.warlock;
+                return { s.pCurseoftheElements, s.pCurseofShadow, s.pCurseofRecklessness };
+            }
+
             // No bursts: Amplify Curse paired only with Curse of Agony, which the warlocks do not
             // cast any more (user 2026-11-15).
 

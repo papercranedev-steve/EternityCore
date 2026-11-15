@@ -1,5 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
+#include "SpellEntry.h"
 
 namespace Commander
 {
@@ -72,6 +73,38 @@ namespace Commander
                 b.spell = m_bot.m_spells.paladin.pDivineFavor;
                 b.critChance = 1.0f;
                 return { b };
+            }
+
+            // Holy Shock (user 2026-11-15): instant, 30 s cooldown, little heal per mana: for an
+            // emergency the cast-time heals would not reach in time.
+            HealUse CombatHealUse(SpellEntry const* heal) const override
+            {
+                if (heal->IsFitToFamily<SPELLFAMILY_PALADIN, CF_PALADIN_HOLY_SHOCK>())
+                    return HealUse::EmergencyOnly;
+                return HealUse::Normal;
+            }
+
+            std::vector<SpellEntry const*> Blessings() const override
+            {
+                auto const& s = m_bot.m_spells.paladin;
+                return { s.pBlessingOfWisdom, s.pBlessingOfMight, s.pBlessingOfKings,
+                         s.pBlessingOfSalvation, s.pBlessingOfLight, s.pBlessingOfSanctuary };
+            }
+
+            // Only with Judgement learned (it is what puts the debuff on).
+            std::vector<SpellEntry const*> JudgementSeals() const override
+            {
+                auto const& s = m_bot.m_spells.paladin;
+                if (!s.pJudgement)
+                    return {};
+                return { s.pSealOfWisdom, s.pSealOfLight };
+            }
+
+            std::vector<SpellEntry const*> PartyAuras() const override
+            {
+                auto const& s = m_bot.m_spells.paladin;
+                return { s.pDevotionAura, s.pConcentrationAura, s.pRetributionAura, s.pSanctityAura,
+                         s.pShadowResistanceAura, s.pFrostResistanceAura, s.pFireResistanceAura };
             }
         };
     }

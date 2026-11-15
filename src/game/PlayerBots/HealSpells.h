@@ -68,7 +68,12 @@ namespace HealSpells
         float periodicSec = 0.0f;   // duration of the periodic part
     };
 
-    // Healing `spell` cast by `healer` does on `target` (bonuses included, see header).
+    // The spell whose effects heal when `spell` is cast on a friendly unit: Holy Shock's
+    // learned ranks are a dummy that casts a separate heal (spell_paladin.cpp
+    // PaladinHolyShockScript, triggered: no mana, no GCD of its own). Any other spell: itself.
+    SpellEntry const* HealingPart(SpellEntry const* spell);
+    // Healing `spell` cast by `healer` does on `target` (bonuses included, see header; a
+    // dummy like Holy Shock: its HealingPart).
     Amount Estimate(Unit* healer, Unit const* target, SpellEntry const* spell);
     // Direct part of `spell` when a script adds `extraBase` to its base value before the
     // bonuses (Swiftmend: the eaten HoT's ticks, spell_druid.cpp, then Spell::EffectHeal).

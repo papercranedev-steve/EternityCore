@@ -312,6 +312,9 @@ public:
     std::vector<SpellEntry const*> m_spellListTaunt;
     std::set<SpellEntry const*, HealAuraCompare> m_spellListPeriodicHeal;
     std::set<SpellEntry const*, HealSpellCompare> m_spellListDirectHeal;
+    // Single-target heals cast through a dummy that triggers the heal (Holy Shock, all ranks;
+    // HealSpells::HealingPart). Not in m_spellListDirectHeal: its order sums heal effects.
+    std::vector<SpellEntry const*> m_spellListIndirectHeal;
     union
     {
         struct
@@ -320,12 +323,28 @@ public:
         } raw;
         struct
         {
-            SpellEntry const* pAura;
             SpellEntry const* pSeal;
-            SpellEntry const* pBlessingBuff;
+            // Seals judged for their debuff on the victim (the brain says which:
+            // Commander/Coordination/Duties/JudgementAssigner.h).
+            SpellEntry const* pSealOfWisdom;
+            SpellEntry const* pSealOfLight;
+            // Blessings and auras (best rank; not the Greater Blessings). Who gives which:
+            // the brain (Commander/Coordination/Duties/BlessingAssigner.h), PaladinRotation casts.
+            SpellEntry const* pBlessingOfWisdom;
+            SpellEntry const* pBlessingOfMight;
+            SpellEntry const* pBlessingOfKings;
+            SpellEntry const* pBlessingOfSalvation;
+            SpellEntry const* pBlessingOfLight;
+            SpellEntry const* pBlessingOfSanctuary;
+            SpellEntry const* pDevotionAura;
+            SpellEntry const* pConcentrationAura;
+            SpellEntry const* pRetributionAura;
+            SpellEntry const* pSanctityAura;
+            SpellEntry const* pShadowResistanceAura;
+            SpellEntry const* pFrostResistanceAura;
+            SpellEntry const* pFireResistanceAura;
             SpellEntry const* pBlessingOfProtection;
             SpellEntry const* pBlessingOfFreedom;
-            SpellEntry const* pBlessingOfSacrifice;
             SpellEntry const* pHammerOfJustice;
             SpellEntry const* pJudgement;
             SpellEntry const* pExorcism;
