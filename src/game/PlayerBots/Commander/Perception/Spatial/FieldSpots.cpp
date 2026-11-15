@@ -47,6 +47,7 @@ namespace FieldSpots
                     s.walkYd = field.WalkYd(member, s.pos, q.tight, fight);
                     if (s.walkYd < 0.0f)
                     {
+                        s.reached = false;
                         unreached.push_back(s);
                         continue;
                     }
@@ -58,6 +59,8 @@ namespace FieldSpots
         // part): all of them, the caller's path check decides.
         if (out.empty())
             out.swap(unreached);
+        else if (q.keepUnreached)
+            out.insert(out.end(), unreached.begin(), unreached.end());
         return out;
     }
 }

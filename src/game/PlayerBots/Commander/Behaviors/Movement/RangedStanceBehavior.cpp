@@ -44,17 +44,28 @@ namespace Commander
             float loss = 0.0f;      // points: SpotCost::Walk + exposure + sight, lower first
             bool viewed = false;    // PositionField::SeesEstimate from the victim
             bool taken = false;     // FieldSpots::Spot::taken
+            bool reached = true;    // FieldSpots::Spot::reached
 
             // Cells estimated in sight first (header "Where"), then the loss.
             float Key() const { return loss + (viewed ? 0.0f : FieldSpots::HIDDEN_KEY); }
         };
 
+        // Cells the grid walk reaches first, then the others (header "Where"); each part by Key,
+        // PreferFree within a part only.
         void SortSpots(WorldModel const& world, PartyMemberFacts const& self, float speed, std::vector<Spot>& spots)
         {
-            std::stable_sort(spots.begin(), spots.end(), [](Spot const& a, Spot const& b) { return a.Key() < b.Key(); });
+            auto const firstUnreached = std::stable_partition(spots.begin(), spots.end(), [](Spot const& s) { return s.reached; });
+            size_t const reachedCount = size_t(firstUnreached - spots.begin());
             // Equally good: within one cell of walk.
             float const tie = SpotCost::Walk(world, self, PositionField::CELL_YD * RS::PATH_FACTOR / speed);
-            FieldSpots::PreferFree(spots, [](Spot const& s) { return s.Key(); }, [](Spot const& s) { return s.taken; }, tie);
+            std::vector<Spot> rest(spots.begin() + reachedCount, spots.end());
+            spots.resize(reachedCount);
+            for (std::vector<Spot>* part : { &spots, &rest })
+            {
+                std::stable_sort(part->begin(), part->end(), [](Spot const& a, Spot const& b) { return a.Key() < b.Key(); });
+                FieldSpots::PreferFree(*part, [](Spot const& s) { return s.Key(); }, [](Spot const& s) { return s.taken; }, tie);
+            }
+            spots.insert(spots.end(), rest.begin(), rest.end());
         }
 
         // Field cells up to MAX_RADIUS (PREPARE_MAX_RADIUS before the fight) from the victim's
@@ -79,6 +90,9 @@ namespace Commander
             // In the fight: circles covering the victim's spot as the fight there (FieldSpots.h).
             q.hasFight = !prepare;
             q.fightAt = victim;
+            // In the fight also the cells the grid walk misses: their path check is the only way
+            // to a blocker for the join gamble (FieldSpots::Query::keepUnreached).
+            q.keepUnreached = !prepare;
             for (FieldSpots::Spot const& c : FieldSpots::Collect(world, self, q))
             {
                 if (HazardZones::IsInside(zones, HAZARD_RANGED, c.pos))
@@ -91,6 +105,7 @@ namespace Commander
                 s.loss = SpotCost::Walk(world, self, s.walkSec) + s.exposure + s.sight;
                 s.viewed = field.SeesEstimate(victim, c.pos);
                 s.taken = c.taken;
+                s.reached = c.reached;
                 spots.push_back(s);
             }
             SortSpots(world, self, speed, spots);

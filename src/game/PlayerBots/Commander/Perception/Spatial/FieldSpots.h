@@ -13,6 +13,8 @@
  *    (walkYd). When it is not (on a crate, a cell not flooded yet), or the grid walk reaches
  *    none of the band (a member far off, the field between not covered), walkYd is -1 and
  *    every cell that passes the rest is returned: the caller's path check decides.
+ *    Query::keepUnreached: the cells the grid walk does not reach come too, after the reached
+ *    ones (Spot::reached false), for a caller whose reached cells may all fail its own checks.
  * Facts only; the caller filters for its purpose, sorts and runs its live checks (line of
  * sight, SafeRoute::PathIsSafe) on the best few.
  */
@@ -35,6 +37,9 @@ namespace Commander
             float straightYd = 0.0f;    // 2D, from the member
             float walkYd = -1.0f;       // grid walk from the member, -1 = not known
             float patrolSec = -1.0f;    // FieldCell::patrolSec
+            // The grid walk gets there (false: walkYd -1 because the walk does not get there,
+            // not because the member's own cell is not standable).
+            bool reached = true;
 
             // Another member (not a pet) stands there or walks there (PartyMemberFacts::standAt
             // within TAKEN_YD of the cell centre).
@@ -67,6 +72,11 @@ namespace Commander
             // that spot, nor stop the grid walk there (PositionField::ClearOfIdle, WalkYd).
             bool hasFight = false;
             Position3 fightAt;
+            // Also the cells the grid walk does not reach, after the reached ones (header).
+            // stockade-20261115-143912: 575 of 900 cells under idle prisoners, the mages' grid walk
+            // reached only cells in the next rooms, none saw the tank's cell; the cells in it were
+            // never path checked, so the join gamble had no blocker and they stood for 70 s.
+            bool keepUnreached = false;
         };
 
         // From world.field (must be set).

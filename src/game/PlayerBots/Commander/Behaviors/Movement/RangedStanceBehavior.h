@@ -64,7 +64,11 @@
  * MAX_GEOMETRY_CHECKS cells; the first that passes is taken. In the fight the walk counts a
  * circle covering the victim's spot only closer than the victim (ArrivingAt, MeleeRoutes.h).
  * (Before: cells probed nearest first with the real line only, those behind a wall used the
- * budget and the path checks, stockade-20261115-002203.) Nothing found, or no field: the bot
+ * budget and the path checks, stockade-20261115-002203.) In the fight the cells the grid walk
+ * does not reach come after all of those, same order (FieldSpots::Query::keepUnreached,
+ * 2026-11-15, stockade-20261115-143912: the grid walk reached only the next rooms, none saw the
+ * tank's cell, the mages stood 70 s): SafeRoute::PathIsSafe decides, and a path blocked by an
+ * idle creature gives the join gamble its blocker. Nothing found, or no field: the bot
  * stays (no chase into a pack).
  * The spot here costs its exposure + its sight margin (in reach only); the move's reason
  * "sees the victim only narrowly" when the margin saved more than the exposure.
