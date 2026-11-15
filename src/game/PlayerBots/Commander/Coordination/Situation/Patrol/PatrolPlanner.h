@@ -5,10 +5,9 @@
  *
  * Step: every lure in Search (casters standing back in the patrol's path, casting at the
  * hider) gets a point from LosBreak::FindPoint around the hider: hidden from the casters,
- * seen by the hider, the main tank and the healer bots (not the hider itself; at most
- * MAX_WATCHERS), not in the patrol's path, not towards an idle creature (within
- * OTHER_CREATURE_CLEARANCE and closer to it than the hider is). Found: Active from now (the
- * hider walks there, PatrolBehavior). Not found: NoPoint (PatrolAssigner kills the casters
+ * seen by the main tank and the healer bots (not the hider itself; LosBreak::Watchers), not
+ * in the patrol's path, not towards an idle creature (LosBreak::TowardsIdleCreature). Found:
+ * Active from now (the hider walks there, LureBehavior). Not found: NoPoint (PatrolAssigner kills the casters
  * from range). A note for the leader either way.
  */
 
@@ -26,9 +25,6 @@ namespace Commander
 
     namespace PatrolPlanner
     {
-        uint32 const MAX_WATCHERS = 2;
-        float const OTHER_CREATURE_CLEARANCE = 20.0f;
-
         void Step(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs);
     }
 }

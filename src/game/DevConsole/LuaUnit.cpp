@@ -761,9 +761,9 @@ namespace DevConsole
         return "?";
     }
 
-    static char const* LureStateName(Commander::PatrolLureState s)
+    static char const* LureStateName(Commander::LosLureState s)
     {
-        using S = Commander::PatrolLureState;
+        using S = Commander::LosLureState;
         switch (s)
         {
             case S::Search:  return "search";
@@ -934,7 +934,7 @@ namespace DevConsole
             {
                 lua_createtable(L, int(m.lures.size()), 0);
                 int j = 0;
-                for (Commander::PatrolLure const& l : m.lures)
+                for (Commander::LosLure const& l : m.lures)
                 {
                     lua_createtable(L, 0, 3);
                     SetFieldG(L, "hider", l.hider);
@@ -946,6 +946,22 @@ namespace DevConsole
                 lua_setfield(L, -2, "lures");
             }
             lua_setfield(L, -2, "patrol");
+        }
+        // Caster lures after the pull (CasterLureAssigner): {hider, state, casters} each.
+        if (!plan.casterLure.lures.empty())
+        {
+            lua_createtable(L, int(plan.casterLure.lures.size()), 0);
+            int j = 0;
+            for (Commander::LosLure const& l : plan.casterLure.lures)
+            {
+                lua_createtable(L, 0, 3);
+                SetFieldG(L, "hider", l.hider);
+                SetFieldS(L, "state", LureStateName(l.state));
+                PushGuidList(L, l.casters);
+                lua_setfield(L, -2, "casters");
+                lua_rawseti(L, -2, ++j);
+            }
+            lua_setfield(L, -2, "casterLures");
         }
         if (!plan.interrupts.empty())
         {

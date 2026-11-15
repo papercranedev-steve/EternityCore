@@ -17,7 +17,7 @@
 #include "Commander/Behaviors/Movement/KiteBehavior.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Combat/AreaRoomBehavior.h"
-#include "Commander/Behaviors/Movement/PatrolBehavior.h"
+#include "Commander/Behaviors/Movement/LureBehavior.h"
 #include "Commander/Behaviors/Movement/OffRouteBehavior.h"
 #include "Commander/Behaviors/Movement/BlastBehavior.h"
 #include "Commander/Behaviors/Combat/CrowdControlBehavior.h"
@@ -46,6 +46,7 @@
 #include "Commander/Coordination/Doctrine/ControlledEnd.h"
 #include "Commander/Coordination/Situation/FightSpot/FightSpotAssigner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
+#include "Commander/Coordination/Situation/Los/CasterLureAssigner.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolHold.h"
 #include "Commander/Coordination/Doctrine/AreaPhase.h"
@@ -94,7 +95,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<KiteBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaDamageBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<AreaRoomBehavior>()));
-        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PatrolBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<LureBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<OffRouteBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BlastBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FinishCastBehavior>()));
@@ -125,6 +126,8 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FightSpotAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
+        // Reads this refresh's patrol guard (its path's casters are its own lures).
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CasterLureAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RouteGuardAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<AreaPhaseAssigner>()));
     }

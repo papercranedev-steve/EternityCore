@@ -36,7 +36,7 @@ namespace Commander
             { "escape",      "脱身",   true  },
             { "threat",      "仇恨",   true  },
             { "pull",        "开怪",   true  },
-            { "patrol",      "巡逻",   true  },
+            { "lure",        "卡视野", true  },
             { "position",    "走位",   true  },
             { "retreat",     "撤退",   true  },
             { "mana",        "回蓝",   false },

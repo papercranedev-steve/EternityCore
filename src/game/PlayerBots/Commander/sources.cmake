@@ -405,10 +405,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullOpening.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Los/LosHealerSpot.h
   ${COMMANDER_DIR}/Coordination/Situation/Los/LosHealerSpot.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Los/CasterLureAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Los/CasterLureAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Los/CasterLurePlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Los/CasterLurePlanner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullMethod.h
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlace.h
-  ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.h
-  ${COMMANDER_DIR}/Behaviors/Movement/PatrolBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/LureBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/LureBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Patrol/RouteGuard.h

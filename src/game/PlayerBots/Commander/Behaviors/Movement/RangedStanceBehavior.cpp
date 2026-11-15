@@ -54,6 +54,9 @@ namespace Commander
         Player* me = bot->me;
         if (me->HasUnitState(UNIT_STATE_ROOT) || !bot->UsesCasterChase())
             return;
+        // Hiding from a caster standing back (LureBehavior walks it).
+        if (plan.HidingFor(me->GetObjectGuid()))
+            return;
 
         // Before the fight: out of combat while the pull runs, take a place in cast range of
         // where the brain planned the tank to fight (PullPlan::PlannedFightSpot), then wait.

@@ -1,5 +1,7 @@
 #include "Commander/Coordination/Situation/Los/LosBreak.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
 #include "Creature.h"
@@ -203,6 +205,40 @@ namespace Commander
         {
             std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(entry);
             return profile && profile->mainRangedSpellId;
+        }
+
+        bool TowardsIdleCreature(WorldModel const& world, Position3 const& point, Position3 const& from)
+        {
+            for (PackFacts const& pack : world.packs)
+            {
+                for (PackCreature const& c : pack.members)
+                {
+                    if (!c.aggressive || c.noAggro)
+                        continue;
+                    float const d = PackResolver::Distance(c.pos, point);
+                    if (d < IDLE_CREATURE_CLEARANCE && d < PackResolver::Distance(c.pos, from))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        std::vector<Unit const*> Watchers(WorldModel const& world, Map* map, ObjectGuid hider)
+        {
+            std::vector<Unit const*> out;
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (out.size() >= MAX_WATCHERS)
+                    break;
+                if (m.isPet || !m.alive || m.guid == hider)
+                    continue;
+                if (!(tank && m.guid == tank->guid) && !(m.isBot && m.role == ROLE_HEALER))
+                    continue;
+                if (Unit* u = map->GetUnit(m.guid))
+                    out.push_back(u);
+            }
+            return out;
         }
     }
 }

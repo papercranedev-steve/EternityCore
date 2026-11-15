@@ -366,6 +366,14 @@ namespace Commander
                 d.outliersWhy = l.corner ? "corner fight: the tank hides from the far ones"
                                          : "they stand back and cast: the tank hides from them";
             }
+            // After the pull: the casters the caster lure works on (CasterLureAssigner, last refresh).
+            else if (pull.phase == PullPhase::None)
+            {
+                for (LosLure const& l : plan.casterLure.lures)
+                    if (l.state == LosLureState::Search || l.state == LosLureState::Active)
+                        lure.insert(lure.end(), l.casters.begin(), l.casters.end());
+                d.outliersWhy = "they stand back and cast: their victim steps out of their sight";
+            }
             bool const anyOutlier = std::any_of(d.enemies.begin(), d.enemies.end(),
                 [](DoctrineEnemy const& x) { return (x.stamps & STAMP_OUTLIER) != 0; });
             if (!lure.empty())

@@ -481,23 +481,25 @@ namespace Commander
         }
     };
 
-    enum class PatrolLureState : uint8
+    // A lure in the fight: the patrol guard's (PatrolGuardPlan::lures) or a caster standing
+    // back anywhere (CasterLurePlan).
+    enum class LosLureState : uint8
     {
-        Search,     // PatrolPlanner::Step looks for a point on the map thread
-        Active,     // the hider stands at `point` until the casters came (PatrolAssigner)
-        NoPoint,    // no point found: the casters are killed from range instead
+        Search,     // the map step (PatrolPlanner / CasterLurePlanner) looks for a point
+        Active,     // the hider stands at `point` until the casters came (the assigner)
+        NoPoint,    // no point found
         Done,       // the casters came out (or died, or turned to someone else)
-        Failed,     // they did not come within LURE_TIMEOUT_MS: killed from range instead
+        Failed,     // they did not come within the assigner's timeout
     };
 
-    // Casters left standing in the patrol's path, casting at `hider` (their victim, a bot):
-    // the hider steps out of their sight (LosBreak.h) and keeps fighting what it can reach
-    // there, so they walk out of the path to it. One lure per hider and fight.
-    struct PatrolLure
+    // Casters standing back, casting at `hider` (their victim, a bot): the hider steps out of
+    // their sight (LosBreak.h) and keeps fighting what it can reach there, so they walk to it
+    // (LureBehavior).
+    struct LosLure
     {
         ObjectGuid hider;
         std::vector<ObjectGuid> casters;
-        PatrolLureState state = PatrolLureState::Search;
+        LosLureState state = LosLureState::Search;
         Position3 point;
         uint32 sinceMs = 0;                 // Active since then
     };
@@ -525,7 +527,7 @@ namespace Commander
         // was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
         std::vector<ObjectGuid> avoid;
         // Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
-        std::vector<PatrolLure> lures;
+        std::vector<LosLure> lures;
         // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot): a
         // ranged damage dealer kills each (FocusAssigner intercept; since 2026-11-03 it runs after PatrolAssigner and reads this in the same refresh).
         std::vector<ObjectGuid> kill;
@@ -536,14 +538,39 @@ namespace Commander
         }
 
         // The lure `bot` hides for, still going (Active), or null.
-        PatrolLure const* ActiveLureOf(ObjectGuid bot) const
+        LosLure const* ActiveLureOf(ObjectGuid bot) const
         {
             if (!active)
                 return nullptr;
-            for (PatrolLure const& l : lures)
-                if (l.hider == bot && l.state == PatrolLureState::Active)
+            for (LosLure const& l : lures)
+                if (l.hider == bot && l.state == LosLureState::Active)
                     return &l;
             return nullptr;
+        }
+    };
+
+    // Casters standing back after the pull (Coordination/Situation/Los/CasterLureAssigner.h):
+    // their victim steps out of their sight so they walk over. The pull's own break is
+    // PullPlan::losBreak, a patrol's path PatrolGuardPlan::lures.
+    struct CasterLurePlan
+    {
+        std::vector<LosLure> lures;             // this fight's, ended ones kept (one per caster)
+
+        LosLure const* ActiveLureOf(ObjectGuid bot) const
+        {
+            for (LosLure const& l : lures)
+                if (l.hider == bot && l.state == LosLureState::Active)
+                    return &l;
+            return nullptr;
+        }
+        // Still going (Search or Active) for `caster`.
+        bool Lures(ObjectGuid caster) const
+        {
+            for (LosLure const& l : lures)
+                if ((l.state == LosLureState::Search || l.state == LosLureState::Active) &&
+                    std::find(l.casters.begin(), l.casters.end(), caster) != l.casters.end())
+                    return true;
+            return false;
         }
     };
 
@@ -937,8 +964,8 @@ namespace Commander
         STAMP_NO_MEZ        = 1 << 3,   // no control that breaks on damage, no fear (CrowdControlAssigner)
         STAMP_COMMITTED     = 1 << 4,   // held by a bot's control: that bot renews it, does not move it
         STAMP_PLAYER_TARGET = 1 << 5,   // a player hits it
-        // The tank steps out of its sight so it walks to the tank (OutlierTactic::Lure; the pull's
-        // map step SearchLosBreak looks for the point).
+        // Its victim steps out of its sight so it walks over (OutlierTactic::Lure; the pull's
+        // map step SearchLosBreak looks for the point, after the pull CasterLurePlanner).
         STAMP_LURE          = 1 << 6,
         // Roles and sources (todo 9, .kiro/docs/2026-11-09-doctrine/2026-11-10-roles-sources.md):
         STAMP_SELF_DESTRUCT = 1 << 7,   // blows itself up (Broken Cadaver): no taunt, no rescue, no control
@@ -1310,6 +1337,7 @@ namespace Commander
         RetreatPlan retreat;
         FightSpotPlan fightSpot;
         PatrolGuardPlan patrolGuard;
+        CasterLurePlan casterLure;
         PatrolHoldPlan patrolHold;
         RouteGuardPlan routeGuard;
         AreaPlan area;
@@ -1418,6 +1446,15 @@ namespace Commander
             if (before && fightSpot.planned && !fightSpot.plannedSpots.empty())
                 out = fightSpot.plannedSpots.front();
             return true;
+        }
+
+        // The lure `bot` hides for now (Active: the patrol guard's or a caster's), or null. Its
+        // stance module stands down meanwhile (LureBehavior walks it).
+        LosLure const* HidingFor(ObjectGuid bot) const
+        {
+            if (LosLure const* l = patrolGuard.ActiveLureOf(bot))
+                return l;
+            return casterLure.ActiveLureOf(bot);
         }
 
         // `bot` was given `enemy` to kill by the brain (intercept, also a caster of

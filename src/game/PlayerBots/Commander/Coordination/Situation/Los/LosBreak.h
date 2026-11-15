@@ -103,6 +103,16 @@ namespace Commander
         // Pure: the creature's profile has a main ranged spell (creature_spells
         // CF_MAIN_RANGED_SPELL): it stands back and casts instead of following its victim.
         bool IsRangedCaster(uint32 entry);
+
+        // Helpers of the lures' map steps (PatrolPlanner, CasterLurePlanner).
+        float const IDLE_CREATURE_CLEARANCE = 20.0f;
+        uint32 const MAX_WATCHERS = 2;
+        // Pure: moving from `from` to `point` takes the hider towards an idle hostile creature
+        // (within IDLE_CREATURE_CLEARANCE of the point and closer to it than `from` is).
+        bool TowardsIdleCreature(WorldModel const& world, Position3 const& point, Position3 const& from);
+        // The main tank and the healer bots but `hider` (at most MAX_WATCHERS): they must still
+        // see the hider's point (heals, the tank's view of a healer).
+        std::vector<Unit const*> Watchers(WorldModel const& world, Map* map, ObjectGuid hider);
     }
 }
 

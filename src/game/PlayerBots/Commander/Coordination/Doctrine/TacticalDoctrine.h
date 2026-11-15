@@ -33,6 +33,8 @@
  *   Lure       the pull settles and its line of sight break was not searched yet: the enemies
  *              FightPlace::LureTargets picks (casters standing back; a corner fight's far ones)
  *              get STAMP_LURE, the pull's map step looks for the point; Active: its casters.
+ *              After the pull: the casters of the caster lures going on (CasterLureAssigner,
+ *              last refresh: their victim hides).
  *   KillFirst  otherwise, under the Area tactic with an Outlier left (also when no point was
  *              found): the party focus is among the outliers first (TargetAssigner, DamageTargets).
  *   None       otherwise.

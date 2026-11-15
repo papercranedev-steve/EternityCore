@@ -227,8 +227,10 @@ namespace Commander
             return;
         }
 
-        // While the pull places the tank, only patrols coming soon count (judged again later).
-        float const within = plan.pull.PlacesTank() ? PULL_PLACING_DEFER_SEC : FLT_MAX;
+        // While the pull places the tank or the tank hides from a caster (CasterLureAssigner,
+        // last refresh), only patrols coming soon count (judged again later).
+        bool const placed = plan.pull.PlacesTank() || plan.casterLure.ActiveLureOf(tank->guid);
+        float const within = placed ? PULL_PLACING_DEFER_SEC : FLT_MAX;
         FightSpot::Choice const c = FightSpot::Choose(world, plan, *tank, FightSpot::InFight(world, *tank, within));
         // (nothing lost here can still gain: a channel with enemies outside its circle)
         if (c.hereLoss <= 0.0f && c.spots.empty())

@@ -155,6 +155,9 @@ namespace Commander
         // The pull walks the tank (PullBehavior).
         if (self->guid == plan.pull.tank && plan.pull.PlacesTank())
             return;
+        // Hiding from a caster (LureBehavior walks it): no chase back into its sight.
+        if (plan.HidingFor(self->guid))
+            return;
 
         // The brain's target, else the victim.
         Unit* enemy = nullptr;

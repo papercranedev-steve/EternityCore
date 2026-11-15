@@ -19,6 +19,7 @@
  *    (Backpedal, order renewed every tick, the rotation keeps fighting), or MoveTo when no
  *    backwards path is found or the tank has no victim, with Hold while that walk is under way.
  *    (Was PatrolBehavior's until 2026-11-14.)
+ *  - Hiding from a caster (TeamPlan::HidingFor): nothing, LureBehavior walks it.
  *  - Otherwise the tank stays where it stands. Its enemy (the brain's target, else the victim)
  *    out of melee reach:
  *      comes by itself (it hits this tank, walks in to melee: Tags::Engage::Melee with melee

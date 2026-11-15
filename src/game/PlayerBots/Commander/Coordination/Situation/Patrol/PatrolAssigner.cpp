@@ -61,17 +61,17 @@ namespace Commander
             return !e.meleeEnabled || LosBreak::IsRangedCaster(e.entry);
         }
 
-        PatrolLure* LureOfHider(PatrolGuardPlan& m, ObjectGuid hider)
+        LosLure* LureOfHider(PatrolGuardPlan& m, ObjectGuid hider)
         {
-            for (PatrolLure& l : m.lures)
+            for (LosLure& l : m.lures)
                 if (l.hider == hider)
                     return &l;
             return nullptr;
         }
 
-        PatrolLure* LureWithCaster(PatrolGuardPlan& m, ObjectGuid caster)
+        LosLure* LureWithCaster(PatrolGuardPlan& m, ObjectGuid caster)
         {
-            for (PatrolLure& l : m.lures)
+            for (LosLure& l : m.lures)
                 if (Contains(l.casters, caster))
                     return &l;
             return nullptr;
@@ -79,7 +79,7 @@ namespace Commander
 
         // The caster no longer needs the lure: gone, out of the path, turned to someone else,
         // or came close to the hider.
-        bool CasterCame(WorldModel const& world, PatrolGuardPlan const& m, PatrolLure const& l, ObjectGuid caster)
+        bool CasterCame(WorldModel const& world, PatrolGuardPlan const& m, LosLure const& l, ObjectGuid caster)
         {
             EnemyFacts const* e = world.FindEnemy(caster);
             if (!e || !e->acting || e->crowdControlled || !Contains(m.avoid, caster) || e->victim != l.hider)
@@ -92,20 +92,20 @@ namespace Commander
         void UpdateLures(WorldModel const& world, PatrolGuardPlan& m, std::vector<std::string>& notes)
         {
             uint32 const now = world.refreshedAtMs;
-            for (PatrolLure& l : m.lures)
+            for (LosLure& l : m.lures)
             {
                 PartyMemberFacts const* hider = world.FindMember(l.hider);
-                if (l.state == PatrolLureState::Search && (!hider || !hider->CanAct()))
-                    l.state = PatrolLureState::NoPoint;
-                if (l.state != PatrolLureState::Active)
+                if (l.state == LosLureState::Search && (!hider || !hider->CanAct()))
+                    l.state = LosLureState::NoPoint;
+                if (l.state != LosLureState::Active)
                     continue;
                 bool const allCame = std::all_of(l.casters.begin(), l.casters.end(),
                     [&](ObjectGuid g) { return CasterCame(world, m, l, g); });
                 if (allCame || !hider || !hider->CanAct())
-                    l.state = PatrolLureState::Done;
+                    l.state = LosLureState::Done;
                 else if (WorldTimer::getMSTimeDiff(l.sinceMs, now) > PatrolAssigner::LURE_TIMEOUT_MS)
                 {
-                    l.state = PatrolLureState::Failed;
+                    l.state = LosLureState::Failed;
                     EnemyFacts const* first = world.FindEnemy(l.casters.front());
                     notes.push_back(Format("%s did not come out of the patrol's path in %u s: killing it from range.",
                         NameOf(first ? first->entry : 0, "The caster").c_str(), PatrolAssigner::LURE_TIMEOUT_MS / 1000));
@@ -118,17 +118,17 @@ namespace Commander
                 EnemyFacts const* e = world.FindEnemy(g);
                 if (!e || !StandsBack(world, *e))
                     continue;
-                if (PatrolLure* l = LureWithCaster(m, g))
+                if (LosLure* l = LureWithCaster(m, g))
                 {
-                    if (l->state != PatrolLureState::Search && l->state != PatrolLureState::Active)
+                    if (l->state != LosLureState::Search && l->state != LosLureState::Active)
                         m.kill.push_back(g);
                     continue;
                 }
                 // Its victim hides; only a bot can be told to, and only once per fight.
                 PartyMemberFacts const* victim = world.FindMember(e->victim);
                 bool const canHide = victim && victim->isBot && !victim->isPet && victim->CanAct();
-                PatrolLure* own = canHide ? LureOfHider(m, victim->guid) : nullptr;
-                if (own && own->state == PatrolLureState::Search && own->casters.size() < PatrolAssigner::MAX_LURE_CASTERS)
+                LosLure* own = canHide ? LureOfHider(m, victim->guid) : nullptr;
+                if (own && own->state == LosLureState::Search && own->casters.size() < PatrolAssigner::MAX_LURE_CASTERS)
                 {
                     own->casters.push_back(g);
                     continue;
@@ -138,7 +138,7 @@ namespace Commander
                     m.kill.push_back(g);
                     continue;
                 }
-                PatrolLure l;
+                LosLure l;
                 l.hider = victim->guid;
                 l.casters.push_back(g);
                 m.lures.push_back(l);

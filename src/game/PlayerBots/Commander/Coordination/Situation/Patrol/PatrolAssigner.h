@@ -17,7 +17,7 @@
  *            the focus; bots switch off them (TeamPlan.h, PatrolGuardPlan::avoid).
  *   lures  = a caster of `avoid` standing back (melee off, or a main ranged spell, more than
  *            LURE_MIN_DISTANCE from its victim) casting at a bot: that bot hides from it
- *            (PatrolLure; the point: PatrolPlanner::Step, LosBreak.h) and keeps fighting what
+ *            (LosLure; the point: PatrolPlanner::Step, LosBreak.h) and keeps fighting what
  *            it reaches there. Done when the casters came out of the path, within
  *            LURE_ARRIVED of the hider, turned to someone else or are gone; Failed after
  *            LURE_TIMEOUT_MS. One lure per hider and fight, at most MAX_LURE_CASTERS casters.

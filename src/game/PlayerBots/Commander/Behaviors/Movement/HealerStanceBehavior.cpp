@@ -258,6 +258,9 @@ namespace Commander
         // Hiding behind the tank during a line of sight pull: the brain chose the spot (PullBehavior).
         if (plan.pull.phase == PullPhase::Settle && plan.pull.LosHiderOf(me->GetObjectGuid()))
             return;
+        // Hiding from a caster standing back (LureBehavior walks it).
+        if (plan.HidingFor(me->GetObjectGuid()))
+            return;
 
         // Before the fight: out of combat while the pull runs, take a place for the fight the
         // brain planned (PullPlan::PlannedFightSpot), then wait there (PullBehavior's hold).
