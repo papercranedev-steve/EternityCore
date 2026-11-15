@@ -16,8 +16,9 @@ struct CreatureProfile;
 
 namespace WorldModelBuilder
 {
-    // Radius around the party leader scanned for out-of-combat packs.
-    float const PACK_SCAN_RADIUS = 50.0f;
+    // Radius around the party leader scanned for out-of-combat packs; also the largest
+    // `.partybot ai clear` radius (the clear only sees packs in this scan).
+    float const PACK_SCAN_RADIUS = 80.0f;
     // Radius around the party leader scanned for patrols (WorldModel::patrols), same scan.
     float const PATROL_SCAN_RADIUS = 100.0f;
     // Each patrol's walk is predicted one lap ahead (PatrolTracker::LapSec), at least

@@ -88,7 +88,7 @@ namespace Commander
         };
 
         // Hostile creatures that are not fighting yet: a rally point next to them starts a new fight.
-        // Wider than world.packs (50 yd around the leader): candidate points lie up to 100 yd away.
+        // Wider than world.packs (80 yd around the leader): candidate points lie up to 100 yd away.
         class IdleHostileCheck
         {
         public:

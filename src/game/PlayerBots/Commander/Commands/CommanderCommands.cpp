@@ -18,7 +18,7 @@
  *   .partybot ai control             bots' crowd control spells and what each is worth now (ControlValue.h)
  *   .partybot ai threat              enemies of your party: victim, threat, headroom per member
  *   .partybot ai threat watch [off|target|all]   addon threat meter feed (ThreatFeed.h)
- *   .partybot ai packs               out-of-combat packs within 50 yards
+ *   .partybot ai packs               out-of-combat packs within PACK_SCAN_RADIUS (80 yards)
  *   .partybot ai field               position field (PositionField.h): size, build cost, the
  *                                    cell you stand on and each member's grid walk to it
  *   .partybot ai plan                team plan: pull state, focus and intercepts, interrupt abilities and duties
@@ -53,6 +53,7 @@
 #include "Commander/Commands/ProfileCommands.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/WorldModelBuilder.h"
 #include "Creature.h"
 #include <algorithm>
 #include <cstdlib>
@@ -628,9 +629,12 @@ namespace
             radius = float(atof(first));
         if (second)
             maxMobs = uint32(atoi(second));
-        if (radius < 10.0f || radius > 50.0f || maxMobs < 1 || maxMobs > 10)
+        // The clear only sees packs in the pack scan.
+        float const maxRadius = Commander::WorldModelBuilder::PACK_SCAN_RADIUS;
+        if (radius < 10.0f || radius > maxRadius || maxMobs < 1 || maxMobs > 10)
         {
-            handler->SendSysMessage("Usage: .partybot ai clear [radius 10-50, default 40] [max mobs per pull 1-10, default 4] | stop");
+            handler->PSendSysMessage("Usage: .partybot ai clear [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 4] | stop",
+                maxRadius);
             return false;
         }
 
@@ -696,7 +700,7 @@ namespace
         ShowAge(handler, world);
         if (world.packs.empty())
         {
-            handler->PSendSysMessage("No out-of-combat packs within %.0f yards.", 50.0f);
+            handler->PSendSysMessage("No out-of-combat packs within %.0f yards.", Commander::WorldModelBuilder::PACK_SCAN_RADIUS);
             return true;
         }
 
