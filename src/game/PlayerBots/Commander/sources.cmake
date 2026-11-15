@@ -225,6 +225,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/HotPlan.h
+  ${COMMANDER_DIR}/Behaviors/Support/HotPlan.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/CastWatch.h
   ${COMMANDER_DIR}/Behaviors/Combat/CastWatch.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/CastBreak.h

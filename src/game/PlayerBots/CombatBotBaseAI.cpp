@@ -1582,6 +1582,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.druid.pTranquility))
                         m_spells.druid.pTranquility = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Swiftmend") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.druid.pSwiftmend))
+                        m_spells.druid.pSwiftmend = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Pounce") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.druid.pPounce))
@@ -1701,7 +1706,10 @@ void CombatBotBaseAI::PopulateSpellData()
             switch (pSpellEntry->Effect[i])
             {
                 case SPELL_EFFECT_HEAL:
-                    m_spellListDirectHeal.insert(pSpellEntry);
+                    // Swiftmend heals only by eating a Rejuvenation / Regrowth on the target
+                    // (spell_druid.cpp): not a plain heal, the heal module casts it on its own.
+                    if (!pSpellEntry->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_SWIFTMEND>())
+                        m_spellListDirectHeal.insert(pSpellEntry);
                     break;
                 case SPELL_EFFECT_ATTACK_ME:
                     m_spellListTaunt.push_back(pSpellEntry);

@@ -1,5 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
+#include "SpellEntry.h"
 
 namespace Commander
 {
@@ -69,6 +70,29 @@ namespace Commander
                 b.spell = m_bot.m_spells.druid.pNaturesSwiftness;
                 b.instant = true;
                 return { b };
+            }
+
+            // Regrowth: the second emergency heal (user 2026-11-15; Nature's Swiftness and
+            // Swiftmend come first): 2 s cast, far more mana per health than Healing Touch.
+            HealUse CombatHealUse(SpellEntry const* heal) const override
+            {
+                return heal->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_REGROWTH>() ? HealUse::EmergencyOnly
+                                                                                   : HealUse::Normal;
+            }
+
+            // Swiftmend (31-point talent, 15 s): eats the target's Rejuvenation or Regrowth.
+            SpellEntry const* HotConsumer() const override
+            {
+                return m_bot.m_spells.druid.pSwiftmend;
+            }
+
+            uint32 HotConsumeTicks(SpellEntry const* hot) const override
+            {
+                if (hot->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_REGROWTH>())
+                    return 6;   // "18 sec of Regrowth"
+                if (hot->IsFitToFamily<SPELLFAMILY_DRUID, CF_DRUID_REJUVENATION>())
+                    return 4;   // "12 sec of Rejuvenation"
+                return 0;
             }
 
             // Barkskin (1 min, caster and moonkin form; the form is read through

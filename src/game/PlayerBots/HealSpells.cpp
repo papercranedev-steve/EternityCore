@@ -55,6 +55,21 @@ namespace HealSpells
         return out;
     }
 
+    float EstimateDirectWithBase(Unit* healer, Unit const* target, SpellEntry const* spell, float extraBase)
+    {
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (spell->Effect[i] != SPELL_EFFECT_HEAL)
+                continue;
+            SpellEffectIndex const idx = SpellEffectIndex(i);
+            float value = AverageBase(spell, i) + extraBase;
+            value = healer->SpellHealingBonusDone(target, spell, idx, value, SPELL_DIRECT_DAMAGE);
+            value = target->SpellHealingBonusTaken(healer, spell, idx, value, SPELL_DIRECT_DAMAGE);
+            return std::max(0.0f, value);
+        }
+        return 0.0f;
+    }
+
     float ManaCost(Unit* caster, SpellEntry const* spell)
     {
         if (spell->powerType != POWER_MANA)

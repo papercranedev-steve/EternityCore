@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Support/HealPlanBehavior.h"
 #include "Commander/Behaviors/Support/HealPlan.h"
+#include "Commander/Behaviors/Support/HotPlan.h"
 #include "Commander/Behaviors/Support/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -14,6 +15,7 @@
 #include "HealSpells.h"
 #include "Map.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
 
@@ -29,7 +31,105 @@ namespace Commander
             HealPlan::Assessment assessment;
             std::vector<HealPlan::Option> options;
             std::vector<SpellEntry const*> spells;      // same index as options
+            // Pure HoT ranks the healer may put on (none of its own is up), see HotPlan.h.
+            std::vector<HotPlan::HotOption> hots;
+            std::vector<SpellEntry const*> hotSpells;   // same index as hots
+            HotPlan::Eat eat;
+
+            float Missing() const { return std::max(0.0f, target.maxHealth - target.health); }
         };
+
+        // The eatable HoT on the member (HotPlan::Eat: Swiftmend takes the one with the least
+        // time left, anyone's). Empty when the bot has no eat spell or there is none.
+        HotPlan::Eat EatOf(PartyBotAI const* bot, Unit* unit, PartyMemberFacts const& m)
+        {
+            HotPlan::Eat e;
+            ClassKit const& kit = bot->Kit();
+            SpellEntry const* eat = kit.HotConsumer();
+            if (!eat)
+                return e;
+            PartyHot const* eaten = nullptr;
+            uint32 ticks = 0;
+            for (PartyHot const& h : m.hots)
+            {
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(h.spellId);
+                uint32 const n = spell ? kit.HotConsumeTicks(spell) : 0;
+                if (!n)
+                    continue;
+                if (!eaten || h.remainingMs < eaten->remainingMs)
+                {
+                    eaten = &h;
+                    ticks = n;
+                }
+            }
+            if (!eaten)
+                return e;
+
+            Player* me = bot->me;
+            int32 const cooldownMs = me->GetSpellCooldownLeft(eat);
+            e.known = true;
+            e.cooldownSec = cooldownMs < 0 ? HealPlan::NO_LIMIT : float(cooldownMs) / 1000.0f;
+            e.ready = cooldownMs == 0 && bot->CanTryToCastSpell(unit, eat);
+            e.heal = HealSpells::EstimateDirectWithBase(me, unit, eat, eaten->perTick * float(ticks));
+            e.ticksLeft = eaten->TicksLeft();
+            e.lost = eaten->perTick * float(e.ticksLeft);
+            if (e.ticksLeft)
+                e.untilLastTickSec = float(eaten->nextTickMs + (e.ticksLeft - 1) * eaten->periodMs) / 1000.0f;
+            return e;
+        }
+
+        // Swiftmend on the target (HotPlan::Decide said how). A heal order like the heals.
+        void ProposeEat(PartyBotAI const* bot, WorldModel const& world, Candidate const& c,
+                        HotPlan::EatUse use, float tickSec, std::vector<Proposal>& out)
+        {
+            bool const emergency = use == HotPlan::EatUse::Emergency;
+            float const effective = std::min(c.eat.heal, c.Missing());
+            Proposal p;
+            p.kind = ProposalKind::HealOrder;
+            p.tier = emergency ? ProposalTier::Urgent : ProposalTier::Assigned;
+            p.source = "heal";
+            p.reason = emergency ? "emergency: eat HoT, instant heal" :
+                       use == HotPlan::EatUse::Free ? "HoT's last tick: eat it, nearly free" :
+                                                      "lift: eat HoT instead of a cast";
+            p.action.type = BotActionType::Cast;
+            p.action.target = c.facts->guid;
+            p.action.spell = bot->Kit().HotConsumer();
+            float benefit = Value::Points(world, effective);
+            if (emergency && c.assessment.timeToDie < HealPlan::GCD_SEC + tickSec * 2.0f)
+                benefit += Value::DeathPenalty(*c.facts);
+            // Cost: the overheal and the ticks the HoT still had.
+            p.SetValue(benefit, Value::Points(world, c.eat.heal - effective + c.eat.lost));
+            out.push_back(p);
+        }
+
+        // The healer's HoT on a member being hit (HotPlan::PickHot). False = none fits.
+        bool ProposeHot(PartyBotAI const* bot, WorldModel const& world, Candidate const& c,
+                        std::vector<Proposal>& out)
+        {
+            if (c.hots.empty() || c.target.intake <= 0.0f)
+                return false;
+            // A HoT the healer can eat later: the biggest that fits (a bigger free heal).
+            bool preferBig = false;
+            if (bot->Kit().HotConsumer())
+                for (SpellEntry const* spell : c.hotSpells)
+                    preferBig = preferBig || bot->Kit().HotConsumeTicks(spell) > 0;
+            int const index = HotPlan::PickHot(c.hots, preferBig);
+            if (index < 0)
+                return false;
+            HotPlan::HotOption const& o = c.hots[index];
+            float const effective = std::min(o.total, o.need);
+            Proposal p;
+            p.kind = ProposalKind::HealOrder;
+            p.tier = ProposalTier::Assigned;
+            p.source = "heal";
+            p.reason = "being hit, no own HoT: HoT";
+            p.action.type = BotActionType::Cast;
+            p.action.target = c.facts->guid;
+            p.action.spell = c.hotSpells[index];
+            p.SetValue(Value::Points(world, effective), Value::Points(world, o.total - effective));
+            out.push_back(p);
+            return true;
+        }
 
         bool IsMoreUrgent(Candidate const& a, Candidate const& b)
         {
@@ -244,7 +344,8 @@ namespace Commander
         healer.manaWeight = HealPlan::ManaWeight(tension, manaPct);
 
         BotDirectives const& directives = bot->Directives();
-        std::vector<Candidate> candidates;
+        ClassKit const& kit = bot->Kit();
+        std::vector<Candidate> all;
         for (PartyMemberFacts const& m : world.party)
         {
             if (!m.alive || m.charmed)
@@ -253,9 +354,10 @@ namespace Commander
             if (!unit || !bot->IsValidHealTarget(unit))
                 continue;
 
-            // Castable single-target heals with a direct part (HoTs left out, see header).
+            // Castable single-target heals; a HoT of the healer's own that is up is left out
+            // (CombatBotBaseAI::ChooseHeal: not refreshed early, not put on twice).
             HealChoice choice;
-            bot->ChooseHeal(unit, choice, true);
+            bot->ChooseHeal(unit, choice, false);
             if (choice.options.empty())
                 continue;
 
@@ -264,14 +366,32 @@ namespace Commander
             c.facts = &m;
             c.target.health = float(unit->GetHealth());
             c.target.maxHealth = float(unit->GetMaxHealth());
-            c.target.intake = Value::TakenDps(world, m.guid);
+            // Damage the HoTs already on it do not cover.
+            float hotPerSec = 0.0f;
+            for (PartyHot const& h : m.hots)
+                hotPerSec += h.PerSec();
+            c.target.intake = std::max(0.0f, Value::TakenDps(world, m.guid) - hotPerSec);
             c.target.burst = m.takenBurst;
             c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
             for (HealSpells::Option const& o : choice.options)
             {
                 // The free self heal has its own rule (ProposeFreeSelfHeal).
-                if (o.amount.direct <= 0.0f || o.spell == freeSelfHeal)
+                HealUse const use = kit.CombatHealUse(o.spell);
+                if (o.spell == freeSelfHeal || use == HealUse::Never)
                     continue;
+                if (o.amount.direct <= 0.0f)
+                {
+                    // A pure HoT (ProposeHot).
+                    if (use != HealUse::Normal || o.amount.periodic <= 0.0f)
+                        continue;
+                    HotPlan::HotOption h;
+                    h.total = o.amount.periodic;
+                    h.need = c.Missing() + c.target.intake * o.amount.periodicSec * HealSpells::HOT_INCOMING_SHARE;
+                    h.mana = o.mana;
+                    c.hots.push_back(h);
+                    c.hotSpells.push_back(o.spell);
+                    continue;
+                }
                 HealPlan::Option p;
                 p.heal = o.amount.direct;
                 if (o.amount.periodic > 0.0f)
@@ -279,32 +399,47 @@ namespace Commander
                                        c.target.intake * o.amount.periodicSec * HealSpells::HOT_INCOMING_SHARE);
                 p.mana = o.mana;
                 p.castSec = o.castSec;
+                p.emergencyOnly = use == HealUse::EmergencyOnly;
                 c.options.push_back(p);
                 c.spells.push_back(o.spell);
             }
-            c.target.waitDeficit = FreeBoostWait(bot, c.options);
+            c.eat = EatOf(bot, unit, m);
+            c.target.waitDeficit = std::max(FreeBoostWait(bot, c.options), HotPlan::WaitDeficit(c.eat));
             c.assessment = HealPlan::Assess(c.target, healer, c.options);
-            if (c.assessment.need == HealPlan::Need::None || c.assessment.need == HealPlan::Need::Rest)
-                continue;
-            candidates.push_back(std::move(c));
+            all.push_back(std::move(c));
         }
-        if (candidates.empty())
-            return;     // rest: the rotation heals nobody this tick
 
-        std::stable_sort(candidates.begin(), candidates.end(), IsMoreUrgent);
+        std::vector<Candidate*> candidates;
+        for (Candidate& c : all)
+            if (c.assessment.need != HealPlan::Need::None && c.assessment.need != HealPlan::Need::Rest)
+                candidates.push_back(&c);
+        std::stable_sort(candidates.begin(), candidates.end(),
+                         [](Candidate const* a, Candidate const* b) { return IsMoreUrgent(*a, *b); });
 
         // The free self heal first, unless someone else needs an emergency heal (user 2026-11-14).
-        bool const otherEmergency = std::any_of(candidates.begin(), candidates.end(), [me](Candidate const& c)
-            { return c.unit != me && c.assessment.need == HealPlan::Need::Emergency; });
-        if (!heldByPull && ProposeFreeSelfHeal(bot, world, *myFacts, otherEmergency, out))
+        bool const otherEmergency = std::any_of(candidates.begin(), candidates.end(), [me](Candidate const* c)
+            { return c->unit != me && c->assessment.need == HealPlan::Need::Emergency; });
+        if (!candidates.empty() && !heldByPull && ProposeFreeSelfHeal(bot, world, *myFacts, otherEmergency, out))
             return;
 
         bool const checkAggro = sCommanderMgr.IsModuleEnabled("threat");
-        for (Candidate& c : candidates)
+        for (Candidate* pc : candidates)
         {
+            Candidate& c = *pc;
             bool const emergency = c.assessment.need == HealPlan::Need::Emergency;
             if (heldByPull && !emergency)
                 continue;
+
+            // Swiftmend first (instant; in an emergency before Nature's Swiftness), then the
+            // healer's HoT on a lift target, then the heal.
+            HotPlan::EatUse const eatUse = HotPlan::Decide(c.eat, c.Missing(), c.assessment.need);
+            if (eatUse != HotPlan::EatUse::None)
+            {
+                ProposeEat(bot, world, c, eatUse, healer.tickSec, out);
+                return;
+            }
+            if (!emergency && ProposeHot(bot, world, c, out))
+                return;
             // Emergencies prefer heals that do not pull, but take one that does (HealPlan::Pick).
             if (checkAggro && c.unit->GetHealthPercent() >= ThreatBehavior::HEAL_IGNORE_THREAT_PCT)
                 for (size_t i = 0; i < c.options.size(); ++i)
@@ -356,6 +491,26 @@ namespace Commander
             p.SetValue(benefit, Value::Points(world, heal - effective));
             out.push_back(p);
             return;
+        }
+
+        // No lift this tick: a free Swiftmend or a HoT on whoever takes the most damage.
+        if (heldByPull)
+            return;
+        std::vector<Candidate*> others;
+        for (Candidate& c : all)
+            others.push_back(&c);
+        std::stable_sort(others.begin(), others.end(),
+                         [](Candidate const* a, Candidate const* b) { return a->target.intake > b->target.intake; });
+        for (Candidate* pc : others)
+        {
+            HotPlan::EatUse const eatUse = HotPlan::Decide(pc->eat, pc->Missing(), pc->assessment.need);
+            if (eatUse != HotPlan::EatUse::None)
+            {
+                ProposeEat(bot, world, *pc, eatUse, healer.tickSec, out);
+                return;
+            }
+            if (ProposeHot(bot, world, *pc, out))
+                return;
         }
     }
 }

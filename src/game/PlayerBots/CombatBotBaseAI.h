@@ -596,6 +596,7 @@ public:
             SpellEntry const* pBash;
             SpellEntry const* pFeralCharge;
             SpellEntry const* pTranquility;
+            SpellEntry const* pSwiftmend;
         } druid;
     } m_spells;
     static_assert(sizeof(m_spells) == sizeof(m_spells.raw), "a class spell struct is larger than raw.spells");

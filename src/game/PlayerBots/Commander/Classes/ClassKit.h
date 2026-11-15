@@ -86,6 +86,14 @@ namespace Commander
     // An instant off the global cooldown that makes the next heal better (HealPlanBehavior,
     // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7.1): put on right before it
     // (BotAction::prepSpell).
+    // ClassKit::CombatHealUse.
+    enum class HealUse : uint8
+    {
+        Normal,
+        EmergencyOnly,
+        Never,
+    };
+
     struct HealBoostSpell
     {
         SpellEntry const* spell = nullptr;
@@ -188,6 +196,16 @@ namespace Commander
         // on before the heal it suits (a big deficit; an emergency the heal would not reach in
         // time); the rotations do not cast them while it decides heals.
         virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
+        // How the heal module may use one of its single-target heals while the party fights
+        // (user 2026-11-15): Renew never (Heal ranks do more per mana), Regrowth only in an
+        // emergency (a fast heal: expensive, its HoT is a bonus).
+        virtual HealUse CombatHealUse(SpellEntry const* /*heal*/) const { return HealUse::Normal; }
+        // Turns a HoT on the target into an instant heal and removes it (Swiftmend). The heal
+        // module casts it: right before the HoT's last tick (nearly free), or in an emergency.
+        virtual SpellEntry const* HotConsumer() const { return nullptr; }
+        // Ticks of `hot` HotConsumer turns into its heal (Swiftmend, spell_druid.cpp:
+        // Rejuvenation 4, Regrowth 6); 0 = it cannot eat it.
+        virtual uint32 HotConsumeTicks(SpellEntry const* /*hot*/) const { return 0; }
         // Cooldowns for a party member (Innervate, Power Infusion, Mana Tide Totem): the brain picks
         // whom (BoostAssigner), BoostBehavior casts them; the rotations do not.
         virtual std::vector<AllyBoostSpell> AllyBoosts() const { return {}; }

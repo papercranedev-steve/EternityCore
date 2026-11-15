@@ -392,6 +392,25 @@ namespace Commander
         uint32 remainingMs = 0;
     };
 
+    // One periodic heal on a party member, anyone's (PartyMemberFacts::hots).
+    struct PartyHot
+    {
+        ObjectGuid caster;
+        uint32 spellId = 0;
+        float perTick = 0.0f;       // Modifier::m_amount (the caster's bonuses included at apply)
+        uint32 periodMs = 0;
+        uint32 nextTickMs = 0;      // from the refresh
+        uint32 remainingMs = 0;
+
+        uint32 TicksLeft() const
+        {
+            if (!periodMs || nextTickMs > remainingMs)
+                return 0;
+            return 1 + (remainingMs - nextTickMs) / periodMs;
+        }
+        float PerSec() const { return periodMs ? perTick * 1000.0f / float(periodMs) : 0.0f; }
+    };
+
     // A party member or a party member's pet on this map.
     struct PartyMemberFacts
     {
@@ -474,6 +493,9 @@ namespace Commander
         bool immunePhysical = false;
         bool immuneMagic = false;
         uint32 immuneMechanics = 0;
+        // Every member: periodic heals on it, anyone's (the heal module: what still heals it,
+        // whether the healer's own HoT is up, what Swiftmend would eat).
+        std::vector<PartyHot> hots;
         // Pets: casts a taunt by itself (Growl, Torment, Suffering on autocast). An enemy on it
         // is growled back, so the tank does not take it (Perception/Profiles/PetTaunt.h).
         bool tauntsItself = false;

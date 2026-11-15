@@ -20,6 +20,8 @@
  *   chain     the last heal went to this target and ended just now: keep healing it until the
  *             next heal would overheal by more than OVERHEAL_MAX, then rest.
  *
+ * Emergency-only options (Option::emergencyOnly) count only for an emergency: not for the
+ * deficit, a lift, a chain or a non-instant boost.
  * Rank of a lift or chain heal: options that do not pull aggro, overheal at most OVERHEAL_MAX
  * when they land, and lift the missing health within LIFT_MAX_SEC against the incoming damage.
  * Of those the lowest net mana per second over one lift + rest cycle:
@@ -81,6 +83,7 @@ namespace HealPlan
         float mana = 0.0f;
         float castSec = 0.0f;
         bool pulls = false;         // the heal would turn an enemy on the healer
+        bool emergencyOnly = false; // only for an emergency (ClassKit::CombatHealUse: Regrowth)
         // Filled by Pick.
         float effective = 0.0f;     // heal capped at the health missing when it lands
     };

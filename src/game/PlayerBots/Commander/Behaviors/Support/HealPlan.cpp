@@ -36,7 +36,7 @@ namespace HealPlan
             for (size_t i = 0; i < options.size(); ++i)
             {
                 Option const& o = options[i];
-                if (o.heal <= 0.0f)
+                if (o.heal <= 0.0f || o.emergencyOnly)
                     continue;
                 float const perMana = o.mana > 0.0f ? o.heal / o.mana : NO_LIMIT;
                 if (best < 0)
@@ -82,8 +82,7 @@ namespace HealPlan
     {
         Assessment a;
         float const missing = Missing(t);
-        int const efficient = MostEfficient(options);
-        if (missing <= 0.0f || t.maxHealth <= 0.0f || efficient < 0)
+        if (missing <= 0.0f || t.maxHealth <= 0.0f || options.empty())
             return a;
 
         a.reserve = ReserveHealth(t);
@@ -98,6 +97,10 @@ namespace HealPlan
             return a;
         }
 
+        // Only emergency heals (or none that heals): nothing to lift with.
+        int const efficient = MostEfficient(options);
+        if (efficient < 0)
+            return a;
         Option const& e = options[efficient];
         float const minDeficit = std::min(e.heal, t.maxHealth);
         float const lead = t.intake * (e.castSec + h.tickSec);
@@ -160,7 +163,7 @@ namespace HealPlan
         for (size_t i = 0; i < options.size(); ++i)
         {
             Option const& o = options[i];
-            if (o.pulls || o.effective <= 0.0f || !overhealOk(o))
+            if (o.pulls || o.emergencyOnly || o.effective <= 0.0f || !overhealOk(o))
                 continue;
             float const hps = o.heal / Busy(o);
             float rate;
@@ -191,7 +194,7 @@ namespace HealPlan
         for (size_t i = 0; i < options.size(); ++i)
         {
             Option const& o = options[i];
-            if (o.pulls || o.effective <= 0.0f || !overhealOk(o))
+            if (o.pulls || o.emergencyOnly || o.effective <= 0.0f || !overhealOk(o))
                 continue;
             if (best < 0 || o.heal / Busy(o) > options[best].heal / Busy(options[best]))
                 best = int(i);
@@ -216,7 +219,7 @@ namespace HealPlan
         for (size_t i = 0; i < options.size(); ++i)
         {
             Option const& o = options[i];
-            if (o.pulls || o.heal <= 0.0f || (b.instant && o.castSec <= 0.0f))
+            if (o.pulls || o.heal <= 0.0f || (b.instant && o.castSec <= 0.0f) || (o.emergencyOnly && !emergency))
                 continue;
             if (big < 0 || o.heal > options[big].heal)
                 big = int(i);

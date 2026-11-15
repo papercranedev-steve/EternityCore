@@ -144,6 +144,19 @@ namespace WorldModelBuilder
                     amount = std::min(amount, float(unit->GetPower(POWER_MANA)) / perPoint);
                 f.absorb += amount;
             }
+            for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_PERIODIC_HEAL))
+            {
+                if (aura->GetModifier()->periodictime <= 0 || aura->GetAuraDuration() <= 0)
+                    continue;
+                PartyHot h;
+                h.caster = aura->GetCasterGuid();
+                h.spellId = aura->GetId();
+                h.perTick = std::max(0.0f, float(aura->GetModifier()->m_amount));
+                h.periodMs = uint32(aura->GetModifier()->periodictime);
+                h.nextTickMs = uint32(std::max(0, aura->GetAuraPeriodicTimer()));
+                h.remainingMs = uint32(aura->GetAuraDuration());
+                f.hots.push_back(h);
+            }
             f.damageTakenMult = unit->GetTotalAuraMultiplier(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN);
             f.immunePhysical = unit->IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL);
             f.immuneMagic = unit->IsImmuneToDamage(SpellSchoolMask(SPELL_SCHOOL_MASK_MAGIC));

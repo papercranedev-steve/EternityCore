@@ -16,9 +16,18 @@
  *
  * Rhythm (user, 2026-11-01): wait until a target misses a deficit the healer can lift quickly,
  * chain heals until it is topped up, then rest (no heal, no HoT) so the five second rule ends and
- * spirit regeneration runs. HoTs are not used in combat (worse per mana than Heal ranks with
- * gear, and each one restarts the five second rule); hybrid heals count their direct part plus
- * HealSpells::HOT_INCOMING_SHARE of the expected damage for the HoT part.
+ * spirit regeneration runs. Hybrid heals count their direct part plus
+ * HealSpells::HOT_INCOMING_SHARE of the expected damage for the HoT part. The class kit says
+ * which heals are used (ClassKit::CombatHealUse, user 2026-11-15): priest Renew never (until
+ * then no HoT was used in combat), druid Regrowth only in an emergency. The target's intake is
+ * the damage the HoTs on it do not cover (PartyMemberFacts::hots).
+ *
+ * HoTs and Swiftmend (Behaviors/Support/HotPlan.h, user 2026-11-15): the healer's HoT
+ * (Rejuvenation) on a member being hit that has none of its own, the rank by HotPlan::PickHot;
+ * before a lift's heal on that target, else when nobody needs a lift (most damage taken first).
+ * Swiftmend: in an emergency first; else right before the eaten HoT's last tick when the
+ * target misses its heal (or with two ticks left instead of a lift's cast). The lift of a target
+ * whose HoT is about to be eaten waits for that deficit. A pure HoT starts no heal chain.
  *
  * Targets (alive, healable from here: line of sight, 30 yd), in this order:
  *  1. emergencies (being hit and at the reserve or dying within HealPlan::EMERGENCY_TTD_SEC),

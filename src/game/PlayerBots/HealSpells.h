@@ -70,6 +70,9 @@ namespace HealSpells
 
     // Healing `spell` cast by `healer` does on `target` (bonuses included, see header).
     Amount Estimate(Unit* healer, Unit const* target, SpellEntry const* spell);
+    // Direct part of `spell` when a script adds `extraBase` to its base value before the
+    // bonuses (Swiftmend: the eaten HoT's ticks, spell_druid.cpp, then Spell::EffectHeal).
+    float EstimateDirectWithBase(Unit* healer, Unit const* target, SpellEntry const* spell, float extraBase);
     // Mana the spell costs `caster` now; 0 for spells that do not use mana.
     float ManaCost(Unit* caster, SpellEntry const* spell);
     // A heal for one target (not Prayer of Healing and other area / party heals).

@@ -1,5 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "PartyBotAI.h"
+#include "SpellEntry.h"
 
 namespace Commander
 {
@@ -100,6 +101,13 @@ namespace Commander
                 if (m_bot.GetRole() != ROLE_RANGE_DPS)
                     return {};
                 return { { m_bot.m_spells.priest.pHolyNova, false, 0.0f } };
+            }
+
+            // Renew: not in combat (user 2026-11-15; Heal ranks do more per mana, and every cast
+            // restarts the five second rule).
+            HealUse CombatHealUse(SpellEntry const* heal) const override
+            {
+                return heal->IsFitToFamily<SPELLFAMILY_PRIEST, CF_PRIEST_RENEW>() ? HealUse::Never : HealUse::Normal;
             }
 
             // Desperate Prayer: no mana cost, 10 min cooldown (spell_template, 1.12).
