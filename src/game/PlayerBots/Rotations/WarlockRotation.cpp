@@ -1,6 +1,6 @@
 /*
  * Warlock rotation (moved out of PartyBotAI.cpp 2026-11-14; reworked 2026-11-15 for the level 60
- * SM/Ruin spec with the Imp, user: no pet sacrifice for now).
+ * 22/3/26 spec with Siphon Life, Improved Imp and Ruin, user: no pet sacrifice for now).
  *
  * Out of combat: Detect Invisibility on the party, Demon Armor; with a victim (an opener): the
  * combat steps; without one: summon the pet (the Imp). The Imp stays in Phase Shift, in and
