@@ -6,6 +6,8 @@
  * then the combat steps. The pet: PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded).
  *
  * In combat:
+ *   0. Melee auto attack on (user 2026-11-15: a hunter is ranged and melee; without it the boss
+ *      stood in its face for 12 s, the queued Raptor Strike never swung, strat-20261115-181613).
  *   1. Walk closer when idle more than 30 yd away.
  *   2. Auto Shot beyond 8 yd (ammo added when it has none).
  *   3. Concussive Shot on a victim running at the hunter.
@@ -87,6 +89,13 @@ namespace
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
                 return;
+
+            // Melee auto attack stays on (header step 0): the victim can be set without it
+            // (Unit::Attack meleeAttack = false, a ranged victim after Feign Death), and then a
+            // queued Raptor Strike never swings. No chase: it only swings in reach, and not while
+            // Auto Shot runs (Unit::UpdateMeleeAttackingState).
+            if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+                me->Attack(pVictim, true);
 
             ChaseWhenOutOfRange(pVictim);
 
