@@ -278,6 +278,12 @@ void PartyBotAI::BreakControl()
         if ((me->HasAuraType(SPELL_AURA_MOD_FEAR) || me->HasAuraType(SPELL_AURA_MOD_CHARM)) &&
             me->IsSpellReady(pBreak) && DoCastSpell(me, pBreak) == SPELL_CAST_OK)
             return;
+    // Class fear break (warrior Berserker Rage, 30 s): fear only, not charm.
+    if (SpellEntry const* pBreak = Kit().FearBreak())
+        if (me->HasAuraType(SPELL_AURA_MOD_FEAR) && me->IsSpellReady(pBreak) &&
+            pBreak->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+            DoCastSpell(me, pBreak) == SPELL_CAST_OK)
+            return;
     BreakCrowdControlEffects(false);
 }
 

@@ -211,6 +211,9 @@ namespace Commander
         // Charge at an enemy to open a fight (warrior Charge). Only the Commander casts it
         // (PullBehavior: a walk-in pull fought where the pack stands); the tank rotation does not.
         virtual SpellEntry const* OpenerCharge() const { return nullptr; }
+        // Breaks a fear on itself (warrior Berserker Rage): hands and feet, cast as soon as the
+        // bot is feared (PartyBotAI::BreakControl), after the racial one (RaceKit::FearBreak).
+        virtual SpellEntry const* FearBreak() const { return nullptr; }
         // Stuns, roots and slows that keep an enemy running away at low health from getting
         // far (flee interception, FleeStopAssigner, todo 13). What each does (stun / root
         // duration, slow percent, range) is read from the spell data (WorldModelBuilder fills

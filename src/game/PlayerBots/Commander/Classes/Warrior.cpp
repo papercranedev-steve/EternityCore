@@ -27,6 +27,13 @@ namespace Commander
                 return m_bot.m_spells.warrior.pCharge;
             }
 
+            // Berserker Rage (Berserker Stance, 30 s): immune to fear, usable while feared (its
+            // fear immunity lifts the fleeing state, Spell::CheckCasterAuras).
+            SpellEntry const* FearBreak() const override
+            {
+                return m_bot.m_spells.warrior.pBerserkerRage;
+            }
+
             // Hamstring (Battle / Berserker Stance), Piercing Howl (talent, around the warrior).
             std::vector<SpellEntry const*> FleeStoppers() const override
             {
