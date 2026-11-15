@@ -702,6 +702,16 @@ namespace Commander
         // could heal if they had to (FightLoad::Lineup, the contingency check). Kept apart so
         // nothing that counts the healers counts them.
         std::vector<HealRate> spareHealRates;
+        // Every member (wipe protection, Coordination/Situation/Crisis/WipeAssigner.h):
+        //   selfRes     it can rise by itself after dying: alive, Player::SelectResurrectionSpellId
+        //               (a Soulstone Resurrection on it, Reincarnation ready with an Ankh); dead,
+        //               the self resurrection kept on its body (PLAYER_SELF_RES_SPELL).
+        //   resurrects  it can resurrect others out of combat (bots: their resurrection spell;
+        //               players: priests from level 10, paladins and shamans from 12).
+        // soulstoneItem: warlock bots, a Soulstone in the bags whose use is ready (item entry).
+        bool selfRes = false;
+        bool resurrects = false;
+        uint32 soulstoneItem = 0;
 
         bool CanAct() const { return alive && !controlled; }
         bool UsesMana() const { return maxMana > 0; }

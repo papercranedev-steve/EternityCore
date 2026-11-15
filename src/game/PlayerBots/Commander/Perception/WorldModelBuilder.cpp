@@ -32,6 +32,7 @@
 #include "Player.h"
 #include "Corpse.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "SpellMgr.h"
 #include "Spell.h"
@@ -1205,6 +1206,52 @@ namespace WorldModelBuilder
                       !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
         }
 
+        // PartyMemberFacts::selfRes and resurrects, every member (wipe protection).
+        void FillRevive(Player const* member, PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            if (member->IsAlive())
+                f.selfRes = member->SelectResurrectionSpellId() != 0;
+            else
+#if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_6_1
+                f.selfRes = member->GetUInt32Value(PLAYER_SELF_RES_SPELL) != 0;
+#else
+                f.selfRes = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_CAN_SELF_RESURRECT);
+#endif
+            if (ai)
+                f.resurrects = ai->m_resurrectionSpell != nullptr;
+            else
+            {
+                uint32 const level = member->GetLevel();
+                switch (member->GetClass())
+                {
+                    case CLASS_PRIEST:  f.resurrects = level >= 10; break;
+                    case CLASS_PALADIN:
+                    case CLASS_SHAMAN:  f.resurrects = level >= 12; break;
+                    default: break;
+                }
+            }
+        }
+
+        // PartyMemberFacts::soulstoneItem: a warlock bot's Soulstone in its bags, its use ready
+        // (the same item as WarlockRotation::Soulstone: what its best Create Soulstone makes).
+        void FillSoulstone(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            SpellEntry const* create = ai->m_spells.warlock.pCreateSoulstone;
+            if (ai->me->GetClass() != CLASS_WARLOCK || !create)
+                return;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                if (create->Effect[i] != SPELL_EFFECT_CREATE_ITEM)
+                    continue;
+                uint32 const stone = uint32(create->EffectItemType[i]);
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stone);
+                SpellEntry const* use = proto ? sSpellMgr.GetSpellEntry(proto->Spells[0].SpellId) : nullptr;
+                if (use && ai->me->HasItemCount(stone, 1) && ai->me->IsSpellReady(use, proto))
+                    f.soulstoneItem = stone;
+                return;
+            }
+        }
+
         // Dead members whose body (not released) or corpse (released) is on `map`.
         void FillCorpses(Group* group, Map* map, WorldModel& world)
         {
@@ -1702,11 +1749,14 @@ namespace WorldModelBuilder
             FillDebuffs(member, f);
             FillAfflictions(member, f);
             FillPaladinBuffsOn(member, f);
+            FillRevive(member, member->AI() ? dynamic_cast<PartyBotAI const*>(member->AI()) : nullptr, f);
             if (member->AI())
             {
                 if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
                 {
                     f.isBot = true;
+                    if (member->IsAlive())
+                        FillSoulstone(ai, f);
                     f.role = uint8(ai->m_role);
                     f.roleLocked = ai->IsRoleLocked();
                     f.drinkManaPerSec = ai->DrinkManaPerSec();

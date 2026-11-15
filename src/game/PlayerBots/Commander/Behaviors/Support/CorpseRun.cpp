@@ -45,23 +45,37 @@ namespace CorpseRun
 #endif
         }
 
-        // Rising now would not put the bot back into the fight: no member fights, and no enemy
-        // near the corpse is still in combat (Vanish or Feign Death drop the party out of combat,
-        // the fight goes on).
-        bool SafeToRise(Player* me)
+        enum class RiseCheck : uint8
+        {
+            Safe,
+            Fight,      // a member or an enemy near the body still fights: wait
+            Idle,       // an idle enemy would see it rise (back home after a wipe): wait, then give up
+        };
+
+        // Rising now would not put the bot back into the fight: no member fights, no enemy near
+        // the corpse is still in combat (Vanish or Feign Death drop the party out of combat, the
+        // fight goes on), and no idle enemy has the body within its aggro range (user
+        // 2026-11-15, wipe protection: the enemies walk home after a wipe, often to where the
+        // party fell).
+        RiseCheck SafeToRise(Player* me)
         {
             if (Group* group = me->GetGroup())
                 for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
                     if (Player* member = itr->getSource())
                         if (member != me && member->IsInCombat())
-                            return false;
+                            return RiseCheck::Fight;
 
             std::list<Unit*> enemies;
             me->GetEnemyListInRadiusAround(me, ENEMY_COMBAT_RADIUS, enemies);
             for (Unit const* enemy : enemies)
                 if (enemy->IsInCombat())
-                    return false;
-            return true;
+                    return RiseCheck::Fight;
+            for (Unit const* enemy : enemies)
+                if (Creature const* c = enemy->ToCreature())
+                    if (c->IsAlive() && !c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO) &&
+                        me->IsWithinDistInMap(c, c->GetAttackDistance(me) + RISE_AGGRO_MARGIN))
+                        return RiseCheck::Idle;
+            return RiseCheck::Safe;
         }
 
         WorldLocation Here(WorldObject const* obj)
@@ -176,9 +190,24 @@ namespace CorpseRun
         {
             if (HasSelfRes(me))
             {
-                if (SafeToRise(me))
+                RiseCheck const check = SafeToRise(me);
+                if (check == RiseCheck::Safe)
+                {
+                    state.idleSinceMs = 0;
                     UseSelfRes(me);
-                return;
+                    return;
+                }
+                if (check == RiseCheck::Fight)
+                {
+                    state.idleSinceMs = 0;
+                    return;
+                }
+                // Only idle enemies in the way: they stay there. Wait a while (one may be a
+                // patrol), then run the corpse like everybody else.
+                if (!state.idleSinceMs)
+                    state.idleSinceMs = now;
+                if (WorldTimer::getMSTimeDiff(state.idleSinceMs, now) < RISE_IDLE_WAIT_MS)
+                    return;
             }
             // As WorldSession::HandleRepopRequestOpcode; the bot has no pending movement change,
             // so the graveyard teleport is not scheduled.

@@ -4,8 +4,11 @@
  *
  * Body (not released):
  *   - a self resurrection (Soulstone, Reincarnation: PLAYER_SELF_RES_SPELL) is kept and used
- *     once it is safe (no member in combat, no enemy in combat within ENEMY_COMBAT_RADIUS),
- *     as the release dialog's button does (WorldSession::HandleSelfResOpcode);
+ *     once it is safe (no member in combat, no enemy in combat within ENEMY_COMBAT_RADIUS, no
+ *     idle enemy with the body in its aggro range + RISE_AGGRO_MARGIN: after a wipe they walk
+ *     home, often to where the party fell), as the release dialog's button does
+ *     (WorldSession::HandleSelfResOpcode). Idle enemies in the way for RISE_IDLE_WAIT_MS: the
+ *     spirit is released after all;
  *   - else the spirit is released at once (WorldSession::HandleRepopRequestOpcode). A released
  *     corpse can still be resurrected: the bots cast at it (PartyBotAI::SelectReleasedCorpse),
  *     a player too; the ghost accepts (CombatBotBaseAI::OnPacketReceived) and the run ends.
@@ -56,11 +59,17 @@ namespace Commander
         uint32 toZone = 0;
         uint32 startMs = 0;
         uint32 arriveMs = 0;
+        // Body with a self resurrection: since when only idle enemies keep it from rising.
+        uint32 idleSinceMs = 0;
     };
 
     namespace CorpseRun
     {
         constexpr float ENEMY_COMBAT_RADIUS = 40.0f;
+        // Not rising within an idle enemy's aggro range + this (it would pull it at once), for
+        // at most RISE_IDLE_WAIT_MS; then the spirit is released (the corpse run instead).
+        constexpr float RISE_AGGRO_MARGIN = 5.0f;
+        constexpr uint32 RISE_IDLE_WAIT_MS = 90 * 1000;
         constexpr uint32 MIN_TRAVEL_SEC = 10;
         constexpr uint32 UNKNOWN_TRAVEL_SEC = 120;
 

@@ -1397,6 +1397,36 @@ namespace Commander
         std::string notedKey;
     };
 
+    // The fight is lost (Coordination/Situation/Crisis/WipeAssigner.h): keep the way back.
+    struct WipeHider
+    {
+        ObjectGuid bot;
+        uint32 spellId = 0;             // Feign Death, Vanish
+    };
+
+    struct WipePlan
+    {
+        bool active = false;            // called for the rest of this fight
+        uint32 sinceMs = 0;
+        uint32 losingSinceMs = 0;       // the contingency had no bearable option since (0 = it has)
+        std::string why;
+        std::vector<ObjectGuid> revivers;   // rise by themselves and resurrect the others
+        std::vector<WipeHider> hiders;      // drop out of the fight and stay out
+        // A warlock bot puts its Soulstone on a member who resurrects (no reviver yet).
+        ObjectGuid stoneBy;
+        ObjectGuid stoneOn;
+        uint32 stoneItem = 0;
+        std::string notedKey;
+
+        bool Hides(ObjectGuid bot) const
+        {
+            for (WipeHider const& h : hiders)
+                if (h.bot == bot)
+                    return true;
+            return false;
+        }
+    };
+
     // A bot given another role for the rest of the fight (CrisisAssigner: the best option's
     // stand-in tank, its spare healers). PartyCommander::ApplyEmergencyRoles sets it on the bot
     // (PartyBotAI::SetEmergencyRole) and gives the old role back once the fight is over.
@@ -1443,6 +1473,7 @@ namespace Commander
         RetreatPlan retreat;
         CrisisPlan crisis;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)
+        WipePlan wipe;
         FightSpotPlan fightSpot;
         PatrolGuardPlan patrolGuard;
         CasterLurePlan casterLure;

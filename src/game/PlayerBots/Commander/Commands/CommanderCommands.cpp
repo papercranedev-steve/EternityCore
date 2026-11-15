@@ -310,6 +310,21 @@ namespace
                 player->GetDistance(plan.retreat.point.x, plan.retreat.point.y, plan.retreat.point.z),
                 WorldTimer::getMSTimeDiffToNow(plan.retreat.startedMs) / 1000.0f, uint32(world.enemies.size()));
 
+        // Wipe protection (WipeAssigner).
+        if (plan.wipe.active)
+        {
+            std::string revivers, hiders;
+            for (ObjectGuid g : plan.wipe.revivers)
+                revivers += (revivers.empty() ? "" : ", ") + NameOf(map, g);
+            for (Commander::WipeHider const& h : plan.wipe.hiders)
+                hiders += (hiders.empty() ? "" : ", ") + NameOf(map, h.bot);
+            handler->PSendSysMessage("Wipe called (%s) %.1fs ago: rise and resurrect: %s; Soulstone: %s; hide: %s",
+                plan.wipe.why.c_str(), WorldTimer::getMSTimeDiffToNow(plan.wipe.sinceMs) / 1000.0f,
+                revivers.empty() ? "nobody" : revivers.c_str(),
+                plan.wipe.stoneBy.IsEmpty() ? "-" : (NameOf(map, plan.wipe.stoneBy) + " -> " + NameOf(map, plan.wipe.stoneOn)).c_str(),
+                hiders.empty() ? "nobody" : hiders.c_str());
+        }
+
         // Contingencies (CrisisAssigner): every option with its forecast, * = best.
         if (plan.crisis.lost)
         {

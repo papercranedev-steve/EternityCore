@@ -30,6 +30,8 @@
 #include "Commander/Behaviors/Combat/FinishCastBehavior.h"
 #include "Commander/Behaviors/Support/BoostBehavior.h"
 #include "Commander/Behaviors/Support/ResurrectBehavior.h"
+#include "Commander/Behaviors/Support/WipeBehavior.h"
+#include "Commander/Coordination/Situation/Crisis/WipeAssigner.h"
 #include "Commander/Coordination/Duties/ResurrectAssigner.h"
 #include "Commander/Behaviors/Combat/MitigationBehavior.h"
 #include "Commander/Behaviors/Combat/StoneformBehavior.h"
@@ -79,6 +81,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BoostBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ResurrectBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<WipeBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<MitigationBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CurseBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
@@ -130,6 +133,8 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrisisAssigner>()));
         // Reads this refresh's crisis; RetreatPlanner::Step starts what it asks for.
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RunAwayAssigner>()));
+        // Reads this refresh's crisis and the last refresh's declined retreat.
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<WipeAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RetreatAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FightSpotAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PatrolAssigner>()));
