@@ -2,8 +2,9 @@
  * Hunter rotation (moved out of PartyBotAI.cpp 2026-11-14; shots reworked 2026-11-15 for the
  * beast mastery spec, user).
  *
- * Out of combat: Aspect of the Hawk; with a victim (an opener): Hunter's Mark, the pet on it,
- * then the combat steps. The pet: PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded).
+ * Out of combat: Aspect of the Hawk; no victim: Mend Pet below MEND_PET_BELOW_PCT; with a
+ * victim (an opener): Hunter's Mark, the pet on it, then the combat steps. The pet:
+ * PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded, TrainHunterPet).
  *
  * In combat:
  *   0. Melee auto attack on (user 2026-11-15: a hunter is ranged and melee; without it the boss
@@ -25,7 +26,7 @@
  * Not cast: Arcane Shot (190 mana for 183 damage, the worst shot for mana), Volley, Scare
  * Beast, Disengage (1.12: threat only, in melee), Aspect of the Monkey (the aspect stays Hawk).
  * The Commander decides: Feign Death and Deterrence (team rescue), Rapid Fire and Bestial
- * Wrath (BurstBehavior), Wing Clip / Intimidation and the step out of the dead zone
+ * Wrath (BurstBehavior), Mend Pet in combat (PetCareBehavior), Wing Clip / Intimidation and the step out of the dead zone
  * (KiteBehavior), running to the tank (EscapeBehavior), where it stands (RangedStanceBehavior,
  * outside the dead zone: ClassKit::MinAttackRange).
  */
@@ -33,6 +34,7 @@
 #include "Rotations/ClassRotation.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Pet.h"
 #include "Spell.h"
 #include <algorithm>
 
@@ -45,6 +47,8 @@ namespace
     uint32 const AIMED_AFTER_SHOT_MS = 600;
     // Auto Shot's wind-up after a cast (Unit::_UpdateAutoRepeatSpell).
     uint32 const AUTO_SHOT_WINDUP_MS = 500;
+    // Out of combat, Mend Pet below this pet health percent.
+    float const MEND_PET_BELOW_PCT = 80.0f;
 
     class HunterRotation : public ClassRotation
     {
@@ -63,7 +67,10 @@ namespace
             // (the pet: PartyBotAI::UpdateAI, SummonPetIfNeeded)
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
+            {
+                MendPet();
                 return;
+            }
 
             if (Cast(pVictim, s.pHuntersMark))
                 return;
@@ -124,6 +131,16 @@ namespace
         }
 
     private:
+        // Between fights: the pet back up before the next pull (in combat: PetCareBehavior).
+        void MendPet()
+        {
+            SpellEntry const* pMend = m_bot.m_spells.hunter.pMendPet;
+            Pet* pPet = m_bot.me->GetPet();
+            if (pMend && pPet && pPet->IsAlive() && pPet->GetHealthPercent() < MEND_PET_BELOW_PCT &&
+                !pPet->HasAura(pMend->Id))
+                Cast(pPet, pMend);
+        }
+
         void AutoShot(Unit* pVictim)
         {
             Player* me = m_bot.me;

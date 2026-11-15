@@ -313,6 +313,9 @@ namespace Commander
         // Cast on its pet: the pet's next hit stuns the pet's target (hunter Intimidation).
         // KiteBehavior's fallback when no slow takes.
         virtual SpellEntry const* PetStun() const { return nullptr; }
+        // A heal only for its pet (hunter Mend Pet). In combat only the Commander casts it
+        // (PetCareBehavior); out of combat the rotation.
+        virtual SpellEntry const* PetHeal() const { return nullptr; }
 
     protected:
         PartyBotAI const& m_bot;

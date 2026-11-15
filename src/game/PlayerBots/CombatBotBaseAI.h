@@ -106,6 +106,10 @@ public:
     // The warlock's demon knows every ability its level allows (a player's Grimoires) and its
     // party aura (Blood Pact) is on autocast. Once per demon.
     void LearnDemonSpells(Pet* pPet);
+    // The hunter's beast as a player's long-kept pet: best friend loyalty, kept happy (fed), its
+    // training points spent on the abilities a pet that holds enemies wants (Growl, its damage
+    // abilities on autocast, Natural Armor, Great Stamina). Once per pet and level.
+    void TrainHunterPet(Pet* pPet);
     void LearnArmorProficiencies();
     void LearnPremadeSpecForClass();
     // Spends the free talent points on `spec`'s talents, top row first, as far as they reach.
@@ -429,6 +433,7 @@ public:
             SpellEntry const* pBestialWrath;
             SpellEntry const* pDeterrence;
             SpellEntry const* pIntimidation;
+            SpellEntry const* pMendPet;
         } hunter;
         struct
         {
@@ -667,6 +672,8 @@ public:
     bool LosFailedRecently(Unit const* pTarget) const;
 
     ObjectGuid m_demonSpellsLearnedFor;     // LearnDemonSpells
+    ObjectGuid m_hunterPetTrainedFor;       // TrainHunterPet
+    uint32 m_hunterPetTrainedLevel = 0;
 };
 
 #endif

@@ -223,6 +223,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Support/ManaBudgetBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealthTradeBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/HealthTradeBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/PetCareBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/PetCareBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.h
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.h

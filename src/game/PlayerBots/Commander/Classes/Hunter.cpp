@@ -80,6 +80,12 @@ namespace Commander
             {
                 return m_bot.m_spells.hunter.pIntimidation;
             }
+
+            // Mend Pet: channelled, heals the pet every second for 5 s.
+            SpellEntry const* PetHeal() const override
+            {
+                return m_bot.m_spells.hunter.pMendPet;
+            }
         };
     }
 

@@ -17,6 +17,8 @@
 #include "SpellMgr.h"
 #include "Utilities/Random.h"
 
+#include <algorithm>
+#include <map>
 #include <random>
 
 enum CombatBotSpells
@@ -41,23 +43,11 @@ enum CombatBotSpells
     SPELL_REVIVE_PET = 982,
     SPELL_CALL_PET = 883,
 
-    PET_WOLF    = 565,
-    PET_CAT     = 681,
+    // Beasts tamed for a hunter bot (SummonPetIfNeeded); levelled to the hunter first.
     PET_BEAR    = 822,
-    PET_CRAB    = 831,
     PET_GORILLA = 1108,
-    PET_BIRD    = 1109,
     PET_BOAR    = 1190,
-    PET_BAT     = 1554,
-    PET_CROC    = 1693,
-    PET_SPIDER  = 1781,
-    PET_OWL     = 1997,
-    PET_STRIDER = 2322,
-    PET_SCORPID = 3127,
-    PET_SERPENT = 3247,
-    PET_RAPTOR  = 3254,
     PET_TURTLE  = 3461,
-    PET_HYENA   = 4127,
 };
 
 void CombatBotBaseAI::AutoAssignRole()
@@ -612,6 +602,11 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.hunter.pIntimidation))
                         m_spells.hunter.pIntimidation = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Mend Pet") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.hunter.pMendPet))
+                        m_spells.hunter.pMendPet = pSpellEntry;
                 }
                 break;
             }
@@ -2336,18 +2331,23 @@ void CombatBotBaseAI::SummonPetIfNeeded()
             else
                 me->CastSpell(me, SPELL_CALL_PET, true);
 
+            if (Pet* pPet = me->GetPet())
+                TrainHunterPet(pPet);
             return;
         }
 
-        uint32 petId = PickRandomValue( PET_WOLF, PET_CAT, PET_BEAR, PET_CRAB, PET_GORILLA, PET_BIRD,
-                                        PET_BOAR, PET_BAT, PET_CROC, PET_SPIDER, PET_OWL, PET_STRIDER,
-                                        PET_SCORPID, PET_SERPENT, PET_RAPTOR, PET_TURTLE, PET_HYENA );
+        // A sturdy family (user 2026-11-15): the pet holds enemies for the party besides
+        // damaging (bear, boar: Charge, gorilla: Thunderstomp, turtle: Shell Shield). A pet the
+        // player gives the bot is kept as it is.
+        uint32 petId = PickRandomValue(PET_BEAR, PET_BOAR, PET_GORILLA, PET_TURTLE);
         if (Creature* pCreature = me->SummonCreature(petId,
             me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f,
             TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000))
         {
             pCreature->SetLevel(me->GetLevel());
             me->CastSpell(pCreature, SPELL_TAME_BEAST, true);
+            if (Pet* pPet = me->GetPet())
+                TrainHunterPet(pPet);
         }
     }
     else if (me->GetClass() == CLASS_WARLOCK)
@@ -2422,6 +2422,142 @@ void CombatBotBaseAI::LearnDemonSpells(Pet* pPet)
             continue;
         SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(itr.first);
         if (!pSpell || !pSpell->HasEffect(SPELL_EFFECT_APPLY_AREA_AURA_PARTY))
+            continue;
+        pPet->ToggleAutocast(itr.first, true);
+        pCharmInfo->SetSpellAutocast(itr.first, true);
+    }
+}
+
+namespace
+{
+    // What a hunter pet ability is to a pet that holds enemies (TrainHunterPet), in the order
+    // its training points go.
+    enum class PetTraining : uint8
+    {
+        Taunt,      // Growl
+        Damage,     // Bite, Claw, Thunderstomp: on autocast
+        Armor,      // Natural Armor
+        Stamina,    // Great Stamina
+        Other,      // Charge, Shell Shield, Dash: with what is left
+        Skip,       // Cower (drops threat), resistances
+    };
+
+    PetTraining TrainingOf(SpellEntry const* pSpell)
+    {
+        bool const passive = pSpell->IsPassiveSpell();
+        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            switch (pSpell->Effect[i])
+            {
+                case SPELL_EFFECT_THREAT:
+                    return pSpell->EffectBasePoints[i] > 0 ? PetTraining::Taunt : PetTraining::Skip;
+                case SPELL_EFFECT_SCHOOL_DAMAGE:
+                    return passive ? PetTraining::Skip : PetTraining::Damage;
+                case SPELL_EFFECT_APPLY_AURA:
+                    if (!passive)
+                        break;
+                    if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_RESISTANCE &&
+                        (pSpell->EffectMiscValue[i] & SPELL_SCHOOL_MASK_NORMAL))
+                        return PetTraining::Armor;
+                    if (pSpell->EffectApplyAuraName[i] == SPELL_AURA_MOD_STAT && pSpell->EffectMiscValue[i] == STAT_STAMINA)
+                        return PetTraining::Stamina;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return passive ? PetTraining::Skip : PetTraining::Other;
+    }
+}
+
+void CombatBotBaseAI::TrainHunterPet(Pet* pPet)
+{
+    if (pPet->GetPetType() != HUNTER_PET || !pPet->GetCharmInfo())
+        return;
+
+    // Fed: a bot carries no pet food. Below happy it does less damage (so less threat) and
+    // loses loyalty; at the first level it runs away (Pet::ModifyLoyalty).
+    if (pPet->GetHappinessState() != HAPPY)
+        pPet->SetPower(POWER_HAPPINESS, pPet->GetMaxPower(POWER_HAPPINESS));
+
+    if (m_hunterPetTrainedFor == pPet->GetObjectGuid() && m_hunterPetTrainedLevel == pPet->GetLevel())
+        return;
+    m_hunterPetTrainedFor = pPet->GetObjectGuid();
+    m_hunterPetTrainedLevel = pPet->GetLevel();
+
+    CreatureInfo const* pInfo = pPet->GetCreatureInfo();
+    CreatureFamilyEntry const* pFamily = pInfo ? sCreatureFamilyStore.LookupEntry(pInfo->pet_family) : nullptr;
+    if (!pFamily)
+        return;
+
+    // A bot is not saved, so each tamed beast is new (loyalty 1, no training points, only its
+    // create spells). As a player's pet kept for long: best friend, whose training points are
+    // level x (loyalty - 1) (Pet::GivePetLevel, Pet::ModifyLoyalty), less what it knows costs
+    // (as Pet::GetTPForSpell counts it).
+    pPet->SetLoyaltyLevel(BEST_FRIEND);
+    int32 spent = 0;
+    for (auto const& itr : pPet->m_petSpells)
+    {
+        if (itr.second.state == PETSPELL_REMOVED)
+            continue;
+        SkillLineAbilityMapBounds const bounds = sSpellMgr.GetSkillLineAbilityMapBoundsBySpellId(itr.first);
+        if (bounds.first != bounds.second)
+            spent += int32(bounds.first->second->reqtrainpoints);
+    }
+    pPet->SetTP(int32(pPet->GetLevel()) * (BEST_FRIEND - 1) - spent);
+
+    // The ranks its level allows, per spell chain, of its family's lines (the family's own
+    // abilities, the general pet line).
+    std::map<uint32, std::vector<SpellEntry const*>> chains;
+    for (uint32 i = 0; i < sObjectMgr.GetMaxSkillLineAbilityId(); ++i)
+    {
+        SkillLineAbilityEntry const* pAbility = sObjectMgr.GetSkillLineAbility(i);
+        if (!pAbility || (pAbility->skillId != pFamily->skillLine[0] && pAbility->skillId != pFamily->skillLine[1]))
+            continue;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(pAbility->spellId);
+        if (!pSpell || !pSpell->spellLevel || pSpell->spellLevel > pPet->GetLevel())
+            continue;
+        std::vector<SpellEntry const*>& ranks = chains[sSpellMgr.GetFirstSpellInChain(pSpell->Id)];
+        if (std::find(ranks.begin(), ranks.end(), pSpell) == ranks.end())
+            ranks.push_back(pSpell);
+    }
+
+    // Highest affordable rank of each chain, in PetTraining order; paid as the trainer does
+    // (Spell::EffectLearnPetSpell).
+    for (PetTraining want : { PetTraining::Taunt, PetTraining::Damage, PetTraining::Armor,
+                              PetTraining::Stamina, PetTraining::Other })
+    {
+        for (auto& chain : chains)
+        {
+            std::vector<SpellEntry const*>& ranks = chain.second;
+            if (TrainingOf(ranks.front()) != want)
+                continue;
+            std::sort(ranks.begin(), ranks.end(), [](SpellEntry const* a, SpellEntry const* b)
+            {
+                return a->spellLevel > b->spellLevel;
+            });
+            for (SpellEntry const* pSpell : ranks)
+            {
+                if (pPet->HasSpell(pSpell->Id))
+                    break;
+                if (!pPet->HasTPForSpell(pSpell->Id))
+                    continue;
+                pPet->SetTP(pPet->m_trainingPoints - pPet->GetTPForSpell(pSpell->Id));
+                pPet->LearnSpell(pSpell->Id);
+                break;
+            }
+        }
+    }
+
+    // Damage abilities on autocast, as a player sets them (learned ones start off). Growl is
+    // ThreatBehavior's (off while a tank holds), Charge and the rest stay off.
+    CharmInfo* pCharmInfo = pPet->GetCharmInfo();
+    for (auto const& itr : pPet->m_petSpells)
+    {
+        if (itr.second.state == PETSPELL_REMOVED || itr.second.active == ACT_PASSIVE || itr.second.active == ACT_ENABLED)
+            continue;
+        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(itr.first);
+        if (!pSpell || !pSpell->IsAutocastable() || TrainingOf(pSpell) != PetTraining::Damage)
             continue;
         pPet->ToggleAutocast(itr.first, true);
         pCharmInfo->SetSpellAutocast(itr.first, true);
