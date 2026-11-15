@@ -6,6 +6,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Values/SurvivalValue.h"
+#include "Commander/Perception/Forecast/ChainHealForecast.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
@@ -404,6 +405,10 @@ namespace Commander
                 p.mana = o.mana;
                 p.castSec = o.castSec;
                 p.emergencyOnly = use == HealUse::EmergencyOnly;
+                // Chain Heal: what its jumps heal on the others (2026-11-15).
+                ChainHealForecast::Jumps const jumps = ChainHealForecast::Of(bot, world, m, o.spell, o.castSec);
+                p.otherHeal = jumps.heal;
+                p.otherEffective = jumps.effective;
                 c.options.push_back(p);
                 c.spells.push_back(o.spell);
             }
@@ -487,7 +492,9 @@ namespace Commander
             p.action.prepSpell = boostSpell;
             // Benefit: the health it restores, plus the death it prevents when the target would
             // not last until the next chance to heal it, plus the mana a free boost saves.
-            // Cost: the overheal.
+            // Cost: the overheal. A chained heal's jumps count on both sides (Option::otherHeal).
+            heal += o.otherHeal;
+            effective += o.otherEffective;
             float benefit = Value::Points(world, effective);
             if (emergency && c.assessment.timeToDie < std::max(HealPlan::GCD_SEC, castSec) + healer.tickSec * 2.0f)
                 benefit += Value::DeathPenalty(*c.facts);

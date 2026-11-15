@@ -20,7 +20,8 @@
  * HealSpells::HOT_INCOMING_SHARE of the expected damage for the HoT part. The class kit says
  * which heals are used (ClassKit::CombatHealUse, user 2026-11-15): priest Renew never (until
  * then no HoT was used in combat), druid Regrowth and paladin Holy Shock (instant, valued by
- * the heal it triggers: HealSpells::HealingPart; 2026-11-15) only in an emergency. The target's intake is
+ * the heal it triggers: HealSpells::HealingPart; 2026-11-15) only in an emergency. Chain Heal
+ * counts its jumps on the others too (ChainHealForecast, HealPlan::Option::otherHeal; 2026-11-15). The target's intake is
  * the damage the HoTs on it do not cover (PartyMemberFacts::hots).
  *
  * HoTs and Swiftmend (Behaviors/Support/HotPlan.h, user 2026-11-15): the healer's HoT

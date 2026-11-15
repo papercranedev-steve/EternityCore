@@ -31,7 +31,8 @@
  * heal that still lands. Overheal lowers "effective", so ranks bigger than the hole lose.
  *
  * Group heals (area / party targets: Prayer of Healing) are not single-target heals and are
- * left out. Chain Heal stays in; only its first target is counted.
+ * left out. Chain Heal stays in; only its first target is counted here (the Commander heal
+ * module adds its jumps: Perception/Forecast/ChainHealForecast.h).
  *
  * Danger (IsInDanger, for absorb shields such as Power Word: Shield): incoming > 0 and the
  * target dies before the fastest castable direct heal lands + SHIELD_MARGIN_SEC, or health is

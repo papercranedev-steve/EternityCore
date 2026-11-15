@@ -237,6 +237,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/PullOdds.cpp
   ${COMMANDER_DIR}/Perception/Forecast/HealCapacity.h
   ${COMMANDER_DIR}/Perception/Forecast/HealCapacity.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ChainHealForecast.h
+  ${COMMANDER_DIR}/Perception/Forecast/ChainHealForecast.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FightLoad.h
   ${COMMANDER_DIR}/Perception/Forecast/FightLoad.cpp
   ${COMMANDER_DIR}/Trace/Trace.h

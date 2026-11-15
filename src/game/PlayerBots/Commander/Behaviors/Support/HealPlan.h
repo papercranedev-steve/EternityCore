@@ -34,6 +34,9 @@
  *   rate       = (spent - regained) / (tc + tr)
  * Nothing hits the target: the least mana per health healed. None qualifies: the fastest heal
  * that does not overheal; none of those either: no heal (topped up, or every heal pulls aggro).
+ * A heal that also heals others (Option::otherHeal, Chain Heal; 2026-11-15): the overheal is
+ * judged on all of it, and only effective / (effective + otherEffective) of its mana spent counts
+ * for this target: the same mana also bought the rest elsewhere. The lift itself (LIFT_MAX_SEC) is the target's own.
  */
 
 #ifndef MANGOS_COMMANDER_HEAL_PLAN_H
@@ -92,6 +95,11 @@ namespace HealPlan
         float castSec = 0.0f;
         bool pulls = false;         // the heal would turn an enemy on the healer
         bool emergencyOnly = false; // only for an emergency (ClassKit::CombatHealUse: Regrowth)
+        // Healing on other members (Chain Heal's jumps, Perception/Forecast/ChainHealForecast.h):
+        // expected and, of it, what they miss when it lands. Counted in a lift's overheal and
+        // mana rate, not in an emergency (only the dying target counts there).
+        float otherHeal = 0.0f;
+        float otherEffective = 0.0f;
         // Filled by Pick.
         float effective = 0.0f;     // heal capped at the health missing when it lands
     };

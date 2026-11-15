@@ -52,14 +52,15 @@ namespace HealPlan
             return best;
         }
 
-        // Net mana per second over one lift + rest cycle (header).
-        float CycleManaRate(Target const& t, Healer const& h, Option const& o, float cycleDeficit)
+        // Net mana per second over one lift + rest cycle (header). `share`: the part of the
+        // mana spent that is this target's (a chained heal heals others with the same mana).
+        float CycleManaRate(Target const& t, Healer const& h, Option const& o, float cycleDeficit, float share)
         {
             float const busy = Busy(o);
             float const net = o.heal / busy - t.intake;
             float const castTime = cycleDeficit / net;
             float const restTime = cycleDeficit / t.intake;
-            float const spent = o.mana / busy * castTime;
+            float const spent = o.mana / busy * castTime * share;
             float const regained = h.regenCasting * (castTime + std::min(FIVE_SECOND_RULE_SEC, restTime)) +
                                    h.regen * std::max(0.0f, restTime - FIVE_SECOND_RULE_SEC);
             return (spent - regained) / (castTime + restTime);
@@ -159,7 +160,14 @@ namespace HealPlan
             return -1;
 
         float const missing = Missing(t);
-        auto overhealOk = [](Option const& o) { return o.heal - o.effective <= OVERHEAL_MAX * o.heal; };
+        // On all the healing (the jumps of a chained heal too).
+        auto overhealOk = [](Option const& o)
+        {
+            float const total = o.heal + o.otherHeal;
+            return total - o.effective - o.otherEffective <= OVERHEAL_MAX * total;
+        };
+        // The mana also bought healing elsewhere (header).
+        auto shared = [](Option const& o) { return o.effective / (o.effective + o.otherEffective); };
 
         float bestRate = 0.0f;
         for (size_t i = 0; i < options.size(); ++i)
@@ -174,10 +182,10 @@ namespace HealPlan
                 float const net = hps - t.intake;
                 if (net <= 0.0f || missing / net > LIFT_MAX_SEC)
                     continue;
-                rate = CycleManaRate(t, h, o, std::max(a.deficit, missing));
+                rate = CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
             }
             else
-                rate = o.mana / o.effective;   // mana per health healed
+                rate = o.mana / (o.effective + o.otherEffective);   // mana per health healed
 
             if (best >= 0)
             {
