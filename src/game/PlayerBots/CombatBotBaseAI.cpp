@@ -2317,6 +2317,67 @@ bool CombatBotBaseAI::IsValidBuffTarget(Unit const* pTarget, SpellEntry const* p
     return true;
 }
 
+namespace
+{
+    bool IsSameSpellChain(SpellEntry const* pSpellEntry, SpellEntry const* pOther)
+    {
+        return pSpellEntry->Id == pOther->Id || sSpellMgr.IsRankSpellDueToSpell(pSpellEntry, pOther->Id);
+    }
+
+    // Same buff: same chain, or one of them is the more powerful version (Arcane Intellect
+    // and Arcane Brilliance).
+    bool IsSameBuff(SpellEntry const* pSpellEntry, SpellEntry const* pOther)
+    {
+        if (IsSameSpellChain(pSpellEntry, pOther))
+            return true;
+
+        std::vector<uint32> morePowerfulSpells;
+        sSpellMgr.ListMorePowerfulSpells(pSpellEntry->Id, morePowerfulSpells);
+        sSpellMgr.ListMorePowerfulSpells(pOther->Id, morePowerfulSpells);
+        for (uint32 spellId : morePowerfulSpells)
+            if (spellId == pSpellEntry->Id || spellId == pOther->Id)
+                return true;
+
+        return false;
+    }
+}
+
+bool CombatBotBaseAI::IsBuffPendingFromOther(Player const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const
+{
+    Group* pGroup = me->GetGroup();
+    if (!pGroup)
+        return false;
+
+    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pCaster = itr->getSource();
+        if (!pCaster || pCaster == me)
+            continue;
+
+        Spell const* pSpell = pCaster->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        if (!pSpell || pSpell->getState() == SPELL_STATE_FINISHED)
+            continue;
+
+        Unit const* pTarget = pSpell->m_targets.getUnitTarget();
+        if (!pTarget)
+            continue;
+
+        SpellEntry const* pPending = pSpell->m_spellInfo;
+        if (pGroupSpellEntry && IsSameSpellChain(pGroupSpellEntry, pPending))
+        {
+            Player const* pTargetPlayer = pTarget->ToPlayer();
+            if (pTargetPlayer && pGroup->SameSubGroup(pTargetPlayer, pMember))
+                return true;
+        }
+        else if (pTarget == pMember &&
+                ((pSingleSpellEntry && IsSameBuff(pSingleSpellEntry, pPending)) ||
+                 (pGroupSpellEntry && IsSameBuff(pGroupSpellEntry, pPending))))
+            return true;
+    }
+
+    return false;
+}
+
 Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSpellEntry) const
 {
     Group* pGroup = me->GetGroup();
@@ -2329,6 +2390,7 @@ Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSpellEntry) const
                 if (me->IsValidHelpfulTarget(pMember) &&
                    !pMember->IsGameMaster() &&
                     IsValidBuffTarget(pMember, pSpellEntry) &&
+                   !IsBuffPendingFromOther(pMember, pSpellEntry, nullptr) &&
                     me->IsWithinLOSInMap(pMember) &&
                     me->IsWithinDist(pMember, 30.0f))
                     return pMember;
@@ -2372,7 +2434,8 @@ Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSingleSpellEntry, S
                     !me->IsWithinLOSInMap(pMember) ||
                     !me->IsWithinDist(pMember, 30.0f) ||
                     !IsValidBuffTarget(pMember, pSingleSpellEntry) ||
-                    !IsValidBuffTarget(pMember, pGroupSpellEntry))
+                    !IsValidBuffTarget(pMember, pGroupSpellEntry) ||
+                     IsBuffPendingFromOther(pMember, pSingleSpellEntry, pGroupSpellEntry))
                     continue;
 
                 if (!pFirstMissingMember)

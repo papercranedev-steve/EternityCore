@@ -1,7 +1,8 @@
 /*
  * Priest rotation (moved out of PartyBotAI.cpp 2026-11-14, same steps).
  *
- * Out of combat: Fortitude, Divine Spirit, Shadow Protection (single or prayer), Inner Fire,
+ * Out of combat: Fortitude (Inner Focus first when it is Prayer of Fortitude, so it costs no
+ * mana), Divine Spirit, Shadow Protection (single or prayer), Inner Fire,
  * heals (healer); with a victim (an opener): the combat steps.
  *
  * In combat:
@@ -37,7 +38,7 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.priest;
 
-            if (PartyBuff(s.pPowerWordFortitude, s.pPrayerofFortitude) ||
+            if (PartyBuff(s.pPowerWordFortitude, s.pPrayerofFortitude, s.pInnerFocus) ||
                 PartyBuff(s.pDivineSpirit, s.pPrayerofSpirit) ||
                 PartyBuff(s.pShadowProtection, s.pPrayerofShadowProtection) ||
                 Buff(me, s.pInnerFire))
@@ -90,11 +91,20 @@ namespace
         }
 
     private:
-        bool PartyBuff(SpellEntry const* pSingle, SpellEntry const* pGroup)
+        // pFreeCast (Inner Focus): cast first when the group version is chosen, so the prayer
+        // costs no mana (user, 2026-11-15). The prayer follows on the next update.
+        bool PartyBuff(SpellEntry const* pSingle, SpellEntry const* pGroup, SpellEntry const* pFreeCast = nullptr)
         {
             SpellEntry const* pBuffSpell = nullptr;
             Player* pTarget = m_bot.SelectBuffTarget(pSingle, pGroup, pBuffSpell);
-            return pTarget && Buff(pTarget, pBuffSpell);
+            if (!pTarget)
+                return false;
+
+            Player* me = m_bot.me;
+            if (pFreeCast && pBuffSpell == pGroup && !me->HasAura(pFreeCast->Id) && Cast(me, pFreeCast))
+                return true;
+
+            return Buff(pTarget, pBuffSpell);
         }
 
         void Damage(Unit* pVictim)
