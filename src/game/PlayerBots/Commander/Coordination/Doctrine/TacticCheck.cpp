@@ -155,7 +155,7 @@ namespace TacticCheck
                         {
                             EnemyFacts const* e = world.FindEnemy(x.guid);
                             if (!e || !e->acting || !e->health || e->control.spellId || d.HoldOn(x.guid) ||
-                                (x.stamps & (STAMP_SWARM | STAMP_SELF_DESTRUCT | STAMP_PLAYER_TARGET)) ||
+                                (x.stamps & (STAMP_SWARM | STAMP_SELF_DESTRUCT | STAMP_PLAYER_TARGET | STAMP_OFF_TANK)) ||
                                 Tier(x.tier) == Tier::Fodder)
                                 continue;
                             bool const noMez = (x.stamps & STAMP_NO_MEZ) != 0;

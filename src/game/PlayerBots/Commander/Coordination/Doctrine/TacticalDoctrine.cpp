@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Coordination/Doctrine/Stragglers.h"
+#include "Commander/Coordination/Doctrine/OffTank.h"
 #include "Commander/Coordination/Doctrine/TacticCheck.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/Doctrine/FightPlace.h"
@@ -436,6 +437,8 @@ namespace Commander
 
         AllyCharm::Apply(world, d);
         Stragglers::Apply(world, plan, d);
+        // Before the check: an enemy on an off-tank is not a hold candidate.
+        OffTank::Apply(world, plan, prev, d);
         TacticCheck::Apply(world, plan, prev, d, recheck);
 
         if (scope.On())
@@ -525,6 +528,7 @@ namespace Commander
         if (d.stamps & STAMP_MUST_CONTROL)  s += ", must be held (not bearable otherwise)";
         if (d.stamps & STAMP_NO_HOLD)       s += ", no tank hold";
         if (d.stamps & STAMP_AREA_MAY_WAKE) s += ", area spells may wake it";
+        if (d.stamps & STAMP_OFF_TANK)      s += ", held by an off-tank";
         return s;
     }
 }

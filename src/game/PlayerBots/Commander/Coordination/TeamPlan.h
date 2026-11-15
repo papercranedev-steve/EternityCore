@@ -999,6 +999,21 @@ namespace Commander
         // only controlled enemies are left (ControlledEnd.h). Single target damage still leaves
         // it alone (TeamPlan::AreaKeepsUnbroken).
         STAMP_AREA_MAY_WAKE = 1 << 20,
+        // Held by an off-tank (Coordination/Doctrine/OffTank.h, DoctrinePlan::offTanks, user
+        // 2026-11-15): not loose while on it (no rescue, the main tank leaves it), damage dealers
+        // kill it last and leave room under the off-tank's threat, no control on it.
+        STAMP_OFF_TANK      = 1 << 21,
+    };
+
+    // An enemy an off-tank holds for the party (OffTank.h): kept until the enemy dies, the
+    // holder cannot hold it (dead, cannot act, about to die) or lost it for a while.
+    struct OffTankHold
+    {
+        ObjectGuid enemy;
+        ObjectGuid holder;
+        uint32 sinceMs = 0;         // held from (world refresh time)
+        uint32 seenOnMs = 0;        // the enemy was last hitting the holder at
+        std::string why;
     };
 
     // An enemy the doctrine holds under a control so the fight is bearable (TacticCheck.h).
@@ -1123,6 +1138,30 @@ namespace Commander
                 if (h.bot == bot)
                     return &h;
             return nullptr;
+        }
+        // Enemies off-tanks hold (OffTank.h), kept like the holds.
+        std::vector<OffTankHold> offTanks;
+        OffTankHold const* OffTankOf(ObjectGuid enemy) const
+        {
+            for (OffTankHold const& h : offTanks)
+                if (h.enemy == enemy)
+                    return &h;
+            return nullptr;
+        }
+        // `holder` holds `enemy` as an off-tank: a holder for that enemy (damage dealers leave
+        // room under its threat, it is not loose).
+        bool OffTankHolds(ObjectGuid holder, ObjectGuid enemy) const
+        {
+            OffTankHold const* h = OffTankOf(enemy);
+            return h && h->holder == holder;
+        }
+        // The enemy `holder` holds as an off-tank, or empty.
+        ObjectGuid OffTankEnemyOf(ObjectGuid holder) const
+        {
+            for (OffTankHold const& h : offTanks)
+                if (h.holder == holder)
+                    return h.enemy;
+            return ObjectGuid();
         }
         std::vector<DoctrineEnemy> enemies;
         // The area spell the Area tactic counts on (Coordination/Doctrine/AreaIntent.h): each

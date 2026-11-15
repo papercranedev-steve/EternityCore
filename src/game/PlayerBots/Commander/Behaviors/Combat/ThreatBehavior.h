@@ -116,7 +116,9 @@ namespace Commander
                            std::vector<Proposal>& out) const;
         void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
-        void ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // An off-tank pet (doctrine OffTank.h): takes and keeps the enemy the brain gives it.
+        void ProposePet(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                        std::vector<Proposal>& out) const;
         // Headroom `who` must keep on `enemy` (damage dealers and pets): DPS_STOP_HEADROOM of the
         // holder's threat, and its own threat for one bot tick (NEW_ENEMY_LEAD_SEC on new enemies).
         float NeededHeadroom(WorldModel const& world, ObjectGuid who, EnemyFacts const& enemy) const;

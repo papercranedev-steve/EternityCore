@@ -28,6 +28,9 @@ namespace Commander
         {
             Unit* unit = nullptr;
             PartyMemberFacts const* facts = nullptr;
+            // Healed after the players (a pet), unless it holds an enemy for the party (an
+            // off-tank, doctrine OffTank.h).
+            bool last = false;
             HealPlan::Target target;
             HealPlan::Assessment assessment;
             std::vector<HealPlan::Option> options;
@@ -140,8 +143,8 @@ namespace Commander
                 return ea;
             if (ea)
                 return a.assessment.timeToDie < b.assessment.timeToDie;
-            if (a.facts->isPet != b.facts->isPet)
-                return !a.facts->isPet;
+            if (a.last != b.last)
+                return !a.last;
             // A chain and a lift by who reaches the reserve first: until 2026-11-02 a chain came
             // before every lift, and the priest topped up a rogue at 65% while the tank sank from
             // 53% into an emergency (strat-20261102-012937). The chain only breaks ties.
@@ -369,6 +372,7 @@ namespace Commander
             Candidate c;
             c.unit = unit;
             c.facts = &m;
+            c.last = m.isPet && plan.doctrine.OffTankEnemyOf(m.guid).IsEmpty();
             c.target.health = float(unit->GetHealth());
             c.target.maxHealth = float(unit->GetMaxHealth());
             // Damage the HoTs already on it do not cover.

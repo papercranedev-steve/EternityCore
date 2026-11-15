@@ -157,6 +157,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/Battlefield.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/Stragglers.h
   ${COMMANDER_DIR}/Coordination/Doctrine/Stragglers.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/OffTank.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/OffTank.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticCheck.h
   ${COMMANDER_DIR}/Coordination/Doctrine/TacticCheck.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/AreaIntent.h

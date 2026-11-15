@@ -142,8 +142,9 @@ namespace Commander
                 // Standing in a patrol's path: the party stays off it (PatrolAssigner.h).
                 // (party-wide: no bot's intercept exception)
                 // A melee straggler on its way is the tank's (Stragglers.h).
+                // An off-tank's enemy is killed last (OffTank.h).
                 return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid) &&
-                       !plan.doctrine.Has(e.guid, STAMP_STRAGGLER);
+                       !plan.doctrine.Has(e.guid, STAMP_STRAGGLER | STAMP_OFF_TANK);
             };
 
             // Doctrine (TacticalDoctrine.h, OutlierTactic::KillFirst): the pile is left to area

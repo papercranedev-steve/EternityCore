@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Duties/RescueAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Doctrine/OffTank.h"
 #include "Commander/Perception/Forecast/TauntWindow.h"
 #include "Commander/Perception/Values/LooseEnemy.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -66,6 +67,9 @@ namespace Commander
         {
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
             if (!victim || !plan.MayEngage(ObjectGuid(), e.guid))
+                continue;
+            // Doctrine (OffTank.h): on the off-tank holding it, it is held.
+            if (plan.doctrine.OffTankHolds(victim->guid, e.guid))
                 continue;
             // Doctrine (RoleStamps.h): a self-destruct dies anyway, nobody takes it; NoTaunt (a
             // trap swarm, taunt immune, a totem): no single target taunt (winning it back with
@@ -138,6 +142,19 @@ namespace Commander
                     add(tank->guid, t.spellId, RescueValue::Taunt(world, e, *victim, *tank, t, tankRate, distance, enemyDps));
                 }
             }
+
+            // A free off-tank (OffTank.h, user 2026-11-15: the hunter's pet): no taunt, it wins the
+            // enemy with threat; once the enemy hits it, the doctrine keeps it there.
+            if (OffTank::MayTake(plan.doctrine, e))
+                for (PartyMemberFacts const& h : world.party)
+                {
+                    if (h.guid == victim->guid || !OffTank::IsFree(world, plan.doctrine, h))
+                        continue;
+                    float const distance = PackResolver::Distance(h.pos, e.pos);
+                    if (distance > TANK_REACH)
+                        continue;
+                    add(h.guid, 0, RescueValue::Threat(world, e, *victim, h, LooseEnemy::TankRate(world, h.guid), distance));
+                }
 
             // The victim's own threat drops (Fade, Feint, Cower, Feign Death, Vanish): only now
             // that the enemy hits it (user 2026-11-14: not while it is merely close to the

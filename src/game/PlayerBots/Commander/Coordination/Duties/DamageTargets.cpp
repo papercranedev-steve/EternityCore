@@ -39,8 +39,11 @@ namespace DamageTargets
             return !ctx.tankBot;
         if (e.victim == bot.guid)
             return true;
+        // An off-tank holding it (doctrine OffTank.h) is its holder too.
         bool holder = false;
-        if (PartyMemberFacts const* v = world.FindMember(e.victim))
+        if (ctx.plan.doctrine.OffTankHolds(e.victim, e.guid))
+            holder = true;
+        else if (PartyMemberFacts const* v = world.FindMember(e.victim))
             holder = Tanks::IsHolder(*v);
         else if (AllyFacts const* a = world.FindAlly(e.victim))
             holder = a->tankLike;
@@ -71,6 +74,15 @@ namespace DamageTargets
             straggler = current;
             current = nullptr;
         }
+        // On an off-tank's enemy (doctrine OffTank.h, killed last): the same.
+        EnemyFacts const* offTanked = nullptr;
+        if (current && ctx.plan.doctrine.Has(current->guid, STAMP_OFF_TANK))
+        {
+            offTanked = current;
+            current = nullptr;
+        }
+        // The off-tanks' enemies it could hit: the one closest to dying when nothing else is left.
+        EnemyFacts const* lastResort = nullptr;
         float const range = current ? (melee ? MELEE_SWITCH_YD : RANGED_SWITCH_YD)
                                     : JOIN_FIGHT_YD;
 
@@ -154,6 +166,14 @@ namespace DamageTargets
                     skip(*e, "threat room");
                     continue;
                 }
+                // Doctrine (OffTank.h): an off-tank holds it, it is killed last.
+                if (ctx.plan.doctrine.Has(e->guid, STAMP_OFF_TANK))
+                {
+                    if (!lastResort || e->health < lastResort->health)
+                        lastResort = e;
+                    skip(*e, "an off-tank holds it: last");
+                    continue;
+                }
                 if (!killNow && FinishedFor(world, bot, *e))
                 {
                     skip(*e, "the others kill it before its cast lands");
@@ -221,6 +241,18 @@ namespace DamageTargets
         {
             pick.enemy = straggler;
             pick.reason = "keep (a straggler, nothing else)";
+        }
+        else if (offTanked)
+        {
+            pick.enemy = offTanked;
+            pick.reason = "keep (an off-tank's, nothing else)";
+        }
+        else if (lastResort)
+        {
+            FocusScore const& f = ctx.Score(*lastResort);
+            pick.enemy = lastResort;
+            pick.benefit = std::max(f.harmRate * f.killSec * share, idleGain);
+            pick.reason = "an off-tank's, nothing else left";
         }
         if (Trace::On())
             Trace::Emit("target", Trace::Format("%s: %s %s", Trace::Guid(bot.guid).c_str(),

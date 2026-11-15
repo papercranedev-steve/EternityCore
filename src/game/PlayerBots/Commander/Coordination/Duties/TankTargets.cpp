@@ -116,6 +116,9 @@ namespace TankTargets
             {
                 if (!e || !ctx.Hittable(*e, tank))
                     return false;
+                // An off-tank holds it (doctrine OffTank.h): not the tank's.
+                if (ctx.plan.doctrine.Has(e->guid, STAMP_OFF_TANK))
+                    return false;
                 float const distance = PackResolver::Distance(tank.pos, e->pos);
                 // An enemy already hitting one of us: the hard line (RouteFact::safeTight) is enough
                 // (stockade-20261115-010336: the tank stood in the corridor 14 s, every walk into
@@ -168,6 +171,9 @@ namespace TankTargets
 
     TargetPick Choose(TargetContext const& ctx, PartyMemberFacts const& tank, EnemyFacts const* current)
     {
+        // On an off-tank's enemy (doctrine OffTank.h): any other is taken as from nothing.
+        if (current && ctx.plan.doctrine.Has(current->guid, STAMP_OFF_TANK))
+            current = nullptr;
         TargetPick loose = FromRescue(ctx, tank);
         if (loose.enemy)
         {

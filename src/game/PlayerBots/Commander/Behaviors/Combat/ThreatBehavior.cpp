@@ -84,8 +84,13 @@ namespace Commander
         // Damage dealers leave room under its threat the same way. Threat rows of allies are
         // on EnemyFacts::threat (partySide = false), so ThreatView::Headroom works unchanged:
         // it compares my threat with victimThreat, whoever the victim is.
-        bool IsHeldByHolder(PartyBotAI const* bot, WorldModel const& world, ObjectGuid victim)
+        // An off-tank holding `e` (doctrine OffTank.h: the hunter's pet besides the main tank)
+        // is its holder too.
+        bool IsHeldByHolder(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e)
         {
+            ObjectGuid const victim = e.victim;
+            if (plan.doctrine.OffTankHolds(victim, e.guid))
+                return true;
             if (PartyMemberFacts const* m = world.FindMember(victim))
                 return m->isPet ? IsHolderPet(bot, world, victim) : IsHolder(*m);
             AllyFacts const* ally = world.FindAlly(victim);
@@ -140,8 +145,9 @@ namespace Commander
         // candidate yet gets the 110% rule (ThreatView::MELEE_AGGRO_FACTOR) instead of the 130%
         // ThreatView::Headroom gives it now, else it switches into the stop band (threat-behavior
         // doc 4.2 / 4.7). Ranged units keep Headroom.
-        EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, ObjectGuid who,
-                                         Position3 const& from, ObjectGuid current, ObjectGuid preferred)
+        // An off-tank's enemy is killed last (doctrine OffTank.h): never a switch target.
+        EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                         ObjectGuid who, Position3 const& from, ObjectGuid current, ObjectGuid preferred)
         {
             float const range = ThreatBehavior::DPS_SWITCH_RANGE;
             float const minRatio = ThreatBehavior::DPS_SWITCH_HEADROOM;
@@ -153,8 +159,10 @@ namespace Commander
                 if (a.guid == current || a.crowdControlled || !a.acting || a.victim.IsEmpty() || a.victim == who ||
                     a.victimThreat <= 0.0f)
                     continue;
-                if (!IsHeldByHolder(bot, world, a.victim))
+                if (!IsHeldByHolder(bot, world, plan, a))
                     continue;   // switching onto an enemy that is already on a healer does not help
+                if (plan.doctrine.Has(a.guid, STAMP_OFF_TANK))
+                    continue;
                 if (PackResolver::Distance(from, a.pos) > range)
                     continue;
                 float room = ThreatView::Headroom(a, who);
@@ -285,7 +293,7 @@ namespace Commander
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // Pet actions run besides the bot's own action (Arbiter), so both are proposed.
-        ProposePet(bot, world, out);
+        ProposePet(bot, world, plan, out);
 
         if (world.enemies.empty())
             return;
@@ -360,6 +368,9 @@ namespace Commander
             // pets are loose too: with a tank around, the pet's taunt autocast is off.
             PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
             if (!victim || plan.doctrine.Has(e.guid, STAMP_SELF_DESTRUCT))   // dies anyway (RoleStamps.h)
+                continue;
+            // On the off-tank holding it (doctrine OffTank.h): held.
+            if (plan.doctrine.OffTankHolds(victim->guid, e.guid))
                 continue;
             // Only this fight: an enemy in another room hitting a teleported member (Gandling's
             // Shadow Portal) or far away is not ours to run after (combat scenario 10).
@@ -492,7 +503,7 @@ namespace Commander
 
         // Only protect a holder (also a tank-like ally). If it is on a healer, another dps or an
         // ally that is not tank-like, taking it is not worse.
-        if (!IsHeldByHolder(bot, world, e->victim))
+        if (!IsHeldByHolder(bot, world, plan, *e))
             return;
 
         if (ThreatView::Headroom(*e, self) >= NeededHeadroom(world, self, *e))
@@ -522,7 +533,8 @@ namespace Commander
     }
 
     // Pet of this bot (hunter, warlock): threat-behavior doc 4.7.
-    void ThreatBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ThreatBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                    std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         Pet* pet = me->GetPet();
@@ -537,28 +549,55 @@ namespace Commander
             if (pet->HasSpell(aside->Id))
                 return;
 
+        // An off-tank's enemy (doctrine OffTank.h): the one the pet holds, else the loose enemy
+        // the brain's rescue gives it to win with threat (RescueAssigner).
+        EnemyFacts const* job = world.FindEnemy(plan.doctrine.OffTankEnemyOf(petGuid));
+        RescueDuty const* rescue = plan.FindRescueFor(petGuid);
+        if (!job && rescue && rescue->way == RescueWay::Threat)
+            job = world.FindEnemy(rescue->enemy);
+
         // Taunt autocast (Growl, Torment, Suffering): off while a tank holds the enemies, on
-        // again without one. Proposed only while it differs, so once per change.
+        // again without one, and on while the pet off-tanks (it casts it on its own victim:
+        // the job's enemy). Proposed only while it differs, so once per change.
         // The tank roles do not flip mid-fight (Tanks.h), so no stance-based hysteresis is needed.
         bool const tank = HasTank(world);
+        bool const tauntOn = !tank || job;
         std::vector<SpellEntry const*> taunts;
         PetTaunt::Spells(pet, taunts);
         for (SpellEntry const* spell : taunts)
         {
             bool const autocast = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spell->Id) !=
                                   pet->m_autospells.end();
-            bool const turnOff = autocast && tank;
-            bool const turnOn = !autocast && !tank;
+            bool const turnOff = autocast && !tauntOn;
+            bool const turnOn = !autocast && tauntOn;
             if (!turnOff && !turnOn)
                 continue;
             Proposal p = MakeProposal(ProposalTier::Assigned,
                 turnOff ? BotActionType::PetAutocastOff : BotActionType::PetAutocastOn, ObjectGuid(), spell);
-            p.reason = turnOff ? "tank holds, pet taunt off" : "no tank, pet taunt on";
+            p.reason = turnOff ? "tank holds, pet taunt off" : job ? "off-tank, pet taunt on" : "no tank, pet taunt on";
             out.push_back(p);
         }
 
         if (world.enemies.empty())
             return;
+
+        // Off-tank: on its enemy and nothing else (the switch and stop rules below are for a pet
+        // that only adds damage).
+        if (job)
+        {
+            Unit const* victim = pet->GetVictim();
+            if (victim && victim->GetObjectGuid() == job->guid)
+                return;
+            float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetAttack, job->guid);
+            p.reason = rescue && rescue->enemy == job->guid ? "off-tank: win the loose enemy" : "off-tank: back on its enemy";
+            // Benefit: the rescue's worth (taking the enemy off its victim), else what holding it
+            // is worth to the doctrine; at least the pet's damage over the next ticks.
+            float const worth = rescue && rescue->enemy == job->guid ? rescue->points : 0.0f;
+            p.SetValue(std::max({ 1.0f, worth, Value::LostAction(world, *petFacts, 2.0f * tickSec) }), 0.0f);
+            out.push_back(p);
+            return;
+        }
         // No tank and the pet taunts by itself: it holds enemies (IsHolderPet), leave it.
         if (!tank && PetTaunt::HasAutocast(pet))
             return;
@@ -595,10 +634,10 @@ namespace Commander
             ThreatEntry const* own = ThreatView::FindEntry(*e, petGuid);
             float const factor = pet->GetEntry() == IMP_ENTRY ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
             float const room = own ? e->victimThreat * factor - own->threat : ThreatView::NO_LIMIT;
-            bool const safe = !IsHeldByHolder(bot, world, e->victim) ||
+            bool const safe = !IsHeldByHolder(bot, world, plan, *e) ||
                 (e->victimThreat > 0.0f && room / e->victimThreat >= minRatio &&
                  room >= OwnThreatRate(world, petGuid, *e) * minSec);
-            EnemyFacts const* sendAt = safe ? e : FindSafeTarget(bot, world, petGuid, petFacts->pos, e->guid,
+            EnemyFacts const* sendAt = safe ? e : FindSafeTarget(bot, world, plan, petGuid, petFacts->pos, e->guid,
                                                                  tankBot ? tankBot->victim : ObjectGuid());
             if (!sendAt)
                 return;
@@ -620,7 +659,7 @@ namespace Commander
             if (!tankBot)
                 return;
         }
-        else if (!IsHeldByHolder(bot, world, e->victim) ||
+        else if (!IsHeldByHolder(bot, world, plan, *e) ||
                  ThreatView::Headroom(*e, petGuid) >= NeededHeadroom(world, petGuid, *e))
             return;
 
@@ -632,7 +671,7 @@ namespace Commander
 
         // A safe enemy, the tank's target first: the pet then fights next to the tank, and an
         // enemy hitting the pet follows it there.
-        EnemyFacts const* best = FindSafeTarget(bot, world, petGuid, petFacts->pos, e->guid,
+        EnemyFacts const* best = FindSafeTarget(bot, world, plan, petGuid, petFacts->pos, e->guid,
                                                 tankBot ? tankBot->victim : ObjectGuid());
         if (best)
         {

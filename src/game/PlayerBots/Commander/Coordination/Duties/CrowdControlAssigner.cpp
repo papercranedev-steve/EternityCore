@@ -49,7 +49,8 @@ namespace Commander
         bool DoctrineForbids(TeamPlan const& plan, ControlAbility const& a, ObjectGuid enemy)
         {
             // No control of any kind on a trap swarm or a self-destruct (RoleStamps.h).
-            if (plan.doctrine.Has(enemy, STAMP_SWARM | STAMP_SELF_DESTRUCT))
+            // Held by an off-tank (OffTank.h): it is held already.
+            if (plan.doctrine.Has(enemy, STAMP_SWARM | STAMP_SELF_DESTRUCT | STAMP_OFF_TANK))
                 return true;
             return a.Kind() != ControlKind::Hold && plan.doctrine.Has(enemy, STAMP_NO_MEZ);
         }
@@ -69,6 +70,8 @@ namespace Commander
                 return "doctrine: no control (self-destructs)";
             if (d && (d->stamps & STAMP_SWARM))
                 return "doctrine: no control (trap swarm)";
+            if (d && (d->stamps & STAMP_OFF_TANK))
+                return "doctrine: no control (an off-tank holds it)";
             return "doctrine: no mez (" + (d ? d->noMezWhy : std::string("?")) + ")";
         }
     }

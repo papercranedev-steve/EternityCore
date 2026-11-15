@@ -38,8 +38,10 @@ namespace RescueValue
         PartyMemberFacts const* victim = world.FindMember(e.victim);
         if (!victim || victim->charmed || Tanks::IsTank(*victim))
             return nullptr;
-        // A pet that growls it back: taking it from the pet is a war the tank loses.
-        if (victim->isPet && victim->tauntsItself)
+        // A pet that growls it back: taking it from the pet is a war the tank loses. A bot's pet
+        // that can off-tank growls only at the enemy the brain gives it (the doctrine's
+        // OffTank.h, which the callers check); any other on it is loose.
+        if (victim->isPet && victim->tauntsItself && !victim->canOffTank)
             return nullptr;
         return victim;
     }

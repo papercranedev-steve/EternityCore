@@ -1729,6 +1729,14 @@ namespace WorldModelBuilder
                     pf.isPet = true;
                     pf.ownerGuid = member->GetObjectGuid();
                     pf.tauntsItself = PetTaunt::HasAutocast(pet);
+                    // Only a bot's pet: a player's pet is his to command.
+                    if (pet->IsControlled() && !pet->IsCharmed() && member->AI() &&
+                        dynamic_cast<PartyBotAI const*>(member->AI()))
+                    {
+                        std::vector<SpellEntry const*> threatSpells;
+                        PetTaunt::Spells(pet, threatSpells);
+                        pf.canOffTank = !threatSpells.empty();
+                    }
                     world.party.push_back(pf);
                     partyUnits.push_back(pet);
                 }

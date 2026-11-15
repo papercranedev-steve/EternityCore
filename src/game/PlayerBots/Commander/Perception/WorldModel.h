@@ -533,6 +533,11 @@ namespace Commander
         ObjectGuid ownerGuid;       // pets: the owning member
         bool isBot = false;         // controlled by PartyBotAI
         bool isPet = false;
+        // Can hold an enemy for the party besides the main tank (an off-tank, the doctrine's
+        // OffTank.h): a bot's pet with a threat ability it uses on its own target (Growl,
+        // Torment). No taunt, no survival spells, no area threat: what it can do is in its
+        // other facts (taunts, survival, health, armor), the same as for a tank.
+        bool canOffTank = false;
         bool alive = false;
         // CombatBotRoles. Bots: PartyBotAI::m_role. Players: the role they chose, else from
         // RoleCapability (tank only while no bot tanks), see Perception/Tanks.h. Pets: 0.
