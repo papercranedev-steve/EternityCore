@@ -13,6 +13,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/RaceKit.h"
+#include "Commander/Classes/ItemKit.h"
 #include "DamageSpells.h"
 #include "HealSpells.h"
 #include "RoleCapability.h"
@@ -920,6 +921,7 @@ namespace WorldModelBuilder
                 a.notOnTank = s.notOnTank;
                 a.casterStops = s.casterStops;
                 a.targetStops = s.targetStops;
+                a.gcd = spell->StartRecoveryTime > 0;
                 // Divine Shield, Ice Block: castable while stunned or feared, they lift it
                 // (Spell::CheckCasterAuras; PartyBotAI::CastRescueWhileControlled casts them).
                 bool const liftsControl = spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT);
@@ -927,6 +929,56 @@ namespace WorldModelBuilder
                           !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
                           (!s.needsShield || ai->IsWearingShield(me));
                 f.survival.push_back(a);
+            }
+        }
+
+        // Healthstones and healing potions in the bags (ItemKit::Use::Heal): rescue options on
+        // itself, like a self heal spell.
+        void FillItemSurvival(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (ItemKit::Consumable const& c : ItemKit::Held(*ai, ItemKit::Use::Heal))
+            {
+                SurvivalAbility a;
+                a.spellId = c.spell->Id;
+                a.itemId = c.proto->ItemId;
+                a.effect = SurvivalAbility::Effect::Heal;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (c.spell->Effect[i] == SPELL_EFFECT_HEAL)
+                        a.amount += ItemKit::AverageValue(c.spell, i);
+                if (a.amount <= 0.0f)
+                    continue;
+                a.cooldownMs = c.cooldownMs;
+                a.selfOnly = true;
+                a.gcd = c.spell->StartRecoveryTime > 0;
+                a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
+                f.survival.push_back(a);
+            }
+        }
+
+        // Mana potions, mana gems and runes in the bags (ItemKit::Use::Mana).
+        void FillManaItems(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            if (me->GetMaxPower(POWER_MANA) == 0)
+                return;
+            for (ItemKit::Consumable const& c : ItemKit::Held(*ai, ItemKit::Use::Mana))
+            {
+                ManaItemAbility a;
+                a.itemId = c.proto->ItemId;
+                a.spellId = c.spell->Id;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (c.spell->Effect[i] == SPELL_EFFECT_ENERGIZE && c.spell->EffectMiscValue[i] == POWER_MANA)
+                        a.mana += ItemKit::AverageValue(c.spell, i);
+                    else if (c.spell->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE)
+                        a.healthCost += ItemKit::AverageValue(c.spell, i);
+                }
+                if (a.mana <= 0.0f)
+                    continue;
+                a.cooldownMs = c.cooldownMs;
+                a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
+                f.manaItems.push_back(a);
             }
         }
 
@@ -1303,6 +1355,8 @@ namespace WorldModelBuilder
                         FillTaunts(ai, f);
                         FillThreatDrops(ai, f);
                         FillSurvival(ai, f);
+                        FillItemSurvival(ai, f);
+                        FillManaItems(ai, f);
                         FillBursts(ai, f);
                         FillAllyBoosts(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);

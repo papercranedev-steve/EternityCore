@@ -37,6 +37,7 @@ namespace Commander
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::Retreat: return "retreat";
                 case BotActionType::UseObject: return "use";
+                case BotActionType::UseItem: return "use-item";
                 case BotActionType::PetAttack: return "pet-attack";
                 case BotActionType::PetFollow: return "pet-follow";
                 case BotActionType::PetAutocastOn: return "pet-autocast-on";
@@ -79,7 +80,7 @@ namespace Commander
         {
             return type == BotActionType::Attack || type == BotActionType::Backpedal ||
                    type == BotActionType::StopMove || type == BotActionType::Chase ||
-                   type == BotActionType::StopChase;
+                   type == BotActionType::StopChase || type == BotActionType::UseItem;
         }
 
         // Arbiter.h "Two channels".
@@ -94,6 +95,7 @@ namespace Commander
                 case BotActionType::Chase:
                     return Channel::Move;
                 case BotActionType::Cast:
+                case BotActionType::UseItem:
                 case BotActionType::Attack:
                 case BotActionType::HoldFire:
                     return Channel::Act;
@@ -113,6 +115,7 @@ namespace Commander
             switch (act.action.type)
             {
                 case BotActionType::Cast:
+                case BotActionType::UseItem:
                 {
                     SpellEntry const* spell = act.action.spell;
                     if (!spell || CurrentAction::NeedsStandingStill(bot, spell) || spell->IsAutoRepeatRangedSpell())
@@ -196,6 +199,12 @@ namespace Commander
         {
             snprintf(buf, sizeof(buf), "%s %s spell%u", VetoName(p.veto.type),
                 TargetName(bot, p.veto.target).c_str(), p.veto.spellId);
+            return buf;
+        }
+        if (p.action.type == BotActionType::UseItem)
+        {
+            snprintf(buf, sizeof(buf), "%s %s item%u spell%u", ActionName(p.action.type),
+                TargetName(bot, p.action.target).c_str(), p.action.itemId, p.action.spell ? p.action.spell->Id : 0);
             return buf;
         }
         snprintf(buf, sizeof(buf), "%s %s spell%u", p.kind == ProposalKind::HealOrder ? "heal" : ActionName(p.action.type),
@@ -687,6 +696,8 @@ namespace Commander
                 // run, it would pick the nearest attacker and hit it again.
                 return true;
             }
+            case BotActionType::UseItem:
+                return action.itemId && bot->UseBagItem(action.itemId, pTarget ? pTarget : me);
             case BotActionType::UseObject:
             case BotActionType::Rest:
                 break;      // handled above

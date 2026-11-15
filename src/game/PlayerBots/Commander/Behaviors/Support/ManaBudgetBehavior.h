@@ -37,6 +37,17 @@
  * while the missing mana is less than the uncapped R, every filler cast first makes the same
  * channel restore more, so it waits until R fits, or until the mana pays fewer than
  * DRY_FILLER_CASTS fillers (running dry before R fits: big regeneration pool).
+ *
+ * Mana items (any bot with a mana pool; ManaItemAbility facts from Classes/ItemKit.h: mana
+ * potions, mana gems, Demonic / Dark Rune; cooldown doc 2026-11-14, spell list section 5):
+ * in combat, the fight rate measured, only once the missing mana is at least the item's
+ * average R (nothing of it wasted). Instant, off the global cooldown (BotActionType::UseItem).
+ *   benefit  healer:  Points(ManaBudget::SavedManaHealth(R, E, tension)) (0 while the mana lasts)
+ *            others:  LostAction(min(T, (M + R) / S)) - LostAction(min(T, M / S)), S as above
+ *   cost     Value::CooldownPoints(item cooldown, T + SurvivalValue::NEXT_FIGHTS_SEC)
+ *            + Points(the rune's average damage to itself)
+ * A rune is skipped while the bot is in danger (SurvivalValue) or when it would leave it below
+ * RUNE_MIN_HEALTH_PCT. The best net item is proposed at tier Assigned.
  */
 
 #ifndef MANGOS_COMMANDER_MANA_BUDGET_BEHAVIOR_H
@@ -57,6 +68,8 @@ namespace Commander
         static constexpr uint32 LOW_MANA_NOTE_REPEAT_MS = 60000;
         // Self restore before its whole amount fits only when the mana pays fewer fillers than this.
         static constexpr float DRY_FILLER_CASTS = 2.0f;
+        // A rune (it hurts the user) only while its damage leaves at least this health percent. Guess.
+        static constexpr float RUNE_MIN_HEALTH_PCT = 50.0f;
 
         struct Budget
         {
@@ -81,6 +94,8 @@ namespace Commander
     private:
         // Self restore (header): mage Evocation when it buys casting time.
         void ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        // Mana items (header): the best mana potion, gem or rune when it pays.
+        void ProposeManaItem(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Tells the leader when this healer is low on mana for the rest of the fight.
         // One behavior object serves every bot on every map thread: the last note time per

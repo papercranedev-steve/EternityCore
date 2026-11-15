@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/RaceKit.h"
+#include "Commander/Classes/ItemKit.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -19,7 +20,7 @@ namespace Commander
             for (SurvivalSpell const& s : bot->Kit().Survival())
                 if (s.spell)
                     return true;
-            return !RaceKit::Survival(*bot).empty();
+            return !RaceKit::Survival(*bot).empty() || ItemKit::HoldsAny(*bot, ItemKit::Use::Heal);
         }
     }
 
@@ -51,6 +52,26 @@ namespace Commander
         p.source = "rescue";
         p.action.type = BotActionType::Cast;
         p.action.spell = spell;
+        bool gcd = true;
+        if (duty->way == RescueWay::Save)
+        {
+            // A healthstone or healing potion (ItemKit): its spell is the duty's.
+            auto const item = std::find_if(self->survival.begin(), self->survival.end(),
+                                           [&](SurvivalAbility const& a) { return a.itemId && a.spellId == duty->spellId; });
+            if (item != self->survival.end())
+            {
+                if (!item->ready || duty->victim != me->GetObjectGuid())
+                    return;
+                p.reason = "rescue: about to die, use an item";
+                p.action.type = BotActionType::UseItem;
+                p.action.itemId = item->itemId;
+                p.action.target = duty->victim;
+                float const cost = item->gcd ? Value::LostAction(world, *self, Value::GCD_SEC) : 0.0f;
+                p.SetValue(duty->points + cost, cost);
+                out.push_back(p);
+                return;
+            }
+        }
         if (duty->way == RescueWay::Taunt)
         {
             Unit* enemy = me->GetMap()->GetUnit(duty->enemy);

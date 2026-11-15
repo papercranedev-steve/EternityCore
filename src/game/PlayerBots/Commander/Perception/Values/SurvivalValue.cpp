@@ -164,7 +164,8 @@ namespace SurvivalValue
             kept += std::min(extra, dps * HORIZON_SEC);
         o.benefit = Value::DeathPenalty(member) * (Risk(danger.ttd) - Risk(ttd)) + Value::Points(world, kept);
 
-        o.cost = Value::LostAction(world, caster, Value::GCD_SEC) + ManaWorth::Points(world, caster, float(a.manaCost));
+        o.cost = (a.gcd ? Value::LostAction(world, caster, Value::GCD_SEC) : 0.0f) +
+                 ManaWorth::Points(world, caster, float(a.manaCost));
         if (a.casterStops)
             o.cost += Value::LostAction(world, caster, a.durationSec);
         if (a.targetStops && !self && (member.role == ROLE_MELEE_DPS || member.role == ROLE_TANK))

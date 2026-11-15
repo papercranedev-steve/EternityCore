@@ -141,7 +141,9 @@ namespace CurrentAction
         float cost = 0.0f;
         if (state.Casting())
         {
-            bool const ends = action.type == BotActionType::Cast || action.type == BotActionType::Rest ||
+            // An item's spell ends a running cast too (SpellCaster::SetCurrentCastedSpell).
+            bool const ends = action.type == BotActionType::Cast || action.type == BotActionType::UseItem ||
+                              action.type == BotActionType::Rest ||
                               (state.movementEnds && WalkAction(action.type));
             if (ends && state.keep > 0.0f)
             {

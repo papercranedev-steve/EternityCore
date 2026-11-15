@@ -10,6 +10,9 @@
 #include "HealSpells.h"
 #include "DamageSpells.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/Classes/ItemKit.h"
+#include "Commander/Perception/Values/SurvivalValue.h"
+#include "SpellMgr.h"
 #include "SpellAuraDefines.h"
 #include "Chat.h"
 #include "Timer.h"
@@ -143,7 +146,8 @@ namespace Commander
 
     bool ManaBudgetBehavior::AppliesTo(PartyBotAI const* bot) const
     {
-        return bot->GetRole() == ROLE_HEALER || bot->Kit().SelfManaRestore();
+        return bot->GetRole() == ROLE_HEALER || bot->Kit().SelfManaRestore() ||
+               (bot->me->GetMaxPower(POWER_MANA) > 0 && ItemKit::HoldsAny(*bot, ItemKit::Use::Mana));
     }
 
     void ManaBudgetBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
@@ -153,6 +157,7 @@ namespace Commander
             return;
 
         ProposeSelfRestore(bot, world, out);
+        ProposeManaItem(bot, world, out);
         if (bot->GetRole() == ROLE_HEALER)
             ProposeHealVeto(bot, world, out);
     }
@@ -206,6 +211,78 @@ namespace Commander
         p.action.type = BotActionType::Cast;
         p.action.spell = restore;
         p.SetValue(Value::LostAction(world, *self, castWith), Value::LostAction(world, *self, castWithout));
+        out.push_back(p);
+    }
+
+    void ManaBudgetBehavior::ProposeManaItem(PartyBotAI const* bot, WorldModel const& world,
+                                             std::vector<Proposal>& out) const
+    {
+        Player* me = bot->me;
+        if (!me->IsInCombat() || !world.rates.dealtMeasured)
+            return;
+        PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+        if (!self || !self->UsesMana() || !self->CanAct() || self->manaItems.empty())
+            return;
+
+        float const mana = float(self->mana);
+        float const missing = float(self->maxMana) - mana;
+        float const fightSec = Value::FightRemainingSec(world);
+
+        // What `restored` more mana is worth to this bot (header).
+        Budget budget;
+        bool const healer = bot->GetRole() == ROLE_HEALER;
+        bool const hasBudget = healer && ComputeBudget(bot, world, budget);
+        float spend = 0.0f;
+        if (!healer)
+            if (SpellEntry const* filler = bot->Kit().Filler())
+                spend = DamageSpells::ManaCost(me, filler) / DamageSpells::BusySec(me, filler) - self->manaRegenCasting;
+        auto worth = [&](float restored)
+        {
+            if (hasBudget)
+                return Value::Points(world, ManaBudget::SavedManaHealth(restored, budget.healPerMana, budget.tension));
+            if (spend <= 0.0f)
+                return 0.0f;
+            float const castWithout = std::min(fightSec, mana / spend);
+            float const castWith = std::min(fightSec, (mana + restored) / spend);
+            return Value::LostAction(world, *self, castWith) - Value::LostAction(world, *self, castWithout);
+        };
+        bool const inDanger = SurvivalValue::Of(world, *self).InDanger();
+
+        ManaItemAbility const* best = nullptr;
+        float bestBenefit = 0.0f;
+        float bestCost = 0.0f;
+        for (ManaItemAbility const& a : self->manaItems)
+        {
+            // Not before its whole amount fits (cooldown doc, spell list section 5).
+            if (!a.ready || missing < a.mana)
+                continue;
+            if (a.healthCost > 0.0f &&
+                (inDanger || float(self->health) - a.healthCost < float(self->maxHealth) * RUNE_MIN_HEALTH_PCT / 100.0f))
+                continue;
+            float const benefit = worth(a.mana);
+            float const cost = Value::CooldownPoints(a.cooldownMs / 1000.0f, fightSec + SurvivalValue::NEXT_FIGHTS_SEC) +
+                               Value::Points(world, a.healthCost);
+            if (benefit <= cost || (best && benefit - cost <= bestBenefit - bestCost))
+                continue;
+            best = &a;
+            bestBenefit = benefit;
+            bestCost = cost;
+        }
+        if (!best)
+            return;
+        SpellEntry const* spell = sSpellMgr.GetSpellEntry(best->spellId);
+        if (!spell)
+            return;
+
+        Proposal p;
+        p.tier = ProposalTier::Assigned;
+        p.source = "mana";
+        p.reason = best->healthCost > 0.0f ? "mana runs short: rune" : "mana runs short: potion or gem";
+        p.action.type = BotActionType::UseItem;
+        p.action.itemId = best->itemId;
+        p.action.spell = spell;
+        p.action.target = self->guid;
+        p.SetValue(bestBenefit, bestCost);
         out.push_back(p);
     }
 

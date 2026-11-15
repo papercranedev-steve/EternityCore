@@ -3484,6 +3484,67 @@ bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
     return false;
 }
 
+bool CombatBotBaseAI::UseBagItem(uint32 itemId, Unit* pTarget)
+{
+    // First stack: the backpack, then the bags.
+    Item* pItem = nullptr;
+    uint8 bag = INVENTORY_SLOT_BAG_0;
+    uint8 slot = 0;
+    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END && !pItem; ++i)
+    {
+        Item* p = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
+        if (p && p->GetEntry() == itemId)
+        {
+            pItem = p;
+            slot = i;
+        }
+    }
+    for (uint8 b = INVENTORY_SLOT_BAG_START; b < INVENTORY_SLOT_BAG_END && !pItem; ++b)
+    {
+        Item* pBagItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, b);
+        if (!pBagItem || !pBagItem->IsBag())
+            continue;
+        Bag* pBag = static_cast<Bag*>(pBagItem);
+        for (uint32 j = 0; j < pBag->GetBagSize() && !pItem; ++j)
+        {
+            Item* p = pBag->GetItemByPos(uint8(j));
+            if (p && p->GetEntry() == itemId)
+            {
+                pItem = p;
+                bag = b;
+                slot = uint8(j);
+            }
+        }
+    }
+    if (!pItem)
+        return false;
+
+    ItemPrototype const* pProto = pItem->GetProto();
+    uint8 spellSlot = MAX_ITEM_PROTO_SPELLS;
+    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
+        if (pProto->Spells[i].SpellId && pProto->Spells[i].SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
+        {
+            spellSlot = i;
+            break;
+        }
+    }
+    SpellEntry const* pSpellEntry = spellSlot < MAX_ITEM_PROTO_SPELLS ? sSpellMgr.GetSpellEntry(pProto->Spells[spellSlot].SpellId) : nullptr;
+    if (!pSpellEntry || me->CanUseItem(pItem) != EQUIP_ERR_OK || !me->IsSpellReady(pSpellEntry, pProto))
+        return false;
+
+    uint32 const countBefore = me->GetItemCount(itemId);
+    WorldPackets::Spell::UseItem packet;
+    packet.bagIndex = bag;
+    packet.slot = slot;
+    packet.spellSlot = spellSlot;
+    packet.targets.setUnitTarget(pTarget ? pTarget : me);
+    me->GetSession()->HandleUseItemOpcode(packet);
+    // pItem may be deleted now (last charge used).
+
+    return me->GetItemCount(itemId) < countBefore || !me->IsSpellReady(pSpellEntry, pProto);
+}
+
 void CombatBotBaseAI::BreakCrowdControlEffects(bool emergencyCooldowns)
 {
     if (UseTrinketEffects(true))

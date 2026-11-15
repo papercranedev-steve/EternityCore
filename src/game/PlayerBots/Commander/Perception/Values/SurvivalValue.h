@@ -25,7 +25,8 @@
  * ttd' from the drain with f during d and without after.
  * benefit = DeathPenalty x (Risk(ttd) - Risk(ttd')) + Points(health it keeps within the horizon:
  *           the damage f takes off, the absorb or extra health used, the heal used)
- * cost    = LostAction(caster, GCD) [+ LostAction(caster, d): Ice Block]
+ * cost    = LostAction(caster, GCD) (not for an option off the global cooldown: potions,
+ *           healthstones) [+ LostAction(caster, d): Ice Block]
  *           [+ LostAction(target, d) for a melee target that cannot attack: Blessing of Protection]
  *           + ManaWorth::Points(mana) + cooldown points (Value::CooldownPoints over
  *           fight left + NEXT_FIGHTS_SEC: a long cooldown is also missing in the next pulls) [+ DropThreat: what the enemies' next holders take on top of it,

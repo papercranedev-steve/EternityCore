@@ -156,9 +156,27 @@ namespace Commander
         bool notOnTank = false;
         bool casterStops = false;
         bool targetStops = false;
+        // Starts the global cooldown (the rescue pays an action for it); potions and
+        // healthstones do not.
+        bool gcd = true;
+        // 0 = a spell; else the item whose on-use spell `spellId` is (ItemKit: healthstone,
+        // healing potion), used with BotActionType::UseItem.
+        uint32 itemId = 0;
         // Off cooldown, enough power (stance swap counted), can act (or controlled and the spell
         // lifts it: Divine Shield, Ice Block), a shield if needed.
         bool ready = false;
+    };
+
+    // A consumable of a bot that restores its own mana (ItemKit::Use::Mana: mana potions, mana
+    // gems, Demonic / Dark Rune), the best held one per shared cooldown. ManaBudgetBehavior.
+    struct ManaItemAbility
+    {
+        uint32 itemId = 0;
+        uint32 spellId = 0;
+        float mana = 0.0f;          // average restored
+        float healthCost = 0.0f;    // average damage it does to the user (runes)
+        uint32 cooldownMs = 0;
+        bool ready = false;         // can act, off cooldown, usable by it
     };
 
     // A damage cooldown of a bot (ClassKit::Bursts, RaceKit::Bursts), with the numbers of its
@@ -438,6 +456,7 @@ namespace Commander
         std::vector<TauntAbility> taunts;           // tank-role bots only
         std::vector<ThreatDropAbility> threatDrops; // non-tank bots only
         std::vector<SurvivalAbility> survival;      // bots only
+        std::vector<ManaItemAbility> manaItems;     // bots with a mana pool only
         std::vector<BurstAbility> bursts;           // bots only
         std::vector<AllyBoostAbility> allyBoosts;   // bots only
         // Every member (BoostAssigner): its mana regeneration is boosted now

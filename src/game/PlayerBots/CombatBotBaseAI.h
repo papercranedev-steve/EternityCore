@@ -190,6 +190,11 @@ public:
     SpellCastResult CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot);
     bool UseTrinketEffects(bool onlyToBreakCC = false);
     bool UseItemEffect(Item* pItem, bool onlyToBreakCC = false);
+    // Uses the first stack of `itemId` in the backpack or the bags on `pTarget` (null = itself)
+    // through the client's path (WorldSession::HandleUseItemOpcode: a player's checks, shared
+    // item cooldowns), like `.partybot useslot`. True when it went through (the item was
+    // consumed or its cooldown started).
+    bool UseBagItem(uint32 itemId, Unit* pTarget = nullptr);
     // `emergencyCooldowns`: Divine Shield and Ice Block may be spent on it. PartyBotAI passes
     // false: its team rescue decides them (PartyBotAI::BreakControl).
     void BreakCrowdControlEffects(bool emergencyCooldowns = true);

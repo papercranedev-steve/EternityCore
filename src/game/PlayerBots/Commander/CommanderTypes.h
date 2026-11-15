@@ -59,6 +59,12 @@ namespace Commander
         // held for holdMs while out of INTERACTION_DISTANCE, then GameObject::Use(me) (button,
         // lever). Same use path as `.partybot usegobject` (PlayerBotMgr.cpp).
         UseObject,
+        // Use the item `itemId` from the bags on `target` (empty = self): a potion, healthstone,
+        // mana gem (Commander/Classes/ItemKit.h). `spell` is its on-use spell, for the logs and
+        // the walk check. Same use path as `.partybot useslot` (CombatBotBaseAI::UseBagItem).
+        // The consumables used are off the global cooldown: the original rotation still runs
+        // in the same tick.
+        UseItem,
         // Pet actions command the bot's pet, not the bot. The arbiter executes them besides the
         // bot's own action (the rotation still runs): every autocast toggle, and the best pet
         // command (PetAttack / PetFollow). Pet commands are skipped during a retreat (Override).
@@ -96,6 +102,8 @@ namespace Commander
         // Swiftness before a heal; Cold Blood, Presence of Mind, Elemental Mastery before a hit;
         // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7). Not cast when `spell` cannot be.
         SpellEntry const* prepSpell = nullptr;
+        // UseItem: the item entry.
+        uint32 itemId = 0;
     };
 
     // Replace: do this action this tick instead of the original rotation.
