@@ -1013,6 +1013,10 @@ namespace Commander
         ObjectGuid holder;
         uint32 sinceMs = 0;         // held from (world refresh time)
         uint32 seenOnMs = 0;        // the enemy was last hitting the holder at
+        // Handed over from the main tank (OffTank.h "Handed"): the holder is winning it with
+        // threat until then (WorldTimer ms); 0 = it has it.
+        uint32 takeByMs = 0;
+        float points = 0.0f;        // handed over: what it saves (FightLoad::Loss as is - held)
         std::string why;
     };
 

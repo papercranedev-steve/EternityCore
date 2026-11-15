@@ -48,9 +48,26 @@ namespace FightLoad
     Result Run(Input const& in, std::vector<Step>* steps)
     {
         Result r;
-        float const maxHealth = std::max(1.0f, in.tankMaxHealth);
-        float tank = std::min(maxHealth, std::max(0.0f, in.tankHealth));
-        r.lowestTankPct = tank / maxHealth * 100.0f;
+        // Who is hit: 0 the tank, k + 1 Input::holders[k].
+        size_t const targets = 1 + in.holders.size();
+        std::vector<float> hp(targets), maxHp(targets);
+        maxHp[0] = std::max(1.0f, in.tankMaxHealth);
+        hp[0] = std::min(maxHp[0], std::max(0.0f, in.tankHealth));
+        for (size_t k = 0; k < in.holders.size(); ++k)
+        {
+            maxHp[k + 1] = std::max(1.0f, in.holders[k].maxHealth);
+            hp[k + 1] = std::min(maxHp[k + 1], std::max(0.0f, in.holders[k].health));
+            r.lowestHolderPct = std::min(r.lowestHolderPct, hp[k + 1] / maxHp[k + 1] * 100.0f);
+        }
+        std::vector<bool> gaveUp(in.holders.size(), false);
+        r.lowestTankPct = hp[0] / maxHp[0] * 100.0f;
+        // The target foe i hits, and for how much.
+        auto const on = [&](size_t i) -> size_t
+        {
+            int const h = in.foes[i].holder;
+            return h >= 0 && size_t(h) < in.holders.size() && !gaveUp[h] ? size_t(h) + 1 : 0;
+        };
+        auto const dpsOf = [&](size_t i) { return on(i) ? in.foes[i].holderDps : in.foes[i].dps; };
 
         std::vector<float> health;
         float totalHealth = 0.0f;
@@ -94,7 +111,7 @@ namespace FightLoad
         {
             auto present = [&](size_t i) { return health[i] > 0.0f && arrival[i] <= t; };
 
-            float incoming = 0.0f;
+            std::vector<float> hits(targets, 0.0f);     // per second on each target
             bool anyPresent = false;
             for (size_t i = 0; i < in.foes.size(); ++i)
             {
@@ -104,14 +121,17 @@ namespace FightLoad
                 // A self-destruct at the end of its life: the blast, and it is gone.
                 if (f.lifeSec > 0.0f && t >= arrival[i] + f.lifeSec)
                 {
-                    incoming += f.burst / STEP_SEC;
+                    hits[on(i)] += f.burst / STEP_SEC;
                     health[i] = 0.0f;
                     anyPresent = true;
                     continue;
                 }
                 anyPresent = true;
-                incoming += f.dps * DAMAGE_MARGIN;
+                hits[on(i)] += dpsOf(i) * DAMAGE_MARGIN;
             }
+            float incoming = 0.0f;
+            for (float x : hits)
+                incoming += x;
             if (!anyPresent)
             {
                 // The rest comes after this fight: another fight. Unless it is still this one
@@ -123,22 +143,32 @@ namespace FightLoad
                 if (!waiting)
                     break;
             }
-            r.peakDps = std::max(r.peakDps, incoming);
-            tank -= incoming * STEP_SEC;
+            r.peakDps = std::max(r.peakDps, hits[0]);
+            for (size_t k = 0; k < targets; ++k)
+                hp[k] -= hits[k] * STEP_SEC;
             r.damage += incoming * STEP_SEC;
             float const healedBefore = r.healed;
 
-            float const deficit = maxHealth - tank;
-            if (deficit > 0.0f && !in.healers.empty())
+            // Each one's need; every healer covers its share of all of them.
+            std::vector<float> want(targets, 0.0f);
+            float totalWant = 0.0f;
+            if (!in.healers.empty())
+                for (size_t k = 0; k < targets; ++k)
+                {
+                    float const deficit = maxHp[k] - hp[k];
+                    if (deficit <= 0.0f || (k > 0 && hp[k] <= 0.0f))
+                        continue;
+                    want[k] = std::min(deficit / STEP_SEC, hits[k] + deficit / TOP_UP_SEC) / float(in.healers.size());
+                    totalWant += want[k];
+                }
+            if (totalWant > 0.0f)
             {
-                float const want = std::min(deficit / STEP_SEC, incoming + deficit / TOP_UP_SEC) /
-                                   float(in.healers.size());
                 for (size_t h = 0; h < in.healers.size(); ++h)
                 {
-                    HealRate const* rate = PickRate(in.healers[h].rates, want);
+                    HealRate const* rate = PickRate(in.healers[h].rates, totalWant);
                     if (!rate || mana[h] <= 0.0f)
                         continue;
-                    float heal = std::min(want, rate->hps) * STEP_SEC;
+                    float heal = std::min(totalWant, rate->hps) * STEP_SEC;
                     float cost = heal / (rate->perMana * waste);
                     if (cost > mana[h])
                     {
@@ -146,15 +176,29 @@ namespace FightLoad
                         cost = mana[h];
                     }
                     mana[h] -= cost;
-                    tank += heal;
+                    for (size_t k = 0; k < targets; ++k)
+                        hp[k] += heal * want[k] / totalWant;
                     r.healed += heal;
                 }
-                tank = std::min(maxHealth, tank);
+                for (size_t k = 0; k < targets; ++k)
+                    hp[k] = std::min(maxHp[k], hp[k]);
             }
             for (size_t h = 0; h < in.healers.size(); ++h)
                 mana[h] = std::min(in.healers[h].maxMana, mana[h] + in.healers[h].regenPerSec * STEP_SEC);
 
-            r.lowestTankPct = std::min(r.lowestTankPct, std::max(0.0f, tank) / maxHealth * 100.0f);
+            r.lowestTankPct = std::min(r.lowestTankPct, std::max(0.0f, hp[0]) / maxHp[0] * 100.0f);
+            // A holder low gives its foes up to the tank from the next step on.
+            for (size_t k = 0; k < in.holders.size(); ++k)
+            {
+                float const pct = std::max(0.0f, hp[k + 1]) / maxHp[k + 1] * 100.0f;
+                r.lowestHolderPct = std::min(r.lowestHolderPct, pct);
+                if (!gaveUp[k] && pct < HOLDER_GIVE_UP_PCT)
+                {
+                    gaveUp[k] = true;
+                    r.holderGaveUp = true;
+                }
+            }
+            float const tank = hp[0];
             Step* step = nullptr;
             if (steps)
             {
@@ -429,6 +473,27 @@ namespace FightLoad
             AddSpawns(out, e.guid, e.entry, false, *tank);
         }
         AddHealers(world, out);
+        return true;
+    }
+
+    bool PutOn(WorldModel const& world, Input& in, ObjectGuid enemy, PartyMemberFacts const& holder)
+    {
+        EnemyFacts const* e = world.FindEnemy(enemy);
+        auto foe = std::find_if(in.foes.begin(), in.foes.end(), [enemy](Foe const& f) { return f.guid == enemy; });
+        if (!e || foe == in.foes.end())
+            return false;
+        auto h = std::find_if(in.holders.begin(), in.holders.end(), [&holder](Holder const& x) { return x.guid == holder.guid; });
+        if (h == in.holders.end())
+        {
+            Holder x;
+            x.guid = holder.guid;
+            x.health = float(holder.health);
+            x.maxHealth = float(std::max(1u, holder.maxHealth));
+            in.holders.push_back(x);
+            h = in.holders.end() - 1;
+        }
+        foe->holder = int(h - in.holders.begin());
+        foe->holderDps = FoeOf(*e, holder).dps;
         return true;
     }
 

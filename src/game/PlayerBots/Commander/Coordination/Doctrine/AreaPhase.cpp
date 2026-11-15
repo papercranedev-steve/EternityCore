@@ -281,11 +281,14 @@ namespace Commander
             }
         }
 
-        // Seconds the main tank needs to give every enemy `c` turns a runway through the whole
+        // Seconds the holders need to give every enemy `c` turns a runway through the whole
         // spell (ThreatRunway shortfalls with the spell's threat and the planned casts', one
-        // after another at ThreatGap::FillRate), and their total. False: no main tank, or one is
-        // not on it.
-        bool TankFill(WorldModel const& world, Candidate const& c, Planned const& planned, float& sec, float& total)
+        // after another at ThreatGap::FillRate), and their total. The holders: the main tank,
+        // and an off-tank for the enemy it holds (doctrine OffTank.h, user 2026-11-15: the
+        // hunter's pet in the area pile); they fill at the same time, the slowest one counts.
+        // False: no main tank, or one is on neither.
+        bool TankFill(WorldModel const& world, DoctrinePlan const& doctrine, Candidate const& c, Planned const& planned,
+                      float& sec, float& total)
         {
             PartyMemberFacts const* tank = Tanks::Main(world, true);
             AreaSpellFacts const& s = *c.request.spell;
@@ -295,14 +298,28 @@ namespace Commander
             threat.push_back({ c.request.caster->guid, s.tickThreat / s.periodSec });
             float const spellSec = float(s.ticks) * s.periodSec;
             total = 0.0f;
+            std::vector<std::pair<PartyMemberFacts const*, float>> holders;     // holder, its shortfalls
             for (ObjectGuid g : c.value.turning)
             {
                 EnemyFacts const* e = world.FindEnemy(g);
-                if (!e || e->victim != tank->guid)
+                if (!e)
                     return false;
-                total += ThreatRunway::Of(world, *e, tank->guid, threat, spellSec).shortfall;
+                PartyMemberFacts const* holder = e->victim == tank->guid ? tank : nullptr;
+                if (!holder && doctrine.OffTankHolds(e->victim, e->guid))
+                    holder = world.FindMember(e->victim);
+                if (!holder || !holder->CanAct())
+                    return false;
+                float const shortfall = ThreatRunway::Of(world, *e, holder->guid, threat, spellSec).shortfall;
+                total += shortfall;
+                auto h = std::find_if(holders.begin(), holders.end(), [holder](auto const& x) { return x.first == holder; });
+                if (h == holders.end())
+                    holders.push_back({ holder, shortfall });
+                else
+                    h->second += shortfall;
             }
-            sec = total / ThreatGap::FillRate(world, *tank);
+            sec = 0.0f;
+            for (auto const& h : holders)
+                sec = std::max(sec, h.second / ThreatGap::FillRate(world, *h.first));
             return true;
         }
 
@@ -313,8 +330,8 @@ namespace Commander
         //           not when the total did not shrink for TANK_STALL_MS.
         //   Shield  the caster's shield (on cooldown now) first, as in step 2.
         // Adds the caster's wait to `a.waits`; a note when it starts.
-        bool Waits(WorldModel const& world, Candidate const& c, Planned const& planned, AreaPlan const& prev,
-                   AreaPlan& a, std::vector<std::string>& notes)
+        bool Waits(WorldModel const& world, DoctrinePlan const& doctrine, Candidate const& c, Planned const& planned,
+                   AreaPlan const& prev, AreaPlan& a, std::vector<std::string>& notes)
         {
             AreaSpellFacts const& s = *c.request.spell;
             PartyMemberFacts const& m = *c.request.caster;
@@ -331,7 +348,7 @@ namespace Commander
             float sec = 0.0f;
             float fillSec = 0.0f;
             float total = 0.0f;
-            if (TankFill(world, c, planned, fillSec, total))
+            if (TankFill(world, doctrine, c, planned, fillSec, total))
             {
                 bool const stalled = waitedTank && total >= before->shortfall - AreaPhaseAssigner::TANK_PROGRESS_MIN &&
                                      WorldTimer::getMSTimeDiff(before->progressMs, nowMs) > AreaPhaseAssigner::TANK_STALL_MS;
@@ -694,7 +711,7 @@ namespace Commander
                 break;
 
             PartyMemberFacts const& m = *best.request.caster;
-            if (Waits(world, best, planned, prev, a, plan.notes))
+            if (Waits(world, plan.doctrine, best, planned, prev, a, plan.notes))
             {
                 // Meanwhile it walks to where it will cast from.
                 if (best.move)

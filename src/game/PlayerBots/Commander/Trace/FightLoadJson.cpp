@@ -30,8 +30,12 @@ namespace FightLoadJson
         for (FightLoad::Foe const& f : in.foes)
             foes.push_back({ { "g", Trace::Guid(f.guid) }, { "hp", f.health }, { "dps", f.dps }, { "at", f.arriveSec },
                              { "same", f.sameFight }, { "after", Trace::Guid(f.parent) }, { "life", f.lifeSec },
-                             { "burst", f.burst } });
+                             { "burst", f.burst }, { "on", f.holder }, { "hdps", f.holderDps } });
         j["foes"] = std::move(foes);
+        Json holders = Json::array();
+        for (FightLoad::Holder const& h : in.holders)
+            holders.push_back({ { "g", Trace::Guid(h.guid) }, { "hp", h.health }, { "max", h.maxHealth } });
+        j["holders"] = std::move(holders);
         Json healers = Json::array();
         for (FightLoad::Healer const& h : in.healers)
         {
@@ -57,6 +61,8 @@ namespace FightLoadJson
         j["dies"] = r.tankDies;
         j["unfinished"] = r.unfinished;
         j["left"] = r.healthLeftPct;
+        j["holderLow"] = r.lowestHolderPct;
+        j["holderGaveUp"] = r.holderGaveUp;
         return j.dump();
     }
 
@@ -87,8 +93,19 @@ namespace FightLoadJson
             foe.dps = Num(f, "dps");
             foe.arriveSec = Num(f, "at");
             foe.sameFight = f.contains("same") && f["same"].is_boolean() && f["same"].get<bool>();
+            foe.holder = f.contains("on") && f["on"].is_number() ? int(f["on"].get<float>()) : -1;
+            foe.holderDps = Num(f, "hdps");
             out.foes.push_back(foe);
         }
+        auto const holders = j.find("holders");
+        if (holders != j.end() && holders->is_array())
+            for (Json const& h : *holders)
+            {
+                FightLoad::Holder holder;
+                holder.health = Num(h, "hp");
+                holder.maxHealth = Num(h, "max");
+                out.holders.push_back(holder);
+            }
         auto const healers = j.find("healers");
         if (healers != j.end() && healers->is_array())
         {

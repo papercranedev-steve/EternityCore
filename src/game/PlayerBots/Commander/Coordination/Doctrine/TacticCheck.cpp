@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Doctrine/TacticCheck.h"
+#include "Commander/Coordination/Doctrine/OffTank.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/Tags.h"
@@ -135,6 +136,8 @@ namespace TacticCheck
             FightLoad::Input fight;
             if (FightLoad::FromWorld(world, fight))
             {
+                // The off-tanks' enemies on them (OffTank.h, the step before this one).
+                OffTank::PutHeld(world, d, fight);
                 float const penalty = Value::DeathPenalty(*tank);
                 for (DoctrineHold const& h : d.holds)
                     if (PartyMemberFacts const* b = world.FindMember(h.bot))

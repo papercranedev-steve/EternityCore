@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Duties/CrowdControlAssigner.h"
+#include "Commander/Coordination/Doctrine/OffTank.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ControlValue.h"
 #include "Commander/Perception/Values/ManaWorth.h"
@@ -89,6 +90,8 @@ namespace Commander
         FightLoad::Input fight;
         if (!FightLoad::FromWorld(world, fight))
             return;
+        // The off-tanks' enemies on them (doctrine OffTank.h).
+        OffTank::PutHeld(world, plan.doctrine, fight);
 
         std::vector<DutyNeed> perEnemy;     // single target needs, one per enemy
         auto needFor = [&perEnemy](ObjectGuid enemy) -> DutyNeed&

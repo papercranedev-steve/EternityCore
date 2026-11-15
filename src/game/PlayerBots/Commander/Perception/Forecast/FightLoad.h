@@ -19,6 +19,11 @@
  *            (Build, FromWorld; CreatureProfile::deathSpawns / aggroSpawns, health and melee
  *            from the template); a self-destruct blows up on the tank lifeSec after it came
  *            unless the party killed it first (Broken Cadaver).
+ *   off-tanks (Input::holders, user 2026-11-15: the hunter's pet holds one enemy) a foe with a
+ *            holder hits it instead of the tank (holderDps: after the holder's armor). The
+ *            healers split their heals by each one's need. A holder that drops below
+ *            HOLDER_GIVE_UP_PCT gives its foes up: they hit the tank from then on (the doctrine's
+ *            drop, Coordination/Doctrine/OffTank.h). Damage counts on every holder.
  * The fight ends when no present creature is left; one that arrives after that is another
  * fight, unless it is marked sameFight (a controlled enemy waking up: the gap passes with
  * healing and regeneration, no eating). Bearable: the tank survives and never drops below
@@ -47,6 +52,15 @@ namespace FightLoad
     float const DAMAGE_MARGIN = 1.2f;
     float const TOP_UP_SEC = 5.0f;
     float const TANK_FLOOR_PCT = 30.0f;
+    float const HOLDER_GIVE_UP_PCT = 25.0f;
+
+    // An off-tank besides the main tank (header "off-tanks").
+    struct Holder
+    {
+        ObjectGuid guid;
+        float health = 0.0f;
+        float maxHealth = 1.0f;
+    };
 
     struct Foe
     {
@@ -64,6 +78,10 @@ namespace FightLoad
         // `burst` on the tank (after armor), and is gone. 0 = lives until killed.
         float lifeSec = 0.0f;
         float burst = 0.0f;
+        // Held by Input::holders[holder] (-1: the tank), hitting it for holderDps (after its
+        // armor, before DAMAGE_MARGIN); `dps` is still what it does on the tank.
+        int holder = -1;
+        float holderDps = 0.0f;
     };
 
     struct Healer
@@ -82,12 +100,13 @@ namespace FightLoad
         float tankHealth = 0.0f;
         float tankMaxHealth = 1.0f;
         std::vector<Healer> healers;
+        std::vector<Holder> holders;
     };
 
     struct Result
     {
         float fightSec = 0.0f;
-        float damage = 0.0f;        // on the tank, margin included
+        float damage = 0.0f;        // on the tank and the holders, margin included
         float healed = 0.0f;
         float peakDps = 0.0f;       // highest damage per second on the tank, margin included
         float lowestTankPct = 100.0f;
@@ -96,6 +115,8 @@ namespace FightLoad
         bool tankDies = false;
         bool unfinished = false;    // still fighting after MAX_SEC
         float healthLeftPct = 0.0f; // share of the creatures' health left when it ended
+        float lowestHolderPct = 100.0f; // the lowest of the holders (100 without one)
+        bool holderGaveUp = false;  // a holder dropped below HOLDER_GIVE_UP_PCT
     };
 
     // One STEP_SEC step of Run, for the explanation of a recorded run (dev console fightload()).
@@ -139,6 +160,9 @@ namespace FightLoad
     // The current fight from the facts only (pure): every acting enemy of ours; one under a
     // control effect joins when it ends (sameFight).
     bool FromWorld(WorldModel const& world, Input& out);
+    // `enemy` held by the off-tank `holder` (header "off-tanks"; the brain's choice, the caller
+    // passes it). False: the enemy is not in the input or not in the facts.
+    bool PutOn(WorldModel const& world, Input& in, ObjectGuid enemy, PartyMemberFacts const& holder);
     Foe FoeOf(EnemyFacts const& enemy, PartyMemberFacts const& tank);
     // An idle creature joining later (fear add risk, ControlValue).
     Foe FoeOf(PackCreature const& creature, PartyMemberFacts const& tank, float arriveSec);

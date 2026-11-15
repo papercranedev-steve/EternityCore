@@ -593,7 +593,8 @@ namespace Commander
             p.reason = rescue && rescue->enemy == job->guid ? "off-tank: win the loose enemy" : "off-tank: back on its enemy";
             // Benefit: the rescue's worth (taking the enemy off its victim), else what holding it
             // is worth to the doctrine; at least the pet's damage over the next ticks.
-            float const worth = rescue && rescue->enemy == job->guid ? rescue->points : 0.0f;
+            OffTankHold const* held = plan.doctrine.OffTankOf(job->guid);
+            float const worth = rescue && rescue->enemy == job->guid ? rescue->points : held ? held->points : 0.0f;
             p.SetValue(std::max({ 1.0f, worth, Value::LostAction(world, *petFacts, 2.0f * tickSec) }), 0.0f);
             out.push_back(p);
             return;
