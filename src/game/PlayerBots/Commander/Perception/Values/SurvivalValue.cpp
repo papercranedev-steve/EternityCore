@@ -117,6 +117,9 @@ namespace SurvivalValue
             return o;
         if (a.mechanic && a.mechanic < 32 && (member.immuneMechanics & (1u << a.mechanic)))
             return o;
+        // A consumable only when the fight is not over before it would die (user 2026-11-15).
+        if (a.itemId && Value::FightRemainingSec(world) <= danger.ttd)
+            return o;
 
         float const dps = danger.dps;
         float const heal = danger.heal;

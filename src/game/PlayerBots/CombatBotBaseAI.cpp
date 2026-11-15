@@ -818,6 +818,13 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.mage.pPyroblast))
                         m_spells.mage.pPyroblast = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Conjure Mana") != std::string::npos &&
+                         pSpellEntry->HasEffect(SPELL_EFFECT_CREATE_ITEM))
+                {
+                    // No ranks: Agate 759 < Jade 3552 < Citrine 10053 < Ruby 10054 by id.
+                    if (IsHigherRankSpell(m_spells.mage.pConjureManaGem))
+                        m_spells.mage.pConjureManaGem = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Evocation") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.mage.pEvocation))

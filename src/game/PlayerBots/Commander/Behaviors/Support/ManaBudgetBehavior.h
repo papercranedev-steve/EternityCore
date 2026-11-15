@@ -42,6 +42,11 @@
  * potions, mana gems, Demonic / Dark Rune; cooldown doc 2026-11-14, spell list section 5):
  * in combat, the fight rate measured, only once the missing mana is at least the item's
  * average R (nothing of it wasted). Instant, off the global cooldown (BotActionType::UseItem).
+ * Consumables come after own spells and only when the fight is not won without them (user
+ * 2026-11-15): none while a boost duty (Innervate, Mana Tide) targets the bot or its own
+ * restore (Evocation) is ready and nothing hits it; a damage dealer only in a boss fight
+ * (running dry elsewhere only slows the kill); a healer only while the mana does not last the
+ * fight (the benefit below is 0 at tension <= 1).
  *   benefit  healer:  Points(ManaBudget::SavedManaHealth(R, E, tension)) (0 while the mana lasts)
  *            others:  LostAction(min(T, (M + R) / S)) - LostAction(min(T, M / S)), S as above
  *   cost     Value::CooldownPoints(item cooldown, T + SurvivalValue::NEXT_FIGHTS_SEC)
@@ -95,7 +100,8 @@ namespace Commander
         // Self restore (header): mage Evocation when it buys casting time.
         void ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Mana items (header): the best mana potion, gem or rune when it pays.
-        void ProposeManaItem(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeManaItem(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                             std::vector<Proposal>& out) const;
         void ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Tells the leader when this healer is low on mana for the rest of the fight.
         // One behavior object serves every bot on every map thread: the last note time per

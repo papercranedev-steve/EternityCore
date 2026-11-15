@@ -148,7 +148,9 @@ namespace Commander
                     DutyCandidate c;
                     c.bot = b.guid;
                     c.spellId = a.spellId;
-                    c.rank = o.Net();
+                    // Consumables (healthstone, healing potion) after every spell that pays
+                    // (user 2026-11-15): only when no bot with one is free.
+                    c.rank = a.itemId ? o.Net() - CONSUMABLE_RANK_OFFSET : o.Net();
                     need.candidates.push_back(c);
                     need.points = std::max(need.points, o.Net());
                 }

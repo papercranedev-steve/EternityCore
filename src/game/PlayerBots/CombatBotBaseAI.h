@@ -411,6 +411,7 @@ public:
             SpellEntry const* pCombustion;
             SpellEntry const* pMageArmor;
             SpellEntry const* pColdSnap;
+            SpellEntry const* pConjureManaGem;  // the best Conjure Mana Agate / Jade / Citrine / Ruby
         } mage;
         struct
         {

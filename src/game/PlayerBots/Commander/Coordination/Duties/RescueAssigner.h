@@ -44,6 +44,8 @@ namespace Commander
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float STICKY_POINTS = 0.5f;
         static constexpr uint8 DETAIL_URGENT = 1;
+        // Subtracted from a consumable's rank in a Save need: every spell candidate comes first.
+        static constexpr float CONSUMABLE_RANK_OFFSET = 1.0e6f;
 
         // Same id as RescueBehavior: `.partybot ai module rescue off` switches both.
         char const* GetId() const override { return "rescue"; }

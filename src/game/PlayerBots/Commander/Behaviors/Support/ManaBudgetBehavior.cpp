@@ -11,6 +11,7 @@
 #include "DamageSpells.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/ItemKit.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "SpellMgr.h"
 #include "SpellAuraDefines.h"
@@ -55,6 +56,14 @@ namespace Commander
                 return false;
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && e.victim == m.guid)
+                    return true;
+            return false;
+        }
+
+        bool IsHit(WorldModel const& world, PartyMemberFacts const& self)
+        {
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && !e.crowdControlled && e.victim == self.guid)
                     return true;
             return false;
         }
@@ -151,13 +160,13 @@ namespace Commander
     }
 
     void ManaBudgetBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
-                                     TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
+                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         if (world.enemies.empty())
             return;
 
         ProposeSelfRestore(bot, world, out);
-        ProposeManaItem(bot, world, out);
+        ProposeManaItem(bot, world, plan, out);
         if (bot->GetRole() == ROLE_HEALER)
             ProposeHealVeto(bot, world, out);
     }
@@ -174,9 +183,8 @@ namespace Commander
         if (!self || !self->UsesMana() || !self->CanAct())
             return;
         // Hits push the channel back and cut it short.
-        for (EnemyFacts const& e : world.enemies)
-            if (e.acting && !e.crowdControlled && e.victim == self->guid)
-                return;
+        if (IsHit(world, *self))
+            return;
         if (!bot->CanTryToCastSpell(me, restore))
             return;
 
@@ -215,7 +223,7 @@ namespace Commander
     }
 
     void ManaBudgetBehavior::ProposeManaItem(PartyBotAI const* bot, WorldModel const& world,
-                                             std::vector<Proposal>& out) const
+                                             TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         if (!me->IsInCombat() || !world.rates.dealtMeasured)
@@ -224,13 +232,29 @@ namespace Commander
         if (!self || !self->UsesMana() || !self->CanAct() || self->manaItems.empty())
             return;
 
+        // Own spells before consumables (user 2026-11-15): Innervate / Mana Tide on its way, or
+        // its own restore ready while nothing hits it (ProposeSelfRestore casts that).
+        for (BoostDuty const& d : plan.boosts)
+            if (d.target == self->guid)
+                return;
+        if (SpellEntry const* restore = bot->Kit().SelfManaRestore())
+            if (me->IsSpellReady(restore) && !IsHit(world, *self))
+                return;
+
+        bool const healer = bot->GetRole() == ROLE_HEALER;
+        // Won without it (user 2026-11-15): a damage dealer running dry only makes the kill
+        // slower; only a boss fight is worth a consumable for that. A healer: the budget below
+        // is 0 while the mana lasts the fight.
+        if (!healer && std::none_of(world.enemies.begin(), world.enemies.end(),
+                                    [](EnemyFacts const& e) { return e.boss && e.acting; }))
+            return;
+
         float const mana = float(self->mana);
         float const missing = float(self->maxMana) - mana;
         float const fightSec = Value::FightRemainingSec(world);
 
         // What `restored` more mana is worth to this bot (header).
         Budget budget;
-        bool const healer = bot->GetRole() == ROLE_HEALER;
         bool const hasBudget = healer && ComputeBudget(bot, world, budget);
         float spend = 0.0f;
         if (!healer)

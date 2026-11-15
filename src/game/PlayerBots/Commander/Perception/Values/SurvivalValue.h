@@ -25,6 +25,9 @@
  * ttd' from the drain with f during d and without after.
  * benefit = DeathPenalty x (Risk(ttd) - Risk(ttd')) + Points(health it keeps within the horizon:
  *           the damage f takes off, the absorb or extra health used, the heal used)
+ * A consumable (healthstone, healing potion: SurvivalAbility::itemId) has no option when the
+ * fight is over (Value::FightRemainingSec) before the member would die; RescueAssigner ranks it
+ * after every spell.
  * cost    = LostAction(caster, GCD) (not for an option off the global cooldown: potions,
  *           healthstones) [+ LostAction(caster, d): Ice Block]
  *           [+ LostAction(target, d) for a melee target that cannot attack: Blessing of Protection]
