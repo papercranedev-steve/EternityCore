@@ -25,6 +25,10 @@
  *  - a damage dealer's target: TargetAssigner holds out a damage dealer whose rest pays (same
  *    RestValue), so it gets no target while resting.
  * The pull does not hold a resting bot (PullBehavior): it is waiting already.
+ * Health to mana first (ClassKit::HealthToMana, warlock Life Tap; user 2026-11-16): while one
+ * tap shortens the rest by more than a global cooldown (RestValue::TapSavesSec: eating and
+ * drinking run at once, the rest lasts the longer of the two), it proposes the tap in the
+ * rest's place (same tier and value); then it sits down. Only with no fight on (no eating then).
  * Not while the retreat runs, while casting, or in combat (a hit stands the bot up and puts it
  * in combat; the game does not allow eating or drinking then).
  */

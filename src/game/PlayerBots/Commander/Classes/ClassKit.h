@@ -289,7 +289,8 @@ namespace Commander
         virtual SpellEntry const* SelfShield() const { return nullptr; }
         // Turns its health into mana (warlock Life Tap): its mana is worth less (ManaWorth.h).
         // Only the Commander casts it (HealthTradeBehavior: how low it may tap depends on the
-        // healers it can count on); the rotation does not.
+        // healers it can count on), out of combat RestBehavior before sitting down (eat and
+        // drink take about as long); the rotation does not.
         virtual SpellEntry const* HealthToMana() const { return nullptr; }
         // A channel that damages its target and heals the bot (warlock Drain Life): its own heal,
         // also with healers around (they may not keep up). Only HealthTradeBehavior casts it.

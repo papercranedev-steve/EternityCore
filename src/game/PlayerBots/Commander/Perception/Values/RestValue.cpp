@@ -52,5 +52,36 @@ namespace RestValue
         w.cost = healer ? 0.0f : Value::ContributionPerSecAt(world, member, incoming) * w.sec;
         return w;
     }
+
+    float SecondsToFull(PartyMemberFacts const& member, float health, float mana)
+    {
+        float sec = 0.0f;
+        if (member.UsesMana() && member.drinkManaPerSec > 0.0f)
+        {
+            // While the drink is on, manaRegen already includes it (as in Of).
+            float const rate = member.drinking ? member.manaRegen : member.drinkManaPerSec + member.manaRegen;
+            sec = std::max(sec, std::max(0.0f, float(member.maxMana) - mana) / std::max(1.0f, rate));
+        }
+        if (member.foodHealthPerSec > 0.0f)
+            sec = std::max(sec, std::max(0.0f, float(member.maxHealth) - health) / member.foodHealthPerSec);
+        return sec;
+    }
+
+    float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member)
+    {
+        if (!member.alive || member.inCombat || world.HasPartyEnemy() || !world.targeted.empty())
+            return 0.0f;
+        if (!member.UsesMana() || member.drinkManaPerSec <= 0.0f || member.foodHealthPerSec <= 0.0f ||
+            member.tapManaPerCast <= 0.0f || member.tapManaPerHealth <= 0.0f)
+            return 0.0f;
+        float const health = float(member.health);
+        float const mana = float(member.mana);
+        float const gain = member.tapManaPerCast;
+        float const healthCost = gain / member.tapManaPerHealth;
+        if (float(member.maxMana) - mana < gain || health <= healthCost)
+            return 0.0f;
+        return std::max(0.0f, SecondsToFull(member, health, mana) -
+                              SecondsToFull(member, health - healthCost, mana + gain));
+    }
 }
 }

@@ -4,6 +4,8 @@
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/RestValue.h"
+#include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/Tanks.h"
 #include "PartyBotAI.h"
 #include "Map.h"
@@ -83,6 +85,20 @@ namespace Commander
             p.tier = ProposalTier::Assigned;
             p.reason = bot->IsResting() ? "keep resting, mana for this fight" : "rest, mana for this fight";
             p.SetValue(w.benefit, w.cost);
+        }
+
+        // Health to mana first while that shortens the rest by more than the cast's global
+        // cooldown (RestValue::TapSavesSec): the same place in the arbitration as the rest it
+        // shortens, one tap per tick, then it sits down.
+        if (SpellEntry const* tap = bot->Kit().HealthToMana())
+        {
+            if (RestValue::TapSavesSec(world, *self) > Value::GCD_SEC && bot->CanTryToCastSpell(me, tap))
+            {
+                p.action.type = BotActionType::Cast;
+                p.action.spell = tap;
+                p.action.target = self->guid;
+                p.reason = "rest: health to mana first, eat and drink together";
+            }
         }
         out.push_back(p);
     }

@@ -56,6 +56,17 @@ namespace Commander
 
         // `planned`: the pull's estimate (sec 0 = none), used while no damage comes in yet.
         Worth Of(WorldModel const& world, PartyMemberFacts const& member, ManaWorth::Fight const& planned);
+
+        // Seconds eating and drinking from `health` and `mana` to full take: the longer of the
+        // two (both run at once). Eating assumed allowed.
+        float SecondsToFull(PartyMemberFacts const& member, float health, float mana);
+
+        // Seconds of resting one health-to-mana cast (warlock Life Tap, tapManaPerCast) saves
+        // before sitting down (user 2026-11-16: mana empty, health full -> tap until the two
+        // take about as long, then eat and drink). 0 when it saves nothing: a fight on (no
+        // eating, the health is not won back), no tap, its mana does not fit, the health does
+        // not pay it.
+        float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member);
     }
 }
 
