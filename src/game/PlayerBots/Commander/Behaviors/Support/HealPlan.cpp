@@ -209,11 +209,21 @@ namespace HealPlan
             if (t.intake > 0.0f)
             {
                 float const net = hps - t.intake;
-                if (net <= 0.0f || missing / net > (h.steady ? STEADY_LIFT_MAX_SEC : LIFT_MAX_SEC))
-                    continue;
-                // A steady healer does not rest between lifts: mana per health healed (header).
-                rate = h.steady ? o.mana / (o.effective + o.otherEffective)
-                                : CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
+                if (h.steady)
+                {
+                    // Holds the target: out-heals the damage, or keeps it above its reserve for
+                    // STEADY_HOLD_SEC; a steady healer does not rest, so mana per health (header).
+                    float const above = std::max(0.0f, t.health - a.reserve);
+                    if (net < 0.0f && above < -net * STEADY_HOLD_SEC)
+                        continue;
+                    rate = o.mana / (o.effective + o.otherEffective);
+                }
+                else
+                {
+                    if (net <= 0.0f || missing / net > LIFT_MAX_SEC)
+                        continue;
+                    rate = CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
+                }
             }
             else
                 rate = o.mana / (o.effective + o.otherEffective);   // mana per health healed

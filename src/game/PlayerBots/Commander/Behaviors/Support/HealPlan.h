@@ -49,9 +49,13 @@
  *             heal fills it, the others get the steady heals. A target nobody hits is not held
  *             (its gap would not grow). A chain waits for the deficit too (the chain only
  *             orders the targets).
- *   rank      the least mana per health healed (no regeneration term), lifting within
- *             STEADY_LIFT_MAX_SEC: a smaller rank that out-heals the damage slowly beats a big
- *             expensive one; only damage the cheaper ranks cannot keep up with takes the big one.
+ *   rank      the least mana per health healed (no regeneration term) among the ranks that
+ *             hold the target: out-heal the damage, or keep it above its reserve for
+ *             STEADY_HOLD_SEC while casting them back to back. No "lift it in one go" (user
+ *             2026-11-16: two Flash of Light rank 1 instead of one rank 6; a tank at 60% needs
+ *             no Holy Light, strat-20261116-215832). Rank 1 while the target is high; as it
+ *             sinks toward the reserve the cheaper ranks stop holding it and a bigger one takes
+ *             over (Holy Light only when no Flash of Light rank holds). None holds: the fastest.
  *   cancel    a heal that would land mostly as overheal is cancelled just before it lands
  *             (CastWatch, snipe): no mana is spent on a cancelled cast.
  */
@@ -70,7 +74,7 @@ namespace HealPlan
     static constexpr float MIN_RESERVE_PCT = 30.0f;
     static constexpr float MAX_RESERVE_PCT = 70.0f;
     static constexpr float LIFT_MAX_SEC = 8.0f;
-    static constexpr float STEADY_LIFT_MAX_SEC = 20.0f;
+    static constexpr float STEADY_HOLD_SEC = 10.0f;
     static constexpr float OVERHEAL_MAX = 0.2f;
     static constexpr float EMERGENCY_TTD_SEC = 4.0f;
     static constexpr float LANDING_MARGIN_SEC = 0.5f;
