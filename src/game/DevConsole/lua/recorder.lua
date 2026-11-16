@@ -81,6 +81,15 @@ rec.level = rec.level or "verbose"
 local LEVEL_MIN_SEV = { verbose = 1, normal = 1, warning = 2, danger = 3 }
 local SEV_RANK = { low = 1, mid = 2, high = 3 }
 
+-- On/off (user 2026-11-16: on by default, for every fight). Before, only a scenario's finish()
+-- started the watcher, so after a `.lua reload`, a server restart, a tick error, the leader away
+-- for LEADER_GONE_MS or a scenario that failed half way nothing was recorded until the next
+-- scenario load. Now rec.autoAttach (every rec.AUTO_MS) follows the first player with a party
+-- bot in the group whenever no watcher runs. Not kept over a reload: on again after it.
+-- Switched with rec.setEnabled / rec.setLevel (addon: .scenario rec on | off | level <level>).
+if rec.enabled == nil then rec.enabled = true end
+rec.AUTO_MS = rec.AUTO_MS or 1000
+
 local function ensureDir(dir)
     local win = dir:gsub("/", "\\")
     os.execute('if not exist "' .. win .. '" mkdir "' .. win .. '"')
@@ -393,9 +402,20 @@ local function writePinnedTrace(w, leader)
     end
 end
 
+-- File label of a watcher without its own (rec.autoAttach): the current scenario's id while the
+-- leader is on its map (a reload mid-scenario keeps the scenario's file names), else "fight".
+local function fightLabel(w, leader)
+    if w.label then return w.label end
+    local s = scenario and scenario.current and scenario.find(scenario.current)
+    if s and leader and leader:pos().map == s.entry.map then return s.id end
+    return "fight"
+end
+
 local function beginFight(w, members)
     ensureDir(rec.dir)
-    local name = (w.label or "fight") .. "-" .. os.date("%Y%m%d-%H%M%S") .. ".jsonl"
+    local leader = unit(w.leader)
+    w.fightLabel = fightLabel(w, leader)
+    local name = w.fightLabel .. "-" .. os.date("%Y%m%d-%H%M%S") .. ".jsonl"
     local path = rec.dir .. "/" .. name
     local f, err = io.open(path, "w")
     if not f then
@@ -432,7 +452,7 @@ local function beginFight(w, members)
     end
     for _, m in ipairs(members) do w.names[m:guid()] = m:name() end
     review.begin(w, members)
-    write(w, { type = "begin", t = w.fightStart, label = w.label, file = name, level = w.level,
+    write(w, { type = "begin", t = w.fightStart, label = w.fightLabel, file = name, level = w.level,
                members = memberRows(members) })
     for _, e in ipairs(w.pre) do
         e.type = "ev"
@@ -442,6 +462,7 @@ local function beginFight(w, members)
     end
     w.pre = {}
     rec.last = path
+    rec.pushState(leader)
 end
 
 local function endFight(w, members, reason)
@@ -519,7 +540,12 @@ local function tick(w)
         local keep = {}
         for _, e in ipairs(w.pre) do if e.t >= cutoff then keep[#keep + 1] = e end end
         w.pre = keep
-        if inCombat then beginFight(w, members) end
+        -- A fight begins with an engaged enemy, not with a combat flag alone: the hunter bot's
+        -- Tame Beast on its new pet (SummonPetIfNeeded, after login or a death) flags it in
+        -- combat for a moment, and buffing that pet pulls the buffer in too (Spell.cpp assist
+        -- combat). 2026-11-16: 19 recordings of 3-10 s with no enemy at all. Once running,
+        -- the combat flags still keep the fight open (inCombat below).
+        if #enemies > 0 then beginFight(w, members) end
         if not w.file then return end
     end
 
