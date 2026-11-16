@@ -8,9 +8,11 @@
 #include "Commander/Trace/FightLoadJson.h"
 #include "Commander/Trace/Trace.h"
 #include "Creature.h"
+#include "HealSpells.h"
 #include "Map.h"
 #include "SharedDefines.h"
 #include <algorithm>
+#include <cfloat>
 #include <cstdio>
 
 namespace Commander
@@ -19,7 +21,8 @@ namespace FightLoad
 {
     namespace
     {
-        // The cheapest heal that keeps up with `want` per second, else the fastest one.
+        // The cheapest heal that keeps up with `want` per second, else the fastest one
+        // (HealSpells::Choose, Normal; an emergency passes FLT_MAX: the fastest).
         HealRate const* PickRate(std::vector<HealRate> const& rates, float want)
         {
             HealRate const* cheapest = nullptr;
@@ -152,6 +155,13 @@ namespace FightLoad
             // Each one's need; every healer covers its share of all of them.
             std::vector<float> want(targets, 0.0f);
             float totalWant = 0.0f;
+            // Which heal: the bots' own rule (HealSpells::Choose). The heal has to keep up with
+            // the damage less what the health above SAFE_FLOOR_PCT can absorb over HORIZON_SEC,
+            // so a healthy tank gets the cheap heals and sinks slowly while they fall short
+            // (the paladin chaining Flash of Light); below EMERGENCY_PCT or dying within
+            // EMERGENCY_TTD_SEC, the fastest.
+            float required = 0.0f;
+            bool emergency = false;
             if (!in.healers.empty())
                 for (size_t k = 0; k < targets; ++k)
                 {
@@ -160,12 +170,17 @@ namespace FightLoad
                         continue;
                     want[k] = std::min(deficit / STEP_SEC, hits[k] + deficit / TOP_UP_SEC) / float(in.healers.size());
                     totalWant += want[k];
+                    float const buffer = hp[k] - maxHp[k] * HealSpells::SAFE_FLOOR_PCT / 100.0f;
+                    required += std::max(0.0f, hits[k] - buffer / HealSpells::HORIZON_SEC) / float(in.healers.size());
+                    if (hits[k] > 0.0f && (hp[k] < maxHp[k] * HealSpells::EMERGENCY_PCT / 100.0f ||
+                                           hp[k] / hits[k] < HealSpells::EMERGENCY_TTD_SEC))
+                        emergency = true;
                 }
             if (totalWant > 0.0f)
             {
                 for (size_t h = 0; h < in.healers.size(); ++h)
                 {
-                    HealRate const* rate = PickRate(in.healers[h].rates, totalWant);
+                    HealRate const* rate = PickRate(in.healers[h].rates, emergency ? FLT_MAX : required);
                     if (!rate || mana[h] <= 0.0f)
                         continue;
                     float heal = std::min(totalWant, rate->hps) * STEP_SEC;
@@ -315,8 +330,8 @@ namespace FightLoad
         float const hit = (creature->GetFloatValue(UNIT_FIELD_MINDAMAGE) + creature->GetFloatValue(UNIT_FIELD_MAXDAMAGE)) / 2.0f;
         uint32 const attackMs = creature->GetAttackTime(BASE_ATTACK);
         float melee = attackMs ? hit / (attackMs / 1000.0f) : 0.0f;
-        if (creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL)
-            melee *= 1.0f - Value::ArmorReduction(tank.armor, creature->GetLevel());
+        bool const physical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
+        melee *= Value::MeleeTaken(tank, creature->GetLevel(), physical);
         float ranged = 0.0f;
         uint32 rangedSpell = 0;
         if (std::shared_ptr<CreatureProfile const> profile = sProfileStore.GetCreature(creature->GetEntry()))
@@ -329,10 +344,10 @@ namespace FightLoad
         if (Trace::On())
             Trace::Emit("foe", creature->GetName(), Trace::Format(
                 "{\"g\":\"%s\",\"level\":%u,\"hp\":%.0f,\"hit\":%.1f,\"attackMs\":%u,\"physical\":%s,\"armorCut\":%.3f,"
-                "\"melee\":%.1f,\"rangedSpell\":%u,\"ranged\":%.1f,\"dps\":%.1f}",
-                Trace::Guid(f.guid).c_str(), creature->GetLevel(), f.health, hit, attackMs,
-                creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL ? "true" : "false",
-                Value::ArmorReduction(tank.armor, creature->GetLevel()), melee, rangedSpell, ranged, f.dps));
+                "\"avoid\":%.3f,\"melee\":%.1f,\"rangedSpell\":%u,\"ranged\":%.1f,\"dps\":%.1f}",
+                Trace::Guid(f.guid).c_str(), creature->GetLevel(), f.health, hit, attackMs, physical ? "true" : "false",
+                physical ? Value::ArmorReduction(tank.armor, creature->GetLevel()) : 0.0f,
+                Value::MeleeAvoidance(tank, creature->GetLevel()), melee, rangedSpell, ranged, f.dps));
         return f;
     }
 
@@ -341,9 +356,7 @@ namespace FightLoad
         Foe f;
         f.guid = enemy.guid;
         f.health = float(enemy.health);
-        float melee = enemy.meleeDps;
-        if (enemy.meleePhysical)
-            melee *= 1.0f - Value::ArmorReduction(tank.armor, enemy.level);
+        float const melee = enemy.meleeDps * Value::MeleeTaken(tank, enemy.level, enemy.meleePhysical);
         f.dps = std::max(melee, enemy.rangedDps);
         return f;
     }
@@ -353,7 +366,7 @@ namespace FightLoad
         Foe f;
         f.guid = creature.guid;
         f.health = float(creature.health);
-        f.dps = creature.meleeDps * (1.0f - Value::ArmorReduction(tank.armor, creature.level));
+        f.dps = creature.meleeDps * Value::MeleeTaken(tank, creature.level, true);
         f.arriveSec = arriveSec;
         f.sameFight = true;
         return f;
@@ -370,7 +383,7 @@ namespace FightLoad
                 return f;
             uint32 const level = (p->levelMin + std::max(p->levelMin, p->levelMax)) / 2;
             f.health = CreatureProfiles::EstimateHealth(*p, level);
-            f.dps = CreatureProfiles::EstimateMeleeDps(*p, level) * (1.0f - Value::ArmorReduction(tank.armor, level));
+            f.dps = CreatureProfiles::EstimateMeleeDps(*p, level) * Value::MeleeTaken(tank, level, true);
             f.sameFight = true;
             if (p->selfDestruct.spellId && p->selfDestruct.afterMaxMs)
             {

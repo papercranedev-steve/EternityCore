@@ -565,6 +565,14 @@ namespace Commander
         uint32 maxHealth = 0;
         uint32 level = 0;
         uint32 armor = 0;
+        // Melee avoidance as the server rolls it (SpellCaster::RollMeleeOutcomeAgainst), before
+        // the attacker's level (Value::MeleeAvoidance): dodge and parry percent (players: their
+        // fields, parry only with CanParry and a weapon; creatures: 5 + auras) and the defense
+        // skill for the miss chance. Not zeroed while casting or stunned (Unit::GetUnitDodgeChance
+        // does): the forecast wants the steady value.
+        float dodgePct = 0.0f;
+        float parryPct = 0.0f;
+        uint32 defenseSkill = 0;
         float manaPct = -1.0f;      // -1 = no mana, or mana is not the active power (druid in bear / cat form)
         // Mana pool, also while shapeshifted into a form without mana. maxMana 0 = no mana pool.
         uint32 mana = 0;

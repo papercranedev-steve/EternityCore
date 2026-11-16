@@ -5,15 +5,22 @@
  *
  * A rough fight run in STEP_SEC steps, every creature on the tank:
  *   damage   each present creature's melee per second on the tank (live damage fields, after
- *            the tank's armor), or its main ranged spell (WorldModelBuilder::RangedSpellDps)
- *            when that is more, x DAMAGE_MARGIN (other spells, crushing blows, a slow kill).
+ *            the tank's armor and its miss / dodge / parry: Value::MeleeTaken; 2026-11-17,
+ *            fight-20261116-230431: without avoidance a bear took 425/s against 679 forecast),
+ *            or its main ranged spell (WorldModelBuilder::RangedSpellDps) when that is more,
+ *            x DAMAGE_MARGIN (other spells, crushing blows, a slow kill).
  *            A creature with arriveSec > 0 (a patrol coming later) hits from then on.
  *   kills    the party's damage per second (Value::DealtDps: this fight, else the last one)
  *            goes to the present creature with the most damage per remaining health first.
  *   healing  healer bots (PartyMemberFacts::healRates, Perception/Forecast/HealCapacity.h: real spells,
- *            +healing gear) cover the damage and refill the tank's deficit over TOP_UP_SEC,
- *            each with the cheapest heal that keeps up (else its fastest), paying mana for the
- *            heal plus ManaBudget::OVERHEAL waste, regenerating at its in-combat rate.
+ *            +healing gear) cover the damage and refill the tank's deficit over TOP_UP_SEC.
+ *            The heal is picked by the bots' own rule (HealSpells::Choose): the cheapest that
+ *            keeps up with the damage less the health above HealSpells::SAFE_FLOOR_PCT spread
+ *            over HORIZON_SEC (a healthy tank gets Flash of Light and sinks slowly toward the
+ *            floor; until 2026-11-17 it had to cover all the damage, so Holy Light at a third
+ *            of the mana efficiency), the fastest in an emergency. Mana for the heal plus
+ *            ManaBudget::OVERHEAL waste, regenerating at its in-combat rate. Not counted:
+ *            Illumination, potions, Lay on Hands.
  *            Player healers are not counted (their spells are not known).
  *   spawns   (todo 9) a creature's death spawns come when it dies, its aggro summons with it
  *            (Build, FromWorld; CreatureProfile::deathSpawns / aggroSpawns, health and melee
@@ -66,7 +73,7 @@ namespace FightLoad
     {
         ObjectGuid guid;
         float health = 0.0f;
-        float dps = 0.0f;           // on the tank, after armor, before DAMAGE_MARGIN
+        float dps = 0.0f;           // on the tank, after armor and avoidance, before DAMAGE_MARGIN
         float arriveSec = 0.0f;     // joins the fight this many seconds after the start
         // Part of this fight even if it arrives after the others died: a controlled enemy that
         // wakes later (the party is still in combat: no eating or drinking in between).

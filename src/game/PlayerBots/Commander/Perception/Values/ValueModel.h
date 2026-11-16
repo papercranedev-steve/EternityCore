@@ -53,6 +53,15 @@ namespace Commander
 
         // Armor mitigation of melee hits, vanilla formula (Unit::CalcArmorReducedDamage), max 75%.
         float ArmorReduction(uint32 armor, uint32 attackerLevel);
+        // Share of a creature's melee swings at `victim` that miss, are dodged or parried
+        // (SpellCaster::RollMeleeOutcomeAgainst, attacker weapon skill 5 x level): miss 5% minus
+        // per-skill x (skill - defense), dodge and parry minus per-skill x (skill - 5 x the
+        // victim's level); per-skill 0.04% on players, 0.1% on pets. Block (a reduction, not an
+        // avoidance) and crushing blows are left to the caller's margin. 0..0.95.
+        float MeleeAvoidance(PartyMemberFacts const& victim, uint32 attackerLevel);
+        // Melee damage `victim` takes per point an attacker of that level swings: armor (only
+        // for physical melee) and MeleeAvoidance (any school: a fire swing is dodged too).
+        float MeleeTaken(PartyMemberFacts const& victim, uint32 attackerLevel, bool physical);
 
         // Health amount -> points.
         float Points(WorldModel const& world, float health);

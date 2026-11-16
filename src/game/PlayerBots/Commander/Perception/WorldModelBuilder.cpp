@@ -98,6 +98,18 @@ namespace WorldModelBuilder
             f.maxHealth = unit->GetMaxHealth();
             f.level = unit->GetLevel();
             f.armor = uint32(std::max(0, unit->GetArmor()));
+            if (Player const* player = unit->ToPlayer())
+            {
+                f.dodgePct = player->GetFloatValue(PLAYER_DODGE_PERCENTAGE);
+                f.parryPct = player->CanParry() && player->GetWeaponForParry()
+                    ? player->GetFloatValue(PLAYER_PARRY_PERCENTAGE) : 0.0f;
+            }
+            else
+            {
+                f.dodgePct = std::max(0.0f, 5.0f + float(unit->GetTotalAuraModifier(SPELL_AURA_MOD_DODGE_PERCENT)));
+                f.parryPct = std::max(0.0f, 5.0f + float(unit->GetTotalAuraModifier(SPELL_AURA_MOD_PARRY_PERCENT)));
+            }
+            f.defenseSkill = unit->GetDefenseSkillValue();
             f.manaPct = unit->GetPowerType() == POWER_MANA && unit->GetMaxPower(POWER_MANA)
                 ? unit->GetPowerPercent(POWER_MANA) : -1.0f;
             f.mana = unit->GetPower(POWER_MANA);

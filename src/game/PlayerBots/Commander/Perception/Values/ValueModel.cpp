@@ -19,6 +19,23 @@ namespace Value
         return std::min(0.75f, std::max(0.0f, tmp));
     }
 
+    float MeleeAvoidance(PartyMemberFacts const& victim, uint32 attackerLevel)
+    {
+        float const perSkill = victim.isPet ? 0.1f : 0.04f;
+        float const skill = 5.0f * float(attackerLevel);
+        float const miss = std::max(0.0f, 5.0f - (skill - float(victim.defenseSkill)) * perSkill);
+        float const levelDiff = (skill - 5.0f * float(victim.level)) * perSkill;
+        float const dodge = std::max(0.0f, victim.dodgePct - levelDiff);
+        float const parry = victim.parryPct > 0.0f ? std::max(0.0f, victim.parryPct - levelDiff) : 0.0f;
+        return std::min(0.95f, (miss + dodge + parry) / 100.0f);
+    }
+
+    float MeleeTaken(PartyMemberFacts const& victim, uint32 attackerLevel, bool physical)
+    {
+        float const armor = physical ? 1.0f - ArmorReduction(victim.armor, attackerLevel) : 1.0f;
+        return armor * (1.0f - MeleeAvoidance(victim, attackerLevel));
+    }
+
     float Points(WorldModel const& world, float health)
     {
         if (world.rates.partyMaxHealth <= 0.0f)
