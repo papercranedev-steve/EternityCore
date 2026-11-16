@@ -673,6 +673,7 @@ namespace Commander
         uint32 spellId = 0;          // the dispel it casts
         float points = 0.0f;         // what removing it is worth (Perception/Values/DispelValue.h)
         bool control = false;        // the member cannot act: urgent
+        bool manaCritical = false;   // a mana leech takes mana a healer needs (DispelValue::Worth): urgent
     };
 
     // One control spell to put on an enemy now, and who casts it (CrowdControlAssigner).

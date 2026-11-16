@@ -457,7 +457,7 @@ namespace
             for (Commander::DispelDuty const& d : plan.dispels)
                 handler->PSendSysMessage("    %s: %s from |cffffcc00%s|r with %s (%.1f pt%s)",
                     NameOf(map, d.bot).c_str(), SpellName(d.auraSpellId).c_str(), NameOf(map, d.target).c_str(),
-                    SpellName(d.spellId).c_str(), d.points, d.control ? ", cannot act" : "");
+                    SpellName(d.spellId).c_str(), d.points, d.control ? ", cannot act" : d.manaCritical ? ", healer mana" : "");
         }
 
         // Crowd control (CrowdControlAssigner); values per option: .partybot ai control

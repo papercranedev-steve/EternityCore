@@ -123,5 +123,15 @@ namespace ManaWorth
     {
         return WorthIn(world, Planned(fight), member, mana);
     }
+
+    bool Critical(WorldModel const& world, PartyMemberFacts const& member, float mana)
+    {
+        if (!IsHealer(member) || !member.alive || !member.UsesMana() || member.manaPct < 0.0f)
+            return false;
+        if (mana < float(member.maxMana) * CRITICAL_MIN_SHARE)
+            return false;
+        float const after = std::max(0.0f, float(member.mana) - mana);
+        return TensionWith(world, Live(world), member, after) > CRITICAL_TENSION;
+    }
 }
 }

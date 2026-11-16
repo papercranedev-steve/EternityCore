@@ -32,8 +32,13 @@ namespace Commander
         // Ranged ability without line of sight to the live caster (EnemyFacts::outOfSight):
         // never primary, last choice as backup.
         static constexpr float SCORE_NO_SIGHT = -5.0f;
-        // Live cast: an ability that needs walking is primary only if walking in plus this
-        // reaction time ends before the cast does (it can still be backup).
+        // The bot keeps failing to cast this ability on this enemy (PartyMemberFacts::
+        // IsFailingCast): never primary, last choice as backup, until a cast of it goes out or
+        // the failures are BotDirectives::CAST_FAILURE_MEMORY_MS old.
+        static constexpr float SCORE_FAILING = -5.0f;
+        // Live cast out of range: primary only for a bot that walks in (a melee ability of a
+        // bot that is not the tank, InterruptBehavior "go to caster") and only if walking in
+        // plus this reaction time ends before the cast does (it can still be backup).
         static constexpr float REACTION_SEC = 0.5f;
 
         char const* GetId() const override { return "interrupt"; }

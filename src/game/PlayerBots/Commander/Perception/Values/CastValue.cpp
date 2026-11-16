@@ -2,6 +2,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Creature.h"
@@ -240,7 +241,14 @@ namespace CastValues
                 if (offParty)
                     break;
                 if (known && victim)
+                {
                     v.points = ManaLoss(world, amounts, *victim);
+                    if (victim->manaPct >= 0.0f)
+                    {
+                        v.manaDrained = std::min(amounts.mana, float(victim->mana));
+                        v.manaCritical = ManaWorth::Critical(world, *victim, v.manaDrained);
+                    }
+                }
                 else    // mana burns pick a random mana user
                     v.points = PartyAverage(world, [&](PartyMemberFacts const& m) { return ManaLoss(world, amounts, m); });
                 break;
@@ -295,7 +303,10 @@ namespace CastValues
                 mult *= creature->override.interruptMult;
         v.points *= mult;
         if (mult <= 0.0f)
+        {
             v.lethal = false;
+            v.manaCritical = false;
+        }
         return v;
     }
 
@@ -426,6 +437,17 @@ namespace CastValues
         return best;
     }
 
+    float DrainedManaPoints(WorldModel const& world, PartyMemberFacts const& member, float mana)
+    {
+        // Same terms as ManaLoss, mana only.
+        if (member.manaPct < 0.0f || mana <= 0.0f)
+            return 0.0f;
+        float points = Value::Points(world, mana * HEAL_PER_MANA);
+        if (member.isBot && member.role == ROLE_HEALER)
+            points *= MANA_DRAIN_HEALER_MULT;
+        return points;
+    }
+
     CastValue InterruptBenefit(WorldModel const& world, EnemyFacts const& enemy)
     {
         bool const live = enemy.castingSpellId && enemy.castInterruptible;
@@ -436,6 +458,19 @@ namespace CastValues
         {
             v = Evaluate(world, enemy, enemy.castingSpellId, enemy.castTarget);
             p = sProfileStore.GetSpell(enemy.castingSpellId);
+            // A channel already partly done: stopping it saves the rest only (Soul Tap 4 s into
+            // its 12 s has 2/3 of its drain left).
+            if (p && p->channeled && enemy.castTotalMs > 0 && enemy.castRemainingMs < enemy.castTotalMs)
+            {
+                float const left = float(enemy.castRemainingMs) / float(enemy.castTotalMs);
+                v.points *= left;
+                if (v.manaDrained > 0.0f)
+                {
+                    v.manaDrained *= left;
+                    PartyMemberFacts const* victim = world.FindMember(enemy.castTarget);
+                    v.manaCritical = v.manaCritical && victim && ManaWorth::Critical(world, *victim, v.manaDrained);
+                }
+            }
         }
         else
         {
@@ -453,6 +488,7 @@ namespace CastValues
         {
             v.points *= ttd / remainingSec;
             v.lethal = v.lethal && ttd >= remainingSec * 0.5f;
+            v.manaCritical = v.manaCritical && ttd >= remainingSec * 0.5f;
         }
         // A heal on an ally that dies before the heal lands is worth nothing.
         if (live && p && p->category == CastCategory::Heal && enemy.castTarget != enemy.guid)

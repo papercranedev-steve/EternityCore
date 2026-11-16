@@ -117,14 +117,21 @@ namespace Commander
 
             if (!isPrimary)
             {
-                // Primary asleep, stunned, gone or without a usable ability: act at once.
-                bool const primaryUnable = duty.primary.IsEmpty() || !HasReadyInterrupt(world.FindMember(duty.primary), live);
+                // Primary asleep, stunned, gone, without a usable ability, or its cast keeps
+                // failing (out of reach, no sight): act at once.
+                PartyMemberFacts const* primary = world.FindMember(duty.primary);
+                bool const primaryUnable = duty.primary.IsEmpty() || !HasReadyInterrupt(primary, live) ||
+                                           primary->IsFailingCast(duty.primarySpellId, duty.enemy);
                 if (!primaryUnable && cast.progress < BACKUP_AFTER_PROGRESS)
                     continue;
             }
 
             CastValue const value = CastValues::InterruptBenefit(world, live);
-            ProposalTier const tier = value.lethal ? ProposalTier::Urgent : ProposalTier::Assigned;
+            // Urgent (before a heal that is not an emergency one scoring higher): the cast kills,
+            // or drains mana a healer needs for this fight (CastValue::manaCritical).
+            ProposalTier const tier = value.lethal || value.manaCritical ? ProposalTier::Urgent : ProposalTier::Assigned;
+            char const* const why = value.manaCritical ? (isPrimary ? "primary: healer mana" : "backup: healer mana")
+                                                        : (isPrimary ? "primary" : "backup");
 
             // Every ready ability, assigned one first, then cheaper cooldowns: the arbiter tries
             // them in order of benefit - cost if one fails (out of range, immune, wrong form).
@@ -151,7 +158,7 @@ namespace Commander
                 Proposal p;
                 p.tier = tier;
                 p.source = "interrupt";
-                p.reason = isPrimary ? "primary" : "backup";
+                p.reason = why;
                 p.action.type = BotActionType::Cast;
                 p.action.target = duty.enemy;
                 p.action.spell = spell;

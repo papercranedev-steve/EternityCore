@@ -43,6 +43,7 @@
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
 #include "Timer.h"
+#include "Commander/BotDirectives.h"
 #include "MoveSpline.h"
 #include <algorithm>
 #include <limits>
@@ -721,6 +722,20 @@ namespace WorldModelBuilder
         {
             for (SpellEntry const* spell : ai->Kit().Interrupts())
                 AddInterrupt(ai, spell, f);
+        }
+
+        // Casts the arbiter tried and could not execute (BotDirectives::GetCastFailures).
+        void FillCastFailures(PartyBotAI const* ai, PartyMemberFacts& f)
+        {
+            for (CastFailure const& c : ai->Directives().GetCastFailures(WorldTimer::getMSTime()))
+            {
+                CastFailureFacts x;
+                x.target = c.target;
+                x.spellId = c.spellId;
+                x.count = c.count;
+                x.failingMs = WorldTimer::getMSTimeDiff(c.firstMs, c.lastMs);
+                f.castFailures.push_back(x);
+            }
         }
 
         void FillDispels(PartyBotAI const* ai, PartyMemberFacts& f)
@@ -1789,6 +1804,7 @@ namespace WorldModelBuilder
                     if (member->IsAlive())
                     {
                         FillInterrupts(ai, f);
+                        FillCastFailures(ai, f);
                         FillDispels(ai, f);
                         FillControls(ai, f);
                         FillFleeStops(ai, f);

@@ -109,13 +109,25 @@ namespace Commander
                     score += InterruptAssigner::SCORE_NO_SIGHT;
                     c.canBePrimary = false;
                 }
+                // Kept trying it on this enemy and the cast never went out (range, sight, power,
+                // form; fight-20261116-232401: Bash failed for 3 s on a Soul Tap channel while
+                // the tank stood at another enemy). Backup at most until it works again.
+                bool const failing = m.IsFailingCast(a.spellId, e.guid);
+                if (failing)
+                {
+                    score += InterruptAssigner::SCORE_FAILING;
+                    c.canBePrimary = false;
+                }
                 c.score = score;
 
                 // A 3 s cast and a melee 20 yards away: it arrives after the cast (scenario 2, 3.5 item 2).
-                if (target.live && outOfRange > 0.0f && !noSight && !notInFront)
+                if (target.live && outOfRange > 0.0f && !noSight && !notInFront && !failing)
                 {
+                    // Only a melee interrupt of a bot that is not the tank walks to the caster
+                    // (InterruptBehavior "go to caster"); the others wait where they are.
+                    bool const walks = a.maxRange <= WorldModelBuilder::MELEE_INTERRUPT_RANGE && m.role != ROLE_TANK;
                     float const reachSec = outOfRange / CastValues::RUN_YARDS_PER_SEC + InterruptAssigner::REACTION_SEC;
-                    c.canBePrimary = reachSec <= e.castRemainingMs / 1000.0f;
+                    c.canBePrimary = walks && reachSec <= e.castRemainingMs / 1000.0f;
                 }
                 out.push_back(c);
             }

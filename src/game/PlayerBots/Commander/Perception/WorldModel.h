@@ -420,6 +420,20 @@ namespace Commander
         float reapplySec = 0.0f;
     };
 
+    // A bot kept trying one spell on one target and the cast never went out (BotDirectives
+    // CastFailure: range, line of sight, power, form). Bots only.
+    struct CastFailureFacts
+    {
+        ObjectGuid target;
+        uint32 spellId = 0;
+        uint32 count = 0;
+        uint32 failingMs = 0;       // first to last failure of the run
+    };
+    // A run this long (longer than a global cooldown, which also makes a cast fail) and at least
+    // this many tries: the bot cannot carry out that cast for now.
+    static constexpr uint32 CAST_FAILING_MS = 1600;
+    static constexpr uint32 CAST_FAILING_TRIES = 3;
+
     // One direct heal of a healer bot, chain cast (Perception/Forecast/HealCapacity.h).
     struct HealRate
     {
@@ -718,9 +732,19 @@ namespace Commander
         // its heals in spareHealRates (FightLoad::Lineup::risen).
         uint32 riseHealth = 0;
         uint32 riseMana = 0;
+        // Bots: casts the arbiter tried and could not execute, recently (CastFailureFacts).
+        std::vector<CastFailureFacts> castFailures;
 
         bool CanAct() const { return alive && !controlled; }
         bool UsesMana() const { return maxMana > 0; }
+        // Keeps failing to cast `spellId` on `target` (CAST_FAILING_MS, CAST_FAILING_TRIES).
+        bool IsFailingCast(uint32 spellId, ObjectGuid target) const
+        {
+            for (CastFailureFacts const& f : castFailures)
+                if (f.spellId == spellId && f.target == target)
+                    return f.count >= CAST_FAILING_TRIES && f.failingMs >= CAST_FAILING_MS;
+            return false;
+        }
     };
 
     // One row of an enemy's threat list, plus party members not on it yet (onList = false).

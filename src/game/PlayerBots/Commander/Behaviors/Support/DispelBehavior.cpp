@@ -35,9 +35,10 @@ namespace Commander
                 continue;
 
             Proposal p;
-            p.tier = d.control ? ProposalTier::Urgent : ProposalTier::Assigned;
+            p.tier = d.control || d.manaCritical ? ProposalTier::Urgent : ProposalTier::Assigned;
             p.source = "dispel";
-            p.reason = d.control ? "assigned: member cannot act" : "assigned";
+            p.reason = d.control ? "assigned: member cannot act"
+                     : d.manaCritical ? "assigned: drains mana the healer needs" : "assigned";
             p.action.type = BotActionType::Cast;
             p.action.target = d.target;
             p.action.spell = spell;
@@ -50,7 +51,7 @@ namespace Commander
     {
         ObjectGuid const self = bot->me->GetObjectGuid();
         for (DispelDuty const& d : plan.dispels)
-            if (d.bot == self && d.control)
+            if (d.bot == self && (d.control || d.manaCritical))
                 return true;
         return false;
     }

@@ -142,6 +142,17 @@ namespace Commander
             }
         }
 
+        // Cast failures per (target, spell) for the eyes (BotDirectives CastFailure).
+        void NoteCastOutcome(BotDirectives& directives, Proposal const& p, bool executed, uint32 nowMs)
+        {
+            if (p.action.type != BotActionType::Cast || !p.action.spell)
+                return;
+            if (executed)
+                directives.NoteCastExecuted(p.action.spell->Id);
+            else
+                directives.NoteCastFailed(p.action.target, p.action.spell->Id, nowMs);
+        }
+
         // Highest tier first, then the highest score inside the tier.
         bool IsBetter(Proposal const& a, Proposal const& b)
         {
@@ -404,11 +415,15 @@ namespace Commander
                     r.result = CandidateRecord::Result::Executed;
                     directives.SetLastDecision(now, std::string(p.source) + " " + r.what);
                     directives.NoteExecuted(p, now);
+                    NoteCastOutcome(directives, p, true, now);
                     BotSpeech::OnExecuted(bot, p, now);
                     primary = &p;
                 }
                 else
+                {
                     r.result = CandidateRecord::Result::Failed;
+                    NoteCastOutcome(directives, p, false, now);
+                }
             }
             if (!executed && !(bestHeal && IsBetter(*bestHeal, replace.front())))
                 directives.SetLastDecision(now, "failed: " + std::string(replace.front().source) + " " + Describe(bot, replace.front()));
@@ -444,9 +459,11 @@ namespace Commander
                 if (!Execute(bot, p))
                 {
                     r.result = CandidateRecord::Result::Failed;
+                    NoteCastOutcome(directives, p, false, now);
                     continue;
                 }
                 r.result = CandidateRecord::Result::Executed;
+                NoteCastOutcome(directives, p, true, now);
                 r.reason += " [with the ";
                 r.reason += want == Channel::Act ? "walk]" : "action]";
                 rotationMayRun = rotationMayRun && LetsRotationRun(p.action.type);

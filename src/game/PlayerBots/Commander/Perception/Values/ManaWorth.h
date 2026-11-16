@@ -48,6 +48,16 @@ namespace Commander
             float incomingDps = 0.0f;
         };
         float Points(WorldModel const& world, PartyMemberFacts const& member, float mana, Fight const& fight);
+
+        // Losing `mana` (an enemy mana drain or leech) leaves a healer bot short for this
+        // fight: after it, its tension is above CRITICAL_TENSION (its mana no longer pays for
+        // the healing the fight still needs). Amounts below CRITICAL_MIN_SHARE of its pool
+        // never are. Interrupting or dispelling such a drain is urgent like a lethal cast
+        // (fight-20261116-232401: two Soul Tap channels took the paladin's mana, ~2100 each,
+        // while every interrupt and Cleanse waited behind emergency heals; the party wiped).
+        static constexpr float CRITICAL_TENSION = 1.0f;
+        static constexpr float CRITICAL_MIN_SHARE = 0.05f;
+        bool Critical(WorldModel const& world, PartyMemberFacts const& member, float mana);
     }
 }
 

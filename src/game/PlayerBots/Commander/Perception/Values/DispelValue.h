@@ -11,6 +11,12 @@
  *            being hit: only WAKE_ON_DAMAGE_SEC (the next hit ends it, combat scenario 3).
  *   other effects, added up:
  *     periodic damage   ticks per second x the seconds it would still tick
+ *     mana leech        mana per second x the seconds it would still drain (at most the
+ *                       member's mana), CastValues::DrainedManaPoints; manaCritical when a
+ *                       healer bot cannot spare it (ManaWorth::Critical). On a single target
+ *                       channel (Soul Tap) the dispel also ends the caster's channel
+ *                       (Unit::RemoveSpellAuraHolder interrupts it), so "would still" is the
+ *                       channel time left: the same gain as interrupting it
  *     only slows        LostAction(member, min(left, SLOW_SEC)) for a healer / ranged member
  *                       with a melee enemy on it (has to walk away), else 0
  *                       (strat-20261102-012937: Dispel Magic on a chilled rogue, twice)
@@ -43,6 +49,8 @@ namespace Commander
         {
             float points = 0.0f;
             bool control = false;   // the member cannot act (or a Now policy): urgent
+            // A mana leech takes mana the healer bot needs for this fight (ManaWorth::Critical): urgent.
+            bool manaCritical = false;
         };
 
         Worth Of(WorldModel const& world, PartyMemberFacts const& member, DebuffFacts const& debuff);

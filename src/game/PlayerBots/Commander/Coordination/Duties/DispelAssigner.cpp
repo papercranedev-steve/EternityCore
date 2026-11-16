@@ -36,9 +36,9 @@ namespace Commander
                 need.kind = DutyKind::Dispel;
                 need.target = m.guid;
                 need.auraSpellId = d.spellId;
-                need.now = worth.control;
+                need.now = worth.control || worth.manaCritical;
                 need.points = worth.points;
-                need.detail = worth.control ? 1 : 0;
+                need.detail = uint8((worth.control ? DETAIL_CONTROL : 0) | (worth.manaCritical ? DETAIL_MANA_CRITICAL : 0));
 
                 uint32 const typeBit = 1u << d.dispelType;
                 for (PartyMemberFacts const& b : world.party)
@@ -81,7 +81,8 @@ namespace Commander
             d.bot = r.primary;
             d.spellId = r.primarySpellId;
             d.points = r.points;
-            d.control = r.detail != 0;
+            d.control = (r.detail & DETAIL_CONTROL) != 0;
+            d.manaCritical = (r.detail & DETAIL_MANA_CRITICAL) != 0;
             duties.push_back(d);
         }
         plan.dispels = std::move(duties);

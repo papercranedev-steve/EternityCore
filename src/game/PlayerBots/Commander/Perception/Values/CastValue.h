@@ -22,6 +22,11 @@ namespace Commander
         uint32 spellId = 0;
         float points = 0.0f;        // what the party loses if the cast completes
         bool lethal = false;        // the cast would kill its target
+        // Mana burn / drain on a known party member: the mana it takes (a live channel: the
+        // part still to come, InterruptBenefit), and whether that is mana a healer bot needs
+        // for this fight (ManaWorth::Critical). Urgent like `lethal`.
+        float manaDrained = 0.0f;
+        bool manaCritical = false;
     };
 
     namespace CastValues
@@ -75,7 +80,14 @@ namespace Commander
 
         // Benefit of interrupting the enemy's current cast (or, when it is not casting,
         // PlannedCast for planning), times the chance it lives long enough to complete it.
+        // A live channel is worth the part still to come (castRemainingMs / castTotalMs).
         CastValue InterruptBenefit(WorldModel const& world, EnemyFacts const& enemy);
+
+        // Points `mana` drained from `member` is worth (the mana part of a mana burn / drain;
+        // DispelValue for mana leech debuffs): HEAL_PER_MANA per mana, times
+        // MANA_DRAIN_HEALER_MULT on a healer bot. 0 when mana is not its active power (a druid
+        // in bear / cat form is immune).
+        float DrainedManaPoints(WorldModel const& world, PartyMemberFacts const& member, float mana);
 
         // Extra benefit of `ability` locking the school of `interruptedSpellId`: other casts of
         // that school the enemy would make during the lockout, plus the enemy walking into melee

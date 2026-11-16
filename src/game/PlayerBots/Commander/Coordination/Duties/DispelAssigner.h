@@ -7,8 +7,8 @@
  * hostile unit (Dispel Magic). Cost of a candidate = one global cooldown of its output
  * (Value::LostAction); offered only if the debuff is worth more. Rank = -cost, the previous
  * dispeller of the same debuff gets STICKY_SEC of output off.
- * Control effects are urgent (need "now" and DispelDuty::control); the others are answered by
- * points after them. Each bot takes one primary duty (DutyAllocator), so two healers do not
+ * Control effects and mana leeches a healer cannot spare are urgent (need "now",
+ * DispelDuty::control / manaCritical); the others are answered by points after them. Each bot takes one primary duty (DutyAllocator), so two healers do not
  * remove the same debuff, and a bot already interrupting is not given a dispel too.
  * In combat only: out of combat the rotation dispels as before.
  */
@@ -24,6 +24,9 @@ namespace Commander
     {
     public:
         static constexpr float STICKY_SEC = 0.5f;
+        // DutyNeed::detail bits, passed through to DispelDuty.
+        static constexpr uint8 DETAIL_CONTROL = 1;
+        static constexpr uint8 DETAIL_MANA_CRITICAL = 2;
 
         // Same id as DispelBehavior: `.partybot ai module dispel off` switches both.
         char const* GetId() const override { return "dispel"; }

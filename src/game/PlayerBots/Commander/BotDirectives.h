@@ -10,6 +10,8 @@
 #include "Common.h"
 #include "Timer.h"
 #include "Commander/CommanderTypes.h"
+#include "ObjectGuid.h"
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <string>
@@ -68,12 +70,27 @@ namespace Commander
         float net = 0.0f;
     };
 
+    // A cast proposal the arbiter tried and could not execute (out of range, no line of sight,
+    // not enough power, wrong form), per (target, spell), until the spell executes or the
+    // failures stop for CAST_FAILURE_MEMORY_MS. The eyes read it (PartyMemberFacts::castFailures):
+    // a duty given to a bot that cannot carry it out goes to someone else.
+    struct CastFailure
+    {
+        ObjectGuid target;
+        uint32 spellId = 0;
+        uint32 firstMs = 0;         // first failure of this run
+        uint32 lastMs = 0;
+        uint32 count = 0;
+    };
+
     class BotDirectives
     {
     public:
         // 40: the combat recorder polls every 200 ms (recorder.lua rec.interval); leaves room for
         // slow polls (a reload, a long console call) at a bot tick of 100-200 ms
         static size_t const LOG_SIZE = 40;
+        // A run of failures is forgotten when the bot has not tried for this long.
+        static uint32 const CAST_FAILURE_MEMORY_MS = 5000;
 
         // While held, PartyBotAI does not issue MoveFollow / MoveChase / run-away moves.
         // `owner` = the module whose MoveTo started it (Proposal::source, a string literal), so
@@ -214,6 +231,42 @@ namespace Commander
                 m_lastWalk = a;
         }
         ExecutedAction const& GetLastExecuted() const { return m_lastExecuted; }
+
+        // Arbiter: a Cast proposal failed / executed (CastFailure).
+        void NoteCastFailed(ObjectGuid target, uint32 spellId, uint32 nowMs)
+        {
+            PruneCastFailures(nowMs);
+            for (CastFailure& f : m_castFailures)
+            {
+                if (f.target == target && f.spellId == spellId)
+                {
+                    f.lastMs = nowMs;
+                    ++f.count;
+                    return;
+                }
+            }
+            CastFailure f;
+            f.target = target;
+            f.spellId = spellId;
+            f.firstMs = nowMs;
+            f.lastMs = nowMs;
+            f.count = 1;
+            m_castFailures.push_back(f);
+        }
+        void NoteCastExecuted(uint32 spellId)
+        {
+            m_castFailures.erase(std::remove_if(m_castFailures.begin(), m_castFailures.end(),
+                [spellId](CastFailure const& f) { return f.spellId == spellId; }), m_castFailures.end());
+        }
+        // Runs still remembered at `nowMs`.
+        std::vector<CastFailure> GetCastFailures(uint32 nowMs) const
+        {
+            std::vector<CastFailure> out;
+            for (CastFailure const& f : m_castFailures)
+                if (WorldTimer::getMSTimeDiff(f.lastMs, nowMs) < CAST_FAILURE_MEMORY_MS)
+                    out.push_back(f);
+            return out;
+        }
         // The last MoveTo the arbiter executed (the walk a movement hold keeps going).
         ExecutedAction const& GetLastWalk() const { return m_lastWalk; }
 
@@ -244,6 +297,13 @@ namespace Commander
             }
         }
 
+        void PruneCastFailures(uint32 nowMs)
+        {
+            m_castFailures.erase(std::remove_if(m_castFailures.begin(), m_castFailures.end(),
+                [nowMs](CastFailure const& f) { return WorldTimer::getMSTimeDiff(f.lastMs, nowMs) >= CAST_FAILURE_MEMORY_MS; }),
+                m_castFailures.end());
+        }
+
         uint32 m_holdStartMs = 0;
         uint32 m_holdDurationMs = 0;
         char const* m_holdOwner = nullptr;
@@ -265,6 +325,7 @@ namespace Commander
         ExecutedAction m_lastExecuted;
         ExecutedAction m_lastWalk;
         std::vector<ActiveVeto> m_vetoes;
+        std::vector<CastFailure> m_castFailures;
         std::deque<DecisionRecord> m_log;
     };
 }

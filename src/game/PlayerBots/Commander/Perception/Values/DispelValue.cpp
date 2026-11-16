@@ -3,6 +3,8 @@
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/SpellProfile.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/CastValue.h"
+#include "Commander/Perception/Values/ManaWorth.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
 #include <algorithm>
@@ -65,7 +67,7 @@ namespace DispelValue
         // Seconds it would still work: until it ends, or until the caster puts it back.
         float const effectSec = debuff.reapplySec > 0.0f ? std::min(leftSec, debuff.reapplySec) : leftSec;
 
-        bool periodic = false, slow = false, other = false;
+        bool periodic = false, manaLeech = false, slow = false, other = false;
         for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
             if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
@@ -73,18 +75,32 @@ namespace DispelValue
             uint32 const aura = spell->EffectApplyAuraName[i];
             if (IsPeriodicDamage(aura))
                 periodic = true;
+            else if (aura == SPELL_AURA_PERIODIC_MANA_LEECH)
+                manaLeech = true;
             else if (aura == SPELL_AURA_MOD_DECREASE_SPEED)
                 slow = true;
             else
                 other = true;
         }
 
-        if (periodic)
+        if (periodic || manaLeech)
         {
             SpellAmounts const amounts = SpellProfiles::Estimate(spell, debuff.casterLevel, 0.0f);
             float const durationSec = std::max(1.0f, profile->durationMs / 1000.0f);
-            float const perSec = amounts.periodicDamage * debuff.stacks / durationSec;
-            w.points += Value::Points(world, perSec * effectSec);
+            if (periodic)
+            {
+                float const perSec = amounts.periodicDamage * debuff.stacks / durationSec;
+                w.points += Value::Points(world, perSec * effectSec);
+            }
+            if (manaLeech && member.manaPct >= 0.0f)
+            {
+                // The mana it still takes (no more than the member has), valued like an
+                // interrupted mana drain (CastValues::DrainedManaPoints).
+                float const perSec = amounts.mana * debuff.stacks / durationSec;
+                float const mana = std::min(perSec * effectSec, float(member.mana));
+                w.points += CastValues::DrainedManaPoints(world, member, mana);
+                w.manaCritical = ManaWorth::Critical(world, member, mana);
+            }
         }
         if (slow && NeedsToMove(world, member))
             w.points += Value::LostAction(world, member, std::min(effectSec, SLOW_SEC));
