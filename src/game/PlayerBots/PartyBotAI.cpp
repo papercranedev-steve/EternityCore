@@ -1060,7 +1060,12 @@ bool PartyBotAI::AttackStart(Unit* pVictim)
     // a mage that ran to the tank kept stabbing with its dagger between casts
     // (strat-20261101-235124). Their spells work at any distance.
     // (A melee / tank role keeps melee: UpdateAI restarts the attack of those roles without it.)
-    bool const melee = !IsClothCaster() || GetRole() == ROLE_MELEE_DPS || GetRole() == ROLE_TANK;
+    // A ranged hunter swings only in reach (HunterRotation step 0): out of reach it shoots, melee
+    // off as a player's (UpdateWeaponStance; else a melee ready stance flashes at each switch).
+    bool const rangedHunter = me->GetClass() == CLASS_HUNTER && GetRole() == ROLE_RANGE_DPS &&
+                              !me->CanReachWithMeleeAutoAttack(pVictim);
+    bool const melee = (!IsClothCaster() || GetRole() == ROLE_MELEE_DPS || GetRole() == ROLE_TANK) &&
+                       !rangedHunter;
     if (me->Attack(pVictim, melee))
     {
         BeginChasing(pVictim);
@@ -1555,7 +1560,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         SummonPetIfNeeded();
 
     // (before the auto-repeat step: it returns)
-    UpdateSheath();
+    UpdateWeaponStance();
 
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
     {
@@ -1845,7 +1850,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         UpdateInCombatAI();
 }
 
-void PartyBotAI::UpdateSheath()
+void PartyBotAI::UpdateWeaponStance()
 {
     if (me->IsMounted())
         return;
@@ -1856,15 +1861,31 @@ void PartyBotAI::UpdateSheath()
     // shooting, the gun showing only for the moment of each shot.
     bool const shooting = me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL) &&
                           me->GetWeaponForAttack(RANGED_ATTACK, true, false);
+
+    // Fix: a player's melee attack is off while he shoots from range. The hunter's stayed on
+    // (HunterRotation step 0, PartyBotAI::AttackStart), and the observers' client showed the
+    // melee ready stance (SMSG_ATTACKSTART) with the gun hanging in hand, the aimed gun only
+    // after the fight's SMSG_ATTACKSTOP. Melee off, the victim kept (Unit::Attack meleeAttack
+    // = false); it comes back when the victim is in reach.
+    Unit* pVictim = me->GetVictim();
+    if (shooting && pVictim && me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
+        !me->CanReachWithMeleeAutoAttack(pVictim))
+    {
+        me->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+        me->SendMeleeAttackStop(pVictim);
+    }
+
     SheathState const sheath = me->GetSheath();
     if (shooting)
     {
         if (sheath != SHEATH_STATE_RANGED)
             me->SetSheath(SHEATH_STATE_RANGED);
     }
-    // As a player's client: the ranged weapon stays out until a melee attack.
+    // The ranged weapon goes back for a melee attack, and after the fight (the bot's default:
+    // melee weapons in hand).
     else if (sheath == SHEATH_STATE_UNARMED ||
-             (sheath == SHEATH_STATE_RANGED && me->HasUnitState(UNIT_STATE_MELEE_ATTACKING)))
+             (sheath == SHEATH_STATE_RANGED &&
+              (me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) || !me->IsInCombat())))
         me->SetSheath(SHEATH_STATE_MELEE);
 }
 

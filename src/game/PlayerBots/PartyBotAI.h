@@ -287,9 +287,10 @@ public:
     // Standing still (UpdateAI): turn to the unit of a cast in progress or an auto-repeat shot
     // whose spell checks facing, else to a melee victim in reach outside the swing arc.
     void KeepFacing(Unit* pVictim);
-    // Every tick (UpdateAI): the weapons in hand as a player's client sets them, the ranged one
-    // while Auto Shot or Shoot repeats, the melee ones after a melee attack starts.
-    void UpdateSheath();
+    // Every tick (UpdateAI): the weapons in hand and the melee attack as a player's client sets
+    // them: while Auto Shot or Shoot repeats the ranged weapon, and no melee attack out of reach;
+    // the melee weapons after a melee attack starts or the fight ends.
+    void UpdateWeaponStance();
     // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/
     // HumanFollow.h), moved out of idle creatures' aggro range (FollowSpot.h); on a transport
     // the original random offset.

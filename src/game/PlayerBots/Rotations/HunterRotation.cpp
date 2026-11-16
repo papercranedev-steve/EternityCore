@@ -97,11 +97,12 @@ namespace
             if (!pVictim)
                 return;
 
-            // Melee auto attack stays on (header step 0): the victim can be set without it
+            // Melee auto attack on in reach (header step 0): the victim can be set without it
             // (Unit::Attack meleeAttack = false, a ranged victim after Feign Death), and then a
             // queued Raptor Strike never swings. No chase: it only swings in reach, and not while
-            // Auto Shot runs (Unit::UpdateMeleeAttackingState).
-            if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+            // Auto Shot runs (Unit::UpdateMeleeAttackingState). Out of reach it is off while
+            // shooting, as a player's (PartyBotAI::UpdateWeaponStance): not turned on again here.
+            if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) && me->CanReachWithMeleeAutoAttack(pVictim))
                 me->Attack(pVictim, true);
 
             ChaseWhenOutOfRange(pVictim);
