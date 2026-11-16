@@ -41,6 +41,7 @@ namespace Commander
                 case BotActionType::Resurrect: return "resurrect";
                 case BotActionType::PetAttack: return "pet-attack";
                 case BotActionType::PetFollow: return "pet-follow";
+                case BotActionType::PetStay: return "pet-stay";
                 case BotActionType::PetAutocastOn: return "pet-autocast-on";
                 case BotActionType::PetAutocastOff: return "pet-autocast-off";
                 case BotActionType::PetCast: return "pet-cast";
@@ -63,6 +64,7 @@ namespace Commander
             {
                 case BotActionType::PetAttack:
                 case BotActionType::PetFollow:
+                case BotActionType::PetStay:
                 case BotActionType::PetAutocastOn:
                 case BotActionType::PetAutocastOff:
                 case BotActionType::PetCast:
@@ -75,7 +77,8 @@ namespace Commander
         // Moves the pet: at most one per tick. Autocast toggles do not conflict with each other.
         bool IsPetCommand(BotActionType type)
         {
-            return type == BotActionType::PetAttack || type == BotActionType::PetFollow;
+            return type == BotActionType::PetAttack || type == BotActionType::PetFollow ||
+                   type == BotActionType::PetStay;
         }
 
         // The original rotation still runs in the tick the action executed (Arbiter::Run).
@@ -721,6 +724,7 @@ namespace Commander
                 break;      // handled above
             case BotActionType::PetAttack:
             case BotActionType::PetFollow:
+            case BotActionType::PetStay:
             case BotActionType::PetAutocastOn:
             case BotActionType::PetAutocastOff:
             case BotActionType::PetCast:
@@ -761,6 +765,18 @@ namespace Commander
                     return true;
                 if (pet->GetVictim() || !(charmInfo->IsReturning() && charmInfo->IsCommandFollow()))
                     pet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
+                return true;
+            }
+            case BotActionType::PetStay:
+            {
+                // Same path as the Stay button: stops and saves where it stands as its stay
+                // position. Re-sent only when it is not standing at it: after a victim of its own
+                // dies, PetAI::HandleReturnMovement walks it back to the older stay position.
+                if (pet->GetVictim())
+                    return false;
+                if (charmInfo->HasCommandState(COMMAND_STAY) && charmInfo->IsAtStay())
+                    return true;
+                pet->HandlePetCommand(COMMAND_STAY, nullptr);
                 return true;
             }
             case BotActionType::PetAutocastOn:

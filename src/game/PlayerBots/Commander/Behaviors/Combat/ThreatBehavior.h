@@ -42,6 +42,11 @@
  *            it) and is left alone. Otherwise, near the holder's threat (same rule as damage
  *            dealers): Cower on its enemy when that gives the room back (BotActionType::
  *            PetCast), else attack a safe enemy (the tank's target first) or come back (PetFollow).
+ *            Idle in combat (its victim died by another's hand, or called back): sent at the
+ *            owner's target, else a safe enemy, with the enter rule (ThreatRoom::Enter); with
+ *            nothing to send it at and an enemy within PET_WAIT_NEAR_YD, it stays there
+ *            (PetStay) instead of walking back to the owner; Follow again once the fight is
+ *            over or moved away from it (user 2026-11-16).
  *            Holding an enemy itself while a tank bot is there: switch to a safe enemy only
  *            (running back would bring the enemy to the owner). The tank treats enemies on
  *            pets as loose (taunt / win back, valued like any member).
@@ -73,6 +78,9 @@ namespace Commander
         static constexpr float DPS_SWITCH_HEADROOM = 0.25f;   // alternative target needs this much
         static constexpr float DPS_SWITCH_RANGE = 30.0f;
         static constexpr float DPS_SWITCH_MIN_SEC = 3.0f;     // switch target needs room for this much of my threat
+        // An idle pet with an acting enemy this near stays there (PetStay) instead of walking
+        // back to its owner (user 2026-11-16).
+        static constexpr float PET_WAIT_NEAR_YD = 10.0f;
         // An enemy seen for the first time less than this long ago (a summoned add, a patrol
         // that walked in) must leave room for NEW_ENEMY_LEAD_SEC of my threat before I hit it.
         static constexpr float NEW_ENEMY_SETTLE_SEC = ThreatRoom::NEW_ENEMY_SETTLE_SEC;

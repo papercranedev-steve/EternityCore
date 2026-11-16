@@ -70,11 +70,14 @@ namespace Commander
         Resurrect,
         // Pet actions command the bot's pet, not the bot. The arbiter executes them besides the
         // bot's own action (the rotation still runs): every autocast toggle, and the best pet
-        // command (PetAttack / PetFollow). Pet commands are skipped during a retreat (Override).
+        // command (PetAttack / PetFollow / PetStay). Pet commands are skipped during a retreat (Override).
         PetAttack,      // pet attacks `target` (the pet bar's Attack button)
         // Pet stops attacking and runs back to the bot (Follow button). While it runs back, the
         // rotation's "send the pet in" is refused (PetAI::CanAttack: returning after Follow).
         PetFollow,
+        // An idle pet stops where it stands and waits there (Stay button) instead of walking
+        // back to the bot; the next PetAttack sends it in from there.
+        PetStay,
         PetAutocastOn,  // turn autocast of the pet's `spell` on
         PetAutocastOff, // turn autocast of the pet's `spell` off
         // The pet casts its `spell` on `target` (empty = itself), as the pet bar's spell button

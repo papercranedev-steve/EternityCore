@@ -148,9 +148,14 @@ namespace Commander
         // ThreatView::Headroom gives it now, else it switches into the stop band (threat-behavior
         // doc 4.2 / 4.7). Ranged units keep Headroom.
         // An off-tank's enemy is killed last (doctrine OffTank.h): never a switch target.
+        // `entering`: `who` hits nothing now (an idle pet), so there is no stop band to keep
+        // away from by switching; the room needed is the enter rule (ThreatRoom::Enter), the same
+        // a damage dealer starting on a target gets, instead of the switch thresholds.
         EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                         ObjectGuid who, Position3 const& from, ObjectGuid current, ObjectGuid preferred)
+                                         ObjectGuid who, Position3 const& from, ObjectGuid current, ObjectGuid preferred,
+                                         bool entering = false)
         {
+            float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
             float const range = ThreatBehavior::DPS_SWITCH_RANGE;
             float const minRatio = ThreatBehavior::DPS_SWITCH_HEADROOM;
             float const minSec = ThreatBehavior::DPS_SWITCH_MIN_SEC;
@@ -172,9 +177,17 @@ namespace Commander
                     if (ThreatEntry const* own = ThreatView::FindEntry(a, who))
                         if (!own->inMeleeReach)
                             room = a.victimThreat * ThreatView::MELEE_AGGRO_FACTOR - own->threat;
-                float const ownRate = OwnThreatRate(world, who, a);
-                if (room / a.victimThreat < minRatio || room < ownRate * minSec)
-                    continue;
+                if (entering)
+                {
+                    if (room < ThreatRoom::Enter(world, who, a, tickSec))
+                        continue;
+                }
+                else
+                {
+                    float const ownRate = OwnThreatRate(world, who, a);
+                    if (room / a.victimThreat < minRatio || room < ownRate * minSec)
+                        continue;
+                }
                 if (!preferred.IsEmpty() && a.guid == preferred)
                     return &a;
                 if (!best || a.health < best->health)
@@ -573,6 +586,41 @@ namespace Commander
             return gap <= fast * sec ? gap / fast : sec + (gap - fast * sec) / run;
         }
 
+        // An idle pet in combat with no enemy to send it at yet. Next to the fight (an acting
+        // enemy within PET_WAIT_NEAR_YD): Stay where it stands instead of PetAI's walk back to
+        // the owner and the walk in again once there is room (2 s or more each way at a ranged
+        // owner). Away from it with Stay on (the fight moved): Follow again.
+        // Stay changes nothing else in this module: the Attack command chases from there, and
+        // the pet follows again once the fight is over (ProposePet).
+        void ProposePetWait(WorldModel const& world, Pet* pet, PartyMemberFacts const& petFacts,
+                            std::vector<Proposal>& out)
+        {
+            CharmInfo* charmInfo = pet->GetCharmInfo();
+            bool nearFight = false;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && PackResolver::Distance(petFacts.pos, e.pos) <= ThreatBehavior::PET_WAIT_NEAR_YD)
+                {
+                    nearFight = true;
+                    break;
+                }
+            if (nearFight)
+            {
+                if (charmInfo->HasCommandState(COMMAND_STAY) && charmInfo->IsAtStay())
+                    return;
+                Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetStay);
+                p.reason = "idle pet, wait at the fight";
+                p.SetValue(1.0f, 0.0f);
+                out.push_back(p);
+                return;
+            }
+            if (!charmInfo->HasCommandState(COMMAND_STAY))
+                return;
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetFollow);
+            p.reason = "idle pet away from the fight, follow";
+            p.SetValue(1.0f, 0.0f);
+            out.push_back(p);
+        }
+
         // Charge or Dash on the pet's way to the enemy it must take (an off-tank's job, user
         // 2026-11-15): arriving sooner saves the enemy's hits on its victim meanwhile
         // (Value::HitLoss over the seconds saved); the cost is the spell's cooldown.
@@ -697,6 +745,15 @@ namespace Commander
             out.push_back(p);
         }
 
+        // Left on Stay by ProposePetWait: the fight is over, it follows the owner again.
+        if (pet->GetCharmInfo()->HasCommandState(COMMAND_STAY) && (!me->IsInCombat() || world.enemies.empty()))
+        {
+            Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetFollow);
+            p.reason = "fight over, pet follows again";
+            p.SetValue(1.0f, 0.0f);
+            out.push_back(p);
+        }
+
         if (world.enemies.empty())
             return;
 
@@ -723,46 +780,52 @@ namespace Commander
         if (!tank && PetTaunt::HasAutocast(pet))
             return;
 
-        // The enemy the pet hits, else the one the rotation sends it to next (hunter and warlock
-        // rotations send an idle pet at the owner's victim).
-        Unit const* aim = pet->GetVictim() ? pet->GetVictim() : me->GetVictim();
-        if (!aim)
-            return;
-        EnemyFacts const* e = world.FindEnemy(aim->GetObjectGuid());
-        if (!e || e->crowdControlled || !e->acting || e->victim.IsEmpty())
-            return;
-
         PartyMemberFacts const* tankBot = Tanks::Main(world, true);
 
-        // Idle pet in combat (after a PetFollow below, or never sent): nothing in the rotations
-        // sends it in again during a fight (only their out of combat parts do, and PetAI only
-        // reacts when the pet or the owner is hit). Send it at the owner's target once that has
-        // room, with the stricter switch thresholds as hysteresis against the stop rule above,
-        // else at another safe enemy. Never PetFollow an idle pet: it is already back.
+        // Idle pet in combat: its victim died by another's hand (PetAI picks a next target only
+        // after its own killing blow, else walks back to the owner: Unit::Kill calls KilledUnit
+        // on the killer only), it was called back (PetFollow below), or it was never sent.
+        // Nothing in the rotations sends it in again during a fight (only their out of combat
+        // parts do). Send it at the owner's target once that has room, else at another safe
+        // enemy (the tank's target first); with nothing to send it at, keep it at the fight
+        // (ProposePetWait). Room is the enter rule (ThreatRoom::Enter): the hysteresis against
+        // the stop rule below, as for a damage dealer starting on a target. The stricter switch
+        // thresholds (DPS_SWITCH_*) kept it idle for seconds after every kill, while the tank
+        // had little threat on its next target yet (strat-20261116-220304: 13 s without a hit).
         if (!pet->GetVictim())
         {
-            if (!me->IsInCombat() || e->victim == petGuid)
+            if (!me->IsInCombat())
                 return;
             // Busy with its own cast or channel (Consume Shadows when idle): the Attack command
             // starts a chase and breaks it.
             if (pet->IsNonMeleeSpellCasted(false))
                 return;
-            float const minRatio = DPS_SWITCH_HEADROOM;
-            float const minSec = DPS_SWITCH_MIN_SEC;
-            // Room as it will fight: a pet called back stands out of melee reach and gets the
-            // 130% rule, 0.2 x the holder's threat more than once it is back in (110%), which
-            // would send it straight into the stop band. The imp (416) has no melee.
-            ThreatEntry const* own = ThreatView::FindEntry(*e, petGuid);
-            float const factor = pet->GetEntry() == IMP_ENTRY ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
-            float const room = own ? e->victimThreat * factor - own->threat : ThreatView::NO_LIMIT;
-            bool const safe = !IsHeldByHolder(bot, world, plan, *e) ||
-                (e->victimThreat > 0.0f && room / e->victimThreat >= minRatio &&
-                 room >= OwnThreatRate(world, petGuid, *e) * minSec);
-            EnemyFacts const* sendAt = safe ? e : FindSafeTarget(bot, world, plan, petGuid, petFacts->pos, e->guid,
-                                                                 tankBot ? tankBot->victim : ObjectGuid());
-            if (!sendAt)
-                return;
             float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+            Unit const* ownerVictim = me->GetVictim();
+            EnemyFacts const* e = ownerVictim ? world.FindEnemy(ownerVictim->GetObjectGuid()) : nullptr;
+            // The owner's target hits the pet: PetAI hits back by itself.
+            if (e && e->victim == petGuid)
+                return;
+            bool safe = false;
+            if (e && !e->crowdControlled && e->acting && !e->victim.IsEmpty())
+            {
+                // Room as it will fight: a pet called back stands out of melee reach and gets the
+                // 130% rule, 0.2 x the holder's threat more than once it is back in (110%), which
+                // would send it straight into the stop band. The imp (416) has no melee.
+                ThreatEntry const* own = ThreatView::FindEntry(*e, petGuid);
+                float const factor = pet->GetEntry() == IMP_ENTRY ? ThreatView::RANGED_AGGRO_FACTOR : ThreatView::MELEE_AGGRO_FACTOR;
+                float const room = own ? e->victimThreat * factor - own->threat : ThreatView::NO_LIMIT;
+                safe = !IsHeldByHolder(bot, world, plan, *e) ||
+                       (e->victimThreat > 0.0f && room >= ThreatRoom::Enter(world, petGuid, *e, tickSec));
+            }
+            EnemyFacts const* sendAt = safe ? e : FindSafeTarget(bot, world, plan, petGuid, petFacts->pos,
+                                                                 e ? e->guid : ObjectGuid(),
+                                                                 tankBot ? tankBot->victim : ObjectGuid(), true);
+            if (!sendAt)
+            {
+                ProposePetWait(world, pet, *petFacts, out);
+                return;
+            }
             Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::PetAttack, sendAt->guid);
             p.reason = "idle pet, send in";
             // Benefit: the pet's damage over the next ticks; nothing is lost by sending it. At
@@ -772,6 +835,12 @@ namespace Commander
             out.push_back(p);
             return;
         }
+
+        // The enemy the pet hits.
+        Unit const* aim = pet->GetVictim();
+        EnemyFacts const* e = world.FindEnemy(aim->GetObjectGuid());
+        if (!e || e->crowdControlled || !e->acting || e->victim.IsEmpty())
+            return;
         bool const holding = e->victim == petGuid;
         if (holding)
         {

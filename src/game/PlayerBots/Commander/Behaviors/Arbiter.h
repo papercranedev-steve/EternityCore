@@ -20,7 +20,7 @@
  * but a chase. A cast-time spell and a walk still compete as one (the CurrentAction costs
  * decide). Not with an Override winner (retreat) nor with Hold, Rest, Retreat, UseObject,
  * StopMove, StopChase. The rotation runs after them only if both let it.
- * Pet actions (PetAttack, PetFollow, PetAutocastOn/Off) are executed besides the bot's own
+ * Pet actions (PetAttack, PetFollow, PetStay, PetAutocastOn/Off) are executed besides the bot's own
  * action and never skip the rotation: every autocast toggle, plus the best pet command
  * (none during a retreat, which calls the pet back itself).
  */
@@ -66,7 +66,7 @@ namespace Commander
         // UseObject: walk into INTERACTION_DISTANCE (movement held), then GameObject::Use(me).
         // True while walking or after the use; false if the object is gone or the bot is rooted.
         static bool ExecuteUseObject(PartyBotAI* bot, BotAction const& action);
-        // PetAttack / PetFollow / PetAutocastOn / PetAutocastOff on bot->me->GetPet().
+        // PetAttack / PetFollow / PetStay / PetAutocastOn / PetAutocastOff on bot->me->GetPet().
         // `pTarget` = the live unit of action.target (null if empty).
         static bool ExecutePetAction(PartyBotAI* bot, BotAction const& action, Unit* pTarget);
         static std::string Describe(PartyBotAI const* bot, Proposal const& proposal);
