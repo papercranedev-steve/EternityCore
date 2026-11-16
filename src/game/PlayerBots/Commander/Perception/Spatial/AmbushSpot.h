@@ -6,7 +6,7 @@
  * Find: the patrol's predicted track (PatrolFacts::track, PatrolZone's clock), earliest point
  * first, up to Request::maxWaitSec. A track point is the stand point (on the ground below it)
  * when
- *  - it lies within Request::maxFromNearYd of Request::near (the party: the fight is there);
+ *  - it lies within Request::maxFromNearYd of Request::partyAt (the party: the fight is there);
  *  - its ground is within the patrol's aggro reach - AGGRO_INSIDE of the point (a flyer high
  *    above the ground does not notice the tank);
  *  - the patrol comes within that distance of it (`meetAt`, `arriveSec`) after the tank got
@@ -53,7 +53,7 @@ namespace AmbushSpot
         Creature* patrol = nullptr;
         PatrolFacts const* facts = nullptr;     // the patrol's facts (track)
         Player* tank = nullptr;                 // walks there from where it stands now
-        Position3 near;                         // where the party is
+        Position3 partyAt;                      // where the party is (not `near`: a Windows macro)
         float maxFromNearYd = 0.0f;
         float maxWaitSec = 0.0f;                // from the world refresh
         std::vector<ObjectGuid> ignore;         // the patrol's group (comes with it)

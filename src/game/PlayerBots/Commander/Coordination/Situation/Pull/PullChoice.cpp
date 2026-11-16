@@ -163,7 +163,7 @@ namespace Commander
             request.facts = &facts;
             request.tank = tank;
             PartyMemberFacts const* leader = world.FindMember(world.leader);
-            request.near = leader ? leader->pos : PositionOf(tank);
+            request.partyAt = leader ? leader->pos : PositionOf(tank);
             request.maxFromNearYd = PullPlanner::AMBUSH_MAX_FROM_PARTY_YD;
             request.maxWaitSec = PullPlanner::AMBUSH_MAX_WAIT_SEC;
             if (!facts.dbGroupLeader.IsEmpty())

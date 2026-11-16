@@ -70,7 +70,7 @@ namespace AmbushSpot
         float const age = PatrolZone::TrackAgeSec(world);
 
         float const scan = std::min(SafeRoute::SCAN_RADIUS + 30.0f,
-            PackResolver::Distance(tankAt, r.near) + r.maxFromNearYd + AggroRange::MAX_ATTACK_DISTANCE);
+            PackResolver::Distance(tankAt, r.partyAt) + r.maxFromNearYd + AggroRange::MAX_ATTACK_DISTANCE);
         SafeRoute::IdleCreatures idle(r.tank, tankAt, scan);
         std::vector<ObjectGuid> ignore = r.ignore;
         ignore.push_back(p.guid);
@@ -90,7 +90,7 @@ namespace AmbushSpot
             checkedAny = true;
             lastChecked = point;
 
-            if (PackResolver::Distance(point, r.near) > r.maxFromNearYd)
+            if (PackResolver::Distance(point, r.partyAt) > r.maxFromNearYd)
             {
                 reached(Failure::TooFar);
                 continue;
