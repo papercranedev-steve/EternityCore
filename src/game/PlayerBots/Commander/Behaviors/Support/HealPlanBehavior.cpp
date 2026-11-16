@@ -242,7 +242,12 @@ namespace Commander
             {
                 if (!s.spell || s.instant)
                     continue;
-                if (!me->HasAura(s.spell->Id) && (!me->IsSpellReady(s.spell) || !bot->CanTryToCastSpell(me, s.spell)))
+                // Ready for the coming heal: the global cooldown of the heal before does not
+                // count (it ended the wait in every tick between two heals).
+                if (!me->HasAura(s.spell->Id) &&
+                    (!me->IsSpellReady(s.spell) ||
+                     !bot->CanTryToCastSpellBesidesTimers(me, s.spell, me->GetShapeshiftForm(),
+                                                          me->GetPower(Powers(s.spell->powerType)))))
                     continue;
                 HealPlan::Boost b;
                 b.free = s.free;
@@ -429,8 +434,25 @@ namespace Commander
 
         std::vector<Candidate*> candidates;
         for (Candidate& c : all)
+        {
             if (c.assessment.need != HealPlan::Need::None && c.assessment.need != HealPlan::Need::Rest)
                 candidates.push_back(&c);
+            // A ready heal boost holds this target (its gap grows for one boosted big heal):
+            // written to the decision log as a dropped order, nothing is cast.
+            else if (c.assessment.boostHeld && c.Missing() > 0.0f && !kit.HealBoosts().empty())
+            {
+                Proposal p;
+                p.kind = ProposalKind::HealOrder;
+                p.tier = ProposalTier::Assigned;
+                p.source = "heal";
+                p.reason = "heal boost ready: held until one boosted big heal fills the gap";
+                p.action.type = BotActionType::Cast;
+                p.action.target = c.facts->guid;
+                p.action.spell = kit.HealBoosts().front().spell;
+                p.SetValue(0.0f, 0.0f);
+                out.push_back(p);
+            }
+        }
         std::stable_sort(candidates.begin(), candidates.end(),
                          [](Candidate const* a, Candidate const* b) { return IsMoreUrgent(*a, *b); });
 

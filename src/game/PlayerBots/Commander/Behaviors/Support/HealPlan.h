@@ -47,7 +47,8 @@
  *             (boostDeficit, Divine Favor; user 2026-11-16: "save up a big one") does, on a
  *             target being hit whose safe deficit holds it: that one sinks until the boosted big
  *             heal fills it, the others get the steady heals. A target nobody hits is not held
- *             (its gap would not grow).
+ *             (its gap would not grow). A chain waits for the deficit too (the chain only
+ *             orders the targets).
  *   rank      the least mana per health healed (no regeneration term), lifting within
  *             STEADY_LIFT_MAX_SEC: a smaller rank that out-heals the damage slowly beats a big
  *             expensive one; only damage the cheaper ranks cannot keep up with takes the big one.
@@ -139,6 +140,7 @@ namespace HealPlan
         float deficit = 0.0f;
         float timeToDie = NO_LIMIT;
         float timeToReserve = NO_LIMIT;  // seconds until health reaches the reserve
+        bool boostHeld = false;          // the deficit is Target::boostDeficit (a ready boost waits)
     };
 
     // tension: ManaBudget tension of the fight (0 if unknown). Low mana counts on its own:

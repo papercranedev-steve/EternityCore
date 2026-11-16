@@ -1536,8 +1536,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (Spell* pCurrentSpell = me->GetCurrentSpell(CURRENT_GENERIC_SPELL))
     {
-        // Interrupt pre casted heals if target is not injured.
-        if (pCurrentSpell->getState() == SPELL_STATE_PREPARING &&
+        // Interrupt pre casted heals if target is not injured. Not while the heal module decides
+        // heals: a steady healer starts heals on a full target being hit on purpose, and
+        // CastWatch cancels them just before they land (2026-11-16: this restarted them every
+        // bot tick, strat-20261116-212207).
+        if (!IsHealingControlled() && pCurrentSpell->getState() == SPELL_STATE_PREPARING &&
             pCurrentSpell->m_spellInfo->IsHealSpell())
         {
             if (Unit* pTarget = pCurrentSpell->m_targets.getUnitTarget())

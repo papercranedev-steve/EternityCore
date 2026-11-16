@@ -116,20 +116,30 @@ namespace HealPlan
                 a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
             // A ready boost: a target being hit whose safe deficit holds it is let sink until
             // one boosted big heal fills it (else steady healing never leaves a gap that big).
-            if (t.boostDeficit > 0.0f && t.intake > 0.0f && t.boostDeficit <= maxDeficit)
-                a.deficit = std::max(a.deficit, t.boostDeficit);
+            if (t.boostDeficit > 0.0f && t.intake > 0.0f && t.boostDeficit <= maxDeficit &&
+                t.boostDeficit > a.deficit)
+            {
+                a.deficit = t.boostDeficit;
+                a.boostHeld = true;
+            }
+            // A chain too waits for the deficit: steady heals keep the target chained, so a
+            // chain that skipped it never let the boost's gap come, and pre-cast the longest
+            // cast on a full target (strat-20261116-212207: Holy Light rank 2 on the tank).
             float const atLanding = std::min(t.maxHealth, missing + t.intake * e.castSec);
-            if (t.chained)
-                a.need = Need::Chain;
+            if (atLanding < a.deficit)
+                a.need = Need::Rest;
             else
-                a.need = atLanding >= a.deficit ? Need::Lift : Need::Rest;
+                a.need = t.chained ? Need::Chain : Need::Lift;
             return a;
         }
         a.deficit = minDeficit + (maxDeficit - minDeficit) * h.manaWeight;
         if (t.waitDeficit > 0.0f)
             a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
-        if (t.boostDeficit > 0.0f && t.boostDeficit <= maxDeficit)
-            a.deficit = std::max(a.deficit, t.boostDeficit);
+        if (t.boostDeficit > 0.0f && t.boostDeficit <= maxDeficit && t.boostDeficit > a.deficit)
+        {
+            a.deficit = t.boostDeficit;
+            a.boostHeld = true;
+        }
 
         if (t.chained)
             a.need = Need::Chain;
