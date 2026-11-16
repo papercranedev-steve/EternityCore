@@ -2,15 +2,18 @@
  * PartyBot Commander layer 2: which damage curse each warlock bot keeps on its victim ("curse"
  * module, user 2026-11-15).
  *
- * Every party member (players, not pets) counts for the curse its class profits from
- * (WarlockCurses::Favoured; tanks and healers count for none). The curses go by that count,
- * most first, ties in the order Elements, Shadow, Recklessness; a curse nobody profits from is
- * left out. The warlock bots in guid order each take the first curse of that list they know
- * that no warlock before them took. The dead count too: the curses do not swap when someone
- * dies.
+ * Count order (Order): every party member (players, not pets) counts for the curse its class
+ * profits from (WarlockCurses::Favoured; tanks and healers count for none), most first, ties in
+ * the order Elements, Shadow, Recklessness; a curse nobody profits from is left out.
  *
- * Whether it goes on an enemy at all is the value's (Perception/Values/CurseValue.h): trash
- * dies before it pays, bosses and long fights get it. CurseBehavior casts.
+ * The warlock bots in guid order each take, on their victim, the curse they know with the
+ * highest benefit - cost (Perception/Values/CurseValue.h) above 0, that no warlock before them
+ * took on the same enemy; ties in the count order. The one it already keeps there stays while it
+ * pays (no flipping on small changes). Example: Magistrate Barthilas (attack power 242, melee x9)
+ * gains more from +90 attack power on the tank than a warrior and a hunter gain from -640
+ * armor, so the warlock takes Shadow for its own damage (user 2026-11-16).
+ * No victim yet, or nothing pays on it: the first of the count order it knows (CurseBehavior
+ * proposes it, the arbiter drops it while it does not pay: trash that dies first).
  * Not a Duties module: DutyAllocator gives a bot one primary duty, the curse is kept all fight.
  * Runs every refresh (pure function of the world model).
  */
@@ -29,7 +32,7 @@ namespace Commander
     class CurseAssigner : public IAssigner
     {
     public:
-        // The curses wanted for this party, most wanted first (header).
+        // The curses wanted for this party by count, most wanted first (header).
         static std::vector<CurseKind> Order(WorldModel const& world);
 
         char const* GetId() const override { return "curse"; }

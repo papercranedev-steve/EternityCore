@@ -1,7 +1,11 @@
 #include "Commander/Coordination/Duties/CurseAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Values/CurseValue.h"
 #include "Commander/Perception/WorldModel.h"
+#include "SpellEntry.h"
+#include "SpellMgr.h"
 #include <algorithm>
+#include <utility>
 
 namespace Commander
 {
@@ -13,6 +17,25 @@ namespace Commander
                 if (s.kind == uint8(kind))
                     return s.spellId;
             return 0;
+        }
+
+        // Its own curse of this kind on the enemy (the one it keeps: no flipping on small changes).
+        bool OwnCurseOn(EnemyFacts const& enemy, ObjectGuid warlock, CurseKind kind)
+        {
+            for (CurseOnFacts const& c : enemy.curses)
+                if (c.kind == uint8(kind) && c.caster == warlock)
+                    return true;
+            return false;
+        }
+
+        // Benefit - cost of this warlock's curse of `kind` on `enemy` (CurseValue).
+        float Net(WorldModel const& world, PartyMemberFacts const& warlock, EnemyFacts const& enemy, uint32 spellId)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            if (!spell)
+                return 0.0f;
+            CurseEffect const curse = WarlockCurses::EffectOf(spell);
+            return CurseValue::Benefit(world, enemy, curse) - CurseValue::Cost(world, warlock, enemy, curse);
         }
     }
 
@@ -59,20 +82,65 @@ namespace Commander
         if (!warlocks.empty())
         {
             std::vector<CurseKind> const order = Order(world);
-            std::vector<CurseKind> taken;
+            // (enemy, kind) already given: the same curse from two warlocks does not stack.
+            std::vector<std::pair<ObjectGuid, CurseKind>> taken;
+            auto isTaken = [&taken](ObjectGuid enemy, CurseKind kind)
+            {
+                return std::find(taken.begin(), taken.end(), std::make_pair(enemy, kind)) != taken.end();
+            };
+
             for (PartyMemberFacts const* w : warlocks)
             {
+                EnemyFacts const* enemy = world.FindEnemy(w->victim);
+                ObjectGuid const key = enemy ? enemy->guid : ObjectGuid();
+
+                CurseKind best = CurseKind::None;
+                uint32 bestSpell = 0;
+                float bestNet = 0.0f;
+                bool bestHeld = false;
+                CurseKind fallback = CurseKind::None;
+                uint32 fallbackSpell = 0;
                 for (CurseKind kind : order)
                 {
-                    if (std::find(taken.begin(), taken.end(), kind) != taken.end())
+                    if (isTaken(key, kind))
                         continue;
                     uint32 const spellId = SpellOf(w->curseSpells, kind);
                     if (!spellId)
                         continue;
-                    out.duties.push_back({ w->guid, spellId, uint8(kind) });
-                    taken.push_back(kind);
-                    break;
+                    if (fallback == CurseKind::None)
+                    {
+                        fallback = kind;
+                        fallbackSpell = spellId;
+                    }
+                    if (!enemy)
+                        break;
+                    float const net = Net(world, *w, *enemy, spellId);
+                    if (net <= 0.0f)
+                        continue;
+                    // The curse it already keeps there stays while it pays; otherwise the best net,
+                    // ties in the count order.
+                    bool const held = OwnCurseOn(*enemy, w->guid, kind);
+                    if (bestHeld)
+                        continue;
+                    if (held || best == CurseKind::None || net > bestNet)
+                    {
+                        best = kind;
+                        bestSpell = spellId;
+                        bestNet = net;
+                        bestHeld = held;
+                    }
                 }
+                // No victim yet, or nothing pays on it: the most wanted one (CurseBehavior
+                // proposes it, the arbiter drops it while it does not pay).
+                if (best == CurseKind::None)
+                {
+                    best = fallback;
+                    bestSpell = fallbackSpell;
+                }
+                if (best == CurseKind::None)
+                    continue;
+                out.duties.push_back({ w->guid, bestSpell, uint8(best) });
+                taken.emplace_back(key, best);
             }
         }
         plan.curses = std::move(out);
