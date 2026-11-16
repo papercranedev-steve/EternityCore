@@ -84,6 +84,10 @@ namespace Commander
                 return HealUse::Normal;
             }
 
+            // Little spirit regeneration, Illumination refunds crits: casts Flash of Light
+            // steadily rather than lift + rest (user 2026-11-16).
+            bool HealsSteadily() const override { return true; }
+
             std::vector<SpellEntry const*> Blessings() const override
             {
                 auto const& s = m_bot.m_spells.paladin;

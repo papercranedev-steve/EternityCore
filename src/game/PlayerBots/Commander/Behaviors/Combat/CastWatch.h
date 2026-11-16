@@ -7,7 +7,7 @@
  * frame, before its bot update throttle: the cast is tracked every frame (cheap pointer
  * compare), the checks below run at most every CHECK_INTERVAL_MS.
  *
- * Only for healer bots, Commander on, `threat` module on, and only for a
+ * Only for healer bots, Commander on, and only for a
  * single-target direct heal with a cast time (not channelled, not area, not chained).
  * Resurrections and any other cast have no heal effect and are never touched. Targets below
  * ThreatBehavior::HEAL_IGNORE_THREAT_PCT are never cancelled.
@@ -20,7 +20,10 @@
  *             on the target (Regrowth) are not cancelled for overheal.
  *             The "dropped since start" rule keeps a heal the rotation chose on purpose for a
  *             small injury from being cancelled straight away and recast in a loop.
- *  Aggro    - the heal's threat (ThreatView::PredictHealThreat on live threat refs, headroom
+ *  Snipe    - a steady healer (ClassKit::HealsSteadily, paladin; user 2026-11-16) starts heals
+ *             before the hits (HealPlan.h): within SNIPE_LEFT_MS of landing, a heal of which
+ *             less than SNIPE_KEEP_FRACTION would be effective is cancelled (no mana spent).
+ *  Aggro    - (`threat` module on) the heal's threat (ThreatView::PredictHealThreat on live threat refs, headroom
  *             from the commander's WorldModel snapshot) makes an enemy turn on the healer.
  *             Enemies not in the snapshot yet are ignored (cancelling is the expensive choice).
  *             At most one aggro cancel per target every AGGRO_CANCEL_COOLDOWN_MS: if the
@@ -63,6 +66,10 @@ namespace Commander
         constexpr float OVERHEAL_KEEP_FRACTION = 0.25f;     // x estimated heal
         constexpr float OVERHEAL_DROP_FRACTION = 0.5f;      // x missing health at cast start
         constexpr uint32 AGGRO_CANCEL_COOLDOWN_MS = 5000;
+        // Snipe (steady healers): looked at in the last SNIPE_LEFT_MS of the cast (at least two
+        // checks), cancelled when less than SNIPE_KEEP_FRACTION of the heal would be effective.
+        constexpr uint32 SNIPE_LEFT_MS = 500;
+        constexpr float SNIPE_KEEP_FRACTION = 0.5f;
 
         // Every frame from PartyBotAI::UpdateAI. True = the cast was cancelled.
         bool Update(PartyBotAI* bot, CastWatchState& state);

@@ -67,6 +67,10 @@
  * priests: ControlsSelfHealOf); nothing else of this module runs for them. Not among the
  * heals Pick chooses from.
  *
+ * Steady healers (ClassKit::HealsSteadily, paladin; user 2026-11-16): no lift + rest rhythm, a
+ * heal starts once the efficient one lands on a deficit (full targets being hit included), the
+ * rank by mana per health; CastWatch cancels one about to land as overheal (HealPlan.h).
+ *
  * Inputs: Value::TakenDps (measured damage or the enemy melee prediction, whichever is larger),
  * PartyMemberFacts::takenBurst for the reserve, mana regeneration and the ManaBudget tension.
  */

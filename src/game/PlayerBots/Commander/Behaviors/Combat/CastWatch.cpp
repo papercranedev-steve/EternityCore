@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Combat/CastWatch.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -28,6 +29,8 @@ namespace Commander
 
             bool directHeal = false;
             periodicOut = false;
+            // Flash of Light heals through a triggered spell (HealSpells::HealingPart).
+            info = HealSpells::HealingPart(info);
             for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
                 if (info->EffectChainTarget[i] > 1)
@@ -98,7 +101,7 @@ namespace CastWatch
             return false;
         state.lastCheckMs = now;
 
-        if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
+        if (!sCommanderMgr.IsEnabled())
             return false;
         if (!target->IsAlive() || !target->IsInWorld() || target->GetMaxHealth() == 0)
             return false;
@@ -135,8 +138,19 @@ namespace CastWatch
             return true;
         }
 
-        // 2. The heal would now pull an enemy off its holder.
-        if (me->IsInCombat() &&
+        // 2. A steady healer's heal about to land on a target that was not hit as expected
+        // (it starts before the hits, HealPlan.h): cancelled, no mana spent; the heal module
+        // starts the next one.
+        if (!state.periodic && leftMs <= SNIPE_LEFT_MS && bot->Kit().HealsSteadily() &&
+            missingAtLanding < SNIPE_KEEP_FRACTION * heal)
+        {
+            me->InterruptSpell(CURRENT_GENERIC_SPELL, true);
+            state.spell = nullptr;
+            return true;
+        }
+
+        // 3. The heal would now pull an enemy off its holder.
+        if (me->IsInCombat() && sCommanderMgr.IsModuleEnabled("threat") &&
             !(state.aggroCancelTarget == targetGuid &&
               WorldTimer::getMSTimeDiff(state.aggroCancelMs, now) < AGGRO_CANCEL_COOLDOWN_MS))
         {

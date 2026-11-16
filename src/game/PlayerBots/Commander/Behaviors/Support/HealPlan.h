@@ -37,6 +37,19 @@
  * A heal that also heals others (Option::otherHeal, Chain Heal; 2026-11-15): the overheal is
  * judged on all of it, and only effective / (effective + otherEffective) of its mana spent counts
  * for this target: the same mana also bought the rest elsewhere. The lift itself (LIFT_MAX_SEC) is the target's own.
+ *
+ * Steady healer (Healer::steady, ClassKit::HealsSteadily: paladin, user 2026-11-16; resting
+ * regains it little, so the lift + rest cycle only left it idle and favoured one big Holy Light
+ * over Flash of Light, strat-20261116-005955):
+ *   deficit   the most efficient heal x (1 - OVERHEAL_MAX), compared with the health missing
+ *             when that heal lands (missing + incoming x its cast): it starts before the hits,
+ *             also on a full target being hit. Mana weight and a ready boost (boostDeficit) do
+ *             not delay it; the boost still goes on a big heal when a gap that big comes.
+ *   rank      the least mana per health healed (no regeneration term), lifting within
+ *             STEADY_LIFT_MAX_SEC: a smaller rank that out-heals the damage slowly beats a big
+ *             expensive one; only damage the cheaper ranks cannot keep up with takes the big one.
+ *   cancel    a heal that would land mostly as overheal is cancelled just before it lands
+ *             (CastWatch, snipe): no mana is spent on a cancelled cast.
  */
 
 #ifndef MANGOS_COMMANDER_HEAL_PLAN_H
@@ -53,6 +66,7 @@ namespace HealPlan
     static constexpr float MIN_RESERVE_PCT = 30.0f;
     static constexpr float MAX_RESERVE_PCT = 70.0f;
     static constexpr float LIFT_MAX_SEC = 8.0f;
+    static constexpr float STEADY_LIFT_MAX_SEC = 20.0f;
     static constexpr float OVERHEAL_MAX = 0.2f;
     static constexpr float EMERGENCY_TTD_SEC = 4.0f;
     static constexpr float LANDING_MARGIN_SEC = 0.5f;
@@ -86,6 +100,8 @@ namespace HealPlan
         float regenCasting = 0.0f;  // inside it
         float tickSec = 1.0f;       // bot update interval
         float manaWeight = 0.0f;    // ManaWeight: 0 plentiful .. 1 scarce
+        // Heals steadily, no lift + rest rhythm (ClassKit::HealsSteadily, paladin; see header).
+        bool steady = false;
     };
 
     struct Option

@@ -349,6 +349,7 @@ namespace Commander
         float const tension = ManaBudgetBehavior::ComputeBudget(bot, world, budget) ? budget.tension : 0.0f;
         float const manaPct = myFacts->maxMana ? float(myFacts->mana) * 100.0f / float(myFacts->maxMana) : 100.0f;
         healer.manaWeight = HealPlan::ManaWeight(tension, manaPct);
+        healer.steady = bot->Kit().HealsSteadily();
 
         BotDirectives const& directives = bot->Directives();
         ClassKit const& kit = bot->Kit();
@@ -358,7 +359,8 @@ namespace Commander
             if (!m.alive || m.charmed)
                 continue;
             Unit* unit = me->GetMap()->GetUnit(m.guid);
-            if (!unit || !bot->IsValidHealTarget(unit))
+            // A steady healer heals before the hits: full targets too (HealPlan.h).
+            if (!unit || !bot->IsValidHealTarget(unit, healer.steady ? 101.0f : 100.0f))
                 continue;
 
             // Castable single-target heals; a HoT of the healer's own that is up is left out

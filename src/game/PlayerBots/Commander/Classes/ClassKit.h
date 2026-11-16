@@ -216,6 +216,11 @@ namespace Commander
         // (user 2026-11-15): Renew never (Heal ranks do more per mana), Regrowth only in an
         // emergency (a fast heal: expensive, its HoT is a bonus).
         virtual HealUse CombatHealUse(SpellEntry const* /*heal*/) const { return HealUse::Normal; }
+        // Resting between heals regains little (paladin, user 2026-11-16: spirit regeneration is
+        // worth little to it): the heal module heals steadily instead of lift + rest
+        // (HealPlan::Healer::steady): starts a heal as soon as one lands on a deficit, picks the
+        // rank by mana per health, and cancels a heal about to land on a target that was not hit.
+        virtual bool HealsSteadily() const { return false; }
         // Paladin blessings and party auras it has learned (best rank, nullptr = not learned).
         // Which one it gives whom is the brain's (Coordination/Duties/BlessingAssigner.h,
         // WorldModel facts PartyMemberFacts::blessingSpells / auraSpells); the rotation casts.

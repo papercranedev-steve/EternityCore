@@ -83,7 +83,9 @@ namespace HealPlan
     {
         Assessment a;
         float const missing = Missing(t);
-        if (missing <= 0.0f || t.maxHealth <= 0.0f || options.empty())
+        // A steady healer looks at a full target being hit too (it heals before the hits).
+        bool const steadyHit = h.steady && t.intake > 0.0f;
+        if ((missing <= 0.0f && !steadyHit) || t.maxHealth <= 0.0f || options.empty())
             return a;
 
         a.reserve = ReserveHealth(t);
@@ -106,6 +108,19 @@ namespace HealPlan
         float const minDeficit = std::min(e.heal, t.maxHealth);
         float const lead = t.intake * (e.castSec + h.tickSec);
         float const maxDeficit = std::max(minDeficit, t.maxHealth - a.reserve - lead);
+        if (h.steady)
+        {
+            // As soon as the efficient heal lands on a deficit it fills (header).
+            a.deficit = minDeficit * (1.0f - OVERHEAL_MAX);
+            if (t.waitDeficit > 0.0f)
+                a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
+            float const atLanding = std::min(t.maxHealth, missing + t.intake * e.castSec);
+            if (t.chained)
+                a.need = Need::Chain;
+            else
+                a.need = atLanding >= a.deficit ? Need::Lift : Need::Rest;
+            return a;
+        }
         a.deficit = minDeficit + (maxDeficit - minDeficit) * h.manaWeight;
         if (t.waitDeficit > 0.0f)
             a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
@@ -180,9 +195,11 @@ namespace HealPlan
             if (t.intake > 0.0f)
             {
                 float const net = hps - t.intake;
-                if (net <= 0.0f || missing / net > LIFT_MAX_SEC)
+                if (net <= 0.0f || missing / net > (h.steady ? STEADY_LIFT_MAX_SEC : LIFT_MAX_SEC))
                     continue;
-                rate = CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
+                // A steady healer does not rest between lifts: mana per health healed (header).
+                rate = h.steady ? o.mana / (o.effective + o.otherEffective)
+                                : CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
             }
             else
                 rate = o.mana / (o.effective + o.otherEffective);   // mana per health healed
