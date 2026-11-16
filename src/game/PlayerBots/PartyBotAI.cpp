@@ -1554,6 +1554,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!me->IsInCombat() && !me->IsMounted())
         SummonPetIfNeeded();
 
+    // (before the auto-repeat step: it returns)
+    UpdateSheath();
+
     if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
     {
         // Auto shot / wand would otherwise skip the Commander hook below (e.g. stop shooting near aggro).
@@ -1698,9 +1701,6 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting && !idleSitting)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
-    if (me->GetSheath() == SHEATH_STATE_UNARMED && !me->IsMounted())
-        me->SetSheath(SHEATH_STATE_MELEE);
-
     // (not while retreating: a 10 s resurrection or a buff next to the enemies stops the run)
     if (!me->IsInCombat() && !me->IsMounted() && !commanderResting &&
         !(commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
@@ -1837,6 +1837,29 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (me->IsInCombat())
         UpdateInCombatAI();
+}
+
+void PartyBotAI::UpdateSheath()
+{
+    if (me->IsMounted())
+        return;
+
+    // Fix: only the client sets the sheath (CMSG_SETSHEATHED, WorldSession::HandleSetSheathedOpcode):
+    // it draws the ranged weapon when a player starts Auto Shot or Shoot, the melee weapons when
+    // it starts a melee attack. A bot has no client, so it kept its melee weapons in hand while
+    // shooting, the gun showing only for the moment of each shot.
+    bool const shooting = me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL) &&
+                          me->GetWeaponForAttack(RANGED_ATTACK, true, false);
+    SheathState const sheath = me->GetSheath();
+    if (shooting)
+    {
+        if (sheath != SHEATH_STATE_RANGED)
+            me->SetSheath(SHEATH_STATE_RANGED);
+    }
+    // As a player's client: the ranged weapon stays out until a melee attack.
+    else if (sheath == SHEATH_STATE_UNARMED ||
+             (sheath == SHEATH_STATE_RANGED && me->HasUnitState(UNIT_STATE_MELEE_ATTACKING)))
+        me->SetSheath(SHEATH_STATE_MELEE);
 }
 
 void PartyBotAI::KeepFacing(Unit* pVictim)
