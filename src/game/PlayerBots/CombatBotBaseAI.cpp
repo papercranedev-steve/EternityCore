@@ -3152,8 +3152,9 @@ SpellCastResult CombatBotBaseAI::DoCastSpellAt(float x, float y, float z, SpellE
     bool const standing = pSpellEntry->GetCastTime(me) > 0 || pSpellEntry->IsChanneledSpell();
     if (standing && !me->IsStopped())
         me->StopMoving();
+    // FaceTo, not Unit::SetFacingTo: no spline packet to reset the cast animation (DoCastSpell).
     if (me->IsStopped())
-        me->SetFacingTo(me->GetAngle(x, y));
+        FaceTo(me->GetAngle(x, y));
 
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
@@ -3201,6 +3202,16 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
     if (m_preventCasting)
         return SPELL_FAILED_DONT_REPORT;
 
+    // Fix: every movement packet must go out before SMSG_SPELL_START. The client plays the
+    // precast animation (Frostbolt's channel pose, a Flash of Light's raised hands) when the
+    // cast starts, and a SMSG_MONSTER_MOVE arriving after it puts the model back to standing:
+    // only the release pose of SMSG_SPELL_GO remained. The bot stopped after the cast, and the
+    // facing spline of Unit::SetFacingTo sets MOVEFLAG_FORWARD (MoveSplineInit::Launch), so
+    // that stop went out after almost every cast on another unit.
+    bool const hasCastTime = pSpellEntry->GetCastTime(me) > 0;
+    if (hasCastTime && (me->IsMoving() || !me->IsStopped()))
+        me->StopMoving();
+
     if (me != pTarget)
     {
         // Fix: Unit::SetFacingToObject does nothing while moving, and its facing spline turns the
@@ -3209,7 +3220,10 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         // SPELL_FAILED_UNIT_NOT_INFRONT, e.g. a tank's Taunt while chasing
         // (strat-20261101-224637). Stop and turn now, as a player turns while running.
         FaceForSpell(pTarget, pSpellEntry);
-        me->SetFacingToObject(pTarget);
+        // Other spells (heals, buffs): a standing bot turns to its target too, with the
+        // player's own facing packet (no spline, see above).
+        if (me->IsStopped() && !me->IsFacingTarget(pTarget))
+            FaceTarget(pTarget);
     }
 
     if (me->IsMounted())
@@ -3228,9 +3242,9 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         m_losFailY = me->GetPositionY();
     }
 
-    if ((result == SPELL_FAILED_MOVING ||
-        result == SPELL_CAST_OK) &&
-        (pSpellEntry->GetCastTime(me) > 0) &&
+    // Already stopped above for a cast time; this is left for a failed cast only (no cast
+    // animation to break).
+    if (result == SPELL_FAILED_MOVING && hasCastTime &&
         (me->IsMoving() || !me->IsStopped()))
         me->StopMoving();
 

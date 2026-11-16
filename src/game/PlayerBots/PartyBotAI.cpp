@@ -1238,7 +1238,8 @@ bool PartyBotAI::CastResurrectionAtCorpse(Corpse* pCorpse, SpellEntry const* pRe
 
     if (!me->IsStopped())
         me->StopMoving();
-    me->SetFacingTo(me->GetAngle(pCorpse));
+    // FaceTo, not Unit::SetFacingTo: no spline packet to reset the cast animation (DoCastSpell).
+    FaceTo(me->GetAngle(pCorpse));
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
