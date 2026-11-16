@@ -95,6 +95,29 @@ namespace Commander
             return true;
         }
 
+        // Walk guard of a walk-in pull (PullAssigner::TARGET_MOVED_YD): why the plan no longer
+        // fits, empty when it still does.
+        std::string WalkGuard(WorldModel const& world, PullPlan const& pull)
+        {
+            if (pull.OpensFromAfar())
+                return std::string();
+            EnemyFacts const* target = world.FindTargeted(pull.target);
+            Position3 at;
+            if (target)
+                at = target->pos;
+            else if (PackCreature const* c = FindPackCreature(world, pull.target))
+                at = c->pos;
+            else
+                return std::string();
+            float const moved = PackResolver::Distance(at, pull.packAt);
+            if (moved > PullAssigner::TARGET_MOVED_YD)
+                return Format("the target walked %.0f yd from where the pull was planned.", moved);
+            RouteFact const* route = world.FindRoute(pull.tank, pull.target);
+            if (route && !route->safeTight && !route->blocker.IsEmpty() && !Contains(pull.expected, route->blocker))
+                return "the walk to the target passes the aggro range of a creature the prediction does not count.";
+            return std::string();
+        }
+
         // How long the pack may take to reach the tank (PullAssigner::ARRIVAL_*).
         uint32 ArrivalTimeoutMs(WorldModel const& world, PullPlan const& pull, Position3 const& tankAt)
         {
@@ -142,6 +165,12 @@ namespace Commander
         auto finish = [&](PullOutcome outcome, std::string const& text)
         {
             plan.notes.push_back(text);
+            // Left Approach without a fight: the tank still has the target (PullBehavior drops it).
+            if (pull.phase == PullPhase::Approach)
+            {
+                pull.standDownTarget = pull.target;
+                pull.standDownUntilMs = now + STAND_DOWN_MS;
+            }
             pull.phase = PullPhase::None;
             plan.lastPullOutcome = outcome;
         };
@@ -150,6 +179,11 @@ namespace Commander
         {
             finish(PullOutcome::Interrupted, "Pull interrupted: " + why +
                 (plan.clear.active ? " Clear goes on after this fight." : ""));
+        };
+        auto callOff = [&](std::string const& why)
+        {
+            finish(PullOutcome::CalledOff, "Pull called off: " + why +
+                (plan.clear.active ? " Clear plans the next pull from here." : " Pull again to plan it from here."));
         };
 
         PartyMemberFacts const* tank = world.FindMember(pull.tank);
@@ -213,6 +247,7 @@ namespace Commander
                 // The opener went out this Approach (PullShotState::openedAtMs, the tank's tick).
                 PullShotState const& shot = pull.rangedShot;
                 uint32 const openedAtMs = shot.approachSinceMs == pull.phaseSinceMs ? shot.openedAtMs : 0;
+                std::string guardWhy;
                 std::vector<ObjectGuid> unexpected;
                 for (EnemyFacts const& e : world.enemies)
                     // (an ally's fight nearby, e.g. a guard, is not ours)
@@ -253,8 +288,16 @@ namespace Commander
                          (!openedAtMs || WorldTimer::getMSTimeDiff(openedAtMs, now) > OPENED_GRACE_MS))
                     interrupt(openedAtMs ? "other enemies came and the pulled ones did not follow." :
                                            "a fight with other enemies started.");
+                else if (pull.ambush)
+                {
+                    // Waits on the patrol's way: no walk-in fallback (it would follow the patrol).
+                    if (elapsed > pull.ambushTimeoutMs)
+                        cancel("the patrol did not come by the ambush spot in time.");
+                }
                 else if (elapsed > APPROACH_TIMEOUT_MS)
                     cancel("tank did not reach the target in 20 seconds.");
+                else if (!openedAtMs && !(guardWhy = WalkGuard(world, pull)).empty())
+                    callOff(guardWhy);
                 else if (pull.rangedPullSpell && elapsed > RANGED_PULL_FALLBACK_MS)
                 {
                     pull.rangedPullSpell = 0;

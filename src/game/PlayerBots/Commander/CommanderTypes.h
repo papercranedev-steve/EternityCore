@@ -51,6 +51,10 @@ namespace Commander
         // resting bot up first.
         Rest,
         HoldFire,   // like Hold, and also stop melee swings / auto shot (keeps the target)
+        // Drop the victim `target` (AttackStop), stop auto shot and the chase; fails when the
+        // victim is another unit. Out of combat the original AI would otherwise walk after a
+        // victim it keeps (PartyBotAI::UpdateAI: BeginChasing). The pet is left alone.
+        DropTarget,
         // Drop the target (AttackStop), stop auto shot, call the pet back; then, if holdMs > 0,
         // move to x/y/z like MoveTo. Always succeeds (also when rooted), so the original
         // rotation never runs and never picks a new target while the party retreats.

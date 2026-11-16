@@ -35,6 +35,7 @@ namespace Commander
                 case BotActionType::Hold:   return "hold";
                 case BotActionType::Rest:   return "rest";
                 case BotActionType::HoldFire: return "holdfire";
+                case BotActionType::DropTarget: return "drop-target";
                 case BotActionType::Retreat: return "retreat";
                 case BotActionType::UseObject: return "use";
                 case BotActionType::UseItem: return "use-item";
@@ -697,6 +698,22 @@ namespace Commander
                     me->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
                     if (Unit* pVictim = me->GetVictim())
                         me->SendMeleeAttackStop(pVictim);
+                }
+                return true;
+            }
+            case BotActionType::DropTarget:
+            {
+                if (!pTarget || me->GetVictim() != pTarget)
+                    return false;
+                if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                    me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+                me->AttackStop();
+                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
+                {
+                    if (!me->IsStopped())
+                        me->StopMoving();
+                    me->GetMotionMaster()->Clear(false, true);
+                    me->GetMotionMaster()->MoveIdle();
                 }
                 return true;
             }

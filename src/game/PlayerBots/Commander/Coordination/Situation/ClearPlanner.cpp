@@ -439,6 +439,14 @@ namespace ClearPlanner
                 plan.lastPullOutcome = PullOutcome::None;
                 ++clear.cleared;
                 break;
+            case PullOutcome::CalledOff:
+                // The plan no longer fitted before the opener (the reason was noted). The same
+                // pack would be planned the same way again: skip it, go on with the next.
+                plan.lastPullOutcome = PullOutcome::None;
+                for (ObjectGuid g : plan.pull.expected)
+                    clear.skipped.push_back(g);
+                ++clear.skippedPacks;
+                break;
             case PullOutcome::None:
                 break;
         }

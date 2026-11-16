@@ -1286,6 +1286,7 @@ namespace DevConsole
             SetFieldS(L, "targetName", target->GetName());
         SetFieldB(L, "ranged", pull.rangedPullSpell != 0);
         SetFieldB(L, "face", pull.facePull);
+        SetFieldB(L, "ambush", pull.ambush);
         SetFieldB(L, "corner", pull.corner);
         SetFieldB(L, "returnToSpot", pull.returnToSpot);
         if (pull.expectedFightSec > 0.0f)

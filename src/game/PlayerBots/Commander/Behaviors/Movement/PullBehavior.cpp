@@ -40,6 +40,10 @@ namespace Commander
                 s.approachSinceMs = pull.phaseSinceMs;
                 s.standAt = pull.facePull ? pull.faceSpot : pull.rangedSpot;
             }
+            // An ambush spot follows the brain's latest look at the patrol's way (the recheck
+            // may run after the tank's first tick of this Approach).
+            if (pull.ambush)
+                s.standAt = pull.faceSpot;
             return s;
         }
 
@@ -211,10 +215,23 @@ namespace Commander
                 case StandWalk::Walking:
                     return true;
                 case StandWalk::Failed:
+                    // Ambush: never after the patrol (PullAssigner's timeout ends the wait).
+                    if (pull.ambush)
+                    {
+                        out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                        return true;
+                    }
                     s.walkIn = true;
                     return false;
                 case StandWalk::Arrived:
                     break;
+            }
+            // Ambush: wait on the patrol's way until it comes by (NoteOpened: once the tank is in
+            // its aggro range); the patrol comes to the tank.
+            if (pull.ambush)
+            {
+                out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                return true;
             }
             if (!s.shotAtMs)
                 s.shotAtMs = now;
@@ -343,10 +360,21 @@ namespace Commander
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         PullPlan const& pull = plan.pull;
+        Player* me = bot->me;
+
+        // The pull ended without a fight while the tank was out (PullPlan::standDownTarget):
+        // drop the target, or the original AI walks after it.
+        if (me->GetObjectGuid() == pull.tank && !pull.standDownTarget.IsEmpty() && !me->IsInCombat() &&
+            me->GetVictim() && me->GetVictim()->GetObjectGuid() == pull.standDownTarget &&
+            WorldTimer::getMSTime() < pull.standDownUntilMs &&
+            (pull.phase == PullPhase::None || pull.phase == PullPhase::WaitReady))
+        {
+            out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::DropTarget, pull.standDownTarget));
+            return;
+        }
+
         if (pull.phase == PullPhase::None || pull.phase == PullPhase::WaitReady)
             return;
-
-        Player* me = bot->me;
 
         if (me->GetObjectGuid() == pull.tank)
         {

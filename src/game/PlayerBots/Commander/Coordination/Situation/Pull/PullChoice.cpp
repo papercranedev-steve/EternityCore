@@ -20,6 +20,7 @@
 #include "Commander/Perception/Spatial/PatrolTracker.h"
 #include "Commander/Perception/Forecast/PullOdds.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
+#include "Commander/Perception/Spatial/AmbushSpot.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -62,6 +63,9 @@ namespace Commander
                 return o.elites < best.elites;
             if (o.caster != best.caster)
                 return !o.caster;
+            // An ambushed patrol: the sooner it comes the better (0 for the others).
+            if (o.waitSec != best.waitSec)
+                return o.waitSec < best.waitSec;
             return o.distance < best.distance;
         }
 
@@ -140,9 +144,61 @@ namespace Commander
         // whichever brings fewer, then fewer elites; a shot on a tie (more room to the aggro
         // ranges). It needs a spot (`avoid`: spots that failed live); none: walks in (`noSpot`,
         // ranked after the candidates that have one).
+        PatrolFacts const* FindPatrol(WorldModel const& world, ObjectGuid guid)
+        {
+            for (PatrolFacts const& p : world.patrols)
+                if (p.guid == guid)
+                    return &p;
+            return nullptr;
+        }
+
+        Option EvaluateAmbush(WorldModel const& world, Map* map, Creature* patrol, PatrolFacts const& facts, Player* tank)
+        {
+            Option o;
+            o.pullTarget = patrol;
+            o.distance = tank->GetDistance(patrol);
+
+            AmbushSpot::Request request;
+            request.patrol = patrol;
+            request.facts = &facts;
+            request.tank = tank;
+            PartyMemberFacts const* leader = world.FindMember(world.leader);
+            request.near = leader ? leader->pos : PositionOf(tank);
+            request.maxFromNearYd = PullPlanner::AMBUSH_MAX_FROM_PARTY_YD;
+            request.maxWaitSec = PullPlanner::AMBUSH_MAX_WAIT_SEC;
+            if (!facts.dbGroupLeader.IsEmpty())
+                for (PatrolFacts const& p : world.patrols)
+                    if (p.guid != facts.guid && p.dbGroupLeader == facts.dbGroupLeader)
+                        request.ignore.push_back(p.guid);
+
+            AmbushSpot::Spot spot;
+            AmbushSpot::Failure why = AmbushSpot::Failure::None;
+            if (!AmbushSpot::Find(world, map, request, spot, &why))
+            {
+                o.noAmbush = true;
+                o.noAmbushWhy = AmbushSpot::FailureName(why);
+                return o;
+            }
+            o.ambush = true;
+            o.waitSec = spot.arriveSec;
+            o.meetAt = spot.meetAt;
+            o.spot.at = spot.at;
+            o.spot.range = PackResolver::Distance(spot.at, spot.meetAt);
+            o.spot.clearance = ShotSpot::NO_CREATURE_CLEARANCE;
+            o.expected.push_back(patrol->GetObjectGuid());
+            AddUnique(o.expected, AssistPredictor::Guids(
+                AssistPredictor::ExpandAt(patrol, spot.meetAt, tank, std::vector<ObjectGuid>())));
+            o.elites = CountElites(map, o.expected);
+            return o;
+        }
+
         Option Evaluate(WorldModel const& world, Map* map, Creature* c, Player* tank, Openers const& op,
                         std::vector<Position3> const& avoid)
         {
+            // A patrol is pulled where it will be, never walked after (AmbushSpot.h).
+            if (PatrolFacts const* patrol = FindPatrol(world, c->GetObjectGuid()))
+                return EvaluateAmbush(world, map, c, *patrol, tank);
+
             Option o;
             o.pullTarget = c;
             o.distance = tank->GetDistance(c);
@@ -210,7 +266,7 @@ namespace Commander
         // skipped (the tank cannot target them and would walk for 20 seconds) and counted.
         Option ChooseOption(WorldModel const& world, Map* map, PackFacts const* pack,
                             std::vector<ObjectGuid> const& candidates, std::vector<ObjectGuid> const& excluded,
-                            Player* tank, Openers const& op, uint32& stealthed)
+                            Player* tank, Openers const& op, uint32& stealthed, std::vector<std::string>* passed)
         {
             // A pack with a hostile member is pulled through a hostile one. strat-20261103-005941:
             // a neutral Ghostly Citizen wandering in the Ravaged Cadaver pack brought only
@@ -234,6 +290,13 @@ namespace Commander
                     continue;
                 }
                 Option o = Evaluate(world, map, c, tank, op);
+                if (o.noAmbush)
+                {
+                    if (passed)
+                        passed->push_back(Format("Passed over %s (patrol): no spot on its way within %.0f s (%s).",
+                            c->GetName(), PullPlanner::AMBUSH_MAX_WAIT_SEC, o.noAmbushWhy));
+                    continue;
+                }
                 if (Better(o, best))
                     best = std::move(o);
             }
@@ -260,7 +323,8 @@ namespace Commander
             {
                 std::vector<ObjectGuid> candidates;
                 for (PackCreature const& m : pack->members)
-                    candidates.push_back(m.guid);
+                    if (!FindPatrol(world, m.guid))     // an ambush is no shot
+                        candidates.push_back(m.guid);
                 uint32 stealthed = 0;
                 // Already a ranged pull: only a member that can be shot is an alternative.
                 Openers shotOnly;

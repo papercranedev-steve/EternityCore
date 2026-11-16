@@ -55,6 +55,13 @@ namespace Commander
             pull.holdSpellId = held ? patrols.holdSpellId : 0;
         }
 
+        // Approach of an ambush ends by then (PullPlan::ambushTimeoutMs): the predicted arrival
+        // plus PullAssigner::AMBUSH_EXTRA_MS.
+        uint32 AmbushTimeoutMs(float waitSec)
+        {
+            return uint32(std::max(0.0f, waitSec) * 1000.0f) + PullAssigner::AMBUSH_EXTRA_MS;
+        }
+
         // Warrior ranged weapon spells (learned with the weapon skill) and Auto Shot.
         uint32 const SPELL_SHOOT_BOW = 2480;
         uint32 const SPELL_SHOOT_GUN = 7918;
@@ -257,43 +264,6 @@ namespace Commander
                 candidates.push_back(selected->GetObjectGuid());
             }
         }
-        else
-        {
-            uint32 tapped = 0;
-            uint32 bosses = 0;
-            for (PackFacts const& p : world.packs)
-            {
-                // No-aggro creatures never start a fight, so they do not make a pack worth pulling.
-                bool const hostile = AnyMember(p, [](PackCreature const& c) { return c.aggressive && !c.noAggro; });
-                if (!hostile)
-                    continue;
-                if (AnyMember(p, [](PackCreature const& c) { return c.boss; }))
-                {
-                    ++bosses;       // only when the player selects it
-                    continue;
-                }
-                if (AnyMember(p, [](PackCreature const& c) { return c.tappedByOther; }))
-                {
-                    ++tapped;
-                    continue;
-                }
-                pack = &p;
-                break;  // packs are sorted nearest first
-            }
-            if (bosses)
-                notes.push_back(Format("Passed over %u pack(s) with a boss; select the boss to pull it.", bosses));
-            if (tapped)
-                notes.push_back(Format("Passed over %u pack(s) someone else is fighting.", tapped));
-            if (!pack)
-            {
-                report.push_back("No hostile pack within 50 yards.");
-                report.insert(report.end(), notes.begin(), notes.end());
-                return false;
-            }
-            for (PackCreature const& m : pack->members)
-                candidates.push_back(m.guid);
-        }
-
         // The leader's pull method (PullMethod.h): melee never opens from a distance, ranged
         // only shoots, face only face pulls, auto may do either.
         PullMethod const method = sCommanderMgr.GetPullMethod(leader->GetObjectGuid());
@@ -315,14 +285,65 @@ namespace Commander
         openers.face = method == PullMethod::Auto || method == PullMethod::Face;
         openers.forced = forceRanged || method == PullMethod::Face;
 
-        // Each candidate is judged with its best approach (walk in, or open from a shot or face
-        // pull spot), then ranked (Better).
+        // Each candidate is judged with its best approach (walk in, open from a shot or face
+        // pull spot, ambush a patrol on its way), then ranked (Better).
         uint32 stealthed = 0;
-        Option best = ChooseOption(world, map, pack, candidates, std::vector<ObjectGuid>(), tank, openers, stealthed);
+        std::vector<std::string> passed;    // patrols without an ambush spot
+        Option best;
+        if (selected)
+            best = ChooseOption(world, map, pack, candidates, std::vector<ObjectGuid>(), tank, openers, stealthed, &passed);
+        else
+        {
+            // The nearest pack that has a pull. A patrol passing far off has no ambush spot
+            // now: the pack behind it is pulled instead (its patrol check still counts it).
+            uint32 tapped = 0;
+            uint32 bosses = 0;
+            bool anyHostile = false;
+            for (PackFacts const& p : world.packs)      // sorted nearest first
+            {
+                // No-aggro creatures never start a fight, so they do not make a pack worth pulling.
+                bool const hostile = AnyMember(p, [](PackCreature const& c) { return c.aggressive && !c.noAggro; });
+                if (!hostile)
+                    continue;
+                anyHostile = true;
+                if (AnyMember(p, [](PackCreature const& c) { return c.boss; }))
+                {
+                    ++bosses;       // only when the player selects it
+                    continue;
+                }
+                if (AnyMember(p, [](PackCreature const& c) { return c.tappedByOther; }))
+                {
+                    ++tapped;
+                    continue;
+                }
+                std::vector<ObjectGuid> members;
+                for (PackCreature const& m : p.members)
+                    members.push_back(m.guid);
+                Option o = ChooseOption(world, map, &p, members, std::vector<ObjectGuid>(), tank, openers, stealthed, &passed);
+                if (!o.pullTarget)
+                    continue;
+                pack = &p;
+                candidates = std::move(members);
+                best = std::move(o);
+                break;
+            }
+            if (bosses)
+                notes.push_back(Format("Passed over %u pack(s) with a boss; select the boss to pull it.", bosses));
+            if (tapped)
+                notes.push_back(Format("Passed over %u pack(s) someone else is fighting.", tapped));
+            if (!anyHostile)
+            {
+                report.push_back("No hostile pack within 50 yards.");
+                report.insert(report.end(), notes.begin(), notes.end());
+                return false;
+            }
+        }
+        notes.insert(notes.end(), passed.begin(), passed.end());
         if (!best.pullTarget)
         {
-            report.push_back(stealthed ? "Only stealthed creatures left in that pack; the tank cannot target them."
-                                       : "No pullable creature in that pack.");
+            report.push_back(stealthed ? "Only stealthed creatures left; the tank cannot target them."
+                                       : selected ? "No pullable creature in that pack." : "No pullable pack nearby.");
+            report.insert(report.end(), notes.begin(), notes.end());
             return false;
         }
 
@@ -365,8 +386,9 @@ namespace Commander
         placeIn.haveEstimate = haveLoad;
         placeIn.estimate = estimate;
         FightPlace::Choice const place = FightPlace::Choose(placeIn);
-        bool const returnToSpot = place.place == FightPlace::Kind::BringBack;
-        bool const corner = place.place == FightPlace::Kind::Corner;
+        // An ambushed patrol is fought where it meets the tank (the spot is near the party).
+        bool const returnToSpot = !best.ambush && place.place == FightPlace::Kind::BringBack;
+        bool const corner = !best.ambush && place.place == FightPlace::Kind::Corner;
 
         // Bringing them back: open from range when the tank can (and that brings no more).
         ShotSpot::Spot returnSpot;
@@ -404,7 +426,7 @@ namespace Commander
         pull.aggroRangeAdds = best.aggroAdds;
         pull.spot = spot;
         pull.returnToSpot = returnToSpot;
-        pull.packAt = PositionOf(best.pullTarget);
+        pull.packAt = best.ambush ? best.meetAt : PositionOf(best.pullTarget);
         if (haveLoad && estimate.fightSec > 0.0f)
         {
             pull.expectedIncomingDps = estimate.damage / estimate.fightSec;
@@ -421,7 +443,14 @@ namespace Commander
         pull.healerManaPct = HealerManaNeededPct(load, haveLoad);
         // `pull now` means now: no second prediction, no waiting for patrols.
         pull.recheckOnApproach = !skipReady;
-        if (best.ranged)
+        if (best.ambush)
+        {
+            pull.facePull = true;
+            pull.faceSpot = best.spot.at;
+            pull.ambush = true;
+            pull.ambushTimeoutMs = AmbushTimeoutMs(best.waitSec);
+        }
+        else if (best.ranged)
         {
             pull.rangedPullSpell = rangedSpell;
             pull.rangedPullRange = rangedRange;
@@ -450,7 +479,10 @@ namespace Commander
                 "melee before casters, nearest).", uint32(candidates.size())));
         if (stealthedAdded)
             report.push_back(Format("Counted %u stealthed creature(s) of the pack.", stealthedAdded));
-        if (best.ranged)
+        if (best.ambush)
+            report.push_back(Format("Ambush: %s patrols. %s waits on its way %.0f yd from you; it comes by in about %.0f s.",
+                best.pullTarget->GetName(), tank->GetName(), PackResolver::Distance(best.spot.at, spot), best.waitSec));
+        else if (best.ranged)
         {
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(rangedSpell);
             std::string const clearance = best.spot.clearance < ShotSpot::NO_CREATURE_CLEARANCE
@@ -478,7 +510,11 @@ namespace Commander
             report.push_back(Format("Walking in brings %u by aggro range; %s has no ranged pull (warrior: bow/gun/crossbow "
                 "with ammo or a thrown weapon; druid: Faerie Fire (Feral)).", best.meleeAggroAddsNoRanged, tank->GetName()));
         std::string const odds = PullOdds::Describe(map, edge, packRisk);
-        if (pull.returnToSpot)
+        if (pull.ambush)
+        {
+            // (fought where it meets the tank: said above)
+        }
+        else if (pull.returnToSpot)
             report.push_back(Format("Tank brings them back to where you stand, walking backwards (%s; at your spot %.1f).",
                 odds.c_str(), spotRisk.total));
         else if (!distant)
@@ -582,7 +618,7 @@ namespace Commander
 
         // Held before (patrol or over the limit) and predicted a moment ago: still held. The
         // first recheck of a pull (nothing held yet) always runs.
-        bool const patrolWait = pull.patrolWaitSinceMs != 0;
+        bool const patrolWait = pull.patrolWaitSinceMs != 0 || pull.ambushWaitSinceMs != 0;
         if (patrolWait || pull.recheckWaitSinceMs)
         {
             uint32 const interval = patrolWait ? RECHECK_PATROL_WAIT_MS : RECHECK_HOLD_MS;
@@ -599,47 +635,97 @@ namespace Commander
         //    next to the target while the party got ready (combat scenario 13, 3:10).
         //    A ranged pull looks for its shot spot again first (from where the tank stands now);
         //    none: another target, then the whole recheck again for it.
+        std::vector<ObjectGuid> expected;
+        std::vector<ObjectGuid> aggroAdds;
         Position3 standAt = MeleeStandPoint(target, tank);
-        if (pull.rangedPullSpell)
+        if (pull.ambush)
         {
-            ShotSpot::Spot spot;
-            ShotSpot::Failure spotWhy = ShotSpot::Failure::None;
-            if (!FindShotSpot(map, target, tank, pull.rangedPullSpell, pull.rangedPullRange, pull.failedSpots, spot, spotWhy))
+            // An ambushed patrol walked on while the party got ready: its spot again.
+            PatrolFacts const* facts = FindPatrol(world, pull.target);
+            Option const o = facts ? EvaluateAmbush(world, map, target, *facts, tank) : Option();
+            if (!o.ambush)
             {
-                ReplaceUnshootableTarget(plan, world, map, tank, target, ShotSpot::FailureName(spotWhy), nowMs);
+                char const* noWhy = facts ? o.noAmbushWhy : "it does not patrol any more";
+                if (!pull.ambushWaitSinceMs)
+                {
+                    pull.ambushWaitSinceMs = nowMs;
+                    plan.notes.push_back(Format("No spot on %s's way now (%s): waiting for it to come round.",
+                        target->GetName(), noWhy));
+                }
+                else if (WorldTimer::getMSTimeDiff(pull.ambushWaitSinceMs, nowMs) > PATROL_WAIT_MAX_MS)
+                {
+                    if (clear.active)
+                    {
+                        why = Format("no spot on patrol %s's way for %u seconds", target->GetName(),
+                            PATROL_WAIT_MAX_MS / 1000);
+                        AddUnique(pull.expected, std::vector<ObjectGuid>{ pull.target });
+                        return RecheckResult::GiveUp;
+                    }
+                    plan.notes.push_back(Format("Pull cancelled: no spot on %s's way for %u seconds (%s).",
+                        target->GetName(), PATROL_WAIT_MAX_MS / 1000, noWhy));
+                    pull.phase = PullPhase::None;
+                    plan.lastPullOutcome = PullOutcome::Cancelled;
+                    return RecheckResult::NotDue;
+                }
                 holdBack();
                 return RecheckResult::Hold;
             }
-            pull.rangedSpot = spot.at;
-            standAt = spot.at;
+            if (pull.ambushWaitSinceMs)
+                plan.notes.push_back(Format("%s comes by in about %.0f s: ambush.", target->GetName(), o.waitSec));
+            pull.ambushWaitSinceMs = 0;
+            pull.faceSpot = o.spot.at;
+            pull.packAt = o.meetAt;
+            pull.ambushTimeoutMs = AmbushTimeoutMs(o.waitSec);
+            expected = o.expected;
         }
-        else if (pull.facePull)
+        else
         {
-            ShotSpot::Spot spot;
-            ShotSpot::Failure spotWhy = ShotSpot::Failure::None;
-            if (FindFaceSpot(world, map, target, tank, std::vector<Position3>(), spot, spotWhy))
+            if (pull.rangedPullSpell)
             {
-                pull.faceSpot = spot.at;
+                ShotSpot::Spot spot;
+                ShotSpot::Failure spotWhy = ShotSpot::Failure::None;
+                if (!FindShotSpot(map, target, tank, pull.rangedPullSpell, pull.rangedPullRange, pull.failedSpots, spot,
+                                  spotWhy))
+                {
+                    ReplaceUnshootableTarget(plan, world, map, tank, target, ShotSpot::FailureName(spotWhy), nowMs);
+                    holdBack();
+                    return RecheckResult::Hold;
+                }
+                pull.rangedSpot = spot.at;
                 standAt = spot.at;
             }
-            else
+            else if (pull.facePull)
             {
-                pull.facePull = false;
-                plan.notes.push_back(Format("No spot to face pull %s from now (%s): walking in.", target->GetName(),
-                    ShotSpot::FailureName(spotWhy)));
+                ShotSpot::Spot spot;
+                ShotSpot::Failure spotWhy = ShotSpot::Failure::None;
+                if (FindFaceSpot(world, map, target, tank, std::vector<Position3>(), spot, spotWhy))
+                {
+                    pull.faceSpot = spot.at;
+                    standAt = spot.at;
+                }
+                else
+                {
+                    pull.facePull = false;
+                    plan.notes.push_back(Format("No spot to face pull %s from now (%s): walking in.", target->GetName(),
+                        ShotSpot::FailureName(spotWhy)));
+                }
             }
-        }
-        std::vector<AssistPredictor::Joiner> const joiners = AssistPredictor::PredictDetailed(target, tank, &standAt);
-        std::vector<ObjectGuid> expected = AssistPredictor::Guids(joiners);
-        std::vector<ObjectGuid> aggroAdds = AggroRangeGuids(joiners);
-        // A caster opened from a distance does not come: the tank walks to it afterwards, so
-        // the walk-in aggro range counts as well (same as the planner, Evaluate).
-        if (pull.OpensFromAfar() && IsRangedCaster(target))
-        {
-            Position3 const meleeAt = MeleeStandPoint(target, tank);
-            std::vector<ObjectGuid> const walkIn = AggroRangeGuids(AssistPredictor::PredictDetailed(target, tank, &meleeAt));
-            AddUnique(expected, walkIn);
-            AddUnique(aggroAdds, walkIn);
+            std::vector<AssistPredictor::Joiner> const joiners = AssistPredictor::PredictDetailed(target, tank, &standAt);
+            expected = AssistPredictor::Guids(joiners);
+            aggroAdds = AggroRangeGuids(joiners);
+            // A caster opened from a distance does not come: the tank walks to it afterwards, so
+            // the walk-in aggro range counts as well (same as the planner, Evaluate).
+            if (pull.OpensFromAfar() && IsRangedCaster(target))
+            {
+                Position3 const meleeAt = MeleeStandPoint(target, tank);
+                std::vector<ObjectGuid> const walkIn = AggroRangeGuids(AssistPredictor::PredictDetailed(target, tank, &meleeAt));
+                AddUnique(expected, walkIn);
+                AddUnique(aggroAdds, walkIn);
+            }
+            // A walk-in is predicted for where the target stands now: the walk guard measures
+            // from here (PullAssigner::TARGET_MOVED_YD).
+            if (!pull.OpensFromAfar())
+                pull.packAt = PositionOf(target);
         }
         // Stealthed pack members were added by the planner, keep counting them.
         for (ObjectGuid g : pull.expected)

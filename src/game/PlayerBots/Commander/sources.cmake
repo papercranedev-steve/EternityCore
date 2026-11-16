@@ -303,6 +303,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/Spatial/ShotSpot.h
   ${COMMANDER_DIR}/Perception/Spatial/ShotSpot.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/AmbushSpot.h
+  ${COMMANDER_DIR}/Perception/Spatial/AmbushSpot.cpp
   ${COMMANDER_DIR}/Perception/Spatial/StealthDetect.h
   ${COMMANDER_DIR}/Perception/Spatial/StealthDetect.cpp
   ${COMMANDER_DIR}/Perception/Spatial/SapSpot.h

@@ -20,6 +20,10 @@
  *                     Face pull (PullPlan::facePull): walk to PullPlan::faceSpot the same way,
  *                     then stand there facing the target and do nothing; not noticed within
  *                     FACE_WAIT_MS: walk-in pull.
+ *                     Ambush of a patrol (PullPlan::ambush, a face pull on its way): walk
+ *                     there and wait until it comes by; never walks in after it.
+ *           After the pull ended without a fight (PullPlan::standDownTarget): out of
+ *           combat, drop that target (DropTarget), else the original AI chases it.
  *                     When the opener went out (pull spell or Charge executed, standing on the
  *                     face pull spot, or inside the target's aggro range) it writes
  *                     PullShotState::openedAtMs: PullAssigner no longer calls the pull off.

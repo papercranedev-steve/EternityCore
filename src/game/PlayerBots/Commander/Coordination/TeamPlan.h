@@ -40,6 +40,10 @@ namespace Commander
         // Another fight started before the pull did (player attacked, a patrol walked in).
         // `.partybot ai clear` waits for that fight to end and goes on.
         Interrupted,
+        // The tank stopped before the opener because the plan no longer fits (PullAssigner's
+        // walk guard: the walk passes creatures the prediction did not count, the target
+        // walked off). `.partybot ai clear` plans the next pull from where things are now.
+        CalledOff,
     };
 
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
@@ -263,6 +267,22 @@ namespace Commander
         // Opens from a distance (shot or face pull): fought in place, the tank waits where it
         // opened (awaitArrival).
         bool OpensFromAfar() const { return rangedPullSpell || facePull; }
+
+        // Ambush of a patrol (Perception/Spatial/AmbushSpot.h, chosen in PullChoice): a face
+        // pull whose faceSpot lies on the patrol's way. The tank walks there and waits until the
+        // patrol comes by, never walks after it (FACE_WAIT_MS and the walk-in fallbacks do not
+        // apply). Approach ends by ambushTimeoutMs (from the Approach's start: the predicted
+        // arrival + PullAssigner::AMBUSH_EXTRA_MS). ambushWaitSinceMs: the recheck found no
+        // spot on the patrol's way since then (held in WaitReady), 0 = not waiting.
+        bool ambush = false;
+        uint32 ambushTimeoutMs = 0;
+        uint32 ambushWaitSinceMs = 0;
+
+        // The tank left Approach without a fight (cancelled, interrupted, called off): it still
+        // has the target as its victim, and the original AI would chase it. PullBehavior drops
+        // it (BotActionType::DropTarget) while out of combat, until standDownUntilMs.
+        ObjectGuid standDownTarget;
+        uint32 standDownUntilMs = 0;
 
         // Fight at a corner (PullPlace.h). Where the party fights (here, brought back: returnToSpot,
         // corner) is the doctrine's choice (Coordination/Doctrine/FightPlace.h, FightPlace::Choose),

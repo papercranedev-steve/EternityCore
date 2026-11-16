@@ -132,6 +132,17 @@ namespace Commander
         // backwards facing the pack with charges vetoed (PullBehavior).
         float const RETURN_MIN_DISTANCE = 15.0f;
 
+        // Patrol targets (WorldModel::patrols) are ambushed on their way, never walked after
+        // (PullChoice EvaluateAmbush, Perception/Spatial/AmbushSpot.h): a spot within
+        // AMBUSH_MAX_FROM_PARTY_YD of the leader where the patrol comes by within
+        // AMBUSH_MAX_WAIT_SEC. None: the patrol is passed over and, without a selection, the
+        // next pack is pulled (it flew off: no point waiting; the patrol check of that pull
+        // still counts it). Ranked like any candidate, the sooner it comes the better on a tie.
+        // The recheck before the tank goes looks for the spot again; none for
+        // PATROL_WAIT_MAX_MS: the clear skips it, a single pull is cancelled.
+        float const AMBUSH_MAX_WAIT_SEC = 15.0f;
+        float const AMBUSH_MAX_FROM_PARTY_YD = 35.0f;
+
         // Patrols (PatrolTracker, WorldModel::patrols), also those the prediction counts as
         // joiners because they walk past the pack right now (strat-20261103-013312): a patrol
         // joins when its walk comes within max(PATROL_MIN_CLEARANCE, its aggro range) of any
@@ -210,6 +221,21 @@ namespace Commander
         // shows up first does not end the pull: the pulled ones get this long to come (charge
         // flight, shot travel, a face pulled target turning round). Then it is Interrupted.
         static constexpr uint32 OPENED_GRACE_MS = 3 * 1000;
+        // Walk guard of a walk-in pull, before the fight starts (230431: the tank followed a
+        // patrolling gargoyle 70 yd into an idle pack). The pull is called off
+        // (PullOutcome::CalledOff) when
+        //  - the tank's walk to the target (WorldModel::routes, MeleeRoutes) comes into the
+        //    aggro range of an idle creature the prediction does not count, on the hard line
+        //    (RouteFact::safeTight false, a blocker not in PullPlan::expected), or
+        //  - the target is more than TARGET_MOVED_YD from where it was planned (packAt): the
+        //    prediction was made for another place.
+        // A shot or face pull has its own checked spot and walk (ShotSpot, AmbushSpot).
+        static constexpr float TARGET_MOVED_YD = 15.0f;
+        // Ambush (PullPlan::ambush): the patrol has this long after its predicted arrival.
+        static constexpr uint32 AMBUSH_EXTRA_MS = 8 * 1000;
+        // The tank drops the target it still has after a pull ended without a fight (PullPlan::
+        // standDownTarget) for this long.
+        static constexpr uint32 STAND_DOWN_MS = 3 * 1000;
         // Return lasts at most the walk at run-back speed (Backpedal) x RETURN_TIME_FACTOR plus
         // RETURN_TIMEOUT_MS, and no more than RETURN_TIMEOUT_MAX_MS.
         static constexpr uint32 RETURN_TIMEOUT_MS = 8 * 1000;

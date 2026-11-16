@@ -40,6 +40,15 @@ namespace Commander
             ShotSpot::Failure noSpotWhy = ShotSpot::Failure::None;
             // Walking in would bring this many by aggro range and the tank has no ranged pull.
             uint32 meleeAggroAddsNoRanged = 0;
+            // A patrol (WorldModel::patrols) is never walked after: it is ambushed on its way
+            // (Perception/Spatial/AmbushSpot.h) from `spot.at`, where it comes by in `waitSec`
+            // seconds at `meetAt`. No spot within PullPlanner::AMBUSH_MAX_WAIT_SEC: noAmbush,
+            // not a candidate (ChooseOption leaves it out).
+            bool ambush = false;
+            float waitSec = 0.0f;
+            Position3 meetAt;
+            bool noAmbush = false;
+            char const* noAmbushWhy = "";
         };
 
         // How the tank may open from a distance (the leader's PullMethod).
@@ -64,10 +73,18 @@ namespace Commander
 
         // Best pull among `candidates` (target choice in PullChoice.cpp, Better), leaving out
         // `excluded`. Stealthed members are skipped (the tank cannot target them and would walk
-        // for 20 seconds) and counted.
+        // for 20 seconds) and counted. Patrols without an ambush spot are skipped; `passed`, if
+        // given, gets a line for each.
         Option ChooseOption(WorldModel const& world, Map* map, PackFacts const* pack,
                             std::vector<ObjectGuid> const& candidates, std::vector<ObjectGuid> const& excluded,
-                            Player* tank, Openers const& op, uint32& stealthed);
+                            Player* tank, Openers const& op, uint32& stealthed,
+                            std::vector<std::string>* passed = nullptr);
+
+        // Ambush of `patrol` (its facts in WorldModel::patrols): where the tank waits, what comes
+        // (the patrol, its group and the creatures it calls from where it meets the tank:
+        // AssistPredictor::ExpandAt). Option::noAmbush when there is no spot.
+        Option EvaluateAmbush(WorldModel const& world, Map* map, Creature* patrol, PatrolFacts const& facts, Player* tank);
+        PatrolFacts const* FindPatrol(WorldModel const& world, ObjectGuid guid);
 
         // No shot spot works for the pull's target. Another pack member that has a spot becomes
         // the target (at most PullPlanner::MAX_TARGET_SWITCHES); none: the tank walks in on the
