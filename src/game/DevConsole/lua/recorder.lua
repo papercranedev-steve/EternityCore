@@ -75,7 +75,9 @@ rec.traceStartMs = rec.traceStartMs or 2000
 --   danger    trace around high anomalies only (deaths, heal gaps, player marks, ...)
 -- The fight's start and the pull planning are written at every level. Set with rec.level = "..."
 -- (wowdbg.ps1); it is read when a fight begins and written in the begin line.
-rec.level = rec.level or "warning"
+-- Default verbose (user 2026-11-16): a question about a fight usually comes after it, when the
+-- level can no longer be raised.
+rec.level = rec.level or "verbose"
 local LEVEL_MIN_SEV = { verbose = 1, normal = 1, warning = 2, danger = 3 }
 local SEV_RANK = { low = 1, mid = 2, high = 3 }
 
@@ -422,7 +424,7 @@ local function beginFight(w, members)
     w.unitStatic = {}
     w.decRuns = {}
     w.anomaliesSeen = 0
-    w.level = LEVEL_MIN_SEV[rec.level] and rec.level or "warning"
+    w.level = LEVEL_MIN_SEV[rec.level] and rec.level or "verbose"
     if w.level == "verbose" then
         openTraceWindow(w, w.fightStart - 1000, math.huge)
     else
