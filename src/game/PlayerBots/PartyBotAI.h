@@ -224,6 +224,10 @@ public:
     // (CastRescueWhileControlled).
     void BreakControl();
     bool CastRescueWhileControlled();
+    // Feign Death (hunter): up again once it did its job, at least FEIGN_DEATH_MIN_MS after the
+    // cast and nothing still hitting the bot; it stays down while the wipe plan hides it.
+    static constexpr uint32 FEIGN_DEATH_MIN_MS = 1000;
+    bool ShouldEndFeignDeath() const;
     // While the party fights a Commander stance module places this healer, ranged (keeping a
     // caster distance), melee damage bot or tank (Takeover::Stance: HealerStanceBehavior,
     // RangedStanceBehavior, MeleeStanceBehavior, TankStanceBehavior), also before it is in

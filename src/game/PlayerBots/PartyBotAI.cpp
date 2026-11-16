@@ -307,6 +307,41 @@ bool PartyBotAI::CastRescueWhileControlled()
     return DoCastSpell(target, spell) == SPELL_CAST_OK;
 }
 
+bool PartyBotAI::ShouldEndFeignDeath() const
+{
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (commander)
+    {
+        // The fight is lost (WipeAssigner): lie still until it is over, to run back for the others.
+        Commander::WipePlan const& wipe = commander->GetPlan().wipe;
+        if (wipe.active)
+            for (Commander::WipeHider const& h : wipe.hiders)
+                if (h.bot == me->GetObjectGuid())
+                    return false;
+    }
+
+    // The enemies pick their next victim on their own update: give them that time first.
+    Unit::AuraList const& feigns = me->GetAurasByType(SPELL_AURA_FEIGN_DEATH);
+    if (!feigns.empty())
+    {
+        Aura const* aura = feigns.front();
+        int32 const maxMs = aura->GetAuraMaxDuration();
+        if (maxMs > 0 && maxMs - aura->GetAuraDuration() < int32(FEIGN_DEATH_MIN_MS))
+            return false;
+    }
+
+    // The threat is gone (Unit::SetFeignDeath): up again once nothing still hits this bot.
+    // The pet keeps the hunter in combat, so the combat flag is not the signal: up to
+    // 2026-11-16 it waited for the pet to leave combat and lay there the whole fight.
+    if (!me->GetAttackers().empty())
+        return false;
+    if (commander)
+        for (Commander::EnemyFacts const& e : commander->GetWorld().enemies)
+            if (e.victim == me->GetObjectGuid())
+                return false;
+    return true;
+}
+
 bool PartyBotAI::IsStealthControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Stealth, WorldTimer::getMSTime());
@@ -1495,8 +1530,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     }
 
     if (me->HasUnitState(UNIT_STATE_FEIGN_DEATH) && me->HasAuraType(SPELL_AURA_FEIGN_DEATH) &&
-       !me->IsInCombat() && (!me->GetPet() || !me->GetPet()->IsInCombat()) &&
-       !me->SelectRandomUnfriendlyTarget(nullptr, 20.0f, false, true))
+        ShouldEndFeignDeath())
         me->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
 
     if (me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
