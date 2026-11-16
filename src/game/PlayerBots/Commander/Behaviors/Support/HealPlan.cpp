@@ -114,6 +114,10 @@ namespace HealPlan
             a.deficit = minDeficit * (1.0f - OVERHEAL_MAX);
             if (t.waitDeficit > 0.0f)
                 a.deficit = std::max(a.deficit, std::min(t.waitDeficit, maxDeficit));
+            // A ready boost: a target being hit whose safe deficit holds it is let sink until
+            // one boosted big heal fills it (else steady healing never leaves a gap that big).
+            if (t.boostDeficit > 0.0f && t.intake > 0.0f && t.boostDeficit <= maxDeficit)
+                a.deficit = std::max(a.deficit, t.boostDeficit);
             float const atLanding = std::min(t.maxHealth, missing + t.intake * e.castSec);
             if (t.chained)
                 a.need = Need::Chain;

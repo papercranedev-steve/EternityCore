@@ -43,8 +43,11 @@
  * over Flash of Light, strat-20261116-005955):
  *   deficit   the most efficient heal x (1 - OVERHEAL_MAX), compared with the health missing
  *             when that heal lands (missing + incoming x its cast): it starts before the hits,
- *             also on a full target being hit. Mana weight and a ready boost (boostDeficit) do
- *             not delay it; the boost still goes on a big heal when a gap that big comes.
+ *             also on a full target being hit. Mana weight does not delay it. A ready boost
+ *             (boostDeficit, Divine Favor; user 2026-11-16: "save up a big one") does, on a
+ *             target being hit whose safe deficit holds it: that one sinks until the boosted big
+ *             heal fills it, the others get the steady heals. A target nobody hits is not held
+ *             (its gap would not grow).
  *   rank      the least mana per health healed (no regeneration term), lifting within
  *             STEADY_LIFT_MAX_SEC: a smaller rank that out-heals the damage slowly beats a big
  *             expensive one; only damage the cheaper ranks cannot keep up with takes the big one.
