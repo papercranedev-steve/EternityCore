@@ -1338,11 +1338,22 @@ namespace WorldModelBuilder
         // Paladin blessings and party auras: ClassKit::Blessings / PartyAuras.
         void FillPaladinBuffs(PartyBotAI const* ai, PartyMemberFacts& f)
         {
-            for (SpellEntry const* spell : ai->Kit().Blessings())
+            std::vector<SpellEntry const*> const blessings = ai->Kit().Blessings();
+            for (SpellEntry const* spell : blessings)
             {
                 BlessingKind const kind = PaladinBuffs::BlessingOf(spell);
-                if (kind != BlessingKind::None)
+                if (kind != BlessingKind::None && !PaladinBuffs::IsGreaterBlessing(spell))
                     f.blessingSpells.push_back({ spell->Id, uint8(kind) });
+            }
+            // A Greater Blessing goes with its plain one (none learned without it).
+            for (SpellEntry const* spell : blessings)
+            {
+                if (!PaladinBuffs::IsGreaterBlessing(spell))
+                    continue;
+                uint8 const kind = uint8(PaladinBuffs::BlessingOf(spell));
+                for (PaladinBuffAbility& a : f.blessingSpells)
+                    if (a.kind == kind)
+                        a.greaterSpellId = spell->Id;
             }
             for (SpellEntry const* spell : ai->Kit().PartyAuras())
             {

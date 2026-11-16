@@ -196,14 +196,21 @@ namespace
         }
 
         // One blessing cast (true) on the first member that misses the one it gets from me.
+        // Greater Blessings first: one lands on the whole class and replaces my plain blessing
+        // on a member of it that gets another one from me (a tank among warriors).
         bool BlessParty()
+        {
+            std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
+            return BlessParty(owner, true) || BlessParty(owner, false);
+        }
+
+        bool BlessParty(std::shared_ptr<Commander::PartyCommander> const& owner, bool greater)
         {
             PartyBotAI& bot = m_bot;
             Player* me = bot.me;
             Group* pGroup = me->GetGroup();
             if (!pGroup)
                 return false;
-            std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
             for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
             {
                 Player* pMember = itr->getSource();
@@ -218,7 +225,8 @@ namespace
                 }
                 else
                     spell = OwnBlessingChoice(pMember);
-                if (!spell || !bot.IsValidBuffTarget(pMember, spell) || bot.IsBuffPendingFromOther(pMember, spell, nullptr))
+                if (!spell || Commander::PaladinBuffs::IsGreaterBlessing(spell) != greater ||
+                    !bot.IsValidBuffTarget(pMember, spell) || bot.IsBuffPendingFromOther(pMember, spell, nullptr))
                     continue;
                 if (Buff(pMember, spell))
                 {

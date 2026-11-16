@@ -32,6 +32,12 @@ namespace PaladinBuffs
         return BlessingKind::None;
     }
 
+    bool IsGreaterBlessing(SpellEntry const* spell)
+    {
+        return BlessingOf(spell) != BlessingKind::None &&
+               spell->EffectImplicitTargetA[0] == TARGET_UNIT_RAID_AND_CLASS;
+    }
+
     JudgementKind SealOf(SpellEntry const* spell)
     {
         if (!spell || spell->SpellFamilyName != SPELLFAMILY_PALADIN)

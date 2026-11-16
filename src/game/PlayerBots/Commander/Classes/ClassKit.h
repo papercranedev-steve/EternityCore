@@ -221,7 +221,8 @@ namespace Commander
         // (HealPlan::Healer::steady): starts a heal as soon as one lands on a deficit, picks the
         // rank by mana per health, and cancels a heal about to land on a target that was not hit.
         virtual bool HealsSteadily() const { return false; }
-        // Paladin blessings and party auras it has learned (best rank, nullptr = not learned).
+        // Paladin blessings (the Greater ones too) and party auras it has learned (best rank,
+        // nullptr = not learned).
         // Which one it gives whom is the brain's (Coordination/Duties/BlessingAssigner.h,
         // WorldModel facts PartyMemberFacts::blessingSpells / auraSpells); the rotation casts.
         virtual std::vector<SpellEntry const*> Blessings() const { return {}; }

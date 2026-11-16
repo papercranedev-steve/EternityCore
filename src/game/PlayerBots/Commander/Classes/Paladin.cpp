@@ -92,7 +92,9 @@ namespace Commander
             {
                 auto const& s = m_bot.m_spells.paladin;
                 return { s.pBlessingOfWisdom, s.pBlessingOfMight, s.pBlessingOfKings,
-                         s.pBlessingOfSalvation, s.pBlessingOfLight, s.pBlessingOfSanctuary };
+                         s.pBlessingOfSalvation, s.pBlessingOfLight, s.pBlessingOfSanctuary,
+                         s.pGreaterBlessingOfWisdom, s.pGreaterBlessingOfMight, s.pGreaterBlessingOfKings,
+                         s.pGreaterBlessingOfSalvation, s.pGreaterBlessingOfLight, s.pGreaterBlessingOfSanctuary };
             }
 
             // Only with Judgement learned (it is what puts the debuff on).

@@ -1,8 +1,10 @@
+
 #include "Commander/Coordination/Duties/BlessingAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "SharedDefines.h"
 #include <algorithm>
+#include <map>
 #include <numeric>
 
 namespace Commander
@@ -25,12 +27,12 @@ namespace Commander
             }
         }
 
-        uint32 SpellOf(std::vector<PaladinBuffAbility> const& spells, uint8 kind)
+        PaladinBuffAbility const* AbilityOf(std::vector<PaladinBuffAbility> const& spells, uint8 kind)
         {
             for (PaladinBuffAbility const& s : spells)
-                if (s.kind == kind)
-                    return s.spellId;
-            return 0;
+                if (s.kind == kind && s.spellId)
+                    return &s;
+            return nullptr;
         }
 
         bool Contains(std::vector<uint8> const& kinds, uint8 kind)
@@ -40,46 +42,72 @@ namespace Commander
 
         struct Pick
         {
-            PartyMemberFacts const* paladin = nullptr;
-            uint32 spellId = 0;
+            size_t paladin = 0;     // index into the paladin list
+            uint8 kind = 0;
+        };
+
+        struct Dealt
+        {
+            uint32 score = 0;
+            uint32 kept = 0;        // picks equal to the paladin's class-wide one
+            std::vector<Pick> picks;
         };
 
         // The paladins in `turn` order each take the first blessing of `order` they know that
         // is not taken. Score: a higher place outweighs any number of lower ones.
-        uint32 Deal(std::vector<PartyMemberFacts const*> const& paladins, std::vector<size_t> const& turn,
-                    std::vector<BlessingKind> const& order, std::vector<uint8> taken, std::vector<Pick>& out)
+        // classKinds[i]: paladin i's blessing for the member's class (0 = none).
+        Dealt Deal(std::vector<PartyMemberFacts const*> const& paladins, std::vector<size_t> const& turn,
+                   std::vector<BlessingKind> const& order, std::vector<uint8> taken,
+                   std::vector<uint8> const& classKinds)
         {
-            uint32 score = 0;
+            Dealt out;
             for (size_t i : turn)
             {
                 for (size_t place = 0; place < order.size(); ++place)
                 {
                     uint8 const kind = uint8(order[place]);
-                    if (Contains(taken, kind))
+                    if (Contains(taken, kind) || !AbilityOf(paladins[i]->blessingSpells, kind))
                         continue;
-                    uint32 const spellId = SpellOf(paladins[i]->blessingSpells, kind);
-                    if (!spellId)
-                        continue;
-                    out.push_back({ paladins[i], spellId });
+                    out.picks.push_back({ i, kind });
                     taken.push_back(kind);
-                    score += 1u << (order.size() - place);
+                    out.score += 1u << (order.size() - place);
+                    if (classKinds[i] == kind)
+                        ++out.kept;
                     break;
                 }
             }
-            return score;
+            return out;
+        }
+
+        // Every order of the paladins (up to MAX_PERMUTED, else guid order): the higher score,
+        // then the more class-wide blessings kept (ties: the first order).
+        Dealt BestDeal(std::vector<PartyMemberFacts const*> const& paladins, std::vector<BlessingKind> const& order,
+                       std::vector<uint8> const& taken, std::vector<uint8> const& classKinds)
+        {
+            std::vector<size_t> turn(paladins.size());
+            std::iota(turn.begin(), turn.end(), size_t(0));
+            Dealt best = Deal(paladins, turn, order, taken, classKinds);
+            if (paladins.size() > BlessingAssigner::MAX_PERMUTED)
+                return best;
+            while (std::next_permutation(turn.begin(), turn.end()))
+            {
+                Dealt d = Deal(paladins, turn, order, taken, classKinds);
+                if (d.score > best.score || (d.score == best.score && d.kept > best.kept))
+                    best = std::move(d);
+            }
+            return best;
         }
     }
 
     std::vector<BlessingKind> BlessingAssigner::Order(uint8 classId, uint8 role)
     {
-        std::vector<BlessingKind> out;
-        out.push_back(UsesWisdom(classId, role) ? BlessingKind::Wisdom : BlessingKind::Might);
-        out.push_back(BlessingKind::Kings);
-        if (role != ROLE_TANK)
-            out.push_back(BlessingKind::Salvation);
-        out.push_back(BlessingKind::Light);
-        out.push_back(BlessingKind::Sanctuary);
-        return out;
+        if (role == ROLE_TANK)
+            return { BlessingKind::Light, BlessingKind::Kings, BlessingKind::Might, BlessingKind::Sanctuary };
+        if (classId == CLASS_WARLOCK)
+            return { BlessingKind::Salvation, BlessingKind::Kings, BlessingKind::Light, BlessingKind::Wisdom,
+                     BlessingKind::Sanctuary };
+        return { UsesWisdom(classId, role) ? BlessingKind::Wisdom : BlessingKind::Might, BlessingKind::Kings,
+                 BlessingKind::Salvation, BlessingKind::Light, BlessingKind::Sanctuary };
     }
 
     std::vector<PaladinAuraKind> BlessingAssigner::AuraOrder()
@@ -122,45 +150,63 @@ namespace Commander
             {
                 if (Contains(auraTaken, uint8(kind)))
                     continue;
-                uint32 const spellId = SpellOf(p->auraSpells, uint8(kind));
-                if (!spellId)
+                PaladinBuffAbility const* aura = nullptr;
+                for (PaladinBuffAbility const& a : p->auraSpells)
+                    if (a.kind == uint8(kind) && a.spellId)
+                        aura = &a;
+                if (!aura)
                     continue;
-                out.auras.push_back({ p->guid, spellId });
+                out.auras.push_back({ p->guid, aura->spellId });
                 auraTaken.push_back(uint8(kind));
                 break;
             }
         }
 
-        // Blessings, per member.
-        for (PartyMemberFacts const& target : world.party)
+        // Blessings.
+        std::vector<PartyMemberFacts const*> targets;
+        for (PartyMemberFacts const& m : world.party)
+            if (!m.isPet && m.alive)
+                targets.push_back(&m);
+        auto takenOn = [&isAssigned](PartyMemberFacts const& target)
         {
-            if (target.isPet || !target.alive)
-                continue;
-            std::vector<BlessingKind> const order = Order(target.classId, target.role);
             std::vector<uint8> taken;
             for (BlessingOnFacts const& b : target.blessingsOn)
                 if (!isAssigned(b.caster))
                     taken.push_back(b.kind);
+            return taken;
+        };
 
-            std::vector<size_t> turn(paladins.size());
-            std::iota(turn.begin(), turn.end(), size_t(0));
-            std::vector<Pick> best;
-            uint32 bestScore = Deal(paladins, turn, order, taken, best);
-            if (paladins.size() <= MAX_PERMUTED)
+        // Per class: dealt for its first member that is not a tank (else its first member).
+        std::map<uint8, PartyMemberFacts const*> representatives;
+        for (PartyMemberFacts const* t : targets)
+        {
+            PartyMemberFacts const*& rep = representatives[t->classId];
+            if (!rep || (rep->role == ROLE_TANK && t->role != ROLE_TANK))
+                rep = t;
+        }
+        std::map<uint8, std::vector<uint8>> classKinds;
+        for (auto const& entry : representatives)
+        {
+            PartyMemberFacts const& rep = *entry.second;
+            std::vector<uint8> kinds(paladins.size(), 0);
+            Dealt const d = BestDeal(paladins, Order(rep.classId, rep.role), takenOn(rep), kinds);
+            for (Pick const& p : d.picks)
+                kinds[p.paladin] = p.kind;
+            classKinds[entry.first] = std::move(kinds);
+        }
+
+        // Per member: the class-wide one as a Greater Blessing where it fits the member, a
+        // plain one where the member wants another (a tank in a class of damage dealers).
+        for (PartyMemberFacts const* t : targets)
+        {
+            std::vector<uint8> const& kinds = classKinds[t->classId];
+            Dealt const d = BestDeal(paladins, Order(t->classId, t->role), takenOn(*t), kinds);
+            for (Pick const& p : d.picks)
             {
-                while (std::next_permutation(turn.begin(), turn.end()))
-                {
-                    std::vector<Pick> picks;
-                    uint32 const score = Deal(paladins, turn, order, taken, picks);
-                    if (score > bestScore)
-                    {
-                        bestScore = score;
-                        best = std::move(picks);
-                    }
-                }
+                PaladinBuffAbility const* a = AbilityOf(paladins[p.paladin]->blessingSpells, p.kind);
+                uint32 const spellId = kinds[p.paladin] == p.kind && a->greaterSpellId ? a->greaterSpellId : a->spellId;
+                out.blessings.push_back({ paladins[p.paladin]->guid, t->guid, spellId });
             }
-            for (Pick const& p : best)
-                out.blessings.push_back({ p.paladin->guid, target.guid, p.spellId });
         }
         plan.blessings = std::move(out);
     }

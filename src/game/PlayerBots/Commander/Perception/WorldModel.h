@@ -283,6 +283,7 @@ namespace Commander
     {
         uint32 spellId = 0;
         uint8 kind = 0;
+        uint32 greaterSpellId = 0;  // blessings: its Greater Blessing, 0 = not learned
     };
 
     // A damage curse a warlock bot has learned, best rank (ClassKit::Curses). kind = CurseKind

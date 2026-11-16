@@ -56,6 +56,9 @@ namespace Commander
     {
         // By the spell's (English) name, as PopulateSpellData. None for any other spell.
         BlessingKind BlessingOf(SpellEntry const* spell);
+        // A Greater Blessing: lands on every group member of the target's class near it
+        // (TARGET_UNIT_RAID_AND_CLASS, Spell.cpp), 15 min, a Symbol of Kings.
+        bool IsGreaterBlessing(SpellEntry const* spell);
         PaladinAuraKind AuraOf(SpellEntry const* spell);
         // The seal judged for it (Seal of Wisdom / Light) or the debuff itself.
         JudgementKind SealOf(SpellEntry const* spell);

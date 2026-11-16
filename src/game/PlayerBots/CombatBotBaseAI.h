@@ -353,14 +353,21 @@ public:
             // Commander/Coordination/Duties/JudgementAssigner.h).
             SpellEntry const* pSealOfWisdom;
             SpellEntry const* pSealOfLight;
-            // Blessings and auras (best rank; not the Greater Blessings). Who gives which:
-            // the brain (Commander/Coordination/Duties/BlessingAssigner.h), PaladinRotation casts.
+            // Blessings and auras (best rank). Who gives which: the brain
+            // (Commander/Coordination/Duties/BlessingAssigner.h), PaladinRotation casts.
             SpellEntry const* pBlessingOfWisdom;
             SpellEntry const* pBlessingOfMight;
             SpellEntry const* pBlessingOfKings;
             SpellEntry const* pBlessingOfSalvation;
             SpellEntry const* pBlessingOfLight;
             SpellEntry const* pBlessingOfSanctuary;
+            // Greater Blessings: the same on every member of the target's class (15 min).
+            SpellEntry const* pGreaterBlessingOfWisdom;
+            SpellEntry const* pGreaterBlessingOfMight;
+            SpellEntry const* pGreaterBlessingOfKings;
+            SpellEntry const* pGreaterBlessingOfSalvation;
+            SpellEntry const* pGreaterBlessingOfLight;
+            SpellEntry const* pGreaterBlessingOfSanctuary;
             SpellEntry const* pDevotionAura;
             SpellEntry const* pConcentrationAura;
             SpellEntry const* pRetributionAura;

@@ -242,9 +242,25 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 else if (pSpellEntry->SpellName[0].find("Greater Blessing") != std::string::npos)
                 {
-                    // Class-wide 15 min versions, need a Symbol of Kings: not used. Before this
-                    // branch "Blessing of Kings" also matched "Greater Blessing of Kings", whose
-                    // higher spell id won (Kings has no rank).
+                    // Class-wide 15 min versions (a Symbol of Kings each: AddAllSpellReagents).
+                    // Their own branch: "Blessing of Kings" below also matches "Greater
+                    // Blessing of Kings".
+                    std::string const& name = pSpellEntry->SpellName[0];
+                    SpellEntry const** slot = nullptr;
+                    if (name.find("of Wisdom") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfWisdom;
+                    else if (name.find("of Might") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfMight;
+                    else if (name.find("of Kings") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfKings;
+                    else if (name.find("of Salvation") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfSalvation;
+                    else if (name.find("of Light") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfLight;
+                    else if (name.find("of Sanctuary") != std::string::npos)
+                        slot = &m_spells.paladin.pGreaterBlessingOfSanctuary;
+                    if (slot && IsHigherRankSpell(*slot))
+                        *slot = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Blessing of Sanctuary") != std::string::npos)
                 {
