@@ -23,8 +23,8 @@
  *
  * The Commander decides: the damage curse (CurseAssigner picks Elements / Shadow / Recklessness
  * for the party, CurseBehavior casts it when CurseValue says it pays), Banish, Fear, Howl of Terror (crowd control), Rain of Fire (area
- * phase), Life Tap and Drain Life (HealthTradeBehavior: how
- * much health it spends depends on the healers), Drain Soul on enemies about to die
+ * phase), Life Tap and Drain Life (HealthTradeBehavior: tap
+ * and drain cycle when the mana runs out), Drain Soul on enemies about to die
  * (HarvestBehavior: the Soul Shards).
  * Still the rotation's own (doc 2026-11-14-hands-cleanup.md 3): Death Coil.
  */

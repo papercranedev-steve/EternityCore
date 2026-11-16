@@ -288,12 +288,12 @@ namespace Commander
         // (mage Ice Barrier). The area phase decides it (Coordination/Doctrine/AreaPhase.h).
         virtual SpellEntry const* SelfShield() const { return nullptr; }
         // Turns its health into mana (warlock Life Tap): its mana is worth less (ManaWorth.h).
-        // Only the Commander casts it (HealthTradeBehavior: how low it may tap depends on the
-        // healers it can count on), out of combat RestBehavior before sitting down (eat and
+        // Only the Commander casts it (HealthTradeBehavior: while nothing hurts the bot, with
+        // Drain Life as its way back to health), out of combat RestBehavior before sitting down (eat and
         // drink take about as long); the rotation does not.
         virtual SpellEntry const* HealthToMana() const { return nullptr; }
-        // A channel that damages its target and heals the bot (warlock Drain Life): its own heal,
-        // also with healers around (they may not keep up). Only HealthTradeBehavior casts it.
+        // A channel that damages its target and heals the bot (warlock Drain Life): the way back
+        // to health for the next taps, and its own heal under fire. Only HealthTradeBehavior casts it.
         virtual SpellEntry const* DrainHeal() const { return nullptr; }
         // A channel that gives an item when its target dies while it runs (warlock Drain Soul: a
         // Soul Shard; the item is the spell's SPELL_AURA_CHANNEL_DEATH_ITEM effect). Only

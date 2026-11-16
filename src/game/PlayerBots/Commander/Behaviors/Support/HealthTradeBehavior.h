@@ -4,31 +4,38 @@
  * ClassKit::DrainHeal (warlock Drain Life). Only this module casts them in combat; the rotation
  * does not.
  *
- * Healed: a healer bot that can act, has mana and is within reach would heal it
- * (SurvivalValue::HealOn > 0). Human healers are not counted (they may not heal), and even a
- * bot healer may not keep up (other roles may fail, ai-architecture rule): a healer only lets
- * the bot spend more of its health; Drain Life stays its own fallback with healers around.
+ * The warlock pays for itself (user 2026-11-16): out of mana it taps, the last mana goes into a
+ * Drain Life, the health it drains back is tapped into Shadow Bolts again. Healers are not
+ * looked at (they may not heal; whether a healer spends its mana on the warlock is the
+ * healer's call, ManaBudgetBehavior). Life Tap cannot kill (it fizzles at or below its cost,
+ * spell_warlock.cpp), so there is no health floor: only nothing may be hurting it.
+ *
+ * Safe: no acting enemy on it or casting at it, no damage taken within DamageIntake's window
+ * (damage over time and area spells included; Life Tap's own health is not damage). Taking
+ * aggro is ThreatBehavior's (it stops the casts before an overtake).
+ *
+ * Cycle on (CycleOf): the mana and every tap its health still gives, (M + H x k) / S, do not
+ * last the fight (Value::FightRemainingSec). S = filler mana per second - regeneration while
+ * casting, k = Life Tap mana per health.
  *
  * Life Tap, in combat:
- *   gates    the mana it gives fits (nothing wasted); the mana it has does not last the fight
- *            (benefit > 0; user 2026-11-16: tap when the mana runs out, not to keep it topped,
- *            a healer's mana is tighter than the warlock's); health after the tap at least
- *            TAP_FLOOR_PCT (healed), alone DRAIN_BELOW_ALONE_PCT (a tap does not send it into
- *            draining), or TAP_FLOOR_ALONE_PCT once its mana does not pay one filler (dry: tap,
- *            then drain); not in danger (SurvivalValue::Of); alone not while hit unless dry.
- *   benefit  LostAction(seconds of filler casting the mana adds before the fight ends,
- *            Value::FightRemainingSec): min(T, (M + gain) / S) - min(T, M / S),
- *            S = filler mana per second - regeneration while casting
- *   cost     LostAction(GCD). The health is gated by the floors above, not priced.
+ *   gates    the mana it gives fits (nothing wasted); health above its cost; safe; not in
+ *            danger (SurvivalValue::Of); the mana it has does not last the fight (benefit > 0;
+ *            user 2026-11-16: tap when the mana runs out, not to keep it topped).
+ *   benefit  LostAction(min(T, (M + gain) / S) - min(T, M / S)): filler seconds it adds
+ *   cost     LostAction(GCD)
  * Drain Life, in combat, on its victim:
- *   gates    health below DRAIN_BELOW_PCT (healed) / DRAIN_BELOW_ALONE_PCT (alone).
- *   benefit  Points(the health it drains before the channel ends or the victim dies
- *            (Value::EnemyDyingSec), capped at the missing health)
- *   cost     LostAction(channel) x (1 - its damage per second / the filler's)
- *            + ManaWorth::Points(its mana)
- * Alone the two make the warlock's cycle: tap while health is high, drain it back below
- * DRAIN_BELOW_ALONE_PCT, Shadow Bolts in between. Tier Routine: the rotation's damage spells
- * otherwise.
+ *   cycle    the cycle is on, its mana pays less than the drain and one filler (the last mana
+ *            goes into the drain, not into a Shadow Bolt that leaves too little for one), and
+ *            the whole drain fits in the missing health. Nothing else gates it (hit or not).
+ *            benefit  LostAction(channel x its damage share of the filler's)
+ *                     + LostAction((drained health x k - its mana) / S): what the health buys back
+ *            cost     LostAction(channel) x WAND_SHARE: near dry the wand is what it displaces
+ *   own heal health below DRAIN_BELOW_PCT while it takes damage.
+ *            benefit  Points(the health it drains before the channel ends or the victim dies
+ *                     (Value::EnemyDyingSec), capped at the missing health)
+ *            cost     LostAction(channel) x (1 - its damage share) + ManaWorth::Points(its mana)
+ * Tier Routine: the rotation's damage spells otherwise.
  */
 
 #ifndef MANGOS_COMMANDER_HEALTH_TRADE_BEHAVIOR_H
@@ -38,14 +45,24 @@
 
 namespace Commander
 {
+    struct PartyMemberFacts;
+
     class HealthTradeBehavior : public IBehavior
     {
     public:
-        // Untested guesses (user 2026-11-15: no healer -> no blind tapping, drain instead).
-        static constexpr float TAP_FLOOR_PCT = 45.0f;
-        static constexpr float TAP_FLOOR_ALONE_PCT = 50.0f;
-        static constexpr float DRAIN_BELOW_PCT = 35.0f;
-        static constexpr float DRAIN_BELOW_ALONE_PCT = 70.0f;
+        // Untested guesses: its own heal under fire below this health; a wand's damage per
+        // second as a share of the filler's.
+        static constexpr float DRAIN_BELOW_PCT = 50.0f;
+        static constexpr float WAND_SHARE = 0.3f;
+
+        struct Cycle
+        {
+            bool on = false;            // mana + tappable health do not last the fight (header)
+            float spend = 0.0f;         // S
+            float fillerCost = 0.0f;    // mana of one filler cast
+        };
+        // Map thread (reads the bot's spell costs).
+        static Cycle CycleOf(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self);
 
         char const* GetId() const override { return "health"; }
         bool AppliesTo(PartyBotAI const* bot) const override;

@@ -13,23 +13,34 @@ namespace Commander
 {
     namespace
     {
-        bool Healed(WorldModel const& world, PartyMemberFacts const& self)
-        {
-            // Any demand above 0: HealOn shares a healer's rate by the damage taken, and a
-            // member taking none would get no share while others are hit.
-            return SurvivalValue::HealOn(world, self, SurvivalValue::Demand(world, self) + 1.0f).hps > 0.0f;
-        }
-
-        bool IsHit(WorldModel const& world, PartyMemberFacts const& self)
+        // Nothing hurts it and nothing is about to: no enemy on it or casting at it, no damage
+        // taken within DamageIntake's window (damage over time, area spells, a hit just now).
+        bool Safe(WorldModel const& world, PartyMemberFacts const& self)
         {
             for (EnemyFacts const& e : world.enemies)
-                if (e.acting && !e.crowdControlled && e.victim == self.guid)
-                    return true;
-            return false;
+            {
+                if (!e.acting || e.crowdControlled)
+                    continue;
+                if (e.victim == self.guid || (e.castingSpellId && e.castTarget == self.guid))
+                    return false;
+            }
+            return Value::TakenDps(world, self.guid) <= 0.0f;
+        }
+
+        // Filler mana per second while casting it, less the regeneration while casting.
+        float Spend(Player* me, PartyMemberFacts const& self, SpellEntry const* filler)
+        {
+            return DamageSpells::ManaCost(me, filler) / DamageSpells::BusySec(me, filler) - self.manaRegenCasting;
+        }
+
+        // Seconds of filler casting `mana` pays for before the fight ends, on top of `have`.
+        float PaidSec(float fightSec, float spend, float have, float mana)
+        {
+            return std::min(fightSec, (have + mana) / spend) - std::min(fightSec, have / spend);
         }
 
         void ProposeTap(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
-                        bool healed, std::vector<Proposal>& out)
+                        std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             SpellEntry const* tap = bot->Kit().HealthToMana();
@@ -40,38 +51,26 @@ namespace Commander
             float const gain = self.tapManaPerCast;
             if (float(self.maxMana) - mana < gain)
                 return;
-
-            float const fillerCost = DamageSpells::ManaCost(me, filler);
-            bool const dry = mana < fillerCost;
-            float floorPct = HealthTradeBehavior::TAP_FLOOR_PCT;
-            if (!healed)
-            {
-                if (!dry && IsHit(world, self))
-                    return;
-                floorPct = dry ? HealthTradeBehavior::TAP_FLOOR_ALONE_PCT : HealthTradeBehavior::DRAIN_BELOW_ALONE_PCT;
-            }
-            float const healthCost = gain / self.tapManaPerHealth;
-            if ((float(self.health) - healthCost) * 100.0f < float(self.maxHealth) * floorPct)
+            // Life Tap fizzles at or below its cost (spell_warlock.cpp): it cannot kill.
+            if (float(self.health) <= gain / self.tapManaPerHealth)
                 return;
-            if (SurvivalValue::Of(world, self).InDanger())
+            if (!Safe(world, self) || SurvivalValue::Of(world, self).InDanger())
                 return;
             if (!bot->CanTryToCastSpell(me, tap))
                 return;
 
-            // Seconds of filler casting the mana adds before the fight ends: nothing while the
-            // mana it has lasts the fight (tap when it is needed, not to keep it topped).
-            float const spend = fillerCost / DamageSpells::BusySec(me, filler) - self.manaRegenCasting;
+            // Tap when the mana runs out, not to keep it topped: nothing while it lasts the fight.
+            float const spend = Spend(me, self, filler);
             if (spend <= 0.0f)
                 return;
-            float const fightSec = Value::FightRemainingSec(world);
-            float const paidSec = std::min(fightSec, (mana + gain) / spend) - std::min(fightSec, mana / spend);
+            float const paidSec = PaidSec(Value::FightRemainingSec(world), spend, mana, gain);
             if (paidSec <= 0.0f)
                 return;
 
             Proposal p;
             p.tier = ProposalTier::Routine;
             p.source = "health";
-            p.reason = healed ? "mana low, a healer pays the health back: tap" : "mana runs out, health to spare: tap";
+            p.reason = "mana runs out, nothing hits it: tap";
             p.action.type = BotActionType::Cast;
             p.action.spell = tap;
             p.action.target = self.guid;
@@ -80,14 +79,11 @@ namespace Commander
         }
 
         void ProposeDrain(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
-                          bool healed, std::vector<Proposal>& out)
+                          std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             SpellEntry const* drain = bot->Kit().DrainHeal();
-            if (!drain || !self.maxHealth)
-                return;
-            float const below = healed ? HealthTradeBehavior::DRAIN_BELOW_PCT : HealthTradeBehavior::DRAIN_BELOW_ALONE_PCT;
-            if (self.healthPct >= below)
+            if (!drain || !self.maxHealth || self.health >= self.maxHealth)
                 return;
             Unit* victim = me->GetVictim();
             EnemyFacts const* enemy = victim ? world.FindEnemy(victim->GetObjectGuid()) : nullptr;
@@ -106,31 +102,71 @@ namespace Commander
             if (!landed)
                 return;
             float const missing = float(self.maxHealth) - float(self.health);
-            float const gained = std::min(missing, ticks.perTick * float(landed));
+            float const drained = ticks.perTick * float(landed);
+            float const gained = std::min(missing, drained);
+            float const busySec = std::min(channelSec, float(landed) * float(ticks.periodMs) / 1000.0f);
+            float const drainCost = DamageSpells::ManaCost(me, drain);
 
-            // The channel instead of the filler: only the damage it does not do is lost.
-            float lostShare = 1.0f;
-            if (SpellEntry const* filler = bot->Kit().Filler())
+            SpellEntry const* filler = bot->Kit().Filler();
+            float drainShare = 0.0f;    // its damage per second over the filler's
+            if (filler)
             {
                 float const fillerDps = DamageSpells::Estimate(me, victim, filler) / DamageSpells::BusySec(me, filler);
-                float const drainDps = ticks.perTick * float(ticks.ticks) / channelSec;
                 if (fillerDps > 0.0f)
-                    lostShare = std::max(0.0f, 1.0f - drainDps / fillerDps);
+                    drainShare = (ticks.perTick * float(ticks.ticks) / channelSec) / fillerDps;
             }
-            float const busySec = std::min(channelSec, float(landed) * float(ticks.periodMs) / 1000.0f);
-            float const cost = Value::LostAction(world, self, busySec) * lostShare +
-                               ManaWorth::Points(world, self, DamageSpells::ManaCost(me, drain));
 
             Proposal p;
             p.tier = ProposalTier::Routine;
             p.source = "health";
-            p.reason = healed ? "low health, healers may not keep up: drain" : "low health, no healer: drain";
             p.action.type = BotActionType::Cast;
             p.action.spell = drain;
             p.action.target = enemy->guid;
+
+            // The cycle (header): its last mana goes into a drain, the health it brings back is
+            // tapped into Shadow Bolts again.
+            HealthTradeBehavior::Cycle const cycle = HealthTradeBehavior::CycleOf(bot, world, self);
+            float const mana = float(self.mana);
+            if (cycle.on && mana < drainCost + cycle.fillerCost && missing >= drained)
+            {
+                float const netSec = (gained * self.tapManaPerHealth - drainCost) / cycle.spend;
+                float const benefit = Value::LostAction(world, self, busySec * std::min(1.0f, drainShare)) +
+                                      Value::LostAction(world, self, std::max(0.0f, netSec));
+                float const cost = Value::LostAction(world, self, busySec) * HealthTradeBehavior::WAND_SHARE;
+                p.reason = "mana runs out: drain the health back to tap again";
+                p.SetValue(benefit, cost);
+                out.push_back(p);
+                return;
+            }
+
+            // Its own heal under fire.
+            if (self.healthPct >= HealthTradeBehavior::DRAIN_BELOW_PCT || Value::TakenDps(world, self.guid) <= 0.0f)
+                return;
+            float const cost = Value::LostAction(world, self, busySec) * std::max(0.0f, 1.0f - drainShare) +
+                               ManaWorth::Points(world, self, drainCost);
+            p.reason = "low health, hit: drain";
             p.SetValue(Value::Points(world, gained), cost);
             out.push_back(p);
         }
+    }
+
+    HealthTradeBehavior::Cycle HealthTradeBehavior::CycleOf(PartyBotAI const* bot, WorldModel const& world,
+                                                            PartyMemberFacts const& self)
+    {
+        Cycle c;
+        Player* me = bot->me;
+        SpellEntry const* tap = bot->Kit().HealthToMana();
+        SpellEntry const* filler = bot->Kit().Filler();
+        if (!tap || !filler || !self.UsesMana() || self.tapManaPerHealth <= 0.0f)
+            return c;
+        c.fillerCost = DamageSpells::ManaCost(me, filler);
+        c.spend = Spend(me, self, filler);
+        if (c.spend <= 0.0f)
+            return c;
+        // Mana and every tap its health still gives: short of the fight, the cycle is on.
+        float const bank = float(self.mana) + float(self.health) * self.tapManaPerHealth;
+        c.on = bank / c.spend < Value::FightRemainingSec(world);
+        return c;
     }
 
     bool HealthTradeBehavior::AppliesTo(PartyBotAI const* bot) const
@@ -147,8 +183,7 @@ namespace Commander
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct() || self->silenced)
             return;
-        bool const healed = Healed(world, *self);
-        ProposeTap(bot, world, *self, healed, out);
-        ProposeDrain(bot, world, *self, healed, out);
+        ProposeTap(bot, world, *self, out);
+        ProposeDrain(bot, world, *self, out);
     }
 }
