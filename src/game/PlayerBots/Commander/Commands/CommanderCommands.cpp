@@ -629,6 +629,13 @@ namespace
             return false;
         }
 
+        // A dead selection (usually the corpse of the last pull) counts as no selection.
+        if (selected && !selected->IsAlive())
+        {
+            handler->PSendSysMessage("%s is dead, pulling the nearest pack instead.", selected->GetName());
+            selected = nullptr;
+        }
+
         std::vector<std::string> report;
         bool const ok = Commander::PullPlanner::Plan(player, *commander, selected, option != nullptr, report);
         for (std::string const& line : report)
