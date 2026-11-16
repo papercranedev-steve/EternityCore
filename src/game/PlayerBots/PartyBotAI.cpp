@@ -1566,6 +1566,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Stop auto shot if no target.
         if (!me->GetVictim())
             me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+        // Auto Shot survives a channel (SpellCaster::SetCurrentCastedSpell), so this branch also
+        // runs while casting: the rotation's next shot broke the bot's own Mend Pet channel after
+        // its mana was spent (strat-20261117-000150). Casting: only the Commander hook above may
+        // end it (CastBreak weighs that).
+        else if (me->IsNonMeleeSpellCasted(false, false, true))
+            return;
         else if (ClassRotation* pRotation = Rotation())
             pRotation->UpdateWhileAutoRepeating();
 
