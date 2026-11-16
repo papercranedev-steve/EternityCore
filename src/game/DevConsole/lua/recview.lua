@@ -5,7 +5,10 @@
 --   .scenario rec list          the newest recview.listCount fights, newest first
 --       L;<file>;<result>;<duration ms>;<alive>;<members>;<anomalies text>
 --           result: ok / wipe / stopped / running (no end line yet)
---       LZ;<count>
+--       LZ;<count>, then the S line below
+--   .scenario rec status | on | off | level <verbose|normal|warning|danger>
+--       S;<on 0/1>;<level>;<state>;<file being written>   (recorder.lua rec.pushState; also sent
+--           when a fight begins or ends) state: off / idle (no party with a bot) / waiting / recording
 --   .scenario rec open <file>   one fight
 --       B;<file>;<lines in the file>
 --       H;<result>;<reason>;<duration ms>;<alive>;<members>;<label>
@@ -131,6 +134,7 @@ function recview.list(p)
         end
     end
     p:addonmsg(PREFIX, "LZ;" .. #files)
+    rec.pushState(p)
 end
 
 ---------------------------------------------------------------------------
@@ -300,14 +304,25 @@ function recview.open(p, name)
     recview.jobs[job.player] = every(1, function() return step(job) end)
 end
 
--- .scenario rec [list | open <file>]
+-- .scenario rec [list | open <file> | status | on | off | level <verbose|normal|warning|danger>]
 function recview.command(p, args)
     args = (args or ""):match("^%s*(.-)%s*$")
     if args == "" or args == "list" then
         recview.list(p)
     elseif args:match("^open%s") then
         recview.open(p, args:match("^open%s+(%S+)"))
+    elseif args == "status" then
+        rec.pushState(p)
+    elseif args == "on" or args == "off" then
+        rec.setEnabled(args == "on")
+        rec.pushState(p)
+    elseif args:match("^level%s") then
+        local level = args:match("^level%s+(%S+)")
+        if not rec.setLevel(level) then
+            p:addonmsg(PREFIX, "X;没有这个录制级别：" .. clean(level) .. "（" .. table.concat(rec.LEVELS, " / ") .. "）")
+        end
+        rec.pushState(p)
     else
-        p:addonmsg(PREFIX, "X;用法：.scenario rec list | open <文件>")
+        p:addonmsg(PREFIX, "X;用法：.scenario rec list | open <文件> | status | on | off | level <级别>")
     end
 end

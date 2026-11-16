@@ -500,6 +500,7 @@ local function endFight(w, members, reason)
         for kind, n in pairs(counts) do parts[#parts + 1] = (review.labels[kind] or kind) .. " " .. n end
         leader:tell(string.format("[录制] 战斗结束 %.1f 秒，%s，异常：%s。记录：%s", (now() - w.fightStart) / 1000,
             result, #parts > 0 and table.concat(parts, "，") or "无", w.path))
+        rec.pushState(leader)
     end
 end
 
@@ -660,10 +661,12 @@ local function tick(w)
     end
 end
 
--- Start following a party. label goes into the file name (scenario id).
+-- Start following a party. label goes into the file name (scenario id; nil: see fightLabel).
+-- Nothing happens while recording is switched off (rec.enabled).
 function rec.watch(leader, label)
     rec.stop()
-    local w = { leader = leader:guid(), label = label or "fight", pre = {}, traceBuf = { list = {}, byId = {} },
+    if not rec.enabled then return nil end
+    local w = { leader = leader:guid(), label = label, pre = {}, traceBuf = { list = {}, byId = {} },
                 traceWindows = {}, traceDone = {}, traceInputs = {}, pinVersion = {} }
     rec.watcher = w
     combatlog.enable(true)
@@ -674,6 +677,13 @@ function rec.watch(leader, label)
             if w.file then w.file:close() w.file = nil end
             combatlog.enable(false)
             rec.watcher = nil
+            -- rec.autoAttach starts again once this fight is over (not one broken file per second)
+            rec.crashed = w.leader
+            local leader = unit(w.leader)
+            if leader then
+                leader:tell("[录制] 出错停了，这场战斗结束后自动重开：" .. tostring(err))
+                rec.pushState(leader)
+            end
             return false
         end
         if rec.watcher ~= w then return false end
@@ -705,8 +715,80 @@ end
 
 function rec.status()
     local w = rec.watcher
-    if not w then return { watching = false, last = rec.last, lastSummary = rec.lastSummary } end
+    if not w then
+        return { enabled = rec.enabled, level = rec.level, watching = false, last = rec.last, lastSummary = rec.lastSummary }
+    end
     local leader = unit(w.leader)
-    return { watching = true, leader = leader and leader:name(), label = w.label, recording = w.file ~= nil,
-             file = w.path, last = rec.last, lastSummary = rec.lastSummary }
+    return { enabled = rec.enabled, level = rec.level, watching = true, leader = leader and leader:name(),
+             label = w.fightLabel or w.label, recording = w.file ~= nil, file = w.path, last = rec.last,
+             lastSummary = rec.lastSummary }
 end
+
+---------------------------------------------------------------------------
+-- on / off, level, auto attach
+---------------------------------------------------------------------------
+
+rec.LEVELS = { "verbose", "normal", "warning", "danger" }
+
+-- off: recording switched off; idle: on, no party to follow; waiting: following a party, no
+-- fight; recording: a fight is being written
+function rec.state()
+    local w = rec.watcher
+    if not rec.enabled then return "off" end
+    if not w then return "idle" end
+    return w.file and "recording" or "waiting"
+end
+
+-- The state for the addon's fight log window: PBREC S;<on 0/1>;<level>;<state>;<file being written>
+function rec.pushState(p)
+    if not p then return end
+    local w = rec.watcher
+    local file = w and w.file and w.path and w.path:match("([^/\\]+)$") or ""
+    p:addonmsg("PBREC", string.format("S;%d;%s;%s;%s", rec.enabled and 1 or 0, rec.level, rec.state(), file))
+end
+
+function rec.setEnabled(on)
+    rec.enabled = on and true or false
+    if rec.enabled then rec.autoAttach() else rec.stop() end
+end
+
+-- Takes effect when the next fight begins (beginFight reads it). false for an unknown level.
+function rec.setLevel(level)
+    if not LEVEL_MIN_SEV[level] then return false end
+    rec.level = level
+    return true
+end
+
+-- No watcher running: follow the first player (not a bot) with a party bot in the group. Not
+-- while a scenario is being set up (bots removed and spawned, the leader in GM mode): its
+-- finish() starts the watcher with the scenario id.
+function rec.autoAttach()
+    if not rec.enabled or rec.watcher or (scenario and scenario.running) then return end
+    if rec.crashed then
+        local leader = unit(rec.crashed)
+        if leader then
+            for _, m in ipairs(leader:group()) do
+                if m:incombat() then return end
+            end
+        end
+        rec.crashed = nil
+    end
+    for _, p in ipairs(players()) do
+        if not p:isbot() then
+            for _, m in ipairs(p:group()) do
+                if m:isbot() then
+                    rec.watch(p)
+                    return
+                end
+            end
+        end
+    end
+end
+
+cancel(rec.autoTimer)
+rec.autoTimer = every(rec.AUTO_MS, function()
+    local ok, err = pcall(rec.autoAttach)
+    -- the same error every second: logged once
+    if not ok and tostring(err) ~= rec.autoError then dev.pushError("recorder auto", err) end
+    rec.autoError = (not ok) and tostring(err) or nil
+end)

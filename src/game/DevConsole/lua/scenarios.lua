@@ -614,8 +614,9 @@ local function finish(leader, s)
     scenario.running = nil
     scenario.current = s.id
     local names = map(bots, function(b) return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. ")" end)
-    say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪。战斗会自动录制。",
-        s.title, s.level, table.concat(names, " "), respawned))
+    say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪。%s",
+        s.title, s.level, table.concat(names, " "), respawned,
+        rec.enabled and ("战斗会自动录制（级别 " .. rec.level .. "）。") or "战斗录制已关闭（/pbr 里打开）。"))
     for _, w in ipairs(warnings) do say(leader, "|cffffcc00注意|r：" .. w) end
     status(leader, "ready", s.id)
 end
@@ -800,7 +801,8 @@ function scenario.command(leader, args)
     elseif args == "status" then
         local st = rec.status()
         say(leader, "当前场景：" .. (scenario.current or "无") .. "，阵容：" .. (scenario.lineup and lineupText(scenario.lineup) or "无")
-            .. "，录制：" .. (st.recording and "进行中" or (st.watching and "等待战斗" or "关闭")))
+            .. "，录制：" .. (not st.enabled and "关闭" or (st.recording and "进行中" or (st.watching and "等待战斗" or "等组队")))
+            .. "（级别 " .. st.level .. "）")
     else
         -- <id> [lineup] | reset [lineup]
         local id, rest = args:match("^(%S+)%s*(.*)$")
