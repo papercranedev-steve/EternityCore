@@ -201,6 +201,9 @@ public:
 
     void EquipOrUseNewItem();
     void CollectBagItemGuids(std::set<ObjectGuid>& guids) const;
+    // Group loot roll for `itemId` (a RollVote: ROLL_PASS / ROLL_NEED / ROLL_GREED). Bots pass,
+    // so the player gets the item; PartyBotAI lets companions roll like players.
+    virtual uint8 ChooseLootRoll(uint32 itemId) const;
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
     // Projectile subclass (ITEM_SUBCLASS_ARROW / ITEM_SUBCLASS_BULLET) the equipped ranged weapon

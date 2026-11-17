@@ -1,5 +1,5 @@
 #include "Companions/CompanionMgr.h"
-#include "Companions/ClassTraining.h"
+#include "Shared/ClassTraining.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -157,7 +157,7 @@ namespace Companions
 
         // What it learned before it met the player: the class trainer spells of its level, free.
         // From now on new ranks cost money at a trainer.
-        ClassTraining::Result const lessons = ClassTraining::LearnAvailable(bot, false);
+        BotShared::ClassTraining::Result const lessons = BotShared::ClassTraining::LearnAvailable(bot, false);
 
         bot->EnableSaving(account);
         bot->SaveToDB();

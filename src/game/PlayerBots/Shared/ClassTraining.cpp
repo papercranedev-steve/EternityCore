@@ -1,4 +1,4 @@
-#include "Companions/ClassTraining.h"
+#include "Shared/ClassTraining.h"
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -7,7 +7,7 @@
 #include <set>
 #include <vector>
 
-namespace Companions
+namespace BotShared
 {
     namespace
     {

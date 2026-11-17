@@ -628,7 +628,9 @@ source_group("Anticheat"
 add_library(game STATIC
   ${game_SRCS}
 )
+include(PlayerBots/Shared/sources.cmake)
 include(PlayerBots/Commander/sources.cmake)
+include(PlayerBots/Life/sources.cmake)
 include(PlayerBots/Population/sources.cmake)
 include(PlayerBots/Companions/sources.cmake)
 include(PlayerBots/Rotations/sources.cmake)

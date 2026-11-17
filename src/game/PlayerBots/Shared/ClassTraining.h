@@ -7,14 +7,14 @@
  * later by the trainer errand (paid, stage S4). Design: .kiro/docs/2026-11-17-soul-companions.md.
  */
 
-#ifndef MANGOS_COMPANIONS_CLASS_TRAINING_H
-#define MANGOS_COMPANIONS_CLASS_TRAINING_H
+#ifndef MANGOS_BOTSHARED_CLASS_TRAINING_H
+#define MANGOS_BOTSHARED_CLASS_TRAINING_H
 
 #include "Common.h"
 
 class Player;
 
-namespace Companions
+namespace BotShared
 {
     namespace ClassTraining
     {

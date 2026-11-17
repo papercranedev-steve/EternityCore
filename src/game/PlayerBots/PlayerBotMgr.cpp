@@ -2692,6 +2692,9 @@ void PlayerBotMgr::OnPlayerLootedQuestItem(Player* pPlayer, uint32 itemId, uint3
         Player* pBot = itr->getSource();
         if (pBot == pPlayer || !IsPersistentPartyBot(pBot))
             continue;
+        // Companions loot their own copy from the corpse (Life/Errands/LootRun.h).
+        if (sCompanionMgr.IsCompanion(pBot->GetGUIDLow()))
+            continue;
 
         // same range as kill credit, only bots that still need the item for a quest in their log
         if (!pBot->IsInMap(pPlayer) || !pBot->IsAtGroupRewardDistance(pSource))

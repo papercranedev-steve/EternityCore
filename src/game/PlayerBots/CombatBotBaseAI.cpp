@@ -17,6 +17,7 @@
 #include "SpellMgr.h"
 #include "Utilities/Random.h"
 #include "Commander/Perception/Profiles/PetAbilities.h"
+#include "Shared/Inventory.h"
 
 #include <algorithm>
 #include <map>
@@ -3440,18 +3441,14 @@ void CombatBotBaseAI::AddHunterAmmo()
     }
 }
 
+uint8 CombatBotBaseAI::ChooseLootRoll(uint32 /*itemId*/) const
+{
+    return ROLL_PASS;
+}
+
 void CombatBotBaseAI::CollectBagItemGuids(std::set<ObjectGuid>& guids) const
 {
-    guids.clear();
-    for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
-        if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            guids.insert(pItem->GetObjectGuid());
-
-    for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
-        if (Bag* pBag = (Bag*)me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            for (uint32 j = 0; j < pBag->GetBagSize(); ++j)
-                if (Item* pItem = pBag->GetItemByPos(uint8(j)))
-                    guids.insert(pItem->GetObjectGuid());
+    BotShared::Inventory::CollectBagItemGuids(me, guids);
 }
 
 void CombatBotBaseAI::EquipOrUseNewItem()
@@ -3945,13 +3942,15 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             if (!me)
                 return;
 
+            // (WorldPackets::Loot::LootStartRoll: guid, slot, item entry, ...)
             uint64 guid = *((uint64*)(*packet).contents());
             uint32 slot = *(((uint32*)(*packet).contents()) + 2);
+            uint32 itemId = *(((uint32*)(*packet).contents()) + 3);
 
             auto data = std::make_unique<WorldPackets::Loot::LootRoll>();
             data->lootedTarget = ObjectGuid(guid);
             data->itemSlot = slot;
-            data->rollType = ROLL_PASS;
+            data->rollType = ChooseLootRoll(itemId);
             me->GetSession()->QueuePacket(std::move(data));
             return;
         }

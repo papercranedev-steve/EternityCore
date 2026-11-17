@@ -31,6 +31,7 @@
 #include "Commander/Behaviors/Movement/Landing.h"
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
+#include "Life/Errands/LootRun.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -159,6 +160,10 @@ public:
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
 
     Player* GetPartyLeader() const;
+    // A recruited companion (Companions/CompanionMgr): loots corpses itself, keeps its round
+    // robin turns and rolls need / greed like a player. Other party bots leave loot to the player.
+    bool LootsForSelf() const;
+    uint8 ChooseLootRoll(uint32 itemId) const override;
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
@@ -417,6 +422,8 @@ public:
     // Out of combat: the walk to a dead member out of range or sight of the resurrection
     // (Commander/Behaviors/Support/ResurrectApproach.h).
     Commander::ResurrectApproachState m_resurrectApproach;
+    // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
+    Life::LootRunState m_lootRun;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

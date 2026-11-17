@@ -43,6 +43,8 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
+#include "Companions/CompanionMgr.h"
+#include "Shared/GearUpgrade.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
 
@@ -115,6 +117,24 @@ void PartyBotAI::CloneFromPlayer(Player const* pPlayer)
             me->StoreNewItemInBestSlots(pItem->GetEntry(), 1, pItem->GetEnchantmentId(EnchantmentSlot(0)));
         }
     }
+}
+
+bool PartyBotAI::LootsForSelf() const
+{
+    return me && sCompanionMgr.IsCompanion(me->GetGUIDLow());
+}
+
+uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
+{
+    if (!LootsForSelf())
+        return ROLL_PASS;
+    ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(itemId);
+    if (!pProto)
+        return ROLL_PASS;
+    // Need what it would wear; greed the rest that sells (as most players do).
+    if (BotShared::GearUpgrade::IsUpgrade(me, pProto))
+        return ROLL_NEED;
+    return pProto->SellPrice ? ROLL_GREED : ROLL_PASS;
 }
 
 Player* PartyBotAI::GetPartyLeader() const
@@ -1371,7 +1391,8 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
         }
         case SMSG_PARTYKILLLOG:
         {
-            if (!me)
+            // A companion keeps its round robin turn and loots it (Life/Errands/LootRun.h).
+            if (!me || LootsForSelf())
                 return;
 
             if (Group const* pGroup = me->GetGroup())
@@ -1640,7 +1661,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         me->IsSpellReady(m_resurrectionSpell) &&
         me->GetPower(Powers(m_resurrectionSpell->powerType)) >= Spell::CalculatePowerCost(m_resurrectionSpell, me);
     if (me->IsInCombat())
+    {
         m_resurrectApproach = Commander::ResurrectApproachState();
+        Life::LootRun::Stop(me, m_lootRun);
+    }
     if (!me->IsInCombat())
     {
         if (m_resurrectionSpell && !me->IsMounted() && me->IsSpellReady(m_resurrectionSpell))
@@ -1706,6 +1730,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         if (resurrectFirst || !canResurrect || (commanderOutOfCombat && sCommanderMgr.IsRetreating(this)))
             Commander::ResurrectApproach::Stop(me, m_resurrectApproach);
         else if (Commander::ResurrectApproach::Update(this, m_resurrectApproach, m_resurrectionSpell))
+            return;
+
+        // A companion loots for itself after the fight (Life/Errands/LootRun.h). Not while the
+        // Commander has an out-of-combat plan (a pull being set up, a retreat) or a resurrection
+        // is about to be cast.
+        if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
+            Life::LootRun::Stop(me, m_lootRun);
+        else if (Life::LootRun::Update(me, m_lootRun, pLeader))
             return;
 
         // Back from a corpse run away from the leader: walk to him, no teleport. Not while a
