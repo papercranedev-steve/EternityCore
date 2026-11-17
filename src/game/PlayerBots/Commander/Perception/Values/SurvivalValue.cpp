@@ -203,6 +203,13 @@ namespace SurvivalValue
         if (a.targetStops && !self && (member.role == ROLE_MELEE_DPS || member.role == ROLE_TANK))
             o.cost += Value::LostAction(world, member, a.durationSec);
         o.cost += Value::CooldownPoints(a.cooldownMs / 1000.0f, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC);
+        // A heal item on the cooldown of a held mana item (potions; healthstones and mana gems):
+        // that mana is gone for this fight (user 2026-11-17: a healer's mana potion is worth
+        // more than its healing potion). ManaWorth: what the mana would do, times its scarcity.
+        if (a.itemCategory)
+            for (ManaItemAbility const& m : caster.manaItems)
+                if (m.category == a.itemCategory)
+                    o.cost += ManaWorth::Points(world, caster, m.mana);
         o.cost += Value::ResetCost(world, caster, a.reset, Value::FightRemainingSec(world) + NEXT_FIGHTS_SEC);
         if (a.effect == SurvivalAbility::Effect::DropThreat)
         {

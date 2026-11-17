@@ -8,7 +8,8 @@
  * Items that share a cooldown (the spell category: potions 4, healthstones / mana gems / runes 30
  * in this database) exclude each other: only the best held item of each category is listed.
  * Healthstones and mana gems / runes are in the same category, so using one also locks the
- * other; the cooldown points of the one used stand for that.
+ * other. A heal item that locks a held mana item pays that mana (SurvivalValue::Save, user
+ * 2026-11-17: a healer's mana potion is worth more than its healing potion).
  */
 
 #ifndef MANGOS_COMMANDER_ITEM_KIT_H
@@ -36,6 +37,7 @@ namespace Commander
             ItemPrototype const* proto = nullptr;
             SpellEntry const* spell = nullptr;  // its on-use spell
             uint32 cooldownMs = 0;              // the longest of the item's, its category's, the spell's
+            uint32 category = 0;                // shared cooldown (0 = its own only)
         };
 
         // The best held item of each shared cooldown for `use`, best first.

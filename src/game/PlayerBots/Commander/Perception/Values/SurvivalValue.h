@@ -35,7 +35,8 @@
  * fight is over (Value::FightRemainingSec) before the member would die; RescueAssigner ranks it
  * after every spell.
  * cost    = LostAction(caster, GCD) (not for an option off the global cooldown: potions,
- *           healthstones) [+ LostAction(caster, d): Ice Block]
+ *           healthstones) [+ ManaWorth of a held mana item on the same shared cooldown: a
+ *           healing potion locks the mana potion, a healthstone the mana gem] [+ LostAction(caster, d): Ice Block]
  *           [+ LostAction(target, d) for a melee target that cannot attack: Blessing of Protection]
  *           + ManaWorth::Points(mana) + cooldown points (Value::CooldownPoints over
  *           fight left + NEXT_FIGHTS_SEC: a long cooldown is also missing in the next pulls)

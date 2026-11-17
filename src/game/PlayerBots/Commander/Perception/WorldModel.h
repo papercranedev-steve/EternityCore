@@ -192,6 +192,7 @@ namespace Commander
         // 0 = a spell; else the item whose on-use spell `spellId` is (ItemKit: healthstone,
         // healing potion), used with BotActionType::UseItem.
         uint32 itemId = 0;
+        uint32 itemCategory = 0;        // the item's shared cooldown (ItemKit::Consumable::category)
         // Off cooldown (or its reset ready, the caster able to act: `reset`), enough power
         // (stance swap counted), can act (or controlled and the spell lifts it: Divine Shield,
         // Ice Block), a shield if needed.
@@ -209,6 +210,7 @@ namespace Commander
         float mana = 0.0f;          // average restored
         float healthCost = 0.0f;    // average damage it does to the user (runes)
         uint32 cooldownMs = 0;
+        uint32 category = 0;        // shared cooldown (ItemKit::Consumable::category)
         bool ready = false;         // can act, off cooldown, usable by it
     };
 

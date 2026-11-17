@@ -1210,6 +1210,7 @@ namespace WorldModelBuilder
                 SurvivalAbility a;
                 a.spellId = c.spell->Id;
                 a.itemId = c.proto->ItemId;
+                a.itemCategory = c.category;
                 a.effect = SurvivalAbility::Effect::Heal;
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
                     if (c.spell->Effect[i] == SPELL_EFFECT_HEAL)
@@ -1298,6 +1299,7 @@ namespace WorldModelBuilder
                 if (a.mana <= 0.0f)
                     continue;
                 a.cooldownMs = c.cooldownMs;
+                a.category = c.category;
                 a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
                 f.manaItems.push_back(a);
             }

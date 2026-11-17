@@ -68,6 +68,7 @@ namespace Commander
                     Consumable c;
                     c.proto = proto;
                     c.spell = spell;
+                    c.category = category;
                     c.cooldownMs = std::max({ uint32(std::max(0, s.SpellCooldown)),
                                               uint32(std::max(0, s.SpellCategoryCooldown)),
                                               spell->GetRecoveryTime() });
