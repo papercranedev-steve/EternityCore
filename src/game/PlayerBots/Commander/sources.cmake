@@ -98,6 +98,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.h
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Guide.h
+  ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
   ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.h
   ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h

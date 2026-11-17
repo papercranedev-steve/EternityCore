@@ -31,6 +31,8 @@
  *                                    (PullMethod.h); no argument shows it
  *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
  *                                    n mobs per pull), waiting until ready in between; "clear stop"
+ *   .partybot ai guide [off]         the party follows the selected party bot out of combat
+ *                                    instead of you (Guide.h); no selection: show, "off": you again
  *   .partybot ai retreat [stop]      whole party stops attacking and runs to a point out of every
  *                                    enemy's threat area until they give up; in a dungeon out
  *                                    through the door along the way in (also when you run away
@@ -51,6 +53,7 @@
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
@@ -704,6 +707,48 @@ namespace
         return true;
     }
 
+    // .partybot ai guide [off]   (selection: the party bot to follow)
+    bool SetGuide(ChatHandler* handler, Player* player, char const* option, Player* selected)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+        Commander::TeamPlan& plan = commander->GetPlanMutable();
+
+        if (option && !strcmp(option, "off"))
+        {
+            plan.guide.Clear();
+            handler->SendSysMessage("The party follows you again.");
+            return true;
+        }
+        if (option)
+        {
+            handler->SendSysMessage("Usage: .partybot ai guide [off]   (select the party bot to follow; no selection: show)");
+            return false;
+        }
+
+        bool const isPartyBot = selected && selected != player && selected->GetGroup() == player->GetGroup() &&
+            selected->AI() && dynamic_cast<PartyBotAI*>(selected->AI());
+        if (!isPartyBot)
+        {
+            Player* current = Commander::Guide::Current(plan, player);
+            if (current)
+                handler->PSendSysMessage("The party follows %s. Select another party bot to change, '.partybot ai guide off' to follow you.",
+                    current->GetName());
+            else if (!plan.guide.IsEmpty())
+                handler->SendSysMessage("A guide is set but cannot lead now (dead, gone or on another map): the party follows you.");
+            else
+                handler->SendSysMessage("The party follows you. Select a party bot and run this again to make it the guide.");
+            return true;
+        }
+
+        plan.guide = selected->GetObjectGuid();
+        handler->PSendSysMessage("The party follows %s out of combat; %s stands until walked "
+            "(.partybot cometome). If it dies or leaves, the party follows you. '.partybot ai guide off' to end.",
+            selected->GetName(), selected->GetName());
+        return true;
+    }
+
     // .partybot ai retreat [stop]
     // Only the player starts a retreat: the player is not controlled by us, bots running on their
     // own would leave the player to die alone (combat scenario 11, T+18s).
@@ -1198,11 +1243,14 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
-        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field") || !strcmp(sub, "wayin"))
+        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field") || !strcmp(sub, "wayin") ||
+        !strcmp(sub, "guide"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
-        if (!strcmp(sub, "wayin"))
+        if (!strcmp(sub, "guide"))
+            ok = SetGuide(this, player, ExtractLiteralArg(&args), GetSelectedPlayer());
+        else if (!strcmp(sub, "wayin"))
             ok = ShowWayIn(this, player);
         else if (!strcmp(sub, "field"))
             ok = ShowField(this, player);
@@ -1249,7 +1297,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

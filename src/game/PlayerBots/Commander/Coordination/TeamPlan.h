@@ -1497,6 +1497,9 @@ namespace Commander
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
+        // The party bot the party follows out of combat instead of the player (Guide.h: the
+        // push mode's tank). Empty = the player. Only Guide::Current says whether it leads now.
+        ObjectGuid guide;
         RetreatPlan retreat;
         CrisisPlan crisis;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)

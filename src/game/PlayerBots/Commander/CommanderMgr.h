@@ -73,6 +73,8 @@ namespace Commander
         // `.partybot ai retreat` is running for the bot's party: out of combat it must not stop
         // to resurrect, dispel or buff on the way to the rally point (RetreatBehavior).
         bool IsRetreating(PartyBotAI* bot);
+        // The party bot the bot's party follows instead of the player (Guide.h), null = the player.
+        Player* GetGuide(PartyBotAI* bot);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

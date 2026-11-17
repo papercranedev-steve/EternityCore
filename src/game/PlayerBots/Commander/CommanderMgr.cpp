@@ -1,5 +1,6 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/Coordination/Situation/Guide.h"
 #include "PartyBotAI.h"
 #include "Config/Config.h"
 #include "Group.h"
@@ -164,6 +165,14 @@ namespace Commander
             return false;
         std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
         return commander && commander->GetPlan().retreat.active;
+    }
+
+    Player* CommanderMgr::GetGuide(PartyBotAI* bot)
+    {
+        if (!IsEnabled())
+            return nullptr;
+        std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
+        return commander ? Guide::Current(commander->GetPlan(), bot->me) : nullptr;
     }
 
     bool CommanderMgr::IsModuleEnabled(std::string const& id) const

@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolPlanner.h"
 #include "Commander/Coordination/Situation/Los/CasterLurePlanner.h"
@@ -315,7 +316,7 @@ namespace Commander
 
         if (m_world.version == 0 || WorldTimer::getMSTimeDiff(m_world.packsRefreshedAtMs, nowMs) >= PACK_REFRESH_MS)
         {
-            WorldModelBuilder::RefreshPacks(bot, m_world);
+            WorldModelBuilder::RefreshPacks(bot, m_world, Guide::Current(m_plan, bot->me));
             m_world.packsRefreshedAtMs = nowMs;
         }
         // (after the packs: an enemy's pack mates are left out of its route check)

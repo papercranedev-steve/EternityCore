@@ -456,6 +456,7 @@ Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader, floa
 
 void PartyBotAI::IssueFollow(Unit* pLeader, float heading)
 {
+    m_followTargetGuid = pLeader->GetObjectGuid();
     // (on a transport: the original follow, the offset at the leader's facing)
     if (UsesSafeFollow())
         me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle,
@@ -559,6 +560,36 @@ bool PartyBotAI::WaitForDeadLeader(Player* pLeader)
         Commander::TrailFollow::Stop(this, m_trailFollow);
     m_followChecked = false;
     return true;
+}
+
+Player* PartyBotAI::GetFollowTarget(Player* pLeader)
+{
+    Player* pGuide = sCommanderMgr.GetGuide(this);
+    if (!pGuide)
+        return pLeader;
+    return pGuide == me ? nullptr : pGuide;
+}
+
+Player* PartyBotAI::FollowAnchor(Player* pLeader)
+{
+    Player* pFollow = GetFollowTarget(pLeader);
+    return pFollow ? pFollow : pLeader;
+}
+
+void PartyBotAI::StandAsGuide()
+{
+    // Only its own follow: a Commander walk or a `.partybot cometome` move is not stopped.
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+    {
+        me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
+    if (IsTrailFollowing())
+        Commander::TrailFollow::Stop(this, m_trailFollow);
+    m_followChecked = false;
+    // (HumanFollow's sit while the leader stood: the guide gets up)
+    m_humanIdle.sat = false;
 }
 
 void PartyBotAI::BeginChasing(Unit* pVictim) const
@@ -796,7 +827,8 @@ bool PartyBotAI::StartResting()
 
     // Far behind the leader (it is about to be teleported there): full at once, as before.
     Player* pLeader = GetPartyLeader();
-    if (pLeader && !me->IsWithinDistInMap(pLeader, 100.0f) && !IsArriving())
+    Player* pAnchor = pLeader ? FollowAnchor(pLeader) : nullptr;
+    if (pAnchor && !me->IsWithinDistInMap(pAnchor, 100.0f) && !IsArriving())
     {
         me->SetHealth(me->GetMaxHealth());
         if (me->GetPowerType() == POWER_MANA)
@@ -1679,21 +1711,24 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Back from a corpse run away from the leader: walk to him, no teleport. Not while a
         // resurrection here is about to be cast (the walk or the teleport would cancel it).
         // Not to a dead leader (WaitForDeadLeader).
-        if (!resurrectFirst && !pLeader->IsDead() && Commander::Arrival::Update(this, m_arrival, pLeader))
+        // (to the guide the party follows, Commander/Coordination/Situation/Guide.h; the guide
+        // itself to the leader)
+        Player* pAnchor = FollowAnchor(pLeader);
+        if (!resurrectFirst && !pAnchor->IsDead() && Commander::Arrival::Update(this, m_arrival, pAnchor))
             return;
 
         // Teleport to leader if too far away. Fix: not to a dead leader: after a wipe the
         // surviving bots were teleported to the player's ghost at the graveyard, fell behind on
         // its run back and were teleported again every 100 yd. They wait where they are, by
         // the corpse the ghost runs to.
-        if (!resurrectFirst && !pLeader->IsDead() && !me->IsWithinDistInMap(pLeader, 100.0f))
+        if (!resurrectFirst && !pAnchor->IsDead() && !me->IsWithinDistInMap(pAnchor, 100.0f))
         {
             if (!me->IsStopped())
                 me->StopMoving();
             me->GetMotionMaster()->Clear(false, true);
             me->GetMotionMaster()->MoveIdle();
             char name[128] = {};
-            snprintf(name, sizeof(name), "%s", pLeader->GetName());
+            snprintf(name, sizeof(name), "%s", pAnchor->GetName());
             ChatHandler(me).HandleGonameCommand(name);
             return;
         }
@@ -1730,16 +1765,28 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // kept following the player about 2.5 s into the fight, and out of combat under the pull's
     // hold the follow spot went unchecked; she stopped 17.8 yd from a wanderer's home and its
     // group of seven came (strat-20261107-164236).
+    // The party follows a guide bot instead of the leader (Commander/Coordination/Situation/
+    // Guide.h); null for the guide itself, which follows nobody.
+    Player* const pFollow = GetFollowTarget(pLeader);
     {
         // (also while walking: the follow point moves with the leader)
         // The leader's way when the navmesh has none or only a long detour (a drop, a jump):
         // Commander/Behaviors/Movement/TrailFollow.h.
-        bool const follows = !me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
-            !WaitForDeadLeader(pLeader) &&
-            !Commander::TrailFollow::Consider(this, m_trailFollow, pLeader);
-        if (follows)
-            KeepFollowSpotSafe(pLeader);
-        UpdateHumanFollow(pLeader, follows);
+        if (!pFollow)
+            StandAsGuide();
+        else
+        {
+            bool const follows = !me->GetVictim() && !IsMovementHeld() && !IsStanceControlled() &&
+                !WaitForDeadLeader(pFollow) &&
+                !Commander::TrailFollow::Consider(this, m_trailFollow, pFollow);
+            // The guide changed (set, gone, back): the running follow is the old one's.
+            if (follows && me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE &&
+                m_followTargetGuid != pFollow->GetObjectGuid())
+                StartFollowing(pFollow);
+            else if (follows)
+                KeepFollowSpotSafe(pFollow);
+            UpdateHumanFollow(pFollow, follows);
+        }
 
         // Fix: a healer that was following when the fight started kept following until it stood
         // still: the priest walked 15 yd behind the player into Magistrate Barthilas' Crowd
@@ -1814,9 +1861,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // put them while the party fights, in combat themselves or not yet: following the leader walked the
             // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
             // that had not healed yet with the player while the tank fought further away.
-            if (!IsStanceControlled() && !IsTrailFollowing() && !pLeader->IsDead() &&
+            if (pFollow && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
                 me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                StartFollowing(pLeader);
+                StartFollowing(pFollow);
         }
         else
         {

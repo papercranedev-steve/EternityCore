@@ -305,6 +305,14 @@ public:
     // A dead leader (a body, or a ghost on its corpse run): stops the follow and the trail walk
     // and returns true, so the bot waits where it is (by the corpse) instead of going after him.
     bool WaitForDeadLeader(Player* pLeader);
+    // Who this bot follows out of combat: the party's guide bot when one leads
+    // (Commander/Coordination/Situation/Guide.h), else the leader. Null: this bot is the guide.
+    Player* GetFollowTarget(Player* pLeader);
+    // Who this bot stays near (teleport beyond 100 yd, the walk back after a corpse run): the
+    // follow target, the leader for the guide itself.
+    Player* FollowAnchor(Player* pLeader);
+    // The guide: stops its own follow (nothing else), so it stands where it is walked to.
+    void StandAsGuide();
     // Hides CombatBotBaseAI::BeginChasing so every chase started from PartyBotAI honours the movement hold.
     void BeginChasing(Unit* pVictim) const;
     // Hide the CombatBotBaseAI versions so every dispel started from PartyBotAI skips
@@ -380,6 +388,8 @@ public:
     float m_followCheckY = 0.0f;
     float m_followCheckO = 0.0f;
     bool m_followChecked = false;
+    // Who the last MoveFollow follows (IssueFollow): a new guide restarts the follow.
+    ObjectGuid m_followTargetGuid;
     Commander::HumanFollow::IdleState m_humanIdle;
     // The last OrderChase (Commander melee stance): victim and angle. Cleared by an original
     // chase (BeginChasing, const).

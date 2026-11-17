@@ -2127,12 +2127,14 @@ namespace WorldModelBuilder
         }
     }
 
-    void RefreshPacks(PartyBotAI* bot, WorldModel& world)
+    void RefreshPacks(PartyBotAI* bot, WorldModel& world, Player* guide)
     {
         Player* me = bot->me;
         Player* leader = bot->GetPartyLeader();
-        WorldObject* center = (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap())
-            ? static_cast<WorldObject*>(leader) : static_cast<WorldObject*>(me);
+        // Where the party is going: the guide it follows, else the leader.
+        Player* walker = guide ? guide
+            : (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap()) ? leader : nullptr;
+        WorldObject* center = walker ? static_cast<WorldObject*>(walker) : static_cast<WorldObject*>(me);
 
         // One scan for both: packs within PACK_SCAN_RADIUS, patrols within PATROL_SCAN_RADIUS.
         float const scanRadius = std::max(PACK_SCAN_RADIUS, PATROL_SCAN_RADIUS);
@@ -2209,10 +2211,10 @@ namespace WorldModelBuilder
         }
 
         world.packs = PackResolver::Resolve(creatures, PositionOf(center));
-        // Walks from the leader (the clear's order): only out of combat, when nothing is
-        // pulled from here anyway and the paths are not worth the time.
-        if (!fighting && center == leader)
-            PackRoutes::Fill(leader, world.packs);
+        // Walks from the leader or guide (the clear's order): only out of combat, when nothing
+        // is pulled from here anyway and the paths are not worth the time.
+        if (!fighting && walker)
+            PackRoutes::Fill(walker, world.packs);
 
         // Ally candidates for the next RefreshCombat: friendly creatures in combat around the
         // leader. Grid objects only (players are party members or strangers, never allies).
