@@ -124,6 +124,20 @@ bool PartyBotAI::LootsForSelf() const
     return me && sCompanionMgr.IsCompanion(me->GetGUIDLow());
 }
 
+bool PartyBotAI::GetsFreeSupplies() const
+{
+    return !LootsForSelf();
+}
+
+void PartyBotAI::StopErrands()
+{
+    Life::LootRun::Stop(me, m_lootRun);
+    Life::QuestObjectRun::Stop(me, m_questObjectRun);
+    Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
+    Life::NpcVisit::Stop(me, m_vendorVisit);
+    Life::NpcVisit::Stop(me, m_trainerVisit);
+}
+
 uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
 {
     if (!LootsForSelf())
@@ -1663,9 +1677,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (me->IsInCombat())
     {
         m_resurrectApproach = Commander::ResurrectApproachState();
-        Life::LootRun::Stop(me, m_lootRun);
-        Life::QuestObjectRun::Stop(me, m_questObjectRun);
-        Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
+        StopErrands();
     }
     if (!me->IsInCombat())
     {
@@ -1739,16 +1751,22 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // is about to be cast.
         // Then the quest objects its own quests need (Life/Errands/QuestObjectRun.h), then its
         // finished quests at a giver near the leader (Life/Errands/QuestTurnIn.h).
+        // Last its business at a vendor / armorer and its class trainer near the leader
+        // (Life/Errands/NpcVisit.h): sell, repair, buy supplies, learn.
         if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
+            StopErrands();
+        else
         {
-            Life::LootRun::Stop(me, m_lootRun);
-            Life::QuestObjectRun::Stop(me, m_questObjectRun);
-            Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
+            bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
+                Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
+                Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
+                Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
+                Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask);
+            if (m_trainerTask.TakeLearned())
+                m_resetSpellData = true;    // new ranks: the rotation picks them up
+            if (busy)
+                return;
         }
-        else if (Life::LootRun::Update(me, m_lootRun, pLeader) ||
-                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
-                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser))
-            return;
 
         // Back from a corpse run away from the leader: walk to him, no teleport. Not while a
         // resurrection here is about to be cast (the walk or the teleport would cancel it).

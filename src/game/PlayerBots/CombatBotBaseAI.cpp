@@ -1777,10 +1777,14 @@ void CombatBotBaseAI::AddAllSpellReagents()
     {
         if (pSpell)
         {
-            for (const auto& reagent : pSpell->Reagent)
+            // (companions buy their reagents; totems are still given: their quests come later)
+            if (GetsFreeSupplies())
             {
-                if (reagent && !me->HasItemCount(reagent, 1))
-                    AddItemToInventory(reagent);
+                for (const auto& reagent : pSpell->Reagent)
+                {
+                    if (reagent && !me->HasItemCount(reagent, 1))
+                        AddItemToInventory(reagent);
+                }
             }
             for (const auto& totem : pSpell->Totem)
             {
@@ -3316,7 +3320,7 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
 
     if ((result == SPELL_FAILED_NEED_AMMO_POUCH ||
         result == SPELL_FAILED_ITEM_NOT_READY) &&
-        pSpellEntry->Reagent[0])
+        pSpellEntry->Reagent[0] && GetsFreeSupplies())
     {
         if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START))
             me->DestroyItem(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START, true);
@@ -3403,6 +3407,12 @@ bool CombatBotBaseAI::EquipAmmoFromBags()
 
 void CombatBotBaseAI::AddHunterAmmo()
 {
+    // Companions buy their ammo (Life/Errands/MerchantTasks.h); out of it they use what they have.
+    if (!GetsFreeSupplies())
+    {
+        EquipAmmoFromBags();
+        return;
+    }
     if (Item* pWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
     {
         if (ItemPrototype const* pWeaponProto = pWeapon->GetProto())

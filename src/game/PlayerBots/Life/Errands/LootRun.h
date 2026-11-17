@@ -51,6 +51,8 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 15000;
         constexpr size_t DONE_KEEP = 16;
+        // Gray items are taken while more bag slots than this are free (they sell at a vendor).
+        constexpr uint32 JUNK_ROOM_SLOTS = 4;
 
         // `anchor`: corpses near it only (the party leader); null = near the bot.
         // True: the bot walks to a corpse or looted one this tick (the caller does nothing

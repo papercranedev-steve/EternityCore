@@ -23,6 +23,18 @@ namespace Inventory
                         guids.insert(item->GetObjectGuid());
     }
 
+    uint32 FreeBagSlots(Player const* player)
+    {
+        uint32 free = 0;
+        for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+            if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                ++free;
+        for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+            if (Bag* bag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                free += bag->GetFreeSlots();
+        return free;
+    }
+
     uint32 WearUpgrades(Player* player, std::set<ObjectGuid> const& before)
     {
         std::set<ObjectGuid> now;

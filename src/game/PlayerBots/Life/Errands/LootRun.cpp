@@ -24,9 +24,15 @@ namespace LootRun
             return corpse->IsWithinDistInMap(me, me->GetMaxLootDistance(corpse), true, SizeFactor::None);
         }
 
+        // Gray items (vendor money, Shared/Vendor::SellJunk) while the bags have room for them.
+        bool TakesJunk(Player* me)
+        {
+            return BotShared::Inventory::FreeBagSlots(me) > JUNK_ROOM_SLOTS;
+        }
+
         bool Wants(Player* me, Creature* corpse)
         {
-            return me->IsAllowedToLoot(corpse) && BotShared::LootFacts::HasLootWorthTaking(me, corpse);
+            return me->IsAllowedToLoot(corpse) && BotShared::LootFacts::HasLootWorthTaking(me, corpse, TakesJunk(me));
         }
 
         // The nearest corpse to loot. Corpses without a safe walk are marked done.
@@ -67,7 +73,7 @@ namespace LootRun
             if (me->GetLootGuid() != guid)
                 return;
 
-            BotShared::LootFacts::TakeOpenLoot(me);
+            BotShared::LootFacts::TakeOpenLoot(me, TakesJunk(me));
             BotShared::Inventory::WearUpgrades(me, before);
         }
     }

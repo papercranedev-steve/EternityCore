@@ -204,6 +204,9 @@ public:
     // Group loot roll for `itemId` (a RollVote: ROLL_PASS / ROLL_NEED / ROLL_GREED). Bots pass,
     // so the player gets the item; PartyBotAI lets companions roll like players.
     virtual uint8 ChooseLootRoll(uint32 itemId) const;
+    // Reagents (AddAllSpellReagents, the refill on a failed cast) and hunter ammo (AddHunterAmmo)
+    // are created for free. PartyBotAI: not for companions, they buy them.
+    virtual bool GetsFreeSupplies() const { return true; }
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
     // Projectile subclass (ITEM_SUBCLASS_ARROW / ITEM_SUBCLASS_BULLET) the equipped ranged weapon

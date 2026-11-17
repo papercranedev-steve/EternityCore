@@ -32,6 +32,9 @@ namespace BotShared
 
         // What LearnAvailable(player, true) would cost now, first ranks only (no new ranks unlock).
         uint32 CostOfAvailable(Player const* player);
+
+        // The cheapest lesson available now; false when there is none.
+        bool CheapestAvailable(Player const* player, uint32& cost);
     }
 }
 

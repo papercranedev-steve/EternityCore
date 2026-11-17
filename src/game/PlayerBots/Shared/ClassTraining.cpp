@@ -113,6 +113,20 @@ namespace BotShared
             return result;
         }
 
+        bool CheapestAvailable(Player const* player, uint32& cost)
+        {
+            if (!player)
+                return false;
+            // Lessons are sorted cheapest first.
+            for (TrainerSpell const& lesson : LessonsOf(player->GetClass()))
+                if (player->GetTrainerSpellState(&lesson) == TRAINER_SPELL_GREEN)
+                {
+                    cost = lesson.spellCost;
+                    return true;
+                }
+            return false;
+        }
+
         uint32 CostOfAvailable(Player const* player)
         {
             uint32 cost = 0;

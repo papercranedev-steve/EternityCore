@@ -34,6 +34,8 @@
 #include "Life/Errands/LootRun.h"
 #include "Life/Errands/QuestObjectRun.h"
 #include "Life/Errands/QuestTurnIn.h"
+#include "Life/Errands/NpcVisit.h"
+#include "Life/Errands/MerchantTasks.h"
 #include "Companions/RewardChoice.h"
 #include <memory>
 
@@ -167,6 +169,10 @@ public:
     // robin turns and rolls need / greed like a player. Other party bots leave loot to the player.
     bool LootsForSelf() const;
     uint8 ChooseLootRoll(uint32 itemId) const override;
+    // Companions buy their reagents and ammo (Life/Errands/MerchantTasks.h); other bots get them.
+    bool GetsFreeSupplies() const override;
+    // Ends every daily-life errand walk (combat, a Commander plan, not a companion).
+    void StopErrands();
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
@@ -433,6 +439,12 @@ public:
     // (Life/Errands/QuestTurnIn.h); the reward is picked by m_rewardChooser.
     Life::QuestTurnInState m_questTurnIn;
     Companions::CompanionRewardChooser m_rewardChooser;
+    // Out of combat: a companion's business at vendors and its class trainer near the leader
+    // (Life/Errands/NpcVisit.h, MerchantTasks.h).
+    Life::NpcVisitState m_vendorVisit;
+    Life::VendorTask m_vendorTask;
+    Life::NpcVisitState m_trainerVisit;
+    Life::TrainerTask m_trainerTask;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;
