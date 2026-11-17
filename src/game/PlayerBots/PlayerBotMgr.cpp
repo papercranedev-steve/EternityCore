@@ -18,6 +18,7 @@
 #include "Bag.h"
 #include "QuestDef.h"
 #include "Population/PopulationMgr.h"
+#include "Companions/CompanionMgr.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 
@@ -64,9 +65,15 @@ void PlayerBotMgr::LoadConfig()
     m_confUpdateDiff = sConfig.GetIntDefault("PlayerBot.UpdateMs", 10000);
 
     sPopulationMgr.LoadConfig();    // PlayerBots/Population/
+    sCompanionMgr.LoadConfig();     // PlayerBots/Companions/
 
     if (!sWorld.getConfig(CONFIG_BOOL_FORCE_LOGOUT_DELAY))
         m_tempBots.clear();
+}
+
+bool PlayerBotMgr::IsSavingAllowed(uint32 playerGuid) const
+{
+    return m_confAllowSaving || (playerGuid && sCompanionMgr.IsCompanion(playerGuid));
 }
 
 void PlayerBotMgr::Load()
@@ -79,6 +86,7 @@ void PlayerBotMgr::Load()
 
     // 2- Configuration
     LoadConfig();
+    sCompanionMgr.Load();
 
     // 3- Load usable account ID
     std::unique_ptr<QueryResult> result = LoginDatabase.PQuery(
@@ -197,6 +205,8 @@ void PlayerBotMgr::Update(uint32 diff)
 {
     // Population bots (PlayerBots/Population/): spawn queue, lifetimes, despawn requests.
     sPopulationMgr.Update(diff);
+    // Recruited companions: logins as party bots after their temporary bot left.
+    sCompanionMgr.Update(diff);
 
     // Temporary bots.
     std::map<uint32, uint32>::iterator it;
@@ -261,7 +271,7 @@ void PlayerBotMgr::Update(uint32 diff)
                 // the bot session: FindSession returns the client's session then, leave it alone.
                 if (WorldSession* sess = sWorld.FindSession(iter->second->accountId))
                     if (sess->GetBot() == iter->second.get())
-                        sess->LogoutPlayer(m_confAllowSaving);
+                        sess->LogoutPlayer(IsSavingAllowed(uint32(iter->first)));
 
                 iter->second->requestRemoval = false;
 

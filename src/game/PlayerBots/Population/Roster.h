@@ -6,7 +6,8 @@
  * Design: .kiro/docs/2026-11-17-fixed-roster.md (workspace root).
  *
  * Members are identities only (characters DB tables custom_popbot_*, created on first load);
- * the character itself is still a temporary bot. World thread only.
+ * the character itself is a temporary bot, until a real player recruits it: then it is a saved
+ * character (char_guid, Companions/CompanionMgr) and the roster no longer spawns it. World thread only.
  */
 
 #ifndef MANGOS_POPULATION_ROSTER_H
@@ -51,7 +52,9 @@ namespace Population
         uint8 quitLevel = 0;        // != 0: stops logging in once the anchor passed this level
         int8 jitter = 0;            // -1 / 0 / +1 level
         uint8 wealth = 0;           // 0-100, gear and money (phase R2)
-        uint8 temperament = 0;      // chat (later)
+        uint8 temperament = 0;      // unused, personality is `tags`
+        std::vector<std::string> tags;  // personality tag keys (Companions/Personality.h)
+        uint32 charGuid = 0;        // != 0: recruited, a real character now (Companions/); never spawned from the roster
 
         // Runtime
         bool inUse = false;         // online or queued
@@ -102,6 +105,8 @@ namespace Population
         // Picks a member that is not online, not cooling down and not retired; marks it in use.
         bool Pick(RosterQuery const& query, uint32 nowMs, RosterPick& out);
         void SetSessionGuid(uint32 memberId, uint32 guid);
+        // Recruited as a companion: the member is a real character from now on.
+        void SetCharGuid(uint32 memberId, uint32 charGuid);
         void MarkInUse(uint32 memberId);
         // Logged out (or failed to spawn): free again after the cooldown.
         void Release(uint32 memberId, uint32 nowMs);
@@ -115,6 +120,9 @@ namespace Population
         void LoadSeed();
         void LoadCohorts();
         void LoadMembers();
+        void LoadTags();
+        // Members without personality tags (new, or from before tags existed) get theirs, seeded by id.
+        void AssignMissingTags();
         void FreeCohort(Cohort& cohort);
         Cohort* FindCohort(uint32 id);
         Cohort const* FindCohort(uint32 id) const;

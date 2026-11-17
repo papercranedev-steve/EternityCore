@@ -1,7 +1,9 @@
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationBotAI.h"
+#include "Companions/CompanionMgr.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
+#include "ObjectAccessor.h"
 #include "Config/Config.h"
 #include "Log.h"
 #include "Utilities/Random.h"
@@ -163,6 +165,7 @@ namespace Population
             if (!r.removing && r.expireMs && m_nowMs >= r.expireMs)
                 RequestRemoval(r);
 
+        UpdateRecruits();
         m_roster.Update(m_nowMs, m_identity);
         m_city.Update(*this, m_nowMs);
 
@@ -173,6 +176,29 @@ namespace Population
             if (GetBotCount() < m_maxBots)
                 SpawnNow(request);
             m_nextSpawnMs = m_nowMs + m_spawnGapMs;
+        }
+    }
+
+    void PopulationMgr::UpdateRecruits()
+    {
+        for (Record& r : m_bots)
+        {
+            if (r.handle->recruiter.IsEmpty())
+                continue;
+            ObjectGuid const recruiterGuid = r.handle->recruiter;
+            r.handle->recruiter.Clear();    // a failed recruit can be tried again on the next invite
+            if (r.removing || !r.request.rosterId)
+                continue;
+
+            Player* bot = OnlinePlayer(*r.handle);
+            Player* recruiter = sObjectAccessor.FindPlayer(recruiterGuid);
+            if (!bot || !recruiter || !sCompanionMgr.Recruit(bot, recruiter, r.request.rosterId))
+                continue;
+
+            // A real character now: the roster never spawns it again, the temporary bot leaves
+            // and CompanionMgr logs the saved character in as a party bot.
+            m_roster.SetCharGuid(r.request.rosterId, bot->GetGUIDLow());
+            RequestRemoval(r);
         }
     }
 

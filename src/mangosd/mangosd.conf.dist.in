@@ -3347,6 +3347,17 @@ AHBuyer.MaxMarkup = 50
 #        A member who logged out comes back after at least this many minutes.
 #        Default: 30
 #
+#    Companion.Enable
+#        A roster member (city bot) invited by a real player joins as a companion: it becomes a
+#        real saved character (always saved, even with PlayerBot.AllowSaving = 0) and logs in as
+#        a party bot. Load it again later with .partybot load <name>.
+#        Default: 1 - on
+#                 0 - roster members refuse invites like everybody else
+#
+#    Companion.Account
+#        Account that owns the companion characters, created automatically with a random password.
+#        Default: "COMPANIONS"
+#
 ###################################################################################################################
 
 RandomBot.Enable = 0
@@ -3391,6 +3402,8 @@ PopBot.Roster.QuitPct = 30
 PopBot.Roster.EnemyPct = 10
 PopBot.Roster.ElderSharePct = 30
 PopBot.Roster.RespawnCooldownMin = 30
+Companion.Enable = 1
+Companion.Account = "COMPANIONS"
 
 ###################################################################################################################
 # MAIL FLOODING MITIGATION

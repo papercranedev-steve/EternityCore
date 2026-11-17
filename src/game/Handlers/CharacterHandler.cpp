@@ -475,7 +475,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder *holder)
         pCurrChar = new Player(this);
         pCurrChar->GetMotionMaster()->Initialize();
 
-        if (GetBot() && !sPlayerBotMgr.IsSavingAllowed())
+        if (GetBot() && !sPlayerBotMgr.IsSavingAllowed(playerGuid.GetCounter()))
             pCurrChar->m_saveDisabled = true;
     }
 

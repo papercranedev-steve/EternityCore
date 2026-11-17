@@ -103,7 +103,10 @@ class PlayerBotMgr
         bool ForceAccountConnection(WorldSession* sess);
         bool IsPermanentBot(uint32 playerGuid);
         bool IsChatBot(uint32 playerGuid);
-        bool IsSavingAllowed() { return m_confAllowSaving; }
+        // PlayerBot.AllowSaving, or a recruited companion (always saved, PlayerBots/Companions).
+        bool IsSavingAllowed(uint32 playerGuid) const;
+        // The guid has a bot entry (online, loading or waiting for removal).
+        bool HasBot(uint32 playerGuid) const { return m_bots.find(playerGuid) != m_bots.end(); }
 
         // Quests for persistent party bots (saved characters). Bots only take quests and make progress,
         // turning in is done by logging in the bot's own account.

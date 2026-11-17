@@ -1,6 +1,7 @@
 #include "Population/Roster.h"
 #include "Population/Growth.h"
 #include "Population/PopulationIdentity.h"
+#include "Companions/Personality.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
 #include "Group.h"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+#include <unordered_map>
 
 namespace Population
 {
@@ -128,6 +130,13 @@ namespace Population
             " KEY `idx_cohort` (`cohort_id`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='population roster: fixed identities'");
 
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_popbot_member_tag` ("
+            " `member_id` INT UNSIGNED NOT NULL,"
+            " `tag` VARCHAR(24) NOT NULL COMMENT 'key from Companions/Personality.cpp',"
+            " PRIMARY KEY (`member_id`, `tag`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='population roster: personality tags'");
+
         std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_popbot_member'"));
         if (!exists)
             return false;
@@ -193,7 +202,7 @@ namespace Population
 
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
             "SELECT `id`, `cohort_id`, `name`, `race`, `class`, `gender`, `skin`, `face`, `hair_style`, `hair_color`,"
-            " `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`, `temperament`"
+            " `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`, `temperament`, `char_guid`"
             " FROM `custom_popbot_member` ORDER BY `id`"));
         if (!result)
             return;
@@ -219,6 +228,7 @@ namespace Population
             m.jitter = int8(f[15].GetInt32());
             m.wealth = f[16].GetUInt8();
             m.temperament = f[17].GetUInt8();
+            m.charGuid = f[18].GetUInt32();
 
             if (!Identity::IsValidCombo(m.race, m.classId))
                 continue;
@@ -229,9 +239,63 @@ namespace Population
                 m.inUse = prev->inUse;
                 m.availableAtMs = prev->availableAtMs;
                 m.sessionGuid = prev->sessionGuid;
+                if (!m.charGuid)
+                    m.charGuid = prev->charGuid;    // async update not written yet
             }
             m_members.push_back(std::move(m));
         } while (result->NextRow());
+
+        LoadTags();
+        AssignMissingTags();
+    }
+
+    void Roster::LoadTags()
+    {
+        std::unique_ptr<QueryResult> result(CharacterDatabase.Query("SELECT `member_id`, `tag` FROM `custom_popbot_member_tag`"));
+        if (!result)
+            return;
+
+        std::unordered_map<uint32, RosterMember*> byId;
+        for (RosterMember& m : m_members)
+        {
+            m.tags.clear();
+            byId[m.id] = &m;
+        }
+        do
+        {
+            Field* f = result->Fetch();
+            auto itr = byId.find(f[0].GetUInt32());
+            // Unknown keys (a removed tag) are kept: the tag table may grow back.
+            if (itr != byId.end())
+                itr->second->tags.push_back(f[1].GetCppString());
+        } while (result->NextRow());
+    }
+
+    void Roster::AssignMissingTags()
+    {
+        std::string sql;
+        uint32 assigned = 0;
+        for (RosterMember& m : m_members)
+        {
+            if (!m.tags.empty())
+                continue;
+
+            // Same world and member = same personality, also when the tags are rolled again after a wipe.
+            std::seed_seq seq{ uint32(m_seed), uint32(m_seed >> 32), m.id, 0x7a65u };
+            std::mt19937 rng(seq);
+            m.tags = Companions::Personality::Roll(rng);
+            for (std::string const& tag : m.tags)
+            {
+                sql += sql.empty() ? "INSERT IGNORE INTO `custom_popbot_member_tag` (`member_id`, `tag`) VALUES " : ", ";
+                sql += "(" + std::to_string(m.id) + ", '" + tag + "')";
+            }
+            ++assigned;
+        }
+        if (sql.empty())
+            return;
+
+        CharacterDatabase.DirectExecute(sql.c_str());
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roster: personality tags for %u members.", assigned);
     }
 
     void Roster::Load()
@@ -520,7 +584,7 @@ namespace Population
         std::vector<Candidate> own, elders;
         for (RosterMember& m : m_members)
         {
-            if (m.inUse || nowMs < m.availableAtMs)
+            if (m.inUse || nowMs < m.availableAtMs || m.charGuid)
                 continue;
             if (uint32(Player::TeamForRace(m.race)) != query.team)
                 continue;
@@ -587,6 +651,15 @@ namespace Population
     {
         if (RosterMember* m = FindMember(memberId))
             m->sessionGuid = guid;
+    }
+
+    void Roster::SetCharGuid(uint32 memberId, uint32 charGuid)
+    {
+        RosterMember* m = FindMember(memberId);
+        if (!m)
+            return;
+        m->charGuid = charGuid;
+        CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `char_guid` = %u WHERE `id` = %u", charGuid, memberId);
     }
 
     void Roster::MarkInUse(uint32 memberId)

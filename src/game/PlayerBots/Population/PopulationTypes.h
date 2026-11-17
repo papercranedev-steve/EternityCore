@@ -95,6 +95,9 @@ namespace Population
     {
         bool alive = true;
         PopulationBotAI* ai = nullptr;
+        // Set by the AI (map thread) when a real player invited a roster member; the manager
+        // recruits it on its next update (world thread, maps idle) and clears it.
+        ObjectGuid recruiter;
     };
 }
 

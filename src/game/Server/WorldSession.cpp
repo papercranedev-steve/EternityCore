@@ -87,7 +87,7 @@ WorldSession::~WorldSession()
 {
     // unload player if not unloaded
     if (_player)
-        LogoutPlayer(!m_bot || sPlayerBotMgr.IsSavingAllowed());
+        LogoutPlayer(!m_bot || sPlayerBotMgr.IsSavingAllowed(_player->GetGUIDLow()));
 
     // If have unclosed socket, close it
     if (m_socket)
@@ -475,7 +475,7 @@ bool WorldSession::Update(PacketFilter& updater)
     {
         if (m_bot != nullptr && m_bot->state == PB_STATE_OFFLINE)
         {
-            LogoutPlayer(sPlayerBotMgr.IsSavingAllowed());
+            LogoutPlayer(sPlayerBotMgr.IsSavingAllowed(_player ? _player->GetGUIDLow() : 0));
             return false;
         }
 

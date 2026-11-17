@@ -1,5 +1,6 @@
 #include "Population/PopulationBotAI.h"
 #include "Population/PopulationMgr.h"
+#include "Companions/CompanionMgr.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
 #include "Group.h"
@@ -574,8 +575,23 @@ namespace Population
         {
             case SMSG_GROUP_INVITE:
             {
-                if (me && !m_declineInviteInMs)
-                    m_declineInviteInMs = urand(2000, 8000);
+                if (!me || m_declineInviteInMs)
+                    return;
+                // A roster member invited by a real player joins as a companion (Companions/CompanionMgr):
+                // the manager saves it and logs it in again as a party bot. The decline below only
+                // runs if that did not happen.
+                if (m_request.rosterId && m_handle->recruiter.IsEmpty() && sCompanionMgr.IsEnabled())
+                {
+                    Group* pGroup = me->GetGroupInvite();
+                    Player* pInviter = pGroup ? sObjectAccessor.FindPlayer(pGroup->GetLeaderGuid()) : nullptr;
+                    if (pInviter && !pInviter->IsBot())
+                    {
+                        m_handle->recruiter = pInviter->GetObjectGuid();
+                        m_declineInviteInMs = 15000;
+                        return;
+                    }
+                }
+                m_declineInviteInMs = urand(2000, 8000);
                 return;
             }
             case SMSG_TRADE_STATUS:

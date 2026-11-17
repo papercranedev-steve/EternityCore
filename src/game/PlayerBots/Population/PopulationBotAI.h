@@ -1,6 +1,7 @@
 /*
  * World population bot: a temporary character (never saved) that only adds atmosphere.
- * It refuses group invites, trades and duels. Phase 1a behaviour is idle (emotes, sitting,
+ * It refuses trades and duels, and group invites unless it is a roster member invited by a real
+ * player (then it is recruited as a companion, Companions/CompanionMgr). Phase 1a behaviour is idle (emotes, sitting,
  * turning); city and field behaviours come in phases 1b / 1c.
  *
  * Threads: UpdateAI and OnPacketReceived run on the map thread. Settings come from

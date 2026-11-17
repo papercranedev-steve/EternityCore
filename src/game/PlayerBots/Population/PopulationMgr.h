@@ -116,6 +116,8 @@ namespace Population
         // City (and later field) bots come from the roster. False: nobody free, skip this spawn.
         bool TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid);
         void RequestRemoval(Record& record);
+        // Roster members a real player invited become companions (Companions/CompanionMgr).
+        void UpdateRecruits();
         uint32 RandomLifetimeMs() const;
 
         std::atomic<bool> m_enabled{ false };

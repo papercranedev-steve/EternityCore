@@ -1276,6 +1276,9 @@ class Player final: public Unit
         uint32 GetSaveTimer() const { return m_nextSave; }
         void   SetSaveTimer(uint32 timer) { m_nextSave = timer; }
         bool   IsSavingDisabled() const { return m_saveDisabled; }
+        // A temporary bot becomes a saved character of this account (recruited companions,
+        // PlayerBots/Companions). The next SaveToDB writes the whole character.
+        void   EnableSaving(uint32 dbAccountId) { m_saveDisabled = false; m_dbAccountId = dbAccountId; }
 
         /*********************************************************/
         /***                    PET SYSTEM                     ***/
