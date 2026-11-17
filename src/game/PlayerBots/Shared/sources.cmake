@@ -14,6 +14,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/LootFacts.cpp
   ${BOTSHARED_DIR}/ObjectUse.h
   ${BOTSHARED_DIR}/ObjectUse.cpp
+  ${BOTSHARED_DIR}/QuestRewards.h
+  ${BOTSHARED_DIR}/QuestRewards.cpp
 )
 
 target_sources(game PRIVATE ${BOTSHARED_SRCS})

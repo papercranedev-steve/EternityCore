@@ -20,6 +20,8 @@ namespace BotShared
     namespace GearUpgrade
     {
         bool IsUpgrade(Player const* player, ItemPrototype const* proto);
+        // Item levels gained over what it replaces; 0 = not an upgrade (same rules as IsUpgrade).
+        uint32 UpgradeGain(Player const* player, ItemPrototype const* proto);
     }
 }
 

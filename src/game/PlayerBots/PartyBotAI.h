@@ -33,6 +33,8 @@
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include "Life/Errands/LootRun.h"
 #include "Life/Errands/QuestObjectRun.h"
+#include "Life/Errands/QuestTurnIn.h"
+#include "Companions/RewardChoice.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -427,6 +429,10 @@ public:
     Life::LootRunState m_lootRun;
     // Out of combat: the quest objects a companion's own quests need (Life/Errands/QuestObjectRun.h).
     Life::QuestObjectRunState m_questObjectRun;
+    // Out of combat: a companion turns in its finished quests at a giver near the leader
+    // (Life/Errands/QuestTurnIn.h); the reward is picked by m_rewardChooser.
+    Life::QuestTurnInState m_questTurnIn;
+    Companions::CompanionRewardChooser m_rewardChooser;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

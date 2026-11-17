@@ -10,6 +10,9 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/LootRun.cpp
   ${LIFE_DIR}/Errands/QuestObjectRun.h
   ${LIFE_DIR}/Errands/QuestObjectRun.cpp
+  ${LIFE_DIR}/Errands/RewardChooser.h
+  ${LIFE_DIR}/Errands/QuestTurnIn.h
+  ${LIFE_DIR}/Errands/QuestTurnIn.cpp
 )
 
 target_sources(game PRIVATE ${LIFE_SRCS})

@@ -25,8 +25,16 @@ class Player;
 
 namespace Companions
 {
+    // Who picks a quest reward when the companion turns a quest in (RewardChoice.h).
+    enum class RewardMode : uint8
+    {
+        Auto = 0,       // the companion picks (default)
+        AskPlayer = 1,  // the player picks; later unlocked by affinity (soul companions doc §4.3)
+    };
+
     struct CompanionInfo
     {
+        RewardMode rewardMode = RewardMode::Auto;
         uint32 charGuid = 0;
         uint32 memberId = 0;        // custom_popbot_member.id, 0 = not from the roster
         uint32 recruiterGuid = 0;   // real character that recruited it
@@ -47,6 +55,10 @@ namespace Companions
         bool IsEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
         bool IsCompanion(uint32 charGuid) const { return m_companions.find(charGuid) != m_companions.end(); }
         CompanionInfo const* Find(uint32 charGuid) const;
+        // Auto for anyone that is not a companion.
+        RewardMode GetRewardMode(uint32 charGuid) const;
+        // World thread (a command, later the affinity system); stored at once.
+        void SetRewardMode(uint32 charGuid, RewardMode mode);
 
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.

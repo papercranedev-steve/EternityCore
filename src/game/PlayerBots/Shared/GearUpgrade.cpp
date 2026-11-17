@@ -48,25 +48,34 @@ namespace GearUpgrade
         }
     }
 
-    bool IsUpgrade(Player const* player, ItemPrototype const* proto)
+    uint32 UpgradeGain(Player const* player, ItemPrototype const* proto)
     {
         if (!player || !proto || (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR))
-            return false;
+            return 0;
         if (player->CanUseItem(proto) != EQUIP_ERR_OK)
-            return false;
+            return 0;
         if (proto->Class == ITEM_CLASS_ARMOR && IsBodyArmor(proto->InventoryType) && proto->SubClass != BestArmor(player))
-            return false;
+            return 0;
 
+        uint32 current = 0;
         // Two slots: measured against the weaker one.
         if (proto->InventoryType == INVTYPE_FINGER)
-            return proto->ItemLevel > std::min(ItemLevelAt(player, EQUIPMENT_SLOT_FINGER1), ItemLevelAt(player, EQUIPMENT_SLOT_FINGER2));
-        if (proto->InventoryType == INVTYPE_TRINKET)
-            return proto->ItemLevel > std::min(ItemLevelAt(player, EQUIPMENT_SLOT_TRINKET1), ItemLevelAt(player, EQUIPMENT_SLOT_TRINKET2));
+            current = std::min(ItemLevelAt(player, EQUIPMENT_SLOT_FINGER1), ItemLevelAt(player, EQUIPMENT_SLOT_FINGER2));
+        else if (proto->InventoryType == INVTYPE_TRINKET)
+            current = std::min(ItemLevelAt(player, EQUIPMENT_SLOT_TRINKET1), ItemLevelAt(player, EQUIPMENT_SLOT_TRINKET2));
+        else
+        {
+            uint8 const slot = player->FindEquipSlot(proto, NULL_SLOT, true);
+            if (slot == NULL_SLOT)
+                return 0;
+            current = ItemLevelAt(player, slot);
+        }
+        return proto->ItemLevel > current ? proto->ItemLevel - current : 0;
+    }
 
-        uint8 const slot = player->FindEquipSlot(proto, NULL_SLOT, true);
-        if (slot == NULL_SLOT)
-            return false;
-        return proto->ItemLevel > ItemLevelAt(player, slot);
+    bool IsUpgrade(Player const* player, ItemPrototype const* proto)
+    {
+        return UpgradeGain(player, proto) > 0;
     }
 }
 }

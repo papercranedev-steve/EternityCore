@@ -2565,8 +2565,9 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
 //
 // Bots take the quests their group's real player takes and make progress like
 // real group members (kill credit is already shared by the core). Quest drops
-// the player loots are copied to bots that still need them. Turning in is left
-// to the player, who logs in the bot's own account.
+// the player loots are copied to bots that still need them (not to companions: they
+// loot their own). Turning in is left to the player, who logs in the bot's own account;
+// companions turn in themselves (Life/Errands/QuestTurnIn.h).
 //
 // Replies to the player are system messages parsed by the PartyBotBags addon:
 //   PBQUEST;<bot>;accept;<questId>;<title>

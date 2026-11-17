@@ -52,11 +52,19 @@ namespace Companions
             " `member_id` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'custom_popbot_member.id, 0 = not from the roster',"
             " `recruiter_guid` INT UNSIGNED NOT NULL DEFAULT 0,"
             " `recruited_at` INT UNSIGNED NOT NULL DEFAULT 0,"
+            " `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = picks quest rewards itself, 1 = the player picks',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
 
         std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_companion'"));
-        return exists != nullptr;
+        if (!exists)
+            return false;
+
+        // Tables from stage S1 (before reward_mode).
+        std::unique_ptr<QueryResult> rewardMode(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'reward_mode'"));
+        if (!rewardMode)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `recruited_at`");
+        return true;
     }
 
     void CompanionMgr::Load()
@@ -72,7 +80,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -84,6 +92,7 @@ namespace Companions
                 info.memberId = f[1].GetUInt32();
                 info.recruiterGuid = f[2].GetUInt32();
                 info.recruitedAt = f[3].GetUInt32();
+                info.rewardMode = f[4].GetUInt8() == uint8(RewardMode::AskPlayer) ? RewardMode::AskPlayer : RewardMode::Auto;
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -120,6 +129,21 @@ namespace Companions
     {
         auto itr = m_companions.find(charGuid);
         return itr != m_companions.end() ? &itr->second : nullptr;
+    }
+
+    RewardMode CompanionMgr::GetRewardMode(uint32 charGuid) const
+    {
+        CompanionInfo const* info = Find(charGuid);
+        return info ? info->rewardMode : RewardMode::Auto;
+    }
+
+    void CompanionMgr::SetRewardMode(uint32 charGuid, RewardMode mode)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end())
+            return;
+        itr->second.rewardMode = mode;
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `reward_mode` = %u WHERE `char_guid` = %u", uint32(mode), charGuid);
     }
 
     bool CompanionMgr::Recruit(Player* bot, Player* recruiter, uint32 memberId)
