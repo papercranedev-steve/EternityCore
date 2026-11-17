@@ -572,11 +572,7 @@ namespace CastValues
     float InterruptCost(WorldModel const& world, PartyMemberFacts const& who,
                         InterruptAbility const& ability, EnemyFacts const& enemy, CastValue const& cast)
     {
-        float cost = Value::LostAction(world, who, Value::GCD_SEC);
-
-        float const outOfRange = PackResolver::Distance(who.pos, enemy.pos) - ability.maxRange;
-        if (outOfRange > 0.0f)
-            cost += Value::LostAction(world, who, outOfRange / RUN_YARDS_PER_SEC);
+        float const cost = InterruptActionCost(world, who, ability, enemy);
 
         // The ability is gone for its cooldown. That costs something when this or another enemy
         // casts something worse than this cast during that time. The same enemy counts too: with
@@ -618,6 +614,57 @@ namespace CastValues
             });
         }
         return cost + worst;
+    }
+
+    float InterruptActionCost(WorldModel const& world, PartyMemberFacts const& who,
+                              InterruptAbility const& ability, EnemyFacts const& enemy)
+    {
+        float cost = Value::LostAction(world, who, Value::GCD_SEC);
+        float const outOfRange = PackResolver::Distance(who.pos, enemy.pos) - ability.maxRange;
+        if (outOfRange > 0.0f)
+            cost += Value::LostAction(world, who, outOfRange / RUN_YARDS_PER_SEC);
+        return cost;
+    }
+
+    std::vector<ExpectedCast> ExpectedCasts(WorldModel const& world)
+    {
+        std::vector<ExpectedCast> out;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (e.crowdControlled || !e.acting || e.silenced || e.onAllyOnly)
+                continue;
+            ForEachInterruptibleCast(e, [&](uint32 spellId, CreatureSpellRef const* ref, SpellProfile const& sp)
+            {
+                ExpectedCast c;
+                c.enemy = e.guid;
+                c.spellId = spellId;
+                c.school = sp.school;
+                // The next one of the spell running now: its repeat delay runs from this cast's
+                // start (interrupted or not); the others' from their latest cast seen.
+                c.waitSec = e.castingSpellId == spellId
+                    ? std::max(0.0f, (ref ? ref->repeatMinMs / 1000.0f : 0.0f) - CastElapsedSec(e, spellId))
+                    : RepeatWaitSec(world, e, spellId, ref);
+                float const repeat = RepeatSec(ref);
+                c.intervalSec = repeat > 0.0f ? repeat : CAST_INTERVAL_SEC;
+                c.points = Evaluate(world, e, spellId, ObjectGuid()).points;
+                if (c.points > 0.0f)
+                    out.push_back(c);
+            });
+        }
+        return out;
+    }
+
+    float ShareInCooldown(EnemyFacts const& enemy, ExpectedCast const& next, InterruptAbility const& ability, bool usedOnIt)
+    {
+        float window = ability.cooldownMs / 1000.0f - next.waitSec;
+        // Used on this enemy's cast now: the school lockout blocks `next` meanwhile anyway.
+        if (usedOnIt && ability.lockoutMs && enemy.castingSpellId)
+            if (std::shared_ptr<SpellProfile const> running = sProfileStore.GetSpell(enemy.castingSpellId))
+                if (running->school == next.school)
+                    window -= ability.lockoutMs / 1000.0f;
+        if (window <= 0.0f || next.intervalSec <= 0.0f)
+            return 0.0f;
+        return std::min(1.0f, window / next.intervalSec);
     }
 }
 }

@@ -78,7 +78,8 @@ namespace DutyAllocator
         class Search
         {
         public:
-            explicit Search(std::vector<DutyNeed> const& needs) : m_needs(needs), m_choice(needs.size(), UNANSWERED)
+            Search(std::vector<DutyNeed> const& needs, std::vector<DutyReserve> const& reserves)
+                : m_needs(needs), m_reserves(reserves), m_choice(needs.size(), UNANSWERED)
             {
                 // The best a need can add (bound): its most valuable candidate fit to be primary.
                 m_best.reserve(needs.size());
@@ -136,8 +137,21 @@ namespace DutyAllocator
                 return s;
             }
 
-            void Leaf(Score const& score)
+            // The reserves' loss comes off the needs acting now (only they spend cooldowns).
+            // Only at a leaf: the bounds above leave it out, so they stay upper bounds.
+            void Leaf(Score score)
             {
+                if (!m_reserves.empty())
+                {
+                    std::vector<Spend> spent;
+                    for (size_t i = 0; i < m_needs.size(); ++i)
+                        if (m_needs[i].now && m_choice[i] >= 0)
+                        {
+                            DutyCandidate const& c = m_needs[i].candidates[m_choice[i]];
+                            spent.push_back({ c.bot, c.spellId, m_needs[i].target, m_needs[i].points });
+                        }
+                    score.now -= ReserveLoss(m_reserves, spent);
+                }
                 if (!m_haveGreedy)
                 {
                     m_haveGreedy = true;
@@ -202,6 +216,7 @@ namespace DutyAllocator
             }
 
             std::vector<DutyNeed> const& m_needs;
+            std::vector<DutyReserve> const& m_reserves;
             std::vector<float> m_best;
             std::vector<int> m_choice;
             std::vector<ObjectGuid> m_primaries;
@@ -215,7 +230,42 @@ namespace DutyAllocator
         };
     }
 
-    std::vector<DutyResult> Allocate(std::vector<DutyNeed> needs)
+    float ReserveLoss(std::vector<DutyReserve> const& reserves, std::vector<Spend> const& spent)
+    {
+        if (spent.empty())
+            return 0.0f;
+        std::map<ObjectGuid, float> worstPerGroup;
+        for (DutyReserve const& r : reserves)
+        {
+            if (r.covers.empty())
+                continue;
+            float share = 1.0f;
+            float cheapest = std::numeric_limits<float>::max();
+            bool allSpent = true;
+            for (DutyReserve::Cover const& c : r.covers)
+            {
+                auto const s = std::find_if(spent.begin(), spent.end(), [&c](Spend const& x)
+                    { return x.bot == c.bot && x.spellId == c.spellId; });
+                if (s == spent.end())
+                {
+                    allSpent = false;
+                    break;
+                }
+                share = std::min(share, s->target == r.group ? c.shareOnGroup : c.share);
+                cheapest = std::min(cheapest, s->points);
+            }
+            if (!allSpent || r.points <= cheapest)
+                continue;
+            float& worst = worstPerGroup[r.group];
+            worst = std::max(worst, (r.points - cheapest) * share);
+        }
+        float loss = 0.0f;
+        for (auto const& g : worstPerGroup)
+            loss += g.second;
+        return loss;
+    }
+
+    std::vector<DutyResult> Allocate(std::vector<DutyNeed> needs, std::vector<DutyReserve> const& reserves)
     {
         std::stable_sort(needs.begin(), needs.end(), [](DutyNeed const& a, DutyNeed const& b)
         {
@@ -231,7 +281,7 @@ namespace DutyAllocator
                 return a.rank > b.rank;
             });
 
-        std::vector<int> const choice = Search(needs).Run();
+        std::vector<int> const choice = Search(needs, reserves).Run();
 
         struct Claim
         {
@@ -289,6 +339,10 @@ namespace DutyAllocator
                     pass.reason = c.canBePrimary ? DutyPassReason::LessWorth : DutyPassReason::NotPrimary;
                 r.passed.push_back(pass);
             }
+            // Declined (header): worth more unanswered, no backup either.
+            if (r.primary.IsEmpty() && std::any_of(r.passed.begin(), r.passed.end(),
+                    [](DutyPass const& p) { return p.reason == DutyPassReason::LessWorth; }))
+                continue;
 
             if (need.wantsBackup)
             {

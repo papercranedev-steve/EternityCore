@@ -76,7 +76,9 @@ namespace Commander
                     continue;
                 }
                 float const benefit = target.cast.points + CastValues::LockoutBenefit(world, e, a, target.cast.spellId);
-                float const cost = CastValues::InterruptCost(world, m, a, e, target.cast);
+                // The cooldown part is the team's (OfferReserves, DutyAllocator): another bot may
+                // still cover what comes next.
+                float const cost = CastValues::InterruptActionCost(world, m, a, e);
                 if (benefit <= cost)
                     continue;
 
@@ -195,6 +197,43 @@ namespace Commander
                 need.candidates.push_back(d);
             }
             out.push_back(std::move(need));
+        }
+    }
+
+    void InterruptAssigner::OfferReserves(WorldModel const& world, TeamPlan const& plan, std::vector<DutyReserve>& out) const
+    {
+        for (CastValues::ExpectedCast const& next : CastValues::ExpectedCasts(world))
+        {
+            EnemyFacts const* e = world.FindEnemy(next.enemy);
+            if (!e)
+                continue;
+            DutyReserve r;
+            r.group = next.enemy;
+            r.spellId = next.spellId;
+            r.points = next.points;
+            bool safe = false;      // a cover that is back before it comes: spending it loses nothing
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (!m.isBot || m.isPet || !m.CanAct())
+                    continue;
+                for (InterruptAbility const& a : m.interrupts)
+                {
+                    // On cooldown now (time left not known): neither spendable nor counted on.
+                    if (!a.ready || !CastValues::CanStop(a, *e) || !DoctrineForbids(plan, a, e->guid).empty() ||
+                        (a.needsFront && e->victim != m.guid))
+                        continue;
+                    DutyReserve::Cover c;
+                    c.bot = m.guid;
+                    c.spellId = a.spellId;
+                    c.share = CastValues::ShareInCooldown(*e, next, a, false);
+                    c.shareOnGroup = CastValues::ShareInCooldown(*e, next, a, true);
+                    if (c.share <= 0.0f)
+                        safe = true;
+                    r.covers.push_back(c);
+                }
+            }
+            if (!safe && !r.covers.empty())
+                out.push_back(std::move(r));
         }
     }
 

@@ -47,6 +47,9 @@ namespace Commander
         // Duties stage: the needs this module wants answered (plan = situation of this refresh
         // plus the last results of this module, e.g. for sticky choices) ...
         virtual void Offer(WorldModel const& /*world*/, TeamPlan const& /*plan*/, std::vector<DutyNeed>& /*out*/) const {}
+        // ... the needs it expects later, which spending a cooldown now may leave unanswered
+        // (DutyReserve: team cooldown budget) ...
+        virtual void OfferReserves(WorldModel const& /*world*/, TeamPlan const& /*plan*/, std::vector<DutyReserve>& /*out*/) const {}
         // ... and its part of the plan from the allocation (all results; take your own kind).
         virtual void Apply(WorldModel const& /*world*/, std::vector<DutyResult> const& /*results*/, TeamPlan& /*plan*/) const {}
 

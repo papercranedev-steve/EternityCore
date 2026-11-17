@@ -515,6 +515,21 @@ namespace
             }
         }
 
+        // Team cooldown budget (DutyReserve): later casts the allocation kept a kick for.
+        if (!plan.reserves.empty())
+        {
+            handler->SendSysMessage("Reserves (later casts, the bots that could stop them, chance it comes in their cooldown):");
+            for (Commander::DutyReserve const& r : plan.reserves)
+            {
+                std::string covers;
+                for (Commander::DutyReserve::Cover const& c : r.covers)
+                    covers += (covers.empty() ? "" : ", ") + NameOf(map, c.bot) + " " + SpellName(c.spellId) +
+                              " " + std::to_string(int(c.share * 100.0f + 0.5f)) + "%";
+                handler->PSendSysMessage("    |cffffcc00%s|r %s (%.1f pt): %s",
+                    NameOf(map, r.group).c_str(), SpellName(r.spellId).c_str(), r.points, covers.c_str());
+            }
+        }
+
         if (plan.interrupts.empty())
         {
             handler->SendSysMessage("No interrupt duties (no enemy has cast an interruptible spell yet).");

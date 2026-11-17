@@ -275,6 +275,7 @@ namespace Commander
 
         // 2. Duties: every module offers against the same plan, one allocation answers them all.
         std::vector<DutyNeed> needs;
+        std::vector<DutyReserve> reserves;
         for (auto const& slot : assigners)
         {
             if (slot->module->GetStage() != AssignStage::Duties)
@@ -282,12 +283,16 @@ namespace Commander
             Trace::Scope scope("assigner");
             scope.Label("%s offer", slot->module->GetId());
             if (slot->enabled.load(std::memory_order_relaxed))
+            {
                 slot->module->Offer(m_world, m_plan, needs);
+                slot->module->OfferReserves(m_world, m_plan, reserves);
+            }
             else
                 slot->module->Clear(m_plan);
         }
         m_plan.offers = needs;      // the log of what was offered (TeamPlan::offers)
-        m_plan.duties = DutyAllocator::Allocate(std::move(needs));
+        m_plan.reserves = reserves;
+        m_plan.duties = DutyAllocator::Allocate(std::move(needs), m_plan.reserves);
         for (auto const& slot : assigners)
             if (slot->module->GetStage() == AssignStage::Duties && slot->enabled.load(std::memory_order_relaxed))
             {

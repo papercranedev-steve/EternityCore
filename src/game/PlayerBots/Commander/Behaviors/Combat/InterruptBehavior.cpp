@@ -60,6 +60,16 @@ namespace Commander
             return e;
         }
 
+        // The plan judged this live cast with the team's cooldown budget (DutyReserve): only the
+        // action is left to pay. A duty planned before the cast started (castingNow false, the
+        // plan is up to one refresh old) still pays the cooldown as if nobody else could kick.
+        float CostOf(WorldModel const& world, PartyMemberFacts const& me, InterruptAbility const& a,
+                     EnemyFacts const& live, CastValue const& value, InterruptDuty const& duty)
+        {
+            return duty.castingNow ? CastValues::InterruptActionCost(world, me, a, live)
+                                   : CastValues::InterruptCost(world, me, a, live, value);
+        }
+
         // Can act (not asleep / stunned / charmed), not busy, and has a ready ability that
         // stops this enemy (not immune).
         bool HasReadyInterrupt(PartyMemberFacts const* m, EnemyFacts const& enemy)
@@ -164,7 +174,7 @@ namespace Commander
                 p.action.spell = spell;
                 // The school lockout is part of what this ability buys (Counterspell 10 s > Kick 5 s).
                 p.SetValue(value.points + CastValues::LockoutBenefit(world, live, a, value.spellId),
-                           CastValues::InterruptCost(world, *myFacts, a, live, value) + preference);
+                           CostOf(world, *myFacts, a, live, value, duty) + preference);
                 made.push_back(p);
                 preference += 0.01f;
             }
@@ -186,7 +196,7 @@ namespace Commander
                 p.action.target = duty.enemy;
                 // Walking in is part of InterruptCost; a little extra so a ranged option wins ties.
                 float const benefit = value.points + (melee ? CastValues::LockoutBenefit(world, live, *melee, value.spellId) : 0.0f);
-                p.SetValue(benefit, (melee ? CastValues::InterruptCost(world, *myFacts, *melee, live, value) : benefit) + 0.05f);
+                p.SetValue(benefit, (melee ? CostOf(world, *myFacts, *melee, live, value, duty) : benefit) + 0.05f);
                 made.push_back(p);
             }
         }
@@ -253,7 +263,7 @@ namespace Commander
                 if (!spell || !me->IsSpellReady(spell) || me->HasGCD(spell))
                     continue;
                 float const net = value.points + CastValues::LockoutBenefit(world, live, a, value.spellId) -
-                                  CastValues::InterruptCost(world, *myFacts, a, live, value);
+                                  CostOf(world, *myFacts, a, live, value, duty);
                 best = std::max(best, net);
             }
         }

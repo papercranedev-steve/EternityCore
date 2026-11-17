@@ -1473,6 +1473,9 @@ namespace Commander
         // The needs as offered this refresh, before the allocation (rejected candidates
         // included): for the combat recorder (u:offers, `offers` lines). Nobody reads it to decide.
         std::vector<DutyNeed> offers;
+        // The later needs the allocation weighed this refresh (DutyReserve: team cooldown
+        // budget), for `.partybot ai plan`.
+        std::vector<DutyReserve> reserves;
         FocusTarget focus;          // TargetAssigner (encounters may override it: EncounterHelpers::SetFocus)
         std::vector<TargetDuty> targets;
         PlayerOrders orders;

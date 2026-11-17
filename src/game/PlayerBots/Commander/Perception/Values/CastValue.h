@@ -9,6 +9,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include <vector>
 
 namespace Commander
 {
@@ -101,8 +102,33 @@ namespace Commander
         // into range, and the ability being on cooldown when this or another enemy casts
         // something worse than `cast` (repeat delays from the creature profiles, counted from
         // each spell's latest cast start seen; a cast running now is not delayed).
+        // That cost for one bot alone (it counts no other interrupter): what the behavior uses
+        // when the plan did not judge this cast (InterruptDuty::castingNow false). The team's
+        // assignment uses InterruptActionCost plus the team reserves (ExpectedCasts) instead.
         float InterruptCost(WorldModel const& world, PartyMemberFacts const& who,
                             InterruptAbility const& ability, EnemyFacts const& enemy, CastValue const& cast);
+
+        // The action part of InterruptCost: the global cooldown and walking into range.
+        float InterruptActionCost(WorldModel const& world, PartyMemberFacts const& who,
+                                  InterruptAbility const& ability, EnemyFacts const& enemy);
+
+        // An interruptible cast an enemy is expected to make later (team cooldown budget,
+        // 2026-11-17), not the one running now: from its creature profile and last cast seen.
+        struct ExpectedCast
+        {
+            ObjectGuid enemy;
+            uint32 spellId = 0;
+            uint8 school = 0;
+            float waitSec = 0.0f;       // not before: its repeat delay left
+            float intervalSec = 0.0f;   // then about once per this (repeat delay, else CAST_INTERVAL_SEC)
+            float points = 0.0f;        // Evaluate, empty target (> 0 only)
+        };
+        std::vector<ExpectedCast> ExpectedCasts(WorldModel const& world);
+
+        // Chance `next` comes while `ability` is on its cooldown if used now:
+        // min(1, (cooldown - wait) / interval). `usedOnIt`: used on `enemy`'s (= next.enemy)
+        // running cast; its school lockout blocks `next` for that long anyway (same school).
+        float ShareInCooldown(EnemyFacts const& enemy, ExpectedCast const& next, InterruptAbility const& ability, bool usedOnIt);
     }
 }
 

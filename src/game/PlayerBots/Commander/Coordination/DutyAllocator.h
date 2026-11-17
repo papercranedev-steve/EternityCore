@@ -23,8 +23,15 @@
  *    best-ranked free candidate). Another answer replaces it only when it is worth at least
  *    SWITCH_MARGIN more (no flapping between near-equal allocations from refresh to refresh);
  *    the search stops after MAX_NODES steps with the best found so far.
+ *  - Team cooldown budget (2026-11-17): the reserves (DutyReserve, later casts) take what the
+ *    allocation's spends lose off the total of the needs acting now. So the team keeps one
+ *    kick for the heal coming in 3 s instead of spending both on a small cast now, but spends
+ *    one freely when another bot still covers the heal.
  * Per need:
  *  primary = the search's candidate (canBePrimary, primary for nothing else);
+ *  declined = no primary although a free candidate was fit (LessWorth): the allocation is
+ *            worth more without it (a reserve). Dropped with its backup: a backup would spend
+ *            the kick the allocation keeps.
  *  backup  = (wantsBackup only) first other candidate that is not primary anywhere; if there is
  *            none, the first other candidate even if it is primary elsewhere.
  * A need with neither is dropped. Candidates ranked above the primary are recorded with the
@@ -118,6 +125,31 @@ namespace Commander
         std::vector<DutyCandidate> rejected;
     };
 
+    // A need expected later (team cooldown budget, 2026-11-17): an enemy cast the listed
+    // abilities could stop. Answering a need acting now with one of them (that bot, that spell)
+    // spends it for its cooldown. An allocation that spends every cover loses
+    // (points - the least valuable need a cover was spent on) x the smallest cover share (the
+    // chance the cast comes before the first of them is back): keeping that kick would have
+    // traded the cheaper cast for this one; a cast worth less than what was kicked loses nothing
+    // (one kick per cooldown either way). Per `group` (the enemy: it casts one thing at a time)
+    // only the largest loss counts.
+    // Spending some but not all costs nothing: the others cover it. Bots only (a player may
+    // not kick). Offered by IAssigner::OfferReserves.
+    struct DutyReserve
+    {
+        struct Cover
+        {
+            ObjectGuid bot;
+            uint32 spellId = 0;
+            float share = 0.0f;         // chance the cast comes within its cooldown if spent now
+            float shareOnGroup = 0.0f;  // the same when spent on `group` itself (its school lockout)
+        };
+        ObjectGuid group;
+        uint32 spellId = 0;             // the cast expected (log)
+        float points = 0.0f;
+        std::vector<Cover> covers;
+    };
+
     enum class DutyPassReason : uint8
     {
         Busy,           // primary for another need (the allocation is worth more that way)
@@ -156,7 +188,17 @@ namespace Commander
         // Search steps before it settles for the best allocation found (5 bots: rarely reached).
         static constexpr uint32 MAX_NODES = 20000;
 
-        std::vector<DutyResult> Allocate(std::vector<DutyNeed> needs);
+        std::vector<DutyResult> Allocate(std::vector<DutyNeed> needs, std::vector<DutyReserve> const& reserves = {});
+
+        // Points `reserves` lose to the `now` primaries (bot, spell, target) of an allocation (DutyReserve).
+        struct Spend
+        {
+            ObjectGuid bot;
+            uint32 spellId = 0;
+            ObjectGuid target;
+            float points = 0.0f;    // the need's points
+        };
+        float ReserveLoss(std::vector<DutyReserve> const& reserves, std::vector<Spend> const& spent);
 
         char const* KindName(DutyKind kind);
         // Why `pass` is not the primary, for `.partybot ai plan` (busyName: the busy target's name).

@@ -3,7 +3,8 @@
  * Design: .kiro/docs/2026-11-01-interrupt-assignment.md
  *
  * Duties module (2026-11-03): one need per enemy worth an interrupter, one candidate per usable
- * ability of each bot, ranked by the SCORE_* below. DutyAllocator picks the primary and the
+ * ability of each bot, ranked by the SCORE_* below; value = benefit - InterruptActionCost
+ * (the cooldown is weighed for the whole team through OfferReserves, 2026-11-17). DutyAllocator picks the primary and the
  * backup (DutyAllocator.h), so a bot primary for another duty kind is not primary here.
  *
  * The doctrine's stamps first (2026-11-13): an ability whose control ends on the next hit
@@ -47,6 +48,10 @@ namespace Commander
         char const* GetId() const override { return "interrupt"; }
         AssignStage GetStage() const override { return AssignStage::Duties; }
         void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
+        // Team cooldown budget (2026-11-17): every expected later cast (CastValues::ExpectedCasts)
+        // with the ready bot abilities that could stop it. Not offered when one of them is back
+        // from its cooldown before the cast can come (spending it loses nothing).
+        void OfferReserves(WorldModel const& world, TeamPlan const& plan, std::vector<DutyReserve>& out) const override;
         void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
     };
