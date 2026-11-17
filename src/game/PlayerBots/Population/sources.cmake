@@ -15,6 +15,10 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/ScenePoints.cpp
   ${POPULATION_DIR}/CityPopulation.h
   ${POPULATION_DIR}/CityPopulation.cpp
+  ${POPULATION_DIR}/Roster.h
+  ${POPULATION_DIR}/Roster.cpp
+  ${POPULATION_DIR}/Growth.h
+  ${POPULATION_DIR}/Growth.cpp
   ${POPULATION_DIR}/PopulationCommands.cpp
 )
 

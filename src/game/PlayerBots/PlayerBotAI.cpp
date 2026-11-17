@@ -72,7 +72,7 @@ enum
 };
 
 
-bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_, uint32 mapId, uint32 instanceId, float x, float y, float z, float o, Player* pClone, char const* pName)
+bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_, uint32 mapId, uint32 instanceId, float x, float y, float z, float o, Player* pClone, char const* pName, PlayerBotAppearance const* pLook)
 {
     ASSERT(botEntry);
     std::string name = pName ? std::string(pName) : sObjectMgr.GenerateFreePlayerName();
@@ -93,6 +93,15 @@ bool PlayerBotAI::SpawnNewPlayer(WorldSession* sess, uint8 class_, uint32 race_,
         hairStyle = pClone->GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_STYLE_ID);
         hairColor = pClone->GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_HAIR_COLOR_ID);
         facialHair = pClone->GetByteValue(PLAYER_BYTES_2, PLAYER_BYTES_2_OFFSET_FACIAL_STYLE);
+    }
+    else if (pLook)
+    {
+        gender = pLook->gender;
+        skin = pLook->skin;
+        face = pLook->face;
+        hairStyle = pLook->hairStyle;
+        hairColor = pLook->hairColor;
+        facialHair = pLook->facialHair;
     }
     else
     {

@@ -111,7 +111,8 @@ namespace Population
     bool PopulationBotAI::OnSessionLoaded(PlayerBotEntry* /*entry*/, WorldSession* sess)
     {
         return SpawnNewPlayer(sess, m_request.classId, m_request.race, m_request.mapId, 0,
-            m_request.x, m_request.y, m_request.z, m_request.o, nullptr, m_name.c_str());
+            m_request.x, m_request.y, m_request.z, m_request.o, nullptr, m_name.c_str(),
+            m_request.hasLook ? &m_request.look : nullptr);
     }
 
     void PopulationBotAI::OnPlayerLogin()

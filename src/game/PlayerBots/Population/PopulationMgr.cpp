@@ -100,6 +100,7 @@ namespace Population
         m_lifetimeMaxMs = maxMinutes * MINUTE * IN_MILLISECONDS;
 
         m_city.LoadConfig();
+        m_roster.LoadConfig();
 
         if (wasEnabled && !IsEnabled())
         {
@@ -113,6 +114,11 @@ namespace Population
         m_identity.Load();
         m_points.Load();
         m_city.LoadAnchors(m_points);
+        m_roster.Load();
+        // Members already online stay taken (queued requests get their member in SpawnNow).
+        for (Record const& r : m_bots)
+            if (r.request.rosterId && r.handle->alive)
+                m_roster.MarkInUse(r.request.rosterId);
         m_dataLoaded = true;
     }
 
@@ -142,6 +148,9 @@ namespace Population
         m_nowMs += diff;
 
         // Forget bots whose AI is gone (logged out and erased by PlayerBotMgr, or failed to load).
+        for (Record const& r : m_bots)
+            if (!r.handle->alive && r.request.rosterId)
+                m_roster.Release(r.request.rosterId, m_nowMs);
         m_bots.erase(std::remove_if(m_bots.begin(), m_bots.end(),
             [](Record const& r) { return !r.handle->alive; }), m_bots.end());
 
@@ -154,6 +163,7 @@ namespace Population
             if (!r.removing && r.expireMs && m_nowMs >= r.expireMs)
                 RequestRemoval(r);
 
+        m_roster.Update(m_nowMs, m_identity);
         m_city.Update(*this, m_nowMs);
 
         if (!m_queue.empty() && m_nowMs >= m_nextSpawnMs)
@@ -190,31 +200,47 @@ namespace Population
             return;
         }
 
-        if (r.tier == GearTier::Showcase)
-            r.level = 60;
-        else if (!r.level)
-            r.level = Identity::RandomCityLevel();
-        r.level = uint8(std::min<uint32>(std::max<uint32>(r.level, 1), 60));
-
-        std::set<std::string> reserved;
-        for (Record const& rec : m_bots)
-            reserved.insert(rec.name);
-
-        std::string const name = m_identity.MakeName(r.race, reserved);
-        if (name.empty())
+        std::string name;
+        uint32 guid = 0;    // 0 = new guid
+        if (r.kind == BotKind::City && m_roster.IsActive())
         {
-            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PopBot] Could not find a free name for race %u.", r.race);
-            return;
+            if (!TakeFromRoster(r, name, guid))
+                return;     // nobody free: the city stays a little emptier
         }
+        else
+        {
+            if (r.tier == GearTier::Showcase)
+                r.level = 60;
+            else if (!r.level)
+                r.level = Identity::RandomCityLevel();
+
+            std::set<std::string> reserved;
+            for (Record const& rec : m_bots)
+                reserved.insert(rec.name);
+            m_roster.AddNamesTo(reserved);
+
+            name = m_identity.MakeName(r.race, reserved);
+            if (name.empty())
+            {
+                sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PopBot] Could not find a free name for race %u.", r.race);
+                return;
+            }
+        }
+        r.level = uint8(std::min<uint32>(std::max<uint32>(r.level, 1), 60));
 
         auto handle = std::make_shared<BotHandle>();
         // PlayerBotMgr takes ownership of the AI (also when AddBot fails).
         PopulationBotAI* ai = new PopulationBotAI(r, name, handle);
-        if (!sPlayerBotMgr.AddBot(ai))
+        if (!sPlayerBotMgr.AddBot(ai, guid))
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PopBot] PlayerBotMgr::AddBot failed for '%s'.", name.c_str());
+            if (r.rosterId)
+                m_roster.Release(r.rosterId, m_nowMs);
             return;
         }
+        // The name cache keeps this guid for the name: the member logs in under it again.
+        if (r.rosterId && ai->botEntry)
+            m_roster.SetSessionGuid(r.rosterId, uint32(ai->botEntry->playerGUID));
 
         Record rec;
         rec.handle = std::move(handle);
@@ -223,6 +249,31 @@ namespace Population
         rec.bornMs = m_nowMs;
         rec.expireMs = m_nowMs + (r.lifetimeMs ? r.lifetimeMs : RandomLifetimeMs());
         m_bots.push_back(std::move(rec));
+    }
+
+    bool PopulationMgr::TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid)
+    {
+        RosterQuery query;
+        query.team = request.team == HORDE ? HORDE : ALLIANCE;
+        query.zone = request.cityZone;
+        query.preferHigh = request.role == CityRole::Showcase;
+
+        RosterPick pick;
+        if (!m_roster.Pick(query, m_nowMs, pick))
+            return false;
+
+        request.rosterId = pick.memberId;
+        request.race = pick.race;
+        request.classId = pick.classId;
+        request.level = pick.level;
+        request.hasLook = true;
+        request.look = pick.look;
+        // Veterans are the furthest of the roster, not phase 6 sets (gear follows the anchor in phase R2).
+        if (request.tier == GearTier::Showcase)
+            request.tier = GearTier::Normal;
+        name = pick.name;
+        guid = pick.sessionGuid;
+        return true;
     }
 
     void PopulationMgr::RequestRemoval(Record& record)
@@ -345,6 +396,7 @@ namespace Population
             info.race = r.request.race;
             info.classId = r.request.classId;
             info.level = r.request.level;
+            info.rosterId = r.request.rosterId;
             info.removing = r.removing;
             info.ageMs = m_nowMs - r.bornMs;
             info.leftMs = r.expireMs > m_nowMs ? r.expireMs - m_nowMs : 0;

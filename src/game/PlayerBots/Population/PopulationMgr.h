@@ -15,6 +15,7 @@
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
 #include "Population/CityPopulation.h"
+#include "Population/Roster.h"
 #include <atomic>
 #include <chrono>
 #include <deque>
@@ -34,6 +35,7 @@ namespace Population
         CityRole role = CityRole::None;
         uint32 cityZone = 0;
         uint8 race = 0, classId = 0, level = 0;
+        uint32 rosterId = 0;        // 0 = random stranger
         bool online = false;
         bool removing = false;
         uint32 mapId = 0;
@@ -80,6 +82,7 @@ namespace Population
         Identity const& GetIdentity() { EnsureDataLoaded(); return m_identity; }
         ScenePoints& GetScenePoints() { EnsureDataLoaded(); return m_points; }
         CityDirector& GetCityDirector() { EnsureDataLoaded(); return m_city; }
+        Roster const& GetRoster() { EnsureDataLoaded(); return m_roster; }
         // After scene points were added or deleted.
         void ReloadAnchors() { m_city.LoadAnchors(m_points); }
 
@@ -110,6 +113,8 @@ namespace Population
 
         void EnsureDataLoaded();
         void SpawnNow(SpawnRequest const& request);
+        // City (and later field) bots come from the roster. False: nobody free, skip this spawn.
+        bool TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid);
         void RequestRemoval(Record& record);
         uint32 RandomLifetimeMs() const;
 
@@ -129,6 +134,7 @@ namespace Population
         Identity m_identity;
         ScenePoints m_points;
         CityDirector m_city;
+        Roster m_roster;
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

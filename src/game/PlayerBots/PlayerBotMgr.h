@@ -80,7 +80,9 @@ class PlayerBotMgr
         void Update(uint32 diff);
         bool AddOrRemoveBot();
 
-        bool AddBot(PlayerBotAI* ai);
+        // Temporary character (never saved). reuseGuid: log in under this guid again (a population
+        // roster member keeps one guid per server run); 0 = new guid. Takes ownership of ai, also on failure.
+        bool AddBot(PlayerBotAI* ai, uint32 reuseGuid = 0);
         // fakeAccount: log in through a generated account id, so several characters of one account can be bots at once
         bool AddBot(uint32 playerGuid, bool chatBot = false, PlayerBotAI* pAI = nullptr, bool fakeAccount = false);
         bool DeleteBot(std::map<uint64, std::shared_ptr<PlayerBotEntry>>::iterator iter);

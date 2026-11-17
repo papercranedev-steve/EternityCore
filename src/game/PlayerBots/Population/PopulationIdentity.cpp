@@ -129,25 +129,34 @@ namespace Population
         return uint32(count);
     }
 
-    std::string Identity::RandomBuiltInName(uint8 race) const
+    uint32 Identity::Roll(std::mt19937* rng, uint32 lo, uint32 hi)
+    {
+        if (hi <= lo)
+            return lo;
+        if (!rng)
+            return urand(lo, hi);
+        return std::uniform_int_distribution<uint32>(lo, hi)(*rng);
+    }
+
+    std::string Identity::RandomBuiltInName(uint8 race, std::mt19937* rng) const
     {
         std::string name;
-        if (urand(0, 99) < 25)
+        if (Roll(rng, 0, 99) < 25)
         {
-            name = g_styleHeads[urand(0, uint32(sizeof(g_styleHeads) / sizeof(g_styleHeads[0])) - 1)];
-            name += g_styleTails[urand(0, uint32(sizeof(g_styleTails) / sizeof(g_styleTails[0])) - 1)];
+            name = g_styleHeads[Roll(rng, 0, uint32(sizeof(g_styleHeads) / sizeof(g_styleHeads[0])) - 1)];
+            name += g_styleTails[Roll(rng, 0, uint32(sizeof(g_styleTails) / sizeof(g_styleTails[0])) - 1)];
         }
         else
         {
             SyllableSet const& set = SyllablesFor(race);
-            name = set.heads[urand(0, uint32(set.heads.size()) - 1)];
-            name += set.tails[urand(0, uint32(set.tails.size()) - 1)];
+            name = set.heads[Roll(rng, 0, uint32(set.heads.size()) - 1)];
+            name += set.tails[Roll(rng, 0, uint32(set.tails.size()) - 1)];
         }
         normalizePlayerName(name, MAX_INTERNAL_PLAYER_NAME);
         return name;
     }
 
-    std::string Identity::MakeName(uint8 race, std::set<std::string> const& reserved) const
+    std::string Identity::MakeName(uint8 race, std::set<std::string> const& reserved, std::mt19937* rng) const
     {
         // Table names first (half of the time when the table has names for this race).
         std::vector<std::string const*> table;
@@ -157,11 +166,11 @@ namespace Population
             for (std::string const& n : m_byRace[race])
                 table.push_back(&n);
 
-        if (!table.empty() && urand(0, 1))
+        if (!table.empty() && Roll(rng, 0, 1))
         {
             for (uint32 attempt = 0; attempt < 10; ++attempt)
             {
-                std::string const& name = *table[urand(0, uint32(table.size()) - 1)];
+                std::string const& name = *table[Roll(rng, 0, uint32(table.size()) - 1)];
                 if (IsUsable(name, reserved))
                     return name;
             }
@@ -169,7 +178,7 @@ namespace Population
 
         for (uint32 attempt = 0; attempt < 40; ++attempt)
         {
-            std::string name = RandomBuiltInName(race);
+            std::string name = RandomBuiltInName(race, rng);
             if (IsUsable(name, reserved))
                 return name;
         }
@@ -181,13 +190,13 @@ namespace Population
         return sObjectMgr.GetPlayerInfo(race, classId) != nullptr;
     }
 
-    uint8 Identity::RandomRace(uint32 team)
+    uint8 Identity::RandomRace(uint32 team, std::mt19937* rng)
     {
         std::vector<uint8> const& races = TeamRaces(team);
-        return races[urand(0, uint32(races.size()) - 1)];
+        return races[Roll(rng, 0, uint32(races.size()) - 1)];
     }
 
-    uint8 Identity::RandomClass(uint8 race)
+    uint8 Identity::RandomClass(uint8 race, std::mt19937* rng)
     {
         std::vector<uint8> classes;
         for (uint8 c = CLASS_WARRIOR; c < MAX_CLASSES; ++c)
@@ -195,8 +204,9 @@ namespace Population
                 classes.push_back(c);
         if (classes.empty())
             return 0;
-        return classes[urand(0, uint32(classes.size()) - 1)];
+        return classes[Roll(rng, 0, uint32(classes.size()) - 1)];
     }
+
 
     uint8 Identity::RandomCityLevel()
     {

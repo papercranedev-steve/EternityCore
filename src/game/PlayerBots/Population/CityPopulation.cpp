@@ -368,7 +368,8 @@ namespace Population
         out.team = city.def->team;
         out.mapId = city.def->mapId;
         out.tier = role == CityRole::Showcase ? GearTier::Showcase : GearTier::Normal;
-        out.level = role == CityRole::Showcase ? 60 : Identity::RandomCityLevel();
+        // 0: PopulationMgr::SpawnNow takes it from the roster (or a random city level without one).
+        out.level = role == CityRole::Showcase ? 60 : 0;
 
         if (role == CityRole::Mover)
         {

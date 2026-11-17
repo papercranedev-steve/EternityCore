@@ -26,6 +26,17 @@ class PlayerBotAI;
 
 PlayerBotAI* CreatePlayerBotAI(std::string ainame);
 
+// Fixed looks for SpawnNewPlayer (population roster bots keep the same face every time).
+struct PlayerBotAppearance
+{
+    uint8 gender = 0;
+    uint8 skin = 0;
+    uint8 face = 0;
+    uint8 hairStyle = 0;
+    uint8 hairColor = 0;
+    uint8 facialHair = 0;
+};
+
 class PlayerBotAI: public PlayerAI
 {
     public:
@@ -44,7 +55,8 @@ class PlayerBotAI: public PlayerAI
         virtual void BeforeAddToMap(Player* player) {} // me=nullptr at call
         // Helpers
         // pName: use this name instead of a generated one (population bots, PlayerBots/Population/).
-        bool SpawnNewPlayer(WorldSession* sess, uint8 classId, uint32 raceId, uint32 mapId, uint32 instanceId, float dx, float dy, float dz, float o, Player* pClone = nullptr, char const* pName = nullptr);
+        // pLook: use these looks (ignored when pClone is given); random otherwise.
+        bool SpawnNewPlayer(WorldSession* sess, uint8 classId, uint32 raceId, uint32 mapId, uint32 instanceId, float dx, float dy, float dz, float o, Player* pClone = nullptr, char const* pName = nullptr, PlayerBotAppearance const* pLook = nullptr);
         PlayerBotEntry* botEntry;
 };
 

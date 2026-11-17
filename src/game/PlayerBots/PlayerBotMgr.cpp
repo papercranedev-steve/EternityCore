@@ -356,13 +356,20 @@ bool PlayerBotMgr::AddOrRemoveBot()
 
 }
 
-bool PlayerBotMgr::AddBot(PlayerBotAI* ai)
+bool PlayerBotMgr::AddBot(PlayerBotAI* ai, uint32 reuseGuid)
 {
+    // The previous bot with this guid has not left yet.
+    if (reuseGuid && m_bots.find(reuseGuid) != m_bots.end())
+    {
+        delete ai;
+        return false;
+    }
+
     // Find a correct accountid ?
     std::shared_ptr<PlayerBotEntry> e = std::make_shared<PlayerBotEntry>();
     e->ai.reset(ai);
     e->accountId = GenBotAccountId();
-    e->playerGUID = sObjectMgr.GeneratePlayerLowGuid();
+    e->playerGUID = reuseGuid ? reuseGuid : sObjectMgr.GeneratePlayerLowGuid();
     e->customBot = true;
     ai->botEntry = e.get();
     m_bots.insert({ e->playerGUID, e });

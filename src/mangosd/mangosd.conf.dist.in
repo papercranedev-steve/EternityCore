@@ -3316,6 +3316,35 @@ AHBuyer.MaxMarkup = 50
 #        24 factors for 0:00 - 23:00 (server machine local time) applied to MaxBots and MaxMoving.
 #        Default: "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
 #
+#    PopBot.Roster.Enable
+#        City bots come from a fixed roster: every real character gets a cohort of people who
+#        started with it (generated once from the world seed, characters DB tables custom_popbot_*,
+#        created automatically). They keep names and looks and their level follows the owner's
+#        highest level. A deleted character's cohort turns free and lives on as elders. Check with .popbot roster
+#        Default: 1 - on
+#                 0 - random strangers (old behaviour)
+#
+#    PopBot.Roster.CohortSize
+#        Members generated per real character (10 - 1000).
+#        Default: 150
+#
+#    PopBot.Roster.LeadCap
+#        Nobody is more than this many levels above the owner's highest level (0 - 10).
+#        Default: 3
+#
+#    PopBot.Roster.StallPct / PopBot.Roster.LeaderPct / PopBot.Roster.QuitPct / PopBot.Roster.EnemyPct
+#        Share of members (only used when a cohort is generated): stuck at level 1-10 for good,
+#        slightly ahead of the owner, stop playing at some level, from the other faction.
+#        Default: 15 / 10 / 30 / 10
+#
+#    PopBot.Roster.ElderSharePct
+#        Share of city bots taken from other characters' cohorts (elders) when there are any.
+#        Default: 30
+#
+#    PopBot.Roster.RespawnCooldownMin
+#        A member who logged out comes back after at least this many minutes.
+#        Default: 30
+#
 ###################################################################################################################
 
 RandomBot.Enable = 0
@@ -3351,6 +3380,15 @@ PopBot.City.Showcase = 4
 PopBot.City.Crafters = 6
 PopBot.City.EmptyGraceSec = 120
 PopBot.HourCurve = "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
+PopBot.Roster.Enable = 1
+PopBot.Roster.CohortSize = 150
+PopBot.Roster.LeadCap = 3
+PopBot.Roster.StallPct = 15
+PopBot.Roster.LeaderPct = 10
+PopBot.Roster.QuitPct = 30
+PopBot.Roster.EnemyPct = 10
+PopBot.Roster.ElderSharePct = 30
+PopBot.Roster.RespawnCooldownMin = 30
 
 ###################################################################################################################
 # MAIL FLOODING MITIGATION

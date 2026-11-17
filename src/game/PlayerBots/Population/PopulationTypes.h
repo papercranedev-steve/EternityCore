@@ -7,6 +7,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "PlayerBotAI.h"    // PlayerBotAppearance
 #include <string>
 #include <vector>
 
@@ -62,6 +63,11 @@ namespace Population
         ObjectGuid faceGuid;        // face this unit once spawned (optional)
         bool hasFacePoint = false;  // face (faceX, faceY) once spawned
         float faceX = 0.0f, faceY = 0.0f;
+
+        // Roster member (Roster.h). Set by PopulationMgr::SpawnNow, 0 = random stranger.
+        uint32 rosterId = 0;
+        bool hasLook = false;
+        PlayerBotAppearance look;
 
         // City bots
         uint32 cityZone = 0;

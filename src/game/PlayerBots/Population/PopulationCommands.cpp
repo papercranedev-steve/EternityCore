@@ -5,6 +5,7 @@
  *   .popbot on | off                     enable / disable (off logs every population bot out)
  *   .popbot stats [reset]                cost of population bot AI ticks
  *   .popbot list                         population bots: level, race, class, distance, time left
+ *   .popbot roster                       roster cohorts: owner, anchor level, level spread
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
  *   .popbot despawn                      log out the selected population bot
@@ -156,11 +157,34 @@ namespace
             else
                 snprintf(kind, sizeof(kind), "%s", Population::BotKindName(b.kind));
 
-            handler->PSendSysMessage("%s %u %s %s [%s/%s] %s, %s, %u min left%s",
+            handler->PSendSysMessage("%s %u %s %s [%s/%s]%s %s, %s, %u min left%s",
                 b.name.c_str(), b.level, Population::Identity::IsValidCombo(b.race, b.classId) ? RaceName(b.race) : "?",
-                ClassName(b.classId), kind, Population::GearTierName(b.tier),
+                ClassName(b.classId), kind, Population::GearTierName(b.tier), b.rosterId ? " roster" : "",
                 b.online ? "online" : "loading", where, b.leftMs / (MINUTE * IN_MILLISECONDS),
                 b.removing ? " (leaving)" : "");
+        }
+    }
+
+    void ShowRoster(ChatHandler* handler)
+    {
+        Population::Roster const& roster = sPopulationMgr.GetRoster();
+        if (!roster.IsAvailable())
+        {
+            handler->SendSysMessage("Roster tables missing in the characters database (see the server log).");
+            return;
+        }
+
+        std::vector<Population::RosterCohortStats> const stats = roster.GetStats();
+        handler->PSendSysMessage("Roster %s, seed %llu, %u cohorts.", roster.IsActive() ? "on" : "off (PopBot.Roster.Enable)",
+            (unsigned long long)roster.GetSeed(), uint32(stats.size()));
+        for (Population::RosterCohortStats const& s : stats)
+        {
+            handler->PSendSysMessage("#%u %s (%s)%s%s anchor %u: %u members, %u enemy faction, %u retired, %u online",
+                s.cohort.id, s.cohort.ownerName.c_str(), s.cohort.team == HORDE ? "Horde" : "Alliance",
+                s.cohort.free ? " free" : "", s.cohort.ownerOnline ? " owner online" : "", s.cohort.maxLevel,
+                s.members, s.enemy, s.retired, s.inUse);
+            handler->PSendSysMessage("   levels 1-9: %u, 10s: %u, 20s: %u, 30s: %u, 40s: %u, 50s: %u, 60: %u",
+                s.byTen[0], s.byTen[1], s.byTen[2], s.byTen[3], s.byTen[4], s.byTen[5], s.byTen[6]);
         }
     }
 
@@ -454,6 +478,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "roster"))
+    {
+        ShowRoster(this);
+        return true;
+    }
+
     if (!strcmp(sub, "spawn"))
         return Spawn(this, player, args);
 
@@ -533,6 +563,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }
