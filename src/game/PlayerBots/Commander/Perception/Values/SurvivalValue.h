@@ -13,8 +13,10 @@
  * one that lands before the member would die adds its amount (capped at the health missing
  * when it lands) to its health; HealOn's rate starts after it. Since 2026-11-15
  * (strat-20261115-173647: the tank at 1500 Shield Walled 0.6 s before a 3800 Greater Heal).
- * Time to die ttd: (health + absorb + pending heals) under the full dps until the first heal,
- * then dps - heal (no limit when the heals keep up). In danger: ttd < DANGER_SEC (the heal
+ * Time to die ttd: health + absorb against the hits one by one (IncomingTimeline: swing timers,
+ * casts, creature_spells timers; the pending heals and HoT ticks on it as negative hits), the
+ * healers' rate from the first heal on (no limit when the heals keep up); worstTtd the same in
+ * the timeline's worst case. Since 2026-11-17 (was health / dps). In danger: ttd < DANGER_SEC (the heal
  * module's emergency, HealPlan). Since 2026-11-08 (strat-20261108-161025: a mage at 8% under
  * seven enemies was not "in danger", each healer's whole rate counted on him from now on).
  *
@@ -49,6 +51,7 @@
 
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Forecast/IncomingTimeline.h"
 
 namespace Commander
 {
@@ -69,7 +72,19 @@ namespace Commander
             float healDelaySec = 0.0f;  // until the first of them lands
             float pendingHeal = 0.0f;   // heals being cast on it that land before it dies (PendingHealOn)
             float ttd = 0.0f;           // seconds to die, infinity when the heals keep up
+            float worstTtd = 0.0f;      // the same when every hit lands high and the biggest crits
+            // The hits coming one by one, the heals being cast and its HoTs' ticks on it
+            // (Perception/Forecast/IncomingTimeline.h): ttd = timeline.TimeToLose(health +
+            // absorb) with the healers' rate (heal) from healDelaySec on.
+            IncomingTimeline::Timeline timeline;
             bool InDanger() const { return ttd < DANGER_SEC; }
+            IncomingTimeline::Relief Healers() const
+            {
+                IncomingTimeline::Relief r;
+                r.healPerSec = heal;
+                r.healDelaySec = healDelaySec;
+                return r;
+            }
         };
 
         Danger Of(WorldModel const& world, PartyMemberFacts const& member);

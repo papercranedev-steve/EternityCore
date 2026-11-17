@@ -198,6 +198,14 @@ class CreatureAI
         void UpdateSpellsList(uint32 const uiDiff);
         void DoSpellsListCasts(uint32 const uiDiff);
 
+        // Read only view of the creature_spells timers (PlayerBots damage forecast): every row
+        // with its live cooldown (ms left at the last list check), and ms until the next check.
+        // SpellsListRuns: this AI calls UpdateSpellsList (scripted AIs that do not keep the
+        // timers of the template frozen).
+        std::vector<CreatureAISpellsEntry> const& GetSpellsListTimers() const { return m_CreatureSpells; }
+        uint32 GetSpellsListCheckDelay() const { return m_uiCastingDelay; }
+        bool SpellsListRuns() const { return m_bSpellsListRuns; }
+
         // Enables or disables melee attacks.
         void SetMeleeAttack(bool enabled);
 
@@ -218,6 +226,7 @@ class CreatureAI
         uint32 m_uiCastingDelay;                                // Cooldown before updating spell list again
         uint32 m_uLastAlertTime;
         std::vector<CreatureAISpellsEntry> m_CreatureSpells;    // Contains the currently used creature_spells template
+        bool   m_bSpellsListRuns = false;                       // UpdateSpellsList was called
 };
 
 struct SelectableAI : FactoryHolder<CreatureAI>, Permissible<Creature>

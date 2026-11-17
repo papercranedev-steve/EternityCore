@@ -35,6 +35,7 @@ namespace SurvivalValue
     {
         Danger d;
         d.ttd = ThreatView::NO_LIMIT;
+        d.worstTtd = ThreatView::NO_LIMIT;
         if (!member.alive || (member.immunePhysical && member.immuneMagic))
             return d;
         for (EnemyFacts const& e : world.enemies)
@@ -53,11 +54,17 @@ namespace SurvivalValue
         HealIn const in = HealOn(world, member, d.dps);
         d.heal = in.hps;
         d.healDelaySec = in.delaySec;
-        if (d.dps > 0.0f)
+        d.timeline = IncomingTimeline::Of(world, member);
+        if (d.dps > 0.0f || !d.timeline.events.empty())
         {
             float const health = float(member.health) + member.absorb;
             d.pendingHeal = PendingHealOn(world, member, health, d.dps);
-            d.ttd = TimeToDie(health + d.pendingHeal, d.dps, in.delaySec, d.dps - in.hps);
+            for (PartyMemberFacts const& h : world.party)
+                if (h.pendingHeal.target == member.guid && h.pendingHeal.amount > 0.0f)
+                    d.timeline.AddHeal(h.pendingHeal.landMs / 1000.0f, h.pendingHeal.amount, h.pendingHeal.spellId, h.guid);
+            d.timeline.AddHots(member);
+            d.ttd = d.timeline.TimeToLose(health, false, d.Healers());
+            d.worstTtd = d.timeline.TimeToLose(health, true, d.Healers());
         }
         return d;
     }
@@ -142,7 +149,6 @@ namespace SurvivalValue
             return o;
 
         float const dps = danger.dps;
-        float const heal = danger.heal;
         float factor = 1.0f;
         float sec = std::min(a.durationSec, HORIZON_SEC);
         float extra = 0.0f;         // health added (absorb, Last Stand, a heal)
@@ -180,8 +186,11 @@ namespace SurvivalValue
                 break;
         }
 
-        float const health = float(member.health) + member.absorb + danger.pendingHeal + extra;
-        float const ttd = TimeToDie(health, dps * factor - heal, sec, dps - heal);
+        // The same timeline as danger.ttd (pending heals in it), the hits x factor during sec.
+        IncomingTimeline::Relief relief = danger.Healers();
+        relief.factor = factor;
+        relief.factorSec = sec;
+        float const ttd = danger.timeline.TimeToLose(float(member.health) + member.absorb + extra, false, relief);
         float kept = dps * (1.0f - factor) * sec + healUsed;
         if (a.effect == SurvivalAbility::Effect::Absorb || a.effect == SurvivalAbility::Effect::ExtraHealth)
             kept += std::min(extra, dps * HORIZON_SEC);

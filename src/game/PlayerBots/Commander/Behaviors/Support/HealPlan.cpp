@@ -89,12 +89,25 @@ namespace HealPlan
             return a;
 
         a.reserve = ReserveHealth(t);
-        if (t.intake > 0.0f)
+        if (t.timeToDie >= 0.0f)
+        {
+            a.timeToDie = std::min(NO_LIMIT, t.timeToDie);
+            a.worstTimeToDie = std::min(NO_LIMIT, t.worstTimeToDie >= 0.0f ? t.worstTimeToDie : t.timeToDie);
+            a.timeToReserve = std::min(NO_LIMIT, t.timeToReserve >= 0.0f ? t.timeToReserve : t.timeToDie);
+        }
+        else if (t.intake > 0.0f)
         {
             a.timeToDie = t.health / t.intake;
+            a.worstTimeToDie = a.timeToDie;
             a.timeToReserve = std::max(0.0f, t.health - a.reserve) / t.intake;
         }
-        if (t.intake > 0.0f && (t.health <= a.reserve || a.timeToDie < EMERGENCY_TTD_SEC))
+        bool const hit = t.intake > 0.0f || a.timeToDie < NO_LIMIT;
+        float fastest = NO_LIMIT;
+        for (Option const& o : options)
+            if (o.heal > 0.0f)
+                fastest = std::min(fastest, o.castSec);
+        bool const outrun = fastest < NO_LIMIT && a.worstTimeToDie < fastest + LANDING_MARGIN_SEC + h.tickSec;
+        if (hit && (t.health <= a.reserve || a.timeToDie < EMERGENCY_TTD_SEC || outrun))
         {
             a.need = Need::Emergency;
             return a;

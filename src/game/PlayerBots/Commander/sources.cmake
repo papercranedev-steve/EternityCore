@@ -115,6 +115,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/CombatRates.cpp
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.h
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/IncomingTimeline.h
+  ${COMMANDER_DIR}/Perception/Forecast/IncomingTimeline.cpp
   ${COMMANDER_DIR}/Perception/Forecast/DamageDealt.h
   ${COMMANDER_DIR}/Perception/Forecast/DamageDealt.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FinishForecast.h

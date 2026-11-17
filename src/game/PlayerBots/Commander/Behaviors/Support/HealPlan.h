@@ -5,7 +5,9 @@
  * Per target:
  *   reserve   health kept for a spike: max(MIN_RESERVE_PCT, biggest recent spike x BURST_SAFETY),
  *             at most MAX_RESERVE_PCT of max health
- *   emergency being hit and (health <= reserve, or time to die < EMERGENCY_TTD_SEC):
+ *   emergency being hit and (health <= reserve, or time to die < EMERGENCY_TTD_SEC, or the
+ *             worst case time to die before the fastest heal started now lands: its cast +
+ *             LANDING_MARGIN_SEC + one bot tick; 2026-11-17, the hits one by one):
  *             the biggest heal that lands in time, mana ignored; one that does not pull aggro
  *             if any lands in time
  *   deficit   missing health at which a lift starts:
@@ -100,6 +102,14 @@ namespace HealPlan
         // a target too small for it is lifted as without the boost (until 2026-11-15 the wait
         // was capped at the safe deficit, where PickBoosted then still found the gap too small).
         float boostDeficit = 0.0f;
+        // From the hits coming one by one (Perception/Forecast/IncomingTimeline.h, its HoT
+        // ticks counted), filled by the caller; < 0 = not known: health / intake.
+        //   timeToDie       expected hits
+        //   worstTimeToDie  every hit high, the biggest one a crit
+        //   timeToReserve   expected hits down to ReserveHealth
+        float timeToDie = -1.0f;
+        float worstTimeToDie = -1.0f;
+        float timeToReserve = -1.0f;
     };
 
     struct Healer
@@ -143,6 +153,7 @@ namespace HealPlan
         float reserve = 0.0f;
         float deficit = 0.0f;
         float timeToDie = NO_LIMIT;
+        float worstTimeToDie = NO_LIMIT;
         float timeToReserve = NO_LIMIT;  // seconds until health reaches the reserve
         bool boostHeld = false;          // the deficit is Target::boostDeficit (a ready boost waits)
     };

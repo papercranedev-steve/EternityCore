@@ -45,17 +45,17 @@ namespace Commander
 
         // Time to die with the heal's rate on top of the healers', from its first tick on.
         float ttdAfter = danger.ttd;
-        if (danger.dps > 0.0f)
+        if (danger.dps > 0.0f || !danger.timeline.events.empty())
         {
             float tickSec = channelSec;
             for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
                 if (heal->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL && heal->EffectAmplitude[i] > 0)
                     tickSec = std::min(tickSec, float(heal->EffectAmplitude[i]) / 1000.0f);
-            SurvivalValue::HealIn in;
-            in.hps = danger.heal + amount.periodic / channelSec;
-            in.delaySec = danger.heal > 0.0f ? std::min(danger.healDelaySec, tickSec) : tickSec;
-            float const health = float(petFacts->health) + petFacts->absorb + danger.pendingHeal;
-            ttdAfter = SurvivalValue::TimeToDieUnder(health, danger.dps, in);
+            // The same hits as danger.ttd (IncomingTimeline), the Mend Pet rate on top.
+            IncomingTimeline::Relief relief = danger.Healers();
+            relief.healPerSec += amount.periodic / channelSec;
+            relief.healDelaySec = danger.heal > 0.0f ? std::min(danger.healDelaySec, tickSec) : tickSec;
+            ttdAfter = danger.timeline.TimeToLose(float(petFacts->health) + petFacts->absorb, false, relief);
         }
         float const saved = std::max(0.0f, SurvivalValue::Risk(danger.ttd) - SurvivalValue::Risk(ttdAfter));
 

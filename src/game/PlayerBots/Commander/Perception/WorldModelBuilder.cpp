@@ -344,6 +344,87 @@ namespace WorldModelBuilder
             e.castTotalMs = channeled ? uint32(std::max(0, info->GetDuration())) : uint32(std::max(0, spell->GetCastTime()));
         }
 
+        // Swing timers, weapon damage and the live creature_spells timers (IncomingTimeline.h).
+        void FillTimers(Creature const* creature, EnemyFacts& e)
+        {
+            e.swingInMs = creature->GetAttackTimer(BASE_ATTACK);
+            e.swingPeriodMs = creature->GetAttackTime(BASE_ATTACK);
+            e.meleeMin = creature->GetFloatValue(UNIT_FIELD_MINDAMAGE);
+            e.meleeMax = creature->GetFloatValue(UNIT_FIELD_MAXDAMAGE);
+            if (creature->HaveOffhandWeapon())
+            {
+                e.offSwingInMs = creature->GetAttackTimer(OFF_ATTACK);
+                e.offSwingPeriodMs = creature->GetAttackTime(OFF_ATTACK);
+                e.offMin = creature->GetFloatValue(UNIT_FIELD_MINOFFHANDDAMAGE);
+                e.offMax = creature->GetFloatValue(UNIT_FIELD_MAXOFFHANDDAMAGE);
+            }
+            e.canCrush = !creature->IsPet() && !creature->HasStaticFlag(CREATURE_STATIC_FLAG_2_NO_CRUSHING_BLOWS);
+            e.alwaysCrush = e.canCrush && creature->HasExtraFlag(CREATURE_FLAG_EXTRA_ALWAYS_CRUSH);
+
+            CreatureAI const* ai = creature->AI();
+            if (!ai || !ai->SpellsListRuns())
+                return;
+            e.spellCheckInMs = ai->GetSpellsListCheckDelay();
+            for (CreatureAISpellsEntry const& s : ai->GetSpellsListTimers())
+            {
+                ListSpellFacts f;
+                f.spellId = s.spellId;
+                f.cooldownMs = s.cooldown;
+                f.repeatMinMs = s.delayRepeatMin;
+                f.repeatMaxMs = s.delayRepeatMax;
+                f.probability = s.probability;
+                f.castTarget = s.castTarget;
+                f.castFlags = s.castFlags;
+                e.spellList.push_back(f);
+            }
+        }
+
+        // The melee boost of a spell's auras on its caster (EnrageFacts), spellId 0 = none.
+        EnrageFacts EnrageOf(uint32 spellId)
+        {
+            EnrageFacts f;
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            if (!spell)
+                return f;
+            bool boosts = false;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            {
+                if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA || spell->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER)
+                    continue;
+                float const amount = float(spell->CalculateSimpleValue(SpellEffectIndex(i)));
+                bool const physical = (spell->EffectMiscValue[i] & SPELL_SCHOOL_MASK_NORMAL) != 0;
+                switch (spell->EffectApplyAuraName[i])
+                {
+                    case SPELL_AURA_MOD_MELEE_HASTE:
+                        if (amount > 0.0f)
+                        {
+                            f.periodMult /= 1.0f + amount / 100.0f;
+                            boosts = true;
+                        }
+                        break;
+                    case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
+                        if (physical && amount > 0.0f)
+                        {
+                            f.damageMult *= 1.0f + amount / 100.0f;
+                            boosts = true;
+                        }
+                        break;
+                    case SPELL_AURA_MOD_DAMAGE_DONE:
+                        if (physical && amount > 1.0f)      // Enrage 8599 carries a +1 placeholder
+                        {
+                            f.damageFlat += amount;
+                            boosts = true;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            if (boosts)
+                f.spellId = spellId;
+            return f;
+        }
+
         void AddInterrupt(PartyBotAI const* ai, SpellEntry const* spell, PartyMemberFacts& f)
         {
             if (!spell || !SpellTags::StopsCasts(spell))
@@ -565,6 +646,7 @@ namespace WorldModelBuilder
             e.slowed = creature->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED);
             e.rooted = creature->HasUnitState(UNIT_STATE_ROOT);
             FillCast(creature, e);
+            FillTimers(creature, e);
             e.crowdControlled = creature->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL);
             e.creatureTypeMask = creature->GetCreatureTypeMask();
             FillControlState(creature, partyUnits, e);
@@ -592,6 +674,17 @@ namespace WorldModelBuilder
                 // Standing back with melee off: it hurts with its main ranged spell instead.
                 if (profile->mainRangedSpellId && !e.meleeEnabled)
                     e.rangedDps = RangedSpellDps(*profile, e.level, e.meleeHit);
+                // EventAI low health enrages not up yet (IncomingTimeline).
+                for (CreatureSpellRef const& ref : profile->spells)
+                {
+                    if (ref.source != SpellSource::EventAI || ref.healthPct <= 0.0f || creature->HasAura(ref.spellId))
+                        continue;
+                    EnrageFacts f = EnrageOf(ref.spellId);
+                    if (!f.spellId)
+                        continue;
+                    f.atHealthPct = ref.healthPct;
+                    e.enrages.push_back(f);
+                }
             }
             e.silenced = creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
             e.maxMana = creature->GetMaxPower(POWER_MANA);

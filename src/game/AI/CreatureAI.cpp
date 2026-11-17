@@ -112,6 +112,7 @@ void CreatureAI::SetSpellsList(CreatureSpellsList const* pSpellsList)
 
 void CreatureAI::UpdateSpellsList(uint32 const uiDiff)
 {
+    m_bSpellsListRuns = true;
     if (m_uiCastingDelay <= uiDiff)
     {
         uint32 const uiDesync = (uiDiff - m_uiCastingDelay);

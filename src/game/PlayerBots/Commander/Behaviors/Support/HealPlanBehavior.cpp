@@ -7,6 +7,7 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Forecast/ChainHealForecast.h"
+#include "Commander/Perception/Forecast/IncomingTimeline.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
@@ -390,6 +391,15 @@ namespace Commander
                 hotPerSec += h.PerSec();
             c.target.intake = std::max(0.0f, Value::TakenDps(world, m.guid) - hotPerSec);
             c.target.burst = m.takenBurst;
+            // The hits coming one by one, the HoT ticks on it between them (IncomingTimeline.h).
+            {
+                IncomingTimeline::Timeline timeline = IncomingTimeline::Of(world, m);
+                timeline.AddHots(m);
+                float const health = c.target.health + m.absorb;
+                c.target.timeToDie = timeline.TimeToLose(health, false);
+                c.target.worstTimeToDie = timeline.TimeToLose(health, true);
+                c.target.timeToReserve = timeline.TimeToLose(std::max(0.0f, health - HealPlan::ReserveHealth(c.target)), false);
+            }
             c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
             for (HealSpells::Option const& o : choice.options)
             {

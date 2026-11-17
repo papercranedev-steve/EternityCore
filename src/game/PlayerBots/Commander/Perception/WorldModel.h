@@ -766,6 +766,32 @@ namespace Commander
         float threatPerSec = 0.0f;  // over the last few seconds (ThreatHistory); includes taunt jumps
     };
 
+    // One creature_spells row of an enemy with its live timer (CreatureAI::GetSpellsListTimers),
+    // EnemyFacts::spellList. Perception/Forecast/IncomingTimeline.h turns it into hits.
+    struct ListSpellFacts
+    {
+        uint32 spellId = 0;
+        uint32 cooldownMs = 0;      // left at the last list check (0 = ready, fires at a check)
+        uint32 repeatMinMs = 0;
+        uint32 repeatMaxMs = 0;
+        uint8 probability = 100;
+        uint8 castTarget = 0;       // ScriptTarget (TARGET_T_*)
+        uint16 castFlags = 0;       // CF_*
+    };
+
+    // A low health boost an EventAI creature casts on itself (Enrage 8269 / 8599: a
+    // CreatureProfile spell with healthPct whose auras on the caster raise its melee), not on it
+    // yet (EnemyFacts::enrages). IncomingTimeline boosts its swings from the moment its health
+    // reaches atHealthPct. Once up, the live attack time and damage fields carry it.
+    struct EnrageFacts
+    {
+        uint32 spellId = 0;
+        float atHealthPct = 0.0f;
+        float periodMult = 1.0f;    // swing period x, SPELL_AURA_MOD_MELEE_HASTE: 1 / (1 + amount%)
+        float damageMult = 1.0f;    // SPELL_AURA_MOD_DAMAGE_PERCENT_DONE (physical)
+        float damageFlat = 0.0f;    // SPELL_AURA_MOD_DAMAGE_DONE (physical), per swing
+    };
+
     // When an enemy last started casting a spell (EnemyFacts::castStarts).
     struct CastStart
     {
@@ -787,6 +813,28 @@ namespace Commander
         uint32 maxHealth = 0;
         float meleeHit = 0.0f;          // average main hand hit now (live unit fields, enrage included)
         float meleeDps = 0.0f;          // meleeHit / attack time, before the victim's armor
+        // Swing timers (Unit::GetAttackTimer: ms to the next swing, 0 = swings as soon as it can)
+        // and periods, weapon damage range now; off hand only with HaveOffhandWeapon (period 0
+        // = none). A swing waits while a cast or channel runs (Unit::UpdateMeleeAttackingState).
+        uint32 swingInMs = 0;
+        uint32 swingPeriodMs = 0;
+        float meleeMin = 0.0f;
+        float meleeMax = 0.0f;
+        uint32 offSwingInMs = 0;
+        uint32 offSwingPeriodMs = 0;
+        float offMin = 0.0f;
+        float offMax = 0.0f;
+        // Crushing blows (SpellCaster::RollMeleeOutcomeAgainst): possible at all (not a pet, no
+        // CREATURE_STATIC_FLAG_2_NO_CRUSHING_BLOWS), every hit that is not avoided or a crit
+        // (CREATURE_FLAG_EXTRA_ALWAYS_CRUSH).
+        bool canCrush = false;
+        bool alwaysCrush = false;
+        // creature_spells rows with live timers, and ms until the list is checked next (every
+        // 1.2 s, CreatureAI::UpdateSpellsList). Empty when the AI does not run the list (C++
+        // boss scripts: their own timers are not readable).
+        std::vector<ListSpellFacts> spellList;
+        uint32 spellCheckInMs = 0;
+        std::vector<EnrageFacts> enrages;   // low health melee boosts still to come (EventAI)
         Position3 pos;
         // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
         float boundingRadius = 0.0f;
