@@ -32,6 +32,7 @@ namespace Population
         std::string ownerName;
         uint32 team = 0;            // owner's team
         uint8 maxLevel = 1;         // anchor: highest level the owner reached
+        uint32 gearCap = 0;         // anchor: best average item level worn in the owner's group
         bool free = false;          // owner deleted: anchor frozen, members are elders for everyone
 
         bool ownerOnline = false;   // runtime
@@ -73,6 +74,8 @@ namespace Population
         uint8 race = 0, classId = 0, level = 0;
         PlayerBotAppearance look;
         uint32 sessionGuid = 0;     // 0 = first time online this run
+        GearPlan gear;
+        uint32 money = 0;           // copper
     };
 
     struct RosterCohortStats
@@ -118,12 +121,15 @@ namespace Population
         Cohort* FindOwnedCohort(uint32 ownerGuid);
         RosterMember* FindMember(uint32 id);
         void CreateCohort(Player* owner, Identity const& identity);
+        // Generates members until the cohort has PopBot.Roster.CohortSize (also after raising it).
+        void FillCohort(Cohort const& cohort, Identity const& identity);
+        void UpdateAnchor(Cohort& cohort, Player* owner);
         bool GenerateMember(std::mt19937& rng, uint32 cohortTeam, Identity const& identity,
             std::set<std::string>& reserved, RosterMember& out) const;
 
         bool m_enabled = true;
         bool m_available = false;
-        uint32 m_cohortSize = 150;
+        uint32 m_cohortSize = 300;
         uint8 m_leadCap = 3;
         uint32 m_stallPct = 15;
         uint32 m_leaderPct = 10;

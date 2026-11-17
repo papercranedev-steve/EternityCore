@@ -3,6 +3,8 @@
 #include "Population/PopulationIdentity.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
+#include "Group.h"
+#include "Item.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
@@ -18,6 +20,7 @@ namespace Population
     namespace
     {
         uint32 const UPDATE_EVERY_MS = 5 * IN_MILLISECONDS;
+        uint32 const HOME_CITY_WEIGHT = 6;
 
         uint32 ClampPct(int32 value)
         {
@@ -63,7 +66,7 @@ namespace Population
     void Roster::LoadConfig()
     {
         m_enabled = sConfig.GetBoolDefault("PopBot.Roster.Enable", true);
-        m_cohortSize = uint32(std::min(std::max(sConfig.GetIntDefault("PopBot.Roster.CohortSize", 150), 10), 1000));
+        m_cohortSize = uint32(std::min(std::max(sConfig.GetIntDefault("PopBot.Roster.CohortSize", 300), 10), 1000));
         m_leadCap = uint8(std::min(std::max(sConfig.GetIntDefault("PopBot.Roster.LeadCap", 3), 0), 10));
         m_stallPct = ClampPct(sConfig.GetIntDefault("PopBot.Roster.StallPct", 15));
         m_leaderPct = ClampPct(sConfig.GetIntDefault("PopBot.Roster.LeaderPct", 10));
@@ -91,6 +94,7 @@ namespace Population
             " `owner_name` VARCHAR(12) NOT NULL,"
             " `team` SMALLINT UNSIGNED NOT NULL,"
             " `max_level` TINYINT UNSIGNED NOT NULL DEFAULT 1,"
+            " `gear_cap` SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'best average item level worn in the owner group',"
             " `free` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'owner deleted: anchor frozen',"
             " `created_at` INT UNSIGNED NOT NULL DEFAULT 0,"
             " PRIMARY KEY (`id`),"
@@ -125,7 +129,14 @@ namespace Population
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='population roster: fixed identities'");
 
         std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_popbot_member'"));
-        return exists != nullptr;
+        if (!exists)
+            return false;
+
+        // Tables from phase R1 (before gear_cap).
+        std::unique_ptr<QueryResult> gearCap(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_popbot_cohort` LIKE 'gear_cap'"));
+        if (!gearCap)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_popbot_cohort` ADD COLUMN `gear_cap` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `max_level`");
+        return true;
     }
 
     void Roster::LoadSeed()
@@ -149,7 +160,7 @@ namespace Population
         old.swap(m_cohorts);
 
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT `id`, `owner_guid`, `owner_name`, `team`, `max_level`, `free` FROM `custom_popbot_cohort`"));
+            "SELECT `id`, `owner_guid`, `owner_name`, `team`, `max_level`, `free`, `gear_cap` FROM `custom_popbot_cohort`"));
         if (!result)
             return;
         do
@@ -162,11 +173,13 @@ namespace Population
             c.team = f[3].GetUInt32();
             c.maxLevel = std::max<uint8>(f[4].GetUInt8(), 1);
             c.free = f[5].GetBool();
+            c.gearCap = f[6].GetUInt32();
             auto prev = std::find_if(old.begin(), old.end(), [&c](Cohort const& o) { return o.id == c.id; });
             if (prev != old.end())
             {
                 c.ownerOnline = prev->ownerOnline && !c.free;
-                c.maxLevel = std::max(c.maxLevel, prev->maxLevel);  // async level update not written yet
+                c.maxLevel = std::max(c.maxLevel, prev->maxLevel);  // async updates not written yet
+                c.gearCap = std::max(c.gearCap, prev->gearCap);
             }
             m_cohorts.push_back(std::move(c));
         } while (result->NextRow());
@@ -307,7 +320,7 @@ namespace Population
             out.look.face, out.look.facialHair, out.look.skin);
 
         // Most live in the capital of their race, some moved to another city of their faction.
-        out.homeZone = Identity::Roll(&rng, 0, 99) < 70 ? HomeCityOfRace(out.race) : RandomCityOfTeam(team, rng);
+        out.homeZone = Identity::Roll(&rng, 0, 99) < 85 ? HomeCityOfRace(out.race) : RandomCityOfTeam(team, rng);
 
         uint32 const kind = Identity::Roll(&rng, 0, 99);
         if (kind < m_stallPct)
@@ -354,8 +367,26 @@ namespace Population
             return;
         }
 
-        // Same world seed and owner = same cohort.
-        std::seed_seq seq{ uint32(m_seed), uint32(m_seed >> 32), ownerGuid, cohortId };
+        LoadCohorts();
+        if (Cohort const* cohort = FindCohort(cohortId))
+            FillCohort(*cohort, identity);
+    }
+
+    void Roster::FillCohort(Cohort const& cohort, Identity const& identity)
+    {
+        uint32 have = 0;
+        for (RosterMember const& m : m_members)
+            if (m.cohortId == cohort.id)
+                ++have;
+        if (have >= m_cohortSize)
+            return;
+
+        uint32 const cohortId = cohort.id;
+        uint32 const team = cohort.team;
+        uint32 const now = uint32(time(nullptr));
+
+        // Same world seed, owner and size = same members.
+        std::seed_seq seq{ uint32(m_seed), uint32(m_seed >> 32), cohort.ownerGuid, cohortId, have };
         std::mt19937 rng(seq);
 
         std::set<std::string> reserved;
@@ -365,7 +396,7 @@ namespace Population
             " `hair_style`, `hair_color`, `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`,"
             " `temperament`, `created_at`) VALUES ";
         uint32 made = 0;
-        for (uint32 i = 0; i < m_cohortSize; ++i)
+        for (uint32 i = have; i < m_cohortSize; ++i)
         {
             RosterMember m;
             if (!GenerateMember(rng, team, identity, reserved, m))
@@ -382,9 +413,57 @@ namespace Population
         if (made)
             CharacterDatabase.DirectExecute(sql);
 
+        std::string const ownerName = cohort.ownerName;   // LoadCohorts below replaces `cohort`
         LoadCohorts();
         LoadMembers();
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roster: cohort %u for '%s' with %u members.", cohortId, owner->GetName(), made);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roster: cohort %u of '%s': %u new members, %u in total.",
+            cohortId, ownerName.c_str(), made, have + made);
+    }
+
+    void Roster::UpdateAnchor(Cohort& cohort, Player* owner)
+    {
+        uint8 const level = uint8(std::min<uint32>(owner->GetLevel(), 60));
+        if (level > cohort.maxLevel)
+        {
+            cohort.maxLevel = level;
+            CharacterDatabase.PExecute("UPDATE `custom_popbot_cohort` SET `max_level` = %u WHERE `id` = %u", level, cohort.id);
+        }
+
+        // Team gear: the best average item level in the owner's group. Temporary bots don't count
+        // (their gear was handed out, not earned).
+        auto averageItemLevel = [](Player* p)
+        {
+            uint32 sum = 0, count = 0;
+            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            {
+                if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
+                    continue;
+                if (Item* item = p->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                {
+                    sum += item->GetProto()->ItemLevel;
+                    ++count;
+                }
+            }
+            return count ? sum / count : 0;
+        };
+
+        uint32 best = averageItemLevel(owner);
+        if (Group* group = owner->GetGroup())
+        {
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                Player* member = itr->getSource();
+                if (!member || member == owner || (member->IsBot() && member->IsSavingDisabled()))
+                    continue;
+                best = std::max(best, averageItemLevel(member));
+            }
+        }
+
+        if (best > cohort.gearCap)
+        {
+            cohort.gearCap = best;
+            CharacterDatabase.PExecute("UPDATE `custom_popbot_cohort` SET `gear_cap` = %u WHERE `id` = %u", best, cohort.id);
+        }
     }
 
     void Roster::Update(uint32 nowMs, Identity const& identity)
@@ -417,12 +496,13 @@ namespace Population
             }
 
             cohort->ownerOnline = true;
-            uint8 const level = uint8(std::min<uint32>(p->GetLevel(), 60));
-            if (level > cohort->maxLevel)
-            {
-                cohort->maxLevel = level;
-                CharacterDatabase.PExecute("UPDATE `custom_popbot_cohort` SET `max_level` = %u WHERE `id` = %u", level, cohort->id);
-            }
+            UpdateAnchor(*cohort, p);
+
+            // PopBot.Roster.CohortSize was raised: top the cohort up (no-op when full).
+            uint32 const cohortId = cohort->id;
+            FillCohort(*cohort, identity);
+            if (Cohort* reloaded = FindCohort(cohortId))
+                reloaded->ownerOnline = true;
         }
     }
 
@@ -471,13 +551,14 @@ namespace Population
         }
         else
         {
+            // Mostly locals: Stormwind is mostly humans living there.
             uint32 total = 0;
             for (Candidate const& c : pool)
-                total += c.member->homeZone == query.zone ? 3 : 1;
+                total += c.member->homeZone == query.zone ? HOME_CITY_WEIGHT : 1;
             uint32 roll = urand(1, total);
             for (Candidate const& c : pool)
             {
-                uint32 const weight = c.member->homeZone == query.zone ? 3 : 1;
+                uint32 const weight = c.member->homeZone == query.zone ? HOME_CITY_WEIGHT : 1;
                 if (roll <= weight)
                 {
                     chosen = c;
@@ -496,6 +577,9 @@ namespace Population
         out.level = chosen.level;
         out.look = m.look;
         out.sessionGuid = m.sessionGuid;
+        Cohort const* cohort = FindCohort(m.cohortId);
+        out.gear = Growth::Gear(m, chosen.level, cohort ? cohort->gearCap : 0);
+        out.money = Growth::Money(m, chosen.level);
         return true;
     }
 

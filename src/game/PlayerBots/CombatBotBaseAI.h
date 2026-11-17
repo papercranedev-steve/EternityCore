@@ -8,6 +8,17 @@
 
 struct PlayerPremadeSpecTemplate;
 
+// CombatBotBaseAI::EquipRandomGearInEmptySlots limits. The defaults keep the PartyBot behaviour.
+struct RandomGearOptions
+{
+    bool allowPvP = true;           // false: no honor rank items, no PvP preference
+    bool allowCosmetic = true;      // false: no armor-less clothes in armor slots (dresses, tuxedos)
+    uint32 maxItemLevel = 0;        // 0 = no cap
+    uint32 qualityWeights[MAX_ITEM_QUALITY] = {};  // per slot, pick a quality first; all 0 = any item
+    uint32 skipSlotMask = 0;        // 1 << EQUIPMENT_SLOT_*: leave these empty
+    uint32 seed = 0;                // != 0: same seed, same picks; 0 = random
+};
+
 // CombatBotBaseAI::ChooseHeal result.
 struct HealChoice
 {
@@ -115,7 +126,8 @@ public:
     // Spends the free talent points on `spec`'s talents, top row first, as far as they reach.
     void LearnTalentsTowards(PlayerPremadeSpecTemplate const& spec);
     void EquipPremadeGearTemplate();
-    void EquipRandomGearInEmptySlots();
+    void EquipRandomGearInEmptySlots() { EquipRandomGearInEmptySlots(RandomGearOptions()); }
+    void EquipRandomGearInEmptySlots(RandomGearOptions const& options);
     void AutoEquipGear(uint32 option);
     void LearnRandomTalents();
     

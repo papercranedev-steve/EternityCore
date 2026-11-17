@@ -3325,8 +3325,10 @@ AHBuyer.MaxMarkup = 50
 #                 0 - random strangers (old behaviour)
 #
 #    PopBot.Roster.CohortSize
-#        Members generated per real character (10 - 1000).
-#        Default: 150
+#        Members generated per real character (10 - 1000). Raising it tops existing cohorts up.
+#        About 45% of the free members are online at once (10-40 min online, 30 min cooldown),
+#        so a city of 40 needs about 90 members of the owner's faction that have not quit.
+#        Default: 300
 #
 #    PopBot.Roster.LeadCap
 #        Nobody is more than this many levels above the owner's highest level (0 - 10).
@@ -3381,7 +3383,7 @@ PopBot.City.Crafters = 6
 PopBot.City.EmptyGraceSec = 120
 PopBot.HourCurve = "0.5 0.4 0.3 0.3 0.3 0.3 0.3 0.4 0.5 0.6 0.6 0.7 0.7 0.7 0.7 0.7 0.8 0.8 0.9 1.0 1.0 1.0 0.9 0.7"
 PopBot.Roster.Enable = 1
-PopBot.Roster.CohortSize = 150
+PopBot.Roster.CohortSize = 300
 PopBot.Roster.LeadCap = 3
 PopBot.Roster.StallPct = 15
 PopBot.Roster.LeaderPct = 10

@@ -268,7 +268,10 @@ namespace Population
         request.level = pick.level;
         request.hasLook = true;
         request.look = pick.look;
-        // Veterans are the furthest of the roster, not phase 6 sets (gear follows the anchor in phase R2).
+        request.hasGearPlan = true;
+        request.gear = pick.gear;
+        request.money = pick.money;
+        // Veterans are the furthest of the roster, not phase 6 sets: gear follows the owner's team.
         if (request.tier == GearTier::Showcase)
             request.tier = GearTier::Normal;
         name = pick.name;

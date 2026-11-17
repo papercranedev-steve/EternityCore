@@ -74,12 +74,6 @@ namespace Population
                    !reserved.count(name) && sObjectMgr.GetPlayerGuidByName(name).IsEmpty();
         }
 
-        std::vector<uint8> const& TeamRaces(uint32 team)
-        {
-            static std::vector<uint8> const alliance = { RACE_HUMAN, RACE_DWARF, RACE_NIGHTELF, RACE_GNOME };
-            static std::vector<uint8> const horde = { RACE_ORC, RACE_UNDEAD, RACE_TAUREN, RACE_TROLL };
-            return team == HORDE ? horde : alliance;
-        }
     }
 
     void Identity::Load()
@@ -192,8 +186,21 @@ namespace Population
 
     uint8 Identity::RandomRace(uint32 team, std::mt19937* rng)
     {
-        std::vector<uint8> const& races = TeamRaces(team);
-        return races[Roll(rng, 0, uint32(races.size()) - 1)];
+        // Rough shares of classic servers: humans and night elves lead the Alliance,
+        // orcs and undead the Horde.
+        struct RaceWeight { uint8 race; uint32 weight; };
+        static RaceWeight const alliance[] = { { RACE_HUMAN, 40 }, { RACE_NIGHTELF, 28 }, { RACE_DWARF, 20 }, { RACE_GNOME, 12 } };
+        static RaceWeight const horde[] = { { RACE_ORC, 30 }, { RACE_UNDEAD, 30 }, { RACE_TAUREN, 22 }, { RACE_TROLL, 18 } };
+        RaceWeight const* races = team == HORDE ? horde : alliance;
+
+        uint32 pick = Roll(rng, 0, 99);
+        for (uint32 i = 0; i < 3; ++i)
+        {
+            if (pick < races[i].weight)
+                return races[i].race;
+            pick -= races[i].weight;
+        }
+        return races[3].race;
     }
 
     uint8 Identity::RandomClass(uint8 race, std::mt19937* rng)

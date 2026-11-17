@@ -2845,12 +2845,25 @@ inline uint32 GetPrimaryItemStatForClassAndRole(uint8 playerClass, uint8 role)
     return ITEM_MOD_STAMINA;
 }
 
-void CombatBotBaseAI::EquipRandomGearInEmptySlots()
+void CombatBotBaseAI::EquipRandomGearInEmptySlots(RandomGearOptions const& options)
 {
     LearnArmorProficiencies();
 
-    bool const onlyPvE = urand(0, 1) != 0;
+    // Seeded picks give the same gear for the same seed (a roster member looks the same every time).
+    std::mt19937 rng(options.seed);
+    auto roll = [&options, &rng](uint32 count) -> uint32   // [0, count)
+    {
+        if (count <= 1)
+            return 0;
+        return options.seed ? std::uniform_int_distribution<uint32>(0, count - 1)(rng) : urand(0, count - 1);
+    };
+
+    bool const onlyPvE = !options.allowPvP || urand(0, 1) != 0;
     uint8 const honorRank = onlyPvE ? 0 : urand(5, 18);
+
+    bool weighted = false;
+    for (uint32 w : options.qualityWeights)
+        weighted = weighted || w > 0;
 
     std::map<uint32 /*slot*/, std::vector<ItemPrototype const*>> itemsPerSlot;
     for (auto const& itr : sObjectMgr.GetItemPrototypeMap())
@@ -2896,6 +2909,26 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         if ((pProto->ItemLevel + sWorld.getConfig(CONFIG_UINT32_PARTY_BOT_RANDOM_GEAR_LEVEL_DIFFERENCE)) < me->GetLevel())
             continue;
 
+        if (options.maxItemLevel && pProto->ItemLevel > options.maxItemLevel)
+            continue;
+
+        if (!options.allowPvP && pProto->RequiredHonorRank)
+            continue;
+
+        // Dresses, tuxedos and the like: armor slot items without any armor.
+        if (!options.allowCosmetic && pProto->Class == ITEM_CLASS_ARMOR && !pProto->Armor)
+        {
+            switch (pProto->InventoryType)
+            {
+                case INVTYPE_HEAD: case INVTYPE_SHOULDERS: case INVTYPE_CHEST: case INVTYPE_ROBE:
+                case INVTYPE_WAIST: case INVTYPE_LEGS: case INVTYPE_FEET: case INVTYPE_WRISTS:
+                case INVTYPE_HANDS: case INVTYPE_CLOAK:
+                    continue;
+                default:
+                    break;
+            }
+        }
+
         if (me->CanUseItem(pProto, onlyPvE) != EQUIP_ERR_OK)
             continue;
 
@@ -2928,6 +2961,7 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         for (uint8 slot : slots)
         {
             if (slot >= EQUIPMENT_SLOT_START && slot < EQUIPMENT_SLOT_END &&
+                !(options.skipSlotMask & (1u << slot)) &&
                 !me->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             {
                 // Offhand checks
@@ -2958,6 +2992,33 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
     uint32 const primaryStat = GetPrimaryItemStatForClassAndRole(me->GetClass(), m_role);
     for (auto& itr : itemsPerSlot)
     {
+        // 0. Quality first (before the primary stat filter, which would drop most white items).
+        if (weighted && !itr.second.empty())
+        {
+            uint32 total = 0;
+            uint32 weightOf[MAX_ITEM_QUALITY] = {};
+            for (ItemPrototype const* pItem : itr.second)
+                if (pItem->Quality < MAX_ITEM_QUALITY && !weightOf[pItem->Quality])
+                    total += (weightOf[pItem->Quality] = options.qualityWeights[pItem->Quality]);
+
+            if (!total)
+            {
+                itr.second.clear();     // only qualities we don't want: leave the slot empty
+                continue;
+            }
+
+            uint32 pick = roll(total);
+            uint32 quality = 0;
+            for (; quality < MAX_ITEM_QUALITY; ++quality)
+            {
+                if (pick < weightOf[quality])
+                    break;
+                pick -= weightOf[quality];
+            }
+            itr.second.erase(std::remove_if(itr.second.begin(), itr.second.end(),
+                [quality](ItemPrototype const* pItem) { return pItem->Quality != quality; }), itr.second.end());
+        }
+
         bool hasPrimaryStatItem = false;
 
         for (auto const& pItem : itr.second)
@@ -2995,6 +3056,9 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
                 itr.second.end());
         }
 
+        if (!options.allowPvP)
+            continue;
+
         bool hasPvpItem = false;
 
         for (auto const& pItem : itr.second)
@@ -3030,7 +3094,8 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots()
         if (itr.second.empty())
             continue;
 
-        ItemPrototype const* pProto = SelectRandomContainerElement(itr.second);
+        ItemPrototype const* pProto = options.seed ? itr.second[roll(uint32(itr.second.size()))]
+                                                   : SelectRandomContainerElement(itr.second);
         if (!pProto)
             continue;
 

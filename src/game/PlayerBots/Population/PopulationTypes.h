@@ -49,6 +49,15 @@ namespace Population
         float faceX = 0.0f, faceY = 0.0f;   // look at this point after arriving
     };
 
+    // Gear of a roster member (Growth::Gear), applied with CombatBotBaseAI random gear limits.
+    struct GearPlan
+    {
+        uint32 maxItemLevel = 0;
+        uint32 qualityWeights[7] = {};  // poor, common, uncommon, rare, epic, legendary, artifact
+        uint32 skipSlotMask = 0;        // 1 << EQUIPMENT_SLOT_*
+        uint32 seed = 0;                // same member and level = same gear
+    };
+
     struct SpawnRequest
     {
         BotKind kind = BotKind::Test;
@@ -68,6 +77,9 @@ namespace Population
         uint32 rosterId = 0;
         bool hasLook = false;
         PlayerBotAppearance look;
+        bool hasGearPlan = false;   // false: GearTier rules (premade sets at 60)
+        GearPlan gear;
+        uint32 money = 0;           // copper
 
         // City bots
         uint32 cityZone = 0;

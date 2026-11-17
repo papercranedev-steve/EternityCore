@@ -411,6 +411,8 @@ namespace Population
 
         EquipForTier();
         me->UpdateSkillsToMaxSkillsForLevel();
+        if (m_request.hasGearPlan)
+            me->SetMoney(m_request.money);
 
         ResetSpellData();
         PopulateSpellData();
@@ -449,6 +451,24 @@ namespace Population
 
     void PopulationBotAI::EquipForTier()
     {
+        if (m_request.hasGearPlan)
+        {
+            // Roster member: plain gear for the level, never above the owner's team.
+            static_assert(sizeof(GearPlan::qualityWeights) / sizeof(uint32) == MAX_ITEM_QUALITY, "GearPlan quality count");
+            GearPlan const& plan = m_request.gear;
+            RandomGearOptions options;
+            options.allowPvP = false;
+            options.allowCosmetic = false;
+            options.maxItemLevel = plan.maxItemLevel;
+            for (uint32 q = 0; q < MAX_ITEM_QUALITY; ++q)
+                options.qualityWeights[q] = plan.qualityWeights[q];
+            options.skipSlotMask = plan.skipSlotMask;
+            options.seed = plan.seed;
+            EquipRandomGearInEmptySlots(options);
+            UpdateVisualHonorRankBasedOnItems();
+            return;
+        }
+
         uint32 templateEntry = 0;
         if (me->GetLevel() >= 60)
         {
