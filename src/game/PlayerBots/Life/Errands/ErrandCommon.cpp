@@ -1,0 +1,69 @@
+#include "Life/Errands/ErrandCommon.h"
+#include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Player.h"
+#include "Group.h"
+#include "MotionMaster.h"
+#include <algorithm>
+#include <cmath>
+
+namespace Life
+{
+namespace Errands
+{
+    bool GroupFights(Player* me)
+    {
+        Group* group = me->GetGroup();
+        if (!group)
+            return me->IsInCombat();
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            if (Player* member = itr->getSource())
+                if (member->IsAlive() && member->IsInCombat())
+                    return true;
+        return false;
+    }
+
+    bool MayRun(Player* me, Player const* anchor)
+    {
+        return me->IsAlive() && !me->IsInCombat() && !me->IsMounted() &&
+               me->GetStandState() == UNIT_STAND_STATE_STAND &&
+               !(anchor && anchor->IsMounted()) && !GroupFights(me);
+    }
+
+    bool WalkIsSafe(Player* me, float x, float y, float z, float maxDetour)
+    {
+        Commander::Position3 to;
+        to.x = x;
+        to.y = y;
+        to.z = z;
+        Commander::Position3 centre;
+        centre.x = (me->GetPositionX() + x) * 0.5f;
+        centre.y = (me->GetPositionY() + y) * 0.5f;
+        centre.z = (me->GetPositionZ() + z) * 0.5f;
+        float const dx = me->GetPositionX() - x;
+        float const dy = me->GetPositionY() - y;
+        float const radius = std::sqrt(dx * dx + dy * dy) * 0.5f + Commander::SafeRoute::SCAN_RADIUS;
+        Commander::SafeRoute::IdleCreatures const idle(me, centre, radius);
+        return Commander::SafeRoute::PathIsSafe(me, idle, to, maxDetour);
+    }
+
+    bool IsDone(std::deque<ObjectGuid> const& done, ObjectGuid guid)
+    {
+        return std::find(done.begin(), done.end(), guid) != done.end();
+    }
+
+    void MarkDone(std::deque<ObjectGuid>& done, ObjectGuid guid, size_t keep)
+    {
+        done.push_back(guid);
+        while (done.size() > keep)
+            done.pop_front();
+    }
+
+    void StopWalk(Player* me)
+    {
+        if (!me->IsStopped())
+            me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+    }
+}
+}

@@ -1,7 +1,8 @@
 /*
  * Shared bot facts (PlayerBots/Shared: depends on nothing of the bot layers): what a player could take from a corpse, by the server's own loot
  * rules (Player::IsAllowedToLoot, LootItem::AllowedForPlayer, round robin and threshold).
- * Facts only: who loots is decided elsewhere (the clear's loot wait, a companion's LootRun).
+ * Facts, plus TakeOpenLoot (the hands for an open loot window). Who loots is decided
+ * elsewhere (the clear's loot wait, a companion's errands).
  * Used by Commander/Coordination/Situation/ClearPlanner and Life/Errands/LootRun.
  *
  * Map thread of the player.
@@ -43,6 +44,13 @@ namespace BotShared
         // Loot::LootItemInSlot: shared and FFA / conditional items first, then the player's quest
         // items). Same filters as HasLootWorthTaking.
         std::vector<uint8> SlotsToTake(Player const* player, Creature const* corpse, bool includePoor = false);
+        // Any loot window (a chest: `target` is the gameobject).
+        std::vector<uint8> SlotsToTake(Player const* player, Loot const& loot, WorldObject const* target, bool includePoor = false);
+
+        // The loot window open on the player (Player::GetLootGuid): takes the money (shared with
+        // the group by the money handler) and every item SlotsToTake gives, through the client's
+        // own handlers, then closes it. True: a window was open.
+        bool TakeOpenLoot(Player* player, bool includePoor = false);
     }
 }
 

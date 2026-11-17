@@ -32,6 +32,7 @@
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include "Life/Errands/LootRun.h"
+#include "Life/Errands/QuestObjectRun.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -424,6 +425,8 @@ public:
     Commander::ResurrectApproachState m_resurrectApproach;
     // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
     Life::LootRunState m_lootRun;
+    // Out of combat: the quest objects a companion's own quests need (Life/Errands/QuestObjectRun.h).
+    Life::QuestObjectRunState m_questObjectRun;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

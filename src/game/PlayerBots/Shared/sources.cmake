@@ -12,6 +12,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Inventory.cpp
   ${BOTSHARED_DIR}/LootFacts.h
   ${BOTSHARED_DIR}/LootFacts.cpp
+  ${BOTSHARED_DIR}/ObjectUse.h
+  ${BOTSHARED_DIR}/ObjectUse.cpp
 )
 
 target_sources(game PRIVATE ${BOTSHARED_SRCS})

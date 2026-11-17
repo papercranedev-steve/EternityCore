@@ -1,5 +1,8 @@
 #include "Shared/LootFacts.h"
 #include "Creature.h"
+#include "GameObject.h"
+#include "Map.h"
+#include "WorldSession.h"
 #include "Group.h"
 #include "LootMgr.h"
 #include "ObjectMgr.h"
@@ -44,9 +47,8 @@ namespace LootFacts
         }
 
         // Shared, FFA or conditional item `i` the player would take now.
-        bool TakesItem(Player const* player, Creature const* corpse, size_t i, bool includePoor)
+        bool TakesItem(Player const* player, Loot const& loot, WorldObject const* target, size_t i, bool includePoor)
         {
-            Loot const& loot = corpse->loot;
             LootItem const& item = loot.items[i];
             if (item.is_looted || item.is_blocked || (!includePoor && !IsWorthLooting(item)))
                 return false;
@@ -55,7 +57,7 @@ namespace LootFacts
                 return HasUntakenEntry(loot.GetPlayerFFAItems(), playerLow, i);
             if (item.conditionId)
                 return HasUntakenEntry(loot.GetPlayerNonQuestNonFFAConditionalItems(), playerLow, i);
-            return item.AllowedForPlayer(player, corpse) && MayTakeSharedItem(player, loot, item);
+            return item.AllowedForPlayer(player, target) && MayTakeSharedItem(player, loot, item);
         }
     }
 
@@ -103,10 +105,14 @@ namespace LootFacts
 
     std::vector<uint8> SlotsToTake(Player const* player, Creature const* corpse, bool includePoor)
     {
+        return SlotsToTake(player, corpse->loot, corpse, includePoor);
+    }
+
+    std::vector<uint8> SlotsToTake(Player const* player, Loot const& loot, WorldObject const* target, bool includePoor)
+    {
         std::vector<uint8> slots;
-        Loot const& loot = corpse->loot;
         for (size_t i = 0; i < loot.items.size(); ++i)
-            if (TakesItem(player, corpse, i, includePoor))
+            if (TakesItem(player, loot, target, i, includePoor))
                 slots.push_back(uint8(i));
 
         // Quest items follow the shared list, in the order of the player's own quest list.
@@ -122,6 +128,47 @@ namespace LootFacts
             }
         }
         return slots;
+    }
+
+    bool TakeOpenLoot(Player* player, bool includePoor)
+    {
+        ObjectGuid const guid = player->GetLootGuid();
+        if (guid.IsEmpty())
+            return false;
+
+        Loot const* loot = nullptr;
+        WorldObject const* target = nullptr;
+        if (guid.IsGameObject())
+        {
+            if (GameObject* go = player->GetMap()->GetGameObject(guid))
+            {
+                loot = &go->loot;
+                target = go;
+            }
+        }
+        else if (guid.IsCreature())
+        {
+            if (Creature* creature = player->GetMap()->GetCreature(guid))
+            {
+                loot = &creature->loot;
+                target = creature;
+            }
+        }
+
+        WorldSession* session = player->GetSession();
+        if (loot)
+        {
+            if (loot->gold)
+                session->HandleLootMoneyOpcode(NullClientPacket(CMSG_LOOT_MONEY));
+            for (uint8 slot : SlotsToTake(player, *loot, target, includePoor))
+            {
+                WorldPackets::Loot::AutoStoreLootItem packet;
+                packet.lootSlot = slot;
+                session->HandleAutostoreLootItemOpcode(packet);
+            }
+        }
+        session->DoLootRelease(guid);
+        return true;
     }
 }
 }

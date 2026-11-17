@@ -19,6 +19,7 @@
 #include "MoveMap.h"
 #include "GridMap.h"
 #include "Creature.h"
+#include "Player.h"
 #include "PathFinder.h"
 #include "Log.h"
 #include "Map.h"
@@ -62,6 +63,23 @@ bool PathInfo::calculate(float destX, float destY, float destZ, bool forceDest, 
 }
 
 bool PathInfo::calculate(Vector3 const& start, Vector3 dest, bool forceDest, bool offsets)
+{
+    bool const calculated = CalculateThroughObjects(start, dest, forceDest, offsets);
+    // The navmesh does not know gameobjects: a client is stopped by a closed door (or any
+    // gameobject with collision on), a player bot walked through it (Stratholme's gates).
+    // Bots stop in front of it like a client; pets do the same in TargetedMovementGenerator.
+    if (StopsAtGameObjects() && m_pathPoints.size() >= 2)
+        CutPathWithDynamicLoS();
+    return calculated;
+}
+
+bool PathInfo::StopsAtGameObjects() const
+{
+    return !m_transport && m_sourceUnit->GetTypeId() == TYPEID_PLAYER &&
+           static_cast<Player const*>(m_sourceUnit)->IsBot();
+}
+
+bool PathInfo::CalculateThroughObjects(Vector3 const& start, Vector3 dest, bool forceDest, bool offsets)
 {
     m_pathPoints.clear();
     m_forceDestination = forceDest;

@@ -1664,6 +1664,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         m_resurrectApproach = Commander::ResurrectApproachState();
         Life::LootRun::Stop(me, m_lootRun);
+        Life::QuestObjectRun::Stop(me, m_questObjectRun);
     }
     if (!me->IsInCombat())
     {
@@ -1735,9 +1736,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // A companion loots for itself after the fight (Life/Errands/LootRun.h). Not while the
         // Commander has an out-of-combat plan (a pull being set up, a retreat) or a resurrection
         // is about to be cast.
+        // Then the quest objects its own quests need (Life/Errands/QuestObjectRun.h).
         if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
+        {
             Life::LootRun::Stop(me, m_lootRun);
-        else if (Life::LootRun::Update(me, m_lootRun, pLeader))
+            Life::QuestObjectRun::Stop(me, m_questObjectRun);
+        }
+        else if (Life::LootRun::Update(me, m_lootRun, pLeader) ||
+                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader))
             return;
 
         // Back from a corpse run away from the leader: walk to him, no teleport. Not while a

@@ -91,6 +91,10 @@ class PathInfo
         GenericTransport* GetTransport() const { return m_transport; }
         void FillTargetAllowedFlags(Unit* target);
     private:
+        // calculate() without the gameobject cut below.
+        bool CalculateThroughObjects(Vector3 const& start, Vector3 dest, bool forceDest, bool offsets);
+        // Player bots: the path ends in front of the first gameobject with collision (a closed door).
+        bool StopsAtGameObjects() const;
 
         dtPolyRef       m_pathPolyRefs[MAX_PATH_LENGTH];   // array of detour polygon references
         uint32          m_polyLength;                      // number of polygons in the path
