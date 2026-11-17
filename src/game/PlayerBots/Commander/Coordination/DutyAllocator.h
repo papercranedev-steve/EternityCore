@@ -11,16 +11,24 @@
  *  - A bot holds at most one primary duty at a time, of any kind (interrupt, intercept, later
  *    crowd control, rescue). Primary duties exclude each other.
  *  - Backups do not claim: a bot already primary elsewhere may still be a backup.
- *  - Conflicts go by points: needs are answered in order (acting now first, then points, then
- *    tieMs, smaller first; stable), so the more valuable need claims the bot and the other need
- *    takes its next candidate.
+ *  - Conflicts go by points over the whole allocation (2026-11-17, was greedy need by need):
+ *    the primaries are the set worth the most in total, needs acting now first (their total
+ *    decides, the others' only among equal totals of those). Each answer is worth the
+ *    candidate's `value` (DutyCandidate). Example: the rogue alone reaches the fear caster,
+ *    rogue and mage reach the healer: the mage kicks the heal, the rogue the fear, although
+ *    the heal is worth more and the rogue ranks first on it.
+ *  - Search: needs in order (acting now first, then points, then tieMs, smaller first;
+ *    stable), each one's candidates by rank (highest first; stable), then "left unanswered";
+ *    branch and bound. The first answer found is the old greedy one (each need takes its
+ *    best-ranked free candidate). Another answer replaces it only when it is worth at least
+ *    SWITCH_MARGIN more (no flapping between near-equal allocations from refresh to refresh);
+ *    the search stops after MAX_NODES steps with the best found so far.
  * Per need:
- *  primary = first candidate (rank, highest first; stable) that canBePrimary and is not primary
- *            for an earlier need;
+ *  primary = the search's candidate (canBePrimary, primary for nothing else);
  *  backup  = (wantsBackup only) first other candidate that is not primary anywhere; if there is
  *            none, the first other candidate even if it is primary elsewhere.
- * A need with neither is dropped. Candidates passed over for the primary are recorded with the
- * reason (DutyResult::passed, shown by `.partybot ai plan`).
+ * A need with neither is dropped. Candidates ranked above the primary are recorded with the
+ * reason it is not them (DutyResult::passed, shown by `.partybot ai plan`).
  * Alternatives (DutyNeed::blockedBy / marks, 2026-11-07 team rescue): a need blocked by a key an
  * earlier answered need marked is skipped (a control and a taunt on the same loose enemy, or a
  * taunt and Shield Wall for the same member, would both spend a bot on one problem).
@@ -79,6 +87,11 @@ namespace Commander
         ObjectGuid bot;
         uint32 spellId = 0;         // ability it would use, 0 = none in particular
         float rank = 0.0f;          // module's own order of preference, highest first
+        // Points answering the need with this candidate is worth (its net, the module's sticky
+        // bonus included): what the allocator compares across needs. Not `valued`: the
+        // need's points (every candidate alike, rank alone tells them apart).
+        float value = 0.0f;
+        bool valued = false;
         bool canBePrimary = true;   // false: backup at most (e.g. cannot reach a live cast in time)
         // For the log only (TeamPlan::offers, the recorder's `offers` lines): how the module
         // valued it (e.g. ControlValue::Describe). Empty = not given.
@@ -107,8 +120,9 @@ namespace Commander
 
     enum class DutyPassReason : uint8
     {
-        Busy,           // primary for an earlier (more valuable) need
+        Busy,           // primary for another need (the allocation is worth more that way)
         NotPrimary,     // candidate only fit to be backup
+        LessWorth,      // free, but another candidate (or none) makes the allocation worth more
     };
 
     struct DutyPass
@@ -137,9 +151,16 @@ namespace Commander
 
     namespace DutyAllocator
     {
+        // Points the best allocation must beat the greedy one by (about a module's sticky bonus).
+        static constexpr float SWITCH_MARGIN = 0.5f;
+        // Search steps before it settles for the best allocation found (5 bots: rarely reached).
+        static constexpr uint32 MAX_NODES = 20000;
+
         std::vector<DutyResult> Allocate(std::vector<DutyNeed> needs);
 
         char const* KindName(DutyKind kind);
+        // Why `pass` is not the primary, for `.partybot ai plan` (busyName: the busy target's name).
+        std::string DescribePass(DutyPass const& pass, std::string const& busyName);
     }
 }
 

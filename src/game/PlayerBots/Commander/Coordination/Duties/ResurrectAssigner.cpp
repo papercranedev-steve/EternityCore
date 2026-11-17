@@ -43,6 +43,8 @@ namespace Commander
                 for (ResurrectDuty const& d : plan.resurrections)
                     if (d.bot == bot.guid && d.target == dead.guid)
                         c.rank += STICKY_POINTS;
+                c.value = c.rank;
+                c.valued = true;
                 if (o.Net() <= 0.0f)
                     need.rejected.push_back(c);
                 else

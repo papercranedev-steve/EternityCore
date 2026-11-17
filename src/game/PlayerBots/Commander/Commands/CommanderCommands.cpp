@@ -445,9 +445,8 @@ namespace
                 for (Commander::DutyResult const& r : plan.duties)
                     if (r.kind == Commander::DutyKind::Intercept && r.target == d.enemy)
                         for (Commander::DutyPass const& pass : r.passed)
-                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
-                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                                NameOf(map, pass.busyTarget).c_str());
+                            handler->PSendSysMessage("        passed over %s: %s", NameOf(map, pass.bot).c_str(),
+                                Commander::DutyAllocator::DescribePass(pass, NameOf(map, pass.busyTarget)).c_str());
             }
         }
 
@@ -472,9 +471,8 @@ namespace
                 for (Commander::DutyResult const& r : plan.duties)
                     if (r.kind == Commander::DutyKind::CrowdControl && r.target == d.enemy)
                         for (Commander::DutyPass const& pass : r.passed)
-                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
-                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                                NameOf(map, pass.busyTarget).c_str());
+                            handler->PSendSysMessage("        passed over %s: %s", NameOf(map, pass.bot).c_str(),
+                                Commander::DutyAllocator::DescribePass(pass, NameOf(map, pass.busyTarget)).c_str());
             }
         }
 
@@ -512,9 +510,8 @@ namespace
                     if ((r.kind == Commander::DutyKind::Rescue && r.target == d.enemy) ||
                         (r.kind == Commander::DutyKind::Save && d.way == Commander::RescueWay::Save && r.target == d.victim))
                         for (Commander::DutyPass const& pass : r.passed)
-                            handler->PSendSysMessage("        passed over %s: primary %s on %s",
-                                NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                                NameOf(map, pass.busyTarget).c_str());
+                            handler->PSendSysMessage("        passed over %s: %s", NameOf(map, pass.bot).c_str(),
+                                Commander::DutyAllocator::DescribePass(pass, NameOf(map, pass.busyTarget)).c_str());
             }
         }
 
@@ -543,15 +540,8 @@ namespace
                 if (r.kind != Commander::DutyKind::Interrupt || r.target != d.enemy)
                     continue;
                 for (Commander::DutyPass const& pass : r.passed)
-                {
-                    if (pass.reason == Commander::DutyPassReason::Busy)
-                        handler->PSendSysMessage("        passed over %s: primary %s on %s",
-                            NameOf(map, pass.bot).c_str(), Commander::DutyAllocator::KindName(pass.busyKind),
-                            NameOf(map, pass.busyTarget).c_str());
-                    else
-                        handler->PSendSysMessage("        passed over %s: backup only (no sight, too far or not in front)",
-                            NameOf(map, pass.bot).c_str());
-                }
+                    handler->PSendSysMessage("        passed over %s: %s", NameOf(map, pass.bot).c_str(),
+                        Commander::DutyAllocator::DescribePass(pass, NameOf(map, pass.busyTarget)).c_str());
             }
         }
         return true;

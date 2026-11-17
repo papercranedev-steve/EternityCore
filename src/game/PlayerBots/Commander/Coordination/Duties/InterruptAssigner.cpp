@@ -19,6 +19,7 @@ namespace Commander
             ObjectGuid bot;
             uint32 spellId = 0;
             float score = -1e9f;
+            float net = 0.0f;           // benefit - cost in points (+ STICKY_POINTS): DutyCandidate::value
             bool canBePrimary = true;   // false: cannot reach the live cast in time (backup only)
         };
 
@@ -75,12 +76,14 @@ namespace Commander
                     continue;
                 }
                 float const benefit = target.cast.points + CastValues::LockoutBenefit(world, e, a, target.cast.spellId);
-                if (benefit <= CastValues::InterruptCost(world, m, a, e, target.cast))
+                float const cost = CastValues::InterruptCost(world, m, a, e, target.cast);
+                if (benefit <= cost)
                     continue;
 
                 Candidate c;
                 c.bot = m.guid;
                 c.spellId = a.spellId;
+                c.net = benefit - cost + (previous && previous->primary == m.guid ? InterruptAssigner::STICKY_POINTS : 0.0f);
                 float score = 0.0f;
                 float const outOfRange = distance - (a.maxRange + InterruptAssigner::RANGE_SLACK);
                 score += outOfRange <= 0.0f ? InterruptAssigner::SCORE_IN_RANGE : -outOfRange * InterruptAssigner::SCORE_PER_YARD_OUT;
@@ -186,6 +189,8 @@ namespace Commander
                 d.bot = cand.bot;
                 d.spellId = cand.spellId;
                 d.rank = cand.score;
+                d.value = cand.net;
+                d.valued = true;
                 d.canBePrimary = cand.canBePrimary;
                 need.candidates.push_back(d);
             }

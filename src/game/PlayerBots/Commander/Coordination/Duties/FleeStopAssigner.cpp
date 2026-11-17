@@ -79,6 +79,8 @@ namespace Commander
                     c.bot = m.guid;
                     c.spellId = a.spellId;
                     c.rank = w.Net() + (m.guid == previous ? STICKY_POINTS : 0.0f);
+                    c.value = c.rank;
+                    c.valued = true;
                     need.candidates.push_back(c);
                     need.points = std::max(need.points, w.Net());
                 }

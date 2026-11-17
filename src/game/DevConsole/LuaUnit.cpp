@@ -1127,11 +1127,13 @@ namespace DevConsole
         int i = 0;
         for (Commander::DutyCandidate const& c : list)
         {
-            lua_createtable(L, 0, 4);
+            lua_createtable(L, 0, 5);
             SetFieldG(L, "bot", c.bot);
             if (c.spellId)
                 SetField(L, "spell", c.spellId);
             SetFieldN(L, "rank", Round2(c.rank));
+            if (c.valued)
+                SetFieldN(L, "value", Round2(c.value));   // what DutyAllocator weighs
             if (!c.why.empty())
                 SetFieldS(L, "why", c.why.c_str());
             lua_rawseti(L, -2, ++i);

@@ -64,6 +64,9 @@ namespace Commander
         static constexpr uint8 DETAIL_URGENT = 1;
         // Subtracted from a consumable's rank in a Save need: every spell candidate comes first.
         static constexpr float CONSUMABLE_RANK_OFFSET = 1.0e6f;
+        // Its value (DutyCandidate::value) is capped this far below the least valuable spell
+        // candidate's: the allocator spends a consumable only to free a spell bot for more.
+        static constexpr float CONSUMABLE_VALUE_GAP = 0.1f;
         // Waiting taunt (header). Lead: a refresh (0.2 s) + a bot tick (0.2 s) + a spell batch
         // (0.4 s) between a decision on these facts and the taunt landing.
         static constexpr float WAIT_LEAD_SEC = 0.8f;

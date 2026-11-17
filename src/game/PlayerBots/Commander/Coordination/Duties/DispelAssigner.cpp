@@ -58,6 +58,8 @@ namespace Commander
                         c.bot = b.guid;
                         c.spellId = a.spellId;
                         c.rank = (b.guid == previousBot ? Value::LostAction(world, b, STICKY_SEC) : 0.0f) - cost;
+                        c.value = worth.points + c.rank;
+                        c.valued = true;
                         need.candidates.push_back(c);
                         break;  // one dispel of the right type per bot
                     }

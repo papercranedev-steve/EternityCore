@@ -40,6 +40,8 @@ namespace Commander
                     for (BoostDuty const& d : plan.boosts)
                         if (d.bot == bot.guid && d.target == target.guid && d.spellId == a.spellId)
                             c.rank += STICKY_POINTS;
+                    c.value = c.rank;
+                    c.valued = true;
                     if (net <= 0.0f)
                         need.rejected.push_back(c);
                     else

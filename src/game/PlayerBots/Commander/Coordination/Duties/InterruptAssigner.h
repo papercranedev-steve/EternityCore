@@ -27,6 +27,9 @@ namespace Commander
         static constexpr float SCORE_PER_COOLDOWN_SEC = 0.05f;
         static constexpr float SCORE_ALREADY_ON_TARGET = 1.0f;
         static constexpr float SCORE_STICKY = 1.5f;         // keep last assignment
+        // The same in points, on the candidate's value (benefit - cost; DutyAllocator weighs
+        // whole allocations by it, the SCORE_* only order the candidates of one enemy).
+        static constexpr float STICKY_POINTS = 0.5f;
         static constexpr float SCORE_TANK = -0.5f;          // tanks prefer holding threat
         static constexpr float SCORE_NOT_READY = -3.0f;     // only for enemies not casting right now
         // Ranged ability without line of sight to the live caster (EnemyFacts::outOfSight):

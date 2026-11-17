@@ -10,6 +10,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/WorldModel.h"
 #include <algorithm>
+#include <limits>
 
 namespace Commander
 {
@@ -113,6 +114,8 @@ namespace Commander
                 c.bot = bot;
                 c.spellId = spellId;
                 c.rank = o.Net() + (WasGiven(plan, bot, e.guid, spellId) ? STICKY_POINTS : 0.0f);
+                c.value = c.rank;
+                c.valued = true;
                 need.candidates.push_back(c);
                 need.points = std::max(need.points, o.Net());
                 if (o.urgent)
@@ -186,6 +189,7 @@ namespace Commander
             need.reason = "about to die";
             need.blockedBy = { { DutyKeyKind::LooseTaken, m.guid } };
             need.marks = { { DutyKeyKind::Saved, m.guid } };
+            std::vector<bool> consumable;   // per candidate
             for (PartyMemberFacts const& b : world.party)
             {
                 // Bots, and bots' pets (Shell Shield on itself: the owner has it cast).
@@ -202,10 +206,22 @@ namespace Commander
                     // Consumables (healthstone, healing potion) after every spell that pays
                     // (user 2026-11-15): only when no bot with one is free.
                     c.rank = a.itemId ? o.Net() - CONSUMABLE_RANK_OFFSET : o.Net();
+                    c.value = o.Net();
+                    c.valued = true;
                     need.candidates.push_back(c);
+                    consumable.push_back(a.itemId != 0);
                     need.points = std::max(need.points, o.Net());
                 }
             }
+            // The same rule for the allocator's totals: a consumable is worth less than every
+            // spell candidate, so it only wins when the spell bots are worth more elsewhere.
+            float lowestSpell = std::numeric_limits<float>::max();
+            for (size_t i = 0; i < need.candidates.size(); ++i)
+                if (!consumable[i])
+                    lowestSpell = std::min(lowestSpell, need.candidates[i].value);
+            for (size_t i = 0; i < need.candidates.size(); ++i)
+                if (consumable[i])
+                    need.candidates[i].value = std::min(need.candidates[i].value, lowestSpell - CONSUMABLE_VALUE_GAP);
             if (!need.candidates.empty())
                 out.push_back(std::move(need));
         }

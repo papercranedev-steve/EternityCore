@@ -139,6 +139,8 @@ namespace Commander
                 c.bot = b->guid;
                 c.spellId = opening.spellId;
                 c.rank = opening.points;
+                c.value = c.rank;
+                c.valued = true;
                 need.candidates.push_back(c);
                 out.push_back(std::move(need));
             }
@@ -182,6 +184,8 @@ namespace Commander
                     c.bot = b.guid;
                     c.spellId = a.spellId;
                     c.rank = w.Net();
+                    c.value = c.rank;
+                    c.valued = true;
                     need.candidates.push_back(c);
                     out.push_back(std::move(need));
                     continue;
@@ -234,6 +238,8 @@ namespace Commander
                         need.points = std::max(need.points, c.rank);
                         need.detail = Detail(a) | DETAIL_TASK;
                         need.reason = "doctrine hold";
+                        c.value = c.rank;
+                        c.valued = true;
                         need.candidates.push_back(c);
                         continue;
                     }
@@ -244,6 +250,8 @@ namespace Commander
                     }
                     if (e.control.caster == b.guid || WasGiven(plan, b.guid, e.guid))
                         c.rank += STICKY_POINTS;
+                    c.value = c.rank;
+                    c.valued = true;
                     need.candidates.push_back(c);
                     if (w.Net() > need.points)
                     {
@@ -305,6 +313,8 @@ namespace Commander
                     }
                     if (WasGiven(plan, b.guid, ally->guid))
                         cand.rank += STICKY_POINTS;
+                    cand.value = cand.rank;
+                    cand.valued = true;
                     need.points = std::max(need.points, benefit - cost);
                     need.detail = Detail(a);
                     need.candidates.push_back(std::move(cand));

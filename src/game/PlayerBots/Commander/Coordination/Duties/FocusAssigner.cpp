@@ -237,6 +237,8 @@ namespace Commander
                     DutyCandidate c;
                     c.bot = m.guid;
                     c.rank = sticky - cost;
+                    c.value = n.points + c.rank;
+                    c.valued = true;
                     need.candidates.push_back(c);
                 }
                 out.push_back(std::move(need));
