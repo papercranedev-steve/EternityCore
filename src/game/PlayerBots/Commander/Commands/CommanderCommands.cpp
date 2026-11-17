@@ -693,7 +693,8 @@ namespace
         }
 
         Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
-        handler->PSendSysMessage("Clearing packs within %.0f yd of here, at most %u mobs per pull "
+        handler->PSendSysMessage("Clearing packs within %.0f yd walk of here (open ways first, then those behind another pack), "
+            "at most %u mobs per pull "
             "(assistance and aggro range counted; waits up to %u s for patrols to pass). ",
             radius, maxMobs, Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
         handler->PSendSysMessage(
@@ -776,8 +777,27 @@ namespace
                 if (!c.aggressive)
                     names += "(neutral)";
             }
-            handler->PSendSysMessage("#%u %.0fyd [%s] %u mobs, %u elite, max lvl %u: %s",
-                index, pack.distanceToLeader, PackSourceName(pack.source),
+            // Walk from you (PackRoutes.h): length, or why not known, and who stands in the way.
+            std::string walk;
+            switch (pack.route.state)
+            {
+                case Commander::PackRouteState::Walk:
+                    walk = "walk " + std::to_string(int32(pack.route.walkYd + 0.5f)) + "yd";
+                    break;
+                case Commander::PackRouteState::Straight:
+                    walk = "no navmesh";
+                    break;
+                case Commander::PackRouteState::NoWay:
+                    walk = "no way";
+                    break;
+                default:
+                    walk = "walk ?";
+                    break;
+            }
+            if (!pack.route.blocker.IsEmpty())
+                walk += ", past " + NameOf(map, pack.route.blocker);
+            handler->PSendSysMessage("#%u %.0fyd (%s) [%s] %u mobs, %u elite, max lvl %u: %s",
+                index, pack.distanceToLeader, walk.c_str(), PackSourceName(pack.source),
                 uint32(pack.members.size()), pack.eliteCount, pack.maxLevel, names.c_str());
         }
         return true;

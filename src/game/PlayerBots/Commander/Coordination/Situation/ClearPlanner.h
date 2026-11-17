@@ -3,8 +3,9 @@
  * Design: .kiro/docs/2026-11-01-pull-planning.md section 5
  *
  * Loop: fight over -> pause (at least 3 s, longer while the player still has corpses to loot)
- * -> wait for dead members to be resurrected -> pick the nearest hostile pack in range that is
- * not too hard -> PullPlanner::Plan (waits until everyone is ready) -> predict again and wait
+ * -> wait for dead members to be resurrected -> pick the next hostile pack in range that is
+ * not too hard (PullOrder: open way first, nearest navmesh walk from the leader first,
+ * PackRoutes.h; range = the walk, packs with no walkable way are passed over) -> PullPlanner::Plan (waits until everyone is ready) -> predict again and wait
  * for patrols when the tank is about to go (PullPlanner::RecheckBeforeApproach) -> pull -> repeat.
  *
  * Pauses while the leader is away from the start (resumes where the leader stops).

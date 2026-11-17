@@ -77,6 +77,9 @@ namespace Commander
         // First member of packs with only stealthed hostile members, already reported. Such
         // packs are not skipped: they are looked at again every round (they may unstealth).
         std::vector<ObjectGuid> stealthNoted;
+        // First member of packs in range by straight line but with no walkable way from the
+        // leader (PackRouteState::NoWay), already reported. Looked at again every round.
+        std::vector<ObjectGuid> noWayNoted;
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
     };
 

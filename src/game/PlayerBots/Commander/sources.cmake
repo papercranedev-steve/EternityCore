@@ -26,6 +26,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/ThreatView.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PackResolver.h
   ${COMMANDER_DIR}/Perception/Spatial/PackResolver.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.h
+  ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/ThreatBehavior.h

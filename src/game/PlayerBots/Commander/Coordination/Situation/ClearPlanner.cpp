@@ -18,6 +18,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <list>
+#include <tuple>
 
 namespace Commander
 {
@@ -211,6 +212,31 @@ namespace ClearPlanner
         bool HasLivingTank(WorldModel const& world)
         {
             return Tanks::Main(world, true) != nullptr;
+        }
+
+        // The order packs are looked at (PackFacts::route, PackRoutes.h):
+        //  1. packs without a patrol before packs with one: a patrol's pack changes as it walks,
+        //     it is looked at again every round;
+        //  2. packs whose way from the leader passes no other creature before those behind
+        //     another pack: the one in front is pulled first, the way to the next is then open
+        //     (in a corridor the corridor is cleared before the room beyond it);
+        //  3. nearest walk first (straight distance where the walk is not known).
+        std::vector<PackFacts const*> PullOrder(WorldModel const& world)
+        {
+            std::vector<PackFacts const*> order;
+            order.reserve(world.packs.size());
+            for (PackFacts const& pack : world.packs)
+                order.push_back(&pack);
+            auto const key = [](PackFacts const* p)
+            {
+                bool const patrol = AnyMember(*p, [](PackCreature const& c) { return c.patrol; });
+                return std::make_tuple(patrol, !p->route.blocker.IsEmpty(), p->ApproachYd());
+            };
+            std::stable_sort(order.begin(), order.end(), [&key](PackFacts const* a, PackFacts const* b)
+            {
+                return key(a) < key(b);
+            });
+            return order;
         }
 
         // Leader moved away from the anchor. Outside a pull this only pauses: the leader is
@@ -485,23 +511,35 @@ namespace ClearPlanner
             return;
         }
 
-        // Next pack: packs are sorted nearest to the leader first. Packs with a patrol go last:
-        // their membership changes as the patrol walks, they are looked at again every round.
+        // Next pack, in PullOrder: open way first, nearest walk first, patrols last.
         bool passedOver = false;    // a pack is left for later (someone else is fighting it)
         uint32 stealthOnly = 0;     // packs whose hostile members are all stealthed now
-        for (int pass = 0; pass < 2; ++pass)
+        uint32 noWay = 0;           // packs in range by straight line, no walkable way to them
         {
-            bool const patrolPass = pass == 1;
-            for (PackFacts const& pack : world.packs)
+            for (PackFacts const* packPtr : PullOrder(world))
             {
+                PackFacts const& pack = *packPtr;
                 if (pack.distanceToLeader > clear.radius || IsSkipped(clear, pack))
-                    continue;
-                bool const patrol = AnyMember(pack, [](PackCreature const& c) { return c.patrol; });
-                if (patrol != patrolPass)
                     continue;
 
                 Creature* first = PickFirst(pack, map);
                 if (!first)
+                    continue;
+
+                // Behind a wall or on another floor: near by straight line, not reachable from
+                // here. Not skipped: the leader may stand elsewhere later.
+                if (pack.route.state == PackRouteState::NoWay)
+                {
+                    ++noWay;
+                    if (!Contains(clear.noWayNoted, first->GetObjectGuid()))
+                    {
+                        clear.noWayNoted.push_back(first->GetObjectGuid());
+                        Note(plan, std::string("Passing over ") + first->GetName() + "'s pack: no walkable way from you.");
+                    }
+                    continue;
+                }
+                // A long way round (the other side of a wall): out of range.
+                if (pack.ApproachYd() > clear.radius)
                     continue;
 
                 // Bosses and creatures that never start a fight are left to the player.
@@ -604,8 +642,10 @@ namespace ClearPlanner
 
         std::string const stealthText = stealthOnly
             ? Format(" %u pack(s) with only stealthed creatures left; pull them yourself.", stealthOnly) : "";
-        Stop(commander, Format("nothing left to pull within %.0f yd (%u packs skipped in total).",
-            clear.radius, clear.skippedPacks) + stealthText);
+        std::string const noWayText = noWay
+            ? Format(" %u pack(s) nearby with no walkable way from here.", noWay) : "";
+        Stop(commander, Format("nothing left to pull within %.0f yd walk (%u packs skipped in total).",
+            clear.radius, clear.skippedPacks) + stealthText + noWayText);
     }
 }
 }

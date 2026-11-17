@@ -1,5 +1,6 @@
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PackRoutes.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/DamageIntake.h"
@@ -2208,6 +2209,10 @@ namespace WorldModelBuilder
         }
 
         world.packs = PackResolver::Resolve(creatures, PositionOf(center));
+        // Walks from the leader (the clear's order): only out of combat, when nothing is
+        // pulled from here anyway and the paths are not worth the time.
+        if (!fighting && center == leader)
+            PackRoutes::Fill(leader, world.packs);
 
         // Ally candidates for the next RefreshCombat: friendly creatures in combat around the
         // leader. Grid objects only (players are party members or strangers, never allies).

@@ -12,6 +12,7 @@
 #include "ObjectGuid.h"
 #include "RoleCapability.h"
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -1019,15 +1020,51 @@ namespace Commander
         std::vector<Position3> track;
     };
 
+    // How the leader would walk to a pack (Perception/Spatial/PackRoutes.h).
+    enum class PackRouteState : uint8
+    {
+        Unknown,    // not calculated (fight going on, too many packs, no leader)
+        Walk,       // navmesh path: walkYd is its length
+        Straight,   // no navmesh here: walkYd is the straight distance, `blocker` is not known
+        NoWay,      // no complete navmesh path to it
+    };
+
+    struct PackRoute
+    {
+        PackRouteState state = PackRouteState::Unknown;
+        float walkYd = 0.0f;
+        ObjectGuid target;          // the member the walk goes to (nearest to the leader)
+        // The first idle creature of another pack (or a patrol) the walk comes into the aggro
+        // range of (SafeRoute::PathIsSafe), empty = none. That creature would join on the way.
+        ObjectGuid blocker;
+    };
+
     struct PackFacts
     {
         PackSource source = PackSource::Distance;
         ObjectGuid dbGroupLeader;
         std::vector<PackCreature> members;
         Position3 center;
-        float distanceToLeader = 0.0f;  // party leader to pack center
+        float distanceToLeader = 0.0f;  // party leader to pack center (straight line)
         uint32 eliteCount = 0;
         uint32 maxLevel = 0;
+        PackRoute route;
+
+        // How far the party walks to it: the walk when known, else the straight distance,
+        // infinity when there is no way.
+        float ApproachYd() const
+        {
+            switch (route.state)
+            {
+                case PackRouteState::Walk:
+                case PackRouteState::Straight:
+                    return route.walkYd;
+                case PackRouteState::NoWay:
+                    return std::numeric_limits<float>::infinity();
+                default:
+                    return distanceToLeader;
+            }
+        }
     };
 
     // The walk of a melee or tank bot to an enemy (Perception/Spatial/MeleeRoutes.h).
