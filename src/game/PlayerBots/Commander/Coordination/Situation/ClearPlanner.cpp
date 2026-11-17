@@ -381,12 +381,13 @@ namespace ClearPlanner
         }
     }
 
-    void Start(Player* leader, PartyCommander& commander, float radius, uint32 maxMobs)
+    void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader)
     {
         TeamPlan& plan = commander.GetPlanMutable();
         plan.clear = ClearPlan();
         plan.clear.active = true;
-        plan.clear.anchor = PositionOf(leader);
+        plan.clear.followsLeader = followsLeader;
+        plan.clear.anchor = PositionOf(anchor);
         plan.clear.radius = radius;
         plan.clear.maxMobs = maxMobs;
         plan.clear.idleSinceMs = 0;     // first pull right away
@@ -397,7 +398,7 @@ namespace ClearPlanner
                 plan.clear.deadAtStart.push_back(m.guid);
     }
 
-    void Stop(PartyCommander& commander, std::string const& why)
+    void Stop(PartyCommander& commander, std::string const& why, ClearEnd end)
     {
         TeamPlan& plan = commander.GetPlanMutable();
         if (!plan.clear.active)
@@ -405,6 +406,7 @@ namespace ClearPlanner
         char buf[200];
         snprintf(buf, sizeof(buf), "Clear stopped after %u packs: %s", plan.clear.cleared, why.c_str());
         plan.clear.active = false;
+        plan.clear.lastEnd = end;
         Note(plan, buf);
     }
 
@@ -439,7 +441,7 @@ namespace ClearPlanner
         if (world.HasPartyEnemy())
             clear.idleSinceMs = nowMs;
 
-        if (!FollowLeader(plan, commander, world, leader, nowMs))
+        if (clear.followsLeader && !FollowLeader(plan, commander, world, leader, nowMs))
             return;
 
         // A pull is being prepared or executed.
@@ -645,7 +647,7 @@ namespace ClearPlanner
         std::string const noWayText = noWay
             ? Format(" %u pack(s) nearby with no walkable way from here.", noWay) : "";
         Stop(commander, Format("nothing left to pull within %.0f yd walk (%u packs skipped in total).",
-            clear.radius, clear.skippedPacks) + stealthText + noWayText);
+            clear.radius, clear.skippedPacks) + stealthText + noWayText, ClearEnd::NothingLeft);
     }
 }
 }

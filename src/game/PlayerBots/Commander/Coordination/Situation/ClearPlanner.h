@@ -23,6 +23,7 @@
 #define MANGOS_COMMANDER_CLEAR_PLANNER_H
 
 #include "Common.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include <string>
 
 class PartyBotAI;
@@ -53,8 +54,11 @@ namespace Commander
 
         uint32 const MAX_LEVEL_ABOVE_LEADER = 3;
 
-        void Start(Player* leader, PartyCommander& commander, float radius, uint32 maxMobs);
-        void Stop(PartyCommander& commander, std::string const& why);
+        // `anchor`: where the clear is centred (the leader; the guide in the push mode).
+        // `followsLeader`: pause while the leader walks away (false: the push planner moves the party).
+        void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader = true);
+        // `end`: why (TeamPlan ClearEnd), read by the push mode.
+        void Stop(PartyCommander& commander, std::string const& why, ClearEnd end = ClearEnd::Failed);
         void Step(PartyBotAI* bot, PartyCommander& commander, uint32 nowMs);
     }
 }

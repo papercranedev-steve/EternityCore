@@ -46,10 +46,56 @@ namespace Commander
         CalledOff,
     };
 
+    // `.partybot ai push`: the tank leads the party through the dungeon on its own (PushPlanner).
+    enum class PushPhase : uint8
+    {
+        Clear,      // a clear runs from where the guide stands
+        Advance,    // the guide walks towards the next goal, a leg at a time
+    };
+
+    struct PushPlan
+    {
+        bool active = false;
+        PushPhase phase = PushPhase::Clear;
+        float radius = 40.0f;           // of each clear
+        uint32 maxMobs = 4;
+        ObjectGuid guideBefore;         // TeamPlan::guide before the push, restored at the end
+
+        // Goal: a hostile spawn still alive (SpawnTargets), empty = pick one.
+        ObjectGuid goal;
+        Position3 goalPos;
+        uint32 goalFailures = 0;        // legs to it that did not get there
+        std::vector<ObjectGuid> givenUp;    // goals reached without a fight or not reachable
+
+        // The leg being walked (PushBehavior walks the guide there).
+        bool walking = false;
+        Position3 legEnd;
+        uint32 legDeadlineMs = 0;
+        Position3 lastPos;              // stuck check: the guide's last position that counted as a move
+        uint32 lastMovedMs = 0;
+
+        uint32 cleared = 0;             // packs over all clears
+        uint32 clearedLastRound = 0;    // packs the last clear killed
+        ObjectGuid lastBlocker;         // the creature the last leg stopped before
+        std::string waitNoted;          // the last "waiting for ..." said, said once
+    };
+
+    // Why the last clear ended (ClearPlanner::Stop), for the push mode.
+    enum class ClearEnd : uint8
+    {
+        None,
+        NothingLeft,    // no pack left in range it would pull
+        Failed,         // anything else: a pull failed, deaths, no tank, stopped, retreating
+    };
+
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
     struct ClearPlan
     {
         bool active = false;
+        ClearEnd lastEnd = ClearEnd::None;
+        // Pauses while the leader walks away from the anchor (`.partybot ai clear`). The push
+        // mode's clears do not: the push planner moves the party, the anchor is the guide's spot.
+        bool followsLeader = true;
         Position3 anchor;               // leader position at start, moved when the leader settles elsewhere
         float radius = 40.0f;
         uint32 maxMobs = 4;             // skip packs predicted to bring more
@@ -1497,6 +1543,7 @@ namespace Commander
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
+        PushPlan push;
         // The party bot the party follows out of combat instead of the player (Guide.h: the
         // push mode's tank). Empty = the player. Only Guide::Current says whether it leads now.
         ObjectGuid guide;

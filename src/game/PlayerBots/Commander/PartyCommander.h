@@ -61,8 +61,9 @@ namespace Commander
             // Since 2026-11-07 the party fighting, or one of us attacking something not fighting
             // yet (WorldModel::targeted), is enough: the original target selection is gone, the
             // first target of a bot comes from TargetAssigner through the Commander hook.
+            // The push mode's guide walking a leg (PushBehavior moves it out of combat).
             return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
-                   m_plan.noRest;
+                   m_plan.noRest || m_plan.push.walking;
         }
         uint32 GetGroupId() const { return m_groupId; }
         uint32 GetMapId() const { return m_mapId; }

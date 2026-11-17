@@ -1909,6 +1909,7 @@ namespace WorldModelBuilder
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
+                    f.resting = ai->IsResting();
                     if (member->IsAlive())
                     {
                         FillInterrupts(ai, f);

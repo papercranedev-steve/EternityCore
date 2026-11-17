@@ -3,17 +3,18 @@
  *
  * Normally the player. A party bot can be made the guide (TeamPlan::guide, the planned push
  * mode: the tank walks on through the dungeon and the others follow it). The guide itself
- * follows nobody: it stands until something walks it (`.partybot cometome`, later the push
- * planner). Everyone else follows it with the same follow as the player's (FollowSpot,
+ * follows nobody: it stands until something walks it (`.partybot cometome`, the push mode's
+ * PushBehavior). Everyone else follows it with the same follow as the player's (FollowSpot,
  * HumanFollow, the teleport beyond 100 yd).
  *
  * Fallback (the guide may fail): a guide that is dead, gone, on another map or out of the
  * party does not lead; the party follows the player again until it is back. The guide itself
  * falls back to the player's follow then too.
  *
- * Not yet for a bot guide: LeaderTrail and WayIn are recorded from client movement packets, a
- * bot sends none, so TrailFollow (the leader's way round a drop) and the retreat's way in are
- * still the player's.
+ * Not recorded for a bot guide, on purpose (user 2026-11-17): LeaderTrail and WayIn come from
+ * client movement packets. A bot walks navmesh paths only (no jumps, no drops), so the others
+ * can follow it on the navmesh too; the retreat's way in is the player's, who walks in with
+ * the party.
  *
  * Map thread of the party.
  */

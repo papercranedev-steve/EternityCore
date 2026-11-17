@@ -28,6 +28,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/PackResolver.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.h
   ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/SpawnTargets.h
+  ${COMMANDER_DIR}/Perception/Spatial/SpawnTargets.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/AdvanceRoute.h
+  ${COMMANDER_DIR}/Perception/Spatial/AdvanceRoute.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/ThreatBehavior.h
@@ -100,6 +104,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Guide.h
   ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/PushPlanner.h
+  ${COMMANDER_DIR}/Coordination/Situation/PushPlanner.cpp
   ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.h
   ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.cpp
   ${COMMANDER_DIR}/Behaviors/IBehavior.h
@@ -239,6 +245,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/LeaderRun.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/PushBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Movement/PushBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/BlastBehavior.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ManaBudget.h

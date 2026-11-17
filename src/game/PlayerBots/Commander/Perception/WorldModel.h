@@ -704,6 +704,7 @@ namespace Commander
         float drinkManaPerSec = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
+        bool resting = false;       // bots: the food or the drink is on (PartyBotAI::IsResting)
         std::vector<DebuffFacts> debuffs;           // players only
         // Harmful auras of any caster on it (players only), what Stoneform removes: a poison,
         // a disease (SpellEntry::Dispel), a bleed (MECHANIC_BLEED on the spell or an effect).

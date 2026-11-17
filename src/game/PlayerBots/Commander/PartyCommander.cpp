@@ -3,6 +3,7 @@
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/Guide.h"
+#include "Commander/Coordination/Situation/PushPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolPlanner.h"
 #include "Commander/Coordination/Situation/Los/CasterLurePlanner.h"
@@ -66,6 +67,7 @@ namespace Commander
         RetreatPlanner::Step(bot, *this);       // a retreat the player's run asked for, door steps
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
+        PushPlanner::Step(bot, *this, nowMs);   // no-op unless `.partybot ai push` is running (after the clear: reads its end)
         FlushNotes(bot);
         m_threatFeed.Push(bot, m_world, nowMs);
         WakeBots(bot, behaviors);

@@ -31,6 +31,9 @@
  *                                    (PullMethod.h); no argument shows it
  *   .partybot ai clear [r] [n]       pull every pack within r yards one after another (at most
  *                                    n mobs per pull), waiting until ready in between; "clear stop"
+ *   .partybot ai push [r] [n]        dungeon only: the tank leads, clears every pack within r
+ *                                    yards, walks on to the next living creature and clears
+ *                                    again (PushPlanner.h); bosses are yours; "push stop"
  *   .partybot ai guide [off]         the party follows the selected party bot out of combat
  *                                    instead of you (Guide.h); no selection: show, "off": you again
  *   .partybot ai retreat [stop]      whole party stops attacking and runs to a point out of every
@@ -54,6 +57,7 @@
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/Guide.h"
+#include "Commander/Coordination/Situation/PushPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
@@ -679,6 +683,11 @@ namespace
             handler->SendSysMessage("Retreating. '.partybot ai retreat stop' first.");
             return false;
         }
+        if (commander->GetPlan().push.active)
+        {
+            handler->SendSysMessage("Push is running (it runs its own clears). '.partybot ai push stop' first.");
+            return false;
+        }
 
         float radius = 40.0f;
         uint32 maxMobs = 4;
@@ -705,6 +714,43 @@ namespace
             "the tank is gone or someone dies twice. '.partybot ai clear stop' to stop.",
             Commander::ClearPlanner::MAX_LEADER_DRIFT);
         return true;
+    }
+
+    // .partybot ai push [radius] [maxmobs] | stop
+    bool StartPush(ChatHandler* handler, Player* player, char const* first, char const* second)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+
+        if (first && !strcmp(first, "stop"))
+        {
+            if (commander->GetPlan().push.active)
+                Commander::PushPlanner::Stop(*commander, player->GetMap(), "you stopped it.");
+            else
+                handler->SendSysMessage("Push is not running.");
+            return true;
+        }
+
+        float radius = 40.0f;
+        uint32 maxMobs = 4;
+        if (first)
+            radius = float(atof(first));
+        if (second)
+            maxMobs = uint32(atoi(second));
+        float const maxRadius = Commander::WorldModelBuilder::PACK_SCAN_RADIUS;
+        if (radius < 10.0f || radius > maxRadius || maxMobs < 1 || maxMobs > 10)
+        {
+            handler->PSendSysMessage("Usage: .partybot ai push [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 4] | stop",
+                maxRadius);
+            return false;
+        }
+
+        std::vector<std::string> report;
+        bool const ok = Commander::PushPlanner::Start(player, *commander, radius, maxMobs, report);
+        for (std::string const& line : report)
+            handler->SendSysMessage(line.c_str());
+        return ok;
     }
 
     // .partybot ai guide [off]   (selection: the party bot to follow)
@@ -1244,11 +1290,17 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
         !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field") || !strcmp(sub, "wayin") ||
-        !strcmp(sub, "guide"))
+        !strcmp(sub, "guide") || !strcmp(sub, "push"))
     {
         Player* player = m_session->GetPlayer();
         bool ok = false;
-        if (!strcmp(sub, "guide"))
+        if (!strcmp(sub, "push"))
+        {
+            char const* first = ExtractLiteralArg(&args);
+            char const* second = ExtractLiteralArg(&args);
+            ok = StartPush(this, player, first, second);
+        }
+        else if (!strcmp(sub, "guide"))
             ok = SetGuide(this, player, ExtractLiteralArg(&args), GetSelectedPlayer());
         else if (!strcmp(sub, "wayin"))
             ok = ShowWayIn(this, player);
@@ -1297,7 +1349,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

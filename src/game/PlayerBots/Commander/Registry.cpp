@@ -7,6 +7,7 @@
 #include "Commander/Behaviors/Support/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/Support/HealPlanBehavior.h"
 #include "Commander/Behaviors/Movement/RetreatBehavior.h"
+#include "Commander/Behaviors/Movement/PushBehavior.h"
 #include "Commander/Behaviors/Movement/PositioningBehavior.h"
 #include "Commander/Behaviors/Movement/HealerStanceBehavior.h"
 #include "Commander/Behaviors/Movement/RangedStanceBehavior.h"
@@ -93,6 +94,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HarvestBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealPlanBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RetreatBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PushBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PositioningBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealerStanceBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RangedStanceBehavior>()));
