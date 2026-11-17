@@ -1,4 +1,5 @@
 #include "Companions/CompanionMgr.h"
+#include "Companions/ClassTraining.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -154,6 +155,10 @@ namespace Companions
             return false;
         }
 
+        // What it learned before it met the player: the class trainer spells of its level, free.
+        // From now on new ranks cost money at a trainer.
+        ClassTraining::Result const lessons = ClassTraining::LearnAvailable(bot, false);
+
         bot->EnableSaving(account);
         bot->SaveToDB();
 
@@ -183,8 +188,8 @@ namespace Companions
         login.sinceMs = m_nowMs;
         m_pending.push_back(login);
 
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s'.",
-            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName());
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned.",
+            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned);
         return true;
     }
 

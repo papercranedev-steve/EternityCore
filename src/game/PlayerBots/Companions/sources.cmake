@@ -6,6 +6,8 @@ set(COMPANIONS_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/CompanionMgr.h
   ${COMPANIONS_DIR}/CompanionMgr.cpp
+  ${COMPANIONS_DIR}/ClassTraining.h
+  ${COMPANIONS_DIR}/ClassTraining.cpp
   ${COMPANIONS_DIR}/Personality.h
   ${COMPANIONS_DIR}/Personality.cpp
 )
