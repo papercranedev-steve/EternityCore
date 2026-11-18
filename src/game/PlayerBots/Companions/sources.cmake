@@ -13,6 +13,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Personality.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.cpp
+  ${COMPANIONS_DIR}/ClassQuests/MirrorSync.h
+  ${COMPANIONS_DIR}/ClassQuests/MirrorSync.cpp
 )
 
 target_sources(game PRIVATE ${COMPANIONS_SRCS})

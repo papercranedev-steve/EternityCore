@@ -41,6 +41,7 @@
 #include "Life/Errands/Trip/ShoppingPlanner.h"
 #include "Life/Errands/Trip/TrainingPlanner.h"
 #include "Companions/RewardChoice.h"
+#include "Companions/ClassQuests/MirrorSync.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
 
@@ -398,6 +399,9 @@ public:
     float m_z = 0.0f;
     float m_o = 0.0f;
     bool m_resetSpellData = false;
+    // The quest of this bot the leader follows in its quest log (Companions/ClassQuests/MirrorSync.h).
+    // Set by the class quest flow (and `.partybot mirror follow`).
+    Companions::MirrorSync::Link m_mirrorLink;
     // The role was chosen by the user (.partybot setrole / load / add with a role, addbot with a
     // role); false = auto, the Commander party assignment may change it.
     bool m_roleLocked = false;

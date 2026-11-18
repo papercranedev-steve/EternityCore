@@ -1649,6 +1649,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!pLeader->IsInWorld())
         return;
 
+    // The leader's copy of this bot's quest (events: the class quest flow's, stage C4).
+    Companions::MirrorSync::Update(me, pLeader, m_mirrorLink);
+
     sCommanderMgr.OnBotUpdate(this);
 
     // Dropping down on the leader's trail: a cast (buff, heal) would stop the fall in the air.

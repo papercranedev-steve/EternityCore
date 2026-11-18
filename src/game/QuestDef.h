@@ -165,7 +165,10 @@ enum QuestSpecialFlags
     // Mangos flags for set SpecialFlags in DB if required but used only at server
     QUEST_SPECIAL_FLAG_REPEATABLE           = 0x001,        // |1 in SpecialFlags from DB
     QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT = 0x002,        // |2 in SpecialFlags from DB (if required area explore, spell SPELL_EFFECT_QUEST_COMPLETE casting, table `*_script` command SCRIPT_COMMAND_QUEST_EXPLORED use, set from script DLL)
-    // reserved for future versions           0x004,        // |4 in SpecialFlags.
+    // |4 in SpecialFlags from DB: a mirror of a bot's quest in a player's log (PlayerBots/Shared/
+    // QuestMirror.h). Only the server sets its counters: the player's own kills, casts and talks
+    // do not count for it.
+    QUEST_SPECIAL_FLAG_MIRROR               = 0x004,
 
     // Mangos flags for internal use only
     QUEST_SPECIAL_FLAG_DELIVER              = 0x008,        // Internal flag computed only
@@ -183,7 +186,7 @@ enum QuestMethod
     QUEST_METHOD_LIMIT                      = 0x3,          // Highest Method entry DB should have
 };
 
-#define QUEST_SPECIAL_FLAG_DB_ALLOWED (QUEST_SPECIAL_FLAG_REPEATABLE | QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT)
+#define QUEST_SPECIAL_FLAG_DB_ALLOWED (QUEST_SPECIAL_FLAG_REPEATABLE | QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT | QUEST_SPECIAL_FLAG_MIRROR)
 
 struct QuestLocale
 {
@@ -201,9 +204,12 @@ struct QuestLocale
 // This Quest class provides a convenient way to access a few pretotaled (cached) quest details,
 // all base quest information, and any utility functions such as generating the amount of
 // xp to give
+namespace BotShared { namespace QuestMirror { class Builder; } }
+
 class Quest
 {
     friend class ObjectMgr;
+    friend class BotShared::QuestMirror::Builder;   // mirror quests made from a real one (PlayerBots)
     public:
         Quest() = default;
         void LoadFromDB(Field* questRecord);

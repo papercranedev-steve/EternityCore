@@ -20,6 +20,7 @@
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
 #include "Life/Requests/RequestBoard.h"
+#include "Shared/QuestMirror.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 
@@ -90,6 +91,13 @@ void PlayerBotMgr::Load()
 
     // 2- Configuration
     LoadConfig();
+    // Mirror quests of class quests (companions' quests in the player's log), before anyone logs in.
+    static bool mirrorsBuilt = false;
+    if (!mirrorsBuilt)
+    {
+        mirrorsBuilt = true;
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [QuestMirror] %u mirror quests made.", BotShared::QuestMirror::BuildAll());
+    }
     sCompanionMgr.Load();
 
     // 3- Load usable account ID

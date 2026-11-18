@@ -747,6 +747,19 @@ class ObjectMgr
             return itr != m_QuestTemplatesMap.end() ? itr->second.get() : nullptr;
         }
         QuestMap const& GetQuestTemplates() const { return m_QuestTemplatesMap; }
+        // A quest made in code, not in quest_template (PlayerBots/Shared/QuestMirror: mirror quests),
+        // after LoadQuests and LoadQuestLocales, before players log in. False: the id is taken.
+        // Gone after `.reload quest_template` / locales until the next start.
+        bool AddCodeQuest(std::unique_ptr<Quest> quest, QuestLocale locale)
+        {
+            uint32 const id = quest ? quest->GetQuestId() : 0;
+            if (!id || m_QuestTemplatesMap.find(id) != m_QuestTemplatesMap.end())
+                return false;
+            m_QuestTemplatesMap[id] = std::move(quest);
+            m_QuestIdSet.insert(id);
+            m_QuestLocaleMap[id] = std::move(locale);
+            return true;
+        }
 
         // Return the ID of the item that starts a quest.
         // Return 0 if no such item exists.

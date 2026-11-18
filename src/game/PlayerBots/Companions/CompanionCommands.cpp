@@ -10,6 +10,8 @@
  *   .partybot mirror show <id>                dev: a mirror quest in your own quest log
  *                    count <id> <objective> <n>    (Shared/QuestMirror; objective 1..4)
  *                    remove <id>
+ *                    follow <bot> <questId>   dev: your log follows a bot's quest (placeholder,
+ *                    unfollow <bot>                then its mirror; ClassQuests/MirrorSync)
  */
 
 #include "Chat.h"
@@ -18,6 +20,7 @@
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
 #include "Shared/TownGates.h"
+#include "PartyBotAI.h"
 #include "WorldSession.h"
 #include <cstring>
 
@@ -135,15 +138,43 @@ bool ChatHandler::HandlePartyBotMirrorCommand(char* args)
 {
     Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
     char* action = ExtractLiteralArg(&args);
+    namespace Mirror = BotShared::QuestMirror;
+
+    // follow <bot> <questId> / unfollow <bot>: the leader's mirror of a bot's quest (MirrorSync)
+    if (player && action && (strcmp(action, "follow") == 0 || strcmp(action, "unfollow") == 0))
+    {
+        std::string name;
+        char* botName = ExtractArg(&args);
+        Player* pBot = ExtractPartyBotTarget(&botName, name);
+        if (!pBot)
+            return false;
+        PartyBotAI* ai = dynamic_cast<PartyBotAI*>(pBot->AI());
+        Companions::MirrorSync::Stop(ai->GetPartyLeader(), ai->m_mirrorLink);
+        if (strcmp(action, "unfollow") == 0)
+        {
+            PSendSysMessage("PBOK;%s;mirror;unfollow", name.c_str());
+            return true;
+        }
+        uint32 questId = 0;
+        if (!ExtractUInt32(&args, questId) || !Mirror::HasMirror(questId))
+        {
+            PSendSysMessage("PBERR;%s;nomirror;%u", name.c_str(), questId);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        Companions::MirrorSync::Follow(ai->m_mirrorLink, questId);
+        PSendSysMessage("PBOK;%s;mirror;follow;%u", name.c_str(), questId);
+        return true;
+    }
+
     uint32 id = 0;
     if (!player || !action || !ExtractUInt32(&args, id))
     {
-        SendSysMessage("PBERR;;usage;.partybot mirror show <id> | count <id> <objective 1-4> <n> | remove <id>");
+        SendSysMessage("PBERR;;usage;.partybot mirror show|remove <id> | count <id> <objective 1-4> <n> | follow <bot> <questId> | unfollow <bot>");
         SetSentErrorMessage(true);
         return false;
     }
 
-    namespace Mirror = BotShared::QuestMirror;
     if (strcmp(action, "show") == 0)
     {
         switch (Mirror::Show(player, id))

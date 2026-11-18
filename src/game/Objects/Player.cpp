@@ -14008,7 +14008,7 @@ void Player::KilledMonsterCredit(uint32 entry, ObjectGuid guid)
             continue;
 
         Quest const* qInfo = sObjectMgr.GetQuestTemplate(questid);
-        if (!qInfo)
+        if (!qInfo || qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_MIRROR))
             continue;
         // just if !ingroup || !noraidgroup || raidgroup
         QuestStatusData& q_status = mQuestStatus[questid];
@@ -14071,7 +14071,7 @@ void Player::CastedCreatureOrGO(uint32 entry, ObjectGuid guid, uint32 spellId, b
         if (!originalCaster && !qInfo->HasQuestFlag(QUEST_FLAGS_SHARABLE))
             continue;
 
-        if (!qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_KILL_OR_CAST))
+        if (!qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_KILL_OR_CAST) || qInfo->HasSpecialFlag(QUEST_SPECIAL_FLAG_MIRROR))
             continue;
 
         QuestStatusData& q_status = mQuestStatus[questid];
@@ -14144,7 +14144,7 @@ void Player::TalkedToCreature(uint32 entry, ObjectGuid guid)
         if (q_status.m_status == QUEST_STATUS_INCOMPLETE)
         {
             if (qInfo->HasSpecialFlag(QuestSpecialFlags(QUEST_SPECIAL_FLAG_KILL_OR_CAST | QUEST_SPECIAL_FLAG_SPEAKTO))
-                && !qInfo->HasSpecialFlag(QuestSpecialFlags(QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT)))
+                && !qInfo->HasSpecialFlag(QuestSpecialFlags(QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT | QUEST_SPECIAL_FLAG_MIRROR)))
             {
                 for (int j = 0; j < QUEST_OBJECTIVES_COUNT; ++j)
                 {
