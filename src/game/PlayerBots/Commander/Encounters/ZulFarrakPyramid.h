@@ -120,10 +120,10 @@ namespace Commander
 
         char const* GetId() const override { return "zf-pyramid"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
-        void Refresh(PartyBotAI* bot, WorldModel const& world) override;
+        void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AddFacts(WorldModel& world) override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         bool ForbidsRest() const override { return m_noRest; }
         void OnReset() override;

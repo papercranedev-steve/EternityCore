@@ -7,14 +7,14 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 
 namespace Commander
 {
     namespace
     {
-        bool InReach(PartyBotAI const* bot, Position3 const& from, Position3 const& to, float range)
+        bool InReach(TeamBotAI const* bot, Position3 const& from, Position3 const& to, float range)
         {
             if (SafeRoute::Distance2d(from, to) > range)
                 return false;
@@ -26,7 +26,7 @@ namespace Commander
         // (the main tank, or before the fight the planned fight spot), a ranged damage dealer
         // before the fight in cast range of the planned fight spot. Elsewhere the stance
         // modules walk it there first.
-        bool PlaceOk(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        bool PlaceOk(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                      PartyMemberFacts const& self)
         {
             Position3 planned;
@@ -45,12 +45,12 @@ namespace Commander
         }
     }
 
-    bool RestBehavior::AppliesTo(PartyBotAI const* /*bot*/) const
+    bool RestBehavior::AppliesTo(TeamBotAI const* /*bot*/) const
     {
         return true;
     }
 
-    void RestBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void RestBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

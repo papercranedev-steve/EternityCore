@@ -6,7 +6,7 @@
  * ran after every new target and every enemy that walked off, so the pile drifted wherever the
  * loose enemies went (towards the area caster, out of the Blizzard).
  *
- * Now the module takes the chase over (Takeover::Stance, PartyBotAI::IsChaseControlled:
+ * Now the module takes the chase over (Takeover::Stance, TeamBotAI::IsChaseControlled:
  * BeginChasing stands down, UpdateAI drops a chase it did not order) while the party fights
  * (WorldModel::InFight), not while the pull places the tank (PullPlan::PlacesTank: the pull
  * walks it, a walk-in pull's chase is the original one) unless the fight spot moves it.
@@ -56,9 +56,9 @@ namespace Commander
         static constexpr float HORIZON_SEC = 8.0f;
 
         char const* GetId() const override { return "tankstance"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

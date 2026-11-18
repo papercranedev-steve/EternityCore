@@ -6,7 +6,7 @@
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Timer.h"
 #include <algorithm>
 
@@ -38,17 +38,17 @@ namespace Commander
         }
     }
 
-    bool OffRouteBehavior::AppliesTo(PartyBotAI const* /*bot*/) const
+    bool OffRouteBehavior::AppliesTo(TeamBotAI const* /*bot*/) const
     {
         return true;
     }
 
-    bool OffRouteBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
+    bool OffRouteBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
     {
         return plan.routeGuard.Find(bot->me->GetObjectGuid()) != nullptr;
     }
 
-    float OffRouteBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float OffRouteBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                              uint32 castLeftMs, char const*& reason) const
     {
         OffRouteTask const* t = plan.routeGuard.Find(bot->me->GetObjectGuid());
@@ -61,7 +61,7 @@ namespace Commander
         return t->points;
     }
 
-    void OffRouteBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void OffRouteBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

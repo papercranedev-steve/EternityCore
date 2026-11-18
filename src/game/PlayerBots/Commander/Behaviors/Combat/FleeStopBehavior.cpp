@@ -3,7 +3,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
@@ -18,7 +18,7 @@ namespace Commander
         }
     }
 
-    bool FleeStopBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool FleeStopBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         for (SpellEntry const* s : bot->Kit().FleeStoppers())
             if (s)
@@ -26,7 +26,7 @@ namespace Commander
         return false;
     }
 
-    void FleeStopBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void FleeStopBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -89,7 +89,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    bool FleeStopBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    bool FleeStopBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         FleeStopDuty const* duty = plan.FindFleeStopFor(bot->me->GetObjectGuid());
         if (!duty)

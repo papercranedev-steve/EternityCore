@@ -25,7 +25,7 @@
  *     Shield  its own shield (Ice Barrier) when its aura is not on. Value shieldGain. Not
  *             castable this moment (GCD): nothing, the spell waits for it.
  *     Cast    the spell on the centre enemy (ground spell) or itself, when CanTryToCastSpell
- *             passes (range, mana, PartyBotAI::PassesPartyCastChecks). Value benefit / cost of
+ *             passes (range, mana, TeamBotAI::PassesPartyCastChecks). Value benefit / cost of
  *             the whole spell.
  *   Channel: nothing (the channel watch below).
  *
@@ -61,21 +61,21 @@ namespace Commander
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "aoe"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
         // `spell` is one of the bot's ClassKit::AreaDamage spells, this module is on and the bot
-        // is in combat: its threat is judged by the area phase, PartyBotAI::PassesPartyCastChecks
+        // is in combat: its threat is judged by the area phase, TeamBotAI::PassesPartyCastChecks
         // skips its rough check (which would block the module's own casts).
-        static bool Judges(PartyBotAI const* bot, SpellEntry const* spell);
+        static bool Judges(TeamBotAI const* bot, SpellEntry const* spell);
 
         // Every frame from PartyBotAI::UpdateAI (channel watch above). True = cancelled.
-        static bool WatchChannel(PartyBotAI* bot, uint32& lastCheckMs);
+        static bool WatchChannel(TeamBotAI* bot, uint32& lastCheckMs);
 
         // The channel watch's best net of the further ticks (>= 0): what ending the bot's own
         // area channel costs any other proposal (Behaviors/CurrentAction.h).
-        float ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                             SpellEntry const* spell, char const*& reason) const override;
     };
 }

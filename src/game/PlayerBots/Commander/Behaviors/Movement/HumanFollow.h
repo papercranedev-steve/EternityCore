@@ -17,7 +17,7 @@
  * The offset is measured from the leader's direction of travel (FollowStyle.h, generator side).
  * Tick: while walking the bot's place drifts a little; once the leader has stood a while the
  * bot looks around, takes a step or sits down (out of combat only).
- * FollowSpot still decides whether the offset is safe: PartyBotAI asks it with Heading() and
+ * FollowSpot still decides whether the offset is safe: TeamBotAI asks it with Heading() and
  * starts from PreferredOffset(); the first move of each MoveFollow is never held back.
  *
  * Map thread of the bot.
@@ -85,7 +85,7 @@ namespace HumanFollow
         uint32 idleAfterMs = 0;
     };
 
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct IdleState
     {
         uint32 nextActMs = 0;       // 0: not scheduled

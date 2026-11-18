@@ -8,7 +8,7 @@
 
 #include "Commander/Perception/WorldModel.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
@@ -52,12 +52,12 @@ namespace WorldModelBuilder
 
     // Party members, pets, allies, enemies and their threat lists. No grid search: allies come
     // from the last scan (allyCandidates), the previous allies, and the threat lists of enemies.
-    void RefreshCombat(PartyBotAI* bot, WorldModel& world);
+    void RefreshCombat(TeamBotAI* bot, WorldModel& world);
 
     // Out-of-combat creatures near the party, grouped into packs, and the ally candidate scan.
     // Grid searches, run less often. Packs and their walks (PackRoutes) are around `guide` when
     // the party follows one (Guide::Current, null = none), else around the leader.
-    void RefreshPacks(PartyBotAI* bot, WorldModel& world, Player* guide);
+    void RefreshPacks(TeamBotAI* bot, WorldModel& world, Player* guide);
 
     // Damage per second of a creature's main ranged spell (CreatureProfile::mainRangedSpellId)
     // while it stands back casting: one cast per (cast time + half a spell list check, or the

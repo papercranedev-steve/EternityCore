@@ -24,7 +24,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
 #include "DBCStores.h"

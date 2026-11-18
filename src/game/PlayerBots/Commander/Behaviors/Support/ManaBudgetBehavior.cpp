@@ -6,7 +6,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Commands/BotSpeech.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "DamageSpells.h"
 #include "Commander/Classes/ClassKit.h"
@@ -29,7 +29,7 @@ namespace Commander
     {
         // E: average healing per mana over the bot's direct heals, measured on itself.
         // Every rank counts the same (the rank cast depends on the target, HealSpells.h).
-        float AverageHealPerMana(PartyBotAI const* bot)
+        float AverageHealPerMana(TeamBotAI const* bot)
         {
             Player* me = bot->me;
             float sum = 0.0f;
@@ -75,7 +75,7 @@ namespace Commander
         }
     }
 
-    bool ManaBudgetBehavior::ComputeBudget(PartyBotAI const* bot, WorldModel const& world, Budget& out)
+    bool ManaBudgetBehavior::ComputeBudget(TeamBotAI const* bot, WorldModel const& world, Budget& out)
     {
         // Own mana from the world facts (the mana pool, also while shapeshifted), the live
         // Player only when the bot is not in world.party.
@@ -124,7 +124,7 @@ namespace Commander
         return true;
     }
 
-    void ManaBudgetBehavior::NoteLowMana(PartyBotAI const* bot, Budget const& budget) const
+    void ManaBudgetBehavior::NoteLowMana(TeamBotAI const* bot, Budget const& budget) const
     {
         if (!ManaBudget::WantsLowManaWarning(budget.manaPct, budget.tension))
             return;
@@ -153,13 +153,13 @@ namespace Commander
         BotSpeech::Report(bot->me, leader, text);
     }
 
-    bool ManaBudgetBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool ManaBudgetBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_HEALER || bot->Kit().SelfManaRestore() ||
                (bot->me->GetMaxPower(POWER_MANA) > 0 && ItemKit::HoldsAny(*bot, ItemKit::Use::Mana));
     }
 
-    void ManaBudgetBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ManaBudgetBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                      TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         if (world.enemies.empty())
@@ -171,7 +171,7 @@ namespace Commander
             ProposeHealVeto(bot, world, out);
     }
 
-    void ManaBudgetBehavior::ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world,
+    void ManaBudgetBehavior::ProposeSelfRestore(TeamBotAI const* bot, WorldModel const& world,
                                                 std::vector<Proposal>& out) const
     {
         SpellEntry const* restore = bot->Kit().SelfManaRestore();
@@ -222,7 +222,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    void ManaBudgetBehavior::ProposeManaItem(PartyBotAI const* bot, WorldModel const& world,
+    void ManaBudgetBehavior::ProposeManaItem(TeamBotAI const* bot, WorldModel const& world,
                                              TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -310,7 +310,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    void ManaBudgetBehavior::ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world,
+    void ManaBudgetBehavior::ProposeHealVeto(TeamBotAI const* bot, WorldModel const& world,
                                              std::vector<Proposal>& out) const
     {
         Budget budget;

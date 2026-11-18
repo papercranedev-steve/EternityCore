@@ -17,7 +17,7 @@
  *      too): the points die with it.
  *   4. Backstab, Ghostly Strike, Hemorrhage, Sinister Strike (Backstab, Hemorrhage, Ghostly
  *      Strike only for characters with their own talents and daggers; the server checks in
- *      PartyBotAI::PassesServerCastChecks skip Backstab without a dagger / not behind).
+ *      TeamBotAI::PassesServerCastChecks skip Backstab without a dagger / not behind).
  * Without a Commander (no party snapshot): Slice and Dice above 10% victim health, no kill shot.
  *
  * Sprint is no longer cast here (until 2026-11-15: whenever the victim was out of melee reach,
@@ -31,7 +31,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "SpellAuras.h"
 #include "Timer.h"
@@ -60,7 +60,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.rogue;
 
@@ -86,7 +86,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.rogue;
 
@@ -177,7 +177,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeRogue(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeRogue(TeamBotAI& bot)
 {
     return std::make_unique<RogueRotation>(bot);
 }

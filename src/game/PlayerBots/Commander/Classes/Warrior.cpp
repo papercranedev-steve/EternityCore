@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 
 namespace Commander
 {
@@ -48,7 +48,7 @@ namespace Commander
             }
 
             // Thunder Clap needs Battle Stance: from Defensive Stance it is cast after a swap
-            // (Arbiter -> PartyBotAI::DoCastWithStance), costed by ThreatBehavior.
+            // (Arbiter -> TeamBotAI::DoCastWithStance), costed by ThreatBehavior.
             std::vector<AreaThreatSpell> AreaThreat() const override
             {
                 auto const& s = m_bot.m_spells.warrior;
@@ -114,7 +114,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeWarrior(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeWarrior(TeamBotAI const& bot)
     {
         return std::make_unique<WarriorKit>(bot);
     }

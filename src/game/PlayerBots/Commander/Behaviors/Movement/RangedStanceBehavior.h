@@ -7,7 +7,7 @@
  * 20.3 yd from a wandering Ravaged Cadaver's home (aggro range 17, wander 5); after 14 s it
  * stepped close enough and its group of seven came.
  *
- * Now, while this module is on, it takes that chase over (Takeover::Stance: PartyBotAI::
+ * Now, while this module is on, it takes that chase over (Takeover::Stance: TeamBotAI::
  * BeginChasing stands down for bots that keep a caster distance, CombatBotBaseAI::
  * UsesCasterChase) and moves the bot itself. Bots that fight in melee (no mana, no ranged
  * weapon, a form) keep the original chase.
@@ -40,7 +40,7 @@
  * HealerStanceBehavior.h). No planned spot: it waits where it is (PullPlan::HoldsWaiting).
  * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself; no
  * victim yet: the brain's target for it (TeamPlan::targets; TargetBehavior attacks only in
- * range and sight). Ranged bots do not follow the leader then (PartyBotAI::IsStanceControlled).
+ * range and sight). Ranged bots do not follow the leader then (TeamBotAI::IsStanceControlled).
  * Not while: the retreat runs, the pull is in Approach / Return, out of combat and held by
  * the pull (PullPlan::HoldsWaiting), rooted, casting, the victim chases the bot itself (the
  * escape module's job), or a MoveTo is under way (then Hold so the rotation's first cast does
@@ -115,9 +115,9 @@ namespace Commander
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "rangedstance"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

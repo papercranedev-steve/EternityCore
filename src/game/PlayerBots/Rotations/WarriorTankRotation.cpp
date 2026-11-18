@@ -7,7 +7,7 @@
  *
  * In combat, in this order:
  *   1. Back to Defensive Stance when out of it (x1.3 threat; Taunt, Revenge and Shield Block need
- *      it). Not while a swap for a Commander cast is waiting (PartyBotAI::DoCastWithStance).
+ *      it). Not while a swap for a Commander cast is waiting (TeamBotAI::DoCastWithStance).
  *   2. Bloodrage below BLOODRAGE_BELOW_RAGE and above BLOODRAGE_MIN_HEALTH_PCT (no GCD).
  *   3. Revenge (5 rage, the most threat per rage).
  *   4. Shield Block: attacked, shield, below SHIELD_BLOCK_HEALTH_PCT (strat-20261101-210522: with
@@ -30,7 +30,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "MotionMaster.h"
 
@@ -57,7 +57,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& w = bot.m_spells.warrior;
 
@@ -114,7 +114,7 @@ namespace
         // in this tick would replace it. A stance on cooldown does not stop the rotation.
         bool KeepDefensiveStance()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             SpellEntry const* pStance = bot.m_spells.warrior.pDefensiveStance;
             if (!pStance || bot.me->GetShapeshiftForm() == FORM_DEFENSIVESTANCE || bot.m_stanceSwap.spell)
                 return false;
@@ -123,7 +123,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeWarriorTank(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeWarriorTank(TeamBotAI& bot)
 {
     return std::make_unique<WarriorTankRotation>(bot);
 }

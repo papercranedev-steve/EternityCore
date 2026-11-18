@@ -30,7 +30,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "DamageSpells.h"
 #include "RoleCapability.h"
 #include "Player.h"
@@ -52,7 +52,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.warlock;
 
@@ -80,7 +80,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.warlock;
 
@@ -121,7 +121,7 @@ namespace
         // leader stand still out of combat.
         bool Soulstone()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             SpellEntry const* pCreate = bot.m_spells.warlock.pCreateSoulstone;
             if (!pCreate || me->IsInCombat())
@@ -166,7 +166,7 @@ namespace
                 Player* pMember = itr->getSource();
                 if (!pMember || !pMember->IsAlive() || pMember->GetMap() != me->GetMap() || HasSoulstone(pMember, pUse))
                     continue;
-                if (PartyBotAI const* pAI = pMember->AI() ? dynamic_cast<PartyBotAI const*>(pMember->AI()) : nullptr)
+                if (TeamBotAI const* pAI = pMember->AI() ? dynamic_cast<TeamBotAI const*>(pMember->AI()) : nullptr)
                 {
                     if (pAI->GetRole() == ROLE_HEALER)
                         return pMember;
@@ -203,7 +203,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeWarlock(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeWarlock(TeamBotAI& bot)
 {
     return std::make_unique<WarlockRotation>(bot);
 }

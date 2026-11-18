@@ -7,7 +7,7 @@
 #ifndef MANGOS_COMMANDER_VETO_CHECKS_H
 #define MANGOS_COMMANDER_VETO_CHECKS_H
 
-class PartyBotAI;
+class TeamBotAI;
 class Unit;
 class SpellEntry;
 class SpellAuraHolder;
@@ -18,20 +18,20 @@ namespace VetoChecks
 {
     // A harmful aura on `target` that `dispelSpell` removes and that is not vetoed
     // (urgent heal order, or hand-written dispel policy never / after combat).
-    bool HasAllowedDebuff(PartyBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell);
+    bool HasAllowedDebuff(TeamBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell);
 
     // One aura: may the rotation not dispel it (out of combat; in combat the dispel module
     // decides)? Hand-written policy never / after combat, and every non-control aura while the
     // bot holds an urgent heal order.
-    bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
+    bool IsDispelVetoed(TeamBotAI const* bot, Unit const* target, SpellAuraHolder const* holder);
 
     // Healing `target` now would pull aggro and is not needed yet (ThreatBehavior).
-    bool IsHealVetoed(PartyBotAI const* bot, Unit const* target);
+    bool IsHealVetoed(TeamBotAI const* bot, Unit const* target);
 
     // `target` is a member of the bot's group mind controlled by a creature (Whitemane's
     // Dominate Mind). It turns hostile, so the original target selection would attack it and
     // the dispel selection would skip it as "not helpful" (combat scenario 7, problem 2).
-    bool IsCharmedPartyMember(PartyBotAI const* bot, Unit const* target);
+    bool IsCharmedPartyMember(TeamBotAI const* bot, Unit const* target);
 }
 }
 

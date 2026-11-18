@@ -6,7 +6,7 @@
  * bots whose combatRes is ready, within its range of the body / corpse (the behavior does not
  * walk there), net > 0 (Perception/Values/ResurrectValue.h: healers and tanks only); rank = net
  * (+ STICKY_POINTS for last refresh's choice). ResurrectBehavior casts it.
- * Out of combat every resurrection stays PartyBotAI's (UpdateOutOfCombatAI).
+ * Out of combat every resurrection stays TeamBotAI's (UpdateOutOfCombatAI).
  */
 
 #ifndef MANGOS_COMMANDER_RESURRECT_ASSIGNER_H

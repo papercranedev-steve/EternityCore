@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander layer 3: casts the dispels DispelAssigner gave this bot (2026-11-03).
  *
- * In combat only this module dispels (the rotation's PartyBotAI::DispelOutOfCombat runs
+ * In combat only this module dispels (the rotation's TeamBotAI::DispelOutOfCombat runs
  * out of combat only); who removes what is decided by the brain
  * (Coordination/Duties/DispelAssigner.h, worth: Perception/Values/DispelValue.h).
  * Live checks before proposing: the member is still there with the debuff, in line of sight
@@ -26,11 +26,11 @@ namespace Commander
     {
     public:
         char const* GetId() const override { return "dispel"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         // The bot has a control dispel duty (the member cannot act).
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        bool WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
     };
 }
 

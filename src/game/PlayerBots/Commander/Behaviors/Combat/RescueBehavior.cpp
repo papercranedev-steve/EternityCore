@@ -7,7 +7,7 @@
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Pet.h"
 #include "SpellEntry.h"
@@ -20,7 +20,7 @@ namespace Commander
 {
     namespace
     {
-        bool HasSurvival(PartyBotAI const* bot)
+        bool HasSurvival(TeamBotAI const* bot)
         {
             for (SurvivalSpell const& s : bot->Kit().Survival())
                 if (s.spell)
@@ -30,7 +30,7 @@ namespace Commander
 
         // The duty's spell is on cooldown, its reset ready (CooldownResetFacts): cast the reset
         // first (BotAction::prepResets; the arbiter checks the spell after it).
-        bool SetReset(PartyBotAI const* bot, BotAction& action, CooldownResetFacts const& reset)
+        bool SetReset(TeamBotAI const* bot, BotAction& action, CooldownResetFacts const& reset)
         {
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(reset.spellId);
             if (!spell || bot->me->IsSpellReady(action.spell) || !bot->CanTryToCastSpell(bot->me, spell))
@@ -43,7 +43,7 @@ namespace Commander
         // A waiting taunt (RescueDuty::waitUntilMs, RescueAssigner::TauntWaitSec) is due: its
         // time is up, or, checked live, within RescueAssigner::WAIT_LEAD_SEC the enemy is on its
         // victim or out of the tank's reach (`reach`: TauntAbility::maxRange, from its edge).
-        bool TauntDue(PartyBotAI const* bot, RescueDuty const& duty, Unit const* enemy, float reach)
+        bool TauntDue(TeamBotAI const* bot, RescueDuty const& duty, Unit const* enemy, float reach)
         {
             if (!duty.waitUntilMs || int32(WorldTimer::getMSTime() - duty.waitUntilMs) >= 0)
                 return true;
@@ -64,7 +64,7 @@ namespace Commander
         }
     }
 
-    bool RescueBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool RescueBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         if (HasSurvival(bot))
             return true;
@@ -76,7 +76,7 @@ namespace Commander
     // The brain gave the bot's pet a rescue of its own spells (WorldModelBuilder's pet facts):
     // Shell Shield on itself about to die, Cower on the enemy hitting it. The pet casts it
     // (BotActionType::PetCast), the bot's own action is not taken.
-    void RescueBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world,
+    void RescueBehavior::ProposePet(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Pet* pet = bot->me->GetPet();
@@ -110,7 +110,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    void RescueBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void RescueBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         ProposePet(bot, world, plan, out);
@@ -210,7 +210,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    bool RescueBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    bool RescueBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         RescueDuty const* duty = plan.FindRescueFor(bot->me->GetObjectGuid());
         // The pet's own (Shell Shield, Cower; its Threat way is ThreatBehavior's).

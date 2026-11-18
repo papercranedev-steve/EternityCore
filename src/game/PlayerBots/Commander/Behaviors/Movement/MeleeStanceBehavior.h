@@ -6,7 +6,7 @@
  * walked any path to the victim, also past idle packs; the brain only drew a straight line
  * (RouteRisk::CrossesIdle). A melee bot without a target followed the player.
  *
- * Now the module takes the chase and the follow over (Takeover::Stance, PartyBotAI::
+ * Now the module takes the chase and the follow over (Takeover::Stance, TeamBotAI::
  * IsChaseControlled: BeginChasing stands down, UpdateAI does not follow the leader) while the
  * party fights (WorldModel::InFight), also for a bot not in combat itself.
  *
@@ -28,7 +28,7 @@
  *                there from the spot of the angle it chases at (or from the bot, not chasing yet);
  *      the angle it chases at is kept while it is allowed and loses at most MOVE_MARGIN_SEC of
  *      LostAction more than the best; none allowed: behind (PI).
- *    Proposed only when the bot does not run that chase yet (PartyBotAI::GetChaseAngle) or the
+ *    Proposed only when the bot does not run that chase yet (TeamBotAI::GetChaseAngle) or the
  *    angle changes. Value: out of reach Value::LostAction(HORIZON_SEC), in reach
  *    LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.
  * No enemy it can walk to: wait near the tank (Tanks::Main, else the leader). Farther than
@@ -78,9 +78,9 @@ namespace Commander
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "meleestance"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

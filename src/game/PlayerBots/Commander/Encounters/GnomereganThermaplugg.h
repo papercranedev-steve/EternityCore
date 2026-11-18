@@ -95,9 +95,9 @@ namespace Commander
 
         char const* GetId() const override { return "thermaplugg"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
-        void Refresh(PartyBotAI* bot, WorldModel const& world) override;
+        void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
 
@@ -117,15 +117,15 @@ namespace Commander
             mutable uint32 pressedAtMs = 0;
         };
 
-        void FindObjects(PartyBotAI* bot, uint32 nowMs);
-        void ReadFaces(PartyBotAI* bot);
+        void FindObjects(TeamBotAI* bot, uint32 nowMs);
+        void ReadFaces(TeamBotAI* bot);
         // The presser is within INTERACTION_DISTANCE of the face's button.
-        bool PresserAtButton(PartyBotAI* bot, Face const& f) const;
+        bool PresserAtButton(TeamBotAI* bot, Face const& f) const;
         void PickPresser(WorldModel const& world);
         void AddBombIntercepts(WorldModel const& world, TeamPlan& plan) const;
 
-        void ProposePresser(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        void ProposeMelee(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposePresser(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeMelee(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                           std::vector<Proposal>& out) const;
         // Points lost to one explosion.
         float ExplosionLoss(WorldModel const& world) const;

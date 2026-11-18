@@ -48,7 +48,7 @@
 
 #include "Chat.h"
 #include "Player.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/PartyCommander.h"
@@ -774,7 +774,7 @@ namespace
         }
 
         bool const isPartyBot = selected && selected != player && selected->GetGroup() == player->GetGroup() &&
-            selected->AI() && dynamic_cast<PartyBotAI*>(selected->AI());
+            selected->AI() && dynamic_cast<TeamBotAI*>(selected->AI());
         if (!isPartyBot)
         {
             Player* current = Commander::Guide::Current(plan, player);
@@ -1024,7 +1024,7 @@ namespace
             {
                 Player* member = itr->getSource();
                 if (member && member->IsInWorld() && member->GetMap() == player->GetMap() && member->AI())
-                    if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
+                    if (TeamBotAI const* ai = dynamic_cast<TeamBotAI const*>(member->AI()))
                         if (ai->m_role == ROLE_HEALER)
                             healer = member;
             }
@@ -1264,7 +1264,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     if (!strcmp(sub, "bot"))
     {
         Player* pBot = GetSelectedPlayer();
-        PartyBotAI* pAI = (pBot && pBot->AI()) ? dynamic_cast<PartyBotAI*>(pBot->AI()) : nullptr;
+        TeamBotAI* pAI = (pBot && pBot->AI()) ? dynamic_cast<TeamBotAI*>(pBot->AI()) : nullptr;
         if (!pAI)
         {
             SendSysMessage("Select a party bot first.");
@@ -1275,7 +1275,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         // Read-only peek from the GM's thread; good enough for a debug command.
         uint32 const now = WorldTimer::getMSTime();
         // const overload: never creates the directives from this thread
-        Commander::BotDirectives const& d = static_cast<PartyBotAI const*>(pAI)->Directives();
+        Commander::BotDirectives const& d = static_cast<TeamBotAI const*>(pAI)->Directives();
         PSendSysMessage("%s: movement hold %u ms left", pBot->GetName(), d.GetMovementHoldRemaining(now));
         if (d.GetLastDecision().empty())
             SendSysMessage("  last decision: none");

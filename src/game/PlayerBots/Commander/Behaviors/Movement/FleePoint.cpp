@@ -4,7 +4,7 @@
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Group.h"
 #include "Map.h"
 #include "Player.h"
@@ -40,7 +40,7 @@ namespace Commander
             if (world)
                 if (PartyMemberFacts const* m = world->FindMember(member->GetObjectGuid()))
                     return Tanks::IsTank(*m);
-            PartyBotAI* ai = member->AI() ? dynamic_cast<PartyBotAI*>(member->AI()) : nullptr;
+            TeamBotAI* ai = member->AI() ? dynamic_cast<TeamBotAI*>(member->AI()) : nullptr;
             return ai && ai->GetRole() == ROLE_TANK;
         }
     }

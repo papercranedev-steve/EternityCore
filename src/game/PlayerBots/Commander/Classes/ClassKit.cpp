@@ -1,12 +1,12 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 
 namespace Commander
 {
 namespace ClassKits
 {
     // The only switch on the class in the Commander: everything else asks the kit.
-    std::unique_ptr<ClassKit> Create(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> Create(TeamBotAI const& bot)
     {
         switch (bot.me->GetClass())
         {

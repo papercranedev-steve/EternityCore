@@ -1,7 +1,7 @@
 #include "Commander/Perception/Forecast/ChainHealForecast.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "Player.h"
 #include "Map.h"
@@ -12,7 +12,7 @@ namespace Commander
 {
 namespace ChainHealForecast
 {
-    Jumps Of(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& first,
+    Jumps Of(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& first,
              SpellEntry const* spell, float castSec)
     {
         Jumps out;

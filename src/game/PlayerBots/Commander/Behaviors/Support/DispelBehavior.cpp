@@ -3,19 +3,19 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
 
 namespace Commander
 {
-    bool DispelBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool DispelBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->Kit().CanDispel();
     }
 
-    void DispelBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void DispelBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -47,7 +47,7 @@ namespace Commander
         }
     }
 
-    bool DispelBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
+    bool DispelBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
     {
         ObjectGuid const self = bot->me->GetObjectGuid();
         for (DispelDuty const& d : plan.dispels)

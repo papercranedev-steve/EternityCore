@@ -43,13 +43,13 @@ namespace Commander
     {
     public:
         char const* GetId() const override { return "rescue"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        bool WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
 
     private:
-        void ProposePet(PartyBotAI const* bot, WorldModel const& world,
+        void ProposePet(TeamBotAI const* bot, WorldModel const& world,
                         TeamPlan const& plan, std::vector<Proposal>& out) const;
     };
 }

@@ -90,17 +90,17 @@ namespace Commander
 
         char const* GetId() const override { return "mograine-whitemane"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
-        void Refresh(PartyBotAI* bot, WorldModel const& world) override;
+        void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
 
         uint32 GetStage() const { return m_stage; }
 
     private:
-        void ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void SetStage(uint32 stage, uint32 nowMs);
 
         uint32 m_stage = STAGE_NOT_STARTED;

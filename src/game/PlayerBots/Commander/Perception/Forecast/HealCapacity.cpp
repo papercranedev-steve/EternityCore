@@ -1,5 +1,5 @@
 #include "Commander/Perception/Forecast/HealCapacity.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
@@ -35,7 +35,7 @@ namespace HealCapacity
         }
     }
 
-    std::vector<HealRate> Rates(PartyBotAI const* bot)
+    std::vector<HealRate> Rates(TeamBotAI const* bot)
     {
         std::vector<HealRate> rates;
         for (SpellEntry const* spell : bot->m_spellListDirectHeal)

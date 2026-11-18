@@ -50,20 +50,20 @@ namespace Commander
         static constexpr float OPENING_WALK_YD_PER_SEC = 6.0f;
 
         char const* GetId() const override { return "cc"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         // The bot has a control duty while the party fights (a new add hits someone until it is cast).
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        bool WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
 
     private:
         // The Sap controller before the pull (PullControlPlan::beforeOpener).
-        void ProposeSap(PartyBotAI const* bot, TeamPlan const& plan, PartyMemberFacts const& self,
+        void ProposeSap(TeamBotAI const* bot, TeamPlan const& plan, PartyMemberFacts const& self,
                         std::vector<Proposal>& out) const;
         // The controller of the pull's patrol hold before the patrol is in the fight
         // (TeamPlan::patrolHold, PatrolHold.h). True = it proposed.
-        bool ProposePatrolHold(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        bool ProposePatrolHold(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                PartyMemberFacts const& self, std::vector<Proposal>& out) const;
     };
 }

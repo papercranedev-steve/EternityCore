@@ -84,9 +84,9 @@ namespace Commander
 
         char const* GetId() const override { return "gandling"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
-        void Refresh(PartyBotAI* bot, WorldModel const& world) override;
+        void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
 

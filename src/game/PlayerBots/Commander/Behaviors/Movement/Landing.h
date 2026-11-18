@@ -22,12 +22,12 @@
 
 #include "Common.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct LandingState
     {
         bool pending = false;       // a teleport was sent: check the ground when it is done
@@ -44,7 +44,7 @@ namespace Commander
         void OnTeleport(LandingState& state);
 
         // Every frame from PartyBotAI::UpdateAI.
-        void Update(PartyBotAI* bot, LandingState& state);
+        void Update(TeamBotAI* bot, LandingState& state);
 
         // In the fall's spline: the bot update does nothing.
         bool IsFalling(Player const* me, LandingState const& state);

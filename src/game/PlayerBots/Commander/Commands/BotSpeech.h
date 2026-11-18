@@ -26,7 +26,7 @@
 #include <string>
 
 class Player;
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
@@ -39,7 +39,7 @@ namespace Commander
         static constexpr uint32 REPEAT_MS = 15000;
 
         // Arbiter::Run, after `p` executed (map thread of the bot).
-        static void OnExecuted(PartyBotAI const* bot, Proposal const& p, uint32 nowMs);
+        static void OnExecuted(TeamBotAI const* bot, Proposal const& p, uint32 nowMs);
 
         // Speech on: `speaker` says `text` in party chat. Off (or no group): `leader` gets
         // "[PartyBot] text" as a system message when on the speaker's map.

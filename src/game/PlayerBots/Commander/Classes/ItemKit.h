@@ -18,7 +18,7 @@
 #include "Common.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 struct ItemPrototype;
 
@@ -41,8 +41,8 @@ namespace Commander
         };
 
         // The best held item of each shared cooldown for `use`, best first.
-        std::vector<Consumable> Held(PartyBotAI const& bot, Use use);
-        bool HoldsAny(PartyBotAI const& bot, Use use);
+        std::vector<Consumable> Held(TeamBotAI const& bot, Use use);
+        bool HoldsAny(TeamBotAI const& bot, Use use);
 
         // Average of an effect's random range: base points + 1 .. base points + die sides.
         float AverageValue(SpellEntry const* spell, uint32 effectIndex);

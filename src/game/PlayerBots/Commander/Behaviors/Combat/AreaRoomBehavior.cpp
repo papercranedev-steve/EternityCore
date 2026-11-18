@@ -16,7 +16,7 @@
 #include "DamageSpells.h"
 #include "DBCStores.h"
 #include "Map.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 #include "Timer.h"
@@ -33,7 +33,7 @@ namespace Commander
         char const* const SOURCE = "aoe-room";
 
         // The class kit's hold around the bot (Frost Nova), null = none.
-        SpellEntry const* NovaOf(PartyBotAI const* bot)
+        SpellEntry const* NovaOf(TeamBotAI const* bot)
         {
             for (SpellEntry const* s : bot->Kit().HoldSpells())
                 if (s && s->rangeIndex == SPELL_RANGE_IDX_SELF_ONLY)
@@ -54,7 +54,7 @@ namespace Commander
 
         // Seconds until a self spell of the bot can be cast, counted only within a global
         // cooldown (header "Ready"): 0 now, < 0 not soon (a longer cooldown or anything else).
-        float ReadyIn(PartyBotAI const* bot, SpellEntry const* spell)
+        float ReadyIn(TeamBotAI const* bot, SpellEntry const* spell)
         {
             float const sec = spell ? bot->SpellReadyInSec(bot->me, spell) : -1.0f;
             return sec <= Value::GCD_SEC ? sec : -1.0f;
@@ -129,7 +129,7 @@ namespace Commander
             }
         };
 
-        bool Build(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, Line& line, SpellEntry const*& nova)
+        bool Build(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan, Line& line, SpellEntry const*& nova)
         {
             Player* me = bot->me;
             if (!plan.area.KeepsRoom(me->GetObjectGuid()))
@@ -164,7 +164,7 @@ namespace Commander
         // Header "How" 2: Blink away (LeapSpots), the landing from which its ground channel
         // still reaches the first runner first, then nearest a tank (none: farthest from the
         // runners). False: not ready or nowhere to land.
-        bool ProposeBlink(PartyBotAI const* bot, WorldModel const& world, Line const& line, std::vector<Proposal>& out)
+        bool ProposeBlink(TeamBotAI const* bot, WorldModel const& world, Line const& line, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             SpellEntry const* blink = bot->Kit().Leap();
@@ -236,7 +236,7 @@ namespace Commander
             return true;
         }
 
-        bool CanCast(PartyBotAI const* bot, SpellEntry const* spell)
+        bool CanCast(TeamBotAI const* bot, SpellEntry const* spell)
         {
             return spell && bot->CanTryToCastSpell(bot->me, spell);
         }
@@ -244,7 +244,7 @@ namespace Commander
         // Header "Cone of Cold": turn to the nearest runner not slowed yet within its radius
         // (`inFace`: only those about to hit, ArriveSec within ACT_SEC) and slow it and every
         // other one inside the cone. False: not ready or nobody to slow.
-        bool ProposeCone(PartyBotAI const* bot, WorldModel const& world, Line const& line, bool inFace,
+        bool ProposeCone(TeamBotAI const* bot, WorldModel const& world, Line const& line, bool inFace,
                          char const* reason, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -314,7 +314,7 @@ namespace Commander
                                [self](EnemyFacts const& e) { return e.acting && e.rooted && e.victim == self; });
         }
 
-        void ProposeToTank(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        void ProposeToTank(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                            std::vector<EnemyFacts const*> const& chasers, char const* reason, std::vector<Proposal>& out)
         {
             if (chasers.empty())
@@ -328,7 +328,7 @@ namespace Commander
                 out.back().reason = reason;
         }
 
-        void ProposeToTank(PartyBotAI const* bot, WorldModel const& world, Line const& line, char const* reason,
+        void ProposeToTank(TeamBotAI const* bot, WorldModel const& world, Line const& line, char const* reason,
                            std::vector<Proposal>& out)
         {
             std::vector<EnemyFacts const*> chasers;
@@ -339,7 +339,7 @@ namespace Commander
 
         // Header "Another round": the area phase plans a new ground channel for the bot (not
         // the running one) and AreaRound says its chasers stay off it until it is safe.
-        AreaRound::Result Round(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        AreaRound::Result Round(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                 PartyMemberFacts const& self, SpellEntry const* nova)
         {
             AreaRound::Result none;
@@ -377,19 +377,19 @@ namespace Commander
             return out;
         }
 
-        bool WalkingToTank(PartyBotAI const* bot)
+        bool WalkingToTank(TeamBotAI const* bot)
         {
             char const* owner = bot->Directives().GetMovementOwner(WorldTimer::getMSTime());
             return owner && !strcmp(owner, SOURCE) && bot->me->IsMoving();
         }
     }
 
-    bool AreaRoomBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool AreaRoomBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_RANGE_DPS && NovaOf(bot) != nullptr;
     }
 
-    void AreaRoomBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void AreaRoomBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         if (plan.retreat.active)
@@ -541,7 +541,7 @@ namespace Commander
             ProposeToTank(bot, world, line, "they are here, no Frost Nova: to the tank", out);
     }
 
-    float AreaRoomBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float AreaRoomBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                              uint32 castLeftMs, char const*& reason) const
     {
         if (plan.retreat.active)

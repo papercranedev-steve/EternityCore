@@ -13,7 +13,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Group.h"
 #include "Chat.h"
 #include "Map.h"
@@ -45,7 +45,7 @@ namespace Commander
         EncounterRegistry::Create(mapId, m_encounters);
     }
 
-    void PartyCommander::Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
+    void PartyCommander::Update(TeamBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
                                 BehaviorList const& behaviors)
     {
         if (m_world.version && WorldTimer::getMSTimeDiff(m_world.refreshedAtMs, nowMs) < perceptionMs)
@@ -73,7 +73,7 @@ namespace Commander
         WakeBots(bot, behaviors);
     }
 
-    void PartyCommander::WakeBots(PartyBotAI* bot, BehaviorList const& behaviors)
+    void PartyCommander::WakeBots(TeamBotAI* bot, BehaviorList const& behaviors)
     {
         if (!m_world.HasPartyEnemy())
             return;
@@ -87,7 +87,7 @@ namespace Commander
             if (!member || member == bot->me || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() ||
                 !member->IsAlive() || !member->AI())
                 continue;
-            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI());
             if (!ai)
                 continue;
             for (auto const& slot : behaviors)
@@ -102,7 +102,7 @@ namespace Commander
         }
     }
 
-    void PartyCommander::ReleaseMovementAfterRetreat(PartyBotAI* bot)
+    void PartyCommander::ReleaseMovementAfterRetreat(TeamBotAI* bot)
     {
         bool const retreating = m_plan.retreat.active;
         bool const ended = m_wasRetreating && !retreating;
@@ -123,12 +123,12 @@ namespace Commander
             Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
                 continue;
-            if (PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI()))
+            if (TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI()))
                 ai->Directives().ReleaseMovement();
         }
     }
 
-    void PartyCommander::ApplyRoles(PartyBotAI* bot)
+    void PartyCommander::ApplyRoles(TeamBotAI* bot)
     {
         // RoleAssigner is pure and only fills TeamPlan::roles; the bots of this map are changed
         // here (map thread). It keeps the old result during fights; a bot fighting on its own
@@ -144,7 +144,7 @@ namespace Commander
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI() ||
                 member->IsInCombat())
                 continue;
-            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI());
             if (!ai || ai->IsRoleLocked())
                 continue;
             for (RoleDuty const& d : m_plan.roles)
@@ -161,7 +161,7 @@ namespace Commander
         }
     }
 
-    void PartyCommander::ApplyEmergencyRoles(PartyBotAI* bot)
+    void PartyCommander::ApplyEmergencyRoles(TeamBotAI* bot)
     {
         Group* group = bot->me->GetGroup();
         if (!group)
@@ -172,7 +172,7 @@ namespace Commander
             Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
                 continue;
-            PartyBotAI* ai = dynamic_cast<PartyBotAI*>(member->AI());
+            TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI());
             if (!ai)
                 continue;
             EmergencyRole const* given = nullptr;
@@ -200,7 +200,7 @@ namespace Commander
         }
     }
 
-    void PartyCommander::UpdateEncounter(PartyBotAI* bot)
+    void PartyCommander::UpdateEncounter(TeamBotAI* bot)
     {
         if (m_encounters.empty())
             return;     // no boss module on this map: nothing else runs
@@ -232,7 +232,7 @@ namespace Commander
         m_activeEncounter->AddFacts(m_world);
     }
 
-    void PartyCommander::FlushNotes(PartyBotAI* bot)
+    void PartyCommander::FlushNotes(TeamBotAI* bot)
     {
         std::vector<std::string>& notes = m_plan.notes;
         if (notes.empty())
@@ -307,7 +307,7 @@ namespace Commander
         ++m_plan.version;
     }
 
-    void PartyCommander::Refresh(PartyBotAI* bot, uint32 nowMs)
+    void PartyCommander::Refresh(TeamBotAI* bot, uint32 nowMs)
     {
         WorldModel previous;
         previous.enemies = std::move(m_world.enemies);
@@ -335,7 +335,7 @@ namespace Commander
         m_positionField.Build(bot->me->GetMap(), m_world, m_plan, nowMs);
     }
 
-    bool PartyCommander::RunCombat(PartyBotAI* bot, BehaviorList const& behaviors)
+    bool PartyCommander::RunCombat(TeamBotAI* bot, BehaviorList const& behaviors)
     {
         Trace::Use trace(&m_trace, WorldTimer::getMSTime());
         Trace::Scope scope("bot");

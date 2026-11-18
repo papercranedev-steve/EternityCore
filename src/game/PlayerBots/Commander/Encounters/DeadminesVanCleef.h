@@ -85,9 +85,9 @@ namespace Commander
 
         char const* GetId() const override { return "vancleef"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
-        void Refresh(PartyBotAI* bot, WorldModel const& world) override;
+        void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
 
@@ -95,10 +95,10 @@ namespace Commander
 
     private:
         // `plan`: the focus AdjustPlan set on an original guard (switch instead of holding fire).
-        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                            std::vector<Proposal>& out) const;
-        void ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Points lost when `guards` Blackguards hit the healer for LOOSE_SEC.
         float SummonLoss(WorldModel const& world, EnemyFacts const* boss, uint32 guards) const;
         uint32 MsSinceSummon(uint32 nowMs) const;

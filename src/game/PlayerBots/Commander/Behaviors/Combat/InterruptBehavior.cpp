@@ -4,7 +4,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/CastValue.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Spell.h"
 #include "SpellMgr.h"
@@ -91,14 +91,14 @@ namespace Commander
         }
     }
 
-    bool InterruptBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool InterruptBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         // A learned interrupt of the class kit (a priest without Silence has none).
         std::vector<SpellEntry const*> const spells = bot->Kit().Interrupts();
         return std::any_of(spells.begin(), spells.end(), [](SpellEntry const* s) { return s != nullptr; });
     }
 
-    void InterruptBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void InterruptBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -204,7 +204,7 @@ namespace Commander
         out.insert(out.end(), made.begin(), made.end());
     }
 
-    bool InterruptBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
+    bool InterruptBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& /*world*/, TeamPlan const& plan) const
     {
         ObjectGuid const self = bot->me->GetObjectGuid();
         return std::any_of(plan.interrupts.begin(), plan.interrupts.end(), [self](InterruptDuty const& d)
@@ -213,7 +213,7 @@ namespace Commander
         });
     }
 
-    float InterruptBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float InterruptBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                               uint32 castLeftMs, char const*& reason) const
     {
         Player* me = bot->me;

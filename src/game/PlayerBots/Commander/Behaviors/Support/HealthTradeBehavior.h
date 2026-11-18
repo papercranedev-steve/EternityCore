@@ -62,11 +62,11 @@ namespace Commander
             float fillerCost = 0.0f;    // mana of one filler cast
         };
         // Map thread (reads the bot's spell costs).
-        static Cycle CycleOf(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self);
+        static Cycle CycleOf(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self);
 
         char const* GetId() const override { return "health"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

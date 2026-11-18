@@ -21,7 +21,7 @@
 #include <deque>
 #include <string>
 
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
@@ -32,11 +32,11 @@ namespace Commander
 
         // Every bot tick, in and out of combat. Refreshes facts at most once per perceptionMs,
         // so several bots of the same party share one refresh.
-        void Update(PartyBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
+        void Update(TeamBotAI* bot, uint32 nowMs, uint32 perceptionMs, AssignerList const& assigners,
                     BehaviorList const& behaviors);
 
         // Combat tick of one bot: behaviors + arbiter. True = action taken, skip original AI.
-        bool RunCombat(PartyBotAI* bot, BehaviorList const& behaviors);
+        bool RunCombat(TeamBotAI* bot, BehaviorList const& behaviors);
 
         WorldModel const& GetWorld() const { return m_world; }
         TeamPlan const& GetPlan() const { return m_plan; }
@@ -90,28 +90,28 @@ namespace Commander
         Trace::Sink& GetTrace() { return m_trace; }
 
     private:
-        void Refresh(PartyBotAI* bot, uint32 nowMs);
+        void Refresh(TeamBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
         // Picks the matching boss module (OnReset on the one that stops matching), then its
         // Refresh and AddFacts. Before the assigners.
-        void UpdateEncounter(PartyBotAI* bot);
+        void UpdateEncounter(TeamBotAI* bot);
         // TeamPlan::notes: said in party chat by the main tank bot (BotSpeech::Report), or system
         // messages to the leader with speech off; then into the note log.
-        void FlushNotes(PartyBotAI* bot);
+        void FlushNotes(TeamBotAI* bot);
         // After the assigners: when the retreat ended since the last refresh, releases the
         // movement hold of every bot of the party on this map.
-        void ReleaseMovementAfterRetreat(PartyBotAI* bot);
+        void ReleaseMovementAfterRetreat(TeamBotAI* bot);
         // After the assigners: gives the bots of this map the roles of TeamPlan::roles
         // (RoleAssigner), out of combat only, and tells the leader.
-        void ApplyRoles(PartyBotAI* bot);
+        void ApplyRoles(TeamBotAI* bot);
         // After the assigners, before ApplyRoles: gives the bots of this map their
         // TeamPlan::emergencyRoles (CrisisAssigner, a stand-in tank, a spare healer), and the
         // old role back to a bot no longer listed once the party is out of the fight.
-        void ApplyEmergencyRoles(PartyBotAI* bot);
+        void ApplyEmergencyRoles(TeamBotAI* bot);
         // Last step of a refresh, in combat: the other bots of the party on this map that a
         // behavior has urgent work for (IBehavior::WantsTickNow) run their next update in the
-        // next frame (PartyBotAI::WakeUp) instead of after the rest of their bot interval.
-        void WakeBots(PartyBotAI* bot, BehaviorList const& behaviors);
+        // next frame (TeamBotAI::WakeUp) instead of after the rest of their bot interval.
+        void WakeBots(TeamBotAI* bot, BehaviorList const& behaviors);
 
         uint32 m_groupId;
         uint32 m_mapId;

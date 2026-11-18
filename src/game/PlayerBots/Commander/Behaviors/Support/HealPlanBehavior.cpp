@@ -13,7 +13,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -47,7 +47,7 @@ namespace Commander
 
         // The eatable HoT on the member (HotPlan::Eat: Swiftmend takes the one with the least
         // time left, anyone's). Empty when the bot has no eat spell or there is none.
-        HotPlan::Eat EatOf(PartyBotAI const* bot, Unit* unit, PartyMemberFacts const& m)
+        HotPlan::Eat EatOf(TeamBotAI const* bot, Unit* unit, PartyMemberFacts const& m)
         {
             HotPlan::Eat e;
             ClassKit const& kit = bot->Kit();
@@ -85,7 +85,7 @@ namespace Commander
         }
 
         // Swiftmend on the target (HotPlan::Decide said how). A heal order like the heals.
-        void ProposeEat(PartyBotAI const* bot, WorldModel const& world, Candidate const& c,
+        void ProposeEat(TeamBotAI const* bot, WorldModel const& world, Candidate const& c,
                         HotPlan::EatUse use, float tickSec, std::vector<Proposal>& out)
         {
             bool const emergency = use == HotPlan::EatUse::Emergency;
@@ -160,7 +160,7 @@ namespace Commander
         // Power Word: Shield instead of the picked heal (see the header): an emergency the heal
         // does not reach in time, or the healer itself being hit below SHIELD_SELF_PCT before a
         // heal with a cast time (no pushback under the shield). A heal order like the heals.
-        bool ProposeShield(PartyBotAI const* bot, WorldModel const& world,
+        bool ProposeShield(TeamBotAI const* bot, WorldModel const& world,
                            Unit* unit, PartyMemberFacts const& facts, HealPlan::Target const& target,
                            HealPlan::Assessment const& assessment, HealPlan::Option const* heal,
                            std::vector<Proposal>& out)
@@ -203,7 +203,7 @@ namespace Commander
 
         // The free self heal (Desperate Prayer, see the header): hit, and missing at least about
         // its amount. Not while another member needs an emergency heal (it takes a GCD).
-        bool ProposeFreeSelfHeal(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        bool ProposeFreeSelfHeal(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                                  bool otherEmergency, std::vector<Proposal>& out)
         {
             SpellEntry const* spell = bot->Kit().FreeSelfHeal();
@@ -236,7 +236,7 @@ namespace Commander
         // Favor; user 2026-11-15: Divine Favor as Inner Focus): the deficit the lift waits for,
         // so the boosted biggest heal (crit counted) fills it (HealPlan::Target::boostDeficit).
         // Not Nature's Swiftness (instant: emergencies only). 0 = none ready.
-        float BoostWait(PartyBotAI const* bot, std::vector<HealPlan::Option> const& options)
+        float BoostWait(TeamBotAI const* bot, std::vector<HealPlan::Option> const& options)
         {
             Player* me = bot->me;
             for (HealBoostSpell const& s : bot->Kit().HealBoosts())
@@ -265,7 +265,7 @@ namespace Commander
 
         // A ready heal boost that suits this heal (HealPlan::PickBoosted): the option to cast
         // with it, and the boost; -1 = none.
-        int PickBoost(PartyBotAI const* bot, Candidate const& c, int picked,
+        int PickBoost(TeamBotAI const* bot, Candidate const& c, int picked,
                       SpellEntry const*& boostSpell, HealPlan::Boost& boost)
         {
             Player* me = bot->me;
@@ -301,30 +301,30 @@ namespace Commander
         }
     }
 
-    bool HealPlanBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool HealPlanBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_HEALER || bot->Kit().FreeSelfHeal();
     }
 
-    bool HealPlanBehavior::ControlsSelfHealOf(PartyBotAI const* bot, WorldModel const& world)
+    bool HealPlanBehavior::ControlsSelfHealOf(TeamBotAI const* bot, WorldModel const& world)
     {
         return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
                world.HasPartyEnemy();
     }
 
-    bool HealPlanBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+    bool HealPlanBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
                                      TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Healing && ControlsHealingOf(bot, world);
     }
 
-    bool HealPlanBehavior::ControlsHealingOf(PartyBotAI const* bot, WorldModel const& world)
+    bool HealPlanBehavior::ControlsHealingOf(TeamBotAI const* bot, WorldModel const& world)
     {
         return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
                bot->GetRole() == ROLE_HEALER && world.HasPartyEnemy();
     }
 
-    void HealPlanBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void HealPlanBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

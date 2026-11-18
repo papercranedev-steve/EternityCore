@@ -33,7 +33,7 @@
 #include "Common.h"
 #include <map>
 
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
@@ -56,7 +56,7 @@ namespace Commander
 
         // After a world model refresh. Sends to every subscribed real player of the bot's
         // group on the bot's map, at most once per INTERVAL_MS.
-        void Push(PartyBotAI* bot, WorldModel const& world, uint32 nowMs);
+        void Push(TeamBotAI* bot, WorldModel const& world, uint32 nowMs);
 
     private:
         uint32 m_lastPushMs = 0;

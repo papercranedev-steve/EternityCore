@@ -3,7 +3,7 @@
 #include "Commander/Perception/Spatial/TravelTime.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Corpse.h"
 #include "Group.h"
@@ -194,7 +194,7 @@ namespace CorpseRun
         }
     }
 
-    void Update(PartyBotAI* bot, CorpseRunState& state, ArrivalState& arrival)
+    void Update(TeamBotAI* bot, CorpseRunState& state, ArrivalState& arrival)
     {
         Player* me = bot->me;
         uint32 const now = WorldTimer::getMSTime();

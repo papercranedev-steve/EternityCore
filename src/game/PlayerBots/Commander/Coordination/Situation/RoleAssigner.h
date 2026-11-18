@@ -5,7 +5,7 @@
  * Input: every member's RoleCapability (talents, gear, known spells) and whether its role is
  * locked (chosen by the user: bots with .partybot setrole / load / add <role>, players with the
  * role button on their own character). Output: TeamPlan::roles, a role for every bot whose role
- * is not locked; PartyCommander::ApplyRoles sets it (PartyBotAI::AssignRole) and tells the leader.
+ * is not locked; PartyCommander::ApplyRoles sets it (TeamBotAI::AssignRole) and tells the leader.
  *
  * Needs: NEED_TANKS_SMALL tank and NEED_HEALERS_SMALL healer in a party of up to 5; larger
  * groups NEED_TANKS_RAID tanks and one healer per 5 members. Locked members fill needs first

@@ -6,7 +6,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include <algorithm>
 
 namespace Commander

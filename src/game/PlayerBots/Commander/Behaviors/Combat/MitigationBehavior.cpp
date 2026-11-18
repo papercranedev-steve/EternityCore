@@ -3,13 +3,13 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/MitigationValue.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 
 namespace Commander
 {
-    bool MitigationBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool MitigationBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         if (bot->GetRole() != ROLE_TANK)
             return false;
@@ -19,7 +19,7 @@ namespace Commander
         return false;
     }
 
-    void MitigationBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void MitigationBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                      TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

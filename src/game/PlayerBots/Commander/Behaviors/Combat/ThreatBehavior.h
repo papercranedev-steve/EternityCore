@@ -21,7 +21,7 @@
  *            chase it (Value::HarassLoss; casters standing back do not).
  *            Area threat: threat per enemy from spell data (spell_threat + damage x multiplier,
  *            caster modifiers); a warrior spell in the wrong stance is cast after a stance swap
- *            (PartyBotAI::DoCastWithStance) and costs STANCE_SWAP_COST_SEC more. Damaging area
+ *            (TeamBotAI::DoCastWithStance) and costs STANCE_SWAP_COST_SEC more. Damaging area
  *            spells are not proposed next to crowd controlled enemies.
  *  Damage  - near the holder's threat: stop hitting, or switch to a safe target, when the
  *            hits taken after pulling aggro outweigh the damage lost. Holder = tank bot, the
@@ -108,29 +108,29 @@ namespace Commander
         static constexpr float GROUP_THREAT_RADIUS = 8.0f;
         static constexpr float GROUP_TAUNT_RESERVE_MULT = 3.0f; // area taunt cooldown (10 min) is worth more
         // A warrior cast that needs another stance (Thunder Clap from Defensive Stance, Taunt from
-        // Battle Stance; PartyBotAI::DoCastWithStance) also costs this long of the tank's action:
+        // Battle Stance; TeamBotAI::DoCastWithStance) also costs this long of the tank's action:
         // weaker threat and armor in the other stance until the rotation swaps back.
         static constexpr float STANCE_SWAP_COST_SEC = 1.0f;
         char const* GetId() const override { return "threat"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
         // Map thread. Points lost to enemies that turn on the healer `bot` when it heals `target`
         // with `spell` now (0 = safe). `effectiveOut`: the direct heal capped at the health
         // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
-        static float HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
+        static float HealPullLoss(TeamBotAI const* bot, WorldModel const& world, Unit* target,
                                   SpellEntry const* spell, float* effectiveOut = nullptr);
 
     private:
-        void ProposeTank(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposeTank(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                          std::vector<Proposal>& out) const;
-        void ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                            std::vector<Proposal>& out) const;
-        void ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // The bot's own pet (any role): taunt autocast, and backing off a holder's enemy.
         // An off-tank pet (doctrine OffTank.h): takes and keeps the enemy the brain gives it.
-        void ProposePet(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposePet(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                         std::vector<Proposal>& out) const;
         // Headroom `who` must keep on `enemy` (damage dealers and pets): DPS_STOP_HEADROOM of the
         // holder's threat, and its own threat for one bot tick (NEW_ENEMY_LEAD_SEC on new enemies).

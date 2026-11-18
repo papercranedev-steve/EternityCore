@@ -7,8 +7,8 @@
  * the enemies for the rest of the fight: 8 heals cancelled (at least 3 by Kick), 23 casts in
  * 183 s, tank dead at 65 s.
  *
- * Now PartyBotAI does not follow the leader with a healer while the party fights
- * (PartyBotAI::IsStanceControlled); this module moves it instead. "The party fights"
+ * Now TeamBotAI does not follow the leader with a healer while the party fights
+ * (TeamBotAI::IsStanceControlled); this module moves it instead. "The party fights"
  * (WorldModel::InFight), not "the healer is in combat": before 2026-11-07 a healer that had
  * not healed yet kept following the player while the tank fought further away.
  *
@@ -148,11 +148,11 @@ namespace Commander
         static constexpr uint32 HOLD_EXTRA_MS = 500;
 
         char const* GetId() const override { return "stance"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
+        bool AppliesTo(TeamBotAI const* bot) const override;
         // Takeover::Stance in combat (2026-11-07): a healer with a victim (a damage spell
         // between heals) no longer chases it to 25 yd; this module keeps it with the anchor.
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

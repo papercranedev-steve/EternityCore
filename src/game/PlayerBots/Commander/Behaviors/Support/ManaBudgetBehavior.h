@@ -89,24 +89,24 @@ namespace Commander
         };
 
         // Map thread. False when the bot has no mana pool or the fight rate is not measured yet.
-        static bool ComputeBudget(PartyBotAI const* bot, WorldModel const& world, Budget& out);
+        static bool ComputeBudget(TeamBotAI const* bot, WorldModel const& world, Budget& out);
 
         char const* GetId() const override { return "mana"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
     private:
         // Self restore (header): mage Evocation when it buys casting time.
-        void ProposeSelfRestore(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeSelfRestore(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Mana items (header): the best mana potion, gem or rune when it pays.
-        void ProposeManaItem(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposeManaItem(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                              std::vector<Proposal>& out) const;
-        void ProposeHealVeto(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        void ProposeHealVeto(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Tells the leader when this healer is low on mana for the rest of the fight.
         // One behavior object serves every bot on every map thread: the last note time per
         // healer is kept in a locked table in the .cpp.
-        void NoteLowMana(PartyBotAI const* bot, Budget const& budget) const;
+        void NoteLowMana(TeamBotAI const* bot, Budget const& budget) const;
     };
 }
 

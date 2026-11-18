@@ -23,7 +23,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
 #include "DBCStores.h"
@@ -109,7 +109,7 @@ namespace Commander
     {
         range = 0.0f;
         uint32 spellId = 0;
-        PartyBotAI const* ai = tank->AI() ? dynamic_cast<PartyBotAI const*>(tank->AI()) : nullptr;
+        TeamBotAI const* ai = tank->AI() ? dynamic_cast<TeamBotAI const*>(tank->AI()) : nullptr;
 
         auto hasAmmo = [tank]() { return CombatBotBaseAI::HasAmmoEquipped(tank); };
 
@@ -191,7 +191,7 @@ namespace Commander
             float const manaNeeded = (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
             // Healers: the mana pool, not manaPct (a shapeshifted healer still heals with it).
             // Others: only while mana is their active power. A feral druid bot stays in bear /
-            // cat form and PartyBotAI::StartResting only drinks with mana active, so counting its
+            // cat form and TeamBotAI::StartResting only drinks with mana active, so counting its
             // pool would hold every pull until the ready timeout.
             // Players can drink in any form themselves: their pool counts too.
             bool const usePool = (m.isBot && m.role == ROLE_HEALER) || !m.isBot;

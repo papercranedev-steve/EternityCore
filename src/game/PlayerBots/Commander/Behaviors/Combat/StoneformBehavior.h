@@ -20,8 +20,8 @@ namespace Commander
         static constexpr float RULE_POINTS = 1.0f;
 
         char const* GetId() const override { return "stoneform"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

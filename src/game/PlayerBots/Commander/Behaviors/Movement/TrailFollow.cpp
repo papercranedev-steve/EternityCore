@@ -1,7 +1,7 @@
 #include "Commander/Behaviors/Movement/TrailFollow.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "PathFinder.h"
 #include "MotionMaster.h"
@@ -76,7 +76,7 @@ namespace TrailFollow
             return init.Launch();
         }
 
-        void End(PartyBotAI* bot, TrailFollowState& state, bool stopMoving, char const* why)
+        void End(TeamBotAI* bot, TrailFollowState& state, bool stopMoving, char const* why)
         {
             Player* me = bot->me;
             uint32 const now = WorldTimer::getMSTime();
@@ -101,7 +101,7 @@ namespace TrailFollow
         }
 
         // The next leg from state.next on. False: the route is done or a leg did not launch.
-        bool NextLeg(PartyBotAI* bot, TrailFollowState& state)
+        bool NextLeg(TeamBotAI* bot, TrailFollowState& state)
         {
             Player* me = bot->me;
             Position3 const here = PosOf(me);
@@ -192,7 +192,7 @@ namespace TrailFollow
         }
     }
 
-    bool Consider(PartyBotAI* bot, TrailFollowState& state, Player const* leader)
+    bool Consider(TeamBotAI* bot, TrailFollowState& state, Player const* leader)
     {
         if (state.active)
             return true;
@@ -305,7 +305,7 @@ namespace TrailFollow
         return true;
     }
 
-    void Update(PartyBotAI* bot, TrailFollowState& state)
+    void Update(TeamBotAI* bot, TrailFollowState& state)
     {
         if (!state.active)
             return;
@@ -363,7 +363,7 @@ namespace TrailFollow
         return state.active && state.leg == TrailFollowState::Leg::Fall && !me->movespline->Finalized();
     }
 
-    void Stop(PartyBotAI* bot, TrailFollowState& state)
+    void Stop(TeamBotAI* bot, TrailFollowState& state)
     {
         if (state.active)
             End(bot, state, true, "player command");

@@ -52,7 +52,7 @@ namespace Commander
         float maxRange = 0.0f;
         bool ready = false;          // off cooldown, enough mana, can act and cast
         // Can also target a member mind controlled by a creature (Dispel Magic; the friendly-only
-        // ones fail on such a target: PartyBotAI::SelectDispelTarget).
+        // ones fail on such a target: TeamBotAI::SelectDispelTarget).
         bool hostileOk = false;
     };
 
@@ -110,12 +110,12 @@ namespace Commander
         // Without SPELL_EFFECT_ATTACK_ME (Mocking Blow) the threat it lends is taken back when
         // its aura fades: seconds it holds. 0 = the threat stays (RescueValue::TemporaryTauntSec).
         float holdSec = 0.0f;
-        bool stanceSwap = false;        // needs a warrior stance swap first (PartyBotAI::StanceSwapFor)
+        bool stanceSwap = false;        // needs a warrior stance swap first (TeamBotAI::StanceSwapFor)
         // On the global cooldown (StartRecoveryCategory): Mocking Blow, the area taunts. Taunt
         // and Growl are not: they cost the tank no action.
         bool gcd = false;
         // Off cooldown and enough power, after the stance swap if one is needed
-        // (PartyBotAI::IsReadyWithStance). Range and sight are per enemy.
+        // (TeamBotAI::IsReadyWithStance). Range and sight are per enemy.
         bool ready = false;
     };
 
@@ -129,8 +129,8 @@ namespace Commander
         float durationSec = 0.0f;
         float radius = 0.0f;            // around the caster
         uint32 rageCost = 0;            // power units (10 per rage point), with the caster's talents
-        bool stanceSwap = false;        // needs a warrior stance swap first (PartyBotAI::StanceSwapFor)
-        bool ready = false;             // off cooldown, enough power (PartyBotAI::IsReadyWithStance), can act
+        bool stanceSwap = false;        // needs a warrior stance swap first (TeamBotAI::StanceSwapFor)
+        bool ready = false;             // off cooldown, enough power (TeamBotAI::IsReadyWithStance), can act
     };
 
     // A spell on cooldown that its reset makes castable again (ClassKit::CooldownReset: Cold Snap
@@ -549,7 +549,7 @@ namespace Commander
     {
         ObjectGuid guid;
         ObjectGuid ownerGuid;       // pets: the owning member
-        bool isBot = false;         // controlled by PartyBotAI
+        bool isBot = false;         // controlled by TeamBotAI
         bool isPet = false;
         // Can hold an enemy for the party besides the main tank (an off-tank, the doctrine's
         // OffTank.h): a bot's pet with a threat ability it uses on its own target (Growl,
@@ -557,7 +557,7 @@ namespace Commander
         // Shell Shield, threat drops: Cower, health, armor), the same as for a tank.
         bool canOffTank = false;
         bool alive = false;
-        // CombatBotRoles. Bots: PartyBotAI::m_role. Players: the role they chose, else from
+        // CombatBotRoles. Bots: TeamBotAI::m_role. Players: the role they chose, else from
         // RoleCapability (tank only while no bot tanks), see Perception/Tanks.h. Pets: 0.
         uint8 role = 0;
         bool roleLocked = false;    // chosen by the user (bot or player); the "roles" assigner leaves it
@@ -587,7 +587,7 @@ namespace Commander
         Position3 standAt;
         ObjectGuid victim;          // who this member is attacking
         // Bots: the first live enemy carrying one of the raid marks the player told this bot to
-        // focus (`.partybot focusmark`, PartyBotAI::m_marksToFocus). Empty = none. A player
+        // focus (`.partybot focusmark`, TeamBotAI::m_marksToFocus). Empty = none. A player
         // order for TargetAssigner.
         ObjectGuid focusMarkEnemy;
         bool casting = false;       // busy with a cast or channel (cannot react this tick)
@@ -699,11 +699,11 @@ namespace Commander
         // Spell::DoAllEffectOnTarget heal -> HostileRefManager::threatAssist). Full heal, no
         // overheal: the worst case. Perception/Forecast/ThreatGap.h.
         float healThreat = 0.0f;
-        // Bots with a mana pool: mana per second their drink restores (PartyBotAI::DrinkManaPerSec),
+        // Bots with a mana pool: mana per second their drink restores (TeamBotAI::DrinkManaPerSec),
         // on top of manaRegen. Perception/Values/RestValue.h.
         float drinkManaPerSec = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
-        bool drinking = false;      // bots: the drink is on (PartyBotAI::IsDrinking)
+        bool drinking = false;      // bots: the drink is on (TeamBotAI::IsDrinking)
         std::vector<DebuffFacts> debuffs;           // players only
         // Harmful auras of any caster on it (players only), what Stoneform removes: a poison,
         // a disease (SpellEntry::Dispel), a bleed (MECHANIC_BLEED on the spell or an effect).

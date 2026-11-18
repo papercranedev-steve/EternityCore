@@ -2,7 +2,7 @@
  * PartyBot Commander layer 1 (eyes): what a resurrection in combat (PartyMemberFacts::combatRes:
  * Rebirth) on a dead member is worth, in points (user 2026-11-15: a healer or a tank; cooldown
  * doc .kiro/docs/2026-11-14-cooldown-spells.md 10). Consequences only; ResurrectAssigner picks.
- * After the fight every resurrection is free (out of combat, PartyBotAI), so only the rest of
+ * After the fight every resurrection is free (out of combat, TeamBotAI), so only the rest of
  * this fight counts:
  *   back = Value::FightRemainingSec - cast time - ACCEPT_SEC (players answer the request;
  *          bots at once); nothing when back <= MIN_BACK_SEC

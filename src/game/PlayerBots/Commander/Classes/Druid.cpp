@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 
 namespace Commander
@@ -59,7 +59,7 @@ namespace Commander
             }
 
             // Cower: cat form only (a bear is a tank, WorldModelBuilder skips tanks; the form is
-            // read through PartyBotAI::IsReadyWithStance).
+            // read through TeamBotAI::IsReadyWithStance).
             std::vector<SpellEntry const*> ThreatDrops() const override
             {
                 return { m_bot.m_spells.druid.pCower };
@@ -157,7 +157,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeDruid(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeDruid(TeamBotAI const& bot)
     {
         return std::make_unique<DruidKit>(bot);
     }

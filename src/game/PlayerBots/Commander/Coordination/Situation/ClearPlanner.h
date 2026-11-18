@@ -26,7 +26,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include <string>
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
@@ -59,7 +59,7 @@ namespace Commander
         void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader = true);
         // `end`: why (TeamPlan ClearEnd), read by the push mode.
         void Stop(PartyCommander& commander, std::string const& why, ClearEnd end = ClearEnd::Failed);
-        void Step(PartyBotAI* bot, PartyCommander& commander, uint32 nowMs);
+        void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs);
     }
 }
 

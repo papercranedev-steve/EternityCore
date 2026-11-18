@@ -1,5 +1,5 @@
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "MotionMaster.h"
 #include "Spell.h"
@@ -126,7 +126,7 @@ void ClassRotation::SendPetAt(Unit* pVictim)
 
 namespace ClassRotations
 {
-    std::unique_ptr<ClassRotation> Create(PartyBotAI& bot)
+    std::unique_ptr<ClassRotation> Create(TeamBotAI& bot)
     {
         switch (bot.me->GetClass())
         {

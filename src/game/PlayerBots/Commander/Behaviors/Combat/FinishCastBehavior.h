@@ -26,12 +26,12 @@ namespace Commander
     {
     public:
         char const* GetId() const override { return "finishcast"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                      TeamPlan const& /*plan*/, std::vector<Proposal>& /*out*/) const override {}
-        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
-        float ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                             SpellEntry const* spell, char const*& reason) const override;
     };
 }

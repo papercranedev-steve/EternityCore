@@ -4,7 +4,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
@@ -48,18 +48,18 @@ namespace Commander
         }
     }
 
-    bool BlastBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool BlastBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    bool BlastBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    bool BlastBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         PartyMemberFacts const* self = world.FindMember(bot->me->GetObjectGuid());
         return self && self->alive && Nearest(world, plan, *self).enemy;
     }
 
-    void BlastBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void BlastBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

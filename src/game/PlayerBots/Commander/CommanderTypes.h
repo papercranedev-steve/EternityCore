@@ -39,14 +39,14 @@ namespace Commander
         // The original rotation still runs in the same tick (instant abilities while walking).
         Backpedal,
         // Melee stance (MeleeStanceBehavior): attack `target` if it is not the victim yet, then
-        // chase it at angle `x` (radians from its facing, PartyBotAI::OrderChase). The chase
+        // chase it at angle `x` (radians from its facing, TeamBotAI::OrderChase). The chase
         // keeps running after the tick; the original rotation still runs in the same tick.
         Chase,
         // Stop the chase of the victim (keeps the victim): the walk there passes an idle pack.
         // The original rotation still runs in the same tick.
         StopChase,
         Hold,       // do nothing this tick and skip the original rotation
-        // Out of combat: eat and / or drink what is missing, or keep sitting (PartyBotAI::
+        // Out of combat: eat and / or drink what is missing, or keep sitting (TeamBotAI::
         // StartResting); fails in combat or with nothing missing. Every other action stands a
         // resting bot up first.
         Rest,
@@ -70,7 +70,7 @@ namespace Commander
         // in the same tick.
         UseItem,
         // Cast `spell` (a resurrection: Rebirth in combat) on the dead member `target`: its body
-        // here, or its corpse here when it released (PartyBotAI::CastResurrection).
+        // here, or its corpse here when it released (TeamBotAI::CastResurrection).
         Resurrect,
         // Pet actions command the bot's pet, not the bot. The arbiter executes them besides the
         // bot's own action (the rotation still runs): every autocast toggle, and the best pet
@@ -111,7 +111,7 @@ namespace Commander
         // Cast with `facing`, an instant spell: while the bot runs a point walk, jump and turn in
         // the air (JumpCast.h: no stop); otherwise stop and turn.
         bool jumpTurn = false;
-        // Cast: put this on itself first, in the same tick (PartyBotAI::CastPrepSpell): an instant
+        // Cast: put this on itself first, in the same tick (TeamBotAI::CastPrepSpell): an instant
         // off the global cooldown that changes `spell` (Inner Focus, Divine Favor, Nature's
         // Swiftness before a heal; Cold Blood, Presence of Mind, Elemental Mastery before a hit;
         // cooldown doc .kiro/docs/2026-11-14-cooldowns.md 7). Not cast when `spell` cannot be.
@@ -128,7 +128,7 @@ namespace Commander
     // HealOrder: the original rotation still runs (dispels in their usual order;
     // non-control dispels stand down while the order is Urgent, VetoChecks::IsDispelVetoed);
     // at its heal step it casts `action` (a Cast) instead of choosing a heal itself
-    // (PartyBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick and
+    // (TeamBotAI::FindAndHealInjuredAlly). The best order of the tick is kept for one tick and
     // outranks Replace proposals of a lower tier / score (Arbiter.h).
     enum class ProposalKind : uint8
     {
@@ -157,7 +157,7 @@ namespace Commander
         // While the party fights (WorldModel::InFight), where a bot stands: following the
         // leader and the original chase (CombatBotBaseAI::BeginChasing: 25 yd for casters and
         // ranged weapon users, melee behind its victim). The stance module of the bot's role
-        // places it instead (PartyBotAI::IsStanceControlled): HealerStanceBehavior (healers),
+        // places it instead (TeamBotAI::IsStanceControlled): HealerStanceBehavior (healers),
         // RangedStanceBehavior (ranged damage dealers), MeleeStanceBehavior (melee damage
         // dealers), TankStanceBehavior (tanks, since 2026-11-14). Was CasterChase (healers and
         // ranged only) until 2026-11-07.
@@ -171,7 +171,7 @@ namespace Commander
     {
         None,
 
-        Heal,       // do not heal `target` this tick (PartyBotAI::FindAndHealInjuredAlly)
+        Heal,       // do not heal `target` this tick (TeamBotAI::FindAndHealInjuredAlly)
         // (GapCloser, "no charging while the pull brings the pack back", became the plan
         // constraint TeamPlan::ForbidsGapCloser on 2026-11-07, directive types doc.)
     };

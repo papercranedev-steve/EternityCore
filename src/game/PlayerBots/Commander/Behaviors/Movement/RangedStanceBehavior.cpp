@@ -12,7 +12,7 @@
 #include "Commander/Behaviors/Movement/JoinGamble.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Trace/Trace.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
@@ -33,19 +33,19 @@ namespace Commander
         }
     }
 
-    bool RangedStanceBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool RangedStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    bool RangedStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+    bool RangedStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
                                          TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
                !bot->me->GetTransport();
     }
 
-    void RangedStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void RangedStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier).

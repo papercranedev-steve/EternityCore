@@ -605,7 +605,7 @@ namespace Commander
         std::vector<ObjectGuid> announced;
 
         // Enemies standing where the patrol walks before the fight ends, every refresh while
-        // active. Nobody chases them (PartyBotAI::BeginChasing), the tank does not walk over
+        // active. Nobody chases them (TeamBotAI::BeginChasing), the tank does not walk over
         // to win them back and nobody is given them as a target (TargetAssigner), unless a bot
         // was given the enemy to kill (`kill`). Melee enemies walk out by themselves.
         std::vector<ObjectGuid> avoid;
@@ -822,7 +822,7 @@ namespace Commander
     };
 
     // Only controlled enemies are left (ControlledEndAssigner): the tank wakes the first one
-    // (attacks it, PartyBotAI::IsAssignedToBreakControl), after waiting for mana only when the
+    // (attacks it, TeamBotAI::IsAssignedToBreakControl), after waiting for mana only when the
     // fight would be too hard now.
     struct ControlEndPlan
     {
@@ -1499,7 +1499,7 @@ namespace Commander
 
     // A bot given another role for the rest of the fight (CrisisAssigner: the best option's
     // stand-in tank, its spare healers). PartyCommander::ApplyEmergencyRoles sets it on the bot
-    // (PartyBotAI::SetEmergencyRole) and gives the old role back once the fight is over.
+    // (TeamBotAI::SetEmergencyRole) and gives the old role back once the fight is over.
     struct EmergencyRole
     {
         ObjectGuid bot;
@@ -1657,7 +1657,7 @@ namespace Commander
         // ---- Constraints (directive types doc, .kiro/docs/2026-11-07/2026-11-07-directive-types.md).
         // What the brain forbids. Every module reads them when it builds a proposal (to pick
         // something else), the arbiter drops a proposal that breaks one (Behaviors/Constraints.h)
-        // and the class rotations ask the same queries (PartyBotAI::IsEngageForbidden,
+        // and the class rotations ask the same queries (TeamBotAI::IsEngageForbidden,
         // IsGapCloserForbidden). The exceptions live here, not at the readers.
 
         // Where the tank will fight once the pack is on it, as planned, for the members to take
@@ -1731,7 +1731,7 @@ namespace Commander
         }
 
         // `bot` keeps `spellId` for a flee stop (todo 13): nobody else casts it, the rotation
-        // neither (PartyBotAI::IsSpellHeld), only FleeStopBehavior. A finisher kept (Kidney
+        // neither (TeamBotAI::IsSpellHeld), only FleeStopBehavior. A finisher kept (Kidney
         // Shot) holds the bot's other finishers too (`finisher`: the spell needs combo
         // points), so the points stay for it.
         bool HoldsSpell(ObjectGuid bot, uint32 spellId, bool finisher) const
@@ -1742,7 +1742,7 @@ namespace Commander
 
         // `bot` is the area phase's reserved caster (AreaPlan::reserved): no spell with a cast
         // or channel time but its area spells (Constraints::LongCastHeld; the class rotations
-        // too, PartyBotAI::PassesPartyCastChecks), so the area spell is not held back by one.
+        // too, TeamBotAI::PassesPartyCastChecks), so the area spell is not held back by one.
         bool ForbidsLongCast(ObjectGuid bot) const { return area.Reserves(bot); }
 
         // `bot` must not sit down to eat or drink: a retreat runs, the boss module says so, or it

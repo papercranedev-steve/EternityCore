@@ -15,7 +15,7 @@
 #include "Commander/Behaviors/Movement/SpotRejects.h"
 #include "Commander/Behaviors/Movement/JoinGamble.h"
 #include "Commander/Trace/Trace.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
@@ -233,19 +233,19 @@ namespace Commander
         }
     }
 
-    bool HealerStanceBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool HealerStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_HEALER;
     }
 
-    bool HealerStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+    bool HealerStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
                                          TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
                !bot->me->GetTransport();
     }
 
-    void HealerStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void HealerStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier).

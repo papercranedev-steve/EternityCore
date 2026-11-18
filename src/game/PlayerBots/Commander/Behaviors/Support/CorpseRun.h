@@ -11,7 +11,7 @@
  *     spirit is released after all. In the fight only when the brain says so (TeamPlan::rises,
  *     SelfRiseAssigner: rising wins it);
  *   - else the spirit is released at once (WorldSession::HandleRepopRequestOpcode). A released
- *     corpse can still be resurrected: the bots cast at it (PartyBotAI::SelectReleasedCorpse),
+ *     corpse can still be resurrected: the bots cast at it (TeamBotAI::SelectReleasedCorpse),
  *     a player too; the ghost accepts (CombatBotBaseAI::OnPacketReceived) and the run ends.
  * Ghost (at the graveyard the engine chose): the run is simulated, the ghost stays there.
  *   - it takes TravelTime::Seconds from the graveyard to the corpse (to the entrance outside
@@ -35,14 +35,14 @@
 #include "Common.h"
 #include "SharedDefines.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
 {
     struct ArrivalState;
 
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct CorpseRunState
     {
         enum class Phase : uint8
@@ -76,7 +76,7 @@ namespace Commander
 
         // Dead bot update (PartyBotAI::UpdateAI). Starts `arrival` when the bot is alive again
         // away from its corpse.
-        void Update(PartyBotAI* bot, CorpseRunState& state, ArrivalState& arrival);
+        void Update(TeamBotAI* bot, CorpseRunState& state, ArrivalState& arrival);
 
         // Alive bot update: a run that ended another way (a resurrection) is cleared.
         void OnAlive(Player* me, CorpseRunState& state);

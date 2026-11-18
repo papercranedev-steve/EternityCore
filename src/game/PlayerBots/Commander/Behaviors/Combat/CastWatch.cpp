@@ -6,7 +6,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "Spell.h"
 #include "SpellEntry.h"
@@ -70,7 +70,7 @@ namespace Commander
 
 namespace CastWatch
 {
-    bool Update(PartyBotAI* bot, CastWatchState& state)
+    bool Update(TeamBotAI* bot, CastWatchState& state)
     {
         Player* me = bot->me;
         Spell* spell = bot->GetRole() == ROLE_HEALER ? me->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;

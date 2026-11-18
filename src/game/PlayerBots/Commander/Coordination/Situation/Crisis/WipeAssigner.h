@@ -13,7 +13,7 @@
  *   revivers  members (players too) that rise by themselves and resurrect others
  *             (PartyMemberFacts::selfRes and resurrects): nothing to do but die where they
  *             stand; CorpseRun keeps the body and rises once it is safe, then the bots
- *             resurrect the others out of combat (PartyBotAI).
+ *             resurrect the others out of combat (TeamBotAI).
  *   stone     no reviver: a warlock bot with a Soulstone ready (soulstoneItem) puts it on a
  *             member who resurrects (healer bots first, then bots, then players); WipeBehavior.
  *   hiders    bots that are not revivers with a "wipe" threat drop ready (Feign Death, Vanish:

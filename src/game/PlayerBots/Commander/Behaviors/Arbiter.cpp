@@ -4,7 +4,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "GameObject.h"
 #include "Map.h"
 #include "MotionMaster.h"
@@ -116,7 +116,7 @@ namespace Commander
         // face its target only when the bot faces it already: DoCastSpell would stop the walk
         // to turn), or a target switch / stop hitting that is not against a chase (a chase
         // attacks its own target).
-        bool GoTogether(PartyBotAI const* bot, Proposal const& move, Proposal const& act)
+        bool GoTogether(TeamBotAI const* bot, Proposal const& move, Proposal const& act)
         {
             Player* me = bot->me;
             switch (act.action.type)
@@ -173,7 +173,7 @@ namespace Commander
             return "?";
         }
 
-        std::string TargetName(PartyBotAI const* bot, ObjectGuid guid)
+        std::string TargetName(TeamBotAI const* bot, ObjectGuid guid)
         {
             if (guid.IsEmpty())
                 return "self";
@@ -210,7 +210,7 @@ namespace Commander
         }
     }
 
-    std::string Arbiter::Describe(PartyBotAI const* bot, Proposal const& p)
+    std::string Arbiter::Describe(TeamBotAI const* bot, Proposal const& p)
     {
         char buf[200];
         if (p.kind == ProposalKind::Veto)
@@ -230,7 +230,7 @@ namespace Commander
         return buf;
     }
 
-    bool Arbiter::Run(PartyBotAI* bot, WorldModel const& world, TeamPlan const& plan,
+    bool Arbiter::Run(TeamBotAI* bot, WorldModel const& world, TeamPlan const& plan,
                       BehaviorList const& behaviors)
     {
         std::vector<IBehavior const*> active;
@@ -537,7 +537,7 @@ namespace Commander
         return executed && !rotationMayRun;
     }
 
-    bool Arbiter::Execute(PartyBotAI* bot, Proposal const& proposal)
+    bool Arbiter::Execute(TeamBotAI* bot, Proposal const& proposal)
     {
         Player* me = bot->me;
         BotAction const& action = proposal.action;
@@ -579,7 +579,7 @@ namespace Commander
                 }
                 Unit* pCastTarget = pTarget ? pTarget : me;
                 // A warrior swaps stance first when needed (Thunder Clap or Mocking Blow from
-                // Defensive Stance): PartyBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.
+                // Defensive Stance): TeamBotAI::DoCastWithStance, doc 2026-11-01-warrior-tank.md.
                 if (action.prepResets)
                 {
                     // The spell is on cooldown until the reset is cast (Cold Snap, Preparation).
@@ -768,7 +768,7 @@ namespace Commander
         return false;
     }
 
-    bool Arbiter::ExecutePetAction(PartyBotAI* bot, BotAction const& action, Unit* pTarget)
+    bool Arbiter::ExecutePetAction(TeamBotAI* bot, BotAction const& action, Unit* pTarget)
     {
         Pet* pet = bot->me->GetPet();
         // A pet mind controlled by an enemy is not ours to command.
@@ -858,7 +858,7 @@ namespace Commander
         }
     }
 
-    bool Arbiter::ExecuteUseObject(PartyBotAI* bot, BotAction const& action)
+    bool Arbiter::ExecuteUseObject(TeamBotAI* bot, BotAction const& action)
     {
         Player* me = bot->me;
         if (action.target.IsEmpty() || !action.target.IsGameObject())

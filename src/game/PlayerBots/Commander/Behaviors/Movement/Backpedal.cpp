@@ -1,6 +1,6 @@
 #include "Commander/Behaviors/Movement/Backpedal.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "MoveSpline.h"
@@ -143,7 +143,7 @@ namespace Backpedal
         return distance / std::max(1.0f, me->GetSpeed(MOVE_RUN_BACK));
     }
 
-    bool Order(PartyBotAI* bot, BackpedalState& state, Position3 const& to, ObjectGuid face, uint32 durationMs)
+    bool Order(TeamBotAI* bot, BackpedalState& state, Position3 const& to, ObjectGuid face, uint32 durationMs)
     {
         Player* me = bot->me;
         if (me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) || !me->IsAlive())
@@ -209,7 +209,7 @@ namespace Backpedal
             StandStill(me, o);
     }
 
-    void Update(PartyBotAI* bot, BackpedalState& state, uint32 diff)
+    void Update(TeamBotAI* bot, BackpedalState& state, uint32 diff)
     {
         if (!state.active)
             return;

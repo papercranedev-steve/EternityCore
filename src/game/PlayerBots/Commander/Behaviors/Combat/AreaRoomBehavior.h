@@ -33,7 +33,7 @@
  * Ready (2026-11-14, strat-20261114-180150: a rotation Fire Blast's global cooldown made the
  *   Frost Nova and Blink "not ready" 1.4 s before they were, and the mage walked to the tank
  *   under the hits): Frost Nova and Blink count with the seconds until they can be cast
- *   (PartyBotAI::SpellReadyInSec) when that is within a global cooldown (Value::GCD_SEC); a
+ *   (TeamBotAI::SpellReadyInSec) when that is within a global cooldown (Value::GCD_SEC); a
  *   longer cooldown counts as not ready, as before (waiting for it is not weighed against the
  *   other steps). The Frost Nova's moment is one of the time line's moments; a step whose
  *   spell is that soon waits for it when the caster survives until then (the "When" danger
@@ -42,7 +42,7 @@
  *   to the tank ("Frost Nova did not hold them all", "no Frost Nova"), it stays when the area
  *   phase plans a new ground channel for it (AreaPlan::CastBy, not the running one) and
  *   Perception/Forecast/AreaRound says every chaser is under control and stays off it until the
- *   channel ends or its next rescue (Frost Nova, Blink, Cone of Cold, PartyBotAI::SpellReadyInSec)
+ *   channel ends or its next rescue (Frost Nova, Blink, Cone of Cold, TeamBotAI::SpellReadyInSec)
  *   is ready; the area phase then walks it to its spot and casts. All of them rooted (nobody
  *   running): before 2026-11-14 it always left them to the area phase; now to the tank unless
  *   that round is safe. A walk to the tank already under way stops once the round is safe (the
@@ -78,10 +78,10 @@ namespace Commander
         static constexpr float REACH_MARGIN_YD = 3.0f;  // a Blink landing keeps the first runner this far inside the Blizzard's range
 
         char const* GetId() const override { return "aoe-room"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
     };
 }

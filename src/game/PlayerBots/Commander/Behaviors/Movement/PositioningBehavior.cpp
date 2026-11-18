@@ -8,7 +8,7 @@
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Timer.h"
 #include <algorithm>
@@ -204,7 +204,7 @@ namespace Commander
 
         // Melee: updates the record of the last out-of-reach step (header "Melee out of reach")
         // and returns true while the bot is back inside that area after the step and its hold.
-        bool MeleeGaveUp(PartyBotAI::HazardGiveUp& g, std::vector<HazardZone> const& zones,
+        bool MeleeGaveUp(TeamBotAI::HazardGiveUp& g, std::vector<HazardZone> const& zones,
                          Position3 const& here, uint32 nowMs)
         {
             if (g.enemy.IsEmpty())
@@ -237,7 +237,7 @@ namespace Commander
             }
             if (clear)
             {
-                g = PartyBotAI::HazardGiveUp();
+                g = TeamBotAI::HazardGiveUp();
                 return false;
             }
             return g.returned;
@@ -330,7 +330,7 @@ namespace Commander
         }
     }
 
-    bool PositioningBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool PositioningBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return HazardZones::RoleBit(bot->GetRole()) != 0;
     }
@@ -344,7 +344,7 @@ namespace Commander
         }
     }
 
-    bool PositioningBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    bool PositioningBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         if (MovementOwnedElsewhere(plan))
             return false;
@@ -358,7 +358,7 @@ namespace Commander
         return false;
     }
 
-    float PositioningBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float PositioningBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                                 uint32 castLeftMs, char const*& reason) const
     {
         if (MovementOwnedElsewhere(plan))
@@ -409,7 +409,7 @@ namespace Commander
         return benefit;
     }
 
-    void PositioningBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void PositioningBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                       TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier); the pull owns it while the tank goes out
@@ -537,12 +537,12 @@ namespace Commander
                     {
                         // Already stepped out once and came back: fight inside. Lethal steps still go.
                         // Only for that same area: a step out of another one still goes.
-                        PartyBotAI::HazardGiveUp const& last = bot->m_hazardGiveUp;
+                        TeamBotAI::HazardGiveUp const& last = bot->m_hazardGiveUp;
                         if (gaveUp && p.tier != ProposalTier::Urgent &&
                             last.enemy == zone->enemy && last.spellId == zone->spellId)
                             continue;
-                        PartyBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
-                        g = PartyBotAI::HazardGiveUp();
+                        TeamBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
+                        g = TeamBotAI::HazardGiveUp();
                         g.enemy = zone->enemy;
                         g.spellId = zone->spellId;
                         g.movedMs = nowMs;

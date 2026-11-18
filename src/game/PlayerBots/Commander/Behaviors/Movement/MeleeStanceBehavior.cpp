@@ -11,7 +11,7 @@
 #include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Values/SpotCost.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Timer.h"
 #include <algorithm>
@@ -102,7 +102,7 @@ namespace Commander
         // Chase `enemy`; false when its walk is blocked (the caller waits near the tank then).
         // `assigned`: the brain's target. Its walk is checked on the hard line: the brain sends a
         // bot over it only when no other enemy is open to it (DamageTargets, RouteFact::safeTight).
-        bool ProposeChase(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        bool ProposeChase(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                           PartyMemberFacts const& self, Unit* enemy, bool assigned, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -174,7 +174,7 @@ namespace Commander
         }
 
         // No enemy it can walk to: wait near the tank (the leader without one).
-        void ProposeWait(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        void ProposeWait(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                          PartyMemberFacts const& self, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -242,19 +242,19 @@ namespace Commander
         }
     }
 
-    bool MeleeStanceBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool MeleeStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_MELEE_DPS;
     }
 
-    bool MeleeStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+    bool MeleeStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
                                         TeamPlan const& /*plan*/) const
     {
         return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
                !bot->me->GetTransport();
     }
 
-    void MeleeStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void MeleeStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                       TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier).

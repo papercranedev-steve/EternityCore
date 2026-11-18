@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 
 namespace Commander
@@ -115,7 +115,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakePaladin(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakePaladin(TeamBotAI const& bot)
     {
         return std::make_unique<PaladinKit>(bot);
     }

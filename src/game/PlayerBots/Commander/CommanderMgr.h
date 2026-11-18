@@ -1,5 +1,5 @@
 /*
- * PartyBot Commander entry point. Called from PartyBotAI (see the official-code
+ * PartyBot Commander entry point. Called from TeamBotAI (see the official-code
  * change table in .kiro/docs/2026-11-01-ai-teammate-code-structure.md section 4).
  *
  * Threads: OnBotUpdate / OnBotCombatUpdate run on map update threads. The commander
@@ -24,7 +24,7 @@
 #include <string>
 #include <tuple>
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
@@ -62,19 +62,19 @@ namespace Commander
         uint32 GetPerceptionInterval() const { return m_perceptionMs.load(std::memory_order_relaxed); }
 
         // PartyBotAI::UpdateAI, every bot tick after the leader checks.
-        void OnBotUpdate(PartyBotAI* bot);
+        void OnBotUpdate(TeamBotAI* bot);
         // PartyBotAI::UpdateAI, in combat, before target selection and movement.
         // True = an action was executed, skip the rest of UpdateAI for this tick.
-        bool OnBotCombatUpdate(PartyBotAI* bot);
+        bool OnBotCombatUpdate(TeamBotAI* bot);
         // True while an out-of-combat plan (pull in progress, the party fighting, a retreat, a
         // boss module's waves) needs the hook above to run out of combat too. Whether the bot
         // may sit down to eat or drink is the plan's constraint (TeamPlan::ForbidsRest).
-        bool WantsOutOfCombatControl(PartyBotAI* bot);
+        bool WantsOutOfCombatControl(TeamBotAI* bot);
         // `.partybot ai retreat` is running for the bot's party: out of combat it must not stop
         // to resurrect, dispel or buff on the way to the rally point (RetreatBehavior).
-        bool IsRetreating(PartyBotAI* bot);
+        bool IsRetreating(TeamBotAI* bot);
         // The party bot the bot's party follows instead of the player (Guide.h), null = the player.
-        Player* GetGuide(PartyBotAI* bot);
+        Player* GetGuide(TeamBotAI* bot);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }
@@ -117,7 +117,7 @@ namespace Commander
 
     private:
         CommanderMgr();
-        std::shared_ptr<PartyCommander> GetCommander(PartyBotAI* bot);
+        std::shared_ptr<PartyCommander> GetCommander(TeamBotAI* bot);
 
         std::atomic<bool> m_enabled{ true };
         std::atomic<bool> m_speech{ true };

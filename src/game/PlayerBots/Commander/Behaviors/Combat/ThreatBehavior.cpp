@@ -17,7 +17,7 @@
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "DBCStores.h"
 #include "Map.h"
@@ -69,7 +69,7 @@ namespace Commander
 
         // A controlled pet (hunter, warlock) of this party that holds enemies itself: there is
         // no tank and its taunt is on autocast (voidwalker, hunter pet with Growl).
-        bool IsHolderPet(PartyBotAI const* bot, WorldModel const& world, ObjectGuid guid)
+        bool IsHolderPet(TeamBotAI const* bot, WorldModel const& world, ObjectGuid guid)
         {
             if (HasTank(world))
                 return false;
@@ -88,7 +88,7 @@ namespace Commander
         // it compares my threat with victimThreat, whoever the victim is.
         // An off-tank holding `e` (doctrine OffTank.h: the hunter's pet besides the main tank)
         // is its holder too.
-        bool IsHeldByHolder(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e)
+        bool IsHeldByHolder(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e)
         {
             ObjectGuid const victim = e.victim;
             if (plan.doctrine.OffTankHolds(victim, e.guid))
@@ -125,7 +125,7 @@ namespace Commander
 
         // `who` fights in melee: a pet other than the imp, or a melee damage dealer / tank bot.
         // Players (role unknown) and ranged bots count as ranged.
-        bool FightsInMelee(PartyBotAI const* bot, WorldModel const& world, ObjectGuid who)
+        bool FightsInMelee(TeamBotAI const* bot, WorldModel const& world, ObjectGuid who)
         {
             PartyMemberFacts const* m = world.FindMember(who);
             if (!m)
@@ -151,7 +151,7 @@ namespace Commander
         // `entering`: `who` hits nothing now (an idle pet), so there is no stop band to keep
         // away from by switching; the room needed is the enter rule (ThreatRoom::Enter), the same
         // a damage dealer starting on a target gets, instead of the switch thresholds.
-        EnemyFacts const* FindSafeTarget(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        EnemyFacts const* FindSafeTarget(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                          ObjectGuid who, Position3 const& from, ObjectGuid current, ObjectGuid preferred,
                                          bool entering = false)
         {
@@ -201,10 +201,10 @@ namespace Commander
 
         // Threat one cast puts on each enemy it hits: flat spell_threat + direct damage x its
         // multiplier (Spell::HandleThreatSpells, Unit::DealDamage), with the caster's threat
-        // modifiers and a warrior's stance swap (PartyBotAI::StanceSwapThreatFactor).
+        // modifiers and a warrior's stance swap (TeamBotAI::StanceSwapThreatFactor).
         // Demoralizing Shout 43 flat; Thunder Clap 103 damage x 2.5. Spells without data
         // (Consecration ticks) fall back to `share` of a global cooldown of the tank's rate.
-        float ThreatPerEnemy(PartyBotAI const* bot, GroupThreatOption const& o, float tankRate)
+        float ThreatPerEnemy(TeamBotAI const* bot, GroupThreatOption const& o, float tankRate)
         {
             SpellEntry const* spell = o.spell;
             SpellThreatEntry const* entry = sSpellMgr.GetSpellThreatEntry(spell->Id);
@@ -225,7 +225,7 @@ namespace Commander
         // (holdSec > 0: an area taunt holding for that long, TemporaryTauntSec; centre and
         // radius: where the spell lands and its area, SpellTags::AreaRadius).
         template <typename ValueFn>
-        void ProposeGroupThreat(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan, float tankRate,
+        void ProposeGroupThreat(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan, float tankRate,
                                 float switchCost, float stanceCost, float enemyMelee, bool protectsCaster,
                                 ValueFn valueOf, std::vector<Proposal>& out)
         {
@@ -242,7 +242,7 @@ namespace Commander
                 crowdControlNear = crowdControlNear ||
                     (plan.AreaKeepsUnbroken(e) && PackResolver::Distance(myPos, e.pos) <= ThreatBehavior::GROUP_THREAT_RADIUS);
             // A warrior's Thunder Clap from Defensive Stance is cast after a stance swap
-            // (Arbiter -> PartyBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
+            // (Arbiter -> TeamBotAI::DoCastWithStance), costed with STANCE_SWAP_COST_SEC.
             for (GroupThreatOption const& o : bot->Kit().AreaThreat())
             {
                 if (!o.spell)
@@ -290,7 +290,7 @@ namespace Commander
 
     }
 
-    bool ThreatBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool ThreatBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         switch (bot->GetRole())
         {
@@ -304,7 +304,7 @@ namespace Commander
         }
     }
 
-    void ThreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ThreatBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // Pet actions run besides the bot's own action (Arbiter), so both are proposed.
@@ -345,7 +345,7 @@ namespace Commander
     }
 
     // Tank: threat-behavior doc section 3, value-scoring doc 5.3.
-    void ThreatBehavior::ProposeTank(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    void ThreatBehavior::ProposeTank(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                      std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -499,7 +499,7 @@ namespace Commander
     }
 
     // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
-    void ThreatBehavior::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    void ThreatBehavior::ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                        std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -682,7 +682,7 @@ namespace Commander
     }
 
     // Pet of this bot (hunter, warlock): threat-behavior doc 4.7.
-    void ThreatBehavior::ProposePet(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    void ThreatBehavior::ProposePet(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -904,7 +904,7 @@ namespace Commander
     }
 
     // Healers: do not pull aggro with a heal unless the target needs it now.
-    float ThreatBehavior::HealPullLoss(PartyBotAI const* bot, WorldModel const& world, Unit* target,
+    float ThreatBehavior::HealPullLoss(TeamBotAI const* bot, WorldModel const& world, Unit* target,
                                        SpellEntry const* spell, float* effectiveOut)
     {
         Player* me = bot->me;
@@ -963,7 +963,7 @@ namespace Commander
         return loss;
     }
 
-    void ThreatBehavior::ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ThreatBehavior::ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         // The heal module decides heals itself and checks aggro with HealPullLoss.

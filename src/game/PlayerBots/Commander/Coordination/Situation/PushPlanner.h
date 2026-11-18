@@ -30,7 +30,7 @@
 #include <vector>
 
 class Map;
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
@@ -51,7 +51,7 @@ namespace Commander
         bool Start(Player* leader, PartyCommander& commander, float radius, uint32 maxMobs,
                    std::vector<std::string>& report);
         void Stop(PartyCommander& commander, Map* map, std::string const& why);
-        void Step(PartyBotAI* bot, PartyCommander& commander, uint32 nowMs);
+        void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs);
     }
 }
 

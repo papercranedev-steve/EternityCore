@@ -34,16 +34,16 @@ namespace Commander
         static constexpr uint32 CAST_BREAK_SLACK_MS = 300;
 
         char const* GetId() const override { return "interrupt"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         // The bot is primary or backup of a duty whose enemy casts now.
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        bool WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // Own cast: the duty's enemy cast ends before it does (CAST_BREAK_SLACK_MS), nobody free
         // takes it instead (primary: the backup is free and ready; backup: the primary can act
         // once its own cast stops), and an ability is ready now (cooldown and GCD). Worth: the
         // best ability's benefit - cost, as in Propose.
-        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
     };
 }

@@ -28,7 +28,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Group.h"
 #include "SpellMgr.h"
@@ -55,7 +55,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
@@ -76,7 +76,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
@@ -176,7 +176,7 @@ namespace
         SpellEntry const* OwnBlessingChoice(Player* pMember) const
         {
             uint8 role = ROLE_INVALID;
-            if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(pMember->AI()))
+            if (TeamBotAI const* ai = dynamic_cast<TeamBotAI const*>(pMember->AI()))
                 role = uint8(ai->m_role);
             ObjectGuid const self = m_bot.me->GetObjectGuid();
             for (BlessingKind kind : Commander::BlessingAssigner::Order(pMember->GetClass(), role))
@@ -206,7 +206,7 @@ namespace
 
         bool BlessParty(std::shared_ptr<Commander::PartyCommander> const& owner, bool greater)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             Group* pGroup = me->GetGroup();
             if (!pGroup)
@@ -245,7 +245,7 @@ namespace
         // Waiting: the seal is up, the Judgement is not cast yet (cooldown, out of its range).
         JudgeStep KeepJudgement(Unit* pVictim)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
             if (!pVictim || !s.pJudgement || !sCommanderMgr.IsEnabled())
@@ -279,7 +279,7 @@ namespace
         // True = cast.
         bool Damage()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
@@ -334,7 +334,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakePaladin(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakePaladin(TeamBotAI& bot)
 {
     return std::make_unique<PaladinRotation>(bot);
 }

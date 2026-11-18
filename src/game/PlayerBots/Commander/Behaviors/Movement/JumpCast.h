@@ -27,12 +27,12 @@
 #include "Common.h"
 #include "Commander/Perception/WorldModel.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct JumpCastState
     {
         bool active = false;
@@ -56,10 +56,10 @@ namespace Commander
         constexpr float MAX_GROUND_STEP_YD = 3.0f;
 
         // Header. False: not running a point walk (or not free to jump).
-        bool Order(PartyBotAI* bot, JumpCastState& state, SpellEntry const* spell, float castFacing);
+        bool Order(TeamBotAI* bot, JumpCastState& state, SpellEntry const* spell, float castFacing);
 
         // Every frame from PartyBotAI::UpdateAI.
-        void Update(PartyBotAI* bot, JumpCastState& state);
+        void Update(TeamBotAI* bot, JumpCastState& state);
     }
 }
 

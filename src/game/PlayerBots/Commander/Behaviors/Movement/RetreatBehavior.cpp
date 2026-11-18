@@ -3,7 +3,7 @@
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/WayIn.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
 #include <algorithm>
@@ -30,12 +30,12 @@ namespace Commander
         }
     }
 
-    bool RetreatBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool RetreatBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    void RetreatBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void RetreatBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                   TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         RetreatPlan const& r = plan.retreat;
@@ -117,7 +117,7 @@ namespace Commander
 
     // Only called at the point with no chaser close (the caller did not step aside). Picks the
     // most injured member below RETREAT_HEAL_PCT that is safe to heal and an instant heal for it.
-    void RetreatBehavior::ProposeHeal(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void RetreatBehavior::ProposeHeal(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         if (bot->GetRole() != ROLE_HEALER)
             return;
@@ -188,7 +188,7 @@ namespace Commander
     // chaser could catch it standing still. Order: instant direct heals, HoTs (Renew,
     // Rejuvenation; Regrowth has a cast time and is skipped), then Power Word: Shield.
     // Strongest castable first within each list (the lists are sorted strongest first).
-    SpellEntry const* RetreatBehavior::SelectInstantHeal(PartyBotAI const* bot, Unit const* pTarget)
+    SpellEntry const* RetreatBehavior::SelectInstantHeal(TeamBotAI const* bot, Unit const* pTarget)
     {
         Player* me = bot->me;
         for (SpellEntry const* spell : bot->m_spellListDirectHeal)

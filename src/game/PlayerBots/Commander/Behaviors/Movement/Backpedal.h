@@ -28,7 +28,7 @@
  *
  * Ends at the point, when the order runs out, when the bot cannot move freely (root, stun,
  * fear, confuse, taxi), when something else moves it (a MotionMaster generator or spline:
- * player commands, another module's MoveTo) or on Stop (PartyBotAI::ClearMovementHold).
+ * player commands, another module's MoveTo) or on Stop (TeamBotAI::ClearMovementHold).
  *
  * Map thread of the bot (Update from PartyBotAI::UpdateAI every frame, before the throttle).
  */
@@ -41,12 +41,12 @@
 #include "Commander/Perception/WorldModel.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct BackpedalState
     {
         bool active = false;
@@ -78,10 +78,10 @@ namespace Commander
 
         // Starts the walk, or renews the order (same point within SAME_DEST_YD: keeps the path).
         // False when the bot cannot walk there (rooted, no path).
-        bool Order(PartyBotAI* bot, BackpedalState& state, Position3 const& to, ObjectGuid face, uint32 durationMs);
+        bool Order(TeamBotAI* bot, BackpedalState& state, Position3 const& to, ObjectGuid face, uint32 durationMs);
 
         // Every frame from PartyBotAI::UpdateAI.
-        void Update(PartyBotAI* bot, BackpedalState& state, uint32 diff);
+        void Update(TeamBotAI* bot, BackpedalState& state, uint32 diff);
 
         // Ends the walk now (MSG_MOVE_STOP when the bot was walking).
         void Stop(Player* me, BackpedalState& state);

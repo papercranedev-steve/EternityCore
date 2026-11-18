@@ -10,7 +10,7 @@
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Pet.h"
 #include "SpellEntry.h"
@@ -81,12 +81,12 @@ namespace Commander
         }
     }
 
-    bool KiteBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool KiteBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->Kit().MinAttackRange() > 0.0f;
     }
 
-    void KiteBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void KiteBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier); the pull owns it while the tank goes out

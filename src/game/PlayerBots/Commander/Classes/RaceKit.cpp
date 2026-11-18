@@ -1,5 +1,5 @@
 #include "Commander/Classes/RaceKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellMgr.h"
 
 namespace Commander
@@ -12,13 +12,13 @@ namespace Commander
         uint32 const STONEFORM = 20594;
         uint32 const WILL_OF_THE_FORSAKEN = 7744;
 
-        SpellEntry const* Known(PartyBotAI const& bot, uint32 spellId)
+        SpellEntry const* Known(TeamBotAI const& bot, uint32 spellId)
         {
             return bot.me->HasSpell(spellId) ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
         }
     }
 
-    std::vector<BurstSpell> RaceKit::Bursts(PartyBotAI const& bot)
+    std::vector<BurstSpell> RaceKit::Bursts(TeamBotAI const& bot)
     {
         std::vector<BurstSpell> out;
         for (uint32 id : BERSERKING)
@@ -45,17 +45,17 @@ namespace Commander
         return out;
     }
 
-    SpellEntry const* RaceKit::FearBreak(PartyBotAI const& bot)
+    SpellEntry const* RaceKit::FearBreak(TeamBotAI const& bot)
     {
         return Known(bot, WILL_OF_THE_FORSAKEN);
     }
 
-    SpellEntry const* RaceKit::Stoneform(PartyBotAI const& bot)
+    SpellEntry const* RaceKit::Stoneform(TeamBotAI const& bot)
     {
         return Known(bot, STONEFORM);
     }
 
-    std::vector<SurvivalSpell> RaceKit::Survival(PartyBotAI const& bot)
+    std::vector<SurvivalSpell> RaceKit::Survival(TeamBotAI const& bot)
     {
         std::vector<SurvivalSpell> out;
         if (SpellEntry const* spell = Stoneform(bot))

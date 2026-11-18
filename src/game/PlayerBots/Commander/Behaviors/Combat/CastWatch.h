@@ -38,14 +38,14 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Spell;
 class Unit;
 class SpellEntry;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct CastWatchState
     {
         Spell const* spell = nullptr;   // the watched cast, compared only (never dereferenced)
@@ -72,7 +72,7 @@ namespace Commander
         constexpr float SNIPE_KEEP_FRACTION = 0.5f;
 
         // Every frame from PartyBotAI::UpdateAI. True = the cast was cancelled.
-        bool Update(PartyBotAI* bot, CastWatchState& state);
+        bool Update(TeamBotAI* bot, CastWatchState& state);
     }
 }
 

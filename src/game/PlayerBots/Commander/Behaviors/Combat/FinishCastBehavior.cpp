@@ -4,7 +4,7 @@
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
@@ -16,7 +16,7 @@ namespace Commander
     {
         // The bot's single target damage cast in progress whose target the others kill before
         // it lands (header): that target, else null.
-        EnemyFacts const* WastedTarget(PartyBotAI const* bot, WorldModel const& world)
+        EnemyFacts const* WastedTarget(TeamBotAI const* bot, WorldModel const& world)
         {
             Player* me = bot->me;
             Spell const* spell = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
@@ -36,12 +36,12 @@ namespace Commander
         }
     }
 
-    bool FinishCastBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool FinishCastBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    float FinishCastBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float FinishCastBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                                uint32 castLeftMs, char const*& reason) const
     {
         EnemyFacts const* wasted = WastedTarget(bot, world);
@@ -58,7 +58,7 @@ namespace Commander
         return Value::LostAction(world, *facts, float(castLeftMs) / 1000.0f);
     }
 
-    float FinishCastBehavior::ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
+    float FinishCastBehavior::ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
                                             SpellEntry const* spell, char const*& reason) const
     {
         Spell const* current = bot->me->GetCurrentSpell(CURRENT_GENERIC_SPELL);

@@ -11,7 +11,7 @@
 #include "Commander/Classes/ClassKit.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
@@ -19,15 +19,15 @@ namespace Commander
     {
         // Berserking (troll: 10-30% attack and casting speed, more at low health), Blood Fury
         // (orc: +25% base attack power, healing taken halved).
-        std::vector<BurstSpell> Bursts(PartyBotAI const& bot);
+        std::vector<BurstSpell> Bursts(TeamBotAI const& bot);
         // Stoneform (dwarf, 3 min): +10% armor, immune to poison, disease and bleeding.
-        std::vector<SurvivalSpell> Survival(PartyBotAI const& bot);
+        std::vector<SurvivalSpell> Survival(TeamBotAI const& bot);
         // Breaks a fear or charm on itself (Will of the Forsaken, 2 min): hands and feet, cast as
-        // soon as the bot is feared or charmed (PartyBotAI::BreakControl). Null = none.
-        SpellEntry const* FearBreak(PartyBotAI const& bot);
+        // soon as the bot is feared or charmed (TeamBotAI::BreakControl). Null = none.
+        SpellEntry const* FearBreak(TeamBotAI const& bot);
         // Stoneform also removes a poison, disease or bleed on itself: cast as soon as one is
         // on (StoneformBehavior, user 2026-11-15). Null = not a dwarf.
-        SpellEntry const* Stoneform(PartyBotAI const& bot);
+        SpellEntry const* Stoneform(TeamBotAI const& bot);
     }
 }
 

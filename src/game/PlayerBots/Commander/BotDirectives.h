@@ -92,7 +92,7 @@ namespace Commander
         // A run of failures is forgotten when the bot has not tried for this long.
         static uint32 const CAST_FAILURE_MEMORY_MS = 5000;
 
-        // While held, PartyBotAI does not issue MoveFollow / MoveChase / run-away moves.
+        // While held, TeamBotAI does not issue MoveFollow / MoveChase / run-away moves.
         // `owner` = the module whose MoveTo started it (Proposal::source, a string literal), so
         // that module can tell its own walk from another's (EscapeBehavior stops its run when
         // nobody chases any more). Null = not from a module proposal.

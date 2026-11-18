@@ -11,8 +11,8 @@
  * at a time). A class may have one rotation per role when the roles do different jobs
  * (warrior: WarriorTankRotation for the tank role, WarriorRotation for the damage roles).
  *
- * Injection: PartyBotAI creates its rotation with its class kit (UpdateAI init) and holds it
- * (PartyBotAI::Rotation(), made again when the role changes). The rotation keeps a reference to
+ * Injection: TeamBotAI creates its rotation with its class kit (UpdateAI init) and holds it
+ * (TeamBotAI::Rotation(), made again when the role changes). The rotation keeps a reference to
  * its bot and reads bot.m_spells on every call, so rebuilt spell data (ResetSpellData) is seen
  * at once. Map thread of the bot.
  */
@@ -23,19 +23,19 @@
 #include "Common.h"
 #include <memory>
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 class Unit;
 
 class ClassRotation
 {
 public:
-    explicit ClassRotation(PartyBotAI& bot) : m_bot(bot) {}
+    explicit ClassRotation(TeamBotAI& bot) : m_bot(bot) {}
     virtual ~ClassRotation() = default;
 
-    // PartyBotAI::UpdateInCombatAI, after the shared steps (tank taunts, marks, dispels).
+    // TeamBotAI::UpdateInCombatAI, after the shared steps (tank taunts, marks, dispels).
     virtual void UpdateInCombat() = 0;
-    // PartyBotAI::UpdateOutOfCombatAI, after resurrection, marks and dispels.
+    // TeamBotAI::UpdateOutOfCombatAI, after resurrection, marks and dispels.
     virtual void UpdateOutOfCombat() = 0;
     // While an auto-repeat spell runs (Auto Shot, wand) with a victim; the bot update does not
     // reach UpdateInCombat then. Default: keep shooting (a wand user's rotation waits for it).
@@ -50,7 +50,7 @@ protected:
     void EndBuffing(SpellEntry const* pBuffSpell);
     // Rogue Stealth, cat Prowl: in when there is a victim, the bot is almost dead, or the leader
     // is dead / feigning / stealthed; cancelled otherwise. Stands down while the Commander keeps
-    // the Sap controller of a pull stealthed (PartyBotAI::IsStealthControlled). True = cast.
+    // the Sap controller of a pull stealthed (TeamBotAI::IsStealthControlled). True = cast.
     bool KeepStealth(SpellEntry const* pStealthSpell);
     // Wand when out of mana (below `manaPct`), standing, not already shooting.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
@@ -64,7 +64,7 @@ protected:
     // those are up. Costs the bot nothing (the pet casts). True = the pet is kept aside.
     bool KeepPetAside();
 
-    PartyBotAI& m_bot;
+    TeamBotAI& m_bot;
 
 private:
     bool ShouldBeStealthed() const;
@@ -77,19 +77,19 @@ namespace ClassRotations
     uint32 const SPELL_AUTO_SHOT = 75;
 
     // The rotation of the bot's class and role; nullptr for a class without one.
-    std::unique_ptr<ClassRotation> Create(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> Create(TeamBotAI& bot);
 
     // One per file (Rotations/<Class>[<Role>]Rotation.cpp).
-    std::unique_ptr<ClassRotation> MakeDruid(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeHunter(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeMage(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakePaladin(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakePriest(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeRogue(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeShaman(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeWarlock(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeWarrior(PartyBotAI& bot);
-    std::unique_ptr<ClassRotation> MakeWarriorTank(PartyBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeDruid(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeHunter(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeMage(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakePaladin(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakePriest(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeRogue(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeShaman(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarlock(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarrior(TeamBotAI& bot);
+    std::unique_ptr<ClassRotation> MakeWarriorTank(TeamBotAI& bot);
 }
 
 #endif

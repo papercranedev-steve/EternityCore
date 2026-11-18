@@ -1,17 +1,17 @@
 #include "Commander/Behaviors/Support/WipeBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 
 namespace Commander
 {
-    bool WipeBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool WipeBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    void WipeBehavior::Propose(PartyBotAI const* bot, WorldModel const& /*world*/,
+    void WipeBehavior::Propose(TeamBotAI const* bot, WorldModel const& /*world*/,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         WipePlan const& w = plan.wipe;

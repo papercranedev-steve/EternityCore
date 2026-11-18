@@ -11,7 +11,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Spell.h"
 #include "SpellEntry.h"
@@ -37,7 +37,7 @@ namespace Commander
         }
 
         // The kit's spell the plan names (the facts hold the kit's spell ids).
-        SpellEntry const* KitSpell(PartyBotAI const* bot, uint32 spellId)
+        SpellEntry const* KitSpell(TeamBotAI const* bot, uint32 spellId)
         {
             for (AreaDamageSpell const& a : bot->Kit().AreaDamage())
                 if (a.spell && a.spell->Id == spellId)
@@ -70,7 +70,7 @@ namespace Commander
         }
 
         // The bot's own area channel from now on: AreaValue on the ticks left (paid).
-        bool RemainingChannel(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        bool RemainingChannel(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                               AreaValue::Result& out)
         {
             Player* me = bot->me;
@@ -112,7 +112,7 @@ namespace Commander
             return out.valid;
         }
 
-        void ProposeAllyShield(PartyBotAI const* bot, WorldModel const& world, AreaCast const& a,
+        void ProposeAllyShield(TeamBotAI const* bot, WorldModel const& world, AreaCast const& a,
                                PartyMemberFacts const& self, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -170,13 +170,13 @@ namespace Commander
             return false;
         }
 
-        void ProposePrepShield(PartyBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out);
+        void ProposePrepShield(TeamBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out);
 
         // The brain's prep step (AreaPlan::preps): before the phase, while the party holds or
         // the phase waits, walk to the cast spot, then put the shield up. The shield's gain is
         // net of the mana; nothing else is lost (the caster waits). Out of combat the walk costs
         // nothing either (as the stance modules' places before the fight).
-        void ProposePrep(PartyBotAI const* bot, WorldModel const& world, AreaPrep const& a, std::vector<Proposal>& out)
+        void ProposePrep(TeamBotAI const* bot, WorldModel const& world, AreaPrep const& a, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             if (!a.spots.empty() && !AtSpot(PositionOf(me), a.spots) &&
@@ -202,7 +202,7 @@ namespace Commander
                 ProposePrepShield(bot, a, out);
         }
 
-        void ProposePrepShield(PartyBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out)
+        void ProposePrepShield(TeamBotAI const* bot, AreaPrep const& a, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             SpellEntry const* shield = sSpellMgr.GetSpellEntry(a.shieldId);
@@ -220,7 +220,7 @@ namespace Commander
         }
     }
 
-    bool AreaDamageBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool AreaDamageBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         CombatBotRoles const role = bot->GetRole();
         if ((role == ROLE_RANGE_DPS || role == ROLE_MELEE_DPS) && !bot->Kit().AreaDamage().empty())
@@ -228,7 +228,7 @@ namespace Commander
         return bot->Kit().AllyShield() != nullptr;      // the area phase's shield on the caster
     }
 
-    bool AreaDamageBehavior::Judges(PartyBotAI const* bot, SpellEntry const* spell)
+    bool AreaDamageBehavior::Judges(TeamBotAI const* bot, SpellEntry const* spell)
     {
         if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("aoe"))
             return false;
@@ -242,7 +242,7 @@ namespace Commander
         return false;
     }
 
-    void AreaDamageBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void AreaDamageBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                      TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -346,7 +346,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    float AreaDamageBehavior::ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    float AreaDamageBehavior::ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                             SpellEntry const* spell, char const*& reason) const
     {
         Spell const* channel = bot->me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
@@ -359,7 +359,7 @@ namespace Commander
         return std::max(0.0f, v.net);
     }
 
-    bool AreaDamageBehavior::WatchChannel(PartyBotAI* bot, uint32& lastCheckMs)
+    bool AreaDamageBehavior::WatchChannel(TeamBotAI* bot, uint32& lastCheckMs)
     {
         Player* me = bot->me;
         Spell* channel = me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);

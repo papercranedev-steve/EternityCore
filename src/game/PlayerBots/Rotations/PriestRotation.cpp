@@ -20,7 +20,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 
 namespace
@@ -34,7 +34,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.priest;
 
@@ -55,7 +55,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.priest;
             bool const healPlanned = bot.IsHealingControlled();
@@ -118,7 +118,7 @@ namespace
 
         void Damage(Unit* pVictim)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.priest;
 
@@ -148,7 +148,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakePriest(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakePriest(TeamBotAI& bot)
 {
     return std::make_unique<PriestRotation>(bot);
 }

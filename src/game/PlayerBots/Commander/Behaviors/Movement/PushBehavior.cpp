@@ -1,7 +1,7 @@
 #include "Commander/Behaviors/Movement/PushBehavior.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Timer.h"
 #include <algorithm>
@@ -26,12 +26,12 @@ namespace Commander
         }
     }
 
-    bool PushBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool PushBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    void PushBehavior::Propose(PartyBotAI const* bot, WorldModel const& /*world*/,
+    void PushBehavior::Propose(TeamBotAI const* bot, WorldModel const& /*world*/,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         PushPlan const& push = plan.push;

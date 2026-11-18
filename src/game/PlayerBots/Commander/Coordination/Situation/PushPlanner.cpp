@@ -8,7 +8,7 @@
 #include "Commander/Perception/Spatial/AdvanceRoute.h"
 #include "Commander/Perception/Spatial/SpawnTargets.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "Map.h"
 #include "ObjectMgr.h"
@@ -85,7 +85,7 @@ namespace PushPlanner
         void StopGuideWalk(Map* map, ObjectGuid guide)
         {
             Player* p = map ? map->GetPlayer(guide) : nullptr;
-            PartyBotAI* ai = (p && p->AI()) ? dynamic_cast<PartyBotAI*>(p->AI()) : nullptr;
+            TeamBotAI* ai = (p && p->AI()) ? dynamic_cast<TeamBotAI*>(p->AI()) : nullptr;
             if (!ai)
                 return;
             char const* owner = ai->Directives().GetMovementOwner(WorldTimer::getMSTime());
@@ -311,7 +311,7 @@ namespace PushPlanner
         Note(plan, Format("Push stopped after %u packs: %s The party follows you again.", push.cleared, why.c_str()));
     }
 
-    void Step(PartyBotAI* bot, PartyCommander& commander, uint32 nowMs)
+    void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs)
     {
         TeamPlan& plan = commander.GetPlanMutable();
         PushPlan& push = plan.push;

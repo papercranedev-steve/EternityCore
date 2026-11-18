@@ -2,16 +2,16 @@
 #include "Commander/Encounters/EncounterRegistry.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 
 namespace Commander
 {
-    bool EncounterBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool EncounterBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return EncounterRegistry::HasEncounterOnMap(bot->me->GetMapId());
     }
 
-    void EncounterBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void EncounterBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // Same key as the commander that called the arbiter (group, map, instance), so this is

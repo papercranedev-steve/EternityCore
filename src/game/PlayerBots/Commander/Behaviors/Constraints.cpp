@@ -10,7 +10,7 @@
 #include "DamageSpells.h"
 #include "Timer.h"
 #include <algorithm>
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
 #include <cstring>
@@ -53,7 +53,7 @@ namespace Commander
             return false;
         }
 
-        char const* BrokenByCast(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* BrokenByCast(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                  BotAction const& action, char const* source, uint32 nowMs)
         {
             SpellEntry const* spell = action.spell;
@@ -87,7 +87,7 @@ namespace Commander
 
     namespace Constraints
     {
-        char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* CastForbidden(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                   Unit const* target, SpellEntry const* spell, uint32 nowMs)
         {
             if (!spell || !target)
@@ -120,7 +120,7 @@ namespace Commander
             return WakesControl(bot, world, plan, target, spell, nowMs);
         }
 
-        char const* LongCastHeld(PartyBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell)
+        char const* LongCastHeld(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell)
         {
             if (!spell || !plan.ForbidsLongCast(bot->me->GetObjectGuid()))
                 return nullptr;
@@ -131,7 +131,7 @@ namespace Commander
             return "reserved for the area spell";
         }
 
-        char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* CastAtForbidden(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     Position3 const& centre, SpellEntry const* spell, uint32 nowMs)
         {
             if (!spell || !SpellTags::DealsDamage(spell))
@@ -144,7 +144,7 @@ namespace Commander
             return nullptr;
         }
 
-        bool MayBeWasted(PartyBotAI const* bot, SpellEntry const* spell)
+        bool MayBeWasted(TeamBotAI const* bot, SpellEntry const* spell)
         {
             if (!spell || spell->IsChanneledSpell() || spell->IsAutoRepeatRangedSpell() ||
                 spell->IsAreaOfEffectSpell() || !SpellTags::DealsDamage(spell))
@@ -159,7 +159,7 @@ namespace Commander
             return false;
         }
 
-        char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
+        char const* WastedCast(TeamBotAI const* bot, WorldModel const& world, Unit const* target,
                                SpellEntry const* spell, uint32 nowMs)
         {
             if (!MayBeWasted(bot, spell) || !target)
@@ -195,7 +195,7 @@ namespace Commander
             return nullptr;
         }
 
-        char const* WakesControl(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* WakesControl(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                  Unit const* target, SpellEntry const* spell, uint32 nowMs)
         {
             if (!spell || !target)
@@ -227,7 +227,7 @@ namespace Commander
             return nullptr;
         }
 
-        char const* Broken(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* Broken(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                            Proposal const& p, uint32 nowMs)
         {
             if (p.kind != ProposalKind::Replace)

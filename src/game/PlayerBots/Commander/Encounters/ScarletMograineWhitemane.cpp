@@ -23,7 +23,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "InstanceData.h"
 #include "Map.h"
 #include "SpellEntry.h"
@@ -107,7 +107,7 @@ namespace Commander
         }
     }
 
-    void ScarletMograineWhitemane::Refresh(PartyBotAI* bot, WorldModel const& world)
+    void ScarletMograineWhitemane::Refresh(TeamBotAI* bot, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
         EnemyFacts const* mograine = EncounterHelpers::FindEnemyByEntry(world, NPC_MOGRAINE);
@@ -195,7 +195,7 @@ namespace Commander
             EncounterHelpers::ClearFocus(world, plan);     // feigning death: cannot be attacked
     }
 
-    void ScarletMograineWhitemane::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ScarletMograineWhitemane::Propose(TeamBotAI const* bot, WorldModel const& world,
                                            TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         switch (bot->GetRole())
@@ -216,7 +216,7 @@ namespace Commander
         }
     }
 
-    void ScarletMograineWhitemane::ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ScarletMograineWhitemane::ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
         ObjectGuid const self = me->GetObjectGuid();
@@ -272,7 +272,7 @@ namespace Commander
         }
     }
 
-    void ScarletMograineWhitemane::ProposeHealer(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void ScarletMograineWhitemane::ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         if (m_stage != STAGE_DIED_ONCE)
             return;

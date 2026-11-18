@@ -21,7 +21,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "SpellMgr.h"
 #include "Commander/CommanderMgr.h"
@@ -37,7 +37,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.shaman;
 
@@ -61,7 +61,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
 
             if (bot.GetRole() != ROLE_HEALER)
@@ -132,7 +132,7 @@ namespace
         // One totem dropped (true), elements in the order water, earth, air, fire.
         bool KeepTotems()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
             static TotemSlot const SLOTS[] = { TOTEM_SLOT_WATER, TOTEM_SLOT_EARTH, TOTEM_SLOT_AIR, TOTEM_SLOT_FIRE };
             for (TotemSlot slot : SLOTS)
@@ -153,7 +153,7 @@ namespace
 
         bool Damage(Unit* pVictim)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             auto const& s = bot.m_spells.shaman;
 
             if (pVictim->IsMoving() && Cast(pVictim, s.pFrostShock))
@@ -174,7 +174,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeShaman(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeShaman(TeamBotAI& bot)
 {
     return std::make_unique<ShamanRotation>(bot);
 }

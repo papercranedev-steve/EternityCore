@@ -49,13 +49,13 @@ namespace Commander
         static constexpr size_t DOOR_LOOKAHEAD = 2;
 
         char const* GetId() const override { return "retreat"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
     private:
-        void ProposeHeal(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        static SpellEntry const* SelectInstantHeal(PartyBotAI const* bot, Unit const* pTarget);
+        void ProposeHeal(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
+        static SpellEntry const* SelectInstantHeal(TeamBotAI const* bot, Unit const* pTarget);
     };
 }
 

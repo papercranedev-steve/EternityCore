@@ -4,7 +4,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Tanks.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Group.h"
 #include "Map.h"
 #include "Player.h"
@@ -120,7 +120,7 @@ namespace Commander
         }
     }
 
-    void ThreatFeed::Push(PartyBotAI* bot, WorldModel const& world, uint32 nowMs)
+    void ThreatFeed::Push(TeamBotAI* bot, WorldModel const& world, uint32 nowMs)
     {
         if (m_lastPushMs && WorldTimer::getMSTimeDiff(m_lastPushMs, nowMs) < INTERVAL_MS)
             return;

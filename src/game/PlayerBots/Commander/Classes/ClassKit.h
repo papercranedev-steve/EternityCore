@@ -7,7 +7,7 @@
  * the defaults mean "this class has none". Adding an ability to a class touches its own file
  * (Classes/<Class>.cpp), not the modules.
  *
- * Injection: PartyBotAI creates its kit once the bot is in the world and its spells are known
+ * Injection: TeamBotAI creates its kit once the bot is in the world and its spells are known
  * (ClassKits::Create, PartyBotAI::OnPlayerLogin path / UpdateAI init) and modules ask
  * bot->Kit(). The kit keeps a reference to its bot and reads bot.m_spells on every call, so
  * spell data rebuilt after a role, level or talent change (ResetSpellData) is seen at once.
@@ -15,7 +15,7 @@
  *
  * Not here: class facts that also apply to players without a PartyBot AI (PullPlanner's ranged
  * pull of a player tank, ThreatView's heal threat modifier of a paladin): they read the unit.
- * Mechanics of casting (warrior stance swaps, druid forms) stay in the rotation (PartyBotAI).
+ * Mechanics of casting (warrior stance swaps, druid forms) stay in the rotation (TeamBotAI).
  */
 
 #ifndef MANGOS_COMMANDER_CLASS_KIT_H
@@ -25,7 +25,7 @@
 #include <memory>
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 
 namespace Commander
@@ -147,7 +147,7 @@ namespace Commander
     class ClassKit
     {
     public:
-        explicit ClassKit(PartyBotAI const& bot) : m_bot(bot) {}
+        explicit ClassKit(TeamBotAI const& bot) : m_bot(bot) {}
         virtual ~ClassKit() = default;
 
         // Interrupts the Commander assigns (InterruptAssigner, WorldModel interrupt facts).
@@ -268,7 +268,7 @@ namespace Commander
         // (PullBehavior: a walk-in pull fought where the pack stands); the tank rotation does not.
         virtual SpellEntry const* OpenerCharge() const { return nullptr; }
         // Breaks a fear on itself (warrior Berserker Rage): hands and feet, cast as soon as the
-        // bot is feared (PartyBotAI::BreakControl), after the racial one (RaceKit::FearBreak).
+        // bot is feared (TeamBotAI::BreakControl), after the racial one (RaceKit::FearBreak).
         virtual SpellEntry const* FearBreak() const { return nullptr; }
         // Stuns, roots and slows that keep an enemy running away at low health from getting
         // far (flee interception, FleeStopAssigner, todo 13), and run speed boosts on itself to
@@ -325,24 +325,24 @@ namespace Commander
         virtual SpellEntry const* PetHeal() const { return nullptr; }
 
     protected:
-        PartyBotAI const& m_bot;
+        TeamBotAI const& m_bot;
     };
 
     namespace ClassKits
     {
         // The kit for the bot's class (Player::GetClass); the base kit (has nothing) for others.
-        std::unique_ptr<ClassKit> Create(PartyBotAI const& bot);
+        std::unique_ptr<ClassKit> Create(TeamBotAI const& bot);
 
         // One per class file (Classes/<Class>.cpp).
-        std::unique_ptr<ClassKit> MakeWarrior(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakePaladin(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeRogue(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakePriest(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeShaman(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeMage(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeDruid(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeWarlock(PartyBotAI const& bot);
-        std::unique_ptr<ClassKit> MakeHunter(PartyBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeWarrior(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakePaladin(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeRogue(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakePriest(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeShaman(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeMage(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeDruid(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeWarlock(TeamBotAI const& bot);
+        std::unique_ptr<ClassKit> MakeHunter(TeamBotAI const& bot);
     }
 }
 

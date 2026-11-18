@@ -4,7 +4,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "Shared/LootFacts.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "Group.h"
 #include "LootMgr.h"
@@ -312,7 +312,7 @@ namespace ClearPlanner
         Note(plan, buf);
     }
 
-    void Step(PartyBotAI* bot, PartyCommander& commander, uint32 nowMs)
+    void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs)
     {
         TeamPlan& plan = commander.GetPlanMutable();
         ClearPlan& clear = plan.clear;

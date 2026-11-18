@@ -32,11 +32,11 @@
 
 #include "Common.h"
 
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct CastBreakState
     {
         uint32 lastCheckMs = 0;
@@ -49,7 +49,7 @@ namespace Commander
         constexpr uint32 COOLDOWN_MS = 2000;
 
         // Every frame from PartyBotAI::UpdateAI. True = the cast was stopped.
-        bool Update(PartyBotAI* bot, CastBreakState& state);
+        bool Update(TeamBotAI* bot, CastBreakState& state);
     }
 }
 

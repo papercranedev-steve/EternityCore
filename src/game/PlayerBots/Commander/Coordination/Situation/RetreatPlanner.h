@@ -28,7 +28,7 @@
 #include <vector>
 
 class Player;
-class PartyBotAI;
+class TeamBotAI;
 class Map;
 
 namespace Commander
@@ -86,7 +86,7 @@ namespace Commander
 
         // Map step after the assigners (PartyCommander::Update): starts a retreat RunAwayAssigner
         // asked for (and tells the leader, or why it cannot), steps door runners out.
-        void Step(PartyBotAI* bot, PartyCommander& commander);
+        void Step(TeamBotAI* bot, PartyCommander& commander);
     }
 
     class RetreatAssigner : public IAssigner

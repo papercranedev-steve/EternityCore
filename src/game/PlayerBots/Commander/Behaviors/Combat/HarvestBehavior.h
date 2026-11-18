@@ -9,7 +9,7 @@
  *               already on the way (FinishForecast::DeathMsOwnHitOnly), that give the item
  *               (the rules of Aura::HandleChannelDeathItem: Player::IsHonorOrXPTarget, tapped by
  *               the bot's party, not already carrying its own death item aura: a Shadowburn
- *               gives that shard), in sight, castable (PartyBotAI::CanTryToCastSpell: range,
+ *               gives that shard), in sight, castable (TeamBotAI::CanTryToCastSpell: range,
  *               mana, the plan's constraints).
  *   not when    it holds KEEP of the item, or has no bag room for one.
  *   benefit     LostAction(SHARD_WORTH_SEC x (1 - held / KEEP)): one more item is worth some
@@ -40,12 +40,12 @@ namespace Commander
         static constexpr float SHARD_WORTH_SEC = 5.0f;
 
         char const* GetId() const override { return "harvest"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
-        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
-        float ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                             SpellEntry const* spell, char const*& reason) const override;
     };
 }

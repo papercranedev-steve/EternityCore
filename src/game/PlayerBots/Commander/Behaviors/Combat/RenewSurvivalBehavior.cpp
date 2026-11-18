@@ -3,12 +3,12 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellMgr.h"
 
 namespace Commander
 {
-    bool RenewSurvivalBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool RenewSurvivalBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         for (SurvivalSpell const& s : bot->Kit().Survival())
             if (s.spell && s.renewWhileHit && bot->Kit().CooldownReset(s.spell))
@@ -16,7 +16,7 @@ namespace Commander
         return false;
     }
 
-    void RenewSurvivalBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void RenewSurvivalBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                         TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

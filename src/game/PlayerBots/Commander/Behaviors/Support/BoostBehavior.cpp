@@ -3,7 +3,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
@@ -12,7 +12,7 @@ namespace Commander
 {
     namespace
     {
-        bool HasBoosts(PartyBotAI const* bot)
+        bool HasBoosts(TeamBotAI const* bot)
         {
             for (AllyBoostSpell const& s : bot->Kit().AllyBoosts())
                 if (s.spell)
@@ -21,12 +21,12 @@ namespace Commander
         }
     }
 
-    bool BoostBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool BoostBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return HasBoosts(bot);
     }
 
-    void BoostBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void BoostBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

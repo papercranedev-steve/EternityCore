@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/Movement/JumpCast.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "MoveSpline.h"
@@ -29,7 +29,7 @@ namespace JumpCast
             return !current || current->m_spellInfo != spell || current->getState() == SPELL_STATE_FINISHED;
         }
 
-        void Land(PartyBotAI* bot, JumpCastState& state, bool resume)
+        void Land(TeamBotAI* bot, JumpCastState& state, bool resume)
         {
             Player* me = bot->me;
             state.active = false;
@@ -47,7 +47,7 @@ namespace JumpCast
         }
     }
 
-    bool Order(PartyBotAI* bot, JumpCastState& state, SpellEntry const* spell, float castFacing)
+    bool Order(TeamBotAI* bot, JumpCastState& state, SpellEntry const* spell, float castFacing)
     {
         Player* me = bot->me;
         if (state.active || !spell || !me->IsAlive() || me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) ||
@@ -90,7 +90,7 @@ namespace JumpCast
         return true;
     }
 
-    void Update(PartyBotAI* bot, JumpCastState& state)
+    void Update(TeamBotAI* bot, JumpCastState& state)
     {
         if (!state.active)
             return;

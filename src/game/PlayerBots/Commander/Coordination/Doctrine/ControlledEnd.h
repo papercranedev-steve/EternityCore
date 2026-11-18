@@ -29,7 +29,7 @@
  * was sent to wake it at once (strat-20261115-134307: it left the pile while no area spell was
  * coming, and the woken ghoul went to the mage).
  * Execution: TargetAssigner gives the tank the enemy (forced, ControlEndPlan::why);
- * PartyBotAI::IsAssignedToBreakControl lets the tank (only the tank, only that enemy) pick it.
+ * TeamBotAI::IsAssignedToBreakControl lets the tank (only the tank, only that enemy) pick it.
  */
 
 #ifndef MANGOS_COMMANDER_CONTROLLED_END_H

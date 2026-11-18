@@ -20,7 +20,7 @@
 
 #include "Chat.h"
 #include "Player.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "World.h"
@@ -176,7 +176,7 @@ namespace
     // the bot uses its new spells from the next update on
     void TalentsChanged(Player* pBot)
     {
-        if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pBot->AI()))
+        if (TeamBotAI* pAI = dynamic_cast<TeamBotAI*>(pBot->AI()))
             pAI->m_resetSpellData = true;
     }
 }
@@ -276,7 +276,7 @@ bool ChatHandler::HandlePartyBotTalentDebugCommand(char* args)
     }
     else if (action == "autospec")
     {
-        PartyBotAI* pAI = static_cast<PartyBotAI*>(pBot->AI());
+        TeamBotAI* pAI = static_cast<TeamBotAI*>(pBot->AI());
         std::string used = "random";
         if (PlayerPremadeSpecTemplate const* pSpec = PickSpecTemplate(pBot, pAI->m_role))
         {

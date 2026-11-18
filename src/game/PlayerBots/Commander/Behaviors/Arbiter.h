@@ -31,7 +31,7 @@
 #include "Commander/Registry.h"
 #include <string>
 
-class PartyBotAI;
+class TeamBotAI;
 class Unit;
 
 namespace Commander
@@ -44,7 +44,7 @@ namespace Commander
     public:
         // Returns true when an action was executed; the caller then skips the
         // original target selection, movement and class rotation for this tick.
-        static bool Run(PartyBotAI* bot, WorldModel const& world, TeamPlan const& plan,
+        static bool Run(TeamBotAI* bot, WorldModel const& world, TeamPlan const& plan,
                         BehaviorList const& behaviors);
 
         // How long a decision stays in force without being renewed, in ms. Fixed, not a number
@@ -62,14 +62,14 @@ namespace Commander
         static constexpr float USE_APPROACH_YARDS = 2.5f;
 
     private:
-        static bool Execute(PartyBotAI* bot, Proposal const& proposal);
+        static bool Execute(TeamBotAI* bot, Proposal const& proposal);
         // UseObject: walk into INTERACTION_DISTANCE (movement held), then GameObject::Use(me).
         // True while walking or after the use; false if the object is gone or the bot is rooted.
-        static bool ExecuteUseObject(PartyBotAI* bot, BotAction const& action);
+        static bool ExecuteUseObject(TeamBotAI* bot, BotAction const& action);
         // PetAttack / PetFollow / PetStay / PetAutocastOn / PetAutocastOff on bot->me->GetPet().
         // `pTarget` = the live unit of action.target (null if empty).
-        static bool ExecutePetAction(PartyBotAI* bot, BotAction const& action, Unit* pTarget);
-        static std::string Describe(PartyBotAI const* bot, Proposal const& proposal);
+        static bool ExecutePetAction(TeamBotAI* bot, BotAction const& action, Unit* pTarget);
+        static std::string Describe(TeamBotAI const* bot, Proposal const& proposal);
     };
 }
 

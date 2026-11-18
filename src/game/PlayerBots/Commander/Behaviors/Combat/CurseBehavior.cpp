@@ -4,7 +4,7 @@
 #include "Commander/Perception/Profiles/WarlockCurses.h"
 #include "Commander/Perception/Values/CurseValue.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 
@@ -22,7 +22,7 @@ namespace Commander
         }
     }
 
-    bool CurseBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool CurseBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         for (SpellEntry const* spell : bot->Kit().Curses())
             if (spell)
@@ -30,7 +30,7 @@ namespace Commander
         return false;
     }
 
-    void CurseBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void CurseBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

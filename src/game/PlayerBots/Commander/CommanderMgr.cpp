@@ -1,7 +1,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Situation/Guide.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Config/Config.h"
 #include "Group.h"
 #include "Map.h"
@@ -82,7 +82,7 @@ namespace Commander
         m_botUpdateMs.store(ms, std::memory_order_relaxed);
     }
 
-    std::shared_ptr<PartyCommander> CommanderMgr::GetCommander(PartyBotAI* bot)
+    std::shared_ptr<PartyCommander> CommanderMgr::GetCommander(TeamBotAI* bot)
     {
         Player* me = bot->me;
         Group* pGroup = me->GetGroup();
@@ -131,7 +131,7 @@ namespace Commander
         return m_commanders.size();
     }
 
-    void CommanderMgr::OnBotUpdate(PartyBotAI* bot)
+    void CommanderMgr::OnBotUpdate(TeamBotAI* bot)
     {
         if (!IsEnabled())
             return;
@@ -140,7 +140,7 @@ namespace Commander
             commander->Update(bot, WorldTimer::getMSTime(), GetPerceptionInterval(), m_assigners, m_behaviors);
     }
 
-    bool CommanderMgr::OnBotCombatUpdate(PartyBotAI* bot)
+    bool CommanderMgr::OnBotCombatUpdate(TeamBotAI* bot)
     {
         if (!IsEnabled())
             return false;
@@ -151,7 +151,7 @@ namespace Commander
         return false;
     }
 
-    bool CommanderMgr::WantsOutOfCombatControl(PartyBotAI* bot)
+    bool CommanderMgr::WantsOutOfCombatControl(TeamBotAI* bot)
     {
         if (!IsEnabled())
             return false;
@@ -159,7 +159,7 @@ namespace Commander
         return commander && commander->WantsOutOfCombatControl();
     }
 
-    bool CommanderMgr::IsRetreating(PartyBotAI* bot)
+    bool CommanderMgr::IsRetreating(TeamBotAI* bot)
     {
         if (!IsEnabled())
             return false;
@@ -167,7 +167,7 @@ namespace Commander
         return commander && commander->GetPlan().retreat.active;
     }
 
-    Player* CommanderMgr::GetGuide(PartyBotAI* bot)
+    Player* CommanderMgr::GetGuide(TeamBotAI* bot)
     {
         if (!IsEnabled())
             return nullptr;

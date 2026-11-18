@@ -23,7 +23,7 @@
 #include "HealSpells.h"
 #include "RoleCapability.h"
 #include "World.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "DBCStores.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
@@ -426,7 +426,7 @@ namespace WorldModelBuilder
             return f;
         }
 
-        void AddInterrupt(PartyBotAI const* ai, SpellEntry const* spell, PartyMemberFacts& f)
+        void AddInterrupt(TeamBotAI const* ai, SpellEntry const* spell, PartyMemberFacts& f)
         {
             if (!spell || !SpellTags::StopsCasts(spell))
                 return;
@@ -824,14 +824,14 @@ namespace WorldModelBuilder
                 [](InterruptAbility const& a) { return a.maxRange > MELEE_INTERRUPT_RANGE; });
         }
 
-        void FillInterrupts(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillInterrupts(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             for (SpellEntry const* spell : ai->Kit().Interrupts())
                 AddInterrupt(ai, spell, f);
         }
 
         // Casts the arbiter tried and could not execute (BotDirectives::GetCastFailures).
-        void FillCastFailures(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillCastFailures(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             for (CastFailure const& c : ai->Directives().GetCastFailures(WorldTimer::getMSTime()))
             {
@@ -844,7 +844,7 @@ namespace WorldModelBuilder
             }
         }
 
-        void FillDispels(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillDispels(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             for (SpellEntry const* spell : ai->Kit().Dispels())
@@ -880,7 +880,7 @@ namespace WorldModelBuilder
             return true;
         }
 
-        void FillControls(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillControls(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             for (SpellEntry const* spell : ai->Kit().Controls())
@@ -943,7 +943,7 @@ namespace WorldModelBuilder
         // Stun or root: seconds it holds (a root, or a stun that damage breaks, at most
         // FLEE_ROOT_HOLD_SEC: the party's hits break it); slow: the speed it takes off.
         float const FLEE_ROOT_HOLD_SEC = 2.0f;
-        void FillFleeStops(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillFleeStops(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             for (SpellEntry const* spell : ai->Kit().FleeStoppers())
@@ -1001,7 +1001,7 @@ namespace WorldModelBuilder
         }
 
         // Team rescue (Perception/Values/RescueValue.h): a tank bot's taunts, one entry per spell.
-        void FillTaunts(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillTaunts(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             if (ai->GetRole() != ROLE_TANK)
                 return;
@@ -1025,7 +1025,7 @@ namespace WorldModelBuilder
 
         // ClassKit::AttackPowerDebuffs of a tank bot: the SPELL_AURA_MOD_ATTACK_POWER amount
         // below 0, its duration and radius from the spell data.
-        void FillMitigations(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillMitigations(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             if (ai->GetRole() != ROLE_TANK)
                 return;
@@ -1061,7 +1061,7 @@ namespace WorldModelBuilder
         // `spell` is on cooldown and its reset (ClassKit::CooldownReset) is ready: the reset's
         // facts; otherwise none (spellId 0). Only its cooldown keeps `spell`: its power is there.
         // The caster able to act and not silenced for the reset is the caller's.
-        CooldownResetFacts ResetFor(PartyBotAI const* ai, PartyMemberFacts const& f, SpellEntry const* spell)
+        CooldownResetFacts ResetFor(TeamBotAI const* ai, PartyMemberFacts const& f, SpellEntry const* spell)
         {
             CooldownResetFacts r;
             Player* me = ai->me;
@@ -1078,7 +1078,7 @@ namespace WorldModelBuilder
             return r;
         }
 
-        void FillThreatDrops(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillThreatDrops(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             if (ai->GetRole() == ROLE_TANK)
                 return;
@@ -1129,7 +1129,7 @@ namespace WorldModelBuilder
         }
 
         // Team rescue: ClassKit::Survival with the numbers from the spell data.
-        void FillSurvival(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillSurvival(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             std::vector<SurvivalSpell> spells = ai->Kit().Survival();
@@ -1185,7 +1185,7 @@ namespace WorldModelBuilder
                 a.targetStops = s.targetStops;
                 a.gcd = spell->StartRecoveryTime > 0;
                 // Divine Shield, Ice Block: castable while stunned or feared, they lift it
-                // (Spell::CheckCasterAuras; PartyBotAI::CastRescueWhileControlled casts them).
+                // (Spell::CheckCasterAuras; TeamBotAI::CastRescueWhileControlled casts them).
                 bool const liftsControl = spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT);
                 bool const castable = !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
                                       (!s.needsShield || ai->IsWearingShield(me));
@@ -1203,7 +1203,7 @@ namespace WorldModelBuilder
 
         // Healthstones and healing potions in the bags (ItemKit::Use::Heal): rescue options on
         // itself, like a self heal spell.
-        void FillItemSurvival(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillItemSurvival(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             for (ItemKit::Consumable const& c : ItemKit::Held(*ai, ItemKit::Use::Heal))
@@ -1280,7 +1280,7 @@ namespace WorldModelBuilder
         }
 
         // Mana potions, mana gems and runes in the bags (ItemKit::Use::Mana).
-        void FillManaItems(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillManaItems(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             if (me->GetMaxPower(POWER_MANA) == 0)
@@ -1308,7 +1308,7 @@ namespace WorldModelBuilder
 
         // ClassKit::CombatResurrection (Rebirth): its reagent is checked here, the server only
         // refuses the cast (Spell::CheckItems).
-        void FillCombatRes(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillCombatRes(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             SpellEntry const* spell = ai->Kit().CombatResurrection();
             if (!spell)
@@ -1330,7 +1330,7 @@ namespace WorldModelBuilder
         }
 
         // PartyMemberFacts::selfRes and resurrects, every member (wipe protection).
-        void FillRevive(Player const* member, PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillRevive(Player const* member, TeamBotAI const* ai, PartyMemberFacts& f)
         {
             uint32 riseSpell = 0;
             if (member->IsAlive())
@@ -1345,7 +1345,7 @@ namespace WorldModelBuilder
                 f.selfRes = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_CAN_SELF_RESURRECT);
 #endif
             }
-            f.resurrects = PartyBotAI::CanResurrectOthers(member);
+            f.resurrects = TeamBotAI::CanResurrectOthers(member);
             // As Spell::EffectSelfResurrect.
             if (SpellEntry const* spell = f.selfRes ? sSpellMgr.GetSpellEntry(riseSpell) : nullptr)
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -1370,7 +1370,7 @@ namespace WorldModelBuilder
 
         // PartyMemberFacts::soulstoneItem: a warlock bot's Soulstone in its bags, its use ready
         // (the same item as WarlockRotation::Soulstone: what its best Create Soulstone makes).
-        void FillSoulstone(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillSoulstone(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             SpellEntry const* create = ai->m_spells.warlock.pCreateSoulstone;
             if (ai->me->GetClass() != CLASS_WARLOCK || !create)
@@ -1418,7 +1418,7 @@ namespace WorldModelBuilder
                     c.role = f->role;
                     c.isBot = f->isBot;
                 }
-                else if (PartyBotAI const* ai = member->AI() ? dynamic_cast<PartyBotAI const*>(member->AI()) : nullptr)
+                else if (TeamBotAI const* ai = member->AI() ? dynamic_cast<TeamBotAI const*>(member->AI()) : nullptr)
                 {
                     c.role = uint8(ai->m_role);
                     c.isBot = true;
@@ -1433,7 +1433,7 @@ namespace WorldModelBuilder
         }
 
         // Cooldowns for a party member: ClassKit::AllyBoosts.
-        void FillAllyBoosts(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillAllyBoosts(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             for (AllyBoostSpell const& s : ai->Kit().AllyBoosts())
@@ -1459,7 +1459,7 @@ namespace WorldModelBuilder
         }
 
         // Paladin blessings and party auras: ClassKit::Blessings / PartyAuras.
-        void FillPaladinBuffs(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillPaladinBuffs(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             std::vector<SpellEntry const*> const blessings = ai->Kit().Blessings();
             for (SpellEntry const* spell : blessings)
@@ -1493,7 +1493,7 @@ namespace WorldModelBuilder
         }
 
         // Damage curses: ClassKit::Curses.
-        void FillCurses(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillCurses(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             for (SpellEntry const* spell : ai->Kit().Curses())
             {
@@ -1504,7 +1504,7 @@ namespace WorldModelBuilder
         }
 
         // Party totems: ClassKit::Totems.
-        void FillTotems(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillTotems(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             for (SpellEntry const* spell : ai->Kit().Totems())
             {
@@ -1515,7 +1515,7 @@ namespace WorldModelBuilder
         }
 
         // Damage cooldowns: ClassKit::Bursts and the racial ones (RaceKit::Bursts).
-        void FillBursts(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillBursts(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             std::vector<BurstSpell> spells = ai->Kit().Bursts();
             std::vector<BurstSpell> const racial = RaceKit::Bursts(*ai);
@@ -1551,7 +1551,7 @@ namespace WorldModelBuilder
 
         // PartyMemberFacts::areaDpsPerTarget / areaRadius / fillerDps, on the bot's victim
         // (the pull's control valuation, ControlValue::OfPull).
-        void FillAreaPotential(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillAreaPotential(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             CombatBotRoles const role = ai->GetRole();
@@ -1606,7 +1606,7 @@ namespace WorldModelBuilder
 
         // Area phase facts (PartyMemberFacts::areaSpells, areaChannel, boltTarget, selfShield,
         // tapManaPerHealth): what Perception/Values/AreaValue.h needs without the live units.
-        void FillAreaPhase(PartyBotAI const* ai, PartyMemberFacts& f)
+        void FillAreaPhase(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             Player* me = ai->me;
             CombatBotRoles const role = ai->GetRole();
@@ -1731,7 +1731,7 @@ namespace WorldModelBuilder
 
         // PartyMemberFacts::soloDps: what this member deals per second on its own (see there).
         // `ai` null = a player: weapons only (its spells are not known).
-        float SoloDps(Player* member, PartyBotAI const* ai)
+        float SoloDps(Player* member, TeamBotAI const* ai)
         {
             float melee = WeaponDps(member, BASE_ATTACK);
             if (member->HaveOffhandWeapon())
@@ -1747,7 +1747,7 @@ namespace WorldModelBuilder
         }
 
         // ClassKit::Filler's mana per second while chain casting it (PartyMemberFacts::fillerManaPerSec).
-        float FillerManaPerSec(PartyBotAI const* ai)
+        float FillerManaPerSec(TeamBotAI const* ai)
         {
             SpellEntry const* filler = ai->Kit().Filler();
             if (!filler || Powers(filler->powerType) != POWER_MANA)
@@ -1860,7 +1860,7 @@ namespace WorldModelBuilder
         }
     }
 
-    void RefreshCombat(PartyBotAI* bot, WorldModel& world)
+    void RefreshCombat(TeamBotAI* bot, WorldModel& world)
     {
         Player* me = bot->me;
         Map* map = me->GetMap();
@@ -1896,10 +1896,10 @@ namespace WorldModelBuilder
             FillDebuffs(member, f);
             FillAfflictions(member, f);
             FillPaladinBuffsOn(member, f);
-            FillRevive(member, member->AI() ? dynamic_cast<PartyBotAI const*>(member->AI()) : nullptr, f);
+            FillRevive(member, member->AI() ? dynamic_cast<TeamBotAI const*>(member->AI()) : nullptr, f);
             if (member->AI())
             {
-                if (PartyBotAI const* ai = dynamic_cast<PartyBotAI const*>(member->AI()))
+                if (TeamBotAI const* ai = dynamic_cast<TeamBotAI const*>(member->AI()))
                 {
                     f.isBot = true;
                     if (member->IsAlive())
@@ -1989,7 +1989,7 @@ namespace WorldModelBuilder
                     pf.tauntsItself = PetTaunt::HasAutocast(pet);
                     // Only a bot's pet: a player's pet is his to command.
                     if (pet->IsControlled() && !pet->IsCharmed() && member->AI() &&
-                        dynamic_cast<PartyBotAI const*>(member->AI()))
+                        dynamic_cast<TeamBotAI const*>(member->AI()))
                     {
                         std::vector<SpellEntry const*> threatSpells;
                         PetTaunt::Spells(pet, threatSpells);
@@ -2127,7 +2127,7 @@ namespace WorldModelBuilder
         }
     }
 
-    void RefreshPacks(PartyBotAI* bot, WorldModel& world, Player* guide)
+    void RefreshPacks(TeamBotAI* bot, WorldModel& world, Player* guide)
     {
         Player* me = bot->me;
         Player* leader = bot->GetPartyLeader();

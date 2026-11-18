@@ -1,7 +1,7 @@
 /*
  * PartyBot Commander: where a bot follows the leader without pulling another pack.
  *
- * Before: PartyBotAI followed at a random 3-6 yd and a random angle around the leader's facing
+ * Before: TeamBotAI followed at a random 3-6 yd and a random angle around the leader's facing
  * (PB_MIN/MAX_FOLLOW_DIST/ANGLE) and never looked at idle creatures. In the Stockade the tank
  * followed 4 yd to the right front of the leader, saw into the right cell through its door and
  * pulled the prisoner there (17.6 yd, aggro range 20) while the leader opened the left cell
@@ -32,7 +32,7 @@
  *
  * Cost: one grid scan around the leader, then per tested point a cell lookup, a distance check
  * per idle creature and a line of sight check only for creatures in range, and at most
- * MAX_PATH_CHECKS pathfinding calls. PartyBotAI calls it when it starts following and then each
+ * MAX_PATH_CHECKS pathfinding calls. TeamBotAI calls it when it starts following and then each
  * bot update while the leader moved FOLLOW_RECHECK_DIST or its heading turned FOLLOW_RECHECK_TURN since the
  * last check, or NeedsRecheck (a patrol coming to the follow point of a leader standing still).
  * Candidates are only tried when the current offset is unsafe. Map thread of the bot.

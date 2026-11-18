@@ -31,7 +31,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "MotionMaster.h"
 #include "Spell.h"
@@ -53,7 +53,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.druid;
 
@@ -99,7 +99,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             ShapeshiftForm const form = me->GetShapeshiftForm();
 
@@ -188,7 +188,7 @@ namespace
         // Cat for melee damage, bear for a tank (or melee without cat), moonkin for ranged damage.
         bool EnterCombatForm()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             auto const& s = bot.m_spells.druid;
             CombatBotRoles const role = bot.GetRole();
 
@@ -250,7 +250,7 @@ namespace
         // (ClassKit::AttackPowerDebuffs, MitigationBehavior).
         void BearTank(Unit* pVictim)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.druid;
             uint32 const rage = me->GetPower(POWER_RAGE);
@@ -281,7 +281,7 @@ namespace
         // Melee damage without cat form: Swipe and Demoralizing Roar on 2+ attackers or 80 rage.
         void BearDamage(Unit* pVictim)
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             auto const& s = bot.m_spells.druid;
 
             if (Cast(pVictim, s.pFaerieFireFeral))
@@ -316,7 +316,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeDruid(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeDruid(TeamBotAI& bot)
 {
     return std::make_unique<DruidRotation>(bot);
 }

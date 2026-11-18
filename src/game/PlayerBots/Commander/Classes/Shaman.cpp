@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 
 namespace Commander
 {
@@ -70,7 +70,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeShaman(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeShaman(TeamBotAI const& bot)
     {
         return std::make_unique<ShamanKit>(bot);
     }

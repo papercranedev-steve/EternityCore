@@ -2,7 +2,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/CommanderTypes.h"
 #include "Commander/Commands/PlayerChat.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Chat.h"
 #include "Map.h"
 #include "Player.h"
@@ -98,7 +98,7 @@ namespace Commander
         }
     }
 
-    void BotSpeech::OnExecuted(PartyBotAI const* bot, Proposal const& p, uint32 nowMs)
+    void BotSpeech::OnExecuted(TeamBotAI const* bot, Proposal const& p, uint32 nowMs)
     {
         if (!sCommanderMgr.IsSpeechEnabled() || p.kind != ProposalKind::Replace || p.tier == ProposalTier::Routine)
             return;

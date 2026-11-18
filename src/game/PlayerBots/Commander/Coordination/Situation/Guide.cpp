@@ -1,6 +1,6 @@
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Player.h"
 
@@ -16,7 +16,7 @@ namespace Guide
         if (!guide || !guide->IsInWorld() || !guide->IsAlive() || guide->GetGroup() != member->GetGroup())
             return nullptr;
         // Only a party bot: the player is the default anyway, another player is not ours to lead.
-        if (!guide->AI() || !dynamic_cast<PartyBotAI const*>(guide->AI()))
+        if (!guide->AI() || !dynamic_cast<TeamBotAI const*>(guide->AI()))
             return nullptr;
         return guide;
     }

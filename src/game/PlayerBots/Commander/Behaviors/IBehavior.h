@@ -10,7 +10,7 @@
 #include "Commander/CommanderTypes.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 
 namespace Commander
@@ -27,19 +27,19 @@ namespace Commander
         virtual char const* GetId() const = 0;
 
         // Which bots this module is relevant for (role, class).
-        virtual bool AppliesTo(PartyBotAI const* bot) const = 0;
+        virtual bool AppliesTo(TeamBotAI const* bot) const = 0;
 
         // Map thread, every combat tick of the bot: propose zero or more actions.
-        virtual void Propose(PartyBotAI const* bot, WorldModel const& world,
+        virtual void Propose(TeamBotAI const* bot, WorldModel const& world,
                              TeamPlan const& plan, std::vector<Proposal>& out) const = 0;
 
         // True = this module makes decision `what` for this bot now; the class rotation's own
         // version stands down (BotDirectives::IsTakenOver). Asked every arbiter tick (also out
         // of combat: the Sap controller's stealth before a pull reads the plan).
-        virtual bool TakesOver(Takeover /*what*/, PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual bool TakesOver(Takeover /*what*/, TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                                TeamPlan const& /*plan*/) const { return false; }
         // Optional: rescore or drop proposals made by other modules.
-        virtual void Adjust(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual void Adjust(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                             std::vector<Proposal>& /*proposals*/) const {}
 
         // Optional, after every perception refresh, for each bot of the party on the map of the
@@ -48,7 +48,7 @@ namespace Commander
         // running now), so its next tick runs in the next frame. Facts and plan only: it only
         // brings the tick forward, Propose decides as usual. Not asked for the refreshing bot
         // (its own tick is running).
-        virtual bool WantsTickNow(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual bool WantsTickNow(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                                   TeamPlan const& /*plan*/) const { return false; }
 
         // Optional, while the bot casts or channels (CastBreak, at most every
@@ -57,7 +57,7 @@ namespace Commander
         // acting now; 0 = nothing that cannot wait. CastBreak stops the cast when the best answer
         // beats what stopping costs; Propose then acts in the tick that follows. Live reads are
         // allowed (map thread). `reason`: static string for the decision log.
-        virtual float CastBreakBenefit(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual float CastBreakBenefit(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                                        TeamPlan const& /*plan*/, uint32 /*castLeftMs*/,
                                        char const*& /*reason*/) const { return 0.0f; }
 
@@ -65,7 +65,7 @@ namespace Commander
         // what its remaining part still brings (>= 0), for a spell this module casts and can
         // value live (Behaviors/CurrentAction.h). < 0 = not this module's spell: the arbiter's
         // order value is used instead. Live reads are allowed (map thread).
-        virtual float ContinueValue(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual float ContinueValue(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                                     TeamPlan const& /*plan*/, SpellEntry const* /*spell*/,
                                     char const*& /*reason*/) const { return -1.0f; }
     };

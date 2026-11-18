@@ -23,12 +23,12 @@
 #include "Common.h"
 #include "Commander/Perception/WorldModel.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct ArrivalState
     {
         bool active = false;
@@ -53,7 +53,7 @@ namespace Commander
 
         // Out of combat bot update. True: the bot is on its way or waits for the leader
         // (PartyBotAI::UpdateAI does nothing else this tick: no teleport, no follow).
-        bool Update(PartyBotAI* bot, ArrivalState& state, Player* leader);
+        bool Update(TeamBotAI* bot, ArrivalState& state, Player* leader);
     }
 }
 

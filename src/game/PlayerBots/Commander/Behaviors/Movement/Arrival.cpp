@@ -1,5 +1,5 @@
 #include "Commander/Behaviors/Movement/Arrival.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "MotionMaster.h"
 #include "Timer.h"
@@ -23,7 +23,7 @@ namespace Arrival
         state.active = false;
     }
 
-    bool Update(PartyBotAI* bot, ArrivalState& state, Player* leader)
+    bool Update(TeamBotAI* bot, ArrivalState& state, Player* leader)
     {
         if (!state.active)
             return false;

@@ -2,10 +2,10 @@
  * PartyBot Commander layer 3 (cerebellum) with its hands: a bot with a resurrection walks to a
  * dead member it cannot resurrect from where it stands (out of range or out of sight), as a
  * player does (user, 2026-11-15: the priest only resurrected bodies already in range and sight,
- * PartyBotAI::SelectResurrectionTarget / SelectReleasedCorpse).
+ * TeamBotAI::SelectResurrectionTarget / SelectReleasedCorpse).
  *
  * Update (bot update, out of combat, before the arrival walk, the teleport and the follow;
- * PartyBotAI checks the spell is ready and paid for):
+ * TeamBotAI checks the spell is ready and paid for):
  *   - nothing while a member fights (the healer is needed there);
  *   - the nearest dead member on this map within SEARCH_YD whose body (unreleased) or corpse
  *     (released) is out of range or sight of the resurrection, with a safe walk there
@@ -25,13 +25,13 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 class SpellEntry;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct ResurrectApproachState
     {
         ObjectGuid target;          // the dead member walked to
@@ -56,7 +56,7 @@ namespace Commander
 
         // Out of combat bot update, `resurrection` ready and affordable. True: the bot walks to
         // a body (PartyBotAI::UpdateAI does nothing else this tick: no arrival, teleport, follow).
-        bool Update(PartyBotAI* bot, ResurrectApproachState& state, SpellEntry const* resurrection);
+        bool Update(TeamBotAI* bot, ResurrectApproachState& state, SpellEntry const* resurrection);
 
         // The walk ends (a resurrection is cast, the bot can no longer resurrect, combat).
         void Stop(Player* me, ResurrectApproachState& state);

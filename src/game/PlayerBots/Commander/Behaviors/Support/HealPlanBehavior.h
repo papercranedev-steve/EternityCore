@@ -7,7 +7,7 @@
  * rotation, past the pull's healing hold). Out of combat the order is cast after the Commander
  * hook (PartyBotAI::UpdateAI); while the pull holds healing (PullPlan::HoldsWaiting) only
  * emergencies. While the module runs, the rotation's own heal
- * choice is off (PartyBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
+ * choice is off (TeamBotAI::FindAndHealInjuredAlly / FindAndPreHealTarget): at its heal step
  * the rotation casts this module's HealOrder of the tick, or nothing (rest). Fade (RescueBehavior),
  * dispels and the rest of the rotation keep their order; while the order is an emergency
  * (Urgent) only control effects are dispelled before it (VetoChecks::IsDispelVetoed). ThreatBehavior's healer branch and
@@ -96,15 +96,15 @@ namespace Commander
         static constexpr float PET_HOT_MAX_MANA_WEIGHT = 0.5f;
 
         char const* GetId() const override { return "heal"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        bool TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        bool TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
         // The module is on and decides this healer's heals now (other modules check this).
-        static bool ControlsHealingOf(PartyBotAI const* bot, WorldModel const& world);
+        static bool ControlsHealingOf(TeamBotAI const* bot, WorldModel const& world);
         // The module is on and decides this bot's free self heal now (any role).
-        static bool ControlsSelfHealOf(PartyBotAI const* bot, WorldModel const& world);
+        static bool ControlsSelfHealOf(TeamBotAI const* bot, WorldModel const& world);
     };
 }
 

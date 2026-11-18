@@ -12,7 +12,7 @@
 #include "Commander/CommanderTypes.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class Unit;
 
 namespace Commander
@@ -27,13 +27,13 @@ namespace Commander
         // `fleeFrom`: the chaser FleePoint runs from when the way to the tank is blocked.
         // `source`: the proposing module (owner of the walk). False: no tank to run to, already
         // next to it, too far, or no way.
-        bool Propose(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        bool Propose(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                      std::vector<EnemyFacts const*> const& chasers, Unit* fleeFrom, float absorbedSec,
                      ProposalTier tier, char const* source, std::vector<Proposal>& out);
 
         // The walk `source` started (BotDirectives::GetMovementOwner) is under way: stop it
         // where the bot is. False: not walking, or somebody else's walk.
-        bool ProposeStop(PartyBotAI const* bot, char const* source, char const* reason, std::vector<Proposal>& out);
+        bool ProposeStop(TeamBotAI const* bot, char const* source, char const* reason, std::vector<Proposal>& out);
     }
 }
 

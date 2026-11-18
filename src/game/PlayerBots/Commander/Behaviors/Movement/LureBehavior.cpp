@@ -1,7 +1,7 @@
 #include "Commander/Behaviors/Movement/LureBehavior.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
@@ -26,14 +26,14 @@ namespace Commander
             return uint32(distance * LureBehavior::PATH_FACTOR / speed * 1000.0f) + LureBehavior::HOLD_EXTRA_MS;
         }
 
-        bool IsMeleeRole(PartyBotAI const* bot)
+        bool IsMeleeRole(TeamBotAI const* bot)
         {
             return bot->GetRole() == ROLE_TANK || bot->GetRole() == ROLE_MELEE_DPS;
         }
 
         // Nearest enemy in sight that is not off limits and not a caster of `lure`, within
         // reach of `from`: melee reach while hiding (movement is held), else TARGET_RANGE.
-        Unit* PickTarget(PartyBotAI const* bot, WorldModel const& world, Position3 const& from,
+        Unit* PickTarget(TeamBotAI const* bot, WorldModel const& world, Position3 const& from,
                          LosLure const& lure, std::function<bool(ObjectGuid)> const& offLimits)
         {
             Player* me = bot->me;
@@ -70,13 +70,13 @@ namespace Commander
         }
     }
 
-    bool LureBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool LureBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         uint8 const role = bot->GetRole();
         return role == ROLE_TANK || role == ROLE_HEALER || role == ROLE_RANGE_DPS || role == ROLE_MELEE_DPS;
     }
 
-    void LureBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void LureBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

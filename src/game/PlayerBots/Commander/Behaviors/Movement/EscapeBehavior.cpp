@@ -12,7 +12,7 @@
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "DamageSpells.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellAuras.h"
 #include "SpellMgr.h"
 #include "DBCStores.h"
@@ -74,7 +74,7 @@ namespace Commander
         // Health the bot's paid-up shields will still take: Power Word: Shield, Ice Barrier.
         // Hits they absorb cost nothing more: no health and no spell pushback (Unit::DealDamage
         // delays a cast only for damage that got through).
-        float FreeAbsorb(PartyBotAI const* bot)
+        float FreeAbsorb(TeamBotAI const* bot)
         {
             float absorb = 0.0f;
             for (Aura const* aura : bot->me->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
@@ -84,7 +84,7 @@ namespace Commander
 
         // FreeAbsorb plus Mana Shield as far as the mana lasts (it costs mana per point, so it
         // counts for surviving, not as free).
-        float ActiveAbsorb(PartyBotAI const* bot)
+        float ActiveAbsorb(TeamBotAI const* bot)
         {
             Player* me = bot->me;
             float absorb = FreeAbsorb(bot);
@@ -100,7 +100,7 @@ namespace Commander
 
         // The class kit shield (ClassKit::ReactiveShields) castable now that absorbs most,
         // `amountOut` capped by the mana for a mana-paid one (Mana Shield). Null = none.
-        SpellEntry const* BestCastableShield(PartyBotAI const* bot, float& amountOut)
+        SpellEntry const* BestCastableShield(TeamBotAI const* bot, float& amountOut)
         {
             Player* me = bot->me;
             SpellEntry const* best = nullptr;
@@ -152,7 +152,7 @@ namespace Commander
         // Cast `spell` (HoldSpells) on the chasers it can hold: an area around the bot (Frost
         // Nova) takes every free chaser in its radius, a single target spell the one it saves
         // most on. False = not castable / nobody to hold.
-        bool ProposeHold(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        bool ProposeHold(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                          std::vector<Chaser> const& chasers, SpellEntry const* spell, Proposal& p)
         {
             if (!spell)
@@ -208,7 +208,7 @@ namespace Commander
         // everything runs at it counts; fear's add risk and scatter are in the worth). The
         // fear does not change threat: they come back to the bot, the worth only counts what
         // happens until the tank would have them (ControlValue::TAKEOVER_SEC).
-        bool ProposeSelfFear(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, Proposal& p)
+        bool ProposeSelfFear(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, Proposal& p)
         {
             FightLoad::Input fight;
             bool haveFight = false;
@@ -238,12 +238,12 @@ namespace Commander
         }
     }
 
-    bool EscapeBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool EscapeBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_HEALER || bot->GetRole() == ROLE_RANGE_DPS;
     }
 
-    void EscapeBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void EscapeBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier); the pull owns it while the tank goes out

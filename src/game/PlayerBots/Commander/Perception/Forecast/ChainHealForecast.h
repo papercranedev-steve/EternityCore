@@ -20,7 +20,7 @@
 
 #include "Commander/Perception/WorldModel.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 
 namespace Commander
@@ -36,7 +36,7 @@ namespace ChainHealForecast
 
     // `spell` cast by `bot` on `first`, landing after `castSec`; nothing for a spell that does
     // not chain.
-    Jumps Of(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& first,
+    Jumps Of(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& first,
              SpellEntry const* spell, float castSec);
 }
 }

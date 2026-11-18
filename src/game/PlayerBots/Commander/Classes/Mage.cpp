@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include <algorithm>
 
 namespace Commander
@@ -133,7 +133,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeMage(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeMage(TeamBotAI const& bot)
     {
         return std::make_unique<MageKit>(bot);
     }

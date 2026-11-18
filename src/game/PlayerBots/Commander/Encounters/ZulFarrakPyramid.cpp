@@ -34,7 +34,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "InstanceData.h"
 #include "Map.h"
 #include "Player.h"
@@ -157,7 +157,7 @@ namespace Commander
         *this = ZulFarrakPyramid();
     }
 
-    void ZulFarrakPyramid::Refresh(PartyBotAI* bot, WorldModel const& world)
+    void ZulFarrakPyramid::Refresh(TeamBotAI* bot, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
 
@@ -298,7 +298,7 @@ namespace Commander
             EncounterHelpers::SetFocus(world, plan, *best, TierReason(bestTier));
     }
 
-    void ZulFarrakPyramid::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ZulFarrakPyramid::Propose(TeamBotAI const* bot, WorldModel const& world,
                                    TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

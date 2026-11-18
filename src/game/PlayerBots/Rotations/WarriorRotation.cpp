@@ -26,11 +26,11 @@
  * The Commander decides: Pummel, Shield Bash, Concussion Blow on a cast (InterruptBehavior),
  * Last Stand, Shield Wall (team rescue), Intimidating Shout (crowd control), Retaliation,
  * Sweeping Strikes, Recklessness, Death Wish (BurstBehavior), Hamstring on a fleeing enemy
- * (FleeStopBehavior). Berserker Rage on a fear: PartyBotAI::BreakControl (ClassKit::FearBreak).
+ * (FleeStopBehavior). Berserker Rage on a fear: TeamBotAI::BreakControl (ClassKit::FearBreak).
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Spell.h"
 #include <algorithm>
@@ -52,7 +52,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& w = bot.m_spells.warrior;
 
@@ -68,7 +68,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& w = bot.m_spells.warrior;
 
@@ -153,7 +153,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeWarrior(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeWarrior(TeamBotAI& bot)
 {
     return std::make_unique<WarriorRotation>(bot);
 }

@@ -26,7 +26,7 @@
 #include <memory>
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 
 namespace Commander
 {
@@ -47,7 +47,7 @@ namespace Commander
 
         // Map thread, once per refresh while active. The only place a module may read live
         // game objects (instance data, auras); `bot` is whichever party bot triggered the refresh.
-        virtual void Refresh(PartyBotAI* /*bot*/, WorldModel const& /*world*/) {}
+        virtual void Refresh(TeamBotAI* /*bot*/, WorldModel const& /*world*/) {}
 
         // Optional: add facts to the world model before the assigners run.
         virtual void AddFacts(WorldModel& /*world*/) {}
@@ -57,7 +57,7 @@ namespace Commander
 
         // Every combat tick of a bot of this party (through EncounterBehavior). Must not change
         // state: one call per bot, several bots per refresh.
-        virtual void Propose(PartyBotAI const* /*bot*/, WorldModel const& /*world*/,
+        virtual void Propose(TeamBotAI const* /*bot*/, WorldModel const& /*world*/,
                              TeamPlan const& /*plan*/, std::vector<Proposal>& /*out*/) const {}
 
         // True while bots must not sit down to eat or drink (an event with waves: the next group

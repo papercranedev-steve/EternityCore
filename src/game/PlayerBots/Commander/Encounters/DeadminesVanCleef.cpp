@@ -38,7 +38,7 @@
 #include "Map.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 #include "Timer.h"
 #include <algorithm>
@@ -111,7 +111,7 @@ namespace Commander
         return Value::HitLoss(world, g, *victim, LOOSE_SEC);
     }
 
-    void DeadminesVanCleef::Refresh(PartyBotAI* /*bot*/, WorldModel const& world)
+    void DeadminesVanCleef::Refresh(TeamBotAI* /*bot*/, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
 
@@ -223,7 +223,7 @@ namespace Commander
         }
     }
 
-    void DeadminesVanCleef::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void DeadminesVanCleef::Propose(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         switch (bot->GetRole())
@@ -243,7 +243,7 @@ namespace Commander
         }
     }
 
-    void DeadminesVanCleef::ProposeDamage(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    void DeadminesVanCleef::ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                           std::vector<Proposal>& out) const
     {
         if (!m_holdDamage)
@@ -288,7 +288,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    void DeadminesVanCleef::ProposeTank(PartyBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
+    void DeadminesVanCleef::ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const
     {
         if (m_summons.empty() || MsSinceSummon(WorldTimer::getMSTime()) >= GROUP_THREAT_WINDOW_MS)
             return;
@@ -315,7 +315,7 @@ namespace Commander
                 continue;
             float const share = o.primary ? GROUP_THREAT_SHARE : FALLBACK_THREAT_SHARE;
             Unit* castTarget = o.onTarget ? victim : me;
-            // Thunder Clap from Defensive Stance: after a stance swap (PartyBotAI::DoCastWithStance).
+            // Thunder Clap from Defensive Stance: after a stance swap (TeamBotAI::DoCastWithStance).
             if (!castTarget || !bot->CanCastWithStance(castTarget, o.spell))
                 continue;
             float const swapCost = bot->CanTryToCastSpell(castTarget, o.spell) ? 0.0f :
@@ -328,7 +328,7 @@ namespace Commander
         }
     }
 
-    void DeadminesVanCleef::ProposeHealer(PartyBotAI const* /*bot*/, WorldModel const& world, std::vector<Proposal>& out) const
+    void DeadminesVanCleef::ProposeHealer(TeamBotAI const* /*bot*/, WorldModel const& world, std::vector<Proposal>& out) const
     {
         if (m_summons.empty() || MsSinceSummon(WorldTimer::getMSTime()) >= HEAL_VETO_WINDOW_MS)
             return;

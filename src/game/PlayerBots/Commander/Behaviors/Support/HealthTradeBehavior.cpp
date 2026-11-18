@@ -4,7 +4,7 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "DamageSpells.h"
 #include "SpellEntry.h"
 #include <algorithm>
@@ -39,7 +39,7 @@ namespace Commander
             return std::min(fightSec, (have + mana) / spend) - std::min(fightSec, have / spend);
         }
 
-        void ProposeTap(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        void ProposeTap(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                         std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -78,7 +78,7 @@ namespace Commander
             out.push_back(p);
         }
 
-        void ProposeDrain(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+        void ProposeDrain(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                           std::vector<Proposal>& out)
         {
             Player* me = bot->me;
@@ -150,7 +150,7 @@ namespace Commander
         }
     }
 
-    HealthTradeBehavior::Cycle HealthTradeBehavior::CycleOf(PartyBotAI const* bot, WorldModel const& world,
+    HealthTradeBehavior::Cycle HealthTradeBehavior::CycleOf(TeamBotAI const* bot, WorldModel const& world,
                                                             PartyMemberFacts const& self)
     {
         Cycle c;
@@ -169,12 +169,12 @@ namespace Commander
         return c;
     }
 
-    bool HealthTradeBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool HealthTradeBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->Kit().HealthToMana() || bot->Kit().DrainHeal();
     }
 
-    void HealthTradeBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void HealthTradeBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                       TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

@@ -7,7 +7,7 @@
 #include "Commander/Perception/Forecast/ManaBudget.h"
 #include "Commander/Perception/Spatial/TravelTime.h"
 #include "Commander/Perception/Spatial/WayIn.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "Group.h"
 #include "Map.h"
@@ -125,7 +125,7 @@ namespace Commander
                 Player* m = itr->getSource();
                 if (!m || !m->IsInWorld() || m->GetMap() != leader->GetMap() || !m->AI())
                     continue;
-                if (dynamic_cast<PartyBotAI*>(m->AI()))
+                if (dynamic_cast<TeamBotAI*>(m->AI()))
                     bots.push_back(m);
             }
             return bots;
@@ -465,7 +465,7 @@ namespace Commander
             return true;
         }
 
-        void Step(PartyBotAI* bot, PartyCommander& commander)
+        void Step(TeamBotAI* bot, PartyCommander& commander)
         {
             TeamPlan& plan = commander.GetPlanMutable();
             WorldModel const& world = commander.GetWorld();
@@ -534,7 +534,7 @@ namespace Commander
             commander.GetPlanMutable().notes.push_back("Retreat stopped: " + why);
             // The MoveTo hold would keep the bots walking to the point for up to its length.
             for (Player* bot : BotsOf(leader))
-                if (PartyBotAI* ai = dynamic_cast<PartyBotAI*>(bot->AI()))
+                if (TeamBotAI* ai = dynamic_cast<TeamBotAI*>(bot->AI()))
                     ai->Directives().ReleaseMovement();
         }
     }

@@ -4,19 +4,19 @@
 #include "Commander/Perception/Values/SwitchCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Timer.h"
 
 namespace Commander
 {
-    bool TargetBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool TargetBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         CombatBotRoles const role = bot->GetRole();
         return role == ROLE_TANK || role == ROLE_MELEE_DPS || role == ROLE_RANGE_DPS;
     }
 
-    void TargetBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void TargetBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                  TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

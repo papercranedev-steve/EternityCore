@@ -5,7 +5,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Spell.h"
 #include "SpellEntry.h"
@@ -14,7 +14,7 @@
 
 namespace Commander
 {
-    bool CrowdControlBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool CrowdControlBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         for (SpellEntry const* s : bot->Kit().Controls())
             if (s)
@@ -25,7 +25,7 @@ namespace Commander
     namespace
     {
         // This bot walks to Sap the opening target before the tank pulls (PullControl.h).
-        bool IsSapper(PartyBotAI const* bot, TeamPlan const& plan)
+        bool IsSapper(TeamBotAI const* bot, TeamPlan const& plan)
         {
             PullControlPlan const& opening = plan.pull.control;
             return opening.Active() && opening.beforeOpener && !opening.landed &&
@@ -45,13 +45,13 @@ namespace Commander
         }
     }
 
-    bool CrowdControlBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& /*world*/,
+    bool CrowdControlBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& /*world*/,
                                          TeamPlan const& plan) const
     {
         return what == Takeover::Stealth && IsSapper(bot, plan);
     }
 
-    void CrowdControlBehavior::ProposeSap(PartyBotAI const* bot, TeamPlan const& plan,
+    void CrowdControlBehavior::ProposeSap(TeamBotAI const* bot, TeamPlan const& plan,
                                           PartyMemberFacts const& self, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -99,7 +99,7 @@ namespace Commander
         out.push_back(Opening("opening sap: wait at the spot", BotActionType::Hold));
     }
 
-    bool CrowdControlBehavior::ProposePatrolHold(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    bool CrowdControlBehavior::ProposePatrolHold(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                                  PartyMemberFacts const& self, std::vector<Proposal>& out) const
     {
         PatrolHoldPlan const& h = plan.patrolHold;
@@ -171,7 +171,7 @@ namespace Commander
         return true;
     }
 
-    void CrowdControlBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void CrowdControlBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -257,7 +257,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    bool CrowdControlBehavior::WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
+    bool CrowdControlBehavior::WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const
     {
         // The patrol hold's controller once it should be on its way (it casts as soon as it can).
         PatrolHoldPlan const& h = plan.patrolHold;

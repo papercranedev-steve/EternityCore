@@ -17,14 +17,14 @@
  *                              victim of a melee splash buff must not be KeepsUnbroken,
  *                              unless the plan sends this bot to wake it (ControlEndPlan::Breaks).
  *                              The same rule gates every cast of the bot since 2026-11-08
- *                              (PartyBotAI::PassesPartyCastChecks), not only Commander proposals:
+ *                              (TeamBotAI::PassesPartyCastChecks), not only Commander proposals:
  *                              a rotation's Blade Flurry broke a Shackle (strat-20261108-141921).
  *   Cast with a cast or        TeamPlan::ForbidsLongCast (the area phase's reserved caster,
  *   channel time               AreaPhase.h "Reservation"), except its area spells: LongCastHeld
  *   Rest                       TeamPlan::ForbidsRest
  *   Cast time / periodic       WastedCast below: not at an enemy the others kill before it lands,
  *   damage spell               no periodic damage on one dying before it pays
- *                              (every cast of the bot, PartyBotAI::PassesPartyCastChecks)
+ *                              (every cast of the bot, TeamBotAI::PassesPartyCastChecks)
  * (The threat opening's "everyone but the tank waits" is gone since 2026-11-13: each damage
  * dealer starts when it has threat room on its target, DamageTargets / ThreatRoom; doc
  * .kiro/docs/2026-11-13-tank-threat-priority.md 6.)
@@ -39,7 +39,7 @@
 #include "Common.h"
 #include "Commander/CommanderTypes.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 class Unit;
 
@@ -52,39 +52,39 @@ namespace Commander
     namespace Constraints
     {
         // The constraint `p` breaks (a short static text for the candidate log), or null.
-        char const* Broken(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* Broken(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                            Proposal const& p, uint32 nowMs);
 
         // The keep-unbroken rule for one cast of `spell` at `target` (the bot itself for a
         // spell around it), or null: the arbiter's check above and every other cast of the bot
-        // (PartyBotAI::PassesPartyCastChecks: class rotations, the original loops). Enemies
+        // (TeamBotAI::PassesPartyCastChecks: class rotations, the original loops). Enemies
         // TeamPlan::KeepsUnbroken (unless ControlEndPlan::Breaks sends this bot) must not be:
         //   the target of a spell that deals damage;
         //   within SpellTags::AreaRadius of the centre (the target) for an area spell;
         //   within SpellTags::CHAIN_JUMP_YD of the target for a chained hit (Cleave, Multi-Shot);
         //   within SpellTags::MeleeSplashRadius of the bot's victim for a melee splash buff
         //   (Blade Flurry, Sweeping Strikes; also checked while the buff is on:
-        //   PartyBotAI::CancelSplashNearKeptControl).
-        char const* WakesControl(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        //   TeamBotAI::CancelSplashNearKeptControl).
+        char const* WakesControl(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                  Unit const* target, SpellEntry const* spell, uint32 nowMs);
 
-        // Every rule for one cast (the gate the arbiter and PartyBotAI::PassesPartyCastChecks
+        // Every rule for one cast (the gate the arbiter and TeamBotAI::PassesPartyCastChecks
         // use): never a neutral (yellow) creature outside the fight, not as the target (one in
         // the party's fight, WorldModel::FindEnemy, is an enemy), not within an area
         // spell's radius, a chained hit's jump or a melee splash buff's reach (user 2026-11-10,
         // Tags::NeutralNear); no damage at an enemy the doctrine stamped HoldFire (its damage
         // shield / reflection, RoleStamps.h); then WakesControl.
-        char const* CastForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* CastForbidden(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                   Unit const* target, SpellEntry const* spell, uint32 nowMs);
 
         // TeamPlan::ForbidsLongCast: `spell` has a cast or channel time and is not one of the
         // bot's area spells (AreaDamageBehavior::Judges), and the area phase reserves the bot.
-        // The arbiter's check above and every other cast of the bot (PartyBotAI::PassesPartyCastChecks).
-        char const* LongCastHeld(PartyBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell);
+        // The arbiter's check above and every other cast of the bot (TeamBotAI::PassesPartyCastChecks).
+        char const* LongCastHeld(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell);
 
         // CastForbidden for a ground area spell cast at the point `centre` (BotAction::atPoint):
         // no neutral creature and no kept control within its radius of `centre`.
-        char const* CastAtForbidden(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        char const* CastAtForbidden(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                     Position3 const& centre, SpellEntry const* spell, uint32 nowMs);
 
         // A fact, not a plan rule (user 2026-11-15). `spell` is a single target damage spell (not a
@@ -94,12 +94,12 @@ namespace Commander
         //               the enemy dies (FinishForecast::DeathMs, the bot's own hits counted after
         //               the spell's busy time), plus the direct part if it lands, are worth less
         //               than the bot's own damage over that busy time (PartyMemberFacts::soloDps).
-        // Every cast of the bot (PartyBotAI::PassesPartyCastChecks): the rotation goes on to an
+        // Every cast of the bot (TeamBotAI::PassesPartyCastChecks): the rotation goes on to an
         // instant spell (Arcane Shot after the Aimed Shot) or waits.
-        char const* WastedCast(PartyBotAI const* bot, WorldModel const& world, Unit const* target,
+        char const* WastedCast(TeamBotAI const* bot, WorldModel const& world, Unit const* target,
                                SpellEntry const* spell, uint32 nowMs);
         // Cheap test before the commander lookup: WastedCast may answer for `spell`.
-        bool MayBeWasted(PartyBotAI const* bot, SpellEntry const* spell);
+        bool MayBeWasted(TeamBotAI const* bot, SpellEntry const* spell);
     }
 }
 

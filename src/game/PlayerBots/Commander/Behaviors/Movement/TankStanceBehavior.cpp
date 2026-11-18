@@ -4,7 +4,7 @@
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include <algorithm>
 #include <cmath>
@@ -52,7 +52,7 @@ namespace Commander
         }
 
         // The fight spot moves this tank (header, first bullet).
-        void ProposeMove(PartyBotAI const* bot, FightSpotPlan const& m, std::vector<Proposal>& out)
+        void ProposeMove(TeamBotAI const* bot, FightSpotPlan const& m, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             // Walking there forwards (no backwards path): keep walking (an instant ability is fine,
@@ -117,12 +117,12 @@ namespace Commander
         }
     }
 
-    bool TankStanceBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool TankStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_TANK;
     }
 
-    bool TankStanceBehavior::TakesOver(Takeover what, PartyBotAI const* bot, WorldModel const& world,
+    bool TankStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
                                        TeamPlan const& plan) const
     {
         if (what != Takeover::Stance || !world.InFight(bot->me->IsInCombat()) ||
@@ -132,7 +132,7 @@ namespace Commander
         return plan.fightSpot.Moves(self) || self != plan.pull.tank || !plan.pull.PlacesTank();
     }
 
-    void TankStanceBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void TankStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                      TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         // The retreat owns movement (Override tier).

@@ -1,14 +1,14 @@
 /*
  * PartyBot Commander layer 3: eating and drinking ("rest"). Replaces the original PartyBot
- * eat and drink (PartyBotAI::DrinkAndEat, deleted 2026-11-07).
+ * eat and drink (TeamBotAI::DrinkAndEat, deleted 2026-11-07).
  * (user, 2026-11-07: pulls start once healers have the mana the fight needs; a caster still
  * sitting with a drink keeps drinking while the tank's pressure is low, to full, then heals or
  * fights; healers first take their places for the planned fight, then drink there.)
  *
  * PartyBotAI::UpdateAI runs the Commander hook out of combat whenever health or mana is missing
- * (PartyBotAI::NeedsRest) or the bot rests, and no longer stands a resting bot up itself (except
+ * (TeamBotAI::NeedsRest) or the bot rests, and no longer stands a resting bot up itself (except
  * for a resurrection). A bot that is not in combat, has no victim and is not casting proposes
- * Rest (PartyBotAI::StartResting: eat what health is missing, drink what mana is), valued by
+ * Rest (TeamBotAI::StartResting: eat what health is missing, drink what mana is), valued by
  * Perception/Values/RestValue.h:
  *  - no fight on or planned (after a fight, travelling): Routine tier, unvalued: anything else
  *    a module wants comes first, otherwise rest;
@@ -46,8 +46,8 @@ namespace Commander
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
 
         char const* GetId() const override { return "rest"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

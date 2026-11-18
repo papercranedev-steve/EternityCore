@@ -44,7 +44,7 @@
  * melee out of reach holds for the time away, at most MELEE_AWAY_MAX_SEC unless dodging.
  *
  * Melee out of reach (not a dodge): one step per area. The step is recorded on the bot
- * (PartyBotAI::m_hazardGiveUp: zone enemy + spell); after its hold the chase takes the bot
+ * (TeamBotAI::m_hazardGiveUp: zone enemy + spell); after its hold the chase takes the bot
  * back in, and while it stays inside that area no more out-of-reach steps are proposed
  * (dodges, steps that keep reach and Urgent / lethal steps still are). Re-armed when the bot
  * leaves the area again, when the area is gone, or when the bot is not back within
@@ -54,7 +54,7 @@
  * Jitter: proposes only ENTER_MARGIN inside; the target ring is RING_EXTRA outside, so a bot
  * needs to drift back ~3.5 yd before the next move. Apart from the melee record above there is
  * no "just moved" timer; the margins are the hysteresis. Healers and ranged do not follow the
- * leader during the party's fight (PartyBotAI::IsStanceControlled), so they are not walked
+ * leader during the party's fight (TeamBotAI::IsStanceControlled), so they are not walked
  * straight back in after the hold.
  *
  * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself.
@@ -100,17 +100,17 @@ namespace Commander
         static constexpr uint32 MELEE_RETURN_MS = 3000;     // after that hold: time to come back in
 
         char const* GetId() const override { return "position"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         // The bot stands ENTER_MARGIN inside a zone dangerous to its role (facts: its last position).
-        bool WantsTickNow(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
+        bool WantsTickNow(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan) const override;
         // Own cast, standing ENTER_MARGIN inside such zones (not one whose enemy chases the bot):
         // hits taken by staying `castLeftMs` longer before walking out. A cast in progress: its
         // hit when walking out now gets the bot out in time and after the own cast it does not.
         // Otherwise castLeft / repeat delay hits. Plus the death penalty when they would kill it.
         // Walk = distance to the zone edge + RING_EXTRA (the spot itself is found by Propose).
-        float CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+        float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
     };
 }

@@ -6,7 +6,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
 #include "Commander/BotDirectives.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "DBCStores.h"
 #include "Map.h"
@@ -103,7 +103,7 @@ namespace Commander
         // Walk backwards to `to` facing the pack (Backpedal.h), then the forward walk as a
         // fallback (the arbiter tries the next proposal when no path is found). Proposed every
         // tick: the order lasts BACKPEDAL_ORDER_MS and is renewed.
-        void WalkBack(PartyBotAI const* bot, PullPlan const& pull, Position3 const& to, std::vector<Proposal>& out)
+        void WalkBack(TeamBotAI const* bot, PullPlan const& pull, Position3 const& to, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             ObjectGuid face = pull.target;
@@ -152,7 +152,7 @@ namespace Commander
         };
 
         // Walk to PullShotState::standAt (pathfinding), shared by the shot and the face pull.
-        StandWalk WalkToStand(PartyBotAI const* bot, PullShotState& s, uint32 now, std::vector<Proposal>& out)
+        StandWalk WalkToStand(TeamBotAI const* bot, PullShotState& s, uint32 now, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             Position3 const here = PositionOf(me);
@@ -186,7 +186,7 @@ namespace Commander
         // The opener went out this Approach (PullShotState::openedAtMs): a pull proposal cast
         // (the pull spell, Charge) executed since the Approach began, or the tank stands inside
         // the target's aggro range (walk-in, face pull: it notices the tank).
-        void NoteOpened(PartyBotAI const* bot, PullPlan const& pull, Unit const* target, PullShotState& s, uint32 now)
+        void NoteOpened(TeamBotAI const* bot, PullPlan const& pull, Unit const* target, PullShotState& s, uint32 now)
         {
             if (s.openedAtMs)
                 return;
@@ -204,7 +204,7 @@ namespace Commander
         // Hold: the rotation does not run, so no attack or chase starts) until the target
         // notices. Returns false when the tank should walk in instead (not there in time, not
         // noticed within FACE_WAIT_MS).
-        bool ProposeFacePull(PartyBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
+        bool ProposeFacePull(TeamBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
         {
             uint32 const now = WorldTimer::getMSTime();
             PullShotState& s = ShotState(pull);
@@ -253,7 +253,7 @@ namespace Commander
         // The tank never steps closer to find line of sight: on the spot without sight or out
         // of range (the target wandered), or not there in time, it holds and reports
         // (PullShotState::spotFailed); the brain answers with another spot or target.
-        bool ProposeRangedPull(PartyBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
+        bool ProposeRangedPull(TeamBotAI const* bot, PullPlan const& pull, Unit* target, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(pull.rangedPullSpell);
@@ -351,12 +351,12 @@ namespace Commander
         }
     }
 
-    bool PullBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool PullBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_INVALID;
     }
 
-    void PullBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void PullBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         PullPlan const& pull = plan.pull;

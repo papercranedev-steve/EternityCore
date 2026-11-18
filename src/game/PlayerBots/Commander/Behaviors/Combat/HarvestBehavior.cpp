@@ -3,7 +3,7 @@
 #include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "Map.h"
 #include "Spell.h"
@@ -30,7 +30,7 @@ namespace Commander
         }
 
         // What one more item is worth to the bot now (header); 0 = it holds enough or has no room.
-        float ItemWorth(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, uint32 itemId)
+        float ItemWorth(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, uint32 itemId)
         {
             Player* me = bot->me;
             uint32 const held = me->GetItemCount(itemId);
@@ -73,7 +73,7 @@ namespace Commander
         }
 
         // The bot's harvest channel running now (null = none), and its target.
-        Spell const* RunningHarvest(PartyBotAI const* bot, SpellEntry const* harvest)
+        Spell const* RunningHarvest(TeamBotAI const* bot, SpellEntry const* harvest)
         {
             Spell const* spell = bot->me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
             if (!spell || !spell->m_spellInfo || spell->getState() != SPELL_STATE_CASTING)
@@ -84,12 +84,12 @@ namespace Commander
         }
     }
 
-    bool HarvestBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool HarvestBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return HarvestItem(bot->Kit().DeathHarvest()) != 0;
     }
 
-    void HarvestBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void HarvestBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                   TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;
@@ -131,7 +131,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    float HarvestBehavior::ContinueValue(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
+    float HarvestBehavior::ContinueValue(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
                                          SpellEntry const* spell, char const*& reason) const
     {
         SpellEntry const* harvest = bot->Kit().DeathHarvest();
@@ -149,7 +149,7 @@ namespace Commander
         return ItemWorth(bot, world, *self, HarvestItem(harvest));
     }
 
-    float HarvestBehavior::CastBreakBenefit(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
+    float HarvestBehavior::CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& /*plan*/,
                                             uint32 castLeftMs, char const*& reason) const
     {
         SpellEntry const* harvest = bot->Kit().DeathHarvest();

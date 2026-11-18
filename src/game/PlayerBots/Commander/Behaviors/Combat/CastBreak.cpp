@@ -5,7 +5,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
@@ -16,7 +16,7 @@ namespace Commander
 {
 namespace CastBreak
 {
-    bool Update(PartyBotAI* bot, CastBreakState& state)
+    bool Update(TeamBotAI* bot, CastBreakState& state)
     {
         Player* me = bot->me;
         CurrentSpellTypes type = CURRENT_GENERIC_SPELL;

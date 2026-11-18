@@ -4,7 +4,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Spell.h"
 #include "SpellEntry.h"
 #include "Timer.h"
@@ -39,7 +39,7 @@ namespace CurrentAction
         }
     }
 
-    bool NeedsStandingStill(PartyBotAI const* bot, SpellEntry const* spell)
+    bool NeedsStandingStill(TeamBotAI const* bot, SpellEntry const* spell)
     {
         if (!spell)
             return false;
@@ -48,7 +48,7 @@ namespace CurrentAction
         return spell->GetCastTime(bot->me) > 0 && MovementEnds(spell, false);
     }
 
-    State Read(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan)
+    State Read(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan)
     {
         State s;
         Player* me = bot->me;
@@ -135,7 +135,7 @@ namespace CurrentAction
         return s;
     }
 
-    float InterruptCost(PartyBotAI const* bot, State const& state, BotAction const& action, char const*& what)
+    float InterruptCost(TeamBotAI const* bot, State const& state, BotAction const& action, char const*& what)
     {
         what = "";
         float cost = 0.0f;

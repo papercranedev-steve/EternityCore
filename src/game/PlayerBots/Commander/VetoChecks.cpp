@@ -3,7 +3,7 @@
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/Behaviors/Support/ManaBudgetBehavior.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellAuras.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
@@ -26,7 +26,7 @@ namespace VetoChecks
         }
     }
 
-    bool IsDispelVetoed(PartyBotAI const* bot, Unit const* target, SpellAuraHolder const* holder)
+    bool IsDispelVetoed(TeamBotAI const* bot, Unit const* target, SpellAuraHolder const* holder)
     {
         uint32 const spellId = holder->GetId();
         std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(spellId);
@@ -49,7 +49,7 @@ namespace VetoChecks
         return bot->Directives().HasUrgentHealOrder(WorldTimer::getMSTime()) && !(profile && profile->controls);
     }
 
-    bool IsHealVetoed(PartyBotAI const* bot, Unit const* target)
+    bool IsHealVetoed(TeamBotAI const* bot, Unit const* target)
     {
         // Fix: a heal veto lasts Arbiter::VETO_MS (3 s), but every module
         // proposing one (ThreatBehavior, ManaBudgetBehavior, boss modules) only does so above
@@ -63,7 +63,7 @@ namespace VetoChecks
         return bot->Directives().IsVetoed(VetoType::Heal, target->GetObjectGuid(), 0, WorldTimer::getMSTime());
     }
 
-    bool IsCharmedPartyMember(PartyBotAI const* bot, Unit const* target)
+    bool IsCharmedPartyMember(TeamBotAI const* bot, Unit const* target)
     {
         if (!target || !target->IsPlayer() || !target->IsCharmed())
             return false;
@@ -73,7 +73,7 @@ namespace VetoChecks
         return member != bot->me && member->IsInSameRaidWith(bot->me);
     }
 
-    bool HasAllowedDebuff(PartyBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell)
+    bool HasAllowedDebuff(TeamBotAI const* bot, Unit const* target, SpellEntry const* dispelSpell)
     {
         uint32 const mask = DispelMaskOf(dispelSpell);
         for (auto const& itr : target->GetSpellAuraHolderMap())

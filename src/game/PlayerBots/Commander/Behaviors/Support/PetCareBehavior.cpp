@@ -4,7 +4,7 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "HealSpells.h"
 #include "Pet.h"
 #include "SpellEntry.h"
@@ -12,12 +12,12 @@
 
 namespace Commander
 {
-    bool PetCareBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool PetCareBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->Kit().PetHeal() != nullptr;
     }
 
-    void PetCareBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void PetCareBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                   TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

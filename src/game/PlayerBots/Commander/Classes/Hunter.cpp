@@ -1,6 +1,6 @@
 #include "Commander/Classes/ClassKit.h"
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "DBCStores.h"
 #include "SpellMgr.h"
 
@@ -89,7 +89,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeHunter(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeHunter(TeamBotAI const& bot)
     {
         return std::make_unique<HunterKit>(bot);
     }

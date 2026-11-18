@@ -1,5 +1,5 @@
 #include "Commander/Classes/ClassKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellMgr.h"
 
 namespace Commander
@@ -71,7 +71,7 @@ namespace Commander
         };
     }
 
-    std::unique_ptr<ClassKit> ClassKits::MakeWarlock(PartyBotAI const& bot)
+    std::unique_ptr<ClassKit> ClassKits::MakeWarlock(TeamBotAI const& bot)
     {
         return std::make_unique<WarlockKit>(bot);
     }

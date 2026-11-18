@@ -24,7 +24,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Player.h"
 #include <algorithm>
@@ -125,7 +125,7 @@ namespace Commander
             [guid](Guardian const& g) { return g.guid == guid; });
     }
 
-    void ScholomanceGandling::Refresh(PartyBotAI* bot, WorldModel const& world)
+    void ScholomanceGandling::Refresh(TeamBotAI* bot, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
 
@@ -224,7 +224,7 @@ namespace Commander
         }
     }
 
-    void ScholomanceGandling::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ScholomanceGandling::Propose(TeamBotAI const* bot, WorldModel const& world,
                                       TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         if (m_guardians.empty() || bot->GetRole() == ROLE_HEALER)

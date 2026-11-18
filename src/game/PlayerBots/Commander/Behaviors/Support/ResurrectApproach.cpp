@@ -1,6 +1,6 @@
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Corpse.h"
 #include "Group.h"
@@ -31,7 +31,7 @@ namespace ResurrectApproach
 
             if (member->GetDeathState() == DEAD)
             {
-                // (as PartyBotAI::SelectReleasedCorpse: the ghost may be on another map)
+                // (as TeamBotAI::SelectReleasedCorpse: the ghost may be on another map)
                 Corpse* corpse = sObjectAccessor.GetCorpseForPlayerGUID(member->GetObjectGuid());
                 if (!corpse || corpse->GetType() == CORPSE_BONES ||
                     me->GetMap()->GetCorpse(corpse->GetObjectGuid()) != corpse)
@@ -134,7 +134,7 @@ namespace ResurrectApproach
         me->GetMotionMaster()->MoveIdle();
     }
 
-    bool Update(PartyBotAI* bot, ResurrectApproachState& state, SpellEntry const* resurrection)
+    bool Update(TeamBotAI* bot, ResurrectApproachState& state, SpellEntry const* resurrection)
     {
         Player* me = bot->me;
         if (!me->GetGroup() || PartyFights(me))

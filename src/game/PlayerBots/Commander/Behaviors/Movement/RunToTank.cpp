@@ -6,7 +6,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Timer.h"
 #include <algorithm>
 #include <cstring>
@@ -18,7 +18,7 @@ namespace RunToTank
     using EB = EscapeBehavior;
     using SafeRoute::Distance2d;
 
-    bool Propose(PartyBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+    bool Propose(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                  std::vector<EnemyFacts const*> const& chasers, Unit* fleeFrom, float absorbedSec,
                  ProposalTier tier, char const* source, std::vector<Proposal>& out)
     {
@@ -85,7 +85,7 @@ namespace RunToTank
         return true;
     }
 
-    bool ProposeStop(PartyBotAI const* bot, char const* source, char const* reason, std::vector<Proposal>& out)
+    bool ProposeStop(TeamBotAI const* bot, char const* source, char const* reason, std::vector<Proposal>& out)
     {
         if (!bot->me->IsMoving())
             return false;

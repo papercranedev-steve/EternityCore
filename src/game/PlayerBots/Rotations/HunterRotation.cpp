@@ -32,7 +32,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Pet.h"
 #include "Spell.h"
@@ -57,7 +57,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.hunter;
 
@@ -89,7 +89,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.hunter;
 
@@ -101,7 +101,7 @@ namespace
             // (Unit::Attack meleeAttack = false, a ranged victim after Feign Death), and then a
             // queued Raptor Strike never swings. No chase: it only swings in reach, and not while
             // Auto Shot runs (Unit::UpdateMeleeAttackingState). Out of reach it is off while
-            // shooting, as a player's (PartyBotAI::UpdateWeaponStance): not turned on again here.
+            // shooting, as a player's (TeamBotAI::UpdateWeaponStance): not turned on again here.
             if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) && me->CanReachWithMeleeAutoAttack(pVictim))
                 me->Attack(pVictim, true);
 
@@ -180,7 +180,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeHunter(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeHunter(TeamBotAI& bot)
 {
     return std::make_unique<HunterRotation>(bot);
 }

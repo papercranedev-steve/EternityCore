@@ -8,7 +8,7 @@
  *   forced (player order, brain task)   Urgent, not valued
  *   urgent (intercept, deadly loose)    Urgent,   benefit - cost from the plan
  *   otherwise                           Assigned, benefit - cost from the plan
- * Live checks only: the enemy is still a valid target (PartyBotAI::IsValidHostileTarget), and a
+ * Live checks only: the enemy is still a valid target (TeamBotAI::IsValidHostileTarget), and a
  * ranged damage dealer sees it within RANGED_SIGHT_RANGE (melee and tanks walk there).
  * Suggested switch (TargetDuty::suggestUntilMs not passed yet, todo 13): with combo points on
  * its current victim the bot casts its ClassKit::ComboFinisher on it first (Assigned, benefit =
@@ -35,8 +35,8 @@ namespace Commander
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
 
         char const* GetId() const override { return "target"; }
-        bool AppliesTo(PartyBotAI const* bot) const override;
-        void Propose(PartyBotAI const* bot, WorldModel const& world,
+        bool AppliesTo(TeamBotAI const* bot) const override;
+        void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
     };
 }

@@ -5,7 +5,7 @@
 #include "Commander/Perception/Values/BurstValue.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Pet.h"
 #include "SpellEntry.h"
@@ -15,7 +15,7 @@ namespace Commander
 {
     namespace
     {
-        bool HasBursts(PartyBotAI const* bot)
+        bool HasBursts(TeamBotAI const* bot)
         {
             for (BurstSpell const& s : bot->Kit().Bursts())
                 if (s.spell)
@@ -24,12 +24,12 @@ namespace Commander
         }
     }
 
-    bool BurstBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool BurstBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() != ROLE_HEALER && HasBursts(bot);
     }
 
-    void BurstBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void BurstBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                 TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

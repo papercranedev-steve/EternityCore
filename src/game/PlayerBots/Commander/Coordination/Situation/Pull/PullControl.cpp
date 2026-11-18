@@ -16,7 +16,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Creature.h"
 #include "Map.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
@@ -98,7 +98,7 @@ namespace PullControl
         {
             PullPlan const& pull = plan.pull;
             Player* rogue = map->GetPlayer(o.bot->guid);
-            PartyBotAI const* ai = rogue ? dynamic_cast<PartyBotAI const*>(rogue->AI()) : nullptr;
+            TeamBotAI const* ai = rogue ? dynamic_cast<TeamBotAI const*>(rogue->AI()) : nullptr;
             if (!ai)
                 return false;
             SapSpot::Request request;

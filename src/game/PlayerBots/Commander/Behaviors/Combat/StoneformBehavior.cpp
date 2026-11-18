@@ -2,16 +2,16 @@
 #include "Commander/Classes/RaceKit.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 
 namespace Commander
 {
-    bool StoneformBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool StoneformBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return RaceKit::Stoneform(*bot) != nullptr;
     }
 
-    void StoneformBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void StoneformBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

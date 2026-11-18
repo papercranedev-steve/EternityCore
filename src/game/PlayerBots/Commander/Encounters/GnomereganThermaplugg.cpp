@@ -42,7 +42,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Creature.h"
 #include "GameObject.h"
 #include "GridSearchers.h"
@@ -133,7 +133,7 @@ namespace Commander
         return Value::Points(world, BOMB_VICTIMS * BOMB_DAMAGE);
     }
 
-    void GnomereganThermaplugg::FindObjects(PartyBotAI* bot, uint32 nowMs)
+    void GnomereganThermaplugg::FindObjects(TeamBotAI* bot, uint32 nowMs)
     {
         if (m_objectsFound || !bot || !bot->me->IsInWorld())
             return;
@@ -174,7 +174,7 @@ namespace Commander
                 m_objectsFound = false;
     }
 
-    bool GnomereganThermaplugg::PresserAtButton(PartyBotAI* bot, Face const& f) const
+    bool GnomereganThermaplugg::PresserAtButton(TeamBotAI* bot, Face const& f) const
     {
         if (!bot || m_presser.IsEmpty() || f.button.IsEmpty())
             return false;
@@ -184,7 +184,7 @@ namespace Commander
         return presser && button && presser->IsWithinDist(button, INTERACTION_DISTANCE);
     }
 
-    void GnomereganThermaplugg::ReadFaces(PartyBotAI* bot)
+    void GnomereganThermaplugg::ReadFaces(TeamBotAI* bot)
     {
         // Same clock as Face::pressedAtMs (ProposePresser).
         uint32 const nowMs = WorldTimer::getMSTime();
@@ -244,7 +244,7 @@ namespace Commander
         }
     }
 
-    void GnomereganThermaplugg::Refresh(PartyBotAI* bot, WorldModel const& world)
+    void GnomereganThermaplugg::Refresh(TeamBotAI* bot, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
 
@@ -379,7 +379,7 @@ namespace Commander
         AddBombIntercepts(world, plan);
     }
 
-    void GnomereganThermaplugg::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void GnomereganThermaplugg::Propose(TeamBotAI const* bot, WorldModel const& world,
                                         TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         if (!m_presser.IsEmpty() && bot->me->GetObjectGuid() == m_presser)
@@ -388,7 +388,7 @@ namespace Commander
             ProposeMelee(bot, world, plan, out);
     }
 
-    void GnomereganThermaplugg::ProposePresser(PartyBotAI const* bot, WorldModel const& world,
+    void GnomereganThermaplugg::ProposePresser(TeamBotAI const* bot, WorldModel const& world,
                                                std::vector<Proposal>& out) const
     {
         if (!m_bossAlive || !m_litCount)
@@ -443,7 +443,7 @@ namespace Commander
         out.push_back(p);
     }
 
-    void GnomereganThermaplugg::ProposeMelee(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+    void GnomereganThermaplugg::ProposeMelee(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                              std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

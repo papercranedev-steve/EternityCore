@@ -42,12 +42,12 @@
 #include "Commander/Perception/Spatial/LeaderTrail.h"
 #include <vector>
 
-class PartyBotAI;
+class TeamBotAI;
 class Player;
 
 namespace Commander
 {
-    // Per bot (PartyBotAI member). Plain data.
+    // Per bot (TeamBotAI member). Plain data.
     struct TrailFollowState
     {
         enum class Leg : uint8 { None, Approach, Run, Fall };
@@ -80,16 +80,16 @@ namespace Commander
         constexpr float FALL_MIN_DROP_YD = 1.0f;
 
         // Bot update while following. True: walking the trail (no MoveFollow, no follow spot check).
-        bool Consider(PartyBotAI* bot, TrailFollowState& state, Player const* leader);
+        bool Consider(TeamBotAI* bot, TrailFollowState& state, Player const* leader);
 
         // Every frame from PartyBotAI::UpdateAI.
-        void Update(PartyBotAI* bot, TrailFollowState& state);
+        void Update(TeamBotAI* bot, TrailFollowState& state);
 
         // In a Fall leg's spline: the bot update does nothing (a cast stops the spline in the air).
         bool IsFalling(Player const* me, TrailFollowState const& state);
 
-        // Player commands (PartyBotAI::ClearMovementHold): stops the walk where the bot is.
-        void Stop(PartyBotAI* bot, TrailFollowState& state);
+        // Player commands (TeamBotAI::ClearMovementHold): stops the walk where the bot is.
+        void Stop(TeamBotAI* bot, TrailFollowState& state);
     }
 }
 

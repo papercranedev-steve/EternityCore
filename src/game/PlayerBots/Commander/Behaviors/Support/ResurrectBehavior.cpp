@@ -3,19 +3,19 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 #include <algorithm>
 
 namespace Commander
 {
-    bool ResurrectBehavior::AppliesTo(PartyBotAI const* bot) const
+    bool ResurrectBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->Kit().CombatResurrection() != nullptr;
     }
 
-    void ResurrectBehavior::Propose(PartyBotAI const* bot, WorldModel const& world,
+    void ResurrectBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
                                     TeamPlan const& plan, std::vector<Proposal>& out) const
     {
         Player* me = bot->me;

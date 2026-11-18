@@ -1,6 +1,6 @@
 #include "Commander/Behaviors/Movement/Landing.h"
 #include "Commander/BotDirectives.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Player.h"
 #include "Map.h"
 #include "GridMap.h"
@@ -37,7 +37,7 @@ namespace Landing
         state.pending = true;
     }
 
-    void Update(PartyBotAI* bot, LandingState& state)
+    void Update(TeamBotAI* bot, LandingState& state)
     {
         if (!state.pending)
             return;

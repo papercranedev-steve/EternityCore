@@ -1,5 +1,5 @@
 #include "Commander/Classes/ItemKit.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "ItemPrototype.h"
 #include "ObjectMgr.h"
 #include "SpellEntry.h"
@@ -42,7 +42,7 @@ namespace Commander
         };
 
         template <size_t N>
-        void Collect(PartyBotAI const& bot, uint32 const (&ids)[N], std::vector<Consumable>& out, bool firstOnly)
+        void Collect(TeamBotAI const& bot, uint32 const (&ids)[N], std::vector<Consumable>& out, bool firstOnly)
         {
             Player* me = bot.me;
             std::vector<uint32> categories;
@@ -80,7 +80,7 @@ namespace Commander
             }
         }
 
-        void CollectFor(PartyBotAI const& bot, ItemKit::Use use, std::vector<Consumable>& out, bool firstOnly)
+        void CollectFor(TeamBotAI const& bot, ItemKit::Use use, std::vector<Consumable>& out, bool firstOnly)
         {
             if (use == ItemKit::Use::Heal)
                 Collect(bot, HEAL_ITEMS, out, firstOnly);
@@ -89,14 +89,14 @@ namespace Commander
         }
     }
 
-    std::vector<ItemKit::Consumable> ItemKit::Held(PartyBotAI const& bot, Use use)
+    std::vector<ItemKit::Consumable> ItemKit::Held(TeamBotAI const& bot, Use use)
     {
         std::vector<Consumable> out;
         CollectFor(bot, use, out, false);
         return out;
     }
 
-    bool ItemKit::HoldsAny(PartyBotAI const& bot, Use use)
+    bool ItemKit::HoldsAny(TeamBotAI const& bot, Use use)
     {
         std::vector<Consumable> out;
         CollectFor(bot, use, out, true);

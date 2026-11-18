@@ -25,7 +25,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
-#include "PartyBotAI.h"
+#include "TeamBotAI.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Player.h"
 #include "MotionMaster.h"
@@ -43,7 +43,7 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.mage;
 
@@ -74,7 +74,7 @@ namespace
         // CONJURE_MIN_MANA_PCT (resting refills the rest). ManaBudgetBehavior uses the gem.
         bool ConjureManaGem()
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             SpellEntry const* pConjure = bot.m_spells.mage.pConjureManaGem;
             if (!pConjure || me->IsMoving() || me->IsInCombat())
@@ -98,7 +98,7 @@ namespace
 
         void UpdateInCombat() override
         {
-            PartyBotAI& bot = m_bot;
+            TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.mage;
 
@@ -145,7 +145,7 @@ namespace
     };
 }
 
-std::unique_ptr<ClassRotation> ClassRotations::MakeMage(PartyBotAI& bot)
+std::unique_ptr<ClassRotation> ClassRotations::MakeMage(TeamBotAI& bot)
 {
     return std::make_unique<MageRotation>(bot);
 }

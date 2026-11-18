@@ -24,7 +24,7 @@
  *             moving ends the current spell (channel: ChannelInterruptFlags moving; cast:
  *             InterruptFlags movement).
  *   walkKeep  a Cast that needs standing still (NeedsStandingStill): the executor stops the walk
- *             for it (PartyBotAI::StandStillFor).
+ *             for it (TeamBotAI::StandStillFor).
  * Arbiter::Run adds it to every valued replace proposal (unvalued ones are "must" orders: the
  * tier decides), CastBreak uses `keep` as the cost of breaking the cast.
  *
@@ -37,7 +37,7 @@
 #include "Common.h"
 #include "Commander/CommanderTypes.h"
 
-class PartyBotAI;
+class TeamBotAI;
 class SpellEntry;
 
 namespace Commander
@@ -62,14 +62,14 @@ namespace Commander
             bool Casting() const { return spell != nullptr; }
         };
 
-        State Read(PartyBotAI const* bot, WorldModel const& world, TeamPlan const& plan);
+        State Read(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan);
 
         // Points `action` costs on top of its own by ending what runs (header). `what`: what it
         // ends, for the decision log ("" = nothing).
-        float InterruptCost(PartyBotAI const* bot, State const& state, BotAction const& action, char const*& what);
+        float InterruptCost(TeamBotAI const* bot, State const& state, BotAction const& action, char const*& what);
 
         // `spell` must be cast standing: it has a cast time, or it is a channel that moving ends.
-        bool NeedsStandingStill(PartyBotAI const* bot, SpellEntry const* spell);
+        bool NeedsStandingStill(TeamBotAI const* bot, SpellEntry const* spell);
     }
 }
 
