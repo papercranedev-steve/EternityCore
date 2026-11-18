@@ -62,8 +62,9 @@ namespace Commander
             // yet (WorldModel::targeted), is enough: the original target selection is gone, the
             // first target of a bot comes from TargetAssigner through the Commander hook.
             // The push mode's guide walking a leg (PushBehavior moves it out of combat).
+            // A team of bots going for its next fight (HuntAssigner).
             return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
-                   m_plan.noRest || m_plan.push.walking;
+                   m_plan.noRest || m_plan.push.walking || m_plan.hunt.Active();
         }
         uint64 GetTeamKey() const { return m_teamKey; }
         uint32 GetMapId() const { return m_mapId; }

@@ -76,6 +76,9 @@ public:
     bool UpdateBody();
     bool RunCommanderHook(bool outOfCombatControl, bool needsRest, bool resting);
     void FightVictim(Unit* pVictim);
+    // `pVictim` is the creature its team of bots hunts (TeamPlan::hunt) and not fighting yet:
+    // the rotation opens on it out of combat.
+    bool IsOpeningOn(Unit const* pVictim) const;
 
     // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
     // change it later by party composition while the role is not locked.

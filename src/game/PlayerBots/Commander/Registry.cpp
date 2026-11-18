@@ -65,6 +65,8 @@
 #include "Commander/Coordination/Situation/Crisis/RunAwayAssigner.h"
 #include "Commander/Coordination/Situation/Crisis/SelfRiseAssigner.h"
 #include "Commander/Coordination/Situation/RoleAssigner.h"
+#include "Commander/Coordination/Situation/Hunt/HuntAssigner.h"
+#include "Commander/Behaviors/Combat/HuntBehavior.h"
 
 namespace Commander
 {
@@ -87,6 +89,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<MitigationBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CurseBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<TargetBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HuntBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<EncounterBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ManaBudgetBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<HealthTradeBehavior>()));
@@ -115,6 +118,8 @@ namespace Commander
     void RegisterAssigners(AssignerList& out)
     {
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RoleAssigner>()));
+        // A team of bots with no player: its next fight (reads the pull and retreat of the last refresh).
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<HuntAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PullAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TacticalDoctrine>()));
         // Reads this refresh's doctrine holds (the pull's patrol hold); RouteGuard reads it.

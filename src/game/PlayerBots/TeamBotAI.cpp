@@ -182,8 +182,17 @@ void TeamBotAI::FightVictim(Unit* pVictim)
 
     KeepFacing(pVictim);
 
-    if (me->IsInCombat())
+    // In combat; or opening on the creature a team of bots hunts (the rotation's first shot).
+    if (me->IsInCombat() || IsOpeningOn(pVictim))
         UpdateInCombatAI();
+}
+
+bool TeamBotAI::IsOpeningOn(Unit const* pVictim) const
+{
+    if (!pVictim || pVictim->IsInCombat() || !sCommanderMgr.IsEnabled())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().hunt.target == pVictim->GetObjectGuid();
 }
 
 bool TeamBotAI::UpdateFrameHands(uint32 diff)

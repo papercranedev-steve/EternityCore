@@ -88,6 +88,18 @@ namespace Commander
         Failed,         // anything else: a pull failed, deaths, no tank, stopped, retreating
     };
 
+    // A team of bots with no player (Commander/Team.h: a field bot alone) finds its own fights
+    // (Situation/Hunt/HuntAssigner): the next creature to attack, kept until the fight starts,
+    // it dies, or it is no longer a good choice. HuntBehavior attacks it.
+    struct HuntPlan
+    {
+        ObjectGuid target;
+        uint32 sinceMs = 0;         // WorldModel::refreshedAtMs of the choice
+        uint32 idleSinceMs = 0;     // nothing to hunt nearby since (0 = something was found)
+        char const* why = "";       // static text
+        bool Active() const { return !target.IsEmpty(); }
+    };
+
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
     struct ClearPlan
     {
@@ -1543,6 +1555,7 @@ namespace Commander
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
+        HuntPlan hunt;
         PushPlan push;
         // The party bot the party follows out of combat instead of the player (Guide.h: the
         // push mode's tank). Empty = the player. Only Guide::Current says whether it leads now.

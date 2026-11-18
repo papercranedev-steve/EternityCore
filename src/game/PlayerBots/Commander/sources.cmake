@@ -89,6 +89,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Combat/InterruptBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/TargetBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/TargetBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/HuntBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/HuntBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/PullBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/PullBehavior.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlanner.h
@@ -237,6 +239,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Hunt/HuntAssigner.h
+  ${COMMANDER_DIR}/Coordination/Situation/Hunt/HuntAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/SelfRiseAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/SelfRiseAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/WipeAssigner.h

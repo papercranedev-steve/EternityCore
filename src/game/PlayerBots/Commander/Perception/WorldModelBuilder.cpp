@@ -2134,9 +2134,11 @@ namespace WorldModelBuilder
     {
         Player* me = bot->me;
         Player* leader = bot->GetPartyLeader();
-        // Where the party is going: the guide it follows, else the leader.
+        // Where the party is going: the guide it follows, else the leader; a team of bots
+        // (Commander/Team.h) goes where its bot goes (it finds its own fights: HuntAssigner).
         Player* walker = guide ? guide
-            : (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap()) ? leader : nullptr;
+            : (leader && leader->IsInWorld() && leader->GetMap() == me->GetMap()) ? leader
+            : !world.humanInTeam ? me : nullptr;
         WorldObject* center = walker ? static_cast<WorldObject*>(walker) : static_cast<WorldObject*>(me);
 
         // One scan for both: packs within PACK_SCAN_RADIUS, patrols within PATROL_SCAN_RADIUS.
