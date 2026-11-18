@@ -95,6 +95,7 @@ namespace Population
         m_updateMs.store(Clamp(sConfig.GetIntDefault("PopBot.UpdateMs", 1000), 200, 5000));
         m_maxBots = Clamp(sConfig.GetIntDefault("PopBot.MaxBots", 100), 0, 500);
         m_spawnGapMs = Clamp(sConfig.GetIntDefault("PopBot.SpawnGapMs", 3000), 500, 60000);
+        m_prewarmPerTick = Clamp(sConfig.GetIntDefault("PopBot.Prewarm.PerTick", 4), 1, 50);
 
         uint32 const minMinutes = Clamp(sConfig.GetIntDefault("PopBot.LifetimeMinMinutes", 10), 1, 24 * 60);
         uint32 const maxMinutes = Clamp(sConfig.GetIntDefault("PopBot.LifetimeMaxMinutes", 40), minMinutes, 24 * 60);
@@ -103,6 +104,7 @@ namespace Population
 
         m_city.LoadConfig();
         m_roster.LoadConfig();
+        m_observers.LoadConfig();
 
         if (wasEnabled && !IsEnabled())
         {
@@ -166,17 +168,47 @@ namespace Population
                 RequestRemoval(r);
 
         UpdateRecruits();
-        m_roster.Update(m_nowMs, m_identity);
-        m_city.Update(*this, m_nowMs);
-
-        if (!m_queue.empty() && m_nowMs >= m_nextSpawnMs)
+        if (m_observers.Update(m_nowMs))
         {
+            // Someone is at the character screen or loading in: fill his surroundings now.
+            m_roster.ForceUpdate();
+            m_city.ForceTick();
+        }
+        m_roster.Update(m_nowMs, m_identity, m_observers);
+        m_city.Update(*this, m_observers, m_nowMs);
+
+        // Prewarm requests (at the front) go out several per tick, the others one per PopBot.SpawnGapMs.
+        uint32 burst = 0;
+        while (!m_queue.empty())
+        {
+            bool const prewarm = m_queue.front().prewarm;
+            if (prewarm ? burst >= m_prewarmPerTick : m_nowMs < m_nextSpawnMs)
+                break;
+
             SpawnRequest const request = m_queue.front();
             m_queue.pop_front();
             if (GetBotCount() < m_maxBots)
                 SpawnNow(request);
-            m_nextSpawnMs = m_nowMs + m_spawnGapMs;
+
+            if (!prewarm)
+            {
+                m_nextSpawnMs = m_nowMs + m_spawnGapMs;
+                break;
+            }
+            ++burst;
         }
+    }
+
+    void PopulationMgr::OnCharacterScreen(uint32 accountId)
+    {
+        if (IsEnabled())
+            m_observers.ExpectAccount(accountId);
+    }
+
+    void PopulationMgr::OnLoginRequest(uint32 accountId, uint32 charGuid)
+    {
+        if (IsEnabled())
+            m_observers.ExpectCharacter(accountId, charGuid);
     }
 
     void PopulationMgr::UpdateRecruits()
@@ -208,7 +240,10 @@ namespace Population
             return false;
         if (GetBotCount() + m_queue.size() >= m_maxBots)
             return false;
-        m_queue.push_back(request);
+        if (request.prewarm)
+            m_queue.push_front(request);
+        else
+            m_queue.push_back(request);
         return true;
     }
 

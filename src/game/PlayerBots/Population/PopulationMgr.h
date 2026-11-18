@@ -15,6 +15,7 @@
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
 #include "Population/CityPopulation.h"
+#include "Population/Observers.h"
 #include "Population/Roster.h"
 #include <atomic>
 #include <chrono>
@@ -69,8 +70,15 @@ namespace Population
         uint32 GetUpdateInterval() const { return m_updateMs.load(std::memory_order_relaxed); }
         uint32 GetMaxBots() const { return m_maxBots; }
 
-        // Adds to the spawn queue (one bot every PopBot.SpawnGapMs). False if disabled or full.
+        // Adds to the spawn queue (one bot every PopBot.SpawnGapMs; prewarm requests go first,
+        // PopBot.Prewarm.PerTick per update). False if disabled or full.
         bool QueueSpawn(SpawnRequest const& request);
+
+        // Hooks from the character packet handlers (world thread): fill the world around the
+        // character before he enters it (Observers.h).
+        void OnCharacterScreen(uint32 accountId);
+        void OnLoginRequest(uint32 accountId, uint32 charGuid);
+        Observers const& GetObservers() const { return m_observers; }
         // Asks every population bot to log out. Returns how many were asked.
         uint32 DespawnAll();
         bool Despawn(ObjectGuid guid);
@@ -124,6 +132,7 @@ namespace Population
         std::atomic<uint32> m_updateMs{ 1000 };
         uint32 m_maxBots = 100;
         uint32 m_spawnGapMs = 3000;
+        uint32 m_prewarmPerTick = 4;
         uint32 m_lifetimeMinMs = 10 * MINUTE * IN_MILLISECONDS;
         uint32 m_lifetimeMaxMs = 40 * MINUTE * IN_MILLISECONDS;
 
@@ -135,6 +144,7 @@ namespace Population
         std::deque<SpawnRequest> m_queue;
         Identity m_identity;
         ScenePoints m_points;
+        Observers m_observers;
         CityDirector m_city;
         Roster m_roster;
 

@@ -1,4 +1,5 @@
 #include "Population/CityPopulation.h"
+#include "Population/Observers.h"
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
@@ -524,7 +525,10 @@ namespace Population
             return;
         }
 
-        for (uint32 queued = 0; queued < 3 && counts.total < targets.total; ++queued)
+        // Someone is about to log in here: the whole crowd at once, before he can see it.
+        // Otherwise the city fills a few at a time.
+        uint32 const maxQueued = city.arriving ? targets.total : 3;
+        for (uint32 queued = 0; queued < maxQueued && counts.total < targets.total; ++queued)
         {
             CityRole role = CityRole::Stand;
             if (counts.showcase < targets.showcase)
@@ -542,6 +546,7 @@ namespace Population
                 if (!BuildRequest(city, role, counts, request))
                     break;
             }
+            request.prewarm = city.arriving;
 
             if (!mgr.QueueSpawn(request))
                 break;
@@ -560,7 +565,7 @@ namespace Population
         }
     }
 
-    void CityDirector::Update(PopulationMgr& mgr, uint32 nowMs)
+    void CityDirector::Update(PopulationMgr& mgr, Observers const& observers, uint32 nowMs)
     {
         if (nowMs < m_nextTickMs)
             return;
@@ -574,17 +579,20 @@ namespace Population
         }
 
         for (CityState& s : m_states)
-            s.playerPresent = false;
-
-        for (auto const& itr : sObjectAccessor.GetPlayers())
         {
-            Player* p = itr.second;
-            if (!p || !p->IsInWorld() || p->IsBot())
-                continue;
-            uint32 const zone = p->GetCachedZoneId();
+            s.playerPresent = false;
+            s.arriving = false;
+        }
+
+        for (Observer const& o : observers.All())
+        {
             for (CityState& s : m_states)
-                if (s.def->zone == zone)
-                    s.playerPresent = true;
+            {
+                if (s.def->zone != o.zone)
+                    continue;
+                s.playerPresent = true;
+                s.arriving |= o.arriving;
+            }
         }
 
         for (CityState& s : m_states)

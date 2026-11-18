@@ -13,6 +13,8 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/PopulationIdentity.cpp
   ${POPULATION_DIR}/ScenePoints.h
   ${POPULATION_DIR}/ScenePoints.cpp
+  ${POPULATION_DIR}/Observers.h
+  ${POPULATION_DIR}/Observers.cpp
   ${POPULATION_DIR}/CityPopulation.h
   ${POPULATION_DIR}/CityPopulation.cpp
   ${POPULATION_DIR}/Roster.h

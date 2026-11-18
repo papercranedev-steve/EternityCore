@@ -41,6 +41,7 @@
 #include "MasterPlayer.h"
 #include "PlayerBroadcaster.h"
 #include "PlayerBotMgr.h"
+#include "Population/PopulationMgr.h"
 #include "MapManager.h"
 #include "AccountMgr.h"
 
@@ -167,6 +168,10 @@ void WorldSession::HandleCharEnum(std::unique_ptr<QueryResult> result)
 
 void WorldSession::HandleCharEnumOpcode(NullClientPacket const& /*packet*/)
 {
+    // Population bots: start placing the crowd around the last played character.
+    if (!GetBot())
+        sPopulationMgr.OnCharacterScreen(GetAccountId());
+
     // get all the data necessary for loading all characters (along with their pets) on the account
     CharacterDatabase.AsyncPQuery(&chrHandler, &CharacterHandler::HandleCharEnumCallback, GetAccountId(),
                                   //           0                    1                    2                    3                     4                      5                    6                    7                          8                          9                           10
@@ -386,6 +391,10 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin 
     }
     m_playerLoading = true;
     CharacterDatabase.DelayQueryHolderUnsafe(&chrHandler, &CharacterHandler::HandlePlayerLoginCallback, holder);
+
+    // Population bots: the crowd around the logout position is placed during the loading screen.
+    if (!GetBot())
+        sPopulationMgr.OnLoginRequest(GetAccountId(), packet.guid.GetCounter());
 }
 
 void WorldSession::LoginPlayer(ObjectGuid loginPlayerGuid)

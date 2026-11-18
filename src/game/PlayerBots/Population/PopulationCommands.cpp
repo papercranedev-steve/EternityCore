@@ -361,7 +361,7 @@ namespace
             }
             Population::CityCounts const c = sPopulationMgr.CountCity(s.def->zone, s.anchors.size());
             handler->PSendSysMessage("%s (zone %u): %s%s, anchors ah %u bank %u mail %u other %u, bots %u (stand %u, movers %u, crafters %u, veterans %u)",
-                s.def->title, s.def->zone, s.enabled ? "enabled" : "disabled", s.playerPresent ? ", player here" : "",
+                s.def->title, s.def->zone, s.enabled ? "enabled" : "disabled", s.arriving ? ", player arriving" : s.playerPresent ? ", player here" : "",
                 ah, bank, mail, other, c.total, c.stand, c.mover, c.crafter, c.showcase);
         }
     }

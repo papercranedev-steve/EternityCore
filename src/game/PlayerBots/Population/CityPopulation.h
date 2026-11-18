@@ -1,7 +1,8 @@
 /*
  * World population bots, phase 1b: city crowds.
  *
- * While a real player is in a city zone, the director keeps the city at its target size:
+ * While an observer (a real player, or one about to log in there) is in a city zone, the
+ * director keeps the city at its target size:
  * stand bots at auctioneers / bankers / mailboxes, movers running between those spots, and a
  * few geared veterans. Anchors come from the world database (NPCs with the auctioneer or
  * banker flag and mailboxes near the city centre, current patch only) plus manual scene
@@ -22,6 +23,7 @@ namespace Population
 {
     class PopulationMgr;
     class ScenePoints;
+    class Observers;
 
     struct CityDef
     {
@@ -47,7 +49,8 @@ namespace Population
         CityDef const* def = nullptr;
         bool enabled = false;               // listed in PopBot.City.Zones
         std::vector<CityAnchor> anchors;
-        bool playerPresent = false;
+        bool playerPresent = false;         // an observer (Observers.h) is in the city
+        bool arriving = false;              // one of them is about to enter the world here: fill at once
         uint32 lastPlayerSeenMs = 0;
         bool everSeen = false;
     };
@@ -73,7 +76,7 @@ namespace Population
         void LoadConfig();
         // Re-reads DB anchors and adds the manual scene points.
         void LoadAnchors(ScenePoints const& points);
-        void Update(PopulationMgr& mgr, uint32 nowMs);
+        void Update(PopulationMgr& mgr, Observers const& observers, uint32 nowMs);
         // Run the next update right away (.popbot fill).
         void ForceTick() { m_nextTickMs = 0; }
 

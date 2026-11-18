@@ -3284,6 +3284,19 @@ AHBuyer.MaxMarkup = 50
 #        Minimum time between two spawns, to avoid hitches (500 - 60000).
 #        Default: 3000
 #
+#    PopBot.Prewarm.Enable
+#        Fill the surroundings of a character before he enters the world: at the character
+#        screen (last played character of the account) and on the login request (the chosen one).
+#        Default: 1
+#
+#    PopBot.Prewarm.WaitSec
+#        How long an expected character keeps his surroundings filled without logging in (10 - 1800).
+#        Default: 90
+#
+#    PopBot.Prewarm.PerTick
+#        Prewarm spawns per world update; they skip PopBot.SpawnGapMs (1 - 50).
+#        Default: 4
+#
 #    PopBot.LifetimeMinMinutes
 #    PopBot.LifetimeMaxMinutes
 #        Each bot logs out after a random time in this range, so faces keep changing.
@@ -3383,6 +3396,9 @@ PopBot.Enable = 0
 PopBot.UpdateMs = 1000
 PopBot.MaxBots = 100
 PopBot.SpawnGapMs = 3000
+PopBot.Prewarm.Enable = 1
+PopBot.Prewarm.WaitSec = 90
+PopBot.Prewarm.PerTick = 4
 PopBot.LifetimeMinMinutes = 10
 PopBot.LifetimeMaxMinutes = 40
 PopBot.City.Enable = 1

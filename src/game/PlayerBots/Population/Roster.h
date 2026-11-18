@@ -25,6 +25,7 @@ class Player;
 namespace Population
 {
     class Identity;
+    class Observers;
 
     struct Cohort
     {
@@ -96,7 +97,10 @@ namespace Population
         // Cohorts of deleted (or renamed-over) characters are turned free.
         void Load();
         // Every 5 s: real players online get a cohort (generated once), owner levels are stored.
-        void Update(uint32 nowMs, Identity const& identity);
+        // Characters about to log in (Observers) count as online owners.
+        void Update(uint32 nowMs, Identity const& identity, Observers const& observers);
+        // Run the next update right away (a character is about to log in).
+        void ForceUpdate() { m_nextUpdateMs = 0; }
 
         bool IsActive() const { return m_enabled && m_available; }
         bool IsAvailable() const { return m_available; }

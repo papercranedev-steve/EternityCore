@@ -1,6 +1,7 @@
 #include "Population/Roster.h"
 #include "Population/Growth.h"
 #include "Population/PopulationIdentity.h"
+#include "Population/Observers.h"
 #include "Companions/Personality.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
@@ -530,14 +531,16 @@ namespace Population
         }
     }
 
-    void Roster::Update(uint32 nowMs, Identity const& identity)
+    void Roster::Update(uint32 nowMs, Identity const& identity, Observers const& observers)
     {
         if (!IsActive() || nowMs < m_nextUpdateMs)
             return;
         m_nextUpdateMs = nowMs + UPDATE_EVERY_MS;
 
+        // A character about to enter the world already has his people around him (an existing
+        // cohort only: a new one needs the character in the world).
         for (Cohort& c : m_cohorts)
-            c.ownerOnline = false;
+            c.ownerOnline = !c.free && observers.IsArrivingOwner(c.ownerGuid);
 
         for (auto const& itr : sObjectAccessor.GetPlayers())
         {

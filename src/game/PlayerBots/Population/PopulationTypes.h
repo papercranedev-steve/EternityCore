@@ -69,6 +69,7 @@ namespace Population
         uint32 mapId = 0;
         float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
         uint32 lifetimeMs = 0;      // 0 = random from PopBot.Lifetime*
+        bool prewarm = false;       // a player is about to arrive: spawned without the PopBot.SpawnGapMs pause
         ObjectGuid faceGuid;        // face this unit once spawned (optional)
         bool hasFacePoint = false;  // face (faceX, faceY) once spawned
         float faceX = 0.0f, faceY = 0.0f;
