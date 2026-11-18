@@ -1,6 +1,6 @@
 #include "Shared/Supplies.h"
+#include "Shared/PetFood.h"
 #include "Player.h"
-#include "Bag.h"
 #include "Item.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -22,18 +22,25 @@ namespace Supplies
         uint32 const CASTS_OPTIONAL = 5;
         // Ammo kept for the ranged weapon (three stacks of 200).
         uint32 const AMMO_TARGET = 600;
+        // Food and drink: a few for sure, a stack when money and bags allow.
+        uint32 const FOOD_CRITICAL = 5;
+        uint32 const FOOD_TARGET = 20;
+        uint32 const DRINK_CRITICAL = 10;
+        uint32 const DRINK_TARGET = 20;
+        uint32 const PET_FOOD_TARGET = 10;
 
-        // Items a bot wants that are no spell reagent of the spell it knows.
-        struct Extra
+        using Needs = std::vector<Need>;
+
+        Need Make(Goods::Spec goods, uint32 target, Priority priority)
         {
-            uint32 knownSpell;      // the player knows it (passive too)
-            uint32 itemId;
-            uint32 target;
-            Priority priority;
-        };
-        Extra const EXTRA[] = {
-            { 20608, 17030, 5, Priority::Critical },    // Reincarnation (passive): Ankh, used by its self-resurrection
-        };
+            Need n;
+            n.goods = goods;
+            n.target = target;
+            n.priority = priority;
+            return n;
+        }
+
+        // ---- Spell reagents ----
 
         bool CreatesOrEnchantsItems(SpellEntry const* spell)
         {
@@ -81,6 +88,78 @@ namespace Supplies
             }
         }
 
+        void ReagentNeeds(Player const* player, Needs& out)
+        {
+            // Two spells wanting the same reagent: the bigger target and the higher priority.
+            std::map<uint32, Need> byItem;
+            auto add = [&byItem](uint32 itemId, uint32 target, Priority priority)
+            {
+                auto itr = byItem.find(itemId);
+                if (itr == byItem.end())
+                {
+                    byItem[itemId] = Make(Goods::Exact(itemId), target, priority);
+                    return;
+                }
+                itr->second.target = std::max(itr->second.target, target);
+                itr->second.priority = std::min(itr->second.priority, priority);
+            };
+
+            // Lower ranks the player has a higher rank of are skipped (Wild Berries once Thornroot is due).
+            std::set<uint32> lowerRanks;
+            for (auto const& entry : player->GetSpellMap())
+                if (entry.second.state != PLAYERSPELL_REMOVED && !entry.second.disabled)
+                    if (uint32 prev = sSpellMgr.GetPrevSpellInChain(entry.first))
+                        lowerRanks.insert(prev);
+
+            for (auto const& entry : player->GetSpellMap())
+            {
+                if (entry.second.state == PLAYERSPELL_REMOVED || entry.second.disabled || !entry.second.active)
+                    continue;
+                if (lowerRanks.count(entry.first))
+                    continue;
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(entry.first);
+                if (!spell || spell->IsPassiveSpell() || CreatesOrEnchantsItems(spell))
+                    continue;
+                Priority const priority = PriorityOf(spell);
+                for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
+                {
+                    if (spell->Reagent[r] <= 0 || !IsSoldByVendors(uint32(spell->Reagent[r])))
+                        continue;
+                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(uint32(spell->Reagent[r]));
+                    if (!proto)
+                        continue;
+                    uint32 const perCast = std::max<uint32>(spell->ReagentCount[r], 1);
+                    uint32 const target = std::min<uint32>(perCast * CastsFor(priority), std::max<uint32>(proto->GetMaxStackSize(), 1));
+                    add(proto->ItemId, target, priority);
+                }
+            }
+
+            for (auto const& itr : byItem)
+                out.push_back(itr.second);
+        }
+
+        // ---- Items that are no spell's reagent ----
+
+        struct Extra
+        {
+            uint32 knownSpell;      // the player knows it (passive too)
+            uint32 itemId;
+            uint32 target;
+            Priority priority;
+        };
+        Extra const EXTRA[] = {
+            { 20608, 17030, 5, Priority::Critical },    // Reincarnation (passive): Ankh, used by its self-resurrection
+        };
+
+        void ExtraNeeds(Player const* player, Needs& out)
+        {
+            for (Extra const& extra : EXTRA)
+                if (player->HasSpell(extra.knownSpell) && IsSoldByVendors(extra.itemId))
+                    out.push_back(Make(Goods::Exact(extra.itemId), extra.target, extra.priority));
+        }
+
+        // ---- Ammo ----
+
         uint32 RangedAmmoSubClass(Player const* player)
         {
             Item const* weapon = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
@@ -99,22 +178,41 @@ namespace Supplies
             }
         }
 
-        // Keeps the bigger target and the higher priority when two spells want the same item.
-        void Add(std::map<uint32, Need>& needs, uint32 itemId, uint32 target, Priority priority)
+        void AmmoNeeds(Player const* player, Needs& out)
         {
-            auto itr = needs.find(itemId);
-            if (itr == needs.end())
-            {
-                Need n;
-                n.itemId = itemId;
-                n.target = target;
-                n.priority = priority;
-                needs[itemId] = n;
-                return;
-            }
-            itr->second.target = std::max(itr->second.target, target);
-            itr->second.priority = std::min(itr->second.priority, priority);
+            if (uint32 const subClass = RangedAmmoSubClass(player))
+                out.push_back(Make(Goods::AmmoOf(subClass), AMMO_TARGET, Priority::Critical));
         }
+
+        // ---- Food and drink ----
+
+        void FoodAndDrinkNeeds(Player const* player, Needs& out)
+        {
+            Goods::Spec const food = Goods::Of(Goods::Kind::Food);
+            out.push_back(Make(food, FOOD_CRITICAL, Priority::Critical));
+            out.push_back(Make(food, FOOD_TARGET, Priority::Important));
+            if (player->GetMaxPower(POWER_MANA))
+            {
+                Goods::Spec const drink = Goods::Of(Goods::Kind::Drink);
+                out.push_back(Make(drink, DRINK_CRITICAL, Priority::Critical));
+                out.push_back(Make(drink, DRINK_TARGET, Priority::Important));
+            }
+        }
+
+        void PetFoodNeeds(Player const* player, Needs& out)
+        {
+            if (PetFood::HunterPet(player))
+                out.push_back(Make(Goods::Of(Goods::Kind::PetFood), PET_FOOD_TARGET, Priority::Important));
+        }
+
+        using Source = void (*)(Player const*, Needs&);
+        Source const SOURCES[] = {
+            &ReagentNeeds,
+            &ExtraNeeds,
+            &AmmoNeeds,
+            &FoodAndDrinkNeeds,
+            &PetFoodNeeds,
+        };
     }
 
     bool IsSoldByVendors(uint32 itemId)
@@ -146,83 +244,19 @@ namespace Supplies
         return sold.find(itemId) != sold.end();
     }
 
-    uint32 AmmoInBags(Player const* player, uint32 ammoSubClass)
-    {
-        uint32 count = 0;
-        auto consider = [&](Item const* item)
-        {
-            ItemPrototype const* proto = item ? item->GetProto() : nullptr;
-            if (proto && proto->Class == ITEM_CLASS_PROJECTILE && proto->SubClass == ammoSubClass &&
-                player->CanUseAmmo(proto->ItemId) == EQUIP_ERR_OK)
-                count += item->GetCount();
-        };
-        for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
-            consider(player->GetItemByPos(INVENTORY_SLOT_BAG_0, i));
-        for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
-            if (Bag* bag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
-                    consider(bag->GetItemByPos(uint8(j)));
-        return count;
-    }
-
     std::vector<Need> Missing(Player const* player)
     {
-        std::map<uint32, Need> needs;
+        Needs all;
+        for (Source source : SOURCES)
+            source(player, all);
 
-        // Lower ranks the player has a higher rank of are skipped (Wild Berries once Thornroot is due).
-        std::set<uint32> lowerRanks;
-        for (auto const& entry : player->GetSpellMap())
-            if (entry.second.state != PLAYERSPELL_REMOVED && !entry.second.disabled)
-                if (uint32 prev = sSpellMgr.GetPrevSpellInChain(entry.first))
-                    lowerRanks.insert(prev);
-
-        for (auto const& entry : player->GetSpellMap())
+        Needs result;
+        for (Need& n : all)
         {
-            if (entry.second.state == PLAYERSPELL_REMOVED || entry.second.disabled || !entry.second.active)
-                continue;
-            if (lowerRanks.count(entry.first))
-                continue;
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(entry.first);
-            if (!spell || spell->IsPassiveSpell() || CreatesOrEnchantsItems(spell))
-                continue;
-            Priority const priority = PriorityOf(spell);
-            for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
-            {
-                if (spell->Reagent[r] <= 0 || !IsSoldByVendors(uint32(spell->Reagent[r])))
-                    continue;
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(uint32(spell->Reagent[r]));
-                if (!proto)
-                    continue;
-                uint32 const perCast = std::max<uint32>(spell->ReagentCount[r], 1);
-                uint32 const target = std::min<uint32>(perCast * CastsFor(priority), std::max<uint32>(proto->GetMaxStackSize(), 1));
-                Add(needs, proto->ItemId, target, priority);
-            }
-        }
-
-        for (Extra const& extra : EXTRA)
-            if (player->HasSpell(extra.knownSpell) && IsSoldByVendors(extra.itemId))
-                Add(needs, extra.itemId, extra.target, extra.priority);
-
-        std::vector<Need> result;
-        for (auto& itr : needs)
-        {
-            Need& n = itr.second;
-            n.have = player->GetItemCount(n.itemId);
+            n.have = Goods::CountInBags(player, n.goods);
             if (n.Missing())
                 result.push_back(n);
         }
-
-        if (uint32 const ammo = RangedAmmoSubClass(player))
-        {
-            Need n;
-            n.ammoSubClass = ammo;
-            n.target = AMMO_TARGET;
-            n.have = AmmoInBags(player, ammo);
-            n.priority = Priority::Critical;
-            if (n.Missing())
-                result.push_back(n);
-        }
-
         std::stable_sort(result.begin(), result.end(), [](Need const& a, Need const& b) { return a.priority < b.priority; });
         return result;
     }

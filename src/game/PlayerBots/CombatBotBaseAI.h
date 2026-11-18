@@ -121,6 +121,9 @@ public:
     // training points spent on the abilities a pet that holds enemies wants (Growl, its damage
     // abilities on autocast, Natural Armor, Great Stamina). Once per pet and level.
     void TrainHunterPet(Pet* pPet);
+    // Out of combat, the pet below happy: Feed Pet (known) on the best food it eats in the bags
+    // (Shared/PetFood), once its last meal is over. True: cast.
+    bool FeedHunterPet(Pet* pPet);
     void LearnArmorProficiencies();
     void LearnPremadeSpecForClass();
     // Spends the free talent points on `spec`'s talents, top row first, as far as they reach.

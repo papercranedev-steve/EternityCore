@@ -23,6 +23,21 @@ namespace Inventory
                         guids.insert(item->GetObjectGuid());
     }
 
+    std::vector<Item*> BagItems(Player const* player)
+    {
+        std::vector<Item*> items;
+        for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+            if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                items.push_back(item);
+
+        for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+            if (Bag* bag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                    if (Item* item = bag->GetItemByPos(uint8(j)))
+                        items.push_back(item);
+        return items;
+    }
+
     uint32 FreeBagSlots(Player const* player)
     {
         uint32 free = 0;

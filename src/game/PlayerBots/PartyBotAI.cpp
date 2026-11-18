@@ -802,19 +802,60 @@ Player* PartyBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
     return nullptr;
 }
 
-namespace
+SpellEntry const* PartyBotAI::ActiveRest(BotShared::FoodAndDrink::Kind kind) const
 {
-    // Per second of the first effect of `spellId` applying `aura` (amount per 5 s), x `rate`.
-    float RestRatePerSec(uint32 spellId, AuraType aura, float rate)
-    {
-        SpellEntry const* pSpell = sSpellMgr.GetSpellEntry(spellId);
-        if (!pSpell)
-            return 0.0f;
-        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-            if (pSpell->EffectApplyAuraName[i] == aura)
-                return pSpell->CalculateSimpleValue(SpellEffectIndex(i)) / 5.0f * rate;
+    if (SpellEntry const* pSpell = BotShared::FoodAndDrink::Active(me, kind))
+        return pSpell;
+    // (the free aura spells by id too, whatever their flags)
+    uint32 const freeSpell = kind == BotShared::FoodAndDrink::Kind::Food ? PB_SPELL_FOOD : PB_SPELL_DRINK;
+    return me->HasAura(freeSpell) ? sSpellMgr.GetSpellEntry(freeSpell) : nullptr;
+}
+
+SpellEntry const* PartyBotAI::NextRest(BotShared::FoodAndDrink::Kind kind, Item** item) const
+{
+    if (item)
+        *item = nullptr;
+    if (GetsFreeSupplies())
+        return sSpellMgr.GetSpellEntry(kind == BotShared::FoodAndDrink::Kind::Food ? PB_SPELL_FOOD : PB_SPELL_DRINK);
+    Item* pItem = BotShared::FoodAndDrink::BestInBags(me, kind);
+    if (!pItem)
+        return nullptr;
+    if (item)
+        *item = pItem;
+    return BotShared::FoodAndDrink::ItemSpell(pItem->GetProto(), kind);
+}
+
+float PartyBotAI::RestRatePerSec(BotShared::FoodAndDrink::Kind kind) const
+{
+    SpellEntry const* pSpell = ActiveRest(kind);
+    if (!pSpell)
+        pSpell = NextRest(kind);
+    if (!pSpell)
         return 0.0f;
-    }
+    // The free spells' rate the old way (amount per 5 s) when their flags make them no
+    // seated aura to FoodAndDrink.
+    float const rate = BotShared::FoodAndDrink::RatePerSec(me, pSpell, kind);
+    if (rate > 0.0f || (pSpell->Id != PB_SPELL_FOOD && pSpell->Id != PB_SPELL_DRINK))
+        return rate;
+    AuraType const aura = kind == BotShared::FoodAndDrink::Kind::Food ? SPELL_AURA_MOD_REGEN : SPELL_AURA_MOD_POWER_REGEN;
+    float const serverRate = sWorld.getConfig(kind == BotShared::FoodAndDrink::Kind::Food ? CONFIG_FLOAT_RATE_HEALTH : CONFIG_FLOAT_RATE_POWER_MANA);
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (pSpell->EffectApplyAuraName[i] == aura)
+            return pSpell->CalculateSimpleValue(SpellEffectIndex(i)) / 5.0f * serverRate;
+    return 0.0f;
+}
+
+bool PartyBotAI::BeginRest(BotShared::FoodAndDrink::Kind kind)
+{
+    Item* pItem = nullptr;
+    SpellEntry const* pSpell = NextRest(kind, &pItem);
+    if (!pSpell)
+        return false;
+    if (pItem)
+        return UseBagItem(pItem->GetEntry(), me);
+    me->CastSpell(me, pSpell, true);
+    me->RemoveSpellCooldown(pSpell);
+    return ActiveRest(kind) != nullptr;
 }
 
 float PartyBotAI::DrinkManaPerSec() const
@@ -822,39 +863,38 @@ float PartyBotAI::DrinkManaPerSec() const
     // (mana the active power only: a druid in bear or cat form does not drink)
     if (me->GetPowerType() != POWER_MANA || !me->GetMaxPower(POWER_MANA))
         return 0.0f;
-    // SPELL_AURA_MOD_POWER_REGEN: mana per 5 seconds (StatSystem.cpp, Player::UpdateManaRegen).
-    return RestRatePerSec(PB_SPELL_DRINK, SPELL_AURA_MOD_POWER_REGEN, sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA));
+    return RestRatePerSec(BotShared::FoodAndDrink::Kind::Drink);
 }
 
 float PartyBotAI::FoodHealthPerSec() const
 {
-    // SPELL_AURA_MOD_REGEN: health per 5 seconds out of combat (Player::RegenerateHealth).
-    return RestRatePerSec(PB_SPELL_FOOD, SPELL_AURA_MOD_REGEN, sWorld.getConfig(CONFIG_FLOAT_RATE_HEALTH));
+    return RestRatePerSec(BotShared::FoodAndDrink::Kind::Food);
 }
 
 bool PartyBotAI::IsDrinking() const
 {
-    return me->HasAura(PB_SPELL_DRINK);
+    return ActiveRest(BotShared::FoodAndDrink::Kind::Drink) != nullptr;
 }
 
 bool PartyBotAI::IsResting() const
 {
-    return me->HasAura(PB_SPELL_DRINK) || me->HasAura(PB_SPELL_FOOD);
+    return IsDrinking() || ActiveRest(BotShared::FoodAndDrink::Kind::Food) != nullptr;
 }
 
 bool PartyBotAI::NeedsRest() const
 {
     float const full = Commander::RestValue::FULL_SHARE;
-    if (float(me->GetHealth()) < float(me->GetMaxHealth()) * full)
+    if (float(me->GetHealth()) < float(me->GetMaxHealth()) * full && FoodHealthPerSec() > 0.0f)
         return true;
     return DrinkManaPerSec() > 0.0f && float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * full;
 }
 
 bool PartyBotAI::StartResting()
 {
+    using BotShared::FoodAndDrink::Kind;
     if (me->IsInCombat() || m_isBuffing || me->GetVictim())
         return false;
-    bool const needToEat = me->GetHealth() < me->GetMaxHealth();
+    bool const needToEat = me->GetHealth() < me->GetMaxHealth() && FoodHealthPerSec() > 0.0f;
     bool const needToDrink = DrinkManaPerSec() > 0.0f && me->GetPower(POWER_MANA) < me->GetMaxPower(POWER_MANA);
     if (!needToEat && !needToDrink)
         return false;
@@ -870,8 +910,8 @@ bool PartyBotAI::StartResting()
         return false;
     }
 
-    bool const startEat = needToEat && !me->HasAura(PB_SPELL_FOOD);
-    bool const startDrink = needToDrink && !me->HasAura(PB_SPELL_DRINK);
+    bool const startEat = needToEat && !ActiveRest(Kind::Food);
+    bool const startDrink = needToDrink && !ActiveRest(Kind::Drink);
     if (startEat || startDrink)
     {
         if (me->IsMounted())
@@ -883,29 +923,31 @@ bool PartyBotAI::StartResting()
             me->GetMotionMaster()->MoveIdle();
         }
     }
-    for (uint32 spellId : { startEat ? uint32(PB_SPELL_FOOD) : 0u, startDrink ? uint32(PB_SPELL_DRINK) : 0u })
-    {
-        if (!spellId)
-            continue;
-        if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(spellId))
-        {
-            me->CastSpell(me, pSpellEntry, true);
-            me->RemoveSpellCooldown(pSpellEntry);
-        }
-    }
+    if (startEat)
+        BeginRest(Kind::Food);
+    // (an item that is food and drink at once covers both)
+    if (startDrink && !ActiveRest(Kind::Drink))
+        BeginRest(Kind::Drink);
     return IsResting();
 }
 
 void PartyBotAI::EndRestWhenFull()
 {
-    if (me->HasAura(PB_SPELL_DRINK) &&
-        (me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA)))
-        me->RemoveAurasDueToSpell(PB_SPELL_DRINK);
-    if (me->HasAura(PB_SPELL_FOOD) && me->GetHealth() >= me->GetMaxHealth() &&
+    using BotShared::FoodAndDrink::Kind;
+    SpellEntry const* pDrink = ActiveRest(Kind::Drink);
+    SpellEntry const* pFood = ActiveRest(Kind::Food);
+    if (!pDrink && !pFood)
+        return;
+    bool const manaFull = me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA);
+    bool const healthFull = me->GetHealth() >= me->GetMaxHealth() &&
         !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE) &&
         !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE_PERCENT) &&
-        !me->HasAuraType(SPELL_AURA_PERIODIC_LEECH))
-        me->RemoveAurasDueToSpell(PB_SPELL_FOOD);
+        !me->HasAuraType(SPELL_AURA_PERIODIC_LEECH);
+    // A food-and-drink item's aura does both: off only when both are full.
+    if (pDrink && manaFull && (pDrink != pFood || healthFull))
+        me->RemoveAurasDueToSpell(pDrink->Id);
+    if (pFood && healthFull && (pFood != pDrink || manaFull))
+        me->RemoveAurasDueToSpell(pFood->Id);
 }
 
 bool PartyBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const

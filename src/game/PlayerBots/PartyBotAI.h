@@ -37,6 +37,7 @@
 #include "Life/Errands/NpcVisit.h"
 #include "Life/Errands/MerchantTasks.h"
 #include "Companions/RewardChoice.h"
+#include "Shared/FoodAndDrink.h"
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -259,14 +260,19 @@ public:
     // The angle of the chase this bot runs (OrderChase or the original one), or false when it
     // does not chase `pVictim`.
     bool GetChaseAngle(Unit const* pVictim, float& angle) const;
-    // Mana per second the bots' drink (PB_SPELL_DRINK, no item) restores at the server's mana
-    // rate; 0 without a mana pool. A fact for the Commander (PartyMemberFacts::drinkManaPerSec).
+    // What the bot eats and drinks: bots with free supplies the aura spells PB_SPELL_FOOD /
+    // PB_SPELL_DRINK (no item), companions the best food / drink in their bags
+    // (Shared/FoodAndDrink; out of it they do not rest for it, they bought it in town:
+    // Life/Errands/MerchantTasks.h).
+    // Mana per second its drink restores at the server's mana rate (the one on now, else the
+    // one it would start); 0 without a mana pool or without drink. A fact for the Commander
+    // (PartyMemberFacts::drinkManaPerSec).
     float DrinkManaPerSec() const;
-    // Health per second the bots' food (PB_SPELL_FOOD) restores at the server's health rate.
+    // Health per second its food restores at the server's health rate; 0 without food.
     float FoodHealthPerSec() const;
     bool IsDrinking() const;
     bool IsResting() const;     // the food or the drink is on
-    // Health or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
+    // Health (when it has food) or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
     bool NeedsRest() const;
     // Commander rest (BotActionType::Rest, Behaviors/Support/RestBehavior.h; the original eat and drink
     // is gone): eat when health is missing, drink when mana is, or keep sitting. False in
@@ -279,6 +285,13 @@ public:
     // Called each tick before the stand-up check, so a full bot stands at once instead of
     // sitting out the aura (stockade-20261114-221943: full at 10 s, sat to 34 s).
     void EndRestWhenFull();
+    // The eating / drinking aura on the bot now, or null.
+    SpellEntry const* ActiveRest(BotShared::FoodAndDrink::Kind kind) const;
+    // What it would eat / drink next: the free aura spell (`item` null), a bag item, or nothing.
+    SpellEntry const* NextRest(BotShared::FoodAndDrink::Kind kind, Item** item = nullptr) const;
+    float RestRatePerSec(BotShared::FoodAndDrink::Kind kind) const;
+    // Starts eating / drinking NextRest. True: started.
+    bool BeginRest(BotShared::FoodAndDrink::Kind kind);
     // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
     // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
     // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's

@@ -9,6 +9,7 @@
 #include "DBCStores.h"
 #include "WorldSession.h"
 #include <algorithm>
+#include <map>
 #include <vector>
 
 namespace BotShared
@@ -20,14 +21,8 @@ namespace Vendor
         template <class Fn>
         void ForEachBagItem(Player const* player, Fn fn)
         {
-            for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
-                if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-                    fn(item);
-            for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
-                if (Bag* bag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-                    for (uint32 j = 0; j < bag->GetBagSize(); ++j)
-                        if (Item* item = bag->GetItemByPos(uint8(j)))
-                            fn(item);
+            for (Item* item : Inventory::BagItems(player))
+                fn(item);
         }
 
         bool IsJunk(Item const* item)
@@ -57,11 +52,12 @@ namespace Vendor
 
         struct Offer
         {
+            VendorItem const* entry = nullptr;
             ItemPrototype const* proto = nullptr;
             uint32 price = 0;       // copper per vendor stack, discount included
         };
 
-        // The vendor's offer for a need: its exact item, or its best usable ammo of the subclass.
+        // The vendor's best offer of the need's goods (Goods::Matches / Goods::Better).
         Offer OfferFor(Player* player, Creature* vendor, Supplies::Need const& need)
         {
             Offer best;
@@ -77,29 +73,24 @@ namespace Vendor
                     ItemPrototype const* proto = sObjectMgr.GetItemPrototype(v->item);
                     if (!proto || !player->IsVendorItemVisible(vendor, v, proto))
                         continue;
-                    if (need.itemId)
-                    {
-                        if (proto->ItemId != need.itemId)
-                            continue;
-                    }
-                    else if (proto->Class != ITEM_CLASS_PROJECTILE || proto->SubClass != need.ammoSubClass ||
-                             proto->RequiredLevel > player->GetLevel() || player->CanUseAmmo(proto->ItemId) != EQUIP_ERR_OK ||
-                             (best.proto && best.proto->ItemLevel >= proto->ItemLevel))
+                    if (!Goods::Matches(player, need.goods, proto))
                         continue;
+                    if (best.proto && !Goods::Better(player, need.goods, proto, best.proto))
+                        continue;
+                    best.entry = v;
                     best.proto = proto;
                     best.price = uint32(proto->BuyPrice * discount + 0.5f);
-                    if (need.itemId)
-                        return best;
                 }
             }
             return best;
         }
 
-        // New bag slots `units` more of the item take (the last partial stack is filled first).
-        uint32 SlotsFor(Player const* player, ItemPrototype const* proto, uint32 units)
+        // New bag slots `units` more of the item take on top of the bags' and `plannedUnits`
+        // already planned (the last partial stack is filled first).
+        uint32 SlotsFor(Player const* player, ItemPrototype const* proto, uint32 units, uint32 plannedUnits)
         {
             uint32 const stack = std::max<uint32>(proto->GetMaxStackSize(), 1);
-            uint32 const have = player->GetItemCount(proto->ItemId);
+            uint32 const have = player->GetItemCount(proto->ItemId) + plannedUnits;
             uint32 const room = have % stack ? stack - have % stack : 0;
             uint32 const extra = units > room ? units - room : 0;
             return (extra + stack - 1) / stack;
@@ -160,9 +151,17 @@ namespace Vendor
         std::vector<Purchase> plan;
         uint32 money = player->GetMoney();
         uint32 freeSlots = Inventory::FreeBagSlots(player);
+        // Units already planned of each goods: a later row of the same goods (food: critical,
+        // then important) only buys what is still missing on top of them.
+        std::map<Goods::Spec, uint32> planned;
+        std::map<uint32, uint32> plannedOfItem;    // units by item entry (for bag slots and stock)
 
         for (Supplies::Need const& need : needs)
         {
+            uint32& already = planned[need.goods];
+            uint32 const missing = need.Missing() > already ? need.Missing() - already : 0;
+            if (!missing)
+                continue;
             Offer const offer = OfferFor(player, vendor, need);
             if (!offer.proto)
                 continue;
@@ -172,11 +171,18 @@ namespace Vendor
             uint32 const slotsAllowed = critical ? freeSlots : (freeSlots > KEEP_FREE_SLOTS ? freeSlots - KEEP_FREE_SLOTS : 0);
 
             uint32 const perStack = std::max<uint32>(offer.proto->BuyCount, 1);
-            uint32 stacks = (need.Missing() + perStack - 1) / perStack;
+            uint32& itemPlanned = plannedOfItem[offer.proto->ItemId];
+            uint32 stacks = (missing + perStack - 1) / perStack;
             if (offer.price)
                 stacks = std::min(stacks, budget / offer.price);
+            if (offer.entry->maxcount)     // limited stock: the whole order fails beyond it
+            {
+                uint32 const left = vendor->GetVendorItemCurrentCount(offer.entry);
+                uint32 const available = left > itemPlanned ? left - itemPlanned : 0;
+                stacks = std::min(stacks, available / perStack);
+            }
             stacks = std::min<uint32>(stacks, 255);     // one buy order at most (uint8)
-            while (stacks && SlotsFor(player, offer.proto, stacks * perStack) > slotsAllowed)
+            while (stacks && SlotsFor(player, offer.proto, stacks * perStack, itemPlanned) > slotsAllowed)
                 --stacks;
             if (!stacks)
                 continue;
@@ -187,7 +193,9 @@ namespace Vendor
             p.cost = stacks * offer.price;
             plan.push_back(p);
             money -= p.cost;
-            freeSlots -= SlotsFor(player, offer.proto, stacks * perStack);
+            freeSlots -= SlotsFor(player, offer.proto, stacks * perStack, itemPlanned);
+            already += stacks * perStack;
+            itemPlanned += stacks * perStack;
         }
         return plan;
     }

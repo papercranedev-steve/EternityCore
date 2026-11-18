@@ -8,7 +8,9 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include <set>
+#include <vector>
 
+class Item;
 class Player;
 
 namespace BotShared
@@ -17,6 +19,7 @@ namespace BotShared
     {
         // Every item in the backpack and the bags (not equipped, not the bank).
         void CollectBagItemGuids(Player const* player, std::set<ObjectGuid>& guids);
+        std::vector<Item*> BagItems(Player const* player);
 
         // Empty slots in the backpack and the bags (special bags such as quivers included).
         uint32 FreeBagSlots(Player const* player);

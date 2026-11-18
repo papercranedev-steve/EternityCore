@@ -18,6 +18,7 @@
 #include "Utilities/Random.h"
 #include "Commander/Perception/Profiles/PetAbilities.h"
 #include "Shared/Inventory.h"
+#include "Shared/PetFood.h"
 
 #include <algorithm>
 #include <map>
@@ -44,6 +45,7 @@ enum CombatBotSpells
     SPELL_TAME_BEAST = 13481,
     SPELL_REVIVE_PET = 982,
     SPELL_CALL_PET = 883,
+    SPELL_FEED_PET = 6991,
 
     // Beasts tamed for a hunter bot (SummonPetIfNeeded); levelled to the hunter first.
     PET_BEAR    = 822,
@@ -2517,10 +2519,16 @@ void CombatBotBaseAI::TrainHunterPet(Pet* pPet)
     if (pPet->GetPetType() != HUNTER_PET || !pPet->GetCharmInfo())
         return;
 
-    // Fed: a bot carries no pet food. Below happy it does less damage (so less threat) and
-    // loses loyalty; at the first level it runs away (Pet::ModifyLoyalty).
-    if (pPet->GetHappinessState() != HAPPY)
-        pPet->SetPower(POWER_HAPPINESS, pPet->GetMaxPower(POWER_HAPPINESS));
+    // Fed: below happy a pet does less damage (so less threat) and loses loyalty; at the first
+    // level it runs away (Pet::ModifyLoyalty). Bots with free supplies carry no pet food and
+    // are kept happy; the others feed it from their bags (FeedHunterPet).
+    if (GetsFreeSupplies())
+    {
+        if (pPet->GetHappinessState() != HAPPY)
+            pPet->SetPower(POWER_HAPPINESS, pPet->GetMaxPower(POWER_HAPPINESS));
+    }
+    else
+        FeedHunterPet(pPet);
 
     if (m_hunterPetTrainedFor == pPet->GetObjectGuid() && m_hunterPetTrainedLevel == pPet->GetLevel())
         return;
@@ -3619,6 +3627,29 @@ bool CombatBotBaseAI::KeepShamanTotem(TotemSlot slot, SpellEntry const* spell)
     if (!CanTryToCastSpell(me, spell))
         return false;
     return DoCastSpell(me, spell) == SPELL_CAST_OK;
+}
+
+bool CombatBotBaseAI::FeedHunterPet(Pet* pPet)
+{
+    if (!pPet || !pPet->IsAlive() || pPet->GetHappinessState() == HAPPY)
+        return false;
+    if (me->IsInCombat() || pPet->IsInCombat() || me->IsNonMeleeSpellCasted(false))
+        return false;
+    SpellEntry const* pFeed = sSpellMgr.GetSpellEntry(SPELL_FEED_PET);
+    if (!pFeed || !me->HasSpell(SPELL_FEED_PET))
+        return false;
+    // Still eating the last one.
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (uint32 const eating = pFeed->EffectTriggerSpell[i])
+            if (pPet->HasAura(eating) || me->HasAura(eating))
+                return false;
+    Item* pFood = BotShared::PetFood::BestInBags(me, pPet);
+    if (!pFood)
+        return false;
+    Spell* spell = new Spell(me, pFeed, false, ObjectGuid(), nullptr, nullptr, nullptr);
+    SpellCastTargets targets;
+    targets.setItemTarget(pFood);
+    return spell->prepare(std::move(targets), nullptr) == SPELL_CAST_OK;
 }
 
 SpellCastResult CombatBotBaseAI::CastWeaponBuff(SpellEntry const* pSpellEntry, EquipmentSlots slot)
