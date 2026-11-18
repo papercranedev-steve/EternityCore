@@ -71,5 +71,19 @@ namespace Inventory
         }
         return worn;
     }
+
+    void WearPlainShirt(Player* player, uint32 pick)
+    {
+        // Sold by general goods vendors in every capital for 4 silver.
+        static uint32 const plainShirts[] = { 16059 /*Brown*/, 16060 /*White*/, 3428 /*Gray*/ };
+
+        if (player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_BODY))
+            return;
+
+        uint32 const entry = plainShirts[pick % (sizeof(plainShirts) / sizeof(plainShirts[0]))];
+        uint16 dest;
+        if (player->CanEquipNewItem(EQUIPMENT_SLOT_BODY, dest, entry, false) == EQUIP_ERR_OK)
+            player->EquipNewItem(dest, entry, true);
+    }
 }
 }

@@ -28,6 +28,11 @@ namespace BotShared
         // through the equip handler: level, class and proficiency checks apply and the old item
         // goes to the bags. Returns how many were put on.
         uint32 WearUpgrades(Player* player, std::set<ObjectGuid> const& before);
+
+        // Every bot wears a shirt, and only the cheap vendor ones (Common Brown / White / Gray
+        // Shirt): gear is precious in this world, a plain shirt even commoners own.
+        // Does nothing when the shirt slot is taken. `pick` chooses the colour (any number).
+        void WearPlainShirt(Player* player, uint32 pick);
     }
 }
 

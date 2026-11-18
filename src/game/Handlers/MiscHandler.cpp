@@ -948,7 +948,7 @@ void WorldSession::HandleInspectOpcode(WorldPackets::Misc::Inspect const& packet
     if (!pTarget)
         return;
 
-    if (_player->GetDistance3dToCenter(pTarget) > INSPECT_DISTANCE)
+    if (_player->GetDistance3dToCenter(pTarget) > CLIENT_INSPECT_DISTANCE)
         return;
 
     if (_player->IsValidAttackTarget(pTarget))
@@ -965,7 +965,7 @@ void WorldSession::HandleInspectHonorStatsOpcode(WorldPackets::Misc::InspectHono
     if (!pTarget)
         return;
 
-    if (_player->GetDistance3dToCenter(pTarget) > INSPECT_DISTANCE)
+    if (_player->GetDistance3dToCenter(pTarget) > CLIENT_INSPECT_DISTANCE)
         return;
 
     if (_player->IsValidAttackTarget(pTarget))

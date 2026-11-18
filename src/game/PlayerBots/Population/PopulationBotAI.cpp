@@ -1,6 +1,7 @@
 #include "Population/PopulationBotAI.h"
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
+#include "Shared/Inventory.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
 #include "Group.h"
@@ -478,7 +479,10 @@ namespace Population
         }
 
         if (templateEntry)
+        {
             sObjectMgr.ApplyPremadeGearTemplateToPlayer(templateEntry, me);
+            BotShared::Inventory::WearPlainShirt(me, urand(0, 2));
+        }
         else
             EquipRandomGearInEmptySlots();
 

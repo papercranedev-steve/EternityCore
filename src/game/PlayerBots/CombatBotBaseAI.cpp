@@ -2928,6 +2928,20 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots(RandomGearOptions const& optio
         if (!options.allowPvP && pProto->RequiredHonorRank)
             continue;
 
+        // Festival and costume pieces that carry a token bit of armor, so the rule below misses them.
+        if (!options.allowCosmetic)
+        {
+            switch (pProto->ItemId)
+            {
+                case 23323: case 23324:     // Crown / Mantle of the Fire Festival
+                case 21524: case 21525:     // Red / Green Winter Hat
+                case 6836:                  // Dress Shoes
+                    continue;
+                default:
+                    break;
+            }
+        }
+
         // Dresses, tuxedos and the like: armor slot items without any armor.
         if (!options.allowCosmetic && pProto->Class == ITEM_CLASS_ARMOR && !pProto->Armor)
         {
@@ -3115,6 +3129,9 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots(RandomGearOptions const& optio
         me->SatisfyItemRequirements(pProto);
         me->StoreNewItemInBestSlots(pProto->ItemId, 1);
     }
+
+    // Armor slots may stay empty, the shirt never does (always a plain one, see the helper).
+    BotShared::Inventory::WearPlainShirt(me, roll(3));
 }
 
 void CombatBotBaseAI::AutoEquipGear(uint32 option)
@@ -3131,6 +3148,7 @@ void CombatBotBaseAI::AutoEquipGear(uint32 option)
             EquipPremadeGearTemplate();
             break;
     }
+    BotShared::Inventory::WearPlainShirt(me, urand(0, 2));
 
     UpdateVisualHonorRankBasedOnItems();
 }
