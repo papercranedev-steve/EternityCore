@@ -67,6 +67,14 @@ CombatBotRoles RoleCapability::BestNonTank() const
     return melee >= ranged ? ROLE_MELEE_DPS : ROLE_RANGE_DPS;
 }
 
+CombatBotRoles RoleCapability::BestSolo() const
+{
+    CombatBotRoles const damage = melee >= ranged ? ROLE_MELEE_DPS : ROLE_RANGE_DPS;
+    if (tank >= RoleCapabilities::MIN_TANK && tank >= For(damage))
+        return ROLE_TANK;
+    return damage;
+}
+
 CombatBotRoles RoleCapability::Best() const
 {
     CombatBotRoles const other = BestNonTank();

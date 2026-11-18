@@ -1873,6 +1873,8 @@ namespace WorldModelBuilder
         world.enemies.clear();
         world.targeted.clear();
         world.leader = Team::LeaderOf(me);
+        world.humanInTeam = std::any_of(members.begin(), members.end(), [](Player* p)
+            { return p && !(p->AI() && dynamic_cast<TeamBotAI const*>(p->AI())); });
         if (members.empty())
         {
             world.allies.clear();

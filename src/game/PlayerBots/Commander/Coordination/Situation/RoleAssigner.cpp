@@ -106,7 +106,20 @@ namespace Commander
         }
 
         plan.roles.clear();
-        if (free.empty() || members < 2)
+        if (free.empty())
+            return;
+        // Alone (a team of one): it must kill things itself, so never the healer role (a healer
+        // gets no target, TargetAssigner); it heals itself in its damage role.
+        if (world.IsSolo())
+        {
+            RoleDuty d;
+            d.bot = free.front()->guid;
+            d.role = free.front()->cap.BestSolo();
+            d.reason = "alone: fights by itself";
+            plan.roles.push_back(d);
+            return;
+        }
+        if (members < 2)
             return;
 
         bool const small = members <= SMALL_PARTY;

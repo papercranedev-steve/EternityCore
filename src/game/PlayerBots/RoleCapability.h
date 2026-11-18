@@ -50,6 +50,8 @@ struct RoleCapability
     CombatBotRoles Best() const;
     // Best of healer / melee / ranged (the role of someone who does not tank).
     CombatBotRoles BestNonTank() const;
+    // Alone: tank (as Best) or the better damage role, never healer (nobody else kills).
+    CombatBotRoles BestSolo() const;
 };
 
 namespace RoleCapabilities

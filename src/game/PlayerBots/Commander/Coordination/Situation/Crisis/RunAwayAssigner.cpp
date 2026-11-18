@@ -30,6 +30,10 @@ namespace Commander
         RetreatPlan& r = plan.retreat;
         if (!world.HasPartyEnemy() || r.active || r.requested)
             return;
+        // A player's run asks the bots to follow him; a bot's own steps (kiting, an escape)
+        // are not a request (a team of bots, Commander/Team.h).
+        if (!world.humanInTeam)
+            return;
         if (r.declinedAtMs && WorldTimer::getMSTimeDiff(r.declinedAtMs, world.refreshedAtMs) < RETRY_MS)
             return;
 

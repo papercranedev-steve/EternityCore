@@ -227,9 +227,11 @@ namespace Commander
         if (PartyMemberFacts const* tank = Tanks::Main(m_world, true))
             if (Player* p = bot->me->GetMap()->GetPlayer(tank->guid))
                 speaker = p;
+        // Nobody to tell in a team of bots (Commander/Team.h): the note log only.
         Player* leader = bot->GetPartyLeader();
-        for (std::string const& note : notes)
-            BotSpeech::Report(speaker, leader, note);
+        if (leader || m_world.humanInTeam)
+            for (std::string const& note : notes)
+                BotSpeech::Report(speaker, leader, note);
         uint32 const now = WorldTimer::getMSTime();
         for (std::string& note : notes)
         {

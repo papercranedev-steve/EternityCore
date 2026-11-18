@@ -1133,7 +1133,10 @@ namespace Commander
         uint32 refreshedAtMs = 0;
         uint32 packsRefreshedAtMs = 0;
 
-        ObjectGuid leader;           // party leader (the player)
+        ObjectGuid leader;           // party leader (the player; a bot for a team of bots, Commander/Team.h)
+        // A real player is in the team, on any map (a player's party). Without one (a population
+        // unit) the modules about the player (his run away from the fight, notes to him) are off.
+        bool humanInTeam = false;
         LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
         std::vector<PartyMemberFacts> party;
         // Dead members with their body or corpse on this map (a released one's ghost is not in
@@ -1214,6 +1217,17 @@ namespace Commander
         // combat, must go to the tank fighting 30 yd away. `inCombat`: the bot's own flag (an
         // ally's fight it joined counts too).
         bool InFight(bool inCombat) const { return inCombat || HasPartyEnemy(); }
+        // A bot alone (a team of one, pets aside, no player anywhere in its team): it plays
+        // tank, healer and damage itself.
+        bool IsSolo() const
+        {
+            if (humanInTeam)
+                return false;
+            uint32 members = 0;
+            for (PartyMemberFacts const& m : party)
+                members += m.isPet ? 0 : 1;
+            return members == 1;
+        }
     };
 }
 

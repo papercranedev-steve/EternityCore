@@ -20,6 +20,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Player.h"
 
@@ -95,9 +96,16 @@ namespace
                 if (bot.GetRole() == ROLE_HEALER)
                     bot.FindAndPreHealTarget();
             }
+            // Alone (a team of one, Commander/Team.h): nobody else heals it, as the paladin and
+            // shaman rotations heal themselves when low.
+            else if (!healPlanned && !Commander::Team::IsShared(me) && me->GetHealthPercent() < SOLO_SELF_HEAL_PCT &&
+                     bot.HealInjuredTarget(me))
+                return;
             else if (Unit* pVictim = me->GetVictim())
                 Damage(pVictim);
         }
+
+        static constexpr float SOLO_SELF_HEAL_PCT = 40.0f;
 
     private:
         // pFreeCast (Inner Focus): cast first when the group version is chosen, so the prayer
