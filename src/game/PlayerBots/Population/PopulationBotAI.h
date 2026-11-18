@@ -53,6 +53,12 @@ namespace Population
         bool ReachedTarget() const;
         void FacePoint(float x, float y);
         void DeclineInviteNow();
+        // Walk in from the entrance (logged in out of sight) / out to the leave spot.
+        void UpdateEntering();
+        void BeginLeaving();
+        void UpdateLeaving();
+        void ArriveAtSpot();
+        void LogOut();
 
         SpawnRequest m_request;
         std::string m_name;
@@ -60,6 +66,11 @@ namespace Population
 
         ShortTimeTracker m_updateTimer;
         uint32 m_nextIdleAtMs = 0;      // WorldTimer::getMSTime()
+
+        // Coming in from out of sight, living at the spot, going out of sight to log out.
+        enum class Phase : uint8 { Entering, Living, Leaving, Gone };
+        Phase m_phase = Phase::Living;
+        uint32 m_walkRetries = 0;
         // m_initialized comes from CombatBotBaseAI.
 
         // Movement target of the current MovePoint (stand shuffle or mover leg).

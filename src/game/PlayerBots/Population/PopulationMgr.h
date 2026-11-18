@@ -116,7 +116,8 @@ namespace Population
             std::string name;
             uint32 bornMs = 0;
             uint32 expireMs = 0;
-            bool removing = false;
+            bool removing = false;      // logging out, or walking out of sight to log out
+            uint32 leaveByMs = 0;       // != 0: walking out (BotHandle::leave), forced out at this time
         };
 
         void EnsureDataLoaded();
@@ -124,6 +125,8 @@ namespace Population
         // City (and later field) bots come from the roster. False: nobody free, skip this spawn.
         bool TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid);
         void RequestRemoval(Record& record);
+        // Lifetime over / city too full: log out, out of sight first when a player is looking.
+        void Retire(Record& record);
         // Roster members a real player invited become companions (Companions/CompanionMgr).
         void UpdateRecruits();
         uint32 RandomLifetimeMs() const;

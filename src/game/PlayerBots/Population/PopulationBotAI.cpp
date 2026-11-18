@@ -112,6 +112,13 @@ namespace Population
 
     bool PopulationBotAI::OnSessionLoaded(PlayerBotEntry* /*entry*/, WorldSession* sess)
     {
+        if (m_request.hasEntrance)
+        {
+            float const o = std::atan2(m_request.y - m_request.entranceY, m_request.x - m_request.entranceX);
+            return SpawnNewPlayer(sess, m_request.classId, m_request.race, m_request.mapId, 0,
+                m_request.entranceX, m_request.entranceY, m_request.entranceZ, o < 0.0f ? o + 2.0f * float(M_PI) : o,
+                nullptr, m_name.c_str(), m_request.hasLook ? &m_request.look : nullptr);
+        }
         return SpawnNewPlayer(sess, m_request.classId, m_request.race, m_request.mapId, 0,
             m_request.x, m_request.y, m_request.z, m_request.o, nullptr, m_name.c_str(),
             m_request.hasLook ? &m_request.look : nullptr);
@@ -145,6 +152,17 @@ namespace Population
 
         if (me->IsDead())
             return;
+
+        if (m_handle->leave && m_phase != Phase::Leaving && m_phase != Phase::Gone)
+            BeginLeaving();
+
+        switch (m_phase)
+        {
+            case Phase::Entering: UpdateEntering(); return;
+            case Phase::Leaving:  UpdateLeaving(); return;
+            case Phase::Gone:     return;
+            case Phase::Living:   break;
+        }
 
         switch (m_request.role)
         {
@@ -431,12 +449,13 @@ namespace Population
             if (Unit* pFace = me->GetMap()->GetUnit(m_request.faceGuid))
                 me->SetFacingToObject(pFace);
         }
-        else if (m_request.hasFacePoint)
+        else if (m_request.hasFacePoint && !m_request.hasEntrance)
             FacePoint(m_request.faceX, m_request.faceY);
 
-        m_homeX = me->GetPositionX();
-        m_homeY = me->GetPositionY();
-        m_homeZ = me->GetPositionZ();
+        // The spot, also when logged in at an entrance out of sight.
+        m_homeX = m_request.hasEntrance ? m_request.x : me->GetPositionX();
+        m_homeY = m_request.hasEntrance ? m_request.y : me->GetPositionY();
+        m_homeZ = m_request.hasEntrance ? m_request.z : me->GetPositionZ();
         uint32 const startMs = WorldTimer::getMSTime();
         m_nextShuffleAtMs = startMs + urand(60, 240) * IN_MILLISECONDS;
         m_waitUntilMs = startMs + urand(5, 20) * IN_MILLISECONDS;
@@ -449,6 +468,72 @@ namespace Population
 
         m_nextIdleAtMs = WorldTimer::getMSTime() + urand(5000, 20000);
         m_initialized = true;
+
+        if (m_request.hasEntrance)
+        {
+            m_phase = Phase::Entering;
+            MoveTo(m_homeX, m_homeY, m_homeZ);
+        }
+    }
+
+    void PopulationBotAI::UpdateEntering()
+    {
+        if (!ReachedTarget() && WorldTimer::getMSTime() < m_moveDeadlineMs)
+            return;
+
+        if (me->GetDistance2d(m_homeX, m_homeY, SizeFactor::None) <= 3.0f)
+        {
+            ArriveAtSpot();
+            return;
+        }
+
+        // No path, pushed off, stuck: once more, then give up (still near the entrance, out of sight).
+        if (m_walkRetries++ < 1)
+        {
+            MoveTo(m_homeX, m_homeY, m_homeZ);
+            return;
+        }
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[PopBot] %s could not walk in from (%.1f, %.1f, %.1f), logging out.",
+            m_name.c_str(), m_request.entranceX, m_request.entranceY, m_request.entranceZ);
+        LogOut();
+    }
+
+    void PopulationBotAI::ArriveAtSpot()
+    {
+        m_phase = Phase::Living;
+        uint32 const now = WorldTimer::getMSTime();
+        if (m_request.hasFacePoint)
+            FacePoint(m_request.faceX, m_request.faceY);
+        // Mover: stands at the first route spot for a moment, like after any leg.
+        m_routeIndex = 0;
+        m_moving = false;
+        m_waitUntilMs = now + urand(5, 15) * IN_MILLISECONDS;
+        m_nextIdleAtMs = now + urand(3, 9) * IN_MILLISECONDS;
+    }
+
+    void PopulationBotAI::BeginLeaving()
+    {
+        m_phase = Phase::Leaving;
+        m_walkRetries = 0;
+        if (me->IsNonMeleeSpellCasted(false))
+            me->InterruptNonMeleeSpells(false);
+        MoveTo(m_handle->leaveX, m_handle->leaveY, m_handle->leaveZ);
+    }
+
+    void PopulationBotAI::UpdateLeaving()
+    {
+        if (!ReachedTarget() && WorldTimer::getMSTime() < m_moveDeadlineMs)
+            return;
+        // There, or no way there: log out (the manager also forces it after a while).
+        LogOut();
+    }
+
+    void PopulationBotAI::LogOut()
+    {
+        m_phase = Phase::Gone;
+        me->GetMotionMaster()->MoveIdle();
+        if (botEntry)
+            botEntry->requestRemoval = true;
     }
 
     void PopulationBotAI::EquipForTier()

@@ -86,6 +86,11 @@ namespace Population
         std::vector<CityState> const& States() const { return m_states; }
         CityState const* FindState(uint32 zone) const;
 
+        // A walkable spot of the city near (x, y, z) that no player in the world can see, to log
+        // in at and walk from, or to walk to and log out. Known spots first (anchors, scene points),
+        // then the ground around. False: none (the bot should not appear / vanish now).
+        bool PickHiddenSpot(uint32 zone, float x, float y, float z, Observers const& observers, Waypoint& out) const;
+
         // Stand spot in front of an anchor (ground height and line of sight checked on `map`).
         static bool PickStandSpot(Map* map, CityAnchor const& anchor, float minDist, float maxDist, float spread, Waypoint& out);
 

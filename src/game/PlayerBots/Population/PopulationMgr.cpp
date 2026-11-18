@@ -13,6 +13,9 @@ namespace Population
 {
     namespace
     {
+        // The AI gives up walking out after 2 minutes (MoveTo deadline); this is the backstop.
+        uint32 const LEAVE_TIMEOUT_MS = 150 * IN_MILLISECONDS;
+
         int64 SteadyNowMs()
         {
             return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -164,8 +167,16 @@ namespace Population
         EnsureDataLoaded();
 
         for (Record& r : m_bots)
+        {
             if (!r.removing && r.expireMs && m_nowMs >= r.expireMs)
+                Retire(r);
+            // Walking out of sight took too long (stuck): log out where he is.
+            else if (r.leaveByMs && m_nowMs >= r.leaveByMs)
+            {
+                r.leaveByMs = 0;
                 RequestRemoval(r);
+            }
+        }
 
         UpdateRecruits();
         if (m_observers.Update(m_nowMs))
@@ -261,6 +272,19 @@ namespace Population
             return;
         }
 
+        // A player could see the spot: log in out of sight and walk there. No such place right
+        // now: skip, the director asks again with another spot.
+        if (r.kind == BotKind::City && m_observers.CanSee(r.mapId, r.x, r.y, r.z))
+        {
+            Waypoint entrance;
+            if (!m_city.PickHiddenSpot(r.cityZone, r.x, r.y, r.z, m_observers, entrance))
+                return;
+            r.hasEntrance = true;
+            r.entranceX = entrance.x;
+            r.entranceY = entrance.y;
+            r.entranceZ = entrance.z;
+        }
+
         std::string name;
         uint32 guid = 0;    // 0 = new guid
         if (r.kind == BotKind::City && m_roster.IsActive())
@@ -343,8 +367,34 @@ namespace Population
     void PopulationMgr::RequestRemoval(Record& record)
     {
         record.removing = true;
+        record.leaveByMs = 0;
         if (record.handle->alive && record.handle->ai && record.handle->ai->botEntry)
             record.handle->ai->botEntry->requestRemoval = true;
+    }
+
+    void PopulationMgr::Retire(Record& record)
+    {
+        Player* me = OnlinePlayer(*record.handle);
+        if (!me || record.request.kind != BotKind::City ||
+            !m_observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+        {
+            RequestRemoval(record);
+            return;
+        }
+
+        // In sight: walk somewhere nobody looks first (no such place: log out here, like a player).
+        Waypoint spot;
+        if (!m_city.PickHiddenSpot(record.request.cityZone, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), m_observers, spot))
+        {
+            RequestRemoval(record);
+            return;
+        }
+        record.removing = true;     // a replacement may come in already
+        record.leaveByMs = m_nowMs + LEAVE_TIMEOUT_MS;
+        record.handle->leaveX = spot.x;
+        record.handle->leaveY = spot.y;
+        record.handle->leaveZ = spot.z;
+        record.handle->leave = true;
     }
 
     uint32 PopulationMgr::DespawnAll()
@@ -352,7 +402,7 @@ namespace Population
         uint32 count = 0;
         for (Record& r : m_bots)
         {
-            if (r.removing)
+            if (r.removing && !r.leaveByMs)     // walking out counts: he goes right away
                 continue;
             RequestRemoval(r);
             ++count;
@@ -367,7 +417,7 @@ namespace Population
             Player* me = OnlinePlayer(*r.handle);
             if (me && me->GetObjectGuid() == guid)
             {
-                if (!r.removing)
+                if (!r.removing || r.leaveByMs)
                     RequestRemoval(r);
                 return true;
             }
@@ -409,7 +459,7 @@ namespace Population
             [zone](SpawnRequest const& q) { return q.kind == BotKind::City && q.cityZone == zone; }), m_queue.end());
 
         for (Record& r : m_bots)
-            if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone)
+            if ((!r.removing || r.leaveByMs) && r.request.kind == BotKind::City && r.request.cityZone == zone)
                 RequestRemoval(r);
     }
 
@@ -434,7 +484,7 @@ namespace Population
                         oldest = &r;
             if (oldest)
             {
-                RequestRemoval(*oldest);
+                Retire(*oldest);
                 return true;
             }
         }

@@ -47,6 +47,11 @@ namespace Population
         std::vector<Observer> const& All() const { return m_observers; }
         bool IsArrivingOwner(uint32 guid) const;
 
+        // Could a player in the world see someone appear or vanish at this spot? Within the
+        // map's visibility distance (plus a margin) and in line of sight; very close counts
+        // even behind a wall. Arriving observers see nothing yet.
+        bool CanSee(uint32 mapId, float x, float y, float z) const;
+
     private:
         struct Pending
         {

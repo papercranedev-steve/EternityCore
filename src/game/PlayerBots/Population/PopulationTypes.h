@@ -70,6 +70,9 @@ namespace Population
         float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
         uint32 lifetimeMs = 0;      // 0 = random from PopBot.Lifetime*
         bool prewarm = false;       // a player is about to arrive: spawned without the PopBot.SpawnGapMs pause
+        // Someone could see (x, y, z): log in out of sight at the entrance and walk there.
+        bool hasEntrance = false;
+        float entranceX = 0.0f, entranceY = 0.0f, entranceZ = 0.0f;
         ObjectGuid faceGuid;        // face this unit once spawned (optional)
         bool hasFacePoint = false;  // face (faceX, faceY) once spawned
         float faceX = 0.0f, faceY = 0.0f;
@@ -99,6 +102,10 @@ namespace Population
         // Set by the AI (map thread) when a real player invited a roster member; the manager
         // recruits it on its next update (world thread, maps idle) and clears it.
         ObjectGuid recruiter;
+        // Set by the manager (world thread, maps idle): walk to this spot out of everyone's
+        // sight, then log out (the AI asks PlayerBotMgr for the removal itself).
+        bool leave = false;
+        float leaveX = 0.0f, leaveY = 0.0f, leaveZ = 0.0f;
     };
 }
 

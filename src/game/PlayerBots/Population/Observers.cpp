@@ -2,6 +2,8 @@
 #include "Companions/CompanionMgr.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
+#include "Map.h"
+#include "MapManager.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include <algorithm>
@@ -111,6 +113,30 @@ namespace Population
 
         m_observers.insert(m_observers.end(), m_arrivals.begin(), m_arrivals.end());
         return added;
+    }
+
+    bool Observers::CanSee(uint32 mapId, float x, float y, float z) const
+    {
+        float const CLOSE = 20.0f;      // around a corner: too close to pop in
+        float const MARGIN = 15.0f;     // the player moves before the bot does
+
+        Map const* map = sMapMgr.FindMap(mapId, 0);
+        float const visible = (map ? map->GetVisibilityDistance() : 100.0f) + MARGIN;
+
+        for (Observer const& o : m_observers)
+        {
+            if (o.arriving || o.mapId != mapId)
+                continue;
+            float const dx = o.x - x, dy = o.y - y, dz = o.z - z;
+            float const distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq > visible * visible)
+                continue;
+            if (distSq <= CLOSE * CLOSE || !map)
+                return true;
+            if (map->isInLineOfSight(o.x, o.y, o.z + 2.0f, x, y, z + 2.0f))
+                return true;
+        }
+        return false;
     }
 
     bool Observers::IsArrivingOwner(uint32 guid) const
