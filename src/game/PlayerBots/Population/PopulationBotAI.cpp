@@ -1,6 +1,10 @@
 #include "Population/PopulationBotAI.h"
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Team.h"
+#include "Shared/ClassTraining.h"
 #include "Shared/Inventory.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
@@ -98,7 +102,7 @@ namespace Population
     }
 
     PopulationBotAI::PopulationBotAI(SpawnRequest const& request, std::string name, std::shared_ptr<BotHandle> handle)
-        : CombatBotBaseAI(), m_request(request), m_name(std::move(name)), m_handle(std::move(handle))
+        : TeamBotAI(), m_request(request), m_name(std::move(name)), m_handle(std::move(handle))
     {
         m_handle->ai = this;
         m_updateTimer.Reset(1000);
@@ -106,6 +110,8 @@ namespace Population
 
     PopulationBotAI::~PopulationBotAI()
     {
+        if (!m_teamGuid.IsEmpty())
+            Commander::Team::LeaveUnit(m_teamGuid);
         m_handle->alive = false;
         m_handle->ai = nullptr;
     }
@@ -133,6 +139,12 @@ namespace Population
     void PopulationBotAI::UpdateAI(uint32 const diff)
     {
         UpdateSocial(diff);
+
+        if (m_request.kind == BotKind::Field)
+        {
+            UpdateField(diff);
+            return;
+        }
 
         m_updateTimer.Update(diff);
         if (!m_updateTimer.Passed())
@@ -171,6 +183,102 @@ namespace Population
             case CityRole::Crafter: UpdateCrafter(); break;
             default:              UpdateIdle(); break;
         }
+    }
+
+    void PopulationBotAI::InitializeField()
+    {
+        // Below the premade specs (19) a population bot knows no class spell: the trainer's
+        // lessons for its level, free (what it learned before we met it).
+        BotShared::ClassTraining::LearnAvailable(me, false);
+        ResetSpellData();
+        PopulateSpellData();
+        m_rotationCreated = false;
+        Rotation();
+        SummonPetIfNeeded();
+        m_fightsToLeave = urand(FIELD_FIGHTS_MIN, FIELD_FIGHTS_MAX);
+
+        // A team of one for the Commander.
+        m_teamGuid = me->GetObjectGuid();
+        Commander::Team::JoinUnit(m_teamGuid, m_request.unitId);
+    }
+
+    void PopulationBotAI::UpdateField(uint32 diff)
+    {
+        // Every frame: the Commander's mid-cast checks, movement hands, stance swap.
+        if (m_initialized && me->IsInWorld() && UpdateFrameHands(diff))
+            return;
+
+        m_updateTimer.Update(diff);
+        if (!m_updateTimer.Passed())
+            return;
+        m_updateTimer.Reset(sCommanderMgr.GetBotUpdateInterval());
+
+        BotTickCostScope cost;
+
+        if (!me->IsInWorld() || me->IsBeingTeleported())
+            return;
+
+        if (!m_initialized)
+        {
+            Initialize();
+            return;
+        }
+
+        if (m_resetSpellData)
+        {
+            ResetSpellData();
+            PopulateSpellData();
+            m_resetSpellData = false;
+        }
+
+        sCommanderMgr.OnBotUpdate(this);
+
+        // Falling, controlled, dead (the corpse run), auto-repeating, casting.
+        if (UpdateBody())
+            return;
+
+        // A fight over: one more done; enough of them, or nothing left to hunt here: moving on.
+        bool const inCombat = me->IsInCombat();
+        if (m_wasInCombat && !inCombat)
+            ++m_fights;
+        m_wasInCombat = inCombat;
+        if (!inCombat && !m_handle->done)
+        {
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            uint32 const idleSince = commander ? commander->GetPlan().hunt.idleSinceMs : 0;
+            if (m_fights >= m_fightsToLeave ||
+                (idleSince && WorldTimer::getMSTimeDiff(idleSince, WorldTimer::getMSTime()) >= FIELD_IDLE_LEAVE_MS))
+                m_handle->done = true;
+        }
+
+        bool const commanderOutOfCombat = !inCombat && sCommanderMgr.WantsOutOfCombatControl(this);
+
+        // Eating and drinking are the Commander's (RestBehavior), as for party bots.
+        EndRestWhenFull();
+        bool const needsRest = !inCombat && NeedsRest();
+        bool const resting = !inCombat && IsResting();
+        if (me->GetStandState() != UNIT_STAND_STATE_STAND && !resting)
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+
+        if (!inCombat && !me->IsMounted() && !resting)
+        {
+            UpdateOutOfCombatAI();      // buffs, pet
+            if (m_isBuffing || me->IsNonMeleeSpellCasted())
+                return;
+        }
+
+        // After a fight: its loot, as a player (not with a new victim chosen already).
+        if (!inCombat && !resting && !me->GetVictim() && Life::LootRun::Update(me, m_lootRun, nullptr))
+            return;
+        if (inCombat)
+            Life::LootRun::Stop(me, m_lootRun);
+
+        // The Commander picks the next fight (HuntAssigner) and fights it.
+        if (RunCommanderHook(commanderOutOfCombat, needsRest, resting))
+            return;
+
+        StopTakenOverMovement();
+        FightVictim(me->GetVictim());
     }
 
     void PopulationBotAI::SetupProfession()
@@ -436,6 +544,8 @@ namespace Population
 
         ResetSpellData();
         PopulateSpellData();
+        if (m_request.kind == BotKind::Field)
+            InitializeField();
 
         me->SetHealthPercent(100.0f);
         me->SetPowerPercent(me->GetPowerType(), 100.0f);

@@ -11,14 +11,17 @@
 #ifndef MANGOS_POPULATION_BOT_AI_H
 #define MANGOS_POPULATION_BOT_AI_H
 
-#include "CombatBotBaseAI.h"
+#include "TeamBotAI.h"
 #include "Population/PopulationTypes.h"
+#include "Life/Errands/LootRun.h"
 #include "Timer.h"
 #include <memory>
 
 namespace Population
 {
-    class PopulationBotAI : public CombatBotBaseAI
+    // A TeamBotAI: a field bot is a team of one the Commander fights with (Commander/Team.h,
+    // unit SpawnRequest::unitId) and hunts for (HuntAssigner). City bots never fight: no team.
+    class PopulationBotAI : public TeamBotAI
     {
     public:
         PopulationBotAI(SpawnRequest const& request, std::string name, std::shared_ptr<BotHandle> handle);
@@ -29,15 +32,24 @@ namespace Population
         void UpdateAI(uint32 const diff) override;
         void OnPacketReceived(WorldPacket const* packet) override;
 
+        // No player leads it.
+        Player* GetPartyLeader() const override { return nullptr; }
+
         SpawnRequest const& GetRequest() const { return m_request; }
         std::string const& GetBotName() const { return m_name; }
         bool IsInitialized() const { return m_initialized; }
 
-        // Combat comes with the field behaviour (phase 1c). Not called yet.
-        void UpdateInCombatAI() override {}
-        void UpdateOutOfCombatAI() override {}
+        // Field bots: fights before it moves on (logs out out of sight).
+        static constexpr uint32 FIELD_FIGHTS_MIN = 5;
+        static constexpr uint32 FIELD_FIGHTS_MAX = 15;
+        // Nothing to hunt for this long: moves on.
+        static constexpr uint32 FIELD_IDLE_LEAVE_MS = 60 * 1000;
 
     private:
+        // Field bot tick: the Commander's body steps (TeamBotAI) around its own life: looting
+        // after a fight (Life/Errands/LootRun.h), counting fights, moving on.
+        void UpdateField(uint32 diff);
+        void InitializeField();
         void Initialize();
         void EquipForTier();
         void RefreshAppearanceForNearbyPlayers();
@@ -64,8 +76,16 @@ namespace Population
         std::string m_name;
         std::shared_ptr<BotHandle> m_handle;
 
-        ShortTimeTracker m_updateTimer;
+        // (m_updateTimer comes from TeamBotAI: the population interval in town, the
+        // Commander's bot interval in the field.)
         uint32 m_nextIdleAtMs = 0;      // WorldTimer::getMSTime()
+
+        // Field
+        ObjectGuid m_teamGuid;          // joined Commander::Team unit with this guid
+        Life::LootRunState m_lootRun;
+        bool m_wasInCombat = false;
+        uint32 m_fights = 0;
+        uint32 m_fightsToLeave = 0;
 
         // Coming in from out of sight, living at the spot, going out of sight to log out.
         enum class Phase : uint8 { Entering, Living, Leaving, Gone };

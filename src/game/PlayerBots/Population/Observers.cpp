@@ -2,6 +2,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
+#include "DBCStores.h"
 #include "Map.h"
 #include "MapManager.h"
 #include "ObjectAccessor.h"
@@ -59,6 +60,8 @@ namespace Population
                 continue;
             o.accountId = pending.accountId;
             o.team = uint32(Player::TeamForRace(f[1].GetUInt8()));
+            if (ChrRacesEntry const* race = sChrRacesStore.LookupEntry(f[1].GetUInt8()))
+                o.factionTemplate = race->FactionID;
             o.mapId = f[2].GetUInt32();
             o.zone = f[3].GetUInt32();
             o.x = f[4].GetFloat();
@@ -99,6 +102,8 @@ namespace Population
             o.x = p->GetPositionX();
             o.y = p->GetPositionY();
             o.z = p->GetPositionZ();
+            o.factionTemplate = p->GetFactionTemplateId();
+            o.travelling = p->IsTaxiFlying();
             m_observers.push_back(o);
         }
 

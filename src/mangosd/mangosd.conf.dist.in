@@ -3297,6 +3297,29 @@ AHBuyer.MaxMarkup = 50
 #        Prewarm spawns per world update; they skip PopBot.SpawnGapMs (1 - 50).
 #        Default: 4
 #
+#    PopBot.Field.Enable
+#        People levelling in the open world around the player (continents, not in cities).
+#        Each is a team of one for the PartyBot Commander: it hunts creatures at its level,
+#        rests, loots, and logs out out of sight.
+#        Default: 1
+#
+#    PopBot.Field.MaxUnits / PopBot.Field.Radius
+#        At most this many field bots within this many yards of a player (0 - 20 / 100 - 500).
+#        Default: 4 / 250
+#
+#    PopBot.Field.SpawnMinYd / PopBot.Field.SpawnMaxYd
+#        Field bots log in this far from the player (the inner edge is at least the map's
+#        visibility distance + 25), at a creature spawn point nobody can see.
+#        Default: 130 / 240
+#
+#    PopBot.Field.KeepYd
+#        A field bot farther than this from every player logs out (only out of sight).
+#        Default: 320
+#
+#    PopBot.Field.CheckMinSec / PopBot.Field.CheckMaxSec
+#        Seconds between two checks around a player (one new field bot per check).
+#        Default: 15 / 45
+#
 #    PopBot.LifetimeMinMinutes
 #    PopBot.LifetimeMaxMinutes
 #        Each bot logs out after a random time in this range, so faces keep changing.
@@ -3399,6 +3422,14 @@ PopBot.SpawnGapMs = 3000
 PopBot.Prewarm.Enable = 1
 PopBot.Prewarm.WaitSec = 90
 PopBot.Prewarm.PerTick = 4
+PopBot.Field.Enable = 1
+PopBot.Field.MaxUnits = 4
+PopBot.Field.Radius = 250
+PopBot.Field.SpawnMinYd = 130
+PopBot.Field.SpawnMaxYd = 240
+PopBot.Field.KeepYd = 320
+PopBot.Field.CheckMinSec = 15
+PopBot.Field.CheckMaxSec = 45
 PopBot.LifetimeMinMinutes = 10
 PopBot.LifetimeMaxMinutes = 40
 PopBot.City.Enable = 1

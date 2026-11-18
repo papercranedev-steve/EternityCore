@@ -15,6 +15,7 @@
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
 #include "Population/CityPopulation.h"
+#include "Population/FieldPopulation.h"
 #include "Population/Observers.h"
 #include "Population/Roster.h"
 #include <atomic>
@@ -101,6 +102,15 @@ namespace Population
         // One bot leaves (oldest stand bot, else oldest mover; veterans last).
         bool DespawnOneCity(uint32 zone);
 
+        // Field director helpers (FieldPopulation.h). Field bots within `radius` (2d) of x/y,
+        // queued requests included.
+        uint32 CountField(uint32 mapId, float x, float y, float radius) const;
+        // Every field bot leaves, queued requests are dropped (field off).
+        void DespawnField();
+        // Field bots out of everyone's sight leave when no observer is within `keepYd`, their
+        // lifetime is over, or they are done here (BotHandle::done).
+        void RetireFieldBots(Observers const& observers, float keepYd);
+
         // Cost of PopulationBotAI::UpdateAI ticks.
         void RecordBotTick(uint64 micros);
         TickStats GetStats() const;
@@ -149,7 +159,9 @@ namespace Population
         ScenePoints m_points;
         Observers m_observers;
         CityDirector m_city;
+        FieldDirector m_field;
         Roster m_roster;
+        uint32 m_nextUnitId = 0;        // Commander team units of field bots
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

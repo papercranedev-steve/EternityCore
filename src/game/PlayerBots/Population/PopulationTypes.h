@@ -85,6 +85,11 @@ namespace Population
         GearPlan gear;
         uint32 money = 0;           // copper
 
+        // Field bots: the levels that fit the creatures here (0 = any), and its Commander team
+        // unit (Commander/Team.h, a team of one).
+        uint8 minLevel = 0, maxLevel = 0;
+        uint32 unitId = 0;
+
         // City bots
         uint32 cityZone = 0;
         CityRole role = CityRole::None;
@@ -106,6 +111,9 @@ namespace Population
         // sight, then log out (the AI asks PlayerBotMgr for the removal itself).
         bool leave = false;
         float leaveX = 0.0f, leaveY = 0.0f, leaveZ = 0.0f;
+        // Set by a field bot's AI (map thread): it is done here (enough fights, nothing left to
+        // hunt) and would like to log out; the manager retires it (world thread, maps idle).
+        bool done = false;
     };
 }
 

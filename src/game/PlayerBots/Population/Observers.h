@@ -26,6 +26,8 @@ namespace Population
         uint32 mapId = 0;
         uint32 zone = 0;
         float x = 0.0f, y = 0.0f, z = 0.0f;
+        uint32 factionTemplate = 0; // whose enemies he would see as enemies
+        bool travelling = false;    // on a flight path: passes by, nobody needs placing
         bool arriving = false;      // not in the world yet: logout position
         uint32 expireMs = 0;        // arriving only
     };

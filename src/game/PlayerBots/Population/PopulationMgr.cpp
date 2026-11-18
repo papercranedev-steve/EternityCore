@@ -106,6 +106,7 @@ namespace Population
         m_lifetimeMaxMs = maxMinutes * MINUTE * IN_MILLISECONDS;
 
         m_city.LoadConfig();
+        m_field.LoadConfig();
         m_roster.LoadConfig();
         m_observers.LoadConfig();
 
@@ -168,7 +169,8 @@ namespace Population
 
         for (Record& r : m_bots)
         {
-            if (!r.removing && r.expireMs && m_nowMs >= r.expireMs)
+            // (field bots leave only out of sight: FieldDirector, RetireFieldBots)
+            if (!r.removing && r.expireMs && m_nowMs >= r.expireMs && r.request.kind != BotKind::Field)
                 Retire(r);
             // Walking out of sight took too long (stuck): log out where he is.
             else if (r.leaveByMs && m_nowMs >= r.leaveByMs)
@@ -187,6 +189,7 @@ namespace Population
         }
         m_roster.Update(m_nowMs, m_identity, m_observers);
         m_city.Update(*this, m_observers, m_nowMs);
+        m_field.Update(*this, m_observers, m_nowMs);
 
         // Prewarm requests (at the front) go out several per tick, the others one per PopBot.SpawnGapMs.
         uint32 burst = 0;
@@ -285,17 +288,22 @@ namespace Population
             r.entranceZ = entrance.z;
         }
 
+        if (r.kind == BotKind::Field)
+            r.unitId = ++m_nextUnitId;
+
         std::string name;
         uint32 guid = 0;    // 0 = new guid
-        if (r.kind == BotKind::City && m_roster.IsActive())
+        if ((r.kind == BotKind::City || r.kind == BotKind::Field) && m_roster.IsActive())
         {
             if (!TakeFromRoster(r, name, guid))
-                return;     // nobody free: the city stays a little emptier
+                return;     // nobody free (at these levels): a little emptier here
         }
         else
         {
             if (r.tier == GearTier::Showcase)
                 r.level = 60;
+            else if (!r.level && r.minLevel)
+                r.level = uint8(urand(r.minLevel, std::max(r.minLevel, r.maxLevel)));
             else if (!r.level)
                 r.level = Identity::RandomCityLevel();
 
@@ -342,6 +350,11 @@ namespace Population
         query.team = request.team == HORDE ? HORDE : ALLIANCE;
         query.zone = request.cityZone;
         query.preferHigh = request.role == CityRole::Showcase;
+        if (request.minLevel)
+        {
+            query.minLevel = request.minLevel;
+            query.maxLevel = std::max(request.minLevel, request.maxLevel);
+        }
 
         RosterPick pick;
         if (!m_roster.Pick(query, m_nowMs, pick))
@@ -531,6 +544,66 @@ namespace Population
             list.push_back(std::move(info));
         }
         return list;
+    }
+
+    uint32 PopulationMgr::CountField(uint32 mapId, float x, float y, float radius) const
+    {
+        float const radiusSq = radius * radius;
+        auto isNear = [&](uint32 m, float px, float py)
+        {
+            float const dx = px - x, dy = py - y;
+            return m == mapId && dx * dx + dy * dy <= radiusSq;
+        };
+        uint32 count = 0;
+        for (Record const& r : m_bots)
+        {
+            if (r.removing || r.request.kind != BotKind::Field)
+                continue;
+            if (Player* me = OnlinePlayer(*r.handle))
+                count += isNear(me->GetMapId(), me->GetPositionX(), me->GetPositionY()) ? 1 : 0;
+            else
+                count += isNear(r.request.mapId, r.request.x, r.request.y) ? 1 : 0;
+        }
+        for (SpawnRequest const& q : m_queue)
+            if (q.kind == BotKind::Field && isNear(q.mapId, q.x, q.y))
+                ++count;
+        return count;
+    }
+
+    void PopulationMgr::DespawnField()
+    {
+        m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(),
+            [](SpawnRequest const& q) { return q.kind == BotKind::Field; }), m_queue.end());
+        for (Record& r : m_bots)
+            if ((!r.removing || r.leaveByMs) && r.request.kind == BotKind::Field)
+                RequestRemoval(r);
+    }
+
+    void PopulationMgr::RetireFieldBots(Observers const& observers, float keepYd)
+    {
+        float const keepSq = keepYd * keepYd;
+        for (Record& r : m_bots)
+        {
+            if (r.removing || r.request.kind != BotKind::Field)
+                continue;
+            Player* me = OnlinePlayer(*r.handle);
+            if (!me)
+                continue;
+            bool const expired = r.expireMs && m_nowMs >= r.expireMs;
+            bool needed = false;
+            for (Observer const& o : observers.All())
+            {
+                float const dx = o.x - me->GetPositionX(), dy = o.y - me->GetPositionY();
+                if (o.mapId == me->GetMapId() && dx * dx + dy * dy <= keepSq)
+                    needed = true;
+            }
+            if (needed && !expired && !r.handle->done)
+                continue;
+            // Logs out only where nobody sees it (else it goes on until it is out of sight).
+            if (observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+                continue;
+            RequestRemoval(r);
+        }
     }
 
     void PopulationMgr::RecordBotTick(uint64 micros)
