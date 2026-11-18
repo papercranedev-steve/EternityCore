@@ -127,6 +127,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "reply",      SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotReplyCommand,       "", nullptr },
         { "rewardmode", SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRewardModeCommand,  "", nullptr },
         { "gate",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotGateCommand,        "", nullptr },
+        { "mirror",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotMirrorCommand,      "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

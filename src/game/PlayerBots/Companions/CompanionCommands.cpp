@@ -7,12 +7,16 @@
  *   .partybot gate add [name]                 a town gate where the player stands (companions
  *                 remove                      wait there after a town trip, Shared/TownGates)
  *                 list                        (remove: the nearest within 30 yd; list: this zone)
+ *   .partybot mirror show <id>                dev: a mirror quest in your own quest log
+ *                    count <id> <objective> <n>    (Shared/QuestMirror; objective 1..4)
+ *                    remove <id>
  */
 
 #include "Chat.h"
 #include "Player.h"
 #include "Companions/CompanionMgr.h"
 #include "Life/Requests/RequestBoard.h"
+#include "Shared/QuestMirror.h"
 #include "Shared/TownGates.h"
 #include "WorldSession.h"
 #include <cstring>
@@ -123,6 +127,63 @@ bool ChatHandler::HandlePartyBotGateCommand(char* args)
     }
 
     SendSysMessage("PBERR;;usage;.partybot gate add [name] | remove | list");
+    SetSentErrorMessage(true);
+    return false;
+}
+
+bool ChatHandler::HandlePartyBotMirrorCommand(char* args)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    char* action = ExtractLiteralArg(&args);
+    uint32 id = 0;
+    if (!player || !action || !ExtractUInt32(&args, id))
+    {
+        SendSysMessage("PBERR;;usage;.partybot mirror show <id> | count <id> <objective 1-4> <n> | remove <id>");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    namespace Mirror = BotShared::QuestMirror;
+    if (strcmp(action, "show") == 0)
+    {
+        switch (Mirror::Show(player, id))
+        {
+            case Mirror::ShowResult::Shown:        PSendSysMessage("PBOK;;mirror;show;%u", id); return true;
+            case Mirror::ShowResult::AlreadyShown: PSendSysMessage("PBOK;;mirror;already;%u", id); return true;
+            case Mirror::ShowResult::LogFull:      PSendSysMessage("PBERR;;logfull;%u", id); break;
+            case Mirror::ShowResult::NoQuest:      PSendSysMessage("PBERR;;notfound;%u", id); break;
+        }
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (strcmp(action, "count") == 0)
+    {
+        uint32 objective = 0, count = 0;
+        if (!ExtractUInt32(&args, objective) || !ExtractUInt32(&args, count) || objective < 1 ||
+            !Mirror::SetCount(player, id, objective - 1, count))
+        {
+            PSendSysMessage("PBERR;;mirror;count;%u", id);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("PBOK;;mirror;count;%u;%u;%u", id, objective, count);
+        return true;
+    }
+
+    if (strcmp(action, "remove") == 0)
+    {
+        if (!Mirror::Remove(player, id))
+        {
+            PSendSysMessage("PBERR;;notfound;%u", id);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("PBOK;;mirror;remove;%u", id);
+        return true;
+    }
+
+    SendSysMessage("PBERR;;usage;.partybot mirror show <id> | count <id> <objective 1-4> <n> | remove <id>");
     SetSentErrorMessage(true);
     return false;
 }

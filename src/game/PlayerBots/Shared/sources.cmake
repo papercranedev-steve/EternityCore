@@ -40,6 +40,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/QuestRewards.cpp
   ${BOTSHARED_DIR}/QuestGrant.h
   ${BOTSHARED_DIR}/QuestGrant.cpp
+  ${BOTSHARED_DIR}/QuestMirror.h
+  ${BOTSHARED_DIR}/QuestMirror.cpp
   ${BOTSHARED_DIR}/Purchasing.h
   ${BOTSHARED_DIR}/Purchasing.cpp
   ${BOTSHARED_DIR}/WalkLength.h

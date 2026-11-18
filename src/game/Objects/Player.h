@@ -1092,7 +1092,6 @@ class Player final: public Unit
         bool CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* dest = nullptr) const;
         void GiveQuestSourceItemIfNeed(Quest const* pQuest);
 
-        uint16 FindQuestSlot(uint32 questId) const;
         uint32 GetQuestSlotQuestId(uint16 slot) const { return GetUInt32Value(PLAYER_QUEST_LOG_1_1 + slot * MAX_QUEST_OFFSET + QUEST_ID_OFFSET); }
         void SetQuestSlot(uint16 slot, uint32 questId, uint32 timer = 0)
         {
@@ -1111,6 +1110,8 @@ class Player final: public Unit
         void RemoveQuestSlotState(uint16 slot, uint8 state) { RemoveByteFlag(PLAYER_QUEST_LOG_1_1 + slot*MAX_QUEST_OFFSET + QUEST_COUNT_STATE_OFFSET, 3, state); }
         void SetQuestSlotTimer(uint16 slot, uint32 timer) { SetUInt32Value(PLAYER_QUEST_LOG_1_1 + slot*MAX_QUEST_OFFSET + QUEST_TIME_OFFSET, timer); }
     public:
+        // MAX_QUEST_LOG_SIZE: not in the log. (Public for bots: PlayerBots/Shared/QuestMirror.)
+        uint16 FindQuestSlot(uint32 questId) const;
         uint32 GetQuestLevelForPlayer(Quest const* pQuest) const { return pQuest && (pQuest->GetQuestLevel() > 0) ? pQuest->GetQuestLevel() : GetLevel(); }
         void PrepareQuestMenu(ObjectGuid guid, uint32 exceptQuestId = 0);
         void SendPreparedQuest(ObjectGuid guid);
