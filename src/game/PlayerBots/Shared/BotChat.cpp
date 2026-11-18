@@ -21,6 +21,17 @@ namespace BotChat
         return true;
     }
 
+    bool WhisperTo(Player* from, Player* to, std::string const& text)
+    {
+        if (!from || !to || !to->GetSession() || text.empty())
+            return false;
+        WorldPacket data;
+        ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, text.c_str(), LANG_UNIVERSAL, CHAT_TAG_NONE,
+            from->GetObjectGuid(), from->GetName());
+        to->GetSession()->SendPacket(&data);
+        return true;
+    }
+
     void SystemTo(Player* to, std::string const& text)
     {
         if (!to || !to->GetSession())

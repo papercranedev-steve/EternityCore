@@ -175,6 +175,12 @@ public:
     bool GetsFreeSupplies() const override;
     // Ends every daily-life errand walk (combat, a Commander plan, not a companion).
     void StopErrands();
+    // Out of combat, far from its anchor: teleported there (UpdateAI; and StartResting fills up
+    // at once, it is about to be teleported). Party bots beyond PB_TELEPORT_TO_LEADER_YD;
+    // companions only on another map (their town trips and the leader's own business keep them
+    // apart on purpose: they walk, Life/Errands/TownTrip.h).
+    bool CatchesUpByTeleport(Player const* pAnchor) const;
+    static constexpr float PB_TELEPORT_TO_LEADER_YD = 100.0f;
     // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
     std::vector<std::string> const& PersonalityTags() const;
     bool AttackStart(Unit* pVictim);

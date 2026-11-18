@@ -21,6 +21,9 @@ namespace BotShared
 
         // A system message to `to` only.
         void SystemTo(Player* to, std::string const& text);
+
+        // `from` whispers `text` to `to` (as /w; only `to` sees it). False without a session.
+        bool WhisperTo(Player* from, Player* to, std::string const& text);
     }
 }
 

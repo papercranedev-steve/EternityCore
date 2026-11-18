@@ -14,6 +14,7 @@ namespace Requests
             { Intent::Errand,       "errand",    30 * SEC,  60 * MIN,   10 * MIN },
             // (the turn-in waits QuestTurnIn::CHOICE_WAIT_MS: the popup closes before it)
             { Intent::RewardChoice, "reward",    25 * SEC,  0,          0 },
+            { Intent::Rendezvous,   "meet",      60 * SEC,  0,          0 },
         };
     }
 

@@ -1,6 +1,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Shared/ClassTraining.h"
 #include "Life/Requests/Phrases.h"
+#include "Shared/TownGates.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -114,6 +115,7 @@ namespace Companions
         }
 
         Life::Phrases::Load();
+        BotShared::TownGates::Load();
 
         ResolveAccount();
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [Companion] %u companions loaded, account '%s' (%u).",

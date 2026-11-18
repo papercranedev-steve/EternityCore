@@ -6,6 +6,7 @@
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/NpcDirectory.h"
+#include "Shared/TownGates.h"
 #include "Player.h"
 #include "Creature.h"
 #include "Map.h"
@@ -26,6 +27,12 @@ namespace TownTrip
             BotShared::BotChat::SayToParty(me, Phrases::Say(key, tags, vars));
         }
 
+        void Whisper(Player* me, Player* leader, std::string const& key, std::vector<std::string> const& tags,
+                     Phrases::Vars const& vars = {})
+        {
+            BotShared::BotChat::WhisperTo(me, leader, Phrases::Say(key, tags, vars));
+        }
+
         void Enter(TownTripState& state, Phase phase, uint32 now)
         {
             state.phase = phase;
@@ -34,15 +41,24 @@ namespace TownTrip
             state.arrivedMs = 0;
         }
 
-        void Reset(Player* me, TownTripState& state, uint32 now, bool walking)
+        bool Walking(Phase phase)
         {
+            return phase == Phase::Going || phase == Phase::Returning || phase == Phase::ToGate;
+        }
+
+        void Reset(Player* me, TownTripState& state, uint32 now, bool cooldown)
+        {
+            if (Walking(state.phase))
+                Errands::StopWalk(me);
             state.stops.clear();
             state.next = 0;
             state.requestId = 0;
+            state.hasGate = false;
+            state.waitName.clear();
             Enter(state, Phase::Idle, now);
             state.nextCheckMs = now + CHECK_MS;
-            if (walking)
-                Errands::StopWalk(me);
+            if (cooldown)
+                state.cooldownUntilMs = now + COOLDOWN_MS;
         }
 
         // The party is settled in town: the leader rests (city, inn) and stands.
@@ -52,13 +68,12 @@ namespace TownTrip
                    !leader->IsInCombat();
         }
 
-        bool LeaderLeft(Player const* leader, TownTripState const& state)
+        void MoveTo(Player* me, TownTripState& state, float x, float y, float z, uint32 now)
         {
-            if (leader->GetMapId() != state.leaderMap || leader->IsMounted() || leader->IsInCombat())
-                return true;
-            float const dx = leader->GetPositionX() - state.leaderX;
-            float const dy = leader->GetPositionY() - state.leaderY;
-            return dx * dx + dy * dy > LEADER_LEAVE_YD * LEADER_LEAVE_YD;
+            if (me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) || now < state.nextMoveMs)
+                return;
+            state.nextMoveMs = now + REPATH_MS;
+            me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE);
         }
 
         // The nearest NPC (to the leader) out of NpcVisit's reach the task has business with.
@@ -96,13 +111,13 @@ namespace TownTrip
             return places;
         }
 
-        bool TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<INpcTask*> const& tasks,
+        void TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<INpcTask*> const& tasks,
                     std::vector<std::string> const& tags, uint32 now)
         {
             if (!LeaderSettled(leader) || leader->GetMapId() != me->GetMapId())
-                return false;
+                return;
             if (!sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Errand))
-                return false;
+                return;
 
             state.stops.clear();
             for (INpcTask* task : tasks)
@@ -113,18 +128,17 @@ namespace TownTrip
                     state.stops.push_back({ npc->GetObjectGuid(), task });
             }
             if (state.stops.empty())
-                return false;
+                return;
 
             Phrases::Vars vars;
             vars["places"] = PlacesOf(state.stops);
             vars["leader"] = leader->GetName();
             uint32 const trainerCost = BotShared::ClassTraining::CostOfAvailable(me);
             vars["gold"] = trainerCost ? Phrases::Money(trainerCost) : std::string();
-            std::string const text = Phrases::Say("errand.ask", tags, vars);
 
             Requests::Ask ask;
             ask.intent = Requests::Intent::Errand;
-            ask.text = text;
+            ask.text = Phrases::Say("errand.ask", tags, vars);
             ask.options = {
                 { "yes", Phrases::Word("errand.opt.yes", "yes") },
                 { "no",  Phrases::Word("errand.opt.no", "no") },
@@ -134,21 +148,11 @@ namespace TownTrip
             if (!state.requestId)
             {
                 state.stops.clear();
-                return false;
+                return;
             }
-            BotShared::BotChat::SayToParty(me, text);
-            Enter(state, Phase::Asking, now);
-            return true;
-        }
-
-        void Leave(Player* me, TownTripState& state, Player const* leader, std::vector<std::string> const& tags, uint32 now)
-        {
+            BotShared::BotChat::SayToParty(me, ask.text);
             state.leaderMap = leader->GetMapId();
-            state.leaderX = leader->GetPositionX();
-            state.leaderY = leader->GetPositionY();
-            state.next = 0;
-            Say(me, "errand.go", tags);
-            Enter(state, Phase::Going, now);
+            Enter(state, Phase::Asking, now);
         }
 
         // Walks to (or stands at) the current stop. False: the stops are done.
@@ -184,29 +188,96 @@ namespace TownTrip
                     continue;
                 }
 
-                if (!me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) && now >= state.nextMoveMs)
-                {
-                    state.nextMoveMs = now + REPATH_MS;
-                    me->GetMotionMaster()->MovePoint(0, npc->GetPositionX(), npc->GetPositionY(), npc->GetPositionZ(),
-                                                     MOVE_PATHFINDING | MOVE_RUN_MODE);
-                }
+                MoveTo(me, state, npc->GetPositionX(), npc->GetPositionY(), npc->GetPositionZ(), now);
                 return true;
             }
             return false;
         }
 
-        // False: back (or given up: the follow takes over).
-        bool UpdateReturning(Player* me, TownTripState& state, Player const* leader, uint32 now)
+        // The stops are done: walk back, or ask the far leader where to meet.
+        void Finish(Player* me, TownTripState& state, Player* leader, std::vector<std::string> const& tags, uint32 now)
         {
-            if (me->IsWithinDist(leader, BACK_YD, false) || WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > RETURN_GIVE_UP_MS)
-                return false;
-            if (!me->HasUnitState(UNIT_STATE_NO_FREE_MOVE) && now >= state.nextMoveMs)
+            Errands::StopWalk(me);
+            if (me->IsWithinDist(leader, NEAR_YD, false))
             {
-                state.nextMoveMs = now + REPATH_MS;
-                me->GetMotionMaster()->MovePoint(0, leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(),
-                                                 MOVE_PATHFINDING | MOVE_RUN_MODE);
+                Enter(state, Phase::Returning, now);
+                return;
             }
-            return true;
+
+            BotShared::TownGates::Gate gate;
+            state.hasGate = BotShared::TownGates::Nearest(me->GetMapId(), me->GetZoneId(), me->GetPositionX(), me->GetPositionY(), gate);
+            if (state.hasGate)
+            {
+                state.waitX = gate.x;
+                state.waitY = gate.y;
+                state.waitZ = gate.z;
+                state.waitName = gate.name.empty() ? Phrases::Word("place.gate", "gate") : gate.name;
+            }
+            else
+            {
+                state.waitX = me->GetPositionX();
+                state.waitY = me->GetPositionY();
+                state.waitZ = me->GetPositionZ();
+                state.waitName.clear();
+            }
+
+            Phrases::Vars vars;
+            vars["gate"] = state.hasGate ? state.waitName : Phrases::Word("place.here", "here");
+            Requests::Ask ask;
+            ask.intent = Requests::Intent::Rendezvous;
+            ask.text = Phrases::Say("meet.ask", tags, vars);
+            ask.options.push_back({ "come", Phrases::Format(Phrases::Word("meet.opt.come", "come"), vars) });
+            if (state.hasGate)
+                ask.options.push_back({ "gate", Phrases::Format(Phrases::Word("meet.opt.gate", "gate"), vars) });
+            else
+                ask.options.push_back({ "here", Phrases::Word("meet.opt.here", "here") });
+            ask.fallback = "come";
+            state.requestId = sRequestBoard.Open(me, leader, ask);
+            if (!state.requestId)
+            {
+                // (another question open: just come back)
+                Enter(state, Phase::Coming, now);
+                return;
+            }
+            BotShared::BotChat::WhisperTo(me, leader, ask.text);
+            Enter(state, Phase::Reporting, now);
+        }
+
+        bool UpdateReporting(Player* me, TownTripState& state, Player* leader, std::vector<std::string> const& tags, uint32 now)
+        {
+            // He came by himself.
+            if (me->IsWithinDist(leader, MEET_YD, false))
+            {
+                sRequestBoard.Close(state.requestId, Requests::Outcome::Cancelled);
+                state.requestId = 0;
+                Say(me, "errand.back", tags);
+                Reset(me, state, now, true);
+                return false;
+            }
+            Requests::Status const status = sRequestBoard.Poll(state.requestId);
+            if (status.state == Requests::State::Open)
+                return true;
+            sRequestBoard.Close(state.requestId, status.state == Requests::State::Answered ?
+                                Requests::Outcome::Accepted : Requests::Outcome::Expired);
+            state.requestId = 0;
+
+            Phrases::Vars vars;
+            vars["gate"] = state.waitName;
+            if (status.answer == "gate" && state.hasGate)
+            {
+                Whisper(me, leader, "meet.gate", tags, vars);
+                Enter(state, Phase::ToGate, now);
+                return true;
+            }
+            if (status.answer == "here")
+            {
+                Whisper(me, leader, "meet.here", tags, vars);
+                Enter(state, Phase::Waiting, now);
+                return true;
+            }
+            Whisper(me, leader, "meet.come", tags, vars);
+            Enter(state, Phase::Coming, now);
+            return false;
         }
     }
 
@@ -216,15 +287,18 @@ namespace TownTrip
             return;
         if (state.requestId)
             sRequestBoard.Close(state.requestId, Requests::Outcome::Cancelled);
-        bool const walking = state.phase == Phase::Going || state.phase == Phase::Returning;
-        Reset(me, state, WorldTimer::getMSTime(), walking);
+        bool const tripMade = state.phase != Phase::Asking;
+        Reset(me, state, WorldTimer::getMSTime(), tripMade);
     }
 
     bool Update(Player* me, TownTripState& state, Player* leader,
                 std::vector<INpcTask*> const& tasks, std::vector<std::string> const& tags)
     {
         uint32 const now = WorldTimer::getMSTime();
-        if (!leader || !Errands::MayRun(me, leader))
+        bool const beforeTrip = state.phase == Phase::Idle || state.phase == Phase::Asking;
+        // (out on the trip the leader may ride off: the bot is not his anchor-bound follower then)
+        if (!leader || !Errands::MayRun(me, beforeTrip ? leader : nullptr) ||
+            (state.phase != Phase::Idle && leader->GetMapId() != state.leaderMap))
         {
             Stop(me, state);
             return false;
@@ -242,11 +316,6 @@ namespace TownTrip
             }
             case Phase::Asking:
             {
-                if (!LeaderSettled(leader))
-                {
-                    Stop(me, state);
-                    return false;
-                }
                 Requests::Status const status = sRequestBoard.Poll(state.requestId);
                 switch (status.state)
                 {
@@ -258,43 +327,76 @@ namespace TownTrip
                     default:
                         break;
                 }
-                bool const expired = status.state == Requests::State::Expired;
                 if (status.answer == "yes")
                 {
-                    // (no answer counts as a yes: it goes, and the trip's cooldown follows)
+                    // (no answer counts as a yes: it goes)
                     sRequestBoard.Close(state.requestId, Requests::Outcome::Accepted);
                     state.requestId = 0;
-                    Leave(me, state, leader, tags, now);
+                    state.next = 0;
+                    Say(me, "errand.go", tags);
+                    Enter(state, Phase::Going, now);
                     return true;
                 }
-                sRequestBoard.Close(state.requestId, expired ? Requests::Outcome::Expired : Requests::Outcome::Declined);
+                sRequestBoard.Close(state.requestId, status.state == Requests::State::Expired ?
+                                    Requests::Outcome::Expired : Requests::Outcome::Declined);
                 Say(me, "errand.declined", tags);
                 Reset(me, state, now, false);
                 return false;
             }
             case Phase::Going:
             {
-                if (LeaderLeft(leader, state))
-                {
-                    Say(me, "errand.abort", tags);
-                    Reset(me, state, now, true);
-                    state.cooldownUntilMs = now + ABORT_COOLDOWN_MS;
-                    return false;
-                }
                 if (UpdateGoing(me, state, now))
                     return true;
-                Enter(state, Phase::Returning, now);
-                return true;
+                Finish(me, state, leader, tags, now);
+                return state.phase != Phase::Coming;
             }
             case Phase::Returning:
             {
-                if (UpdateReturning(me, state, leader, now))
+                if (!me->IsWithinDist(leader, BACK_YD, false) &&
+                    WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) <= RETURN_GIVE_UP_MS)
+                {
+                    MoveTo(me, state, leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), now);
                     return true;
-                if (me->IsWithinDist(leader, BACK_YD * 2, false))
-                    Say(me, "errand.back", tags);
-                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s is back from its town trip.", me->GetName());
+                }
+                Say(me, "errand.back", tags);
                 Reset(me, state, now, true);
-                state.cooldownUntilMs = now + COOLDOWN_MS;
+                return false;
+            }
+            case Phase::Reporting:
+                return UpdateReporting(me, state, leader, tags, now);
+            case Phase::Coming:
+            {
+                // The follow walks it to him (no teleport for companions on the same map).
+                if (me->IsWithinDist(leader, BACK_YD, false))
+                {
+                    Say(me, "errand.back", tags);
+                    Reset(me, state, now, true);
+                }
+                else if (WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > COME_GIVE_UP_MS)
+                    Reset(me, state, now, true);
+                return false;
+            }
+            case Phase::ToGate:
+            {
+                float const dx = me->GetPositionX() - state.waitX;
+                float const dy = me->GetPositionY() - state.waitY;
+                bool const there = dx * dx + dy * dy <= AT_GATE_YD * AT_GATE_YD;
+                if (!there && WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) <= GATE_GIVE_UP_MS)
+                {
+                    MoveTo(me, state, state.waitX, state.waitY, state.waitZ, now);
+                    return true;
+                }
+                Errands::StopWalk(me);
+                Whisper(me, leader, "meet.arrived", tags, { { "gate", state.waitName } });
+                Enter(state, Phase::Waiting, now);
+                return true;
+            }
+            case Phase::Waiting:
+            {
+                if (!me->IsWithinDist(leader, MEET_YD, false))
+                    return true;    // stands there (no follow)
+                Say(me, "errand.back", tags);
+                Reset(me, state, now, true);
                 return false;
             }
         }

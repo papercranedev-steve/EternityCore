@@ -139,6 +139,13 @@ void PartyBotAI::StopErrands()
     Life::TownTrip::Stop(me, m_townTrip);
 }
 
+bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
+{
+    if (LootsForSelf())
+        return !me->IsInMap(pAnchor);
+    return !me->IsWithinDistInMap(pAnchor, PB_TELEPORT_TO_LEADER_YD);
+}
+
 std::vector<std::string> const& PartyBotAI::PersonalityTags() const
 {
     static std::vector<std::string> const none;
@@ -910,7 +917,7 @@ bool PartyBotAI::StartResting()
     // Far behind the leader (it is about to be teleported there): full at once, as before.
     Player* pLeader = GetPartyLeader();
     Player* pAnchor = pLeader ? FollowAnchor(pLeader) : nullptr;
-    if (pAnchor && !me->IsWithinDistInMap(pAnchor, 100.0f) && !IsArriving())
+    if (pAnchor && CatchesUpByTeleport(pAnchor) && !IsArriving())
     {
         me->SetHealth(me->GetMaxHealth());
         if (me->GetPowerType() == POWER_MANA)
@@ -1832,7 +1839,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // surviving bots were teleported to the player's ghost at the graveyard, fell behind on
         // its run back and were teleported again every 100 yd. They wait where they are, by
         // the corpse the ghost runs to.
-        if (!resurrectFirst && !pAnchor->IsDead() && !me->IsWithinDistInMap(pAnchor, 100.0f))
+        // Companions only when on another map: on the same map they walk (a town trip, the
+        // leader at his own trainer: CatchesUpByTeleport).
+        if (!resurrectFirst && !pAnchor->IsDead() && CatchesUpByTeleport(pAnchor))
         {
             if (!me->IsStopped())
                 me->StopMoving();

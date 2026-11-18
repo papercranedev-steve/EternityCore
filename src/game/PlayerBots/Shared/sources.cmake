@@ -26,6 +26,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/PetFood.cpp
   ${BOTSHARED_DIR}/QuestRewards.h
   ${BOTSHARED_DIR}/QuestRewards.cpp
+  ${BOTSHARED_DIR}/TownGates.h
+  ${BOTSHARED_DIR}/TownGates.cpp
   ${BOTSHARED_DIR}/Supplies.h
   ${BOTSHARED_DIR}/Supplies.cpp
   ${BOTSHARED_DIR}/Vendor.h

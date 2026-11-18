@@ -4,12 +4,16 @@
  *   .partybot reply <id> <option>             the player's answer to a bot's request (the
  *                                             PartyBot addon's popup sends it)
  *   .partybot rewardmode <name> auto|ask      who picks the companion's quest rewards
+ *   .partybot gate add [name]                 a town gate where the player stands (companions
+ *                 remove                      wait there after a town trip, Shared/TownGates)
+ *                 list                        (remove: the nearest within 30 yd; list: this zone)
  */
 
 #include "Chat.h"
 #include "Player.h"
 #include "Companions/CompanionMgr.h"
 #include "Life/Requests/RequestBoard.h"
+#include "Shared/TownGates.h"
 #include "WorldSession.h"
 #include <cstring>
 
@@ -65,4 +69,60 @@ bool ChatHandler::HandlePartyBotRewardModeCommand(char* args)
     sCompanionMgr.SetRewardMode(pBot->GetGUIDLow(), value);
     PSendSysMessage("PBOK;%s;rewardmode;%s", name.c_str(), mode);
     return true;
+}
+
+bool ChatHandler::HandlePartyBotGateCommand(char* args)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    char* action = ExtractLiteralArg(&args);
+    if (!player || !action)
+    {
+        SendSysMessage("PBERR;;usage;.partybot gate add [name] | remove | list");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    if (strcmp(action, "add") == 0)
+    {
+        std::string name = args ? args : "";
+        while (!name.empty() && name.front() == ' ')
+            name.erase(name.begin());
+        uint32 const id = BotShared::TownGates::Add(player->GetMapId(), player->GetZoneId(),
+            player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), name);
+        if (!id)
+        {
+            SendSysMessage("PBERR;;other");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("PBOK;;gate;add;%u;%s", id, name.c_str());
+        return true;
+    }
+
+    if (strcmp(action, "remove") == 0)
+    {
+        BotShared::TownGates::Gate removed;
+        if (!BotShared::TownGates::RemoveNear(player->GetMapId(), player->GetPositionX(), player->GetPositionY(), 30.0f, removed))
+        {
+            SendSysMessage("PBERR;;notfound");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("PBOK;;gate;remove;%u;%s", removed.id, removed.name.c_str());
+        return true;
+    }
+
+    if (strcmp(action, "list") == 0)
+    {
+        std::vector<BotShared::TownGates::Gate> const gates = BotShared::TownGates::OfZone(player->GetMapId(), player->GetZoneId());
+        PSendSysMessage("Town gates in this zone: %u", uint32(gates.size()));
+        for (BotShared::TownGates::Gate const& g : gates)
+            PSendSysMessage("  #%u %s (%.1f, %.1f, %.1f), %.0f yd", g.id, g.name.c_str(), g.x, g.y, g.z,
+                player->GetDistance2d(g.x, g.y));
+        return true;
+    }
+
+    SendSysMessage("PBERR;;usage;.partybot gate add [name] | remove | list");
+    SetSentErrorMessage(true);
+    return false;
 }
