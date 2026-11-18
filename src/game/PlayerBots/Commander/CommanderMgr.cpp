@@ -1,6 +1,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Situation/Guide.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Config/Config.h"
 #include "Group.h"
@@ -85,12 +86,12 @@ namespace Commander
     std::shared_ptr<PartyCommander> CommanderMgr::GetCommander(TeamBotAI* bot)
     {
         Player* me = bot->me;
-        Group* pGroup = me->GetGroup();
-        if (!pGroup || !me->IsInWorld())
+        uint64 const team = Team::KeyOf(me);
+        if (!team || !me->IsInWorld())
             return nullptr;
 
         uint32 const now = WorldTimer::getMSTime();
-        Key const key(pGroup->GetId(), me->GetMapId(), me->GetInstanceId());
+        Key const key(team, me->GetMapId(), me->GetInstanceId());
 
         std::lock_guard<std::mutex> guard(m_commandersLock);
 
@@ -115,11 +116,11 @@ namespace Commander
 
     std::shared_ptr<PartyCommander> CommanderMgr::FindCommander(Player const* member)
     {
-        Group const* pGroup = member ? member->GetGroup() : nullptr;
-        if (!pGroup)
+        uint64 const team = Team::KeyOf(member);
+        if (!team)
             return nullptr;
 
-        Key const key(pGroup->GetId(), member->GetMapId(), member->GetInstanceId());
+        Key const key(team, member->GetMapId(), member->GetInstanceId());
         std::lock_guard<std::mutex> guard(m_commandersLock);
         auto itr = m_commanders.find(key);
         return itr != m_commanders.end() ? itr->second.commander : nullptr;

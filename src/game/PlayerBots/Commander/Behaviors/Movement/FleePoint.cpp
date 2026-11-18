@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Movement/FleePoint.h"
+#include "Commander/Team.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/PositionField.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
@@ -60,11 +61,9 @@ namespace FleePoint
         std::vector<std::pair<Position3, bool>> allies;     // position, is a tank
         Position3 centre;
         uint32 counted = 0;
-        if (Group* group = me->GetGroup())
         {
-            for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            for (Player* m : Team::Members(me))
             {
-                Player* m = itr->getSource();
                 if (!m || m == me || !m->IsInWorld() || m->GetMap() != map || !m->IsAlive())
                     continue;
                 Position3 const p = PointOf(m);

@@ -28,6 +28,7 @@
 #include "Creature.h"
 #include "CreatureGroups.h"
 #include "Group.h"
+#include "Commander/Team.h"
 #include "Pet.h"
 #include "TemporarySummon.h"
 #include "Player.h"
@@ -1389,11 +1390,10 @@ namespace WorldModelBuilder
         }
 
         // Dead members whose body (not released) or corpse (released) is on `map`.
-        void FillCorpses(Group* group, Map* map, WorldModel& world)
+        void FillCorpses(std::vector<Player*> const& members, Map* map, WorldModel& world)
         {
-            for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            for (Player* member : members)
             {
-                Player* member = itr->getSource();
                 if (!member || member->IsAlive())
                     continue;
                 CorpseFacts c;
@@ -1864,14 +1864,16 @@ namespace WorldModelBuilder
     {
         Player* me = bot->me;
         Map* map = me->GetMap();
-        Group* group = me->GetGroup();
+        // The team (Commander/Team.h): a WoW group, or a population unit (a field bot alone too).
+        std::vector<Player*> const members = Team::Members(me);
+        Group* group = me->GetGroup();      // raid marks only
 
         world.party.clear();
         world.corpses.clear();
         world.enemies.clear();
         world.targeted.clear();
-        world.leader = group ? group->GetLeaderGuid() : ObjectGuid();
-        if (!group)
+        world.leader = Team::LeaderOf(me);
+        if (members.empty())
         {
             world.allies.clear();
             world.castStartLog.clear();
@@ -1882,9 +1884,8 @@ namespace WorldModelBuilder
         std::vector<Unit*> partyUnits;
         std::vector<Player*> sightCheckers;     // bots with a ranged interrupt that can act
         std::vector<Player*> tauntCheckers;     // tank bots with a taunt that can act
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : members)
         {
-            Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != map)
                 continue;
 
@@ -1954,7 +1955,7 @@ namespace WorldModelBuilder
                         f.spareHealRates = HealCapacity::Rates(ai);     // its heals once it rises
                     for (RaidTargetIcon mark : ai->m_marksToFocus)
                     {
-                        ObjectGuid const marked = group->GetTargetWithIcon(mark);
+                        ObjectGuid const marked = group ? group->GetTargetWithIcon(mark) : ObjectGuid();
                         if (!marked.IsUnit())
                             continue;
                         Unit const* unit = map->GetUnit(marked);
@@ -2004,7 +2005,7 @@ namespace WorldModelBuilder
         }
 
         FillPlayerRoles(world);
-        FillCorpses(group, map, world);
+        FillCorpses(members, map, world);
 
         // Every creature that has one of us on its threat list.
         std::vector<Creature*> enemies;

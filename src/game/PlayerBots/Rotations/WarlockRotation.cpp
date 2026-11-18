@@ -30,6 +30,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "DamageSpells.h"
 #include "RoleCapability.h"
@@ -157,13 +158,9 @@ namespace
         Player* SoulstoneTarget(SpellEntry const* pUse) const
         {
             Player* me = m_bot.me;
-            Group* pGroup = me->GetGroup();
-            if (!pGroup)
-                return nullptr;
             Player* pPlayerHealer = nullptr;
-            for (GroupReference* itr = pGroup->GetFirstMember(); itr; itr = itr->next())
+            for (Player* pMember : Commander::Team::Members(me))
             {
-                Player* pMember = itr->getSource();
                 if (!pMember || !pMember->IsAlive() || pMember->GetMap() != me->GetMap() || HasSoulstone(pMember, pUse))
                     continue;
                 if (TeamBotAI const* pAI = pMember->AI() ? dynamic_cast<TeamBotAI const*>(pMember->AI()) : nullptr)

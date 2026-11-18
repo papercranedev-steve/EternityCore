@@ -28,6 +28,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Player.h"
 #include "Group.h"
@@ -208,12 +209,8 @@ namespace
         {
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
-            Group* pGroup = me->GetGroup();
-            if (!pGroup)
-                return false;
-            for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+            for (Player* pMember : Commander::Team::Members(me))
             {
-                Player* pMember = itr->getSource();
                 if (!pMember || !me->IsValidHelpfulTarget(pMember) || pMember->IsGameMaster() ||
                     !me->IsWithinLOSInMap(pMember) || !me->IsWithinDist(pMember, 30.0f))
                     continue;

@@ -127,7 +127,7 @@ namespace Commander
         BehaviorList m_behaviors;
         AssignerList m_assigners;
 
-        using Key = std::tuple<uint32, uint32, uint32>;     // group id, map id, instance id
+        using Key = std::tuple<uint64, uint32, uint32>;     // team key (Team.h), map id, instance id
         struct Entry
         {
             std::shared_ptr<PartyCommander> commander;

@@ -1,5 +1,5 @@
 /*
- * PartyBot Commander: one instance per (group, map instance).
+ * PartyBot Commander: one instance per (team, map instance): a team of any size (Commander/Team.h).
  * Keyed by map so that it is only ever touched from that map's update thread.
  */
 
@@ -28,7 +28,7 @@ namespace Commander
     class PartyCommander
     {
     public:
-        PartyCommander(uint32 groupId, uint32 mapId, uint32 instanceId);
+        PartyCommander(uint64 teamKey, uint32 mapId, uint32 instanceId);
 
         // Every bot tick, in and out of combat. Refreshes facts at most once per perceptionMs,
         // so several bots of the same party share one refresh.
@@ -65,7 +65,7 @@ namespace Commander
             return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
                    m_plan.noRest || m_plan.push.walking;
         }
-        uint32 GetGroupId() const { return m_groupId; }
+        uint64 GetTeamKey() const { return m_teamKey; }
         uint32 GetMapId() const { return m_mapId; }
         uint32 GetInstanceId() const { return m_instanceId; }
 
@@ -113,7 +113,7 @@ namespace Commander
         // next frame (TeamBotAI::WakeUp) instead of after the rest of their bot interval.
         void WakeBots(TeamBotAI* bot, BehaviorList const& behaviors);
 
-        uint32 m_groupId;
+        uint64 m_teamKey;
         uint32 m_mapId;
         uint32 m_instanceId;
         WorldModel m_world;

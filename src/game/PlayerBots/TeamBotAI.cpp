@@ -30,6 +30,7 @@
 #include "Utilities/Random.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Team.h"
 #include "Commander/BotDirectives.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/RaceKit.h"
@@ -554,12 +555,10 @@ Player* TeamBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
         if (pSpellEntry->Effect[i] == SPELL_EFFECT_DISPEL && pSpellEntry->EffectImplicitTargetA[i] == TARGET_UNIT_FRIEND)
             canTargetHostile = false;
 
-    Group* pGroup = me->GetGroup();
-    if (pGroup)
     {
-        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        for (Player* pMember : Commander::Team::Members(me))
         {
-            if (Player* pMember = itr->getSource())
+            if (pMember)
             {
                 // A member mind controlled by a creature is hostile, so IsValidHelpfulTarget fails;
                 // CombatBotBaseAI::IsValidDispelTarget already handles the charm aura itself.
@@ -1019,12 +1018,11 @@ namespace
 
 Player* TeamBotAI::SelectResurrectionTarget() const
 {
-    Group* pGroup = me->GetGroup();
     Player* pBest = nullptr;
     int bestRank = -1;
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (Player* pMember : Commander::Team::Members(me))
     {
-        if (Player* pMember = itr->getSource())
+        if (pMember)
         {
             // Can't resurrect self.
             if (pMember == me)
@@ -1060,12 +1058,10 @@ Player* TeamBotAI::SelectResurrectionTarget() const
 
 Corpse* TeamBotAI::SelectReleasedCorpse() const
 {
-    Group* pGroup = me->GetGroup();
     Corpse* pBest = nullptr;
     int bestRank = -1;
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (Player* pMember : Commander::Team::Members(me))
     {
-        Player* pMember = itr->getSource();
         if (!pMember || pMember == me || pMember->GetDeathState() != DEAD || pMember->IsRessurectRequested())
             continue;
 
@@ -1140,17 +1136,14 @@ bool TeamBotAI::CastResurrectionAtCorpse(Corpse* pCorpse, SpellEntry const* pRes
 
 Player* TeamBotAI::SelectShieldTarget() const
 {
-    Group* pGroup = me->GetGroup();
-    if (!pGroup)
-        return nullptr;
 
     // Until 2026-11-01: any attacked member below 90%. A shield costs more mana per point than
     // a heal and the absorbed damage gives a warrior no rage, so it is kept for members who
     // may die before a heal lands (HealSpells::IsInDanger). The lowest health first.
     Player* pBest = nullptr;
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (Player* pMember : Commander::Team::Members(me))
     {
-        if (Player* pMember = itr->getSource())
+        if (pMember)
         {
             // We already checked self.
             if (pMember == me)

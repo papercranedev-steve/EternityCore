@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
+#include "Commander/Team.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/BotDirectives.h"
@@ -117,12 +118,8 @@ namespace Commander
         std::vector<Player*> BotsOf(Player* leader)
         {
             std::vector<Player*> bots;
-            Group* group = leader->GetGroup();
-            if (!group)
-                return bots;
-            for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            for (Player* m : Team::Members(leader))
             {
-                Player* m = itr->getSource();
                 if (!m || !m->IsInWorld() || m->GetMap() != leader->GetMap() || !m->AI())
                     continue;
                 if (dynamic_cast<TeamBotAI*>(m->AI()))

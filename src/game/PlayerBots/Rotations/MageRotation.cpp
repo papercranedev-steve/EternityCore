@@ -25,6 +25,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Player.h"
@@ -137,7 +138,7 @@ namespace
         SpellEntry const* ChooseArmor() const
         {
             auto const& s = m_bot.m_spells.mage;
-            if (m_bot.me->GetGroup())
+            if (Commander::Team::IsShared(m_bot.me))
                 return s.pMageArmor ? s.pMageArmor : s.pIceArmor;
             return s.pIceArmor ? s.pIceArmor : s.pMageArmor;
         }

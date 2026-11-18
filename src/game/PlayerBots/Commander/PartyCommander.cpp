@@ -13,6 +13,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Group.h"
 #include "Chat.h"
@@ -39,8 +40,8 @@ namespace Commander
         }
     }
 
-    PartyCommander::PartyCommander(uint32 groupId, uint32 mapId, uint32 instanceId)
-        : m_groupId(groupId), m_mapId(mapId), m_instanceId(instanceId)
+    PartyCommander::PartyCommander(uint64 teamKey, uint32 mapId, uint32 instanceId)
+        : m_teamKey(teamKey), m_mapId(mapId), m_instanceId(instanceId)
     {
         EncounterRegistry::Create(mapId, m_encounters);
     }
@@ -77,13 +78,9 @@ namespace Commander
     {
         if (!m_world.HasPartyEnemy())
             return;
-        Group* group = bot->me->GetGroup();
-        if (!group)
-            return;
         // Same map only: other maps belong to other threads.
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : Team::Members(bot->me))
         {
-            Player* member = itr->getSource();
             if (!member || member == bot->me || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() ||
                 !member->IsAlive() || !member->AI())
                 continue;
@@ -115,12 +112,8 @@ namespace Commander
         // keeps every bot walking to the point after the fight is over. RetreatPlanner::Stop
         // already released them; doing it again is harmless. Same map only: other maps belong
         // to other threads.
-        Group* group = bot->me->GetGroup();
-        if (!group)
-            return;
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : Team::Members(bot->me))
         {
-            Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
                 continue;
             if (TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI()))
@@ -135,12 +128,8 @@ namespace Commander
         // (the assigner cannot see that) keeps its role until it is out of combat too.
         if (m_plan.roles.empty() || m_world.HasPartyEnemy())
             return;
-        Group* group = bot->me->GetGroup();
-        if (!group)
-            return;
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : Team::Members(bot->me))
         {
-            Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI() ||
                 member->IsInCombat())
                 continue;
@@ -163,13 +152,9 @@ namespace Commander
 
     void PartyCommander::ApplyEmergencyRoles(TeamBotAI* bot)
     {
-        Group* group = bot->me->GetGroup();
-        if (!group)
-            return;
         bool const fighting = m_world.HasPartyEnemy();
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : Team::Members(bot->me))
         {
-            Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != bot->me->GetMap() || !member->AI())
                 continue;
             TeamBotAI* ai = dynamic_cast<TeamBotAI*>(member->AI());

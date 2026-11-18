@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Support/CorpseRun.h"
+#include "Commander/Team.h"
 #include "Commander/Behaviors/Movement/Arrival.h"
 #include "Commander/Perception/Spatial/TravelTime.h"
 #include "Commander/CommanderMgr.h"
@@ -61,11 +62,9 @@ namespace CorpseRun
         // party fell).
         RiseCheck SafeToRise(Player* me)
         {
-            if (Group* group = me->GetGroup())
-                for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
-                    if (Player* member = itr->getSource())
-                        if (member != me && member->IsInCombat())
-                            return RiseCheck::Fight;
+            for (Player* member : Team::Members(me))
+                if (member != me && member->IsInCombat())
+                    return RiseCheck::Fight;
 
             std::list<Unit*> enemies;
             me->GetEnemyListInRadiusAround(me, ENEMY_COMBAT_RADIUS, enemies);

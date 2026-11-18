@@ -4,6 +4,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Group.h"
 #include "Map.h"
@@ -126,13 +127,9 @@ namespace Commander
             return;
         m_lastPushMs = nowMs;
 
-        Group* group = bot->me->GetGroup();
-        if (!group)
-            return;
         Map* map = bot->me->GetMap();
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        for (Player* member : Team::Members(bot->me))
         {
-            Player* member = itr->getSource();
             if (!member || !member->IsInWorld() || member->GetMap() != map || !member->GetSession())
                 continue;
             ThreatWatch const mode = sCommanderMgr.GetThreatWatch(member->GetObjectGuid());

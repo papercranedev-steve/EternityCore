@@ -1,4 +1,5 @@
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
+#include "Commander/Team.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "TeamBotAI.h"
 #include "Player.h"
@@ -49,10 +50,9 @@ namespace ResurrectApproach
 
         bool PartyFights(Player* me)
         {
-            for (GroupReference* itr = me->GetGroup()->GetFirstMember(); itr; itr = itr->next())
-                if (Player* member = itr->getSource())
-                    if (member != me && member->IsAlive() && member->IsInCombat())
-                        return true;
+            for (Player* member : Team::Members(me))
+                if (member != me && member->IsAlive() && member->IsInCombat())
+                    return true;
             return false;
         }
 
@@ -91,9 +91,8 @@ namespace ResurrectApproach
         {
             unsafe = false;
             std::vector<Candidate> candidates;
-            for (GroupReference* itr = me->GetGroup()->GetFirstMember(); itr; itr = itr->next())
+            for (Player* member : Team::Members(me))
             {
-                Player* member = itr->getSource();
                 WorldObject* body = BodyOf(me, member);
                 if (!body)
                     continue;
@@ -137,7 +136,7 @@ namespace ResurrectApproach
     bool Update(TeamBotAI* bot, ResurrectApproachState& state, SpellEntry const* resurrection)
     {
         Player* me = bot->me;
-        if (!me->GetGroup() || PartyFights(me))
+        if (!Team::HasTeam(me) || PartyFights(me))
         {
             Stop(me, state);
             return false;

@@ -12,6 +12,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/CommanderMgr.cpp
   ${COMMANDER_DIR}/PartyCommander.h
   ${COMMANDER_DIR}/PartyCommander.cpp
+  ${COMMANDER_DIR}/Team.h
+  ${COMMANDER_DIR}/Team.cpp
   ${COMMANDER_DIR}/Commands/CommanderCommands.cpp
   ${COMMANDER_DIR}/ThreatFeed.h
   ${COMMANDER_DIR}/ThreatFeed.cpp
