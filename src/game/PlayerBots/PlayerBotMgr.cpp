@@ -21,6 +21,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
+#include "Shared/ClassQuestChains.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 
@@ -96,6 +97,7 @@ void PlayerBotMgr::Load()
     if (!mirrorsBuilt)
     {
         mirrorsBuilt = true;
+        BotShared::ClassQuestChains::Load();
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [QuestMirror] %u mirror quests made.", BotShared::QuestMirror::BuildAll());
     }
     sCompanionMgr.Load();

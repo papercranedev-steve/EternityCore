@@ -12,6 +12,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/ClassTraining.cpp
   ${BOTSHARED_DIR}/ClassQuestAbilities.h
   ${BOTSHARED_DIR}/ClassQuestAbilities.cpp
+  ${BOTSHARED_DIR}/ClassQuestChains.h
+  ${BOTSHARED_DIR}/ClassQuestChains.cpp
   ${BOTSHARED_DIR}/Crafting.h
   ${BOTSHARED_DIR}/Crafting.cpp
   ${BOTSHARED_DIR}/FoodAndDrink.h

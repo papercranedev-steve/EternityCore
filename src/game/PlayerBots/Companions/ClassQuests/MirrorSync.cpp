@@ -1,6 +1,8 @@
 #include "Companions/ClassQuests/MirrorSync.h"
 #include "Shared/QuestMirror.h"
+#include "Shared/ClassQuestChains.h"
 #include "Chat.h"
+#include <algorithm>
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
@@ -17,8 +19,16 @@ namespace Companions
             namespace Mirror = BotShared::QuestMirror;
 
             // The next quest of the chain the bot can do, nullptr when the chain ends here.
-            Quest const* NextStep(Player const* bot, Quest const* quest)
+            Quest const* NextStep(Player const* bot, Quest const* quest, uint32 chainId)
             {
+                if (BotShared::ClassQuestChains::Chain const* chain = chainId ? BotShared::ClassQuestChains::Find(chainId) : nullptr)
+                {
+                    std::vector<Quest const*> const steps = BotShared::ClassQuestChains::StepsFor(bot, *chain);
+                    auto const at = std::find(steps.begin(), steps.end(), quest);
+                    if (at == steps.end() || at + 1 == steps.end() || !Mirror::HasMirror((*(at + 1))->GetQuestId()))
+                        return nullptr;
+                    return *(at + 1);
+                }
                 Quest const* next = sObjectMgr.GetQuestTemplate(quest->GetNextQuestInChain());
                 if (!next || !Mirror::HasMirror(next->GetQuestId()))
                     return nullptr;
@@ -28,10 +38,11 @@ namespace Companions
             }
         }
 
-        void Follow(Link& link, uint32 questId)
+        void Follow(Link& link, uint32 questId, uint32 chainId)
         {
             link = Link();
-            link.questId = questId;         // nextCheckMs 0: at the next update
+            link.chainId = chainId;
+            link.questId = questId;         // lastCheckMs 0: at the next update
         }
 
         void Stop(Player* leader, Link& link)
@@ -72,7 +83,7 @@ namespace Companions
                 if (link.shownId)
                     Mirror::Remove(leader, link.shownId);
                 link.shownId = 0;
-                if (Quest const* next = NextStep(bot, quest))
+                if (Quest const* next = NextStep(bot, quest, link.chainId))
                 {
                     link.questId = next->GetQuestId();
                     link.lastCheckMs = 0;

@@ -12,6 +12,8 @@
  *                    remove <id>
  *                    follow <bot> <questId>   dev: your log follows a bot's quest (placeholder,
  *                    unfollow <bot>                then its mirror; ClassQuests/MirrorSync)
+ *   .partybot classquests [bot]               dev: the class quest chains for a bot (done or not)
+ *   .partybot classquests class <classId>     dev: all chains of a class (Shared/ClassQuestChains)
  */
 
 #include "Chat.h"
@@ -19,8 +21,11 @@
 #include "Companions/CompanionMgr.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
+#include "Shared/ClassQuestChains.h"
 #include "Shared/TownGates.h"
 #include "PartyBotAI.h"
+#include "ObjectMgr.h"
+#include "QuestDef.h"
 #include "WorldSession.h"
 #include <cstring>
 
@@ -217,4 +222,51 @@ bool ChatHandler::HandlePartyBotMirrorCommand(char* args)
     SendSysMessage("PBERR;;usage;.partybot mirror show <id> | count <id> <objective 1-4> <n> | remove <id>");
     SetSentErrorMessage(true);
     return false;
+}
+
+bool ChatHandler::HandlePartyBotClassQuestsCommand(char* args)
+{
+    namespace Chains = BotShared::ClassQuestChains;
+    auto line = [this](Chains::Chain const& chain, char const* state)
+    {
+        Quest const* last = sObjectMgr.GetQuestTemplate(chain.id);
+        std::string steps;
+        for (uint32 id : chain.quests)
+            steps += (steps.empty() ? "" : ">") + std::to_string(id);
+        PSendSysMessage("  %u %s aff %u lvl %u races %u [%s] %s%s%s %s", chain.id,
+            chain.kind == Chains::Kind::Ability ? "ability" : "gear", chain.affinity, chain.minLevel, chain.raceMask,
+            steps.c_str(), last ? last->GetTitle().c_str() : "?", chain.comment.empty() ? "" : " - ", chain.comment.c_str(), state);
+    };
+
+    if (args && strncmp(args, "class", 5) == 0)
+    {
+        char* word = ExtractLiteralArg(&args);
+        uint32 classId = 0;
+        if (!word || !ExtractUInt32(&args, classId) || !classId)
+        {
+            SendSysMessage("PBERR;;usage;.partybot classquests [bot] | class <classId>");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        uint32 count = 0;
+        for (Chains::Chain const& chain : Chains::All())
+            if (chain.classMask & (1 << (classId - 1)))
+            {
+                line(chain, "");
+                ++count;
+            }
+        PSendSysMessage("%u chains of class %u.", count, classId);
+        return true;
+    }
+
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot)
+        return false;
+    std::vector<Chains::Chain const*> const chains = Chains::ChainsFor(pBot);
+    for (Chains::Chain const* chain : chains)
+        line(*chain, Chains::IsDone(pBot, *chain) ? "(done)" :
+            pBot->GetLevel() >= chain->minLevel ? "(to do)" : "(later)");
+    PSendSysMessage("%u chains for %s.", uint32(chains.size()), name.c_str());
+    return true;
 }

@@ -37,6 +37,9 @@ namespace BotShared
 
         std::vector<Ability> const& All();
 
+        // The ability `questId` rewards, nullptr when it rewards none.
+        Ability const* AbilityOf(uint32 questId);
+
         // The variant `player` would do: its class, a race it may take it with, and a quest giver
         // that is not hostile to its team when there is a choice. nullptr: none for this player.
         Quest const* VariantFor(Player const* player, Ability const& ability);

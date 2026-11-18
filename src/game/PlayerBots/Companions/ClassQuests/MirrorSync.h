@@ -22,6 +22,7 @@ namespace Companions
     {
         struct Link
         {
+            uint32 chainId = 0;     // Shared/ClassQuestChains id the steps come from; 0 = NextQuestInChain
             uint32 questId = 0;     // the real quest followed; 0 = none
             uint32 shownId = 0;     // the mirror or placeholder put in the leader's log; 0 = none
             uint32 lastCheckMs = 0; // WorldTimer::getMSTime() of the last check, 0 = check now
@@ -37,8 +38,9 @@ namespace Companions
             BotAbandoned,       // the bot dropped the real quest: the link ended
         };
 
-        // Starts following `questId` (shown at the next update). Replaces what was followed: call Stop first.
-        void Follow(Link& link, uint32 questId);
+        // Starts following `questId` (shown at the next update), then the steps after it in chain
+        // `chainId` (0: by NextQuestInChain). Replaces what was followed: call Stop first.
+        void Follow(Link& link, uint32 questId, uint32 chainId = 0);
 
         // Ends the link and takes its mirror out of the leader's log (leader may be null: only ends it).
         void Stop(Player* leader, Link& link);

@@ -1,5 +1,6 @@
 #include "Companions/ClassQuests/PastQuests.h"
 #include "Shared/ClassQuestAbilities.h"
+#include "Shared/ClassQuestChains.h"
 #include "Shared/QuestGrant.h"
 #include "Player.h"
 #include "QuestDef.h"
@@ -76,32 +77,51 @@ namespace Companions
             if (!bot)
                 return result;
 
-            for (BotShared::ClassQuestAbilities::Ability const& ability : BotShared::ClassQuestAbilities::All())
+            namespace Chains = BotShared::ClassQuestChains;
+            namespace Abilities = BotShared::ClassQuestAbilities;
+
+            // Each chain as a whole, rolled on its first quest.
+            for (Chains::Chain const* chain : Chains::ChainsFor(bot))
             {
-                if (!(ability.classMask & bot->GetClassMask()))
-                    continue;
-                if (BotShared::ClassQuestAbilities::IsEarned(bot, ability))
+                if (Chains::IsDone(bot, *chain))
                 {
                     ++result.done;
                     continue;
                 }
-
-                Quest const* quest = BotShared::ClassQuestAbilities::VariantFor(bot, ability);
-                bool const oldEnough = quest && bot->GetLevel() >= quest->GetMinLevel();
-                if (oldEnough && Roll(bot->GetGUIDLow(), ability.key) < ChanceDone(bot->GetLevel(), quest))
-                {
-                    BotShared::QuestGrant::Complete(bot, quest);
-                    ++result.done;
+                std::vector<Quest const*> const steps = Chains::StepsFor(bot, *chain);
+                Quest const* first = steps.front();
+                if (bot->GetLevel() < first->GetMinLevel())
                     continue;
-                }
-
-                if (HasAnyOf(bot, ability))
+                // After an ability chain (decided before it, All() order): only if that one is done.
+                if (chain->afterAbility)
                 {
-                    BotShared::ClassQuestAbilities::Revoke(bot, ability);
-                    ++result.revoked;
+                    std::vector<Quest const*> const before = BotShared::QuestGrant::ChainUpTo(bot, first);
+                    if (before.size() > 1 && !bot->GetQuestRewardStatus(before[before.size() - 2]->GetQuestId()))
+                        continue;
                 }
-                if (oldEnough)
+                if (Roll(bot->GetGUIDLow(), chain->id) >= ChanceDone(bot->GetLevel(), first))
+                {
                     ++result.notDone;
+                    continue;
+                }
+
+                // Done: in its history. Abilities with what they teach and give (totems); gear
+                // chains without their items (long since replaced or sold).
+                BotShared::QuestGrant::MarkChainRewarded(bot, steps.back());
+                if (chain->kind == Chains::Kind::Ability)
+                    for (Quest const* step : steps)
+                        if (Abilities::AbilityOf(step->GetQuestId()))
+                            BotShared::QuestGrant::GiveRewards(bot, step);
+                ++result.done;
+            }
+
+            // What it has without having done the quest for it (premade spec templates).
+            for (Abilities::Ability const& ability : Abilities::All())
+            {
+                if (!(ability.classMask & bot->GetClassMask()) || Abilities::IsEarned(bot, ability) || !HasAnyOf(bot, ability))
+                    continue;
+                Abilities::Revoke(bot, ability);
+                ++result.revoked;
             }
             return result;
         }

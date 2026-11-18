@@ -123,6 +123,21 @@ namespace BotShared
             return GetCatalog().abilities;
         }
 
+        Ability const* AbilityOf(uint32 questId)
+        {
+            static std::unordered_map<uint32, size_t> const byQuest = []
+            {
+                std::unordered_map<uint32, size_t> map;
+                std::vector<Ability> const& abilities = GetCatalog().abilities;
+                for (size_t i = 0; i < abilities.size(); ++i)
+                    for (Quest const* quest : abilities[i].variants)
+                        map.emplace(quest->GetQuestId(), i);
+                return map;
+            }();
+            auto const itr = byQuest.find(questId);
+            return itr != byQuest.end() ? &GetCatalog().abilities[itr->second] : nullptr;
+        }
+
         Quest const* VariantFor(Player const* player, Ability const& ability)
         {
             if (!player || !(ability.classMask & player->GetClassMask()))
