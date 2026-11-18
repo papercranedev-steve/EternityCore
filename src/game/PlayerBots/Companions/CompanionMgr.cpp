@@ -189,7 +189,37 @@ namespace Companions
         if (itr == m_companions.end())
             return;
         itr->second.rewardMode = mode;
+        if (itr->second.temporary)
+            return;
         CharacterDatabase.PExecute("UPDATE `custom_companion` SET `reward_mode` = %u WHERE `char_guid` = %u", uint32(mode), charGuid);
+    }
+
+    bool CompanionMgr::MarkTemporary(Player* bot, Player* recruiter, std::vector<std::string> tags)
+    {
+        if (!bot || !recruiter || !bot->IsBot() || !bot->IsSavingDisabled() || recruiter->IsBot())
+            return false;
+        uint32 const guid = bot->GetGUIDLow();
+        if (IsCompanion(guid))
+            return false;
+        CompanionInfo info;
+        info.charGuid = guid;
+        info.recruiterGuid = recruiter->GetGUIDLow();
+        info.recruitedAt = uint32(time(nullptr));
+        info.tags = std::move(tags);
+        info.temporary = true;
+        m_companions[guid] = std::move(info);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s acts as a temporary companion of %s (test scenario).",
+            bot->GetName(), recruiter->GetName());
+        return true;
+    }
+
+    bool CompanionMgr::ForgetTemporary(uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.temporary)
+            return false;
+        m_companions.erase(itr);
+        return true;
     }
 
     bool CompanionMgr::Recruit(Player* bot, Player* recruiter, uint32 memberId)

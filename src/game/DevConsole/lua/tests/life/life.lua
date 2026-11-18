@@ -184,9 +184,11 @@ local function setupBot(leader, b, w, level, index, count, at)
         leader:select(b)
         leader:cmd(string.format(".additem %d %d", w.fill, 5000))
     end
-    -- errands are the soul companions' (PartyBotAI::LootsForSelf); a temporary bot is not one.
-    -- setcompanion: not in the dev console yet (a flag that is not saved to the database).
-    if b.setcompanion then b:setcompanion(true) end
+    -- errands and town trips are the soul companions' (PartyBotAI::LootsForSelf): the temporary
+    -- bot counts as one of the leader's until it logs out (in memory only, never saved)
+    if not b:setcompanion(true, leader) then
+        say(leader, "|cffffcc00注意|r：" .. b:name() .. " 没能设成同伴，不会跑腿")
+    end
     b:revive()
     b:refill()
     b:resetcd()
@@ -212,8 +214,9 @@ local function finish(leader, s, at)
     end
     lifetest.running = nil
     lifetest.current = s.id
-    if not (bots[1] and bots[1].setcompanion) then
-        say(leader, "|cffffcc00注意|r：开发控制台还没有 setcompanion，临时 bot 不算灵魂伙伴，不会跑腿")
+    -- the town trip only asks while the leader rests (city, inn) and stands still
+    if not leader:resting() then
+        say(leader, "|cffffcc00注意|r：你不在休息区（城市、旅店），队友不会请求进城")
     end
     for _, b in ipairs(bots) do
         say(leader, string.format("%s：%s，缺 %s", b:name(), money(b:money()), missingText(b) ~= "" and missingText(b) or "无"))

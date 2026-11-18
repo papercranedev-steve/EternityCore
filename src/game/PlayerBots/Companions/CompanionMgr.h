@@ -42,6 +42,9 @@ namespace Companions
         // Personality tag keys (Personality.h), from the roster member (custom_popbot_member_tag).
         // Set at load / recruit, read only afterwards (map threads read it).
         std::vector<std::string> tags;
+        // A temporary bot that acts as a companion for a dev console test scenario (MarkTemporary):
+        // in memory only, nothing about it is written to the database.
+        bool temporary = false;
     };
 
     class CompanionMgr
@@ -66,6 +69,19 @@ namespace Companions
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.
         bool Recruit(Player* bot, Player* recruiter, uint32 memberId);
+
+        // Dev console test scenarios (lua/tests/life): a temporary bot (saving disabled) counts as a
+        // companion of `recruiter` until it logs out (PlayerBotMgr calls ForgetTemporary). Never
+        // saved, no rows written; it cannot be recruited while marked. World thread, maps idle.
+        // False: not a temporary bot, or already a companion.
+        bool MarkTemporary(Player* bot, Player* recruiter, std::vector<std::string> tags = {});
+        // True if it was a temporary companion (and is no longer one).
+        bool ForgetTemporary(uint32 charGuid);
+        bool IsTemporary(uint32 charGuid) const
+        {
+            CompanionInfo const* info = Find(charGuid);
+            return info && info->temporary;
+        }
 
     private:
         CompanionMgr() = default;

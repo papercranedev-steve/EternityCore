@@ -1,13 +1,16 @@
 -- Supplies at the Stormwind gate: no vendor within the errand range (NpcVisit ANCHOR_YD 35),
--- so a bot that needs something has to ask you and walk into the city (soul companions doc
--- stage S5, the request system), buy, and come back to you.
+-- so a bot that needs something critical has to ask you for a town trip (Life/Errands/TownTrip:
+-- you rest and stand still, vendors within TRIP_YD 150 of you), walk to the vendors, buy, and
+-- come back (within NEAR_YD 40 it walks back; farther it whispers: come / gate / here).
+-- Answer the popup (Requests.lua) or wait 30 s (no answer = yes).
 -- Each bot misses something else, so the four together cover the purchase rules
 -- (Shared/Supplies priorities, Shared/Vendor::PlanPurchases budget and bag slots).
 --
 -- Items: 4540 Tough Hunk of Bread, 159 Refreshing Spring Water, 2512 Rough Arrow,
 -- 2589 Linen Cloth (fills the bags: white, so it is not sold as junk).
--- Start: the .tele stormwind point inside the gate (not checked in game yet; stand where you
--- want and use .scenario life setspot supplies-gate).
+-- Start: the .tele stormwind point inside the gate (not checked in game yet; the Trade District
+-- vendors should be 100-150 yd away. Stand where you want and use .scenario life setspot
+-- supplies-gate). For the "wait at the gate" answer add a gate once: .partybot gate add.
 return {
     id = "supplies-gate", title = "暴风城城门 补给请求", level = 20, faction = "alliance",
     at = { map = 0, x = -8913.23, y = 554.63, z = 93.79, o = 0.64 },

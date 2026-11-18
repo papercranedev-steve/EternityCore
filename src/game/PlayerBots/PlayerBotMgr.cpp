@@ -19,6 +19,7 @@
 #include "QuestDef.h"
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
+#include "Life/Requests/RequestBoard.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 
@@ -73,6 +74,9 @@ void PlayerBotMgr::LoadConfig()
 
 bool PlayerBotMgr::IsSavingAllowed(uint32 playerGuid) const
 {
+    // (a test scenario's temporary companion is never saved: CompanionMgr::MarkTemporary)
+    if (playerGuid && sCompanionMgr.IsTemporary(playerGuid))
+        return false;
     return m_confAllowSaving || (playerGuid && sCompanionMgr.IsCompanion(playerGuid));
 }
 
@@ -272,6 +276,11 @@ void PlayerBotMgr::Update(uint32 diff)
                 if (WorldSession* sess = sWorld.FindSession(iter->second->accountId))
                     if (sess->GetBot() == iter->second.get())
                         sess->LogoutPlayer(IsSavingAllowed(uint32(iter->first)));
+
+                // A test scenario's companion mark and requests go with it: the guid of a
+                // temporary bot is given out again.
+                if (sCompanionMgr.ForgetTemporary(uint32(iter->first)))
+                    sRequestBoard.Forget(ObjectGuid(HIGHGUID_PLAYER, uint32(iter->first)));
 
                 iter->second->requestRemoval = false;
 

@@ -160,6 +160,25 @@ namespace Requests
         return true;
     }
 
+    void Board::Forget(ObjectGuid bot)
+    {
+        std::lock_guard<std::mutex> guard(m_lock);
+        for (auto itr = m_open.begin(); itr != m_open.end();)
+        {
+            if (itr->second.bot == bot)
+                itr = m_open.erase(itr);
+            else
+                ++itr;
+        }
+        for (auto itr = m_quiet.begin(); itr != m_quiet.end();)
+        {
+            if (itr->first.first == bot)
+                itr = m_quiet.erase(itr);
+            else
+                ++itr;
+        }
+    }
+
     void Board::DropStale(uint32 now)
     {
         for (auto itr = m_open.begin(); itr != m_open.end();)

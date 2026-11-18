@@ -42,6 +42,7 @@
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Shared/Inventory.h"
+#include "Companions/CompanionMgr.h"
 #include "Shared/Supplies.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
@@ -1947,6 +1948,30 @@ namespace DevConsole
         return 1;
     }
 
+    // u:setcompanion(true, recruiter) / u:setcompanion(false) -> bool
+    // A temporary party bot acts as a soul companion of `recruiter` (errands, town trips, requests)
+    // until it logs out; in memory only (CompanionMgr::MarkTemporary).
+    static int U_setcompanion(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        if (!GetPartyBotAI(p))
+            return luaL_error(L, "%s is not a party bot", p->GetName());
+        if (!lua_toboolean(L, 2))
+        {
+            lua_pushboolean(L, sCompanionMgr.ForgetTemporary(p->GetGUIDLow()));
+            return 1;
+        }
+        Player* recruiter = CheckPlayer(L, 3);
+        lua_pushboolean(L, sCompanionMgr.MarkTemporary(p, recruiter));
+        return 1;
+    }
+    // u:resting() -> bool: in a rest area (inn, city); the town trips wait for a resting leader
+    static int U_resting(lua_State* L)
+    {
+        lua_pushboolean(L, CheckPlayer(L, 1)->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING));
+        return 1;
+    }
+
     class CaptureChatHandler : public ChatHandler
     {
         public:
@@ -2015,6 +2040,7 @@ namespace DevConsole
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
+            { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },
