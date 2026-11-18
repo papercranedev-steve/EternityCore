@@ -7,6 +7,7 @@
 #include "HealSpells.h"
 
 struct PlayerPremadeSpecTemplate;
+class SpellCastTargets;
 
 // CombatBotBaseAI::EquipRandomGearInEmptySlots limits. The defaults keep the PartyBot behaviour.
 struct RandomGearOptions
@@ -244,6 +245,9 @@ public:
     // item cooldowns), like `.partybot useslot`. True when it went through (the item was
     // consumed or its cooldown started).
     bool UseBagItem(uint32 itemId, Unit* pTarget = nullptr);
+    // The same on an item (a poison vial on an equipped weapon).
+    bool UseBagItemOnItem(uint32 itemId, Item* pTarget);
+    bool UseBagItemWithTargets(uint32 itemId, SpellCastTargets const& targets);
     // `emergencyCooldowns`: Divine Shield and Ice Block may be spent on it. PartyBotAI passes
     // false: its team rescue decides them (PartyBotAI::BreakControl).
     void BreakCrowdControlEffects(bool emergencyCooldowns = true);

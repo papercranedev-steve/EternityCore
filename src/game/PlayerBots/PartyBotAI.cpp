@@ -137,6 +137,7 @@ void PartyBotAI::StopErrands()
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
     Life::TownTrip::Stop(me, m_townTrip);
+    Life::CraftRun::Stop(me, m_craftRun);
 }
 
 bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
@@ -1809,7 +1810,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Then the quest objects its own quests need (Life/Errands/QuestObjectRun.h), then its
         // finished quests at a giver near the leader (Life/Errands/QuestTurnIn.h).
         // Last its business at a vendor / armorer and its class trainer near the leader
-        // (Life/Errands/NpcVisit.h): sell, repair, buy supplies, learn.
+        // (Life/Errands/NpcVisit.h): sell, repair, buy supplies, learn. With nothing else to do,
+        // it makes what it does not buy (Life/Errands/CraftRun.h: conjured food, poison vials).
         if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
             StopErrands();
         else
@@ -1819,7 +1821,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
-                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags());
+                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags()) ||
+                Life::CraftRun::Update(me, m_craftRun, pLeader);
             if (m_trainerTask.TakeLearned())
                 m_resetSpellData = true;    // new ranks: the rotation picks them up
             if (busy)

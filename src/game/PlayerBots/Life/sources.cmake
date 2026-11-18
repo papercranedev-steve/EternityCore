@@ -6,6 +6,8 @@ set(LIFE_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(LIFE_SRCS
   ${LIFE_DIR}/Errands/ErrandCommon.h
   ${LIFE_DIR}/Errands/ErrandCommon.cpp
+  ${LIFE_DIR}/Errands/CraftRun.h
+  ${LIFE_DIR}/Errands/CraftRun.cpp
   ${LIFE_DIR}/Errands/LootRun.h
   ${LIFE_DIR}/Errands/LootRun.cpp
   ${LIFE_DIR}/Errands/QuestObjectRun.h

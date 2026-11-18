@@ -10,7 +10,11 @@
  *  - extra items that are not a spell's reagent (EXTRA table: the Ankh for Reincarnation);
  *  - ammo for the ranged weapon it wears;
  *  - food, and drink when it has mana (Shared/FoodAndDrink: what PartyBotAI rests with);
- *  - the hunter pet's food (Shared/PetFood).
+ *  - the hunter pet's food (Shared/PetFood);
+ *  - what it makes itself (Need::recipe, Shared/Crafting): food and drink from a recipe made on
+ *    the road with nothing or vendor reagents (a mage's Conjure Food / Water; then that food or
+ *    drink is not bought), a rogue's best damage poison (Shared/Poisons). The reagents for the
+ *    missing products are bought at the row's priority.
  * What satisfies a need is a Goods::Spec (one item, or a kind such as "food it can eat").
  *
  * Priority decides what money and bag space go to first (Shared/Vendor::PlanPurchases):
@@ -31,6 +35,7 @@
 #include <vector>
 
 class Player;
+class SpellEntry;
 
 namespace BotShared
 {
@@ -49,11 +54,19 @@ namespace BotShared
             uint32 target = 0;          // units wanted in the bags
             uint32 have = 0;            // units in the bags now
             Priority priority = Priority::Important;
+            // Made with this recipe (Shared/Crafting), not bought; null = bought.
+            SpellEntry const* recipe = nullptr;
             uint32 Missing() const { return target > have ? target - have : 0; }
         };
 
-        // Sorted by priority (most important first); only needs with something missing.
+        // What to buy. Sorted by priority (most important first); only needs with something
+        // missing. Goods the bot makes itself are not bought ("makes it, does not buy it": a
+        // mage's conjured food and water); the reagents of what it makes are.
         std::vector<Need> Missing(Player const* player);
+
+        // What to make (Need::recipe set), one row per goods (the biggest target); only needs
+        // with something missing. Most important first.
+        std::vector<Need> ToMake(Player const* player);
 
         // Some vendor in the world sells it (index built once).
         bool IsSoldByVendors(uint32 itemId);

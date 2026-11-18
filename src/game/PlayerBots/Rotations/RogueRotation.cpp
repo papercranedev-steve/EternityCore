@@ -39,6 +39,8 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Shared/Poisons.h"
+#include "Item.h"
 
 namespace
 {
@@ -62,12 +64,17 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.rogue;
 
-            if (s.pMainHandPoison && bot.CanTryToCastSpell(me, s.pMainHandPoison) &&
-                bot.CastWeaponBuff(s.pMainHandPoison, EQUIPMENT_SLOT_MAINHAND) == SPELL_CAST_OK)
-                return;
+            if (bot.GetsFreeSupplies())
+            {
+                if (s.pMainHandPoison && bot.CanTryToCastSpell(me, s.pMainHandPoison) &&
+                    bot.CastWeaponBuff(s.pMainHandPoison, EQUIPMENT_SLOT_MAINHAND) == SPELL_CAST_OK)
+                    return;
 
-            if (s.pOffHandPoison && bot.CanTryToCastSpell(me, s.pOffHandPoison) &&
-                bot.CastWeaponBuff(s.pOffHandPoison, EQUIPMENT_SLOT_OFFHAND) == SPELL_CAST_OK)
+                if (s.pOffHandPoison && bot.CanTryToCastSpell(me, s.pOffHandPoison) &&
+                    bot.CastWeaponBuff(s.pOffHandPoison, EQUIPMENT_SLOT_OFFHAND) == SPELL_CAST_OK)
+                    return;
+            }
+            else if (PoisonFromBags(EQUIPMENT_SLOT_MAINHAND) || PoisonFromBags(EQUIPMENT_SLOT_OFFHAND))
                 return;
 
             if (KeepStealth(s.pStealth))
@@ -123,6 +130,22 @@ namespace
         }
 
     private:
+        // A bot without free supplies (a companion) puts the best poison vial it carries on a
+        // weapon without one (the vials are made by Life/Errands/CraftRun). Not while moving:
+        // the vial has a cast time.
+        bool PoisonFromBags(EquipmentSlots slot)
+        {
+            Player* me = m_bot.me;
+            if (me->IsMoving() || me->IsNonMeleeSpellCasted(false))
+                return false;
+            Item* pWeapon = me->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!pWeapon || pWeapon->GetProto()->Class != ITEM_CLASS_WEAPON ||
+                pWeapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
+                return false;
+            Item* pVial = BotShared::Poisons::BestInBags(me);
+            return pVial && m_bot.UseBagItemOnItem(pVial->GetEntry(), pWeapon);
+        }
+
         bool SliceAndDiceDue(Commander::WorldModel const* world, Unit const* pVictim) const
         {
             SpellEntry const* snd = m_bot.m_spells.rogue.pSliceAndDice;

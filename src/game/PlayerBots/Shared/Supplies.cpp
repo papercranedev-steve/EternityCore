@@ -1,5 +1,7 @@
 #include "Shared/Supplies.h"
+#include "Shared/Crafting.h"
 #include "Shared/PetFood.h"
+#include "Shared/Poisons.h"
 #include "Player.h"
 #include "Item.h"
 #include "ObjectMgr.h"
@@ -28,15 +30,22 @@ namespace Supplies
         uint32 const DRINK_CRITICAL = 10;
         uint32 const DRINK_TARGET = 20;
         uint32 const PET_FOOD_TARGET = 10;
+        // Made food and drink: a stack (no money spent, only mana and time).
+        uint32 const MADE_FOOD_TARGET = 20;
+        uint32 const MADE_DRINK_TARGET = 20;
+        // Poison vials: one per hand for sure, a few rounds more when reagents are bought.
+        uint32 const POISON_CRITICAL = 2;
+        uint32 const POISON_TARGET = 10;
 
         using Needs = std::vector<Need>;
 
-        Need Make(Goods::Spec goods, uint32 target, Priority priority)
+        Need Make(Goods::Spec goods, uint32 target, Priority priority, SpellEntry const* recipe = nullptr)
         {
             Need n;
             n.goods = goods;
             n.target = target;
             n.priority = priority;
+            n.recipe = recipe;
             return n;
         }
 
@@ -205,6 +214,61 @@ namespace Supplies
                 out.push_back(Make(Goods::Of(Goods::Kind::PetFood), PET_FOOD_TARGET, Priority::Important));
         }
 
+        // ---- What it makes itself ----
+
+        // A recipe the bot can keep making while it travels: no workplace, its tools with it,
+        // every reagent sold by some vendor (or none: a mage's conjuring).
+        bool MakeableOnTheRoad(Player const* player, SpellEntry const* recipe)
+        {
+            if (!Crafting::OnTheRoad(recipe) || !Crafting::HasTools(player, recipe))
+                return false;
+            for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
+                if (recipe->Reagent[r] > 0 && recipe->ReagentCount[r] && !IsSoldByVendors(uint32(recipe->Reagent[r])))
+                    return false;
+            return true;
+        }
+
+        // The known recipe whose product is the best of these goods, or null.
+        SpellEntry const* BestRecipeFor(Player const* player, Goods::Spec const& goods)
+        {
+            SpellEntry const* best = nullptr;
+            ItemPrototype const* bestProto = nullptr;
+            for (SpellEntry const* recipe : Crafting::KnownRecipes(player))
+            {
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(Crafting::ProductOf(recipe).itemId);
+                if (!Goods::Matches(player, goods, proto) || !MakeableOnTheRoad(player, recipe))
+                    continue;
+                if (!bestProto || Goods::Better(player, goods, proto, bestProto))
+                {
+                    best = recipe;
+                    bestProto = proto;
+                }
+            }
+            return best;
+        }
+
+        void MadeFoodAndDrinkNeeds(Player const* player, Needs& out)
+        {
+            Goods::Spec const food = Goods::Of(Goods::Kind::Food);
+            if (SpellEntry const* recipe = BestRecipeFor(player, food))
+                out.push_back(Make(food, MADE_FOOD_TARGET, Priority::Critical, recipe));
+            if (!player->GetMaxPower(POWER_MANA))
+                return;
+            Goods::Spec const drink = Goods::Of(Goods::Kind::Drink);
+            if (SpellEntry const* recipe = BestRecipeFor(player, drink))
+                out.push_back(Make(drink, MADE_DRINK_TARGET, Priority::Critical, recipe));
+        }
+
+        void PoisonNeeds(Player const* player, Needs& out)
+        {
+            SpellEntry const* recipe = Poisons::BestRecipe(player);
+            if (!recipe || !MakeableOnTheRoad(player, recipe))
+                return;
+            Goods::Spec const vial = Goods::Exact(Crafting::ProductOf(recipe).itemId);
+            out.push_back(Make(vial, POISON_CRITICAL, Priority::Critical, recipe));
+            out.push_back(Make(vial, POISON_TARGET, Priority::Important, recipe));
+        }
+
         using Source = void (*)(Player const*, Needs&);
         Source const SOURCES[] = {
             &ReagentNeeds,
@@ -212,7 +276,47 @@ namespace Supplies
             &AmmoNeeds,
             &FoodAndDrinkNeeds,
             &PetFoodNeeds,
+            &MadeFoodAndDrinkNeeds,
+            &PoisonNeeds,
         };
+
+        // Every row of every source, `have` counted.
+        Needs AllNeeds(Player const* player)
+        {
+            Needs all;
+            for (Source source : SOURCES)
+                source(player, all);
+            for (Need& n : all)
+                n.have = Goods::CountInBags(player, n.goods);
+            return all;
+        }
+
+        // The reagents for what a made row is missing, at its priority.
+        void AddReagentNeeds(Player const* player, Need const& made, Needs& out)
+        {
+            uint32 const perCast = std::max<uint32>(Crafting::ProductOf(made.recipe).perCast, 1);
+            uint32 const casts = (made.Missing() + perCast - 1) / perCast;
+            if (!casts)
+                return;
+            for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
+            {
+                if (made.recipe->Reagent[r] <= 0 || !made.recipe->ReagentCount[r])
+                    continue;
+                uint32 const itemId = uint32(made.recipe->Reagent[r]);
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                if (!proto)
+                    continue;
+                Need n = Make(Goods::Exact(itemId), made.recipe->ReagentCount[r] * casts, made.priority);
+                n.target = std::min<uint32>(n.target, std::max<uint32>(proto->GetMaxStackSize(), 1));
+                n.have = Goods::CountInBags(player, n.goods);
+                out.push_back(n);
+            }
+        }
+
+        void SortByPriority(Needs& needs)
+        {
+            std::stable_sort(needs.begin(), needs.end(), [](Need const& a, Need const& b) { return a.priority < b.priority; });
+        }
     }
 
     bool IsSoldByVendors(uint32 itemId)
@@ -246,18 +350,50 @@ namespace Supplies
 
     std::vector<Need> Missing(Player const* player)
     {
-        Needs all;
-        for (Source source : SOURCES)
-            source(player, all);
+        Needs const all = AllNeeds(player);
+
+        std::set<Goods::Spec> made;
+        Needs bought;
+        for (Need const& n : all)
+        {
+            if (n.recipe)
+            {
+                made.insert(n.goods);
+                AddReagentNeeds(player, n, bought);
+            }
+            else
+                bought.push_back(n);
+        }
 
         Needs result;
-        for (Need& n : all)
-        {
-            n.have = Goods::CountInBags(player, n.goods);
-            if (n.Missing())
+        for (Need const& n : bought)
+            if (n.Missing() && !made.count(n.goods))
                 result.push_back(n);
+        SortByPriority(result);
+        return result;
+    }
+
+    std::vector<Need> ToMake(Player const* player)
+    {
+        std::map<Goods::Spec, Need> byGoods;
+        for (Need const& n : AllNeeds(player))
+        {
+            if (!n.recipe || !n.Missing())
+                continue;
+            auto itr = byGoods.find(n.goods);
+            if (itr == byGoods.end())
+            {
+                byGoods[n.goods] = n;
+                continue;
+            }
+            itr->second.target = std::max(itr->second.target, n.target);
+            itr->second.priority = std::min(itr->second.priority, n.priority);
         }
-        std::stable_sort(result.begin(), result.end(), [](Need const& a, Need const& b) { return a.priority < b.priority; });
+
+        Needs result;
+        for (auto const& itr : byGoods)
+            result.push_back(itr.second);
+        SortByPriority(result);
         return result;
     }
 }

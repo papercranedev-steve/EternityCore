@@ -3707,6 +3707,22 @@ bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
 
 bool CombatBotBaseAI::UseBagItem(uint32 itemId, Unit* pTarget)
 {
+    SpellCastTargets targets;
+    targets.setUnitTarget(pTarget ? pTarget : me);
+    return UseBagItemWithTargets(itemId, targets);
+}
+
+bool CombatBotBaseAI::UseBagItemOnItem(uint32 itemId, Item* pTarget)
+{
+    if (!pTarget)
+        return false;
+    SpellCastTargets targets;
+    targets.setItemTarget(pTarget);
+    return UseBagItemWithTargets(itemId, targets);
+}
+
+bool CombatBotBaseAI::UseBagItemWithTargets(uint32 itemId, SpellCastTargets const& targets)
+{
     // First stack: the backpack, then the bags.
     Item* pItem = nullptr;
     uint8 bag = INVENTORY_SLOT_BAG_0;
@@ -3759,11 +3775,14 @@ bool CombatBotBaseAI::UseBagItem(uint32 itemId, Unit* pTarget)
     packet.bagIndex = bag;
     packet.slot = slot;
     packet.spellSlot = spellSlot;
-    packet.targets.setUnitTarget(pTarget ? pTarget : me);
+    packet.targets = targets;
     me->GetSession()->HandleUseItemOpcode(packet);
     // pItem may be deleted now (last charge used).
 
-    return me->GetItemCount(itemId) < countBefore || !me->IsSpellReady(pSpellEntry, pProto);
+    // (an item spell with a cast time, a poison vial: consumed when the cast ends)
+    Spell const* pCasting = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+    bool const casting = pCasting && pCasting->m_spellInfo && pCasting->m_spellInfo->Id == pSpellEntry->Id && pCasting->getState() == SPELL_STATE_PREPARING;
+    return casting || me->GetItemCount(itemId) < countBefore || !me->IsSpellReady(pSpellEntry, pProto);
 }
 
 void CombatBotBaseAI::BreakCrowdControlEffects(bool emergencyCooldowns)

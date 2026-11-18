@@ -31,6 +31,7 @@
 #include "Commander/Behaviors/Movement/Landing.h"
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
+#include "Life/Errands/CraftRun.h"
 #include "Life/Errands/LootRun.h"
 #include "Life/Errands/QuestObjectRun.h"
 #include "Life/Errands/QuestTurnIn.h"
@@ -475,6 +476,9 @@ public:
     Life::TownTripState m_townTrip;
     Life::Trip::ShoppingPlanner m_shoppingPlanner;
     Life::Trip::TrainingPlanner m_trainingPlanner{ m_trainerTask };
+    // Out of combat: a companion makes its conjured food and water, poison vials
+    // (Life/Errands/CraftRun.h).
+    Life::CraftRunState m_craftRun;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

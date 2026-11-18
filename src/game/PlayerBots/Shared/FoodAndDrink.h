@@ -16,7 +16,7 @@
 class Item;
 class Player;
 struct ItemPrototype;
-struct SpellEntry;
+class SpellEntry;
 
 namespace BotShared
 {
