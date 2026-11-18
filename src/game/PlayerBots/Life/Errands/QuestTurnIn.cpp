@@ -36,10 +36,11 @@ namespace QuestTurnIn
         std::vector<uint32> FinishedQuests(Player* me)
         {
             std::vector<uint32> quests;
-            for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+            // The status map (public) holds every quest in the log; COMPLETE ones are not rewarded yet.
+            for (auto const& entry : me->GetQuestStatusMap())
             {
-                uint32 const questId = me->GetQuestSlotQuestId(slot);
-                if (!questId || me->GetQuestStatus(questId) != QUEST_STATUS_COMPLETE)
+                uint32 const questId = entry.first;
+                if (entry.second.m_status != QUEST_STATUS_COMPLETE)
                     continue;
                 Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
                 if (quest && me->CanRewardQuest(quest, false))
