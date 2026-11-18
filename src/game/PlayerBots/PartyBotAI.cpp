@@ -136,6 +136,14 @@ void PartyBotAI::StopErrands()
     Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
+    Life::TownTrip::Stop(me, m_townTrip);
+}
+
+std::vector<std::string> const& PartyBotAI::PersonalityTags() const
+{
+    static std::vector<std::string> const none;
+    Companions::CompanionInfo const* info = me ? sCompanionMgr.Find(me->GetGUIDLow()) : nullptr;
+    return info ? info->tags : none;
 }
 
 uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
@@ -1803,7 +1811,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
-                Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask);
+                Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
+                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_vendorTask, &m_trainerTask }, PersonalityTags());
             if (m_trainerTask.TakeLearned())
                 m_resetSpellData = true;    // new ranks: the rotation picks them up
             if (busy)

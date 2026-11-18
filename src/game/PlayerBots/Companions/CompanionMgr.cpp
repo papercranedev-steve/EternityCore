@@ -1,5 +1,6 @@
 #include "Companions/CompanionMgr.h"
 #include "Shared/ClassTraining.h"
+#include "Life/Requests/Phrases.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -97,6 +98,23 @@ namespace Companions
             } while (result->NextRow());
         }
 
+        // Personality: the roster member's tags.
+        std::unique_ptr<QueryResult> tags(CharacterDatabase.Query(
+            "SELECT c.`char_guid`, t.`tag` FROM `custom_companion` c"
+            " JOIN `custom_popbot_member_tag` t ON t.`member_id` = c.`member_id` WHERE c.`member_id` <> 0"));
+        if (tags)
+        {
+            do
+            {
+                Field* f = tags->Fetch();
+                auto itr = m_companions.find(f[0].GetUInt32());
+                if (itr != m_companions.end())
+                    itr->second.tags.push_back(f[1].GetCppString());
+            } while (tags->NextRow());
+        }
+
+        Life::Phrases::Load();
+
         ResolveAccount();
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [Companion] %u companions loaded, account '%s' (%u).",
             uint32(m_companions.size()), m_accountName.c_str(), m_accountId);
@@ -123,6 +141,23 @@ namespace Companions
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] Created account '%s' for companion characters.", m_accountName.c_str());
         // The insert is asynchronous: the id is read again on the next call.
         return 0;
+    }
+
+    std::vector<std::string> CompanionMgr::LoadTags(uint32 memberId)
+    {
+        std::vector<std::string> tags;
+        if (!memberId)
+            return tags;
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            "SELECT `tag` FROM `custom_popbot_member_tag` WHERE `member_id` = %u", memberId));
+        if (result)
+        {
+            do
+            {
+                tags.push_back(result->Fetch()[0].GetCppString());
+            } while (result->NextRow());
+        }
+        return tags;
     }
 
     CompanionInfo const* CompanionMgr::Find(uint32 charGuid) const
@@ -197,6 +232,7 @@ namespace Companions
         info.memberId = memberId;
         info.recruiterGuid = recruiter->GetGUIDLow();
         info.recruitedAt = uint32(time(nullptr));
+        info.tags = LoadTags(memberId);
         CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`)"
             " VALUES (%u, %u, %u, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
         m_companions[guid] = info;

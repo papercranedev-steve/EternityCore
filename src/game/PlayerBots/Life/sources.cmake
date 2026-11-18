@@ -17,6 +17,14 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/NpcVisit.cpp
   ${LIFE_DIR}/Errands/MerchantTasks.h
   ${LIFE_DIR}/Errands/MerchantTasks.cpp
+  ${LIFE_DIR}/Errands/TownTrip.h
+  ${LIFE_DIR}/Errands/TownTrip.cpp
+  ${LIFE_DIR}/Requests/Intents.h
+  ${LIFE_DIR}/Requests/Intents.cpp
+  ${LIFE_DIR}/Requests/RequestBoard.h
+  ${LIFE_DIR}/Requests/RequestBoard.cpp
+  ${LIFE_DIR}/Requests/Phrases.h
+  ${LIFE_DIR}/Requests/Phrases.cpp
 )
 
 target_sources(game PRIVATE ${LIFE_SRCS})

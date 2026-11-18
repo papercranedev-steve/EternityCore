@@ -4,6 +4,8 @@
 set(BOTSHARED_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 set(BOTSHARED_SRCS
+  ${BOTSHARED_DIR}/BotChat.h
+  ${BOTSHARED_DIR}/BotChat.cpp
   ${BOTSHARED_DIR}/ClassTraining.h
   ${BOTSHARED_DIR}/ClassTraining.cpp
   ${BOTSHARED_DIR}/FoodAndDrink.h
@@ -16,6 +18,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Inventory.cpp
   ${BOTSHARED_DIR}/LootFacts.h
   ${BOTSHARED_DIR}/LootFacts.cpp
+  ${BOTSHARED_DIR}/NpcDirectory.h
+  ${BOTSHARED_DIR}/NpcDirectory.cpp
   ${BOTSHARED_DIR}/ObjectUse.h
   ${BOTSHARED_DIR}/ObjectUse.cpp
   ${BOTSHARED_DIR}/PetFood.h

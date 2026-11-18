@@ -39,6 +39,9 @@ namespace Companions
         uint32 memberId = 0;        // custom_popbot_member.id, 0 = not from the roster
         uint32 recruiterGuid = 0;   // real character that recruited it
         uint32 recruitedAt = 0;     // unix time
+        // Personality tag keys (Personality.h), from the roster member (custom_popbot_member_tag).
+        // Set at load / recruit, read only afterwards (map threads read it).
+        std::vector<std::string> tags;
     };
 
     class CompanionMgr
@@ -68,6 +71,7 @@ namespace Companions
         CompanionMgr() = default;
 
         bool EnsureTable();
+        static std::vector<std::string> LoadTags(uint32 memberId);
         // Account id of Companion.Account; creates the account the first time (async, so 0 until it exists).
         uint32 ResolveAccount();
         void LoginAsPartyBot(uint32 charGuid, Player* leader);

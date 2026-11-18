@@ -308,6 +308,8 @@ class ChatHandler
         bool HandlePartyBotTalentsCommand(char * args);     // PlayerBots/Commander/Commands/TalentCommands.cpp
         bool HandlePartyBotLearnTalentCommand(char * args);
         bool HandlePartyBotTalentDebugCommand(char * args);
+        bool HandlePartyBotReplyCommand(char * args);       // PlayerBots/Companions/CompanionCommands.cpp
+        bool HandlePartyBotRewardModeCommand(char * args);
         bool HandlePopBotCommand(char* args);           // PlayerBots/Population/PopulationCommands.cpp
         bool HandleLuaCommand(char* args);              // DevConsole/DevConsoleCommands.cpp
         bool HandleScenarioCommand(char* args);         // DevConsole/DevConsoleCommands.cpp

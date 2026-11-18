@@ -2,7 +2,9 @@
 #include "Shared/ClassTraining.h"
 #include "Shared/Supplies.h"
 #include "Shared/Vendor.h"
+#include "Shared/Inventory.h"
 #include "Player.h"
+#include "Item.h"
 #include "Creature.h"
 #include "Log.h"
 
@@ -53,6 +55,39 @@ namespace Life
 
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at vendor %s: sold for %u, repaired for %u, bought for %u copper.",
             me->GetName(), npc->GetName(), earned, repaired, spent);
+    }
+
+    bool VendorTask::WorthTrip(Player* me)
+    {
+        for (BotShared::Supplies::Need const& need : BotShared::Supplies::Missing(me))
+            if (need.priority == BotShared::Supplies::Priority::Critical)
+                return true;
+
+        for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
+            if (Item* item = me->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            {
+                uint32 const maxDurability = item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
+                if (maxDurability && item->GetUInt32Value(ITEM_FIELD_DURABILITY) * 100 <= maxDurability * TRIP_DURABILITY_PCT)
+                    return true;
+            }
+
+        return BotShared::Inventory::FreeBagSlots(me) <= BotShared::Vendor::KEEP_FREE_SLOTS && BotShared::Vendor::HasJunk(me);
+    }
+
+    uint32 VendorTask::NpcFlags() const
+    {
+        return UNIT_NPC_FLAG_VENDOR | UNIT_NPC_FLAG_REPAIR;
+    }
+
+    bool TrainerTask::WorthTrip(Player* me)
+    {
+        uint32 cheapest = 0;
+        return BotShared::ClassTraining::CheapestAvailable(me, cheapest) && me->GetMoney() >= cheapest;
+    }
+
+    uint32 TrainerTask::NpcFlags() const
+    {
+        return UNIT_NPC_FLAG_TRAINER;
     }
 
     bool TrainerTask::Wants(Player* me, Creature* npc)

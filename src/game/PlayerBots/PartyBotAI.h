@@ -36,6 +36,7 @@
 #include "Life/Errands/QuestTurnIn.h"
 #include "Life/Errands/NpcVisit.h"
 #include "Life/Errands/MerchantTasks.h"
+#include "Life/Errands/TownTrip.h"
 #include "Companions/RewardChoice.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
@@ -174,6 +175,8 @@ public:
     bool GetsFreeSupplies() const override;
     // Ends every daily-life errand walk (combat, a Commander plan, not a companion).
     void StopErrands();
+    // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
+    std::vector<std::string> const& PersonalityTags() const;
     bool AttackStart(Unit* pVictim);
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
@@ -458,6 +461,8 @@ public:
     Life::VendorTask m_vendorTask;
     Life::NpcVisitState m_trainerVisit;
     Life::TrainerTask m_trainerTask;
+    // Farther than the NPC visits, with the leader's consent (Life/Errands/TownTrip.h).
+    Life::TownTripState m_townTrip;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;
