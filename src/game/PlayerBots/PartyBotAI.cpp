@@ -1819,7 +1819,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
-                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_vendorTask, &m_trainerTask }, PersonalityTags());
+                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags());
             if (m_trainerTask.TakeLearned())
                 m_resetSpellData = true;    // new ranks: the rotation picks them up
             if (busy)

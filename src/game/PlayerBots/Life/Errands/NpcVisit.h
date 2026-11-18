@@ -38,12 +38,6 @@ namespace Life
         virtual bool Wants(Player* me, Creature* npc) = 0;
         // At the NPC (in interaction distance): do the business.
         virtual void Do(Player* me, Creature* npc) = 0;
-
-        // Far visits (TownTrip.h): the business is worth asking the leader for a walk out of
-        // the party (not just a gray item to sell), and the npc flags of the NPCs that may
-        // have it (Shared/NpcDirectory). Default: never worth a trip.
-        virtual bool WorthTrip(Player* /*me*/) { return false; }
-        virtual uint32 NpcFlags() const { return 0; }
     };
 
     // Per bot and task (a member of its AI). Plain data.

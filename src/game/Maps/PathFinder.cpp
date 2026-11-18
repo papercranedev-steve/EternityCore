@@ -691,6 +691,11 @@ void PathInfo::createFilter()
     m_filter.setIncludeFlags(includeFlags);
     m_filter.setExcludeFlags(excludeFlags);
 
+    // Player bots walk around water rather than swim through it, as players do (swimming is
+    // slower and leaves them wet): open water costs BOT_SWIM_COST per yard, shores stay 1.
+    if (StopsAtGameObjects())
+        m_filter.setAreaCost(AREA_WATER, BOT_SWIM_COST);
+
     updateFilter();
 }
 

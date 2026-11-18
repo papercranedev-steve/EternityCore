@@ -37,6 +37,8 @@
 #include "Life/Errands/NpcVisit.h"
 #include "Life/Errands/MerchantTasks.h"
 #include "Life/Errands/TownTrip.h"
+#include "Life/Errands/Trip/ShoppingPlanner.h"
+#include "Life/Errands/Trip/TrainingPlanner.h"
 #include "Companions/RewardChoice.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
@@ -467,8 +469,12 @@ public:
     Life::VendorTask m_vendorTask;
     Life::NpcVisitState m_trainerVisit;
     Life::TrainerTask m_trainerTask;
-    // Farther than the NPC visits, with the leader's consent (Life/Errands/TownTrip.h).
+    // Farther than the NPC visits, with the leader's consent (Life/Errands/TownTrip.h): the
+    // auction house, mailbox and vendors, and the class trainer (m_trainerTask, so TakeLearned
+    // sees what the trip learned).
     Life::TownTripState m_townTrip;
+    Life::Trip::ShoppingPlanner m_shoppingPlanner;
+    Life::Trip::TrainingPlanner m_trainingPlanner{ m_trainerTask };
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

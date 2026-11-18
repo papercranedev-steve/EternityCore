@@ -24,12 +24,6 @@ namespace Life
         char const* Name() const override { return "vendor"; }
         bool Wants(Player* me, Creature* npc) override;
         void Do(Player* me, Creature* npc) override;
-        // A critical supply is missing, an equipped item is nearly broken (TRIP_DURABILITY_PCT),
-        // or the bags are full (KEEP_FREE_SLOTS) with junk to sell.
-        bool WorthTrip(Player* me) override;
-        uint32 NpcFlags() const override;
-
-        static constexpr uint32 TRIP_DURABILITY_PCT = 25;
     };
 
     class TrainerTask final : public INpcTask
@@ -38,9 +32,6 @@ namespace Life
         char const* Name() const override { return "trainer"; }
         bool Wants(Player* me, Creature* npc) override;
         void Do(Player* me, Creature* npc) override;
-        // A new rank it can pay for.
-        bool WorthTrip(Player* me) override;
-        uint32 NpcFlags() const override;
 
         // Spells were learned since the last call (once).
         bool TakeLearned()

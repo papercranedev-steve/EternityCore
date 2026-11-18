@@ -3,17 +3,17 @@
  * client's own handlers / Player::BuyItemFromVendor (distance, reputation, stock, price and bag
  * checks all apply). Soul companions doc §4.4 (stage S4).
  *
- * Buying: PlanPurchases spends money and bag space by Supplies priority:
- *  - Critical needs may use all the money and every free slot;
- *  - the others keep `reserve` copper (money set aside, e.g. for the class trainer) and
- *    KEEP_FREE_SLOTS free bag slots (room for loot);
- *  - when money or space is short a need is bought in part (as many vendor stacks as fit).
+ * Buying: PlanPurchases spends a Purchasing::Budget by Supplies priority (critical needs may use
+ * everything; the others keep the reserve and free slots). When money or space is short a need
+ * is bought in part (as many vendor stacks as fit). The budget may be shared with other shops of
+ * the same round (the auction house first: Life/Errands/Trip/ShoppingPlanner).
  */
 
 #ifndef MANGOS_BOTSHARED_VENDOR_H
 #define MANGOS_BOTSHARED_VENDOR_H
 
 #include "Common.h"
+#include "Shared/Purchasing.h"
 #include "Shared/Supplies.h"
 #include <vector>
 
@@ -24,7 +24,7 @@ namespace BotShared
 {
     namespace Vendor
     {
-        constexpr uint32 KEEP_FREE_SLOTS = 2;
+        constexpr uint32 KEEP_FREE_SLOTS = Purchasing::KEEP_FREE_SLOTS;
 
         // Gray items that sell (not quest items). Sells them all at `vendor`; returns the copper earned.
         bool HasJunk(Player const* player);
@@ -35,6 +35,11 @@ namespace BotShared
         // Repairs all through the repair handler; returns the copper spent.
         uint32 RepairAll(Player* player, Creature* npc);
 
+        // The vendor offers something of these goods the player can use.
+        bool Sells(Player* player, Creature* vendor, Goods::Spec const& goods);
+        // A vendor's price of one unit of the item (no reputation discount).
+        uint32 UnitPrice(ItemPrototype const* proto);
+
         struct Purchase
         {
             uint32 itemId = 0;
@@ -42,7 +47,10 @@ namespace BotShared
             uint32 cost = 0;        // copper
         };
 
-        // What to buy at `vendor` for `needs` (Supplies::Missing order).
+        // What to buy at `vendor` for `needs` (Supplies::Missing order), spending `budget`.
+        std::vector<Purchase> PlanPurchases(Player* player, Creature* vendor,
+                                            std::vector<Supplies::Need> const& needs, Purchasing::Budget& budget);
+        // With a budget of the player's money and bags now.
         std::vector<Purchase> PlanPurchases(Player* player, Creature* vendor,
                                             std::vector<Supplies::Need> const& needs, uint32 reserve);
         // Returns the copper spent.

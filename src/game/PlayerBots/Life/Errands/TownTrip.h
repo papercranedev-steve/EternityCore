@@ -7,15 +7,15 @@
  * is free meanwhile (his own trainer, the bank): the bot does not follow, and companions are
  * not teleported to a far leader on the same map (PartyBotAI::CatchesUpByTeleport).
  *   Idle      every CHECK_MS: the leader is in a rest area (a city or an inn) and standing, the
- *             bot may run errands (ErrandCommon::MayRun), a task is worth a trip (INpcTask::
- *             WorthTrip) and has an NPC (Shared/NpcDirectory, the live creature: Wants, safe
- *             walk) further than NpcVisit::ANCHOR_YD from the leader. All tasks' stops make one
- *             trip and one question (doc §5: merged).
+ *             bot may run errands (ErrandCommon::MayRun) and some planner (Trip/TripPlan.h:
+ *             shopping, training) finds it worth a trip. Then every planner adds its stops
+ *             (one trip does all), the route is ordered by real walking distance
+ *             (Trip/RouteOrder.h) and one question names every place (doc §5: merged).
  *   Asking    the bot says the question in party chat (Phrases "errand.ask") and opens a
  *             request (Requests::Board, intent Errand). It keeps following meanwhile. "yes" or
  *             no answer (the fallback: a player who ignores the popup does not mind): it goes.
  *             "no": it stays and the intent backs off.
- *   Going     the stops in turn, each like NpcVisit (stand DWELL_MS, then the task).
+ *   Going     the stops in turn: walk there, stand DWELL_MS, then the stop's action.
  * Done, the leader within NEAR_YD:
  *   Returning back to him (BACK_YD).
  * Done, the leader farther (busy elsewhere in town): it whispers him and asks (intent
@@ -36,6 +36,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Life/Errands/Trip/TripPlan.h"
 #include <string>
 #include <vector>
 
@@ -43,14 +44,6 @@ class Player;
 
 namespace Life
 {
-    class INpcTask;
-
-    struct TownTripStop
-    {
-        ObjectGuid npc;
-        INpcTask* task = nullptr;
-    };
-
     // Per bot (a member of its AI).
     struct TownTripState
     {
@@ -68,7 +61,7 @@ namespace Life
 
         Phase phase = Phase::Idle;
         uint32 requestId = 0;
-        std::vector<TownTripStop> stops;
+        std::vector<Trip::TripStop> stops;
         size_t next = 0;
         uint32 nextCheckMs = 0;
         uint32 phaseSinceMs = 0;    // the current phase or stop since
@@ -98,10 +91,10 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 COOLDOWN_MS = 15 * MINUTE * IN_MILLISECONDS;
 
-        // `tasks` in visiting order; `tags` the bot's personality (what it says).
+        // `planners`: the kinds of business; `tags` the bot's personality (what it says).
         // True: the bot is on its trip this tick (it does not follow).
         bool Update(Player* me, TownTripState& state, Player* leader,
-                    std::vector<INpcTask*> const& tasks, std::vector<std::string> const& tags);
+                    std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags);
         // Cancels the question or the trip (combat, a Commander plan).
         void Stop(Player* me, TownTripState& state);
     }

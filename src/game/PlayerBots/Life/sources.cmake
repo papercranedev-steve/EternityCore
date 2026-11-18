@@ -19,6 +19,13 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/MerchantTasks.cpp
   ${LIFE_DIR}/Errands/TownTrip.h
   ${LIFE_DIR}/Errands/TownTrip.cpp
+  ${LIFE_DIR}/Errands/Trip/TripPlan.h
+  ${LIFE_DIR}/Errands/Trip/RouteOrder.h
+  ${LIFE_DIR}/Errands/Trip/RouteOrder.cpp
+  ${LIFE_DIR}/Errands/Trip/ShoppingPlanner.h
+  ${LIFE_DIR}/Errands/Trip/ShoppingPlanner.cpp
+  ${LIFE_DIR}/Errands/Trip/TrainingPlanner.h
+  ${LIFE_DIR}/Errands/Trip/TrainingPlanner.cpp
   ${LIFE_DIR}/Requests/Intents.h
   ${LIFE_DIR}/Requests/Intents.cpp
   ${LIFE_DIR}/Requests/RequestBoard.h

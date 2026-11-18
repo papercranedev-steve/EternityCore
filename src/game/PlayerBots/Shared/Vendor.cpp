@@ -85,16 +85,6 @@ namespace Vendor
             return best;
         }
 
-        // New bag slots `units` more of the item take on top of the bags' and `plannedUnits`
-        // already planned (the last partial stack is filled first).
-        uint32 SlotsFor(Player const* player, ItemPrototype const* proto, uint32 units, uint32 plannedUnits)
-        {
-            uint32 const stack = std::max<uint32>(proto->GetMaxStackSize(), 1);
-            uint32 const have = player->GetItemCount(proto->ItemId) + plannedUnits;
-            uint32 const room = have % stack ? stack - have % stack : 0;
-            uint32 const extra = units > room ? units - room : 0;
-            return (extra + stack - 1) / stack;
-        }
     }
 
     bool HasJunk(Player const* player)
@@ -145,36 +135,36 @@ namespace Vendor
         return before > player->GetMoney() ? before - player->GetMoney() : 0;
     }
 
+    bool Sells(Player* player, Creature* vendor, Goods::Spec const& goods)
+    {
+        Supplies::Need need;
+        need.goods = goods;
+        return OfferFor(player, vendor, need).proto != nullptr;
+    }
+
+    uint32 UnitPrice(ItemPrototype const* proto)
+    {
+        return proto ? proto->BuyPrice / std::max<uint32>(proto->BuyCount, 1) : 0;
+    }
+
     std::vector<Purchase> PlanPurchases(Player* player, Creature* vendor,
-                                        std::vector<Supplies::Need> const& needs, uint32 reserve)
+                                        std::vector<Supplies::Need> const& needs, Purchasing::Budget& budget)
     {
         std::vector<Purchase> plan;
-        uint32 money = player->GetMoney();
-        uint32 freeSlots = Inventory::FreeBagSlots(player);
-        // Units already planned of each goods: a later row of the same goods (food: critical,
-        // then important) only buys what is still missing on top of them.
-        std::map<Goods::Spec, uint32> planned;
-        std::map<uint32, uint32> plannedOfItem;    // units by item entry (for bag slots and stock)
-
         for (Supplies::Need const& need : needs)
         {
-            uint32& already = planned[need.goods];
-            uint32 const missing = need.Missing() > already ? need.Missing() - already : 0;
+            uint32 const missing = budget.StillMissing(need);
             if (!missing)
                 continue;
             Offer const offer = OfferFor(player, vendor, need);
             if (!offer.proto)
                 continue;
 
-            bool const critical = need.priority == Supplies::Priority::Critical;
-            uint32 const budget = critical ? money : (money > reserve ? money - reserve : 0);
-            uint32 const slotsAllowed = critical ? freeSlots : (freeSlots > KEEP_FREE_SLOTS ? freeSlots - KEEP_FREE_SLOTS : 0);
-
             uint32 const perStack = std::max<uint32>(offer.proto->BuyCount, 1);
-            uint32& itemPlanned = plannedOfItem[offer.proto->ItemId];
+            uint32 const itemPlanned = budget.plannedOfItem[offer.proto->ItemId];
             uint32 stacks = (missing + perStack - 1) / perStack;
             if (offer.price)
-                stacks = std::min(stacks, budget / offer.price);
+                stacks = std::min(stacks, budget.MoneyFor(need.priority) / offer.price);
             if (offer.entry->maxcount)     // limited stock: the whole order fails beyond it
             {
                 uint32 const left = vendor->GetVendorItemCurrentCount(offer.entry);
@@ -182,7 +172,8 @@ namespace Vendor
                 stacks = std::min(stacks, available / perStack);
             }
             stacks = std::min<uint32>(stacks, 255);     // one buy order at most (uint8)
-            while (stacks && SlotsFor(player, offer.proto, stacks * perStack, itemPlanned) > slotsAllowed)
+            uint32 const slotsAllowed = budget.SlotsFor(need.priority);
+            while (stacks && Purchasing::SlotsFor(player, offer.proto, stacks * perStack, itemPlanned) > slotsAllowed)
                 --stacks;
             if (!stacks)
                 continue;
@@ -192,12 +183,17 @@ namespace Vendor
             p.stacks = stacks;
             p.cost = stacks * offer.price;
             plan.push_back(p);
-            money -= p.cost;
-            freeSlots -= SlotsFor(player, offer.proto, stacks * perStack, itemPlanned);
-            already += stacks * perStack;
-            itemPlanned += stacks * perStack;
+            budget.Spend(need.goods, p.itemId, stacks * perStack, p.cost,
+                         Purchasing::SlotsFor(player, offer.proto, stacks * perStack, itemPlanned));
         }
         return plan;
+    }
+
+    std::vector<Purchase> PlanPurchases(Player* player, Creature* vendor,
+                                        std::vector<Supplies::Need> const& needs, uint32 reserve)
+    {
+        Purchasing::Budget budget = Purchasing::Budget::Of(player, reserve);
+        return PlanPurchases(player, vendor, needs, budget);
     }
 
     uint32 Buy(Player* player, Creature* vendor, std::vector<Purchase> const& purchases)

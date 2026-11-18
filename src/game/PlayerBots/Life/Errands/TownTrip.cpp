@@ -5,14 +5,16 @@
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
-#include "Shared/NpcDirectory.h"
+#include "Life/Errands/Trip/RouteOrder.h"
 #include "Shared/TownGates.h"
+#include "GameObject.h"
 #include "Player.h"
 #include "Creature.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "Timer.h"
 #include "Log.h"
+#include <algorithm>
 
 namespace Life
 {
@@ -76,59 +78,47 @@ namespace TownTrip
             me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE);
         }
 
-        // The nearest NPC (to the leader) out of NpcVisit's reach the task has business with.
-        Creature* FindStop(Player* me, Player const* leader, INpcTask& task)
+        // "拍卖行、护甲商和训练师": the named stops in route order, each word once.
+        std::string PlacesOf(std::vector<Trip::TripStop> const& stops)
         {
-            Map* map = me->GetMap();
-            for (BotShared::NpcDirectory::ServiceNpc const& n : BotShared::NpcDirectory::Near(
-                     map->GetId(), leader->GetPositionX(), leader->GetPositionY(), TRIP_YD, task.NpcFlags()))
+            std::vector<std::string> words;
+            for (Trip::TripStop const& s : stops)
             {
-                Creature* npc = map->GetCreature(BotShared::NpcDirectory::GuidOf(n));
-                if (!npc || !npc->IsAlive() || npc->IsInCombat() || me->IsHostileTo(npc))
+                if (s.placeKey.empty())
                     continue;
-                if (leader->IsWithinDist(npc, NpcVisit::ANCHOR_YD, false))
-                    continue;   // NpcVisit's
-                if (!task.Wants(me, npc))
-                    continue;
-                if (!Errands::WalkIsSafe(me, npc->GetPositionX(), npc->GetPositionY(), npc->GetPositionZ(), MAX_PATH_DETOUR))
-                    continue;
-                return npc;
+                std::string const word = Phrases::Word(s.placeKey, Phrases::Word("place.vendor", s.action->Name()));
+                if (std::find(words.begin(), words.end(), word) == words.end())
+                    words.push_back(word);
             }
-            return nullptr;
-        }
-
-        std::string PlacesOf(std::vector<TownTripStop> const& stops)
-        {
+            std::string const comma = Phrases::Word("place.comma", ", ");
+            std::string const last = Phrases::Word("place.and", " / ");
             std::string places;
-            std::string const joiner = Phrases::Word("place.and", "/");
-            for (size_t i = 0; i < stops.size(); ++i)
+            for (size_t i = 0; i < words.size(); ++i)
             {
                 if (i)
-                    places += joiner;
-                std::string const name = stops[i].task->Name();
-                places += Phrases::Word("place." + name, name);
+                    places += i + 1 == words.size() ? last : comma;
+                places += words[i];
             }
             return places;
         }
 
-        void TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<INpcTask*> const& tasks,
+        void TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<Trip::ITripPlanner*> const& planners,
                     std::vector<std::string> const& tags, uint32 now)
         {
             if (!LeaderSettled(leader) || leader->GetMapId() != me->GetMapId())
                 return;
             if (!sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Errand))
                 return;
-
-            state.stops.clear();
-            for (INpcTask* task : tasks)
-            {
-                if (!task || !task->NpcFlags() || !task->WorthTrip(me))
-                    continue;
-                if (Creature* npc = FindStop(me, leader, *task))
-                    state.stops.push_back({ npc->GetObjectGuid(), task });
-            }
-            if (state.stops.empty())
+            if (std::none_of(planners.begin(), planners.end(), [me](Trip::ITripPlanner* p) { return p && p->Worth(me); }))
                 return;
+
+            Trip::TripPlanStops plan;
+            for (Trip::ITripPlanner* planner : planners)
+                if (planner)
+                    planner->PlanStops(me, leader, plan);
+            if (!Trip::RouteOrder::Order(me, plan))
+                return;
+            state.stops = std::move(plan.stops);
 
             Phrases::Vars vars;
             vars["places"] = PlacesOf(state.stops);
@@ -155,40 +145,53 @@ namespace TownTrip
             Enter(state, Phase::Asking, now);
         }
 
+        WorldObject* TargetOf(Player* me, Trip::TripStop const& stop)
+        {
+            if (stop.target.IsGameObject())
+                return me->GetMap()->GetGameObject(stop.target);
+            Creature* npc = me->GetMap()->GetCreature(stop.target);
+            return npc && npc->IsAlive() && !npc->IsInCombat() ? npc : nullptr;
+        }
+
+        bool InReach(Player* me, WorldObject* target)
+        {
+            if (Creature* npc = target->ToCreature())
+                return me->CanInteractWithNPC(npc, 0);
+            return me->IsWithinDistInMap(target, INTERACTION_DISTANCE - 1.0f);
+        }
+
         // Walks to (or stands at) the current stop. False: the stops are done.
         bool UpdateGoing(Player* me, TownTripState& state, uint32 now)
         {
             while (state.next < state.stops.size())
             {
-                TownTripStop const& stop = state.stops[state.next];
-                Creature* npc = me->GetMap()->GetCreature(stop.npc);
-                if (!npc || !npc->IsAlive() || npc->IsInCombat() ||
-                    (!state.arrivedMs && WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > STOP_GIVE_UP_MS))
+                Trip::TripStop const& stop = state.stops[state.next];
+                WorldObject* target = TargetOf(me, stop);
+                if (!target || (!state.arrivedMs && WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > STOP_GIVE_UP_MS))
                 {
                     ++state.next;
                     Enter(state, Phase::Going, now);
                     continue;
                 }
 
-                if (me->CanInteractWithNPC(npc, 0))
+                if (InReach(me, target))
                 {
                     if (!state.arrivedMs)
                     {
                         if (!me->IsStopped())
                             me->StopMoving();
-                        me->SetFacingToObject(npc);
+                        me->SetFacingToObject(target);
                         state.arrivedMs = now;
                     }
                     if (WorldTimer::getMSTimeDiff(state.arrivedMs, now) < NpcVisit::DWELL_MS)
                         return true;
-                    if (stop.task->Wants(me, npc))
-                        stop.task->Do(me, npc);
+                    stop.action->Do(me, target);
                     ++state.next;
                     Enter(state, Phase::Going, now);
                     continue;
                 }
 
-                MoveTo(me, state, npc->GetPositionX(), npc->GetPositionY(), npc->GetPositionZ(), now);
+                MoveTo(me, state, target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), now);
                 return true;
             }
             return false;
@@ -292,7 +295,7 @@ namespace TownTrip
     }
 
     bool Update(Player* me, TownTripState& state, Player* leader,
-                std::vector<INpcTask*> const& tasks, std::vector<std::string> const& tags)
+                std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags)
     {
         uint32 const now = WorldTimer::getMSTime();
         bool const beforeTrip = state.phase == Phase::Idle || state.phase == Phase::Asking;
@@ -311,7 +314,7 @@ namespace TownTrip
                 if (now < state.nextCheckMs || now < state.cooldownUntilMs)
                     return false;
                 state.nextCheckMs = now + CHECK_MS;
-                TryAsk(me, state, leader, tasks, tags, now);
+                TryAsk(me, state, leader, planners, tags, now);
                 return false;   // it keeps following while it asks
             }
             case Phase::Asking:

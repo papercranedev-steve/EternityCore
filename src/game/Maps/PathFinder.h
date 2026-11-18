@@ -42,6 +42,10 @@ struct GridMapLiquidData;
 #define VERTEX_SIZE       3
 #define INVALID_POLYREF   0
 
+// Player bots: Detour cost of a yard of open water (AREA_WATER) against 1 for ground
+// (PathInfo::createFilter).
+#define BOT_SWIM_COST     3.0f
+
 enum PathType
 {
     PATHFIND_BLANK          = 0x0000,   // path not built yet
