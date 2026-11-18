@@ -548,10 +548,6 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     sCommanderMgr.OnBotUpdate(this);
 
-    // Dropping down on the leader's trail: a cast (buff, heal) would stop the fall in the air.
-    if (Commander::TrailFollow::IsFalling(me, m_trailFollow) || Commander::Landing::IsFalling(me, m_landing))
-        return;
-
     if (pLeader->IsTaxiFlying())
     {
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
@@ -562,67 +558,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         return;
     }
 
-    if (me->HasUnitState(UNIT_STATE_FEIGN_DEATH) && me->HasAuraType(SPELL_AURA_FEIGN_DEATH) &&
-        ShouldEndFeignDeath())
-        me->RemoveSpellsCausingAura(SPELL_AURA_FEIGN_DEATH);
-
-    if (me->HasUnitState(UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL))
-    {
-        BreakControl();
+    // Falling, controlled, dead, auto-repeating, casting (TeamBotAI).
+    if (UpdateBody())
         return;
-    }
-
-    // Dead: release and run the corpse like a player (Commander/Behaviors/Support/CorpseRun.h).
-    if (me->IsDead())
-    {
-        Commander::CorpseRun::Update(this, m_corpseRun, m_arrival);
-        return;
-    }
-    Commander::CorpseRun::OnAlive(me, m_corpseRun);
-
-    // The pet (a triggered summon, no cast time): before the walk back, resting and mounting.
-    // From the rotation's out-of-combat step only, a warlock back from a corpse run walked to
-    // the leader, then rested, and the next pull came first: no Imp until the fight was over.
-    if (!me->IsInCombat() && !me->IsMounted())
-        SummonPetIfNeeded();
-
-    // (before the auto-repeat step: it returns)
-    UpdateWeaponStance();
-
-    if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
-    {
-        // Auto shot / wand would otherwise skip the Commander hook below (e.g. stop shooting near aggro).
-        if (me->IsInCombat() && me->GetVictim() && sCommanderMgr.OnBotCombatUpdate(this))
-            return;
-
-        // Stop auto shot if no target.
-        if (!me->GetVictim())
-            me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
-        // Auto Shot survives a channel (SpellCaster::SetCurrentCastedSpell), so this branch also
-        // runs while casting: the rotation's next shot broke the bot's own Mend Pet channel after
-        // its mana was spent (strat-20261117-000150). Casting: only the Commander hook above may
-        // end it (CastBreak weighs that).
-        else if (me->IsNonMeleeSpellCasted(false, false, true))
-            return;
-        else if (ClassRotation* pRotation = Rotation())
-            pRotation->UpdateWhileAutoRepeating();
-
-        return;
-    }
-
-    // (Upstream "interrupt a pre-cast heal once its target is at full health", 2022, removed
-    // 2026-11-16: it restarted a steady healer's heals on a full tank every bot tick,
-    // strat-20261116-212207. A healer's heal that is no longer needed is CastWatch's.)
-    if (me->IsNonMeleeSpellCasted(false, false, true))
-        return;
-
-    if (me->GetTargetGuid() == me->GetObjectGuid())
-        me->ClearTarget();
-
-    // Ammo given to the bot (trade, bag panel) goes into the ammo slot, so Shoot Bow / Gun /
-    // Crossbow (ranged pull) and Auto Shot work. Cheap when nothing is missing.
-    if (!me->IsInCombat())
-        EquipAmmoFromBags();
 
     bool const commanderOutOfCombat = !me->IsInCombat() && sCommanderMgr.WantsOutOfCombatControl(this);
 
@@ -821,25 +759,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         StopTakenOverMovement();
     }
 
-    // A victim that can no longer be hit (dead, under a control that breaks on damage, immune,
-    // a charmed member) is dropped at once. Which enemy comes next is the Commander's
-    // (TargetAssigner / TargetBehavior below).
-    if (Unit* pOld = me->GetVictim())
-        if (!IsValidHostileTarget(pOld))
-            me->AttackStop();
-    CancelSplashNearKeptControl();
-
-    // Commander behaviors run before movement, so they can pick a target or a position
-    // themselves. Since 2026-11-07 every target comes from there (target assignment doc): the
-    // original target selection (leader's victim, own attackers, the first attacker of a
-    // member, the tank's "defend party members") is deleted, not bypassed.
-    if ((me->IsInCombat() || commanderOutOfCombat || needsRest || commanderResting) &&
-        sCommanderMgr.OnBotCombatUpdate(this))
-        return;
-
-    // A healer not in combat during the party's fight: its heal step is here, after the hook
-    // that set this tick's heal order (the out of combat AI above runs before it).
-    if (!me->IsInCombat() && IsHealingControlled() && CastHealOrder())
+    // The Commander's tick: its behaviors pick the target, the place, the cast (TeamBotAI).
+    if (RunCommanderHook(commanderOutOfCombat, needsRest, commanderResting))
         return;
 
     Unit* pVictim = me->GetVictim();
@@ -878,47 +799,18 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // the hook's tick: stop its follow now, not one bot interval later.
     StopTakenOverMovement();
 
-    if (!me->IsMoving() && !IsMovementHeld())
+    if (!pVictim && !me->IsMoving() && !IsMovementHeld())
     {
-        if (!pVictim)
-        {
-            // Healers, ranged and melee damage dealers stand where the Commander stance modules
-            // put them while the party fights, in combat themselves or not yet: following the leader walked the
-            // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
-            // that had not healed yet with the player while the tank fought further away.
-            if (pFollow && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
-                me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-                StartFollowing(pFollow);
-        }
-        else
-        {
-            if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
-               (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) &&
-                IsValidHostileTarget(pVictim) &&
-                AttackStart(pVictim))
-                return;
-
-            switch (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
-            {
-                case IDLE_MOTION_TYPE:
-                case FOLLOW_MOTION_TYPE:
-                    BeginChasing(pVictim);
-                    break;
-            }
-        }
+        // Healers, ranged and melee damage dealers stand where the Commander stance modules
+        // put them while the party fights, in combat themselves or not yet: following the leader walked the
+        // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
+        // that had not healed yet with the player while the tank fought further away.
+        if (pFollow && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
+            me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+            StartFollowing(pFollow);
     }
-    // Walking backwards (Commander Backpedal) faces the enemies coming after it: swing at the
-    // victim without a chase (AttackStart would chase and end the walk). Without it the tank
-    // walked back to its corner for 7 s after the shot without one swing, no rage and 0 threat
-    // on five of the six enemies on it; a Counterspell and a few buffs turned them
-    // (strat-20261108-200046).
-    else if (pVictim && IsBackpedaling() && !me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
-             (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsValidHostileTarget(pVictim))
-        me->Attack(pVictim, true);
 
-    KeepFacing(pVictim);
-
-    if (me->IsInCombat())
-        UpdateInCombatAI();
+    // Swing at / chase the victim, face it, the rotation in combat (TeamBotAI).
+    FightVictim(pVictim);
 }
 

@@ -63,6 +63,20 @@ public:
     // the global cooldown ends. True: the stance swap cast this frame, nothing else this frame.
     bool UpdateFrameHands(uint32 diff);
 
+    // The commanded bot update in three steps; the subclass's UpdateAI puts its own life
+    // (following, errands, a population bot's routine) between them:
+    //  1. UpdateBody: falling after a teleport or the leader's trail, feign death, controls,
+    //     death (the corpse run), the pet, the weapons in hand, an auto-repeat shot, a cast in
+    //     progress. True: nothing else this tick.
+    //  2. RunCommanderHook: drops a victim that can no longer be hit, then the Commander's
+    //     behaviors (in combat, while it controls the out-of-combat time, while resting or
+    //     needing rest) and the heal order of a healer not in combat. True: acted.
+    //  3. FightVictim: swing at / chase the victim (standing, not held), face it, the class
+    //     rotation in combat.
+    bool UpdateBody();
+    bool RunCommanderHook(bool outOfCombatControl, bool needsRest, bool resting);
+    void FightVictim(Unit* pVictim);
+
     // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
     // change it later by party composition while the role is not locked.
     void AutoAssignRole() override;
