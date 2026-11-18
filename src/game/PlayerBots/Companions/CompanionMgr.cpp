@@ -69,6 +69,12 @@ namespace Companions
         return true;
     }
 
+    bool CompanionMgr::HasTagTable()
+    {
+        std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_popbot_member_tag'"));
+        return exists != nullptr;
+    }
+
     void CompanionMgr::Load()
     {
         m_companions.clear();
@@ -99,10 +105,13 @@ namespace Companions
             } while (result->NextRow());
         }
 
-        // Personality: the roster member's tags.
-        std::unique_ptr<QueryResult> tags(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, t.`tag` FROM `custom_companion` c"
-            " JOIN `custom_popbot_member_tag` t ON t.`member_id` = c.`member_id` WHERE c.`member_id` <> 0"));
+        // Personality: the roster member's tags. The roster creates its tables on first use, which can
+        // come after this load: no table yet means no tags yet.
+        std::unique_ptr<QueryResult> tags;
+        if (HasTagTable())
+            tags = CharacterDatabase.Query(
+                "SELECT c.`char_guid`, t.`tag` FROM `custom_companion` c"
+                " JOIN `custom_popbot_member_tag` t ON t.`member_id` = c.`member_id` WHERE c.`member_id` <> 0");
         if (tags)
         {
             do
@@ -148,7 +157,7 @@ namespace Companions
     std::vector<std::string> CompanionMgr::LoadTags(uint32 memberId)
     {
         std::vector<std::string> tags;
-        if (!memberId)
+        if (!memberId || !HasTagTable())
             return tags;
         std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
             "SELECT `tag` FROM `custom_popbot_member_tag` WHERE `member_id` = %u", memberId));

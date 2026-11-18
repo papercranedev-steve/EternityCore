@@ -71,6 +71,8 @@ namespace Companions
         CompanionMgr() = default;
 
         bool EnsureTable();
+        // custom_popbot_member_tag belongs to the roster (Population/Roster), created when it first loads.
+        static bool HasTagTable();
         static std::vector<std::string> LoadTags(uint32 memberId);
         // Account id of Companion.Account; creates the account the first time (async, so 0 until it exists).
         uint32 ResolveAccount();
