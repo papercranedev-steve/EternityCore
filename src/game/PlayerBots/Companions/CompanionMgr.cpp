@@ -1,4 +1,5 @@
 #include "Companions/CompanionMgr.h"
+#include "Companions/ClassQuests/PastQuests.h"
 #include "Shared/ClassTraining.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/TownGates.h"
@@ -55,6 +56,7 @@ namespace Companions
             " `recruiter_guid` INT UNSIGNED NOT NULL DEFAULT 0,"
             " `recruited_at` INT UNSIGNED NOT NULL DEFAULT 0,"
             " `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = picks quest rewards itself, 1 = the player picks',"
+            " `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = class quests done before recruiting are decided (ClassQuests/PastQuests)',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
 
@@ -66,6 +68,10 @@ namespace Companions
         std::unique_ptr<QueryResult> rewardMode(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'reward_mode'"));
         if (!rewardMode)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `recruited_at`");
+        // Tables from before class quest abilities (C0): their companions are decided when next online.
+        std::unique_ptr<QueryResult> pastQuests(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'past_quests_decided'"));
+        if (!pastQuests)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `reward_mode`");
         return true;
     }
 
@@ -79,6 +85,7 @@ namespace Companions
     {
         m_companions.clear();
         m_pending.clear();
+        m_pastQuestsPending.clear();
         m_available = EnsureTable();
         if (!m_available)
         {
@@ -88,7 +95,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -101,6 +108,8 @@ namespace Companions
                 info.recruiterGuid = f[2].GetUInt32();
                 info.recruitedAt = f[3].GetUInt32();
                 info.rewardMode = f[4].GetUInt8() == uint8(RewardMode::AskPlayer) ? RewardMode::AskPlayer : RewardMode::Auto;
+                if (!f[5].GetUInt8())
+                    m_pastQuestsPending.push_back(info.charGuid);
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -255,8 +264,11 @@ namespace Companions
             return false;
         }
 
-        // What it learned before it met the player: the class trainer spells of its level, free.
+        // What it did before it met the player: its class quests (rolled by level, the abilities of
+        // those it did not do are taken away), then the class trainer spells of its level, free
+        // (after the quests: a rank that needs a quest spell is learned only if it has it).
         // From now on new ranks cost money at a trainer.
+        PastQuests::Result const past = PastQuests::Decide(bot);
         BotShared::ClassTraining::Result const lessons = BotShared::ClassTraining::LearnAvailable(bot, false);
 
         bot->EnableSaving(account);
@@ -274,8 +286,8 @@ namespace Companions
         info.recruiterGuid = recruiter->GetGUIDLow();
         info.recruitedAt = uint32(time(nullptr));
         info.tags = LoadTags(memberId);
-        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`)"
-            " VALUES (%u, %u, %u, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
+        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`)"
+            " VALUES (%u, %u, %u, %u, 1)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
         m_companions[guid] = info;
 
         // The name cache holds the temporary session's account; after a restart it is read from `characters`.
@@ -289,8 +301,9 @@ namespace Companions
         login.sinceMs = m_nowMs;
         m_pending.push_back(login);
 
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned.",
-            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned,"
+            " class quests: %u done, %u not done, %u abilities taken away.",
+            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned, past.done, past.notDone, past.revoked);
         return true;
     }
 
@@ -306,9 +319,32 @@ namespace Companions
         }
     }
 
+    void CompanionMgr::DecidePastQuestsOfOnline()
+    {
+        for (auto itr = m_pastQuestsPending.begin(); itr != m_pastQuestsPending.end();)
+        {
+            Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, *itr));
+            PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+            if (!ai)
+            {
+                ++itr;
+                continue;
+            }
+
+            PastQuests::Result const past = PastQuests::Decide(bot);
+            ai->m_resetSpellData = true;   // spells taken away or learned: the rotation sees them
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `past_quests_decided` = 1 WHERE `char_guid` = %u", *itr);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (level %u): class quests before recruiting decided,"
+                " %u done, %u not done, %u abilities taken away.", bot->GetName(), bot->GetLevel(), past.done, past.notDone, past.revoked);
+            itr = m_pastQuestsPending.erase(itr);
+        }
+    }
+
     void CompanionMgr::Update(uint32 diff)
     {
         m_nowMs += diff;
+        if (!m_pastQuestsPending.empty())
+            DecidePastQuestsOfOnline();
         if (m_pending.empty())
             return;
 

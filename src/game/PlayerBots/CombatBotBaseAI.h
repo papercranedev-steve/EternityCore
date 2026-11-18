@@ -215,6 +215,11 @@ public:
     // Reagents (AddAllSpellReagents, the refill on a failed cast) and hunter ammo (AddHunterAmmo)
     // are created for free. PartyBotAI: not for companions, they buy them.
     virtual bool GetsFreeSupplies() const { return true; }
+    // What a class quest gives a player is given for free: totem tools (AddAllSpellReagents),
+    // a hunter pet without Tame Beast, Call Pet and Revive Pet without the spells
+    // (SummonPetIfNeeded). PartyBotAI: not for companions, they do the quests
+    // (Shared/ClassQuestAbilities).
+    virtual bool GetsFreeAbilities() const { return true; }
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
     // Projectile subclass (ITEM_SUBCLASS_ARROW / ITEM_SUBCLASS_BULLET) the equipped ranged weapon

@@ -43,7 +43,8 @@ enum CombatBotSpells
     SPELL_SUMMON_VOIDWALKER = 697,
     SPELL_SUMMON_FELHUNTER = 691,
     SPELL_SUMMON_SUCCUBUS = 712,
-    SPELL_TAME_BEAST = 13481,
+    SPELL_TAME_BEAST = 13481,           // the triggered tame the bot casts on its summoned beast
+    SPELL_TAME_BEAST_PLAYER = 1515,     // the hunter's own Tame Beast (class quest "Taming the Beast")
     SPELL_REVIVE_PET = 982,
     SPELL_CALL_PET = 883,
     SPELL_FEED_PET = 6991,
@@ -1780,7 +1781,7 @@ void CombatBotBaseAI::AddAllSpellReagents()
     {
         if (pSpell)
         {
-            // (companions buy their reagents; totems are still given: their quests come later)
+            // (companions buy their reagents and get their totems from the shaman quests)
             if (GetsFreeSupplies())
             {
                 for (const auto& reagent : pSpell->Reagent)
@@ -1789,10 +1790,13 @@ void CombatBotBaseAI::AddAllSpellReagents()
                         AddItemToInventory(reagent);
                 }
             }
-            for (const auto& totem : pSpell->Totem)
+            if (GetsFreeAbilities())
             {
-                if (totem && !me->HasItemCount(totem, 1))
-                    AddItemToInventory(totem);
+                for (const auto& totem : pSpell->Totem)
+                {
+                    if (totem && !me->HasItemCount(totem, 1))
+                        AddItemToInventory(totem);
+                }
             }
         }
     }
@@ -2348,20 +2352,26 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (me->GetLevel() < 10)
             return;
 
+        // Without the class quests' spells (a companion that has not done them) the pet stays
+        // dead, stays away, or there is none.
+        bool const freeAbilities = GetsFreeAbilities();
         if (me->GetPetGuid() || sCharacterDatabaseCache.GetCharacterPetByOwner(me->GetGUIDLow()))
         {
             if (Pet* pPet = me->GetPet())
             {
-                if (!pPet->IsAlive())
+                if (!pPet->IsAlive() && (freeAbilities || me->HasSpell(SPELL_REVIVE_PET)))
                     me->CastSpell(pPet, SPELL_REVIVE_PET, true);
             }
-            else
+            else if (freeAbilities || me->HasSpell(SPELL_CALL_PET))
                 me->CastSpell(me, SPELL_CALL_PET, true);
 
             if (Pet* pPet = me->GetPet())
                 TrainHunterPet(pPet);
             return;
         }
+
+        if (!freeAbilities && !me->HasSpell(SPELL_TAME_BEAST_PLAYER))
+            return;
 
         // A sturdy family (user 2026-11-15): the pet holds enemies for the party besides
         // damaging (bear, boar: Charge, gorilla: Thunderstomp, turtle: Shell Shield). A pet the

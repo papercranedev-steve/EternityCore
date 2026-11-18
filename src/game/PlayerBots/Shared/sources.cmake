@@ -10,6 +10,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/BotChat.cpp
   ${BOTSHARED_DIR}/ClassTraining.h
   ${BOTSHARED_DIR}/ClassTraining.cpp
+  ${BOTSHARED_DIR}/ClassQuestAbilities.h
+  ${BOTSHARED_DIR}/ClassQuestAbilities.cpp
   ${BOTSHARED_DIR}/Crafting.h
   ${BOTSHARED_DIR}/Crafting.cpp
   ${BOTSHARED_DIR}/FoodAndDrink.h
@@ -36,6 +38,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Poisons.cpp
   ${BOTSHARED_DIR}/QuestRewards.h
   ${BOTSHARED_DIR}/QuestRewards.cpp
+  ${BOTSHARED_DIR}/QuestGrant.h
+  ${BOTSHARED_DIR}/QuestGrant.cpp
   ${BOTSHARED_DIR}/Purchasing.h
   ${BOTSHARED_DIR}/Purchasing.cpp
   ${BOTSHARED_DIR}/WalkLength.h

@@ -129,6 +129,11 @@ bool PartyBotAI::GetsFreeSupplies() const
     return !LootsForSelf();
 }
 
+bool PartyBotAI::GetsFreeAbilities() const
+{
+    return !LootsForSelf();
+}
+
 void PartyBotAI::StopErrands()
 {
     Life::LootRun::Stop(me, m_lootRun);

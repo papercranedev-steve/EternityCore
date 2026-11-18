@@ -93,6 +93,9 @@ namespace Companions
         // Account id of Companion.Account; creates the account the first time (async, so 0 until it exists).
         uint32 ResolveAccount();
         void LoginAsPartyBot(uint32 charGuid, Player* leader);
+        // Companions recruited before class quest abilities existed: decided once each is online
+        // as a party bot (ClassQuests/PastQuests).
+        void DecidePastQuestsOfOnline();
 
         struct PendingLogin
         {
@@ -110,6 +113,7 @@ namespace Companions
         uint32 m_nowMs = 0;
         std::unordered_map<uint32, CompanionInfo> m_companions;
         std::vector<PendingLogin> m_pending;
+        std::vector<uint32> m_pastQuestsPending;    // char guids, see DecidePastQuestsOfOnline
     };
 }
 

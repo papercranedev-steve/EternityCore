@@ -176,6 +176,8 @@ public:
     uint8 ChooseLootRoll(uint32 itemId) const override;
     // Companions buy their reagents and ammo (Life/Errands/MerchantTasks.h); other bots get them.
     bool GetsFreeSupplies() const override;
+    // Companions earn class quest abilities (Companions/ClassQuests); other bots get them.
+    bool GetsFreeAbilities() const override;
     // Ends every daily-life errand walk (combat, a Commander plan, not a companion).
     void StopErrands();
     // Out of combat, far from its anchor: teleported there (UpdateAI; and StartResting fills up
