@@ -462,6 +462,11 @@ local function botsOf(leader)
     return filter(leader:group(), function(m) return m:isbot() end)
 end
 
+-- shared with the life test scenarios (tests/life/life.lua)
+scenario.applyPremades = applyPremades
+scenario.botsOf = botsOf
+scenario.CLASS_ID = CLASS_ID
+
 -- Walkable spot near the pack: along the navmesh path from the entrance, the point closest to the
 -- pack that is within [min, max] of the pack centre and at least 'clear' yards from every live enemy.
 local function computeSpot(leader, s)
@@ -783,6 +788,9 @@ function scenario.command(leader, args)
         end
     elseif args == "rec" or args:match("^rec%s") then
         recview.command(leader, args:match("^rec%s*(.*)$"))
+    elseif args == "life" or args:match("^life%s") then
+        -- life (non-combat) test scenarios: tests/life/life.lua, the addon's 生活测试 window
+        lifetest.command(leader, args:match("^life%s*(.*)$"))
     elseif args:match("^mark") then
         local text = args:match("^mark%s+(.+)$") or ""
         if not rec.mark(leader, text) then say(leader, "现在没有在录制战斗，标记不了") end

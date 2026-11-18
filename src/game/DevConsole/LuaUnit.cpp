@@ -41,6 +41,8 @@
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
+#include "Shared/Inventory.h"
+#include "Shared/Supplies.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
 #include "Packets/Spell.h"
@@ -1889,6 +1891,62 @@ namespace DevConsole
         return 0;
     }
 
+    // ---- money and bags (life test scenarios, lua/tests/life) ----
+    // u:money() -> copper
+    static int U_money(lua_State* L)
+    {
+        lua_pushinteger(L, CheckPlayer(L, 1)->GetMoney());
+        return 1;
+    }
+    // u:setmoney(copper)
+    static int U_setmoney(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_Integer copper = luaL_checkinteger(L, 2);
+        if (copper < 0 || copper > 0x7FFFFFFE)
+            return luaL_error(L, "money out of range");
+        p->SetMoney(uint32(copper));
+        return 0;
+    }
+    // u:itemcount(entry) -> units in the backpack and bags (not the bank)
+    static int U_itemcount(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_pushinteger(L, p->GetItemCount(uint32(luaL_checkinteger(L, 2))));
+        return 1;
+    }
+    // u:freeslots() -> empty bag slots (Shared/Inventory)
+    static int U_freeslots(lua_State* L)
+    {
+        lua_pushinteger(L, BotShared::Inventory::FreeBagSlots(CheckPlayer(L, 1)));
+        return 1;
+    }
+    // u:supplies() -> { {goods = "food", have, target, priority = "critical"|"important"|"optional"}, ... }
+    // What the bot still misses (Shared/Supplies::Missing), most important first.
+    static int U_supplies(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        static char const* const PRIORITY[] = { "critical", "important", "optional" };
+        std::vector<BotShared::Supplies::Need> const needs = BotShared::Supplies::Missing(p);
+        lua_createtable(L, int(needs.size()), 0);
+        int i = 0;
+        for (BotShared::Supplies::Need const& n : needs)
+        {
+            lua_createtable(L, 0, 4);
+            lua_pushstring(L, BotShared::Goods::Describe(n.goods).c_str());
+            lua_setfield(L, -2, "goods");
+            lua_pushinteger(L, n.have);
+            lua_setfield(L, -2, "have");
+            lua_pushinteger(L, n.target);
+            lua_setfield(L, -2, "target");
+            uint8 const prio = uint8(n.priority);
+            lua_pushstring(L, prio < 3 ? PRIORITY[prio] : "?");
+            lua_setfield(L, -2, "priority");
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
+
     class CaptureChatHandler : public ChatHandler
     {
         public:
@@ -1955,6 +2013,8 @@ namespace DevConsole
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
+            { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
+            { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },

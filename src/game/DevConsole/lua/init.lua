@@ -12,3 +12,5 @@ load("review.lua")
 load("recorder.lua")
 load("scenarios.lua")
 load("recview.lua")
+-- test scenarios by kind (tests/<kind>/); combat scenarios are still scenarios.lua
+load("tests/life/life.lua")
