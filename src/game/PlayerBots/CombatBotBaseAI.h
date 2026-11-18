@@ -9,9 +9,13 @@
 struct PlayerPremadeSpecTemplate;
 class SpellCastTargets;
 
-// CombatBotBaseAI::EquipRandomGearInEmptySlots limits. The defaults keep the PartyBot behaviour.
+// CombatBotBaseAI::EquipRandomGearInEmptySlots limits. The defaults keep the PartyBot behaviour,
+// except for rules every bot follows (no tools, fishing or arena gear; trinkets as below).
 struct RandomGearOptions
 {
+    // Players get their first real trinket late in levelling: below this level the trinket slots
+    // stay empty, and even then never a crafted one (engineering gadgets and the like).
+    uint32 minTrinketLevel = 55;
     bool allowPvP = true;           // false: no honor rank items, no PvP preference
     bool allowCosmetic = true;      // false: no armor-less clothes in armor slots (dresses, tuxedos)
     uint32 maxItemLevel = 0;        // 0 = no cap

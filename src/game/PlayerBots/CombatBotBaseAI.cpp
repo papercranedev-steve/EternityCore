@@ -17,6 +17,7 @@
 #include "SpellMgr.h"
 #include "Utilities/Random.h"
 #include "Commander/Perception/Profiles/PetAbilities.h"
+#include "Shared/GearSources.h"
 #include "Shared/Inventory.h"
 #include "Shared/PetFood.h"
 
@@ -2897,6 +2898,19 @@ void CombatBotBaseAI::EquipRandomGearInEmptySlots(RandomGearOptions const& optio
 
         // No tabards and shirts
         if (pProto->InventoryType == INVTYPE_TABARD || pProto->InventoryType == INVTYPE_BODY)
+            continue;
+
+        if (pProto->InventoryType == INVTYPE_TRINKET &&
+            (me->GetLevel() < options.minTrinketLevel || BotShared::GearSources::IsCrafted(pProto->ItemId)))
+            continue;
+
+        // Gear nobody levels in: tools, fishing gear, arena rewards.
+        if (BotShared::GearSources::IsOddity(pProto))
+            continue;
+
+        // No level requirement but far above our level (quest rewards like the fishing contest
+        // or arena prizes): a player of this level would not have it.
+        if (!pProto->RequiredLevel && pProto->ItemLevel > me->GetLevel() + 10)
             continue;
 
         if (pProto->SourceQuestRaces && !(pProto->SourceQuestRaces & me->GetRaceMask()))
