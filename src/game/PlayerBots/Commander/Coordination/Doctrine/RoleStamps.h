@@ -22,6 +22,8 @@
  *                 attacks, chases or casts damage at it while it lasts, every role alike
  *                 (TeamPlan::EngageBlock, Constraints); when it is the only enemy left, only
  *                 for one lasting at most REFLECT_ALONE_MAX_MS (else it is never killed).
+ *                 Also EnemyFacts::beingTamed (a member's taming channel on it): HoldFire and
+ *                 NoTaunt while it lasts, also when it is the only enemy.
  *   (mana drain and resurrects are KillOrder too.)
  *   Alarm         TAG_ALARM (summons as it aggroes): display; the summons are in the fight
  *                 estimate (FightLoad). Combat timer summons: TAG_SUMMONER (and FocusAssigner's

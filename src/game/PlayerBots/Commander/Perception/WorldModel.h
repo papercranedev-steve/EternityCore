@@ -886,6 +886,9 @@ namespace Commander
         // Shadow Shield; spell reflection): its time left, 0 = none. Permanent ones are not counted.
         uint32 reflectMs = 0;
         uint32 reflectSpellId = 0;
+        // A member is taming it (a taming channel, SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG: the hunter's
+        // class quest taming rods, Tame Beast): it must live until the channel ends.
+        bool beingTamed = false;
         bool meleePhysical = true;      // false: melee is fire/frost/... (armor does not reduce it)
         // Melee attack power now and the creature_classlevelstats one: the weapon damage scales
         // by 0.7 + 0.3 x apNow / apDb (Creature::UpdateDamagePhysical). apDb 0 = attack power

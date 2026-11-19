@@ -38,6 +38,7 @@
 #include "Companions/ClassQuests/MirrorSync.h"
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Life/Errands/QuestPickUp.h"
+#include "Life/Errands/QuestItemUse.h"
 
 class PartyBotAI : public TeamBotAI
 {
@@ -132,6 +133,8 @@ public:
     // Out of combat: takes the class quest steps the flow wants from their givers near the leader
     // (Life/Errands/QuestPickUp.h).
     Life::QuestPickUpState m_questPickUp;
+    // Out of combat: a quest item used on the creature it is for (taming rods; Life/Errands/QuestItemUse.h).
+    Life::QuestItemUseState m_questItemUse;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
     // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.

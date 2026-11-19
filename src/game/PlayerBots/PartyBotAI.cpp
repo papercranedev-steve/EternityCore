@@ -133,6 +133,7 @@ void PartyBotAI::StopErrands()
     Life::QuestObjectRun::Stop(me, m_questObjectRun);
     Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
     Life::QuestPickUp::Stop(me, m_questPickUp);
+    Life::QuestItemUse::Stop(me, m_questItemUse);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
     Life::TownTrip::Stop(me, m_townTrip);
@@ -669,6 +670,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 m_resetSpellData = true;
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
+                Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
                 Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||

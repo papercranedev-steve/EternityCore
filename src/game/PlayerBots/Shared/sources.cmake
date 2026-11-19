@@ -26,6 +26,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Goods.cpp
   ${BOTSHARED_DIR}/Inventory.h
   ${BOTSHARED_DIR}/Inventory.cpp
+  ${BOTSHARED_DIR}/ItemUse.h
+  ${BOTSHARED_DIR}/ItemUse.cpp
   ${BOTSHARED_DIR}/LootFacts.h
   ${BOTSHARED_DIR}/LootFacts.cpp
   ${BOTSHARED_DIR}/Mailbox.h

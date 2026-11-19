@@ -69,6 +69,7 @@ namespace Phrases
             { "classquest.thanks",   "quiet",   "成了。谢谢。" },
             { "classquest.selfdone", "default", "对了，「{quest}」我自己去做完了。" },
             { "classquest.selfdone", "lazy",    "那个「{quest}」……拖了好久，总算自己做完了。" },
+            { "questitem.tame",      "default", "我在驯服它，别打它！" },
             { "classquest.opt.yes",  "default", "带你去" },
             { "classquest.opt.no",   "default", "现在不行" },
             // Words and button labels (tag "default" only).

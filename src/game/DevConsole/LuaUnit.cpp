@@ -1892,6 +1892,13 @@ namespace DevConsole
         return 0;
     }
 
+    // u:removepet(): the player's pet is gone for good (a bot that should have none yet, class
+    // quest tests: a hunter before its taming quests).
+    static int U_removepet(lua_State* L)
+    {
+        CheckPlayer(L, 1)->RemovePet(PET_SAVE_AS_DELETED);
+        return 0;
+    }
     // ---- money and bags (life test scenarios, lua/tests/life) ----
     // u:money() -> copper
     static int U_money(lua_State* L)
@@ -2037,7 +2044,7 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
-            { "premade", U_premade }, { "clearbags", U_clearbags }, { "cmd", U_cmd },
+            { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },

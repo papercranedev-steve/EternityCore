@@ -39,6 +39,10 @@ namespace RoleStamps
             if (otherFree || e.reflectMs <= REFLECT_ALONE_MAX_MS)
                 x.stamps |= STAMP_HOLD_FIRE;
         }
+        // A member is taming it (a hunter's taming rod or Tame Beast): it must live until the
+        // channel ends, alone or not (it hits only the tamer meanwhile; the healer still heals).
+        if (e.beingTamed)
+            x.stamps |= STAMP_HOLD_FIRE | STAMP_NO_TAUNT;
 
         // A timed blast (Broken Cadaver). A walking bomb (no timer, it blows when it reaches
         // someone) is the intercept's (FocusAssigner).

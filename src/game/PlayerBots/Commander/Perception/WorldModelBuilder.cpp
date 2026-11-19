@@ -673,6 +673,16 @@ namespace WorldModelBuilder
                         e.reflectMs = uint32(aura->GetAuraDuration());
                         e.reflectSpellId = aura->GetId();
                     }
+            for (auto const& itr : creature->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                if (holder && holder->GetSpellProto()->HasAttribute(SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG) &&
+                    std::any_of(partyUnits.begin(), partyUnits.end(), [holder](Unit const* u)
+                    {
+                        return u->GetObjectGuid() == holder->GetCasterGuid();
+                    }))
+                    e.beingTamed = true;
+            }
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
             FillAttackPower(creature, e);
             e.armor = creature->GetArmor();
