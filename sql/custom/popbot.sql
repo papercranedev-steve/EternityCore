@@ -4,8 +4,8 @@
 -- City scene points, recorded in game with: .popbot point add <city> <type> [route] [capacity]
 CREATE TABLE IF NOT EXISTS `custom_popbot_point` (
   `id`       INT UNSIGNED      NOT NULL AUTO_INCREMENT,
-  `city`     VARCHAR(32)       NOT NULL COMMENT 'ironforge stormwind orgrimmar undercity thunderbluff darnassus',
-  `type`     VARCHAR(16)       NOT NULL COMMENT 'ah bank mail idle route showcase',
+  `city`     VARCHAR(32)       NOT NULL COMMENT 'ironforge stormwind orgrimmar undercity thunderbluff darnassus world',
+  `type`     VARCHAR(16)       NOT NULL COMMENT 'ah bank mail idle route showcase hub (hub: city world, a gathering place)',
   `route`    VARCHAR(32)       NOT NULL DEFAULT '' COMMENT 'route name, type route only',
   `seq`      INT UNSIGNED      NOT NULL DEFAULT 0  COMMENT 'step inside the route',
   `map`      SMALLINT UNSIGNED NOT NULL,

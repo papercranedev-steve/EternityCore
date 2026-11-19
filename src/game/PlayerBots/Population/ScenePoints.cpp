@@ -8,8 +8,9 @@ namespace Population
 {
     namespace
     {
-        char const* const g_cities[] = { "ironforge", "stormwind", "orgrimmar", "undercity", "thunderbluff", "darnassus" };
-        char const* const g_types[] = { "ah", "bank", "mail", "idle", "route", "showcase" };
+        // "world": points outside the cities (type hub: a gathering place, Settlements.h).
+        char const* const g_cities[] = { "ironforge", "stormwind", "orgrimmar", "undercity", "thunderbluff", "darnassus", "world" };
+        char const* const g_types[] = { "ah", "bank", "mail", "idle", "route", "showcase", "hub" };
 
         template <size_t N>
         bool InList(char const* const (&list)[N], std::string const& value)
@@ -23,8 +24,8 @@ namespace Population
 
     bool ScenePoints::IsValidCity(std::string const& city) { return InList(g_cities, city); }
     bool ScenePoints::IsValidType(std::string const& type) { return InList(g_types, type); }
-    char const* ScenePoints::CityList() { return "ironforge stormwind orgrimmar undercity thunderbluff darnassus"; }
-    char const* ScenePoints::TypeList() { return "ah bank mail idle route showcase"; }
+    char const* ScenePoints::CityList() { return "ironforge stormwind orgrimmar undercity thunderbluff darnassus world"; }
+    char const* ScenePoints::TypeList() { return "ah bank mail idle route showcase hub"; }
 
     bool ScenePoints::IsValidRouteName(std::string const& route)
     {

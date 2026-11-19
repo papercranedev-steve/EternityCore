@@ -6,6 +6,7 @@
  *   .popbot stats [reset]                cost of population bot AI ticks
  *   .popbot list                         population bots: level, race, class, distance, time left
  *   .popbot roster                       roster cohorts: owner, anchor level, level spread
+ *   .popbot hubs                         settlements (gathering places) within 1500 yards
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
  *   .popbot despawn                      log out the selected population bot
@@ -289,6 +290,11 @@ namespace
                 Population::ScenePoints::CityList(), Population::ScenePoints::TypeList());
             return false;
         }
+        if ((p.city == "world") != (p.type == "hub"))
+        {
+            handler->SendSysMessage("A gathering place is recorded as: .popbot point add world hub. City points cannot be hubs.");
+            return false;
+        }
 
         if (p.type == "route")
         {
@@ -392,6 +398,38 @@ namespace
         handler->PSendSysMessage("%s: %u anchors, %u within 60 yards.", state->def->title, uint32(state->anchors.size()), shown);
     }
 
+    // Settlements (Settlements.h) near the player, or a count per kind from the console.
+    void ShowHubs(ChatHandler* handler, Player* player)
+    {
+        Population::Settlements const& hubs = sPopulationMgr.GetSettlements();
+        uint32 byKind[5] = {};
+        for (Population::Settlement const& s : hubs.All())
+            ++byKind[uint8(s.kind)];
+        handler->PSendSysMessage("Settlements: %u (capitals %u, start areas %u, towns %u, camps %u, manual %u).",
+            uint32(hubs.All().size()), byKind[0], byKind[1], byKind[2], byKind[3], byKind[4]);
+        if (!player)
+            return;
+
+        float const RANGE = 1500.0f;
+        auto const nearby = hubs.Near(player->GetMapId(), player->GetPositionX(), player->GetPositionY(), RANGE);
+        uint32 shown = 0;
+        for (auto const& n : nearby)
+        {
+            if (++shown > 15)
+            {
+                handler->PSendSysMessage("... %u more", uint32(nearby.size() - 15));
+                break;
+            }
+            Population::Settlement const& s = *n.second;
+            std::string const where = s.kind == Population::SettlementKind::Capital ? s.label : Population::Settlements::AreaName(s);
+            handler->PSendSysMessage("#%u %s %s (%s), %s, %.0f yd from the edge, core %.0f, falloff %.0f, weight %.1f, %u sources",
+                s.id, Population::SettlementKindName(s.kind), where.c_str(), s.label.c_str(),
+                s.alliance && s.horde ? "both sides" : s.alliance ? "Alliance" : "Horde",
+                n.first, s.coreYd, s.falloffYd, s.weight, s.sources);
+        }
+        handler->PSendSysMessage("%u within %.0f yards of your position.", uint32(nearby.size()), RANGE);
+    }
+
     bool PointList(ChatHandler* handler, Player* player)
     {
         Population::ScenePoints& points = sPopulationMgr.GetScenePoints();
@@ -484,6 +522,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "hubs"))
+    {
+        ShowHubs(this, player);
+        return true;
+    }
+
     if (!strcmp(sub, "spawn"))
         return Spawn(this, player, args);
 
@@ -563,6 +607,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

@@ -134,6 +134,7 @@ namespace Population
         m_identity.Load();
         m_points.Load();
         m_city.LoadAnchors(m_points);
+        m_settlements.Load(m_points);
         m_roster.Load();
         // Members already online stay taken (queued requests get their member in SpawnNow).
         for (Record const& r : m_bots)

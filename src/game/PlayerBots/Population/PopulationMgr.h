@@ -14,6 +14,7 @@
 #include "Population/PopulationTypes.h"
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
+#include "Population/Settlements.h"
 #include "Population/CityPopulation.h"
 #include "Population/FieldPopulation.h"
 #include "Population/Observers.h"
@@ -92,8 +93,9 @@ namespace Population
         ScenePoints& GetScenePoints() { EnsureDataLoaded(); return m_points; }
         CityDirector& GetCityDirector() { EnsureDataLoaded(); return m_city; }
         Roster const& GetRoster() { EnsureDataLoaded(); return m_roster; }
+        Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         // After scene points were added or deleted.
-        void ReloadAnchors() { m_city.LoadAnchors(m_points); }
+        void ReloadAnchors() { m_city.LoadAnchors(m_points); m_settlements.Load(m_points); }
 
         // City director helpers. Counts include queued requests.
         CityCounts CountCity(uint32 zone, size_t anchorCount) const;
@@ -159,6 +161,7 @@ namespace Population
         std::deque<SpawnRequest> m_queue;
         Identity m_identity;
         ScenePoints m_points;
+        Settlements m_settlements;
         Observers m_observers;
         CityDirector m_city;
         FieldDirector m_field;
