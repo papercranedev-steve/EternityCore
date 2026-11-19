@@ -7,6 +7,8 @@
  *  - a character about to enter the world (account at the character screen, or a login
  *    request) is an "arriving" observer at his logout position, until he is in the world or
  *    PopBot.Prewarm.WaitSec passed.
+ * An online observer also carries his ground speed (where he is heading: the field director
+ * places people ahead of him, just beyond his sight).
  * World thread only (the hooks come from world-thread packet handlers).
  */
 
@@ -14,6 +16,7 @@
 #define MANGOS_POPULATION_OBSERVERS_H
 
 #include "Common.h"
+#include <unordered_map>
 #include <vector>
 
 namespace Population
@@ -30,6 +33,17 @@ namespace Population
         bool travelling = false;    // on a flight path: passes by, nobody needs placing
         bool arriving = false;      // not in the world yet: logout position
         uint32 expireMs = 0;        // arriving only
+        // Ground speed over the last TRACK_WINDOW_MS (yards per second, 2d); 0 when standing,
+        // arriving, or just teleported.
+        float vx = 0.0f, vy = 0.0f;
+
+        float Speed() const;
+        bool IsMoving() const { return Speed() >= MOVING_SPEED; }
+        // Where he will be in `seconds` if he keeps going.
+        float AheadX(float seconds) const { return x + vx * seconds; }
+        float AheadY(float seconds) const { return y + vy * seconds; }
+
+        static constexpr float MOVING_SPEED = 2.0f;
     };
 
     class Observers
@@ -53,6 +67,13 @@ namespace Population
         // map's visibility distance (plus a margin) and in line of sight; very close counts
         // even behind a wall. Arriving observers see nothing yet.
         bool CanSee(uint32 mapId, float x, float y, float z) const;
+        // CanSee, or a moving observer could within `leadSec` if he keeps going (distance only
+        // at the predicted point: its ground is not known). For logins that take a moment.
+        bool CanSeeSoon(uint32 mapId, float x, float y, float z, float leadSec) const;
+
+        // Speed samples: a new one every TRACK_WINDOW_MS; faster than TELEPORT_SPEED = a jump.
+        static constexpr uint32 TRACK_WINDOW_MS = 2 * IN_MILLISECONDS;
+        static constexpr float TELEPORT_SPEED = 60.0f;
 
     private:
         struct Pending
@@ -61,7 +82,20 @@ namespace Population
             uint32 guid = 0;        // 0 = last played character of the account
         };
 
+        // Per online player: the position the current speed sample started at.
+        struct Track
+        {
+            uint32 mapId = 0;
+            float x = 0.0f, y = 0.0f;
+            uint32 sinceMs = 0;
+            float vx = 0.0f, vy = 0.0f;
+            uint32 seenMs = 0;
+        };
+
         bool Resolve(Pending const& pending, uint32 nowMs);
+        void TrackMotion(Observer& o, uint32 nowMs);
+        float VisibleYd(uint32 mapId) const;
+        std::unordered_map<uint32, Track> m_tracks;     // character guid -> track
 
         bool m_enabled = true;
         uint32 m_waitMs = 90 * IN_MILLISECONDS;

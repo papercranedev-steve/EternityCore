@@ -17,6 +17,11 @@ namespace Population
     {
         // Margin over the map's visibility distance for the spawn ring's inner edge.
         float const SPAWN_SIGHT_MARGIN = 25.0f;
+        // Ahead of a moving observer: as close to his sight as Observers::CanSee allows (its
+        // margin is 15; the login spot is a few yards off the spawn point, checked again).
+        float const AHEAD_SIGHT_MARGIN = 16.0f;
+        // Of the spots ahead, the nearest this many are tried in random order.
+        size_t const AHEAD_SHUFFLED = 8;
         uint32 const TICK_MS = 2 * IN_MILLISECONDS;
         uint32 const SPOT_TRIES = 40;
 
@@ -60,6 +65,47 @@ namespace Population
         return !IsCityZone(o.zone);
     }
 
+    std::vector<FieldSpot const*> FieldDirector::CandidateSpots(Observer const& o, float visibleYd)
+    {
+        if (o.IsMoving())
+        {
+            // Just beyond his sight where he will be once the bot is in: the observers' sight
+            // margin (Observers::CanSee) plus the way he goes during the login.
+            float const speed = o.Speed();
+            float const inner = visibleYd + AHEAD_SIGHT_MARGIN + speed * LOGIN_LEAD_SEC;
+            float const outer = inner + AHEAD_DEPTH_YD;
+            float const cosLimit = std::cos(AHEAD_HALF_ANGLE);
+            std::vector<FieldSpot const*> ahead;
+            for (FieldSpot const* s : m_spots.Around(o.mapId, o.x, o.y, inner, outer))
+            {
+                float const dx = s->x - o.x, dy = s->y - o.y;
+                float const dist = std::sqrt(dx * dx + dy * dy);
+                if (dist > 0.0f && (dx * o.vx + dy * o.vy) / (dist * speed) >= cosLimit)
+                    ahead.push_back(s);
+            }
+            if (!ahead.empty())
+            {
+                // Nearest to his sight first (a few at random among them).
+                std::sort(ahead.begin(), ahead.end(), [&o](FieldSpot const* a, FieldSpot const* b)
+                {
+                    float const da = (a->x - o.x) * (a->x - o.x) + (a->y - o.y) * (a->y - o.y);
+                    float const db = (b->x - o.x) * (b->x - o.x) + (b->y - o.y) * (b->y - o.y);
+                    return da < db;
+                });
+                size_t const head = std::min<size_t>(ahead.size(), AHEAD_SHUFFLED);
+                for (size_t i = head; i > 1; --i)
+                    std::swap(ahead[i - 1], ahead[urand(0, uint32(i - 1))]);
+                return ahead;
+            }
+        }
+
+        float const inner = std::max(m_spawnMinYd, visibleYd + SPAWN_SIGHT_MARGIN);
+        float const outer = std::max(m_spawnMaxYd, inner + 30.0f);
+        std::vector<FieldSpot const*> spots = m_spots.Around(o.mapId, o.x, o.y, inner, outer);
+        Shuffle(spots);
+        return spots;
+    }
+
     bool FieldDirector::BuildRequest(Observer const& o, Observers const& observers, SpawnRequest& out)
     {
         Map* map = sMapMgr.FindMap(o.mapId, 0);
@@ -67,10 +113,7 @@ namespace Population
         if (!map || !own)
             return false;
 
-        float const inner = std::max(m_spawnMinYd, map->GetVisibilityDistance() + SPAWN_SIGHT_MARGIN);
-        float const outer = std::max(m_spawnMaxYd, inner + 30.0f);
-        std::vector<FieldSpot const*> spots = m_spots.Around(o.mapId, o.x, o.y, inner, outer);
-        Shuffle(spots);
+        std::vector<FieldSpot const*> const spots = CandidateSpots(o, map->GetVisibilityDistance());
 
         uint32 tries = 0;
         for (FieldSpot const* spot : spots)
@@ -92,7 +135,7 @@ namespace Population
             if (z <= INVALID_HEIGHT || std::fabs(z - spot->z) > 3.0f ||
                 !map->isInLineOfSight(spot->x, spot->y, spot->z + 2.0f, x, y, z + 2.0f))
                 continue;
-            if (observers.CanSee(o.mapId, x, y, z))
+            if (observers.CanSeeSoon(o.mapId, x, y, z, LOGIN_LEAD_SEC))
                 continue;
 
             // The levels the creatures here are a fight for (Commander HuntAssigner's window:
@@ -133,7 +176,7 @@ namespace Population
         }
 
         // Out of sight and not needed here any more: gone.
-        mgr.RetireFieldBots(observers, m_keepYd);
+        mgr.RetireFieldBots(observers, m_keepYd, BEHIND_SPENT_YD);
 
         for (Observer const& o : observers.All())
         {
@@ -142,13 +185,14 @@ namespace Population
             uint32& next = m_nextCheckMs[o.guid];
             if (!o.arriving && nowMs < next)
                 continue;
-            next = nowMs + urand(m_checkMinMs, m_checkMaxMs);
+            next = nowMs + (o.IsMoving() ? urand(MOVING_CHECK_MIN_MS, MOVING_CHECK_MAX_MS)
+                                         : urand(m_checkMinMs, m_checkMaxMs));
 
             // One more unit per check; an arriving observer gets the whole crowd at once.
             uint32 const want = o.arriving ? m_maxUnits : 1;
             for (uint32 i = 0; i < want; ++i)
             {
-                if (mgr.CountField(o.mapId, o.x, o.y, m_radius) >= m_maxUnits)
+                if (mgr.CountField(o, m_radius, BEHIND_SPENT_YD) >= m_maxUnits)
                     break;
                 SpawnRequest request;
                 if (!BuildRequest(o, observers, request) || !mgr.QueueSpawn(request))

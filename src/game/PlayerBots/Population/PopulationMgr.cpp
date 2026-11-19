@@ -43,6 +43,17 @@ namespace Population
             Player* me = handle.ai->me;
             return (me && me->IsInWorld()) ? me : nullptr;
         }
+
+        // More than `behindYd` behind a moving observer (along his heading). Never for one
+        // standing still.
+        bool IsBehind(Observer const& o, float px, float py, float behindYd)
+        {
+            float const speed = o.Speed();
+            if (speed < Observer::MOVING_SPEED)
+                return false;
+            float const along = ((px - o.x) * o.vx + (py - o.y) * o.vy) / speed;
+            return along < -behindYd;
+        }
     }
 
     char const* BotKindName(BotKind kind)
@@ -293,6 +304,11 @@ namespace Population
             r.entranceY = entrance.y;
             r.entranceZ = entrance.z;
         }
+
+        // A field spot picked a few seconds ago (the queue waits PopBot.SpawnGapMs): the player
+        // walked on, he may see it now. Skip, the director picks another one.
+        if (r.kind == BotKind::Field && m_observers.CanSeeSoon(r.mapId, r.x, r.y, r.z, FieldDirector::LOGIN_LEAD_SEC))
+            return;
 
         if (r.kind == BotKind::Field)
             r.unitId = ++m_nextUnitId;
@@ -552,13 +568,13 @@ namespace Population
         return list;
     }
 
-    uint32 PopulationMgr::CountField(uint32 mapId, float x, float y, float radius) const
+    uint32 PopulationMgr::CountField(Observer const& o, float radius, float behindYd) const
     {
         float const radiusSq = radius * radius;
         auto isNear = [&](uint32 m, float px, float py)
         {
-            float const dx = px - x, dy = py - y;
-            return m == mapId && dx * dx + dy * dy <= radiusSq;
+            float const dx = px - o.x, dy = py - o.y;
+            return m == o.mapId && dx * dx + dy * dy <= radiusSq && !IsBehind(o, px, py, behindYd);
         };
         uint32 count = 0;
         for (Record const& r : m_bots)
@@ -585,7 +601,7 @@ namespace Population
                 RequestRemoval(r);
     }
 
-    void PopulationMgr::RetireFieldBots(Observers const& observers, float keepYd)
+    void PopulationMgr::RetireFieldBots(Observers const& observers, float keepYd, float behindYd)
     {
         float const keepSq = keepYd * keepYd;
         for (Record& r : m_bots)
@@ -600,7 +616,9 @@ namespace Population
             for (Observer const& o : observers.All())
             {
                 float const dx = o.x - me->GetPositionX(), dy = o.y - me->GetPositionY();
-                if (o.mapId == me->GetMapId() && dx * dx + dy * dy <= keepSq)
+                // Passed by long ago: the people ahead of him matter now.
+                if (o.mapId == me->GetMapId() && dx * dx + dy * dy <= keepSq &&
+                    !IsBehind(o, me->GetPositionX(), me->GetPositionY(), behindYd))
                     needed = true;
             }
             if (needed && !expired && !r.handle->done)

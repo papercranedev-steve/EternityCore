@@ -6,17 +6,21 @@
  * Around every observer (Observers.h: a player in the world, or one about to log in there) in
  * the open world of a continent, not in a city, not on a flight path, the director keeps up to
  * PopBot.Field.MaxUnits field bots within PopBot.Field.Radius:
- *  - a new one logs in at a creature spawn point (FieldSpots) between the spawn ring's inner
- *    edge (out of the map's visibility distance) and its outer edge, where no player can see
- *    it (Observers::CanSee), next to creatures that are not friendly to the observer, at a
+ *  - a new one logs in at a creature spawn point (FieldSpots): ahead of a moving observer,
+ *    just beyond the edge of his sight where he is heading (user 2026-11-19: he walks on a
+ *    little and sees them), else (standing, or nothing ahead) between the spawn ring's inner
+ *    edge (out of the map's visibility distance) and its outer edge; where no player can see
+ *    it, now or after the login (Observers::CanSeeSoon), next to creatures that are not
+ *    friendly to the observer, at a
  *    level that fits them (Commander HuntAssigner's window), from the observer's roster;
  *  - it is a team of one for the Commander (Commander/Team.h unit): it hunts, fights, rests,
  *    loots (PopulationBotAI field tick);
  *  - it leaves, only where nobody sees it, when its lifetime is over, when it is done here
  *    (BotHandle::done: enough fights, nothing left to hunt), or when every observer is farther
  *    than PopBot.Field.KeepYd.
- * One unit per check and observer, checks every FIELD_CHECK_MIN..MAX s; an arriving observer
- * is filled at once (prewarm). World thread only.
+ *    Bots far behind a moving observer (BEHIND_SPENT_YD) no longer count for him.
+ * One unit per check and observer, checks every PopBot.Field.CheckMin..MaxSec (moving:
+ * MOVING_CHECK_MIN..MAX_MS); an arriving observer is filled at once (prewarm). World thread only.
  */
 
 #ifndef MANGOS_POPULATION_FIELD_H
@@ -36,6 +40,18 @@ namespace Population
     class FieldDirector
     {
     public:
+        // A login takes a moment: a spot must stay out of sight of a moving observer this long.
+        static constexpr float LOGIN_LEAD_SEC = 3.0f;
+        // Ahead of a moving observer: spots within this angle of his heading (each side), from
+        // his sight's edge (+ LOGIN_LEAD_SEC of his way) to AHEAD_DEPTH_YD beyond it.
+        static constexpr float AHEAD_HALF_ANGLE = float(M_PI) / 4.0f;
+        static constexpr float AHEAD_DEPTH_YD = 40.0f;
+        // Passed by: a field bot this far behind a moving observer no longer counts for him.
+        static constexpr float BEHIND_SPENT_YD = 150.0f;
+        // A moving observer is checked this often (people ahead are used up quickly).
+        static constexpr uint32 MOVING_CHECK_MIN_MS = 5 * IN_MILLISECONDS;
+        static constexpr uint32 MOVING_CHECK_MAX_MS = 10 * IN_MILLISECONDS;
+
         void LoadConfig();
         void Update(PopulationMgr& mgr, Observers const& observers, uint32 nowMs);
 
@@ -48,6 +64,8 @@ namespace Population
         // The open world of a continent around `o`, not a city, not flying.
         bool Fills(Observer const& o) const;
         bool BuildRequest(Observer const& o, Observers const& observers, SpawnRequest& out);
+        // Creature spawn points to log in at: ahead of a moving observer, else the ring.
+        std::vector<FieldSpot const*> CandidateSpots(Observer const& o, float visibleYd);
 
         bool m_enabled = true;
         uint32 m_maxUnits = 4;

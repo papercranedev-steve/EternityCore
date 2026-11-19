@@ -102,14 +102,16 @@ namespace Population
         // One bot leaves (oldest stand bot, else oldest mover; veterans last).
         bool DespawnOneCity(uint32 zone);
 
-        // Field director helpers (FieldPopulation.h). Field bots within `radius` (2d) of x/y,
-        // queued requests included.
-        uint32 CountField(uint32 mapId, float x, float y, float radius) const;
+        // Field director helpers (FieldPopulation.h). Field bots within `radius` (2d) of the
+        // observer, queued requests included; for a moving observer not those more than
+        // `behindYd` behind him (passed by).
+        uint32 CountField(Observer const& o, float radius, float behindYd) const;
         // Every field bot leaves, queued requests are dropped (field off).
         void DespawnField();
-        // Field bots out of everyone's sight leave when no observer is within `keepYd`, their
-        // lifetime is over, or they are done here (BotHandle::done).
-        void RetireFieldBots(Observers const& observers, float keepYd);
+        // Field bots out of everyone's sight leave when no observer is within `keepYd` (more
+        // than `behindYd` behind a moving one does not count), their lifetime is over, or they
+        // are done here (BotHandle::done).
+        void RetireFieldBots(Observers const& observers, float keepYd, float behindYd);
 
         // Cost of PopulationBotAI::UpdateAI ticks.
         void RecordBotTick(uint64 micros);

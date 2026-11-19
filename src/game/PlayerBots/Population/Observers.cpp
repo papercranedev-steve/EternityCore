@@ -8,6 +8,7 @@
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Population
 {
@@ -104,7 +105,17 @@ namespace Population
             o.z = p->GetPositionZ();
             o.factionTemplate = p->GetFactionTemplateId();
             o.travelling = p->IsTaxiFlying();
+            TrackMotion(o, nowMs);
             m_observers.push_back(o);
+        }
+
+        // Logged out a while ago: forget the track.
+        for (auto itr = m_tracks.begin(); itr != m_tracks.end();)
+        {
+            if (nowMs - itr->second.seenMs > 10 * TRACK_WINDOW_MS)
+                itr = m_tracks.erase(itr);
+            else
+                ++itr;
         }
 
         // Arrived (same account in the world: also covers picking a character we did not expect) or gave up.
@@ -120,13 +131,68 @@ namespace Population
         return added;
     }
 
+    float Observer::Speed() const
+    {
+        return std::sqrt(vx * vx + vy * vy);
+    }
+
+    void Observers::TrackMotion(Observer& o, uint32 nowMs)
+    {
+        Track& t = m_tracks[o.guid];
+        t.seenMs = nowMs;
+        if (!t.sinceMs || t.mapId != o.mapId)
+        {
+            t = Track();
+            t.mapId = o.mapId;
+            t.x = o.x;
+            t.y = o.y;
+            t.sinceMs = nowMs;
+            t.seenMs = nowMs;
+        }
+        else if (nowMs - t.sinceMs >= TRACK_WINDOW_MS)
+        {
+            float const seconds = float(nowMs - t.sinceMs) / float(IN_MILLISECONDS);
+            t.vx = (o.x - t.x) / seconds;
+            t.vy = (o.y - t.y) / seconds;
+            if (t.vx * t.vx + t.vy * t.vy > TELEPORT_SPEED * TELEPORT_SPEED)
+                t.vx = t.vy = 0.0f;
+            t.x = o.x;
+            t.y = o.y;
+            t.sinceMs = nowMs;
+        }
+        o.vx = t.vx;
+        o.vy = t.vy;
+    }
+
+    float Observers::VisibleYd(uint32 mapId) const
+    {
+        float const MARGIN = 15.0f;     // the player moves before the bot does
+        Map const* map = sMapMgr.FindMap(mapId, 0);
+        return (map ? map->GetVisibilityDistance() : 100.0f) + MARGIN;
+    }
+
+    bool Observers::CanSeeSoon(uint32 mapId, float x, float y, float z, float leadSec) const
+    {
+        if (CanSee(mapId, x, y, z))
+            return true;
+        float const visible = VisibleYd(mapId);
+        for (Observer const& o : m_observers)
+        {
+            if (o.arriving || o.mapId != mapId || !o.IsMoving())
+                continue;
+            float const dx = o.AheadX(leadSec) - x, dy = o.AheadY(leadSec) - y;
+            if (dx * dx + dy * dy <= visible * visible)
+                return true;
+        }
+        return false;
+    }
+
     bool Observers::CanSee(uint32 mapId, float x, float y, float z) const
     {
         float const CLOSE = 20.0f;      // around a corner: too close to pop in
-        float const MARGIN = 15.0f;     // the player moves before the bot does
 
         Map const* map = sMapMgr.FindMap(mapId, 0);
-        float const visible = (map ? map->GetVisibilityDistance() : 100.0f) + MARGIN;
+        float const visible = VisibleYd(mapId);
 
         for (Observer const& o : m_observers)
         {
