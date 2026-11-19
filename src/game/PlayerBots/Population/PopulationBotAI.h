@@ -39,6 +39,14 @@ namespace Population
         std::string const& GetBotName() const { return m_name; }
         bool IsInitialized() const { return m_initialized; }
 
+        // Dev review of actions (.popbot emote, addon window /pbemote): clears the previous action,
+        // faces the viewer, shows one action and holds still for REVIEW_HOLD_MS (no idle
+        // behaviour) so it can be watched. Text emotes are sent as the bot's own /emote, at the viewer.
+        enum class ReviewKind : uint8 { OneShot, State, Stand, Text, Sheath };
+        static constexpr uint32 REVIEW_HOLD_MS = 5 * 60 * 1000;
+        void PlayForReview(ReviewKind kind, uint32 id, Player* viewer);
+        void EndReview();
+
         // Field bots: fights before it moves on (logs out out of sight).
         static constexpr uint32 FIELD_FIGHTS_MIN = 5;
         static constexpr uint32 FIELD_FIGHTS_MAX = 15;
@@ -81,6 +89,7 @@ namespace Population
         // (m_updateTimer comes from TeamBotAI: the population interval in town, the
         // Commander's bot interval in the field.)
         uint32 m_nextIdleAtMs = 0;      // WorldTimer::getMSTime()
+        uint32 m_reviewUntilMs = 0;     // != 0: held still for a review (PlayForReview)
 
         // Field
         ObjectGuid m_teamGuid;          // joined Commander::Team unit with this guid

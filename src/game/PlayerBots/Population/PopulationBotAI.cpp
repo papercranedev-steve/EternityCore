@@ -17,6 +17,7 @@
 #include "Opcodes.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
+#include "Packets/Misc.h"
 #include "Utilities/Random.h"
 #include "MotionMaster.h"
 #include "GridMap.h"
@@ -176,6 +177,13 @@ namespace Population
             case Phase::Leaving:  UpdateLeaving(); return;
             case Phase::Gone:     return;
             case Phase::Living:   break;
+        }
+
+        if (m_reviewUntilMs)
+        {
+            if (WorldTimer::getMSTime() < m_reviewUntilMs)
+                return;
+            EndReview();
         }
 
         switch (m_request.role)
@@ -773,6 +781,65 @@ namespace Population
             me->SetStandState(UNIT_STAND_STATE_SIT);
         else if (roll < 85)
             me->SetFacingTo(me->GetOrientation() + frand(-1.2f, 1.2f));
+    }
+
+    void PopulationBotAI::PlayForReview(ReviewKind kind, uint32 id, Player* viewer)
+    {
+        m_reviewUntilMs = WorldTimer::getMSTime() + REVIEW_HOLD_MS;
+
+        if (!me->IsStopped())
+            me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+
+        // The previous action off: a bot's state is not cleared by moving like a client's.
+        me->HandleEmoteState(EMOTE_ONESHOT_NONE);
+        if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+        if (me->GetSheath() != SHEATH_STATE_UNARMED && kind != ReviewKind::Sheath)
+            me->SetSheath(SHEATH_STATE_UNARMED);
+        if (viewer && viewer != me)
+            me->SetFacingToObject(viewer);
+
+        switch (kind)
+        {
+            case ReviewKind::OneShot:
+                me->HandleEmoteCommand(id);
+                break;
+            case ReviewKind::State:
+                me->HandleEmoteState(id);
+                break;
+            case ReviewKind::Stand:
+                if (id < MAX_UNIT_STAND_STATE)
+                    me->SetStandState(uint8(id));
+                break;
+            case ReviewKind::Sheath:
+                if (id < MAX_SHEATH_STATE)
+                    me->SetSheath(SheathState(id));
+                break;
+            case ReviewKind::Text:
+            {
+                // As if the bot typed the emote: the handler plays its animation and every client
+                // in range prints the line in its own language.
+                auto packet = std::make_unique<WorldPackets::Misc::TextEmote>();
+                packet->textEmote = id;
+                packet->emoteNum = 0;
+                if (viewer && viewer != me)
+                    packet->guid = viewer->GetObjectGuid();
+                me->GetSession()->QueuePacket(std::move(packet));
+                break;
+            }
+        }
+    }
+
+    void PopulationBotAI::EndReview()
+    {
+        m_reviewUntilMs = 0;
+        me->HandleEmoteState(EMOTE_ONESHOT_NONE);
+        if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+        if (m_request.hasFacePoint)
+            FacePoint(m_request.faceX, m_request.faceY);
     }
 
     void PopulationBotAI::UpdateSocial(uint32 diff)

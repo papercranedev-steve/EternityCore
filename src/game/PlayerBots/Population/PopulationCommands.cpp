@@ -12,6 +12,9 @@
  *   .popbot headless on|off              dev tests: the headless character counts as a player (default off)
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
+ *   .popbot emote one|state|stand|text|sheath <id> | end
+ *                                        dev review: the selected (else nearest) town/city/test bot
+ *                                        shows one action and holds still (addon /pbemote)
  *   .popbot despawn                      log out the selected population bot
  *   .popbot clear                        log out every population bot (cities refill while you are there)
  *   .popbot city                         per city: anchors, bots by role, targets for this hour
@@ -32,6 +35,7 @@
 #include "Map.h"
 #include "SharedDefines.h"
 #include "Population/PopulationMgr.h"
+#include "Population/PopulationBotAI.h"
 #include "Utilities/Random.h"
 #include <algorithm>
 #include <cctype>
@@ -193,6 +197,90 @@ namespace
             handler->PSendSysMessage("   levels 1-9: %u, 10s: %u, 20s: %u, 30s: %u, 40s: %u, 50s: %u, 60: %u",
                 s.byTen[0], s.byTen[1], s.byTen[2], s.byTen[3], s.byTen[4], s.byTen[5], s.byTen[6]);
         }
+    }
+
+    // A city, town or test bot's AI (field bots are run by the Commander: no review).
+    Population::PopulationBotAI* ReviewableAI(Player* bot)
+    {
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive() || !bot->AI())
+            return nullptr;
+        Population::PopulationBotAI* ai = dynamic_cast<Population::PopulationBotAI*>(bot->AI());
+        if (!ai || !ai->IsInitialized() || ai->GetRequest().kind == Population::BotKind::Field)
+            return nullptr;
+        return ai;
+    }
+
+    // The selected population bot, else the nearest one within 30 yards.
+    Population::PopulationBotAI* ReviewBot(Player* selected, Player* player)
+    {
+        if (Population::PopulationBotAI* ai = ReviewableAI(selected))
+            return ai;
+        Population::PopulationBotAI* best = nullptr;
+        float bestDist = 30.0f;
+        for (auto const& ref : player->GetMap()->GetPlayers())
+        {
+            Player* p = ref.getSource();
+            Population::PopulationBotAI* ai = p != player ? ReviewableAI(p) : nullptr;
+            if (!ai)
+                continue;
+            float const d = player->GetDistance(p);
+            if (d < bestDist)
+            {
+                best = ai;
+                bestDist = d;
+            }
+        }
+        return best;
+    }
+
+    // .popbot emote one|state|stand|text|sheath <id> | end
+    // Replies for the addon (Emotes.lua): PBEMOTE;ok;<bot>  PBEMOTE;end;<bot>  PBEMOTE;err;nobot|usage
+    bool ReviewEmote(ChatHandler* handler, Player* player, Player* selected, char* args)
+    {
+        using Kind = Population::PopulationBotAI::ReviewKind;
+        char* kindText = NextToken(&args);
+        Population::PopulationBotAI* ai = kindText ? ReviewBot(selected, player) : nullptr;
+        if (kindText && !ai)
+        {
+            handler->SendSysMessage("PBEMOTE;err;nobot");
+            return false;
+        }
+
+        if (kindText && !strcmp(kindText, "end"))
+        {
+            ai->EndReview();
+            handler->PSendSysMessage("PBEMOTE;end;%s", ai->GetBotName().c_str());
+            return true;
+        }
+
+        uint32 id = 0;
+        bool const hasId = ParseUInt(NextToken(&args), id);
+        Kind kind = Kind::OneShot;
+        bool known = true;
+        if (!kindText)
+            known = false;
+        else if (!strcmp(kindText, "one"))
+            kind = Kind::OneShot;
+        else if (!strcmp(kindText, "state"))
+            kind = Kind::State;
+        else if (!strcmp(kindText, "stand"))
+            kind = Kind::Stand;
+        else if (!strcmp(kindText, "text"))
+            kind = Kind::Text;
+        else if (!strcmp(kindText, "sheath"))
+            kind = Kind::Sheath;
+        else
+            known = false;
+        if (!known || !hasId)
+        {
+            handler->SendSysMessage("PBEMOTE;err;usage");
+            handler->SendSysMessage("Usage: .popbot emote one|state|stand|text|sheath <id> | end (selected population bot, else the nearest within 30 yd)");
+            return false;
+        }
+
+        ai->PlayForReview(kind, id, player);
+        handler->PSendSysMessage("PBEMOTE;ok;%s", ai->GetBotName().c_str());
+        return true;
     }
 
     bool Spawn(ChatHandler* handler, Player* player, char* args)
@@ -553,6 +641,7 @@ bool ChatHandler::HandlePopBotCommand(char* args)
 
     char* sub = ExtractLiteralArg(&args);
     bool const needsPlayer = sub && (!strcmp(sub, "spawn") || !strcmp(sub, "despawn") || !strcmp(sub, "point") || !strcmp(sub, "density") ||
+        !strcmp(sub, "emote") ||
         (!strcmp(sub, "city") && args && strstr(args, "anchors")));
     if (needsPlayer && !player)
     {
@@ -627,6 +716,9 @@ bool ChatHandler::HandlePopBotCommand(char* args)
 
     if (!strcmp(sub, "spawn"))
         return Spawn(this, player, args);
+
+    if (!strcmp(sub, "emote"))
+        return ReviewEmote(this, player, GetSelectedPlayer(), args);
 
     if (!strcmp(sub, "despawn"))
     {
@@ -704,6 +796,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|density|headless on|off|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }
