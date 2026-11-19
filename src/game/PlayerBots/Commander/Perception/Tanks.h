@@ -30,6 +30,12 @@ namespace Commander
         PartyMemberFacts const* Main(WorldModel const& world, bool botsOnly = false);
         // Somebody holds enemies for the party: an alive tank, or a tank-like ally (Sergeant Bly).
         bool Any(WorldModel const& world);
+        // Who the fight forecasts put the enemies on (FightLoad: every enemy on one member): the
+        // main tank. A team with nobody to hold (no member, alive or dead, with FUNCTION_HOLD: a
+        // lone healer, a mage and a rogue; doc 2026-11-19-any-size-team.md) instead puts them on
+        // the alive member most enemies hit now, else the non-pet one with the most health.
+        // nullptr: a team that has a tank but none alive (the tank died: the crisis' case).
+        PartyMemberFacts const* HitTaker(WorldModel const& world);
         // Another alive tank bot that can act is nearer to `pos` than `distance` - `margin`:
         // with several tank bots the nearest one takes a loose enemy.
         bool CloserBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance, float margin);

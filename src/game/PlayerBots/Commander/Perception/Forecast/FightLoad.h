@@ -160,8 +160,9 @@ namespace FightLoad
     // "fight ~62 s, tank down to 41%, incoming up to 520/s, healer mana 5400 -> 1200"
     std::string Describe(Result const& r);
 
-    // The fight against `creatures` (live, alive ones) with the party's main tank and healer
-    // bots as they are now. False when the party has no alive tank.
+    // The fight against `creatures` (live, alive ones) with the party's main tank (Tanks::
+    // HitTaker: with nobody to hold, the member hit) and healer bots as they are now. False when
+    // there is nobody alive to put it on.
     bool Build(WorldModel const& world, Map* map, std::vector<ObjectGuid> const& creatures, Input& out);
     Foe FoeOf(Creature const* creature, PartyMemberFacts const& tank);
     // The current fight from the facts only (pure): every acting enemy of ours; one under a

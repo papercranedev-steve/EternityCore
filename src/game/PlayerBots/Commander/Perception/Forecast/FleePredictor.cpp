@@ -206,7 +206,7 @@ namespace Commander
     float FleePredictor::PointsWithin(WorldModel const& world, EnemyFacts const& e, float reachYd)
     {
         FleeFacts const& f = e.flee;
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         FightLoad::Input asIs;
         if (!tank || !FightLoad::FromWorld(world, asIs))
             return 0.0f;
@@ -246,7 +246,7 @@ namespace Commander
     float FleePredictor::PointsOf(WorldModel const& world, FightLoad::Input const& base, float baseLoss,
                                   std::vector<FleeJoiner> const& joiners, uint64 mask, float arriveSec)
     {
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         if (!mask || !tank)
             return 0.0f;
         FightLoad::Input with = base;
@@ -321,7 +321,7 @@ namespace Commander
         m_fled.erase(std::remove_if(m_fled.begin(), m_fled.end(), [&](ObjectGuid g) { return !onLists(g); }), m_fled.end());
         m_cache.erase(std::remove_if(m_cache.begin(), m_cache.end(), [&](Entry const& c) { return !onLists(c.enemy); }), m_cache.end());
 
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         float const fleeSec = FleeSec();
         uint32 searches = 0;
         for (EnemyFacts& e : world.enemies)

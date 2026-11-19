@@ -2,6 +2,8 @@
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Forecast/FightLoad.h"
 #include "SharedDefines.h"
 #include "Timer.h"
 #include <algorithm>
@@ -39,6 +41,21 @@ namespace Commander
         {
             bool const way = pack.route.state == PackRouteState::Walk || pack.route.state == PackRouteState::Straight;
             return way && pack.route.blocker.IsEmpty() && pack.ApproachYd() <= HuntAssigner::MAX_APPROACH_YD;
+        }
+
+        // The fight forecast (FightLoad, every creature of the pack on Tanks::HitTaker: the
+        // tank, or with nobody to hold the member hit; the team's damage and its healers by
+        // function) ends with the team standing. No one to put it on: not forecast, the rules
+        // of IsHuntable only.
+        bool Winnable(WorldModel const& world, PackFacts const& pack)
+        {
+            FightLoad::Input in;
+            PartyMemberFacts const* victim = Tanks::HitTaker(world);
+            if (!victim || !FightLoad::FromWorld(world, in))
+                return true;
+            for (PackCreature const& c : pack.members)
+                in.foes.push_back(FightLoad::FoeOf(c, *victim, 0.0f));
+            return FightLoad::Bearable(FightLoad::Simulate(in, "hunt"));
         }
 
         // The creature to attack first: the route's target (nearest), else the first member.
@@ -96,10 +113,21 @@ namespace Commander
                 if (IsHuntable(world, *pack) && CanWalkTo(*pack))
                     return;
 
-        PackFacts const* best = nullptr;
+        // The nearest one that passes the rules and the forecast (the forecast only for the
+        // candidates, nearest first, until one passes).
+        std::vector<PackFacts const*> candidates;
         for (PackFacts const& pack : world.packs)
-            if (IsHuntable(world, pack) && CanWalkTo(pack) && (!best || pack.ApproachYd() < best->ApproachYd()))
-                best = &pack;
+            if (IsHuntable(world, pack) && CanWalkTo(pack))
+                candidates.push_back(&pack);
+        std::sort(candidates.begin(), candidates.end(),
+            [](PackFacts const* a, PackFacts const* b) { return a->ApproachYd() < b->ApproachYd(); });
+        PackFacts const* best = nullptr;
+        for (PackFacts const* pack : candidates)
+            if (Winnable(world, *pack))
+            {
+                best = pack;
+                break;
+            }
 
         if (!best)
         {
@@ -114,7 +142,7 @@ namespace Commander
             h.sinceMs = world.refreshedAtMs;
         h.target = target;
         h.idleSinceMs = 0;
-        h.why = "the nearest fight at our level";
+        h.why = "the nearest fight at our level we can win";
     }
 
     void HuntAssigner::Clear(TeamPlan& plan) const

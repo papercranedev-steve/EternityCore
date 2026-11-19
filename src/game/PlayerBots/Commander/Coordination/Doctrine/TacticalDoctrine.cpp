@@ -292,7 +292,10 @@ namespace Commander
         if (!tank || plan.retreat.active)
         {
             d.tactic = PileTactic::None;
-            d.why = !tank ? "no main tank" : "retreat";
+            // (a team with nobody to hold, TeamPlan::coverage: no pile to place, each member
+            // fights what hits it; doc 2026-11-19-any-size-team.md)
+            d.why = plan.retreat.active ? "retreat" :
+                    plan.coverage.noHolder ? "nobody holds: each fights what hits it" : "no main tank";
         }
         else
         {

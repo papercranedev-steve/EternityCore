@@ -11,7 +11,10 @@
  *    a critter, none with somebody else's loot rights;
  *  - is at the team's level: from LEVEL_BELOW under the highest member to LEVEL_ABOVE over it;
  *  - can be walked to without coming near another idle pack (PackRoute: a way, no blocker),
- *    within MAX_APPROACH_YD.
+ *    within MAX_APPROACH_YD;
+ *  - the fight forecast says the team wins it (FightLoad::Bearable: the pack on the tank, or
+ *    with nobody to hold on the member hit, Tanks::HitTaker; damage and heals by function, so
+ *    a lone healer counts its own; doc 2026-11-19-any-size-team.md). Nearest candidates first.
  * The choice is kept until the fight starts, the creature no longer qualifies, or KEEP_MS.
  * Nothing found: idleSinceMs tells the bot's life (Population/) how long it has had nothing
  * to do here (time to move on). Pure.

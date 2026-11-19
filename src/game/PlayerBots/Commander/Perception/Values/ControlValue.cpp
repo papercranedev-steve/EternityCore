@@ -129,7 +129,7 @@ namespace ControlValue
         for (EnemyFacts const* e : targets)
             w.sec = std::max(w.sec, extension(*e));
 
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
         struct Record
         {
@@ -251,7 +251,7 @@ namespace ControlValue
         // Held only while the party fights the others (header: HeldSec).
         if (a.breaksOnDamage && !a.fear)
             w.sec = std::min(w.sec, RestOf(fight, [target](ObjectGuid g) { return g == target; }, "pull: without the target"));
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
 
         FightLoad::Input controlled = fight;
@@ -324,7 +324,7 @@ namespace ControlValue
 
     float HeldWorth(WorldModel const& world, FightLoad::Input const& fight, ObjectGuid enemy)
     {
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         float const penalty = tank ? Value::DeathPenalty(*tank) : 0.0f;
         Trace::Scope scope("held");
         if (scope.On())

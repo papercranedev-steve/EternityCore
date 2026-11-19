@@ -425,7 +425,7 @@ namespace FightLoad
         bool StartInput(WorldModel const& world, Input& out, PartyMemberFacts const*& tank)
         {
             if (!tank)
-                tank = Tanks::Main(world);
+                tank = Tanks::HitTaker(world);   // the main tank; with nobody to hold, the one hit
             if (!tank || !tank->alive)
                 return false;
             out = Input();

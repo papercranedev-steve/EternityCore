@@ -52,7 +52,7 @@ namespace JoinRisk
                 return k.loss;
 
         float loss = -1.0f;
-        PartyMemberFacts const* tank = Tanks::Main(world);
+        PartyMemberFacts const* tank = Tanks::HitTaker(world);
         FightLoad::Input base;
         if (tank && tank->alive && FightLoad::FromWorld(world, base))
         {

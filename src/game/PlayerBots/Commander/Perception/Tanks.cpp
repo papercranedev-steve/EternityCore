@@ -50,6 +50,35 @@ namespace Tanks
         return owner && owner->classId == CLASS_HUNTER;
     }
 
+    PartyMemberFacts const* HitTaker(WorldModel const& world)
+    {
+        if (PartyMemberFacts const* tank = Main(world))
+            return tank;
+        for (PartyMemberFacts const& m : world.party)
+            if (m.functions & FUNCTION_HOLD)
+                return nullptr;     // its tank is dead: no stand-in guessed here
+        PartyMemberFacts const* best = nullptr;
+        uint32 bestHits = 0;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.alive)
+                continue;
+            uint32 hits = 0;
+            for (EnemyFacts const& e : world.enemies)
+                if (!e.onAllyOnly && e.acting && e.victim == m.guid)
+                    ++hits;
+            // (a pet only when enemies hit it: a hunter's pet holding)
+            if (!hits && m.isPet)
+                continue;
+            if (!best || hits > bestHits || (hits == bestHits && m.maxHealth > best->maxHealth))
+            {
+                best = &m;
+                bestHits = hits;
+            }
+        }
+        return best;
+    }
+
     bool Any(WorldModel const& world)
     {
         if (Main(world))

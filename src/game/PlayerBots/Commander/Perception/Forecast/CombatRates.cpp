@@ -26,7 +26,7 @@ namespace Commander
                 ++r.damageDealers;
         }
 
-        PartyMemberFacts const* const tank = Tanks::Main(world);
+        PartyMemberFacts const* const tank = Tanks::HitTaker(world);
         float heldDps = 0.0f;   // controlled enemies, once they wake (RateFacts::worthDps)
         bool hittable = false;  // an enemy of ours the party may hit now (fightDpsPerDealer)
         for (EnemyFacts const& e : world.enemies)
