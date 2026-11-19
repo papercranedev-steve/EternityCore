@@ -87,6 +87,76 @@ namespace Commander
         if (world.HasPartyEnemy() || plan.pull.phase != PullPhase::None || plan.clear.active || plan.retreat.active)
             return;
 
+        ChooseRoles(world, plan);
+        BuildCoverage(world, plan);
+    }
+
+    uint8 RoleAssigner::FunctionsOf(uint8 role)
+    {
+        switch (role)
+        {
+            case ROLE_TANK:      return FUNCTION_HOLD | FUNCTION_DAMAGE;
+            case ROLE_MELEE_DPS:
+            case ROLE_RANGE_DPS: return FUNCTION_DAMAGE;
+            case ROLE_HEALER:    return FUNCTION_HEAL;
+            default:             return 0;
+        }
+    }
+
+    void RoleAssigner::BuildCoverage(WorldModel const& world, TeamPlan& plan)
+    {
+        CoveragePlan& cover = plan.coverage;
+        cover = CoveragePlan();
+
+        // The role each member plays after ApplyRoles: this refresh's choice for a free bot.
+        auto roleOf = [&plan](PartyMemberFacts const& m) -> uint8
+        {
+            for (RoleDuty const& d : plan.roles)
+                if (d.bot == m.guid)
+                    return d.role;
+            return m.role;
+        };
+
+        std::vector<PartyMemberFacts const*> bots;   // same order as cover.members' bots
+        uint8 covered = 0;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (m.isPet)
+                continue;
+            MemberCover c;
+            c.member = m.guid;
+            c.functions = FunctionsOf(roleOf(m));
+            covered |= c.functions;
+            cover.members.push_back(c);
+            bots.push_back(m.isBot ? &m : nullptr);
+        }
+
+        // Fill the gaps: a function nobody has goes to the bots that can do it.
+        auto add = [&](TeamFunction function, char const* reason, auto canDo)
+        {
+            if (covered & function)
+                return;
+            for (size_t i = 0; i < cover.members.size(); ++i)
+            {
+                if (!bots[i] || !canDo(*bots[i], cover.members[i]))
+                    continue;
+                cover.members[i].functions |= function;
+                cover.members[i].added |= function;
+                cover.members[i].reason = reason;
+            }
+        };
+        // Nobody kills: every healer bot deals damage too (a lone healer, two healers).
+        add(FUNCTION_DAMAGE, "nobody else deals damage",
+            [](PartyMemberFacts const&, MemberCover const& c) { return (c.functions & FUNCTION_HEAL) != 0; });
+        // Nobody heals: the bots that can (a retribution paladin next to a warrior).
+        add(FUNCTION_HEAL, "nobody else heals",
+            [](PartyMemberFacts const& m, MemberCover const&) { return m.cap.heal >= RoleCapabilities::MIN_HEAL; });
+        // Nobody holds: not given to anyone, each member takes the enemies that hit it.
+        cover.noHolder = !cover.members.empty() && !(covered & FUNCTION_HOLD);
+    }
+
+    void RoleAssigner::ChooseRoles(WorldModel const& world, TeamPlan& plan)
+    {
         std::vector<PartyMemberFacts const*> free;
         uint32 members = 0;
         uint32 lockedTanks = 0;
@@ -171,5 +241,6 @@ namespace Commander
     void RoleAssigner::Clear(TeamPlan& plan) const
     {
         plan.roles.clear();
+        plan.coverage = CoveragePlan();
     }
 }

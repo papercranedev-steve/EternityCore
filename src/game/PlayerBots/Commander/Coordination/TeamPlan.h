@@ -1339,6 +1339,46 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
+    // What a member does for the team (doc 2026-11-19-any-size-team.md): switches, not shares.
+    enum TeamFunction : uint8
+    {
+        FUNCTION_HOLD   = 0x01,     // the enemies hit it (a tank)
+        FUNCTION_HEAL   = 0x02,     // keeps the team alive
+        FUNCTION_DAMAGE = 0x04,     // kills the enemies
+    };
+
+    struct MemberCover
+    {
+        ObjectGuid member;
+        uint8 functions = 0;        // TeamFunction bits: its role's own plus `added`
+        uint8 added = 0;            // TeamFunction bits given because nobody else had them
+        char const* reason = "";    // static string, why `added`
+    };
+
+    // Who covers which function (RoleAssigner, between fights, kept during a fight). Every
+    // member gets its role's functions; a function nobody has is added to the bots that can
+    // do it. A full party has no gap: the table then says the same as the roles.
+    struct CoveragePlan
+    {
+        std::vector<MemberCover> members;   // non-pet members, players too
+        // Nobody holds (no tank): each member takes the enemies that hit it.
+        bool noHolder = false;
+
+        MemberCover const* Find(ObjectGuid member) const
+        {
+            for (MemberCover const& c : members)
+                if (c.member == member)
+                    return &c;
+            return nullptr;
+        }
+        uint8 Of(ObjectGuid member) const
+        {
+            MemberCover const* c = Find(member);
+            return c ? c->functions : 0;
+        }
+        bool Has(ObjectGuid member, TeamFunction function) const { return (Of(member) & function) != 0; }
+    };
+
     // Paladin blessings and party auras: who gives which (BlessingAssigner.h). The paladin
     // rotation casts them out of combat.
     struct BlessingDuty
@@ -1523,6 +1563,7 @@ namespace Commander
     {
         uint32 version = 0;
         std::vector<RoleDuty> roles;
+        CoveragePlan coverage;      // RoleAssigner, with the roles
         BlessingPlan blessings;
         TotemPlan totems;
         JudgementPlan judgements;

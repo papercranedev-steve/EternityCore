@@ -278,9 +278,25 @@ namespace
                 continue;
             static char const* const names[] = { "auto", "melee", "ranged", "tank", "healer" };
             char const* role = m.role < sizeof(names) / sizeof(names[0]) ? names[m.role] : "?";
-            handler->PSendSysMessage("    %s: %s%s%s  %.2f / %.2f / %.2f / %.2f", NameOf(map, m.guid).c_str(), role,
-                m.roleLocked ? " (locked)" : "", m.isBot ? "" : " (player)", m.cap.tank, m.cap.heal, m.cap.melee, m.cap.ranged);
+            // Coverage (RoleAssigner): hold / heal / damage, "+" = added because nobody else had it.
+            std::string functions;
+            if (Commander::MemberCover const* c = plan.coverage.Find(m.guid))
+            {
+                static struct { Commander::TeamFunction bit; char const* name; } const kinds[] = {
+                    { Commander::FUNCTION_HOLD, "hold" }, { Commander::FUNCTION_HEAL, "heal" },
+                    { Commander::FUNCTION_DAMAGE, "damage" } };
+                for (auto const& k : kinds)
+                    if (c->functions & k.bit)
+                        functions += std::string(functions.empty() ? "" : " ") + ((c->added & k.bit) ? "+" : "") + k.name;
+                if (c->added)
+                    functions += std::string(" (") + c->reason + ")";
+            }
+            handler->PSendSysMessage("    %s: %s%s%s  %.2f / %.2f / %.2f / %.2f  [%s]", NameOf(map, m.guid).c_str(), role,
+                m.roleLocked ? " (locked)" : "", m.isBot ? "" : " (player)", m.cap.tank, m.cap.heal, m.cap.melee, m.cap.ranged,
+                functions.c_str());
         }
+        if (plan.coverage.noHolder)
+            handler->SendSysMessage("    nobody holds: each member takes the enemies that hit it");
 
         handler->SendSysMessage("Interrupters:");
         for (Commander::PartyMemberFacts const& m : world.party)

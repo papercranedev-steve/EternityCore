@@ -6,6 +6,8 @@
  * locked (chosen by the user: bots with .partybot setrole / load / add <role>, players with the
  * role button on their own character). Output: TeamPlan::roles, a role for every bot whose role
  * is not locked; PartyCommander::ApplyRoles sets it (TeamBotAI::AssignRole) and tells the leader.
+ * Then TeamPlan::coverage: which member holds, heals and deals damage, a function nobody has
+ * added to the bots that can do it (doc 2026-11-19-any-size-team.md).
  *
  * Needs: NEED_TANKS_SMALL tank and NEED_HEALERS_SMALL healer in a party of up to 5; larger
  * groups NEED_TANKS_RAID tanks and one healer per 5 members. Locked members fill needs first
@@ -44,6 +46,17 @@ namespace Commander
         char const* GetId() const override { return "roles"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
+
+        // TeamFunction bits a role brings by itself (tank: hold + damage, healer: heal).
+        static uint8 FunctionsOf(uint8 role);
+
+    private:
+        // TeamPlan::roles (header comment).
+        static void ChooseRoles(WorldModel const& world, TeamPlan& plan);
+        // TeamPlan::coverage from the roles just chosen (doc 2026-11-19-any-size-team.md
+        // section 3): each member's role functions, then a function nobody has goes to the bots
+        // that can do it (damage to the healers, heal to bots with MIN_HEAL); no tank = noHolder.
+        static void BuildCoverage(WorldModel const& world, TeamPlan& plan);
     };
 }
 
