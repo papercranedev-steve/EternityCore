@@ -52,7 +52,7 @@ namespace Population
         void InitializeField();
         void Initialize();
         void EquipForTier();
-        void RefreshAppearanceForNearbyPlayers();
+        void HideFromNearbyPlayers();
         void UpdateSocial(uint32 diff);
         void UpdateIdle();
         void UpdateStand();

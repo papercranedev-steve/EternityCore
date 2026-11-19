@@ -567,6 +567,11 @@ namespace Population
 
     void PopulationBotAI::Initialize()
     {
+        // The bot logs in at level 1 and is levelled here. A client that already sees it plays
+        // the level-up glow when its level field goes up, so nearby players stop seeing it until
+        // it is ready (shown again, at its final level and gear, at the end).
+        HideFromNearbyPlayers();
+
         if (m_request.level && m_request.level != me->GetLevel())
         {
             me->GiveLevel(m_request.level);
@@ -620,7 +625,8 @@ namespace Population
             SetupProfession();
 
         me->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
-        RefreshAppearanceForNearbyPlayers();
+        // Re-sent whole: also the client workaround that makes every equipped item visible.
+        me->SetVisibility(VISIBILITY_ON);
 
         m_nextIdleAtMs = WorldTimer::getMSTime() + urand(5000, 20000);
         m_initialized = true;
@@ -730,8 +736,9 @@ namespace Population
         UpdateVisualHonorRankBasedOnItems();
     }
 
-    // Same client workaround as PartyBotAI: re-send the bot so every equipped item is visible.
-    void PopulationBotAI::RefreshAppearanceForNearbyPlayers()
+    // Destroyed on nearby clients now (not at the next visibility update), so no field change
+    // made while hidden reaches them; SetVisibility(VISIBILITY_ON) sends the bot again whole.
+    void PopulationBotAI::HideFromNearbyPlayers()
     {
         me->SetVisibility(VISIBILITY_OFF);
         for (auto const& ref : me->GetMap()->GetPlayers())
@@ -740,7 +747,6 @@ namespace Population
             if (pPlayer && pPlayer != me && !pPlayer->IsBot() && pPlayer->IsWithinDist(me, 200.0f))
                 pPlayer->UpdateVisibilityOf(pPlayer, me);
         }
-        me->SetVisibility(VISIBILITY_ON);
     }
 
     void PopulationBotAI::UpdateIdle()
