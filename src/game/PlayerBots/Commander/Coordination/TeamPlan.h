@@ -1339,14 +1339,7 @@ namespace Commander
         char const* reason = "";     // static string
     };
 
-    // What a member does for the team (doc 2026-11-19-any-size-team.md): switches, not shares.
-    enum TeamFunction : uint8
-    {
-        FUNCTION_HOLD   = 0x01,     // the enemies hit it (a tank)
-        FUNCTION_HEAL   = 0x02,     // keeps the team alive
-        FUNCTION_DAMAGE = 0x04,     // kills the enemies
-    };
-
+    // A member's TeamFunction bits (CommanderTypes.h) for the team.
     struct MemberCover
     {
         ObjectGuid member;

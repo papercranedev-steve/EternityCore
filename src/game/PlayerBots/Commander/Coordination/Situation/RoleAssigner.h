@@ -47,9 +47,6 @@ namespace Commander
         void Assign(WorldModel const& world, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
 
-        // TeamFunction bits a role brings by itself (tank: hold + damage, healer: heal).
-        static uint8 FunctionsOf(uint8 role);
-
     private:
         // TeamPlan::roles (header comment).
         static void ChooseRoles(WorldModel const& world, TeamPlan& plan);

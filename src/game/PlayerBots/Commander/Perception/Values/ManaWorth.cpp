@@ -12,7 +12,7 @@ namespace ManaWorth
     {
         bool IsHealer(PartyMemberFacts const& m)
         {
-            return m.isBot && !m.isPet && m.role == ROLE_HEALER;
+            return m.HealsTeam();
         }
 
         float HealPerMana(PartyMemberFacts const& m)

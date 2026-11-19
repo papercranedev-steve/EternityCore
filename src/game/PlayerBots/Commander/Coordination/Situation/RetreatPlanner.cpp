@@ -550,7 +550,7 @@ namespace Commander
                 lowTank = &m;
             if (!m.isBot)
                 continue;
-            if (m.role == ROLE_HEALER && m.CanAct() && (m.manaPct < 0.0f || m.manaPct >= HEALER_MIN_MANA_PCT))
+            if (m.HealsTeam() && m.CanAct() && (m.manaPct < 0.0f || m.manaPct >= HEALER_MIN_MANA_PCT))
             {
                 healerCanAct = true;
                 // Its real heals (HealCapacity: +healing gear, talents, crit), the level guess

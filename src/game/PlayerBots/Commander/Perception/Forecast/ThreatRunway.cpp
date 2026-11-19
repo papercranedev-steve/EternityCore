@@ -24,7 +24,7 @@ namespace ThreatRunway
 
         float HealBurst(PartyMemberFacts const& m, uint32 split)
         {
-            return m.isBot && !m.isPet && m.CanAct() && m.role == ROLE_HEALER ? m.healThreat / float(split) : 0.0f;
+            return m.CanAct() && m.HealsTeam() ? m.healThreat / float(split) : 0.0f;
         }
 
         float PlannedOf(std::vector<PlannedThreat> const& planned, ObjectGuid member)

@@ -14,6 +14,7 @@ class Player;
 namespace Commander
 {
 struct CreatureProfile;
+struct CoveragePlan;
 
 namespace WorldModelBuilder
 {
@@ -52,7 +53,8 @@ namespace WorldModelBuilder
 
     // Party members, pets, allies, enemies and their threat lists. No grid search: allies come
     // from the last scan (allyCandidates), the previous allies, and the threat lists of enemies.
-    void RefreshCombat(TeamBotAI* bot, WorldModel& world);
+    // `coverage`: the last RoleAssigner result, for PartyMemberFacts::functions.
+    void RefreshCombat(TeamBotAI* bot, WorldModel& world, CoveragePlan const& coverage);
 
     // Out-of-combat creatures near the party, grouped into packs, and the ally candidate scan.
     // Grid searches, run less often. Packs and their walks (PackRoutes) are around `guide` when

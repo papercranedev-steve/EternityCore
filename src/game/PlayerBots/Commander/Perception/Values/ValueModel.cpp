@@ -61,7 +61,7 @@ namespace Value
 
     float DeathPenalty(PartyMemberFacts const& member)
     {
-        if (member.isBot && member.role == ROLE_HEALER)
+        if (member.HealsTeam())
             return DEATH_PENALTY_HEALER;
         if (Tanks::IsTank(member))      // bots and players (Tanks.h)
             return DEATH_PENALTY_TANK;
@@ -80,7 +80,7 @@ namespace Value
 
             float estimate = 0.0f;
             for (PartyMemberFacts const& m : world.party)
-                if (!m.isPet && m.alive && !(m.isBot && m.role == ROLE_HEALER))
+                if (m.alive && m.DealsDamage())
                     estimate += m.soloDps > 0.0f ? m.soloDps : FALLBACK_DPS_PER_LEVEL * m.level;
             return std::max(1.0f, estimate);
         }
@@ -156,13 +156,18 @@ namespace Value
         if (!member.alive)
             return 0.0f;
 
-        if (member.isBot && member.role == ROLE_HEALER)
-            return Points(world, incomingDps) / float(std::max(1u, world.rates.healers));
+        // By function: a healer that also deals damage (nobody else does) adds both parts.
+        bool const heals = member.HealsTeam();
+        float points = heals ? Points(world, incomingDps) / float(std::max(1u, world.rates.healers)) : 0.0f;
 
         // One second of this member's damage shortens the fight by share seconds,
-        // which saves that much incoming damage.
-        float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
-        return Points(world, incomingDps) * share;
+        // which saves that much incoming damage. Pets: damage.
+        if (!heals || member.DealsDamage())
+        {
+            float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
+            points += Points(world, incomingDps) * share;
+        }
+        return points;
     }
 
     float LostAction(WorldModel const& world, PartyMemberFacts const& member, float seconds)

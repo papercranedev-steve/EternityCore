@@ -19,9 +19,10 @@ namespace Commander
             r.partyMaxHealth += float(m.maxHealth);
             if (!m.CanAct())
                 continue;   // dead, asleep, stunned or mind controlled: contributes nothing now
-            if (m.isBot && m.role == ROLE_HEALER)
+            // Not exclusive: a lone healer heals and deals damage (PartyMemberFacts::functions).
+            if (m.HealsTeam())
                 ++r.healers;
-            else
+            if (m.DealsDamage())
                 ++r.damageDealers;
         }
 

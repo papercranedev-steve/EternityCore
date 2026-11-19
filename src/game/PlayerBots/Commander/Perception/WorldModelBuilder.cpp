@@ -16,6 +16,7 @@
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Coordination/TeamPlan.h"    // CoveragePlan (the last RoleAssigner result)
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Classes/RaceKit.h"
 #include "Commander/Classes/ItemKit.h"
@@ -286,7 +287,15 @@ namespace WorldModelBuilder
                     CombatBotRoles const best = m.cap.Best();
                     m.role = uint8((best == ROLE_TANK && botTank) ? m.cap.BestNonTank() : best);
                 }
+                m.functions = RoleFunctions(m.role);     // nothing is added to players
             }
+        }
+
+        // PartyMemberFacts::functions of a bot: its role now plus what the coverage added.
+        uint8 BotFunctions(PartyMemberFacts const& f, CoveragePlan const& coverage)
+        {
+            MemberCover const* c = coverage.Find(f.guid);
+            return RoleFunctions(f.role) | (c ? c->added : 0);
         }
 
         // Interrupt-cast effects lock the school for the spell's duration; stuns and silences don't.
@@ -1860,7 +1869,7 @@ namespace WorldModelBuilder
         }
     }
 
-    void RefreshCombat(TeamBotAI* bot, WorldModel& world)
+    void RefreshCombat(TeamBotAI* bot, WorldModel& world, CoveragePlan const& coverage)
     {
         Player* me = bot->me;
         Map* map = me->GetMap();
@@ -1909,6 +1918,7 @@ namespace WorldModelBuilder
                         FillSoulstone(ai, f);
                     f.role = uint8(ai->m_role);
                     f.roleLocked = ai->IsRoleLocked();
+                    f.functions = BotFunctions(f, coverage);
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
@@ -1942,18 +1952,18 @@ namespace WorldModelBuilder
                         }
                         FillAreaPotential(ai, f);
                         FillAreaPhase(ai, f);
-                        if (f.role != ROLE_HEALER)
+                        if (f.DealsDamage())
                             f.soloDps = SoloDps(member, ai);
                     }
                     f.threatMod = member->ApplyTotalThreatModifier(1.0f, SPELL_SCHOOL_MASK_NORMAL);
-                    if (member->IsAlive() && f.role == ROLE_HEALER)
+                    if (member->IsAlive() && f.HealsTeam())
                     {
                         f.healRates = HealCapacity::Rates(ai);
                         f.healThreat = HealThreat(member, f.healRates);
                     }
                     else if (member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
                         f.spareHealRates = HealCapacity::Rates(ai);
-                    else if (!member->IsAlive() && f.selfRes && f.role == ROLE_HEALER)
+                    else if (!member->IsAlive() && f.selfRes && f.HealsTeam())
                         f.spareHealRates = HealCapacity::Rates(ai);     // its heals once it rises
                     for (RaidTargetIcon mark : ai->m_marksToFocus)
                     {

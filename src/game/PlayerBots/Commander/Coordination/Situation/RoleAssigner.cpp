@@ -91,18 +91,6 @@ namespace Commander
         BuildCoverage(world, plan);
     }
 
-    uint8 RoleAssigner::FunctionsOf(uint8 role)
-    {
-        switch (role)
-        {
-            case ROLE_TANK:      return FUNCTION_HOLD | FUNCTION_DAMAGE;
-            case ROLE_MELEE_DPS:
-            case ROLE_RANGE_DPS: return FUNCTION_DAMAGE;
-            case ROLE_HEALER:    return FUNCTION_HEAL;
-            default:             return 0;
-        }
-    }
-
     void RoleAssigner::BuildCoverage(WorldModel const& world, TeamPlan& plan)
     {
         CoveragePlan& cover = plan.coverage;
@@ -125,7 +113,7 @@ namespace Commander
                 continue;
             MemberCover c;
             c.member = m.guid;
-            c.functions = FunctionsOf(roleOf(m));
+            c.functions = RoleFunctions(roleOf(m));
             covered |= c.functions;
             cover.members.push_back(c);
             bots.push_back(m.isBot ? &m : nullptr);

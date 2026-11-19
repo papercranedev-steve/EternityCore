@@ -439,7 +439,7 @@ namespace FightLoad
         {
             for (PartyMemberFacts const& m : world.party)
             {
-                if (!m.isBot || m.isPet || m.role != ROLE_HEALER || !m.CanAct() || m.healRates.empty())
+                if (!m.HealsTeam() || !m.CanAct() || m.healRates.empty())
                     continue;
                 Healer h;
                 h.rates = m.healRates;

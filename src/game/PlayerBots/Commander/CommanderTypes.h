@@ -8,11 +8,35 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "SharedDefines.h"
 
 class SpellEntry;
 
 namespace Commander
 {
+    // What a member does for the team (doc .kiro/docs/2026-11-19-any-size-team.md): switches,
+    // not shares. Its role brings some (RoleFunctions); TeamPlan::coverage adds the ones nobody
+    // in the team has (RoleAssigner); PartyMemberFacts::functions holds both.
+    enum TeamFunction : uint8
+    {
+        FUNCTION_HOLD   = 0x01,     // the enemies hit it (a tank)
+        FUNCTION_HEAL   = 0x02,     // keeps the team alive
+        FUNCTION_DAMAGE = 0x04,     // kills the enemies
+    };
+
+    // The functions a role brings by itself.
+    inline uint8 RoleFunctions(uint8 role)
+    {
+        switch (role)
+        {
+            case ROLE_TANK:      return FUNCTION_HOLD | FUNCTION_DAMAGE;
+            case ROLE_MELEE_DPS:
+            case ROLE_RANGE_DPS: return FUNCTION_DAMAGE;
+            case ROLE_HEALER:    return FUNCTION_HEAL;
+            default:             return 0;
+        }
+    }
+
     // Lower value wins. A higher tier with any proposal hides all lower tiers.
     enum class ProposalTier : uint8
     {

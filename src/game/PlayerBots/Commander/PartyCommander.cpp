@@ -298,7 +298,7 @@ namespace Commander
     {
         WorldModel previous;
         previous.enemies = std::move(m_world.enemies);
-        WorldModelBuilder::RefreshCombat(bot, m_world);
+        WorldModelBuilder::RefreshCombat(bot, m_world, m_plan.coverage);
         m_threatHistory.Annotate(m_world, previous, nowMs);
         m_combatRates.Annotate(m_world, nowMs);
         m_leaderRun.Annotate(m_world, nowMs);

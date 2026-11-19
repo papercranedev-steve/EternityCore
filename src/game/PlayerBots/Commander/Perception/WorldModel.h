@@ -11,6 +11,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "RoleCapability.h"
+#include "Commander/CommanderTypes.h"
 #include <algorithm>
 #include <limits>
 #include <memory>
@@ -561,6 +562,11 @@ namespace Commander
         // RoleCapability (tank only while no bot tanks), see Perception/Tanks.h. Pets: 0.
         uint8 role = 0;
         bool roleLocked = false;    // chosen by the user (bot or player); the "roles" assigner leaves it
+        // TeamFunction bits (CommanderTypes.h): RoleFunctions(role), the role now (a stand-in's
+        // too), plus what TeamPlan::coverage added because nobody else in the team does it (the
+        // last RoleAssigner result: changes between fights only). Pets: 0. Read HealsTeam and
+        // DealsDamage, not the role, to count who heals and who deals damage.
+        uint8 functions = 0;
         RoleCapability cap;         // what this member can do (players and bots, not pets)
         uint8 classId = 0;
         float healthPct = 0.0f;
@@ -747,6 +753,12 @@ namespace Commander
         std::vector<CastFailureFacts> castFailures;
 
         bool CanAct() const { return alive && !controlled; }
+        // A bot that heals the team: a healer, or given the heal function (nobody else heals).
+        // Players are not counted (their heals are a guess: spareHealRates).
+        bool HealsTeam() const { return isBot && !isPet && (functions & FUNCTION_HEAL); }
+        // Deals damage for the team: players always, bots with the damage function (every role
+        // but healer; a healer when nobody else deals damage).
+        bool DealsDamage() const { return !isPet && (!isBot || (functions & FUNCTION_DAMAGE)); }
         bool UsesMana() const { return maxMana > 0; }
         // Keeps failing to cast `spellId` on `target` (CAST_FAILING_MS, CAST_FAILING_TRIES).
         bool IsFailingCast(uint32 spellId, ObjectGuid target) const
@@ -1112,8 +1124,10 @@ namespace Commander
         float lastFightDps = 0.0f;
         uint32 lastFightDealers = 0;
         float enemyHealth = 0.0f;       // current health of all enemies
-        uint32 healers = 0;             // healer-role bots that can act (alive, not controlled)
-        uint32 damageDealers = 0;       // members that can act and are not healers (tanks included)
+        // Members that can act (alive, not controlled) by function, not by role: a lone healer
+        // counts in both (PartyMemberFacts::HealsTeam, DealsDamage).
+        uint32 healers = 0;             // bots that heal the team
+        uint32 damageDealers = 0;       // members that deal damage (tanks and players included)
     };
 
     // The leader running away from the party's fight (Perception/Spatial/LeaderRun.h).
