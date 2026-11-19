@@ -107,11 +107,7 @@ namespace Companions
 
                 // Done: in its history. Abilities with what they teach and give (totems); gear
                 // chains without their items (long since replaced or sold).
-                BotShared::QuestGrant::MarkChainRewarded(bot, steps.back());
-                if (chain->kind == Chains::Kind::Ability)
-                    for (Quest const* step : steps)
-                        if (Abilities::AbilityOf(step->GetQuestId()))
-                            BotShared::QuestGrant::GiveRewards(bot, step);
+                Chains::GrantDone(bot, *chain);
                 ++result.done;
             }
 

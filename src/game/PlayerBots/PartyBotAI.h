@@ -36,6 +36,7 @@
 #include "Life/Errands/Trip/TrainingPlanner.h"
 #include "Companions/RewardChoice.h"
 #include "Companions/ClassQuests/MirrorSync.h"
+#include "Companions/ClassQuests/ClassQuestFlow.h"
 
 class PartyBotAI : public TeamBotAI
 {
@@ -125,6 +126,8 @@ public:
     // The quest of this bot the leader follows in its quest log (Companions/ClassQuests/MirrorSync.h).
     // Set by the class quest flow (and `.partybot mirror follow`).
     Companions::MirrorSync::Link m_mirrorLink;
+    // A companion's class quest asks (Companions/ClassQuests/ClassQuestFlow.h).
+    Companions::ClassQuestFlow::State m_classQuestFlow;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
     // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.

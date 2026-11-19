@@ -17,6 +17,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,7 +46,12 @@ namespace Companions
         // A temporary bot that acts as a companion for a dev console test scenario (MarkTemporary):
         // in memory only, nothing about it is written to the database.
         bool temporary = false;
+        // 0..MAX_AFFINITY: what the player did for it (class quests, design doc 2026-11-18 §6).
+        // Through Get/AddAffinity only (map threads change it).
+        uint32 affinity = 0;
     };
+
+    uint32 const MAX_AFFINITY = 100;
 
     class CompanionMgr
     {
@@ -65,6 +71,11 @@ namespace Companions
         RewardMode GetRewardMode(uint32 charGuid) const;
         // World thread (a command, later the affinity system); stored at once.
         void SetRewardMode(uint32 charGuid, RewardMode mode);
+
+        // Any thread. Add: capped at MAX_AFFINITY, stored at once (not for temporary companions);
+        // returns the new value (0: not a companion).
+        uint32 GetAffinity(uint32 charGuid) const;
+        uint32 AddAffinity(uint32 charGuid, uint32 points, char const* reason);
 
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.
@@ -114,6 +125,7 @@ namespace Companions
         std::unordered_map<uint32, CompanionInfo> m_companions;
         std::vector<PendingLogin> m_pending;
         std::vector<uint32> m_pastQuestsPending;    // char guids, see DecidePastQuestsOfOnline
+        mutable std::mutex m_affinityLock;
     };
 }
 

@@ -326,5 +326,18 @@ namespace BotShared
         {
             return player && player->GetQuestRewardStatus(chain.id);
         }
+
+        bool GrantDone(Player* player, Chain const& chain)
+        {
+            std::vector<Quest const*> const steps = StepsFor(player, chain);
+            if (steps.empty())
+                return false;
+            QuestGrant::MarkChainRewarded(player, steps.back());
+            if (chain.kind == Kind::Ability)
+                for (Quest const* step : steps)
+                    if (ClassQuestAbilities::AbilityOf(step->GetQuestId()))
+                        QuestGrant::GiveRewards(player, step);
+            return true;
+        }
     }
 }

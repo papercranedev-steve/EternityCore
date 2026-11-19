@@ -15,6 +15,7 @@ namespace Requests
             // (the turn-in waits QuestTurnIn::CHOICE_WAIT_MS: the popup closes before it)
             { Intent::RewardChoice, "reward",    25 * SEC,  0,          0 },
             { Intent::Rendezvous,   "meet",      60 * SEC,  0,          0 },
+            { Intent::ClassQuest,   "classquest", 30 * SEC, 0,          0 },
         };
     }
 

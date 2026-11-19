@@ -57,8 +57,21 @@ namespace Companions
             " `recruited_at` INT UNSIGNED NOT NULL DEFAULT 0,"
             " `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = picks quest rewards itself, 1 = the player picks',"
             " `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = class quests done before recruiting are decided (ClassQuests/PastQuests)',"
+            " `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..100, what the player did for it (class quests)',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
+
+        // Class quest asks (ClassQuests/ClassQuestFlow), one row per companion and chain.
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_soulbot_request` ("
+            " `char_guid` INT UNSIGNED NOT NULL,"
+            " `chain_id` INT UNSIGNED NOT NULL COMMENT 'last quest of the class quest chain (Shared/ClassQuestChains)',"
+            " `state` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 waiting, 1 active, 2 exhausted, 3 done, 4 dropped',"
+            " `asks_left` TINYINT UNSIGNED NOT NULL DEFAULT 3,"
+            " `declined` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+            " `helped` TINYINT UNSIGNED NOT NULL DEFAULT 0,"
+            " PRIMARY KEY (`char_guid`, `chain_id`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: class quest asks and their outcome'");
 
         std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_companion'"));
         if (!exists)
@@ -72,6 +85,9 @@ namespace Companions
         std::unique_ptr<QueryResult> pastQuests(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'past_quests_decided'"));
         if (!pastQuests)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `reward_mode`");
+        std::unique_ptr<QueryResult> affinity(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'affinity'"));
+        if (!affinity)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `past_quests_decided`");
         return true;
     }
 
@@ -95,7 +111,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -110,6 +126,7 @@ namespace Companions
                 info.rewardMode = f[4].GetUInt8() == uint8(RewardMode::AskPlayer) ? RewardMode::AskPlayer : RewardMode::Auto;
                 if (!f[5].GetUInt8())
                     m_pastQuestsPending.push_back(info.charGuid);
+                info.affinity = f[6].GetUInt32();
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -192,6 +209,27 @@ namespace Companions
         return info ? info->rewardMode : RewardMode::Auto;
     }
 
+    uint32 CompanionMgr::GetAffinity(uint32 charGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        CompanionInfo const* info = Find(charGuid);
+        return info ? info->affinity : 0;
+    }
+
+    uint32 CompanionMgr::AddAffinity(uint32 charGuid, uint32 points, char const* reason)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end())
+            return 0;
+        CompanionInfo& info = itr->second;
+        info.affinity = std::min<uint32>(MAX_AFFINITY, info.affinity + points);
+        if (!info.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `affinity` = %u WHERE `char_guid` = %u", info.affinity, charGuid);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u: affinity +%u (%s) = %u.", charGuid, points, reason ? reason : "", info.affinity);
+        return info.affinity;
+    }
+
     void CompanionMgr::SetRewardMode(uint32 charGuid, RewardMode mode)
     {
         auto itr = m_companions.find(charGuid);
@@ -205,7 +243,8 @@ namespace Companions
 
     bool CompanionMgr::MarkTemporary(Player* bot, Player* recruiter, std::vector<std::string> tags)
     {
-        if (!bot || !recruiter || !bot->IsBot() || !bot->IsSavingDisabled() || recruiter->IsBot())
+        // (the recruiter may be the headless dev console character, a bot session itself)
+        if (!bot || !recruiter || !bot->IsBot() || !bot->IsSavingDisabled() || bot == recruiter)
             return false;
         uint32 const guid = bot->GetGUIDLow();
         if (IsCompanion(guid))

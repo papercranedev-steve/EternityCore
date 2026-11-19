@@ -67,6 +67,11 @@ namespace BotShared
 
         // Its last quest is rewarded.
         bool IsDone(Player const* player, Chain const& chain);
+
+        // The chain counts as done without doing it (Shared/QuestGrant): its quests are rewarded;
+        // an ability chain also teaches and gives what its ability steps do (totems), a gear chain
+        // gives no items. False: the chain is not for this player.
+        bool GrantDone(Player* player, Chain const& chain);
     }
 }
 

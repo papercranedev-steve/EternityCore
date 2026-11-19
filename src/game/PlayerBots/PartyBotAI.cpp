@@ -136,6 +136,7 @@ void PartyBotAI::StopErrands()
     Life::NpcVisit::Stop(me, m_trainerVisit);
     Life::TownTrip::Stop(me, m_townTrip);
     Life::CraftRun::Stop(me, m_craftRun);
+    Companions::ClassQuestFlow::Stop(m_classQuestFlow);
 }
 
 bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
@@ -543,8 +544,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!pLeader->IsInWorld())
         return;
 
-    // The leader's copy of this bot's quest (events: the class quest flow's, stage C4).
-    Companions::MirrorSync::Update(me, pLeader, m_mirrorLink);
+    // The leader's copy of this bot's quest; what happens to it is the class quest flow's.
+    {
+        Companions::MirrorSync::Event const mirrorEvent = Companions::MirrorSync::Update(me, pLeader, m_mirrorLink);
+        if (mirrorEvent != Companions::MirrorSync::Event::None)
+            Companions::ClassQuestFlow::OnMirrorEvent(me, pLeader, m_classQuestFlow, m_mirrorLink, mirrorEvent, PersonalityTags());
+    }
 
     sCommanderMgr.OnBotUpdate(this);
 
@@ -656,6 +661,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             StopErrands();
         else
         {
+            // First the class quest question of a visit to a capital (it asks while following,
+            // and before the town trip's question: one open question per bot).
+            Companions::ClassQuestFlow::Update(me, pLeader, m_classQuestFlow, m_mirrorLink, PersonalityTags());
+            if (Companions::ClassQuestFlow::TakeSpellsChanged(m_classQuestFlow))
+                m_resetSpellData = true;
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||

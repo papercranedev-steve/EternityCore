@@ -21,6 +21,8 @@ namespace Requests
         Errand,         // "wait for me, I go to the vendor / trainer" (Life/Errands/TownTrip)
         RewardChoice,   // "which reward should I take?" (Companions/RewardChoice)
         Rendezvous,     // "done: shall I come to you, or wait at the gate?" (Life/Errands/TownTrip)
+        ClassQuest,     // "will you help me with my class quest?" (Companions/ClassQuests/ClassQuestFlow;
+                        // it counts its asks itself, no quiet time here)
     };
 
     struct IntentDef

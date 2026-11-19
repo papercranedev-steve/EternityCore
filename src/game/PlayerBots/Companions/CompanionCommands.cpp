@@ -12,7 +12,8 @@
  *                    remove <id>
  *                    follow <bot> <questId>   dev: your log follows a bot's quest (placeholder,
  *                    unfollow <bot>                then its mirror; ClassQuests/MirrorSync)
- *   .partybot classquests [bot]               dev: the class quest chains for a bot (done or not)
+ *   .partybot classquests [bot]               dev: the class quest chains for a bot (done or not, asks)
+ *   .partybot classquests visit [bot]         dev: counts as a capital visit now (ClassQuestFlow)
  *   .partybot classquests class <classId>     dev: all chains of a class (Shared/ClassQuestChains)
  */
 
@@ -259,14 +260,37 @@ bool ChatHandler::HandlePartyBotClassQuestsCommand(char* args)
         return true;
     }
 
+    // visit <bot>: a capital visit now, wherever the leader is (the next ask comes at once)
+    bool const visit = args && strncmp(args, "visit", 5) == 0;
+    if (visit)
+        ExtractLiteralArg(&args);
+
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
     if (!pBot)
         return false;
+    PartyBotAI* ai = dynamic_cast<PartyBotAI*>(pBot->AI());
+    namespace Flow = Companions::ClassQuestFlow;
+    if (visit)
+    {
+        ai->m_classQuestFlow.forceVisit = true;
+        ai->m_classQuestFlow.askedThisVisit = false;
+        PSendSysMessage("PBOK;%s;classquests;visit", name.c_str());
+        return true;
+    }
+
     std::vector<Chains::Chain const*> const chains = Chains::ChainsFor(pBot);
     for (Chains::Chain const* chain : chains)
-        line(*chain, Chains::IsDone(pBot, *chain) ? "(done)" :
-            pBot->GetLevel() >= chain->minLevel ? "(to do)" : "(later)");
-    PSendSysMessage("%u chains for %s.", uint32(chains.size()), name.c_str());
+    {
+        Flow::Record const r = Flow::RecordOf(ai->m_classQuestFlow, chain->id);
+        std::string const state = std::string(Chains::IsDone(pBot, *chain) ? "(done" :
+            pBot->GetLevel() >= chain->minLevel ? "(to do" : "(later") + ", " + Flow::StateName(r.state) +
+            ", asks " + std::to_string(r.asksLeft) + (r.declined ? ", declined" : "") + (r.helped ? ", helped" : "") + ")";
+        line(*chain, state.c_str());
+    }
+    Flow::State const& flow = ai->m_classQuestFlow;
+    PSendSysMessage("%u chains for %s, affinity %u. Flow: loaded %u, leader in capital %u, asked this visit %u, request #%u (chain %u).",
+        uint32(chains.size()), name.c_str(), sCompanionMgr.GetAffinity(pBot->GetGUIDLow()),
+        uint32(flow.loaded), uint32(flow.leaderInCapital), uint32(flow.askedThisVisit), flow.requestId, flow.askingChain);
     return true;
 }
