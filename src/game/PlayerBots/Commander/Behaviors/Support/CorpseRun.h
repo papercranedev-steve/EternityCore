@@ -22,7 +22,9 @@
  *   - then: a corpse in a dungeon -> the ghost is put at the dungeon's entrance (the area
  *     trigger's destination) and the engine raises it there (Player::TeleportTo, as a player
  *     walking in); a corpse outside -> the ghost is put at its corpse and reclaims it once the
- *     reclaim delay is over (WorldSession::HandleReclaimCorpseOpcode); no corpse left -> it
+ *     reclaim delay is over (WorldSession::HandleReclaimCorpseOpcode), at a spot of the reclaim
+ *     circle outside every idle enemy's aggro range + RISE_AGGRO_MARGIN, as a player picks it
+ *     (none: it waits up to RISE_IDLE_WAIT_MS for a patrol, then rises); no corpse left -> it
  *     rises where it is;
  *   - back alive it walks to the leader (Behaviors/Movement/Arrival.h).
  *
@@ -71,6 +73,11 @@ namespace Commander
         // at most RISE_IDLE_WAIT_MS; then the spirit is released (the corpse run instead).
         constexpr float RISE_AGGRO_MARGIN = 5.0f;
         constexpr uint32 RISE_IDLE_WAIT_MS = 90 * 1000;
+        // Reclaiming: idle enemies this far beyond the reclaim radius count; the rise spots
+        // tried around the body (rings in yards, points per ring), all inside the radius.
+        constexpr float RISE_SCAN_EXTRA_YD = 30.0f;
+        constexpr float RISE_SPOT_RINGS[] = { 10.0f, 20.0f, 30.0f };
+        constexpr uint32 RISE_SPOT_ANGLES = 12;
         constexpr uint32 MIN_TRAVEL_SEC = 10;
         constexpr uint32 UNKNOWN_TRAVEL_SEC = 120;
 

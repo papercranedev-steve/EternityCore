@@ -15,6 +15,7 @@
 #include "SQLStorages.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cmath>
 #include <ctime>
 #include <list>
 
@@ -171,6 +172,56 @@ namespace CorpseRun
             me->TeleportTo(Here(corpse));
         }
 
+        // Would a bot alive at (x, y, z) be in an idle enemy's aggro range (+ RISE_AGGRO_MARGIN)?
+        bool InIdleAggro(Player const* me, std::list<Unit*> const& enemies, float x, float y, float z)
+        {
+            for (Unit const* enemy : enemies)
+            {
+                Creature const* c = enemy->ToCreature();
+                if (!c || !c->IsAlive() || c->IsInCombat() || c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
+                    continue;
+                float const reach = c->GetAttackDistance(me) + RISE_AGGRO_MARGIN;
+                float const dx = c->GetPositionX() - x, dy = c->GetPositionY() - y, dz = c->GetPositionZ() - z;
+                if (dx * dx + dy * dy + dz * dz <= reach * reach)
+                    return true;
+            }
+            return false;
+        }
+
+        // Where to rise, as a player picks his spot inside the reclaim circle: here if no idle
+        // enemy would see it, else the nearest such point around the body (on the ground, in its
+        // line of sight). False: none (wait for a patrol to pass).
+        bool FindRiseSpot(Player* me, Corpse const* corpse, bool& here, float& outX, float& outY, float& outZ)
+        {
+            std::list<Unit*> enemies;
+            me->GetEnemyListInRadiusAround(me, CORPSE_RECLAIM_RADIUS + RISE_SCAN_EXTRA_YD, enemies);
+            here = !InIdleAggro(me, enemies, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ());
+            if (here)
+                return true;
+
+            Map* map = me->GetMap();
+            float const cx = corpse->GetPositionX(), cy = corpse->GetPositionY(), cz = corpse->GetPositionZ();
+            for (float dist : RISE_SPOT_RINGS)
+            {
+                for (uint32 i = 0; i < RISE_SPOT_ANGLES; ++i)
+                {
+                    float const angle = float(i) * 2.0f * float(M_PI) / float(RISE_SPOT_ANGLES);
+                    float const x = cx + std::cos(angle) * dist;
+                    float const y = cy + std::sin(angle) * dist;
+                    float const z = map->GetHeight(x, y, cz + 5.0f);
+                    if (z <= INVALID_HEIGHT || std::fabs(z - cz) > 5.0f ||
+                        !map->isInLineOfSight(cx, cy, cz + 2.0f, x, y, z + 2.0f) ||
+                        InIdleAggro(me, enemies, x, y, z))
+                        continue;
+                    outX = x;
+                    outY = y;
+                    outZ = z;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void Reclaim(Player* me, CorpseRunState& state, ArrivalState& arrival, Corpse const* corpse, uint32 nowMs)
         {
             if (!corpse)
@@ -186,6 +237,26 @@ namespace CorpseRun
             {
                 me->TeleportTo(Here(corpse));
                 return;
+            }
+
+            // Not next to the creature that killed it: a level 2 warrior rose at half health
+            // beside the wolf over his body and died again, over and over.
+            bool here = false;
+            float x = 0.0f, y = 0.0f, z = 0.0f;
+            if (FindRiseSpot(me, corpse, here, x, y, z))
+            {
+                if (!here)
+                {
+                    me->TeleportTo(WorldLocation(me->GetMapId(), x, y, z, me->GetAngle(corpse)));
+                    return;
+                }
+            }
+            else
+            {
+                if (!state.idleSinceMs)
+                    state.idleSinceMs = nowMs;
+                if (WorldTimer::getMSTimeDiff(state.idleSinceMs, nowMs) < RISE_IDLE_WAIT_MS)
+                    return;
             }
             Rise(me);
             state = CorpseRunState();

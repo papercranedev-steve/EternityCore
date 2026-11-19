@@ -4,6 +4,7 @@
 #include "PlayerBotMgr.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
+#include "MapManager.h"
 #include "Config/Config.h"
 #include "Log.h"
 #include "Utilities/Random.h"
@@ -184,6 +185,11 @@ namespace Population
         if (m_observers.Update(m_nowMs))
         {
             // Someone is at the character screen or loading in: fill his surroundings now.
+            // A continent nobody has entered since the start does not exist yet (the first
+            // player creates it): without it the directors find no spot and nothing is placed.
+            for (Observer const& o : m_observers.All())
+                if (o.arriving && (o.mapId == 0 || o.mapId == 1))
+                    sMapMgr.CreateWorldMap(o.mapId);
             m_roster.ForceUpdate();
             m_city.ForceTick();
         }

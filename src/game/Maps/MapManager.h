@@ -89,6 +89,9 @@ class MapManager : public MaNGOS::Singleton<MapManager, MaNGOS::ClassLevelLockab
 
         uint32 GetContinentInstanceId(uint32 mapId, float x, float y, bool* transitionArea = nullptr);
         Map* CreateMap(uint32, WorldObject const* obj);
+        // A non-instanceable map (continent, Deeprun Tram, ...) with nobody on it yet, e.g. to
+        // place population bots before the first player enters it. Null for instanceable maps.
+        Map* CreateWorldMap(uint32 id, uint32 instanceId = 0);
         Map* CreateBgMap(uint32 mapid, BattleGround* bg);
         Map* CreateTestMap(uint32 mapid, bool instanced, float posX, float posY);
         void DeleteTestMap(Map* map);

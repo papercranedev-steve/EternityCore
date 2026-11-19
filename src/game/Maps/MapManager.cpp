@@ -130,27 +130,36 @@ Map* MapManager::CreateMap(uint32 id, WorldObject const* obj)
             m = CreateInstance(id, (Player*)obj);
     }
     else
+        m = CreateWorldMap(id, obj->GetInstanceId());
+
+    return m;
+}
+
+Map* MapManager::CreateWorldMap(uint32 id, uint32 instanceId)
+{
+    Guard _guard(*this);
+
+    MapEntry const* entry = sMapStorage.LookupEntry<MapEntry>(id);
+    if (!entry || entry->Instanceable())
+        return nullptr;
+
+    //create regular non-instanceable map
+    if (instanceId >= RESERVED_INSTANCES_LAST)
+        instanceId = 0;
+    if (id > 1) // Not a continent => Never instanciate this (deeprun tram, etc ...)
+        instanceId = 0;
+    Map* m = FindMap(id, instanceId);
+    if (m == nullptr)
     {
-        //create regular non-instanceable map
-        uint32 instanceId = obj->GetInstanceId();
-        if (instanceId >= RESERVED_INSTANCES_LAST)
-            instanceId = 0;
-        if (id > 1) // Not a continent => Never instanciate this (deeprun tram, etc ...)
-            instanceId = 0;
-        m = FindMap(id, instanceId);
-        if (m == nullptr)
-        {
-            m = new WorldMap(id, i_gridCleanUpDelay, instanceId);
-            //add map into container
-            i_maps[MapID(id, instanceId)] = m;
+        m = new WorldMap(id, i_gridCleanUpDelay, instanceId);
+        //add map into container
+        i_maps[MapID(id, instanceId)] = m;
 
-            // non-instanceable maps always expected have saved state
-            m->CreateInstanceData(true);
-            m->SpawnActiveObjects();
-            sZoneScriptMgr.MapLoaded(id, m);
-        }
+        // non-instanceable maps always expected have saved state
+        m->CreateInstanceData(true);
+        m->SpawnActiveObjects();
+        sZoneScriptMgr.MapLoaded(id, m);
     }
-
     return m;
 }
 

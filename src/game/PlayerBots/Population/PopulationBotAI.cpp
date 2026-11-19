@@ -6,6 +6,7 @@
 #include "Commander/Team.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/Inventory.h"
+#include "RoleCapability.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
 #include "Group.h"
@@ -190,6 +191,10 @@ namespace Population
         // Below the premade specs (19) a population bot knows no class spell: the trainer's
         // lessons for its level, free (what it learned before we met it).
         BotShared::ClassTraining::LearnAvailable(me, false);
+        // Alone, before the first fight: a healer gets no target (TargetAssigner) and roles
+        // change only between fights (RoleAssigner), so a druid attacked right after login
+        // healed itself under a wolf for minutes. The Commander gives a team of one this role too.
+        m_role = RoleCapabilities::Assess(me).BestSolo();
         ResetSpellData();
         PopulateSpellData();
         m_rotationCreated = false;
