@@ -380,6 +380,23 @@ namespace Companions
             state.askedThisVisit = false;
         }
 
+        std::vector<uint32> WantedPickUps(Player const* me, State const& state)
+        {
+            std::vector<uint32> wanted;
+            if (!me || !state.loaded)
+                return wanted;
+            for (auto const& itr : state.records)
+            {
+                if (itr.second.state != RecordState::Active)
+                    continue;
+                Chains::Chain const* chain = Chains::Find(itr.first);
+                Quest const* step = chain ? NextStep(me, *chain) : nullptr;
+                if (step && !me->IsCurrentQuest(step->GetQuestId()))
+                    wanted.push_back(step->GetQuestId());
+            }
+            return wanted;
+        }
+
         bool TakeSpellsChanged(State& state)
         {
             bool const changed = state.spellsChanged;

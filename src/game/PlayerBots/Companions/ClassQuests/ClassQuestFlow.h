@@ -72,6 +72,10 @@ namespace Companions
 
         bool TakeSpellsChanged(State& state);
 
+        // The quests the bot should take from their givers now: the next step of its Active chain
+        // when it is not in its log yet (Life/Errands/QuestPickUp). Empty: none.
+        std::vector<uint32> WantedPickUps(Player const* me, State const& state);
+
         // The record of a chain (a default one when there is none).
         Record RecordOf(State const& state, uint32 chainId);
         char const* StateName(RecordState state);

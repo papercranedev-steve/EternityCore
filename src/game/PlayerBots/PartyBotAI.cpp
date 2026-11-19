@@ -132,6 +132,7 @@ void PartyBotAI::StopErrands()
     Life::LootRun::Stop(me, m_lootRun);
     Life::QuestObjectRun::Stop(me, m_questObjectRun);
     Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
+    Life::QuestPickUp::Stop(me, m_questPickUp);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
     Life::TownTrip::Stop(me, m_townTrip);
@@ -669,6 +670,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
+                Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
                 Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags()) ||

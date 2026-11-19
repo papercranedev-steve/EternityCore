@@ -37,6 +37,7 @@
 #include "Companions/RewardChoice.h"
 #include "Companions/ClassQuests/MirrorSync.h"
 #include "Companions/ClassQuests/ClassQuestFlow.h"
+#include "Life/Errands/QuestPickUp.h"
 
 class PartyBotAI : public TeamBotAI
 {
@@ -128,6 +129,9 @@ public:
     Companions::MirrorSync::Link m_mirrorLink;
     // A companion's class quest asks (Companions/ClassQuests/ClassQuestFlow.h).
     Companions::ClassQuestFlow::State m_classQuestFlow;
+    // Out of combat: takes the class quest steps the flow wants from their givers near the leader
+    // (Life/Errands/QuestPickUp.h).
+    Life::QuestPickUpState m_questPickUp;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the
     // bot has been trying without a success (per bot, whatever the corpse; empty guid = no window).
     // Longer than a 10 s Resurrection cast, so one slow cast that lands is not cut off.
