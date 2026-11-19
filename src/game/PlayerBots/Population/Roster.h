@@ -18,6 +18,7 @@
 #include <random>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class Player;
@@ -108,6 +109,18 @@ namespace Population
 
         // Picks a member that is not online, not cooling down and not retired; marks it in use.
         bool Pick(RosterQuery const& query, uint32 nowMs, RosterPick& out);
+
+        // Strangers (user 2026-11-19: a level-60 character in a start area still sees a full
+        // start area): when no member fits, someone new at the query's levels and team, generated
+        // like a member but never stored. RosterPick::memberId is a stranger id (IsStranger);
+        // Release forgets him. Without a level window: at most the highest owner level of the team.
+        bool MakeStranger(RosterQuery const& query, Identity const& identity, std::set<std::string>& reserved, RosterPick& out);
+        static bool IsStranger(uint32 memberId) { return memberId >= STRANGER_ID_BASE; }
+        uint32 GetStrangerCount() const { return uint32(m_strangers.size()); }
+        // A real player invited the stranger: he joins the recruiter's cohort (stored now, with
+        // his name, looks and class), so he can be recruited like any member. Returns the new
+        // member id, 0 on failure (no cohort, unknown stranger).
+        uint32 Adopt(uint32 strangerId, uint32 recruiterGuid);
         void SetSessionGuid(uint32 memberId, uint32 guid);
         // Recruited as a companion: the member is a real character from now on.
         void SetCharGuid(uint32 memberId, uint32 charGuid);
@@ -154,6 +167,10 @@ namespace Population
         uint32 m_nextUpdateMs = 0;
         std::vector<Cohort> m_cohorts;
         std::vector<RosterMember> m_members;
+
+        static constexpr uint32 STRANGER_ID_BASE = 0x40000000;
+        std::unordered_map<uint32, RosterMember> m_strangers;   // online strangers by stranger id
+        uint32 m_nextStrangerId = STRANGER_ID_BASE;
     };
 }
 

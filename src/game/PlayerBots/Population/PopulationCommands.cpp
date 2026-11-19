@@ -165,7 +165,8 @@ namespace
 
             handler->PSendSysMessage("%s %u %s %s [%s/%s]%s %s, %s, %u min left%s",
                 b.name.c_str(), b.level, Population::Identity::IsValidCombo(b.race, b.classId) ? RaceName(b.race) : "?",
-                ClassName(b.classId), kind, Population::GearTierName(b.tier), b.rosterId ? " roster" : "",
+                ClassName(b.classId), kind, Population::GearTierName(b.tier),
+                !b.rosterId ? "" : Population::Roster::IsStranger(b.rosterId) ? " stranger" : " roster",
                 b.online ? "online" : "loading", where, b.leftMs / (MINUTE * IN_MILLISECONDS),
                 b.removing ? " (leaving)" : "");
         }
@@ -181,8 +182,8 @@ namespace
         }
 
         std::vector<Population::RosterCohortStats> const stats = roster.GetStats();
-        handler->PSendSysMessage("Roster %s, seed %llu, %u cohorts.", roster.IsActive() ? "on" : "off (PopBot.Roster.Enable)",
-            (unsigned long long)roster.GetSeed(), uint32(stats.size()));
+        handler->PSendSysMessage("Roster %s, seed %llu, %u cohorts, %u strangers online.", roster.IsActive() ? "on" : "off (PopBot.Roster.Enable)",
+            (unsigned long long)roster.GetSeed(), uint32(stats.size()), roster.GetStrangerCount());
         for (Population::RosterCohortStats const& s : stats)
         {
             handler->PSendSysMessage("#%u %s (%s)%s%s anchor %u: %u members, %u enemy faction, %u retired, %u online",

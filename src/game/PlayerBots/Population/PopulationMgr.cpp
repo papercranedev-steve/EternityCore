@@ -268,7 +268,17 @@ namespace Population
 
             Player* bot = OnlinePlayer(*r.handle);
             Player* recruiter = sObjectAccessor.FindPlayer(recruiterGuid);
-            if (!bot || !recruiter || !sCompanionMgr.Recruit(bot, recruiter, r.request.rosterId))
+            if (!bot || !recruiter)
+                continue;
+            // A stranger is kept from now on: he joins the recruiter's roster first.
+            if (Roster::IsStranger(r.request.rosterId))
+            {
+                uint32 const memberId = m_roster.Adopt(r.request.rosterId, recruiter->GetGUIDLow());
+                if (!memberId)
+                    continue;
+                r.request.rosterId = memberId;
+            }
+            if (!sCompanionMgr.Recruit(bot, recruiter, r.request.rosterId))
                 continue;
 
             // A real character now: the roster never spawns it again, the temporary bot leaves
@@ -401,12 +411,13 @@ namespace Population
         RosterPick pick;
         if (!m_roster.Pick(query, m_nowMs, pick))
         {
-            // A town is for everyone passing through: nobody at the place's levels, anyone.
-            if (request.kind != BotKind::Town || !query.minLevel)
-                return false;
-            query.minLevel = 0;
-            query.maxLevel = 0;
-            if (!m_roster.Pick(query, m_nowMs, pick))
+            // Nobody of the roster fits (user 2026-11-19: a level-60 character in Northshire still
+            // sees a full start area): a stranger at these levels, for this visit only.
+            std::set<std::string> reserved;
+            for (Record const& rec : m_bots)
+                reserved.insert(rec.name);
+            m_roster.AddNamesTo(reserved);
+            if (!m_roster.MakeStranger(query, m_identity, reserved, pick))
                 return false;
         }
 

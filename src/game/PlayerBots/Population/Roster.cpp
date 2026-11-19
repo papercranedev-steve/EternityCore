@@ -650,8 +650,112 @@ namespace Population
         return true;
     }
 
+    bool Roster::MakeStranger(RosterQuery const& query, Identity const& identity, std::set<std::string>& reserved, RosterPick& out)
+    {
+        if (!IsActive())
+            return false;
+
+        std::random_device device;
+        std::mt19937 rng(device());
+        RosterMember m;
+        bool made = false;
+        for (uint32 tries = 0; tries < 10 && !made; ++tries)
+        {
+            m = RosterMember();
+            made = GenerateMember(rng, query.team, identity, reserved, m) &&
+                uint32(Player::TeamForRace(m.race)) == query.team;
+            if (!made)
+                reserved.erase(m.name);
+        }
+        if (!made)
+            return false;
+
+        // The highest owner of the team (and his team's gear) bounds strangers without a window,
+        // like members: nobody far ahead of the players.
+        uint8 topLevel = 1;
+        uint32 gearCap = 0;
+        for (Cohort const& c : m_cohorts)
+        {
+            if (c.team != query.team || c.free)
+                continue;
+            topLevel = std::max(topLevel, c.maxLevel);
+            gearCap = std::max(gearCap, c.gearCap);
+        }
+        uint8 lo = query.minLevel, hi = query.maxLevel;
+        if (lo <= 1 && hi >= 60)
+        {
+            lo = 1;
+            hi = std::min<uint8>(60, uint8(topLevel + m_leadCap));
+        }
+        uint8 const level = uint8(urand(std::max<uint8>(lo, 1), std::max(lo, hi)));
+        m.stallLevel = level;
+        m.pace = 0.0f;
+        m.quitLevel = 0;
+        m.id = m_nextStrangerId++;
+        if (m_nextStrangerId < STRANGER_ID_BASE)
+            m_nextStrangerId = STRANGER_ID_BASE;
+        m.inUse = true;
+
+        out.memberId = m.id;
+        out.name = m.name;
+        out.race = m.race;
+        out.classId = m.classId;
+        out.level = level;
+        out.look = m.look;
+        out.sessionGuid = 0;
+        out.gear = Growth::Gear(m, level, gearCap);
+        out.money = Growth::Money(m, level);
+        m_strangers[m.id] = std::move(m);
+        return true;
+    }
+
+    uint32 Roster::Adopt(uint32 strangerId, uint32 recruiterGuid)
+    {
+        auto itr = m_strangers.find(strangerId);
+        Cohort const* cohort = FindOwnedCohort(recruiterGuid);
+        if (itr == m_strangers.end() || !cohort || !IsActive())
+            return 0;
+
+        RosterMember const m = itr->second;
+        std::string name = m.name;
+        CharacterDatabase.escape_string(name);
+        // His level stays where he was met (stall level: the roster never spawns him again anyway).
+        if (!CharacterDatabase.DirectPExecute(
+                "INSERT INTO `custom_popbot_member` (`cohort_id`, `name`, `race`, `class`, `gender`, `skin`, `face`,"
+                " `hair_style`, `hair_color`, `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`,"
+                " `temperament`, `created_at`) VALUES (%u, '%s', %u, %u, %u, %u, %u, %u, %u, %u, %u, 0, %u, 0, 0, %u, %u, %u)",
+                cohort->id, name.c_str(), m.race, m.classId, m.look.gender, m.look.skin, m.look.face, m.look.hairStyle,
+                m.look.hairColor, m.look.facialHair, m.homeZone, m.stallLevel, m.wealth, m.temperament, uint32(time(nullptr))))
+            return 0;
+
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
+            "SELECT `id` FROM `custom_popbot_member` WHERE `name` = '%s'", name.c_str()));
+        uint32 const memberId = result ? result->Fetch()[0].GetUInt32() : 0;
+        if (!memberId)
+            return 0;
+
+        uint32 const sessionGuid = m.sessionGuid;
+        m_strangers.erase(itr);
+        LoadMembers();      // also rolls his personality tags
+        if (RosterMember* member = FindMember(memberId))
+        {
+            member->inUse = true;
+            member->sessionGuid = sessionGuid;
+        }
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roster: stranger '%s' joined cohort %u as member %u.",
+            m.name.c_str(), cohort->id, memberId);
+        return memberId;
+    }
+
     void Roster::SetSessionGuid(uint32 memberId, uint32 guid)
     {
+        if (IsStranger(memberId))
+        {
+            auto itr = m_strangers.find(memberId);
+            if (itr != m_strangers.end())
+                itr->second.sessionGuid = guid;
+            return;
+        }
         if (RosterMember* m = FindMember(memberId))
             m->sessionGuid = guid;
     }
@@ -673,6 +777,11 @@ namespace Population
 
     void Roster::Release(uint32 memberId, uint32 nowMs)
     {
+        if (IsStranger(memberId))
+        {
+            m_strangers.erase(memberId);    // one-off: gone with his logout
+            return;
+        }
         if (RosterMember* m = FindMember(memberId))
         {
             m->inUse = false;
@@ -684,6 +793,8 @@ namespace Population
     {
         for (RosterMember const& m : m_members)
             names.insert(m.name);
+        for (auto const& s : m_strangers)
+            names.insert(s.second.name);
     }
 
     std::vector<RosterCohortStats> Roster::GetStats() const
