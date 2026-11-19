@@ -63,6 +63,7 @@ namespace Population
             case BotKind::Test:  return "test";
             case BotKind::City:  return "city";
             case BotKind::Field: return "field";
+            case BotKind::Town:  return "town";
         }
         return "?";
     }
@@ -87,6 +88,7 @@ namespace Population
             case CityRole::Mover:    return "mover";
             case CityRole::Showcase: return "showcase";
             case CityRole::Crafter:  return "crafter";
+            case CityRole::Sitter:   return "sitter";
         }
         return "?";
     }
@@ -118,6 +120,7 @@ namespace Population
         m_lifetimeMaxMs = maxMinutes * MINUTE * IN_MILLISECONDS;
 
         m_city.LoadConfig();
+        m_town.LoadConfig();
         m_field.LoadConfig();
         m_roster.LoadConfig();
         m_observers.LoadConfig();
@@ -133,14 +136,22 @@ namespace Population
     {
         m_identity.Load();
         m_points.Load();
-        m_city.LoadAnchors(m_points);
-        m_settlements.Load(m_points);
+        ReloadAnchors();
         m_roster.Load();
         // Members already online stay taken (queued requests get their member in SpawnNow).
         for (Record const& r : m_bots)
             if (r.request.rosterId && r.handle->alive)
                 m_roster.MarkInUse(r.request.rosterId);
         m_dataLoaded = true;
+    }
+
+    void PopulationMgr::ReloadAnchors()
+    {
+        m_city.LoadAnchors(m_points);
+        // Towns keep pointers into the settlements: both are rebuilt together. Town bots keep
+        // their settlement id (ids follow the same world data, stable between reloads).
+        m_settlements.Load(m_points);
+        m_town.LoadAnchors(m_settlements);
     }
 
     void PopulationMgr::EnsureDataLoaded()
@@ -207,6 +218,7 @@ namespace Population
         }
         m_roster.Update(m_nowMs, m_identity, m_observers);
         m_city.Update(*this, m_observers, m_nowMs);
+        m_town.Update(*this, m_observers, m_nowMs);
         m_field.Update(*this, m_observers, m_nowMs);
 
         // Prewarm requests (at the front) go out several per tick, the others one per PopBot.SpawnGapMs.
@@ -295,10 +307,10 @@ namespace Population
 
         // A player could see the spot: log in out of sight and walk there. No such place right
         // now: skip, the director asks again with another spot.
-        if (r.kind == BotKind::City && m_observers.CanSee(r.mapId, r.x, r.y, r.z))
+        if ((r.kind == BotKind::City || r.kind == BotKind::Town) && m_observers.CanSee(r.mapId, r.x, r.y, r.z))
         {
             Waypoint entrance;
-            if (!m_city.PickHiddenSpot(r.cityZone, r.x, r.y, r.z, m_observers, entrance))
+            if (!PickHiddenSpot(r, r.x, r.y, r.z, entrance))
                 return;
             r.hasEntrance = true;
             r.entranceX = entrance.x;
@@ -316,7 +328,7 @@ namespace Population
 
         std::string name;
         uint32 guid = 0;    // 0 = new guid
-        if ((r.kind == BotKind::City || r.kind == BotKind::Field) && m_roster.IsActive())
+        if (r.kind != BotKind::Test && m_roster.IsActive())
         {
             if (!TakeFromRoster(r, name, guid))
                 return;     // nobody free (at these levels): a little emptier here
@@ -367,6 +379,13 @@ namespace Population
         m_bots.push_back(std::move(rec));
     }
 
+    bool PopulationMgr::PickHiddenSpot(SpawnRequest const& request, float x, float y, float z, Waypoint& out) const
+    {
+        if (request.kind == BotKind::Town)
+            return m_town.PickHiddenSpot(request.settlementId, x, y, z, m_observers, out);
+        return m_city.PickHiddenSpot(request.cityZone, x, y, z, m_observers, out);
+    }
+
     bool PopulationMgr::TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid)
     {
         RosterQuery query;
@@ -381,7 +400,15 @@ namespace Population
 
         RosterPick pick;
         if (!m_roster.Pick(query, m_nowMs, pick))
-            return false;
+        {
+            // A town is for everyone passing through: nobody at the place's levels, anyone.
+            if (request.kind != BotKind::Town || !query.minLevel)
+                return false;
+            query.minLevel = 0;
+            query.maxLevel = 0;
+            if (!m_roster.Pick(query, m_nowMs, pick))
+                return false;
+        }
 
         request.rosterId = pick.memberId;
         request.race = pick.race;
@@ -411,7 +438,7 @@ namespace Population
     void PopulationMgr::Retire(Record& record)
     {
         Player* me = OnlinePlayer(*record.handle);
-        if (!me || record.request.kind != BotKind::City ||
+        if (!me || (record.request.kind != BotKind::City && record.request.kind != BotKind::Town) ||
             !m_observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
         {
             RequestRemoval(record);
@@ -420,7 +447,7 @@ namespace Population
 
         // In sight: walk somewhere nobody looks first (no such place: log out here, like a player).
         Waypoint spot;
-        if (!m_city.PickHiddenSpot(record.request.cityZone, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), m_observers, spot))
+        if (!PickHiddenSpot(record.request, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), spot))
         {
             RequestRemoval(record);
             return;
@@ -461,7 +488,7 @@ namespace Population
         return false;
     }
 
-    CityCounts PopulationMgr::CountCity(uint32 zone, size_t anchorCount) const
+    CityCounts PopulationMgr::CountPlace(PlaceKey place, size_t anchorCount) const
     {
         CityCounts counts;
         counts.anchorUse.assign(anchorCount, 0);
@@ -474,6 +501,7 @@ namespace Population
                 case CityRole::Showcase: ++counts.showcase; break;
                 case CityRole::Mover:    ++counts.mover; break;
                 case CityRole::Crafter:  ++counts.crafter; break;
+                case CityRole::Sitter:   ++counts.sitter; break;
                 default:                 ++counts.stand; break;
             }
             if (r.anchorIndex >= 0 && size_t(r.anchorIndex) < counts.anchorUse.size())
@@ -481,41 +509,41 @@ namespace Population
         };
 
         for (Record const& r : m_bots)
-            if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone)
+            if (!r.removing && place.Has(r.request))
                 add(r.request);
         for (SpawnRequest const& q : m_queue)
-            if (q.kind == BotKind::City && q.cityZone == zone)
+            if (place.Has(q))
                 add(q);
         return counts;
     }
 
-    void PopulationMgr::DespawnCity(uint32 zone)
+    void PopulationMgr::DespawnPlace(PlaceKey place)
     {
         m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(),
-            [zone](SpawnRequest const& q) { return q.kind == BotKind::City && q.cityZone == zone; }), m_queue.end());
+            [place](SpawnRequest const& q) { return place.Has(q); }), m_queue.end());
 
         for (Record& r : m_bots)
-            if ((!r.removing || r.leaveByMs) && r.request.kind == BotKind::City && r.request.cityZone == zone)
+            if ((!r.removing || r.leaveByMs) && place.Has(r.request))
                 RequestRemoval(r);
     }
 
-    bool PopulationMgr::DespawnOneCity(uint32 zone)
+    bool PopulationMgr::DespawnOnePlace(PlaceKey place)
     {
         // Drop a queued request first: nobody saw it yet.
         for (auto it = m_queue.rbegin(); it != m_queue.rend(); ++it)
         {
-            if (it->kind == BotKind::City && it->cityZone == zone)
+            if (place.Has(*it))
             {
                 m_queue.erase(std::next(it).base());
                 return true;
             }
         }
 
-        for (CityRole role : { CityRole::Stand, CityRole::Crafter, CityRole::Mover, CityRole::Showcase })
+        for (CityRole role : { CityRole::Stand, CityRole::Sitter, CityRole::Crafter, CityRole::Mover, CityRole::Showcase })
         {
             Record* oldest = nullptr;
             for (Record& r : m_bots)
-                if (!r.removing && r.request.kind == BotKind::City && r.request.cityZone == zone && r.request.role == role)
+                if (!r.removing && place.Has(r.request) && r.request.role == role)
                     if (!oldest || r.bornMs < oldest->bornMs)
                         oldest = &r;
             if (oldest)

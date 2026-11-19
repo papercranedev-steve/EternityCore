@@ -1,4 +1,5 @@
 #include "Population/CityPopulation.h"
+#include "Population/HiddenSpot.h"
 #include "Population/Observers.h"
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationIdentity.h"
@@ -358,8 +359,6 @@ namespace Population
 
     bool CityDirector::PickHiddenSpot(uint32 zone, float x, float y, float z, Observers const& observers, Waypoint& out) const
     {
-        float const MAX_WALK = 250.0f;
-
         CityState const* city = FindState(zone);
         if (!city)
             return false;
@@ -367,54 +366,25 @@ namespace Population
         if (!map)
             return false;
 
-        bool found = false;
-        float bestSq = MAX_WALK * MAX_WALK;
-        auto consider = [&](float cx, float cy, float cz)
-        {
-            float const dx = cx - x, dy = cy - y;
-            float const distSq = dx * dx + dy * dy;
-            if (distSq >= bestSq || observers.CanSee(city->def->mapId, cx, cy, cz))
-                return;
-            bestSq = distSq;
-            out = Waypoint();
-            out.x = cx;
-            out.y = cy;
-            out.z = cz;
-            out.faceX = x;
-            out.faceY = y;
-            found = true;
-        };
-
         // Where people stand or walk anyway: reachable.
+        std::vector<Waypoint> known;
         for (CityAnchor const& a : city->anchors)
         {
             Waypoint w;
             if (PickStandSpot(map, a, 4.0f, 8.0f, float(M_PI), w))
-                consider(w.x, w.y, w.z);
+                known.push_back(w);
         }
         for (ScenePoint const& p : sPopulationMgr.GetScenePoints().All())
-            if (p.city == city->def->key && p.mapId == city->def->mapId)
-                consider(p.x, p.y, p.z);
-        if (found)
-            return true;
-
-        // Open ground around the spot, on about the same level (no roofs or tunnels).
-        for (float dist : { 35.0f, 60.0f, 90.0f, 130.0f })
         {
-            for (uint32 i = 0; i < 12; ++i)
-            {
-                float const angle = float(i) * float(M_PI) / 6.0f + frand(-0.2f, 0.2f);
-                float const cx = x + std::cos(angle) * dist;
-                float const cy = y + std::sin(angle) * dist;
-                float const cz = map->GetHeight(cx, cy, z + 5.0f);
-                if (cz <= INVALID_HEIGHT || std::fabs(cz - z) > 6.0f)
-                    continue;
-                consider(cx, cy, cz);
-            }
-            if (found)
-                return true;
+            if (p.city != city->def->key || p.mapId != city->def->mapId)
+                continue;
+            Waypoint w;
+            w.x = p.x;
+            w.y = p.y;
+            w.z = p.z;
+            known.push_back(w);
         }
-        return false;
+        return Population::PickHiddenSpot(map, known, x, y, z, observers, out);
     }
 
     bool CityDirector::BuildRequest(CityState const& city, CityRole role, CityCounts const& counts, SpawnRequest& out) const
@@ -565,12 +535,12 @@ namespace Population
             city.everSeen = true;
         }
 
-        CityCounts counts = mgr.CountCity(city.def->zone, city.anchors.size());
+        CityCounts counts = mgr.CountPlace(PlaceKey::City(city.def->zone), city.anchors.size());
 
         if (!city.playerPresent)
         {
             if (counts.total && nowMs - city.lastPlayerSeenMs >= m_emptyGraceMs)
-                mgr.DespawnCity(city.def->zone);
+                mgr.DespawnPlace(PlaceKey::City(city.def->zone));
             return;
         }
 
@@ -582,7 +552,7 @@ namespace Population
         // The hour changed and the city is too full: one leaves per tick.
         if (counts.total > targets.total + 2)
         {
-            mgr.DespawnOneCity(city.def->zone);
+            mgr.DespawnOnePlace(PlaceKey::City(city.def->zone));
             return;
         }
 
@@ -635,7 +605,7 @@ namespace Population
         if (!m_enabled)
         {
             for (CityState const& s : m_states)
-                mgr.DespawnCity(s.def->zone);
+                mgr.DespawnPlace(PlaceKey::City(s.def->zone));
             return;
         }
 
@@ -661,7 +631,7 @@ namespace Population
             if (s.enabled)
                 TickCity(mgr, s, nowMs);
             else
-                mgr.DespawnCity(s.def->zone);
+                mgr.DespawnPlace(PlaceKey::City(s.def->zone));
         }
     }
 }

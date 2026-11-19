@@ -58,6 +58,8 @@ namespace Population
         void UpdateStand();
         void UpdateMover();
         void UpdateCrafter();
+        // Town sitter: on its chair (SpawnRequest::chairEntry) or on the ground, up now and then.
+        void UpdateSitter();
         void SetupProfession();
         void PickRecipe();
         void ClearCraftedItems();

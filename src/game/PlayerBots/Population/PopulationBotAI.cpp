@@ -9,6 +9,7 @@
 #include "RoleCapability.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
+#include "GameObject.h"
 #include "Group.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
@@ -182,6 +183,7 @@ namespace Population
             case CityRole::Mover: UpdateMover(); break;
             case CityRole::Stand: UpdateStand(); break;
             case CityRole::Crafter: UpdateCrafter(); break;
+            case CityRole::Sitter: UpdateSitter(); break;
             default:              UpdateIdle(); break;
         }
     }
@@ -485,6 +487,45 @@ namespace Population
                     FacePoint(m_request.faceX, m_request.faceY);
                 return;
             }
+        }
+    }
+
+    void PopulationBotAI::UpdateSitter()
+    {
+        if (me->IsMoving())
+            return;
+        uint32 const now = WorldTimer::getMSTime();
+        if (now < m_nextIdleAtMs)
+            return;
+
+        if (!me->IsSittingDown())
+        {
+            // On the chair like a player (GameObject::Use puts him on its nearest seat), else on
+            // the ground facing the fire.
+            if (m_request.chairEntry)
+            {
+                if (GameObject* chair = me->FindNearestGameObject(m_request.chairEntry, 5.0f))
+                {
+                    chair->Use(me);
+                    m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
+                    return;
+                }
+            }
+            if (m_request.hasFacePoint)
+                FacePoint(m_request.faceX, m_request.faceY);
+            me->SetStandState(UNIT_STAND_STATE_SIT);
+            m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
+            return;
+        }
+
+        // Now and then up for a moment (stretching, talking), then down again.
+        m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
+        if (urand(0, 99) < 15)
+        {
+            me->SetStandState(UNIT_STAND_STATE_STAND);
+            if (urand(0, 1))
+                me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
+            m_nextIdleAtMs = now + urand(5, 15) * IN_MILLISECONDS;
         }
     }
 

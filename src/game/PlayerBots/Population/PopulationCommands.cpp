@@ -7,6 +7,8 @@
  *   .popbot list                         population bots: level, race, class, distance, time left
  *   .popbot roster                       roster cohorts: owner, anchor level, level spread
  *   .popbot hubs                         settlements (gathering places) within 1500 yards
+ *   .popbot town                         towns with a player near or within 1500 yards: anchors, residents, targets
+ *   .popbot headless on|off              dev tests: the headless character counts as a player (default off)
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
  *   .popbot despawn                      log out the selected population bot
@@ -35,6 +37,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <string>
 
 namespace
 {
@@ -365,7 +369,7 @@ namespace
                 else if (a.type == "mail") ++mail;
                 else ++other;
             }
-            Population::CityCounts const c = sPopulationMgr.CountCity(s.def->zone, s.anchors.size());
+            Population::CityCounts const c = sPopulationMgr.CountPlace(Population::PlaceKey::City(s.def->zone), s.anchors.size());
             handler->PSendSysMessage("%s (zone %u): %s%s, anchors ah %u bank %u mail %u other %u, bots %u (stand %u, movers %u, crafters %u, veterans %u)",
                 s.def->title, s.def->zone, s.enabled ? "enabled" : "disabled", s.arriving ? ", player arriving" : s.playerPresent ? ", player here" : "",
                 ah, bank, mail, other, c.total, c.stand, c.mover, c.crafter, c.showcase);
@@ -382,7 +386,7 @@ namespace
             return;
         }
 
-        Population::CityCounts const c = sPopulationMgr.CountCity(state->def->zone, state->anchors.size());
+        Population::CityCounts const c = sPopulationMgr.CountPlace(Population::PlaceKey::City(state->def->zone), state->anchors.size());
         uint32 shown = 0;
         for (size_t i = 0; i < state->anchors.size(); ++i)
         {
@@ -428,6 +432,44 @@ namespace
                 n.first, s.coreYd, s.falloffYd, s.weight, s.sources);
         }
         handler->PSendSysMessage("%u within %.0f yards of your position.", uint32(nearby.size()), RANGE);
+    }
+
+    // Towns (TownPopulation.h): those with a player near, and the ones near your position.
+    void ShowTowns(ChatHandler* handler, Player* player)
+    {
+        Population::TownDirector& towns = sPopulationMgr.GetTownDirector();
+        float const hour = sPopulationMgr.GetCityDirector().HourFactor();
+        handler->PSendSysMessage("Towns: %s, %u places, hour factor %.2f.", towns.IsEnabled() ? "on" : "off",
+            uint32(towns.States().size()), hour);
+
+        uint32 shown = 0;
+        for (Population::TownState const& t : towns.States())
+        {
+            Population::Settlement const& s = *t.settlement;
+            float dist = -1.0f;
+            if (player && player->GetMapId() == s.mapId)
+                dist = std::max(0.0f, player->GetDistance2d(s.x, s.y) - s.coreYd);
+            if (!t.playerPresent && (dist < 0.0f || dist > 1500.0f))
+                continue;
+            if (++shown > 10)
+                break;
+
+            std::map<std::string, uint32> byType;
+            for (Population::TownAnchor const& a : t.anchors)
+                ++byType[a.spot.type];
+            std::string types;
+            for (auto const& kv : byType)
+                types += " " + kv.first + " " + std::to_string(kv.second);
+
+            Population::CityCounts const c = sPopulationMgr.CountPlace(Population::PlaceKey::Town(s.id), t.anchors.size());
+            Population::TownTargets const target = towns.TargetsFor(t, hour);
+            handler->PSendSysMessage("#%u %s %s%s, levels %u-%u, anchors:%s", s.id, Population::SettlementKindName(s.kind),
+                Population::Settlements::AreaName(s).c_str(), t.arriving ? " (player arriving)" : t.playerPresent ? " (player near)" : "",
+                t.levelMin, t.levelMax, types.empty() ? " none" : types.c_str());
+            handler->PSendSysMessage("   bots %u/%u (sitters %u/%u, movers %u/%u, stand %u)%s", c.total, target.total,
+                c.sitter, target.sitter, c.mover, target.mover, c.stand,
+                dist >= 0.0f ? (", " + std::to_string(int32(dist)) + " yd from you").c_str() : "");
+        }
     }
 
     bool PointList(ChatHandler* handler, Player* player)
@@ -528,6 +570,21 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "town"))
+    {
+        ShowTowns(this, player);
+        return true;
+    }
+
+    if (!strcmp(sub, "headless"))
+    {
+        char* opt = ExtractLiteralArg(&args);
+        bool const on = opt && !strcmp(opt, "on");
+        sPopulationMgr.SetHeadlessObserves(on);
+        PSendSysMessage("The dev console's headless character %s.", on ? "counts as a player (until off or restart)" : "is not a player");
+        return true;
+    }
+
     if (!strcmp(sub, "spawn"))
         return Spawn(this, player, args);
 
@@ -607,6 +664,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|headless on|off|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

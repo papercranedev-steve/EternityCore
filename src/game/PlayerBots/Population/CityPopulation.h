@@ -55,10 +55,10 @@ namespace Population
         bool everSeen = false;
     };
 
-    // Bots of one city, including queued requests.
+    // Bots of one city or town, including queued requests.
     struct CityCounts
     {
-        uint32 total = 0, stand = 0, mover = 0, showcase = 0, crafter = 0;
+        uint32 total = 0, stand = 0, mover = 0, showcase = 0, crafter = 0, sitter = 0;
         std::vector<uint32> anchorUse;      // stand + showcase bots per anchor
     };
 

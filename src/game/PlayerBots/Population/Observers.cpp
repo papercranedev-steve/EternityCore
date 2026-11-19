@@ -1,5 +1,6 @@
 #include "Population/Observers.h"
 #include "Companions/CompanionMgr.h"
+#include "DevConsole/HeadlessPlayerAI.h"
 #include "Database/DatabaseEnv.h"
 #include "Config/Config.h"
 #include "DBCStores.h"
@@ -92,7 +93,9 @@ namespace Population
         for (auto const& itr : sObjectAccessor.GetPlayers())
         {
             Player* p = itr.second;
-            if (!p || !p->IsInWorld() || p->IsBot())
+            // Bots see nobody; the dev console's headless character stands in for a player when
+            // asked to (.popbot headless on: off by default, other tests fight with it).
+            if (!p || !p->IsInWorld() || (p->IsBot() && !(m_headlessObserves && DevConsole::GetHeadlessAI(p))))
                 continue;
             Observer o;
             o.guid = p->GetGUIDLow();

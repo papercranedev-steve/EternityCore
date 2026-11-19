@@ -20,6 +20,7 @@ namespace Population
         Test,       // .popbot spawn
         City,       // filled by the city director while a player is in the city
         Field,      // phase 1c
+        Town,       // residents of a town, start area or camp (TownPopulation.h)
     };
 
     enum class GearTier : uint8
@@ -29,14 +30,15 @@ namespace Population
         Showcase,   // premade phase 6 set ("geared veteran"), forces level 60
     };
 
-    // What a city bot does (phase 1b).
+    // What a city or town bot does (phase 1b; towns: TownPopulation.h).
     enum class CityRole : uint8
     {
-        None,       // not a city bot
-        Stand,      // stands at an auctioneer / banker / mailbox, sometimes steps away and back
-        Mover,      // runs between the city's stand spots, waits at each
+        None,       // not a city or town bot
+        Stand,      // stands at an anchor (auctioneer, smith, innkeeper, ...), sometimes steps away and back
+        Mover,      // runs between the place's stand spots, waits at each
         Showcase,   // geared veteran standing in view near the auction house / bank
         Crafter,    // stands near the auction house / bank / mailbox crafting in batches
+        Sitter,     // sits on a chair (SpawnRequest::chairEntry) or on the ground by a fire
     };
 
     char const* BotKindName(BotKind kind);
@@ -93,8 +95,29 @@ namespace Population
         // City bots
         uint32 cityZone = 0;
         CityRole role = CityRole::None;
-        int32 anchorIndex = -1;         // stand / showcase: which anchor of the city
+        int32 anchorIndex = -1;         // stand / showcase / sitter: which anchor of the city or town
         std::vector<Waypoint> route;    // mover: spots to run between
+
+        // Town bots: the settlement (Settlements.h id); sitter: the chair at (x, y, z), 0 = sit on the ground.
+        uint32 settlementId = 0;
+        uint32 chairEntry = 0;
+    };
+
+    // A city (zone) or a town (settlement id): the bots a director counts and retires together.
+    struct PlaceKey
+    {
+        BotKind kind = BotKind::City;
+        uint32 id = 0;
+
+        static PlaceKey City(uint32 zone) { return { BotKind::City, zone }; }
+        static PlaceKey Town(uint32 settlementId) { return { BotKind::Town, settlementId }; }
+
+        bool Has(SpawnRequest const& r) const
+        {
+            if (r.kind != kind)
+                return false;
+            return kind == BotKind::City ? r.cityZone == id : kind == BotKind::Town ? r.settlementId == id : false;
+        }
     };
 
     // Shared between PopulationMgr (world thread) and the bot AI. The AI clears `alive`

@@ -23,6 +23,10 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/FieldPopulation.cpp
   ${POPULATION_DIR}/CityPopulation.h
   ${POPULATION_DIR}/CityPopulation.cpp
+  ${POPULATION_DIR}/HiddenSpot.h
+  ${POPULATION_DIR}/HiddenSpot.cpp
+  ${POPULATION_DIR}/TownPopulation.h
+  ${POPULATION_DIR}/TownPopulation.cpp
   ${POPULATION_DIR}/Roster.h
   ${POPULATION_DIR}/Roster.cpp
   ${POPULATION_DIR}/Growth.h

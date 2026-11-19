@@ -3297,6 +3297,17 @@ AHBuyer.MaxMarkup = 50
 #        Prewarm spawns per world update; they skip PopBot.SpawnGapMs (1 - 50).
 #        Default: 4
 #
+#    PopBot.Town.Enable
+#        Residents of towns, start areas and camps (inns, flight masters, start positions)
+#        while a player is within 300 yards: they sit on the inn's chairs and by fires, stand
+#        at the smith, vendors, trainers, mailbox, or walk between them. Town 14, start area
+#        10, camp 4 at the busiest hour (PopBot.HourCurve).
+#        Default: 1
+#
+#    PopBot.Town.ScalePct
+#        Percent of those numbers (0 - 300).
+#        Default: 100
+#
 #    PopBot.Field.Enable
 #        People levelling in the open world around the player (continents, not in cities).
 #        Each is a team of one for the PartyBot Commander: it hunts creatures at its level,
@@ -3422,6 +3433,8 @@ PopBot.SpawnGapMs = 3000
 PopBot.Prewarm.Enable = 1
 PopBot.Prewarm.WaitSec = 90
 PopBot.Prewarm.PerTick = 4
+PopBot.Town.Enable = 1
+PopBot.Town.ScalePct = 100
 PopBot.Field.Enable = 1
 PopBot.Field.MaxUnits = 4
 PopBot.Field.Radius = 250

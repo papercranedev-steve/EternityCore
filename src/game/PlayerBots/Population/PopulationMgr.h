@@ -17,6 +17,7 @@
 #include "Population/Settlements.h"
 #include "Population/CityPopulation.h"
 #include "Population/FieldPopulation.h"
+#include "Population/TownPopulation.h"
 #include "Population/Observers.h"
 #include "Population/Roster.h"
 #include <atomic>
@@ -81,6 +82,7 @@ namespace Population
         void OnCharacterScreen(uint32 accountId);
         void OnLoginRequest(uint32 accountId, uint32 charGuid);
         Observers const& GetObservers() const { return m_observers; }
+        void SetHeadlessObserves(bool on) { m_observers.SetHeadlessObserves(on); }
         // Asks every population bot to log out. Returns how many were asked.
         uint32 DespawnAll();
         bool Despawn(ObjectGuid guid);
@@ -94,15 +96,16 @@ namespace Population
         CityDirector& GetCityDirector() { EnsureDataLoaded(); return m_city; }
         Roster const& GetRoster() { EnsureDataLoaded(); return m_roster; }
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
+        TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         // After scene points were added or deleted.
-        void ReloadAnchors() { m_city.LoadAnchors(m_points); m_settlements.Load(m_points); }
+        void ReloadAnchors();
 
-        // City director helpers. Counts include queued requests.
-        CityCounts CountCity(uint32 zone, size_t anchorCount) const;
-        // Every bot of the city leaves, queued requests are dropped.
-        void DespawnCity(uint32 zone);
-        // One bot leaves (oldest stand bot, else oldest mover; veterans last).
-        bool DespawnOneCity(uint32 zone);
+        // City and town director helpers. Counts include queued requests.
+        CityCounts CountPlace(PlaceKey place, size_t anchorCount) const;
+        // Every bot of the place leaves, queued requests are dropped.
+        void DespawnPlace(PlaceKey place);
+        // One bot leaves (oldest stand bot, else sitter, crafter, mover; veterans last).
+        bool DespawnOnePlace(PlaceKey place);
 
         // Field director helpers (FieldPopulation.h). Field bots within `radius` (2d) of the
         // observer, queued requests included; for a moving observer not those more than
@@ -136,6 +139,8 @@ namespace Population
 
         void EnsureDataLoaded();
         void SpawnNow(SpawnRequest const& request);
+        // City and town bots: a spot of their place near x/y/z nobody sees (HiddenSpot.h).
+        bool PickHiddenSpot(SpawnRequest const& request, float x, float y, float z, Waypoint& out) const;
         // City (and later field) bots come from the roster. False: nobody free, skip this spawn.
         bool TakeFromRoster(SpawnRequest& request, std::string& name, uint32& guid);
         void RequestRemoval(Record& record);
@@ -164,6 +169,7 @@ namespace Population
         Settlements m_settlements;
         Observers m_observers;
         CityDirector m_city;
+        TownDirector m_town;
         FieldDirector m_field;
         Roster m_roster;
         uint32 m_nextUnitId = 0;        // Commander team units of field bots

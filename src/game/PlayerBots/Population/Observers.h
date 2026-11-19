@@ -63,6 +63,10 @@ namespace Population
         std::vector<Observer> const& All() const { return m_observers; }
         bool IsArrivingOwner(uint32 guid) const;
 
+        // Dev tests: the dev console's headless character counts as a player (runtime only).
+        void SetHeadlessObserves(bool on) { m_headlessObserves = on; }
+        bool HeadlessObserves() const { return m_headlessObserves; }
+
         // Could a player in the world see someone appear or vanish at this spot? Within the
         // map's visibility distance (plus a margin) and in line of sight; very close counts
         // even behind a wall. Arriving observers see nothing yet.
@@ -98,6 +102,7 @@ namespace Population
         std::unordered_map<uint32, Track> m_tracks;     // character guid -> track
 
         bool m_enabled = true;
+        bool m_headlessObserves = false;
         uint32 m_waitMs = 90 * IN_MILLISECONDS;
 
         std::vector<Pending> m_pending;
