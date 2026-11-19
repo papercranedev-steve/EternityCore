@@ -8,6 +8,7 @@
  *   .popbot roster                       roster cohorts: owner, anchor level, level spread
  *   .popbot hubs                         settlements (gathering places) within 1500 yards
  *   .popbot town                         towns with a player near or within 1500 yards: anchors, residents, targets
+ *   .popbot density                      field density at your position, the field bots wanted there
  *   .popbot headless on|off              dev tests: the headless character counts as a player (default off)
  *   .popbot spawn [count] [level] [ally|horde|enemy] [showcase|preraid]
  *                                        spawn idle test bots around you (one every SpawnGapMs)
@@ -434,6 +435,38 @@ namespace
         handler->PSendSysMessage("%u within %.0f yards of your position.", uint32(nearby.size()), RANGE);
     }
 
+    // Field density at the player's position (FieldPopulation.h) and what makes it.
+    void ShowDensity(ChatHandler* handler, Player* player)
+    {
+        Population::Settlements const& hubs = sPopulationMgr.GetSettlements();
+        Population::FieldDirector const& field = sPopulationMgr.GetFieldDirector();
+        uint32 const team = player->GetTeam();
+        uint32 const mapId = player->GetMapId();
+        float const x = player->GetPositionX(), y = player->GetPositionY();
+
+        Population::Observer o;
+        o.mapId = mapId;
+        o.x = x;
+        o.y = y;
+        uint32 const here = sPopulationMgr.CountField(o, field.GetRadius(), Population::FieldDirector::BEHIND_SPENT_YD);
+        handler->PSendSysMessage("Field density here %.2f: %u of %u field bots wanted within %.0f yd, %u there now.",
+            field.DensityAt(hubs, mapId, x, y, team), field.BudgetAt(hubs, mapId, x, y, team), field.GetMaxUnits(),
+            field.GetRadius(), here);
+
+        uint32 shown = 0;
+        for (auto const& n : hubs.Near(mapId, x, y, 3000.0f))
+        {
+            Population::Settlement const& s = *n.second;
+            if (!s.ServesTeam(team))
+                continue;
+            if (++shown > 3)
+                break;
+            std::string const where = s.kind == Population::SettlementKind::Capital ? s.label : Population::Settlements::AreaName(s);
+            handler->PSendSysMessage("   %s %s: %.0f yd beyond its core, draws %.2f", Population::SettlementKindName(s.kind),
+                where.c_str(), n.first, s.weight * std::exp(-n.first / s.falloffYd));
+        }
+    }
+
     // Towns (TownPopulation.h): those with a player near, and the ones near your position.
     void ShowTowns(ChatHandler* handler, Player* player)
     {
@@ -518,7 +551,7 @@ bool ChatHandler::HandlePopBotCommand(char* args)
     Player* player = m_session ? m_session->GetPlayer() : nullptr;
 
     char* sub = ExtractLiteralArg(&args);
-    bool const needsPlayer = sub && (!strcmp(sub, "spawn") || !strcmp(sub, "despawn") || !strcmp(sub, "point") ||
+    bool const needsPlayer = sub && (!strcmp(sub, "spawn") || !strcmp(sub, "despawn") || !strcmp(sub, "point") || !strcmp(sub, "density") ||
         (!strcmp(sub, "city") && args && strstr(args, "anchors")));
     if (needsPlayer && !player)
     {
@@ -573,6 +606,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
     if (!strcmp(sub, "town"))
     {
         ShowTowns(this, player);
+        return true;
+    }
+
+    if (!strcmp(sub, "density"))
+    {
+        ShowDensity(this, player);
         return true;
     }
 
@@ -664,6 +703,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|headless on|off|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|density|headless on|off|spawn ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

@@ -229,6 +229,26 @@ namespace Population
         return out;
     }
 
+    float Settlements::Pull(uint32 mapId, float x, float y, uint32 team, float falloffScale) const
+    {
+        float best = 0.0f;
+        for (Settlement const& s : m_all)
+        {
+            if (!s.ServesTeam(team))
+                continue;
+            float const d = Dist2d(s, mapId, x, y);
+            if (d < 0.0f)
+                continue;
+            float const edge = std::max(0.0f, d - s.coreYd);
+            float const falloff = std::max(1.0f, s.falloffYd * falloffScale);
+            // e^-8: nothing left worth counting.
+            if (edge > falloff * 8.0f)
+                continue;
+            best = std::max(best, s.weight * std::exp(-edge / falloff));
+        }
+        return best;
+    }
+
     std::string Settlements::AreaName(Settlement const& s)
     {
         AreaEntry const* area = AreaEntry::GetById(sTerrainMgr.GetAreaId(s.mapId, s.x, s.y, s.z + 2.0f));

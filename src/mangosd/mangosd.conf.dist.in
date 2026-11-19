@@ -3315,8 +3315,17 @@ AHBuyer.MaxMarkup = 50
 #        Default: 1
 #
 #    PopBot.Field.MaxUnits / PopBot.Field.Radius
-#        At most this many field bots within this many yards of a player (0 - 20 / 100 - 500).
-#        Default: 4 / 250
+#        At most this many field bots within this many yards of a player (0 - 20 / 100 - 500),
+#        at the edge of a capital or start area; fewer farther away (PopBot.Field.FloorPct).
+#        Default: 8 / 250
+#
+#    PopBot.Field.FloorPct / PopBot.Field.FalloffPct
+#        Field density falls off from the settlements of the player's side (towns, camps, start
+#        areas, capitals): density = floor + (1 - floor) * weight * e^(-distance / falloff),
+#        distance beyond the settlement's core. FloorPct: the density in the wild (0 - 100).
+#        FalloffPct: percent of every settlement's falloff length (20 - 500; town 450 yd,
+#        capital 700, start area 400, camp 300).
+#        Default: 15 / 100
 #
 #    PopBot.Field.SpawnMinYd / PopBot.Field.SpawnMaxYd
 #        Field bots log in this far from the player (the inner edge is at least the map's
@@ -3436,7 +3445,9 @@ PopBot.Prewarm.PerTick = 4
 PopBot.Town.Enable = 1
 PopBot.Town.ScalePct = 100
 PopBot.Field.Enable = 1
-PopBot.Field.MaxUnits = 4
+PopBot.Field.MaxUnits = 8
+PopBot.Field.FloorPct = 15
+PopBot.Field.FalloffPct = 100
 PopBot.Field.Radius = 250
 PopBot.Field.SpawnMinYd = 130
 PopBot.Field.SpawnMaxYd = 240

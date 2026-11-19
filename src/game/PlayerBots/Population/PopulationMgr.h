@@ -97,6 +97,7 @@ namespace Population
         Roster const& GetRoster() { EnsureDataLoaded(); return m_roster; }
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
+        FieldDirector const& GetFieldDirector() const { return m_field; }
         // After scene points were added or deleted.
         void ReloadAnchors();
 

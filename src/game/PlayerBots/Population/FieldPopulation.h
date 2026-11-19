@@ -4,8 +4,11 @@
  * vanish in front of the player).
  *
  * Around every observer (Observers.h: a player in the world, or one about to log in there) in
- * the open world of a continent, not in a city, not on a flight path, the director keeps up to
- * PopBot.Field.MaxUnits field bots within PopBot.Field.Radius:
+ * the open world of a continent, not in a city, not on a flight path, the director keeps its
+ * budget of field bots within PopBot.Field.Radius. The budget falls off with the distance from
+ * the settlements of his side (user 2026-11-19: towns busy, the ring around them more hunters,
+ * the wild few): density = floor + (1 - floor) * Settlements::Pull, budget = density x
+ * PopBot.Field.MaxUnits; spots nearer a settlement are picked first more often.
  *  - a new one logs in at a creature spawn point (FieldSpots): ahead of a moving observer,
  *    just beyond the edge of his sight where he is heading (user 2026-11-19: he walks on a
  *    little and sees them), else (standing, or nothing ahead) between the spawn ring's inner
@@ -35,6 +38,7 @@ namespace Population
 {
     class PopulationMgr;
     class Observers;
+    class Settlements;
     struct Observer;
 
     class FieldDirector
@@ -57,18 +61,26 @@ namespace Population
 
         bool IsEnabled() const { return m_enabled; }
         uint32 GetMaxUnits() const { return m_maxUnits; }
+        // How busy the field is at x/y for `team` (PopBot.Field.FloorPct .. 1), and the field
+        // bots wanted around an observer there (density x PopBot.Field.MaxUnits, rounded).
+        float DensityAt(Settlements const& settlements, uint32 mapId, float x, float y, uint32 team) const;
+        uint32 BudgetAt(Settlements const& settlements, uint32 mapId, float x, float y, uint32 team) const;
         float GetRadius() const { return m_radius; }
         float GetKeepYd() const { return m_keepYd; }
 
     private:
         // The open world of a continent around `o`, not a city, not flying.
         bool Fills(Observer const& o) const;
-        bool BuildRequest(Observer const& o, Observers const& observers, SpawnRequest& out);
-        // Creature spawn points to log in at: ahead of a moving observer, else the ring.
-        std::vector<FieldSpot const*> CandidateSpots(Observer const& o, float visibleYd);
+        bool BuildRequest(Observer const& o, Observers const& observers, Settlements const& settlements, SpawnRequest& out);
+        // Creature spawn points to log in at: ahead of a moving observer, else the ring; busier
+        // spots (DensityAt) first more often.
+        std::vector<FieldSpot const*> CandidateSpots(Observer const& o, float visibleYd, Settlements const& settlements);
+        void PreferBusySpots(std::vector<FieldSpot const*>& spots, Observer const& o, Settlements const& settlements) const;
 
         bool m_enabled = true;
-        uint32 m_maxUnits = 4;
+        uint32 m_maxUnits = 8;          // at a settlement's edge (weight 1)
+        float m_floor = 0.15f;          // density in the wild
+        float m_falloffScale = 1.0f;    // times every settlement's falloff length
         float m_radius = 250.0f;
         float m_spawnMinYd = 130.0f;
         float m_spawnMaxYd = 240.0f;

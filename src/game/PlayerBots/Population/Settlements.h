@@ -71,6 +71,11 @@ namespace Population
         // distance (0 inside the core), nearest first.
         std::vector<std::pair<float, Settlement const*>> Near(uint32 mapId, float x, float y, float rangeYd) const;
 
+        // How strongly the settlements of `team` draw people to x/y (0..1): the strongest of
+        // weight * e^(-edge / (falloff * falloffScale)), edge = distance beyond its core (0
+        // inside). Negative exponential like a city's population density (Clark).
+        float Pull(uint32 mapId, float x, float y, uint32 team, float falloffScale) const;
+
         // Sub-zone name at the settlement (terrain lookup, for commands and logs).
         static std::string AreaName(Settlement const& s);
 

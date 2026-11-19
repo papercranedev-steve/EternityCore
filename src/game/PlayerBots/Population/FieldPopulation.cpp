@@ -49,7 +49,9 @@ namespace Population
     void FieldDirector::LoadConfig()
     {
         m_enabled = sConfig.GetBoolDefault("PopBot.Field.Enable", true);
-        m_maxUnits = ClampU(sConfig.GetIntDefault("PopBot.Field.MaxUnits", 4), 0, 20);
+        m_maxUnits = ClampU(sConfig.GetIntDefault("PopBot.Field.MaxUnits", 8), 0, 20);
+        m_floor = float(ClampU(sConfig.GetIntDefault("PopBot.Field.FloorPct", 15), 0, 100)) / 100.0f;
+        m_falloffScale = float(ClampU(sConfig.GetIntDefault("PopBot.Field.FalloffPct", 100), 20, 500)) / 100.0f;
         m_radius = float(ClampU(sConfig.GetIntDefault("PopBot.Field.Radius", 250), 100, 500));
         m_spawnMinYd = float(ClampU(sConfig.GetIntDefault("PopBot.Field.SpawnMinYd", 130), 60, 400));
         m_spawnMaxYd = std::max(m_spawnMinYd + 30.0f, float(ClampU(sConfig.GetIntDefault("PopBot.Field.SpawnMaxYd", 240), 90, 500)));
@@ -65,7 +67,37 @@ namespace Population
         return !IsCityZone(o.zone);
     }
 
-    std::vector<FieldSpot const*> FieldDirector::CandidateSpots(Observer const& o, float visibleYd)
+    float FieldDirector::DensityAt(Settlements const& settlements, uint32 mapId, float x, float y, uint32 team) const
+    {
+        return m_floor + (1.0f - m_floor) * settlements.Pull(mapId, x, y, team, m_falloffScale);
+    }
+
+    uint32 FieldDirector::BudgetAt(Settlements const& settlements, uint32 mapId, float x, float y, uint32 team) const
+    {
+        return uint32(std::lround(DensityAt(settlements, mapId, x, y, team) * float(m_maxUnits)));
+    }
+
+    void FieldDirector::PreferBusySpots(std::vector<FieldSpot const*>& spots, Observer const& o, Settlements const& settlements) const
+    {
+        // Each spot goes first with its density relative to the busiest one (the others keep
+        // their order after them, still tried when the first ones do not fit).
+        std::vector<float> density(spots.size());
+        float top = 0.0f;
+        for (size_t i = 0; i < spots.size(); ++i)
+        {
+            density[i] = DensityAt(settlements, o.mapId, spots[i]->x, spots[i]->y, o.team);
+            top = std::max(top, density[i]);
+        }
+        if (top <= 0.0f)
+            return;
+        std::vector<FieldSpot const*> first, later;
+        for (size_t i = 0; i < spots.size(); ++i)
+            (frand(0.0f, top) <= density[i] ? first : later).push_back(spots[i]);
+        first.insert(first.end(), later.begin(), later.end());
+        spots.swap(first);
+    }
+
+    std::vector<FieldSpot const*> FieldDirector::CandidateSpots(Observer const& o, float visibleYd, Settlements const& settlements)
     {
         if (o.IsMoving())
         {
@@ -95,6 +127,7 @@ namespace Population
                 size_t const head = std::min<size_t>(ahead.size(), AHEAD_SHUFFLED);
                 for (size_t i = head; i > 1; --i)
                     std::swap(ahead[i - 1], ahead[urand(0, uint32(i - 1))]);
+                PreferBusySpots(ahead, o, settlements);
                 return ahead;
             }
         }
@@ -103,17 +136,18 @@ namespace Population
         float const outer = std::max(m_spawnMaxYd, inner + 30.0f);
         std::vector<FieldSpot const*> spots = m_spots.Around(o.mapId, o.x, o.y, inner, outer);
         Shuffle(spots);
+        PreferBusySpots(spots, o, settlements);
         return spots;
     }
 
-    bool FieldDirector::BuildRequest(Observer const& o, Observers const& observers, SpawnRequest& out)
+    bool FieldDirector::BuildRequest(Observer const& o, Observers const& observers, Settlements const& settlements, SpawnRequest& out)
     {
         Map* map = sMapMgr.FindMap(o.mapId, 0);
         FactionTemplateEntry const* own = sObjectMgr.GetFactionTemplateEntry(o.factionTemplate);
         if (!map || !own)
             return false;
 
-        std::vector<FieldSpot const*> const spots = CandidateSpots(o, map->GetVisibilityDistance());
+        std::vector<FieldSpot const*> const spots = CandidateSpots(o, map->GetVisibilityDistance(), settlements);
 
         uint32 tries = 0;
         for (FieldSpot const* spot : spots)
@@ -178,6 +212,7 @@ namespace Population
         // Out of sight and not needed here any more: gone.
         mgr.RetireFieldBots(observers, m_keepYd, BEHIND_SPENT_YD);
 
+        Settlements const& settlements = mgr.GetSettlements();
         for (Observer const& o : observers.All())
         {
             if (!Fills(o))
@@ -188,14 +223,16 @@ namespace Population
             next = nowMs + (o.IsMoving() ? urand(MOVING_CHECK_MIN_MS, MOVING_CHECK_MAX_MS)
                                          : urand(m_checkMinMs, m_checkMaxMs));
 
-            // One more unit per check; an arriving observer gets the whole crowd at once.
-            uint32 const want = o.arriving ? m_maxUnits : 1;
+            // As many as the place is busy (fewer than there are: the extra ones leave in their
+            // own time, out of sight). One more per check; an arriving observer gets them all.
+            uint32 const budget = BudgetAt(settlements, o.mapId, o.x, o.y, o.team);
+            uint32 const want = o.arriving ? budget : 1;
             for (uint32 i = 0; i < want; ++i)
             {
-                if (mgr.CountField(o, m_radius, BEHIND_SPENT_YD) >= m_maxUnits)
+                if (mgr.CountField(o, m_radius, BEHIND_SPENT_YD) >= budget)
                     break;
                 SpawnRequest request;
-                if (!BuildRequest(o, observers, request) || !mgr.QueueSpawn(request))
+                if (!BuildRequest(o, observers, settlements, request) || !mgr.QueueSpawn(request))
                     break;
             }
         }
