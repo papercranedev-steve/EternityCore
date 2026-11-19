@@ -40,7 +40,7 @@ namespace TownTrip
             state.phase = phase;
             state.phaseSinceMs = now;
             state.nextMoveMs = 0;
-            state.arrivedMs = 0;
+            Trip::Approach::Begin(state.leg, now);
         }
 
         bool Walking(Phase phase)
@@ -145,54 +145,34 @@ namespace TownTrip
             Enter(state, Phase::Asking, now);
         }
 
-        WorldObject* TargetOf(Player* me, Trip::TripStop const& stop)
-        {
-            if (stop.target.IsGameObject())
-                return me->GetMap()->GetGameObject(stop.target);
-            Creature* npc = me->GetMap()->GetCreature(stop.target);
-            return npc && npc->IsAlive() && !npc->IsInCombat() ? npc : nullptr;
-        }
-
-        bool InReach(Player* me, WorldObject* target)
-        {
-            if (Creature* npc = target->ToCreature())
-                return me->CanInteractWithNPC(npc, 0);
-            return me->IsWithinDistInMap(target, INTERACTION_DISTANCE - 1.0f);
-        }
-
         // Walks to (or stands at) the current stop. False: the stops are done.
         bool UpdateGoing(Player* me, TownTripState& state, uint32 now)
         {
             while (state.next < state.stops.size())
             {
                 Trip::TripStop const& stop = state.stops[state.next];
-                WorldObject* target = TargetOf(me, stop);
-                if (!target || (!state.arrivedMs && WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > STOP_GIVE_UP_MS))
+                Trip::Destination dest;
+                dest.target = stop.target;
+                switch (Trip::Approach::Update(me, dest, state.leg, now, STOP_GIVE_UP_MS))
                 {
-                    ++state.next;
-                    Enter(state, Phase::Going, now);
-                    continue;
-                }
-
-                if (InReach(me, target))
-                {
-                    if (!state.arrivedMs)
-                    {
-                        if (!me->IsStopped())
-                            me->StopMoving();
-                        me->SetFacingToObject(target);
-                        state.arrivedMs = now;
-                    }
-                    if (WorldTimer::getMSTimeDiff(state.arrivedMs, now) < NpcVisit::DWELL_MS)
+                    case Trip::ApproachResult::Walking:
                         return true;
-                    stop.action->Do(me, target);
-                    ++state.next;
-                    Enter(state, Phase::Going, now);
-                    continue;
+                    case Trip::ApproachResult::Failed:
+                        ++state.next;
+                        Enter(state, Phase::Going, now);
+                        continue;
+                    case Trip::ApproachResult::Arrived:
+                        break;
                 }
 
-                MoveTo(me, state, target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), now);
-                return true;
+                // (gone while it stood there: the next stop)
+                WorldObject* target = Trip::Approach::TargetOf(me, stop.target);
+                if (target && WorldTimer::getMSTimeDiff(state.leg.arrivedMs, now) < NpcVisit::DWELL_MS)
+                    return true;
+                if (target)
+                    stop.action->Do(me, target);
+                ++state.next;
+                Enter(state, Phase::Going, now);
             }
             return false;
         }

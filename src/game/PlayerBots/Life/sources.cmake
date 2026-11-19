@@ -26,6 +26,12 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/TownTrip.h
   ${LIFE_DIR}/Errands/TownTrip.cpp
   ${LIFE_DIR}/Errands/Trip/TripPlan.h
+  ${LIFE_DIR}/Errands/Trip/Approach.h
+  ${LIFE_DIR}/Errands/Trip/Approach.cpp
+  ${LIFE_DIR}/Pastimes/PlaceActs.h
+  ${LIFE_DIR}/Pastimes/PlaceActs.cpp
+  ${LIFE_DIR}/Pastimes/Notice.h
+  ${LIFE_DIR}/Pastimes/Notice.cpp
   ${LIFE_DIR}/Errands/Trip/RouteOrder.h
   ${LIFE_DIR}/Errands/Trip/RouteOrder.cpp
   ${LIFE_DIR}/Errands/Trip/ShoppingPlanner.h

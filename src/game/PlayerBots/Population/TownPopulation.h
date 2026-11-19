@@ -44,6 +44,7 @@ namespace Population
     {
         Settlement const* settlement = nullptr;
         std::vector<TownAnchor> anchors;
+        PlaceMenu places;                   // the anchors, for the residents' day (TownLife.h)
         uint8 levelMin = 0, levelMax = 0;   // creatures around the place (0: none)
         bool playerPresent = false;
         bool arriving = false;

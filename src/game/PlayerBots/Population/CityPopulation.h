@@ -37,11 +37,13 @@ namespace Population
 
     struct CityAnchor
     {
-        std::string type;       // ah bank mail idle showcase
+        std::string type;       // ah bank mail idle showcase, and PlaceAnchors.h types (only visited)
         std::string label;      // NPC name or "point #id"
         float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
         bool exactSpot = false; // manual point: stand exactly here, facing o
         uint32 capacity = 1;
+        bool object = false;    // a gameobject (mailbox, chair, anvil, fire)
+        uint32 chairEntry = 0;  // chair: its gameobject entry
     };
 
     struct CityState
@@ -49,6 +51,7 @@ namespace Population
         CityDef const* def = nullptr;
         bool enabled = false;               // listed in PopBot.City.Zones
         std::vector<CityAnchor> anchors;
+        PlaceMenu places;                   // the anchors, for the crowd's day (TownLife.h)
         bool playerPresent = false;         // an observer (Observers.h) is in the city
         bool arriving = false;              // one of them is about to enter the world here: fill at once
         uint32 lastPlayerSeenMs = 0;

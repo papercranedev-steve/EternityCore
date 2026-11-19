@@ -27,6 +27,10 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/HiddenSpot.cpp
   ${POPULATION_DIR}/TownPopulation.h
   ${POPULATION_DIR}/TownPopulation.cpp
+  ${POPULATION_DIR}/PlaceAnchors.h
+  ${POPULATION_DIR}/PlaceAnchors.cpp
+  ${POPULATION_DIR}/TownLife.h
+  ${POPULATION_DIR}/TownLife.cpp
   ${POPULATION_DIR}/Roster.h
   ${POPULATION_DIR}/Roster.cpp
   ${POPULATION_DIR}/Growth.h

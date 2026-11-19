@@ -17,7 +17,7 @@
 #include "Opcodes.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
-#include "Packets/Misc.h"
+#include "Shared/BotChat.h"
 #include "Utilities/Random.h"
 #include "MotionMaster.h"
 #include "GridMap.h"
@@ -186,14 +186,29 @@ namespace Population
             EndReview();
         }
 
+        if (LivesTownLife())
+        {
+            uint32 const now = WorldTimer::getMSTime();
+            if (!m_townLife.IsStarted())
+                m_townLife.Begin(me, m_request, now);
+            m_townLife.Update(me, now);
+            return;
+        }
+
         switch (m_request.role)
         {
-            case CityRole::Mover: UpdateMover(); break;
-            case CityRole::Stand: UpdateStand(); break;
             case CityRole::Crafter: UpdateCrafter(); break;
-            case CityRole::Sitter: UpdateSitter(); break;
-            default:              UpdateIdle(); break;
+            default:                UpdateIdle(); break;
         }
+    }
+
+    bool PopulationBotAI::LivesTownLife() const
+    {
+        if (m_request.kind != BotKind::City && m_request.kind != BotKind::Town)
+            return false;
+        if (!m_request.places || m_request.places->empty())
+            return false;
+        return m_request.role == CityRole::Stand || m_request.role == CityRole::Mover || m_request.role == CityRole::Sitter;
     }
 
     void PopulationBotAI::InitializeField()
@@ -438,141 +453,6 @@ namespace Population
         me->SetFacingTo(me->GetAngle(x, y));
     }
 
-    void PopulationBotAI::UpdateStand()
-    {
-        uint32 const now = WorldTimer::getMSTime();
-        switch (m_shuffle)
-        {
-            case Shuffle::Home:
-            {
-                UpdateIdle();
-                if (now < m_nextShuffleAtMs)
-                    return;
-                m_nextShuffleAtMs = now + urand(120, 300) * IN_MILLISECONDS;
-                if (urand(0, 99) >= 35)
-                    return;
-
-                // A few yards away, on the ground and in line of sight of the stand spot.
-                float const angle = frand(0.0f, 2.0f * float(M_PI));
-                float const dist = frand(3.0f, 6.0f);
-                float const x = m_homeX + std::cos(angle) * dist;
-                float const y = m_homeY + std::sin(angle) * dist;
-                float const z = me->GetMap()->GetHeight(x, y, m_homeZ + 3.0f);
-                if (z <= INVALID_HEIGHT || std::fabs(z - m_homeZ) > 2.0f ||
-                    !me->GetMap()->isInLineOfSight(m_homeX, m_homeY, m_homeZ + 2.0f, x, y, z + 2.0f))
-                    return;
-                MoveTo(x, y, z);
-                m_shuffle = Shuffle::Leaving;
-                return;
-            }
-            case Shuffle::Leaving:
-            {
-                if (!ReachedTarget() && now < m_moveDeadlineMs)
-                    return;
-                m_shuffle = Shuffle::Away;
-                m_shuffleUntilMs = now + urand(8, 25) * IN_MILLISECONDS;
-                me->SetFacingTo(frand(0.0f, 2.0f * float(M_PI)));
-                return;
-            }
-            case Shuffle::Away:
-            {
-                if (now < m_shuffleUntilMs)
-                {
-                    if (urand(0, 9) == 0)
-                        me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
-                    return;
-                }
-                MoveTo(m_homeX, m_homeY, m_homeZ);
-                m_shuffle = Shuffle::Returning;
-                return;
-            }
-            case Shuffle::Returning:
-            {
-                if (!ReachedTarget() && now < m_moveDeadlineMs)
-                    return;
-                m_shuffle = Shuffle::Home;
-                if (m_request.hasFacePoint)
-                    FacePoint(m_request.faceX, m_request.faceY);
-                return;
-            }
-        }
-    }
-
-    void PopulationBotAI::UpdateSitter()
-    {
-        if (me->IsMoving())
-            return;
-        uint32 const now = WorldTimer::getMSTime();
-        if (now < m_nextIdleAtMs)
-            return;
-
-        if (!me->IsSittingDown())
-        {
-            // On the chair like a player (GameObject::Use puts him on its nearest seat), else on
-            // the ground facing the fire.
-            if (m_request.chairEntry)
-            {
-                if (GameObject* chair = me->FindNearestGameObject(m_request.chairEntry, 5.0f))
-                {
-                    chair->Use(me);
-                    m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
-                    return;
-                }
-            }
-            if (m_request.hasFacePoint)
-                FacePoint(m_request.faceX, m_request.faceY);
-            me->SetStandState(UNIT_STAND_STATE_SIT);
-            m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
-            return;
-        }
-
-        // Now and then up for a moment (stretching, talking), then down again.
-        m_nextIdleAtMs = now + urand(30, 90) * IN_MILLISECONDS;
-        if (urand(0, 99) < 15)
-        {
-            me->SetStandState(UNIT_STAND_STATE_STAND);
-            if (urand(0, 1))
-                me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
-            m_nextIdleAtMs = now + urand(5, 15) * IN_MILLISECONDS;
-        }
-    }
-
-    void PopulationBotAI::UpdateMover()
-    {
-        std::vector<Waypoint> const& route = m_request.route;
-        if (route.size() < 2)
-        {
-            UpdateIdle();
-            return;
-        }
-
-        uint32 const now = WorldTimer::getMSTime();
-        if (m_moving)
-        {
-            if (!ReachedTarget() && now < m_moveDeadlineMs)
-                return;
-            m_moving = false;
-            FacePoint(route[m_routeIndex].faceX, route[m_routeIndex].faceY);
-            m_waitUntilMs = now + urand(10, 30) * IN_MILLISECONDS;
-            m_nextIdleAtMs = now + urand(3, 9) * IN_MILLISECONDS;
-            return;
-        }
-
-        if (now < m_waitUntilMs)
-        {
-            UpdateIdle();
-            return;
-        }
-
-        size_t next = urand(0, uint32(route.size()) - 2);
-        if (next >= m_routeIndex)
-            ++next;
-        m_routeIndex = next;
-        Waypoint const& w = route[m_routeIndex];
-        MoveTo(w.x + frand(-0.7f, 0.7f), w.y + frand(-0.7f, 0.7f), w.z);
-        m_moving = true;
-    }
-
     void PopulationBotAI::Initialize()
     {
         // The bot logs in at level 1 and is levelled here. A client that already sees it plays
@@ -625,9 +505,6 @@ namespace Population
         m_homeX = m_request.hasEntrance ? m_request.x : me->GetPositionX();
         m_homeY = m_request.hasEntrance ? m_request.y : me->GetPositionY();
         m_homeZ = m_request.hasEntrance ? m_request.z : me->GetPositionZ();
-        uint32 const startMs = WorldTimer::getMSTime();
-        m_nextShuffleAtMs = startMs + urand(60, 240) * IN_MILLISECONDS;
-        m_waitUntilMs = startMs + urand(5, 20) * IN_MILLISECONDS;
 
         if (m_request.role == CityRole::Crafter)
             SetupProfession();
@@ -674,15 +551,14 @@ namespace Population
         uint32 const now = WorldTimer::getMSTime();
         if (m_request.hasFacePoint)
             FacePoint(m_request.faceX, m_request.faceY);
-        // Mover: stands at the first route spot for a moment, like after any leg.
-        m_routeIndex = 0;
-        m_moving = false;
-        m_waitUntilMs = now + urand(5, 15) * IN_MILLISECONDS;
+        // (a town life starts on the next living tick, at this spot)
         m_nextIdleAtMs = now + urand(3, 9) * IN_MILLISECONDS;
     }
 
     void PopulationBotAI::BeginLeaving()
     {
+        if (m_townLife.IsStarted())
+            m_townLife.Stop(me);
         m_phase = Phase::Leaving;
         m_walkRetries = 0;
         if (me->IsNonMeleeSpellCasted(false))
@@ -786,6 +662,8 @@ namespace Population
     void PopulationBotAI::PlayForReview(ReviewKind kind, uint32 id, Player* viewer)
     {
         m_reviewUntilMs = WorldTimer::getMSTime() + REVIEW_HOLD_MS;
+        if (m_townLife.IsStarted())
+            m_townLife.Stop(me);
 
         if (!me->IsStopped())
             me->StopMoving();
@@ -818,17 +696,8 @@ namespace Population
                     me->SetSheath(SheathState(id));
                 break;
             case ReviewKind::Text:
-            {
-                // As if the bot typed the emote: the handler plays its animation and every client
-                // in range prints the line in its own language.
-                auto packet = std::make_unique<WorldPackets::Misc::TextEmote>();
-                packet->textEmote = id;
-                packet->emoteNum = 0;
-                if (viewer && viewer != me)
-                    packet->guid = viewer->GetObjectGuid();
-                me->GetSession()->QueuePacket(std::move(packet));
+                BotShared::BotChat::TextEmote(me, id, viewer);
                 break;
-            }
         }
     }
 

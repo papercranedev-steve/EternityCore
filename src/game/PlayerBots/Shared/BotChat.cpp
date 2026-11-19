@@ -4,6 +4,8 @@
 #include "Player.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
+#include "Packets/Misc.h"
+#include <memory>
 
 namespace BotShared
 {
@@ -30,6 +32,19 @@ namespace BotChat
             from->GetObjectGuid(), from->GetName());
         to->GetSession()->SendPacket(&data);
         return true;
+    }
+
+    void TextEmote(Player* from, uint32 textEmote, Unit const* target)
+    {
+        if (!from || !from->GetSession())
+            return;
+        // Through the bot's own session, as the client sends it (HandleTextEmoteOpcode).
+        auto packet = std::make_unique<WorldPackets::Misc::TextEmote>();
+        packet->textEmote = textEmote;
+        packet->emoteNum = 0;
+        if (target && target != from)
+            packet->guid = target->GetObjectGuid();
+        from->GetSession()->QueuePacket(std::move(packet));
     }
 
     void SystemTo(Player* to, std::string const& text)

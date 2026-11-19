@@ -1,6 +1,7 @@
 /*
  * Shared bot hands (PlayerBots/Shared): a bot talking to players. Party chat as a player types
- * /p, and system lines to one player (the PB...; lines the PartyBot addon reads).
+ * /p, whispers, text emotes (/wave), and system lines to one player (the PB...; lines the
+ * PartyBot addon reads).
  * Any thread that may send to a session (map threads, world thread).
  */
 
@@ -11,6 +12,7 @@
 #include <string>
 
 class Player;
+class Unit;
 
 namespace BotShared
 {
@@ -24,6 +26,10 @@ namespace BotShared
 
         // `from` whispers `text` to `to` (as /w; only `to` sees it). False without a session.
         bool WhisperTo(Player* from, Player* to, std::string const& text);
+
+        // `from` does a text emote (TEXTEMOTE_*, as a player types /wave), at `target` if given:
+        // its animation plays and every client in range prints the line in its own language.
+        void TextEmote(Player* from, uint32 textEmote, Unit const* target = nullptr);
     }
 }
 

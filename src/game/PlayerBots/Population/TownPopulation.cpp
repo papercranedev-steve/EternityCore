@@ -1,5 +1,6 @@
 #include "Population/TownPopulation.h"
 #include "Population/HiddenSpot.h"
+#include "Population/PlaceAnchors.h"
 #include "Population/Observers.h"
 #include "Population/PopulationMgr.h"
 #include "Population/Settlements.h"
@@ -106,33 +107,6 @@ namespace Population
                 : CityDirector::PickStandSpot(map, a.spot, 3.0f, 6.0f, 0.8f, out);
         }
 
-        // The NPC anchor type of a creature template, nullptr: none.
-        char const* NpcAnchorType(uint32 npcFlags)
-        {
-            if (npcFlags & UNIT_NPC_FLAG_INNKEEPER)
-                return "inn";
-            if (npcFlags & UNIT_NPC_FLAG_REPAIR)
-                return "smith";
-            if (npcFlags & UNIT_NPC_FLAG_FLIGHTMASTER)
-                return "flight";
-            if (npcFlags & UNIT_NPC_FLAG_TRAINER)
-                return "trainer";
-            if (npcFlags & UNIT_NPC_FLAG_VENDOR)
-                return "vendor";
-            // Where people crowd in a start area (Deputy Willem, Marshal McBride).
-            if (npcFlags & UNIT_NPC_FLAG_QUESTGIVER)
-                return "quest";
-            return nullptr;
-        }
-
-        // Critters carry quest flags too (Northshire's chickens).
-        char const* NpcAnchorType(CreatureInfo const* info)
-        {
-            if (!info || info->type == CREATURE_TYPE_CRITTER)
-                return nullptr;
-            return NpcAnchorType(info->npc_flags);
-        }
-
         // Of the residents, sitting (chairs, fires): a start area's crowd is outside at the
         // quest givers, not in the abbey's chairs (user 2026-11-19, Northshire looked empty).
         float SitterShareOf(SettlementKind kind)
@@ -143,26 +117,6 @@ namespace Population
                 case SettlementKind::Camp:      return 0.25f;
                 default:                        return 0.4f;
             }
-        }
-
-        // The object anchor type of a gameobject template, nullptr: none.
-        char const* ObjectAnchorType(GameObjectInfo const* info)
-        {
-            switch (info->type)
-            {
-                case GAMEOBJECT_TYPE_CHAIR:
-                    return "chair";
-                case GAMEOBJECT_TYPE_MAILBOX:
-                    return "mail";
-                case GAMEOBJECT_TYPE_SPELL_FOCUS:
-                    // SpellFocusObject.dbc: 1 anvil, 3 forge, 4 cooking fire.
-                    if (info->spellFocus.focusId == 1 || info->spellFocus.focusId == 3)
-                        return "smith";
-                    if (info->spellFocus.focusId == 4)
-                        return "fire";
-                    return nullptr;
-            }
-            return nullptr;
         }
     }
 
@@ -307,6 +261,28 @@ namespace Population
             }
         }
 
+        // Where the residents go during their day (same order as the anchors).
+        for (TownState& t : states)
+        {
+            auto places = std::make_shared<std::vector<PlaceAnchor>>();
+            bool const startArea = t.settlement->kind == SettlementKind::StartArea;
+            for (TownAnchor const& a : t.anchors)
+            {
+                PlaceAnchor p;
+                p.type = a.spot.type;
+                p.x = a.spot.x;
+                p.y = a.spot.y;
+                p.z = a.spot.z;
+                p.o = a.spot.o;
+                p.object = a.object;
+                p.exactSpot = a.spot.exactSpot;
+                p.chairEntry = a.chairEntry;
+                p.visitWeight = VisitWeight(p.type, startArea);
+                places->push_back(std::move(p));
+            }
+            t.places = std::move(places);
+        }
+
         // The levels the place is for: what lives around it (middle half of the creatures).
         for (TownState& t : states)
         {
@@ -377,6 +353,7 @@ namespace Population
         out.kind = BotKind::Town;
         out.settlementId = s.id;
         out.role = role;
+        out.places = town.places;
         out.mapId = s.mapId;
         out.minLevel = town.levelMin;
         out.maxLevel = town.levelMax;

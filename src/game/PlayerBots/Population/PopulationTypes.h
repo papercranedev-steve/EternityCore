@@ -8,6 +8,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "PlayerBotAI.h"    // PlayerBotAppearance
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,19 @@ namespace Population
         float x = 0.0f, y = 0.0f, z = 0.0f;
         float faceX = 0.0f, faceY = 0.0f;   // look at this point after arriving
     };
+
+    // A place of a city or town a bot can go to during its day there (TownLife.h): one anchor
+    // of the city or town, same index as the director's anchor (SpawnRequest::anchorIndex).
+    struct PlaceAnchor
+    {
+        std::string type;               // PlaceAnchors.h types
+        float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
+        bool object = false;            // a gameobject (stand all around it), else an NPC or a point
+        bool exactSpot = false;         // manual scene point: stand exactly here, facing o
+        uint32 chairEntry = 0;          // chair: its gameobject entry
+        uint32 visitWeight = 0;         // PlaceAnchors::VisitWeight, 0: never visited
+    };
+    using PlaceMenu = std::shared_ptr<std::vector<PlaceAnchor> const>;
 
     // Gear of a roster member (Growth::Gear), applied with CombatBotBaseAI random gear limits.
     struct GearPlan
@@ -96,7 +110,10 @@ namespace Population
         uint32 cityZone = 0;
         CityRole role = CityRole::None;
         int32 anchorIndex = -1;         // stand / showcase / sitter: which anchor of the city or town
-        std::vector<Waypoint> route;    // mover: spots to run between
+        std::vector<Waypoint> route;    // mover: its first spot is where it starts
+        // Stand, mover, sitter: the places of the city or town for their day there (TownLife.h);
+        // the role only decides where the day starts.
+        PlaceMenu places;
 
         // Town bots: the settlement (Settlements.h id); sitter: the chair at (x, y, z), 0 = sit on the ground.
         uint32 settlementId = 0;

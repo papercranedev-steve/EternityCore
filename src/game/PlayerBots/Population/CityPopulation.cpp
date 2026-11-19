@@ -1,6 +1,7 @@
 #include "Population/CityPopulation.h"
 #include "Population/HiddenSpot.h"
 #include "Population/Observers.h"
+#include "Population/PlaceAnchors.h"
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationIdentity.h"
 #include "Population/ScenePoints.h"
@@ -203,10 +204,21 @@ namespace Population
 
         uint32 const patch = sWorld.GetWowPatch();
 
-        // Auctioneers and bankers (templates of the current patch are already in memory).
+        // Auctioneers and bankers (templates of the current patch are already in memory), and the
+        // other places people go to during their day (PlaceAnchors.h: trainers, vendors, ...).
+        auto npcType = [](CreatureInfo const* info) -> char const*
+        {
+            if (!info)
+                return nullptr;
+            if (info->npc_flags & UNIT_NPC_FLAG_AUCTIONEER)
+                return "ah";
+            if (info->npc_flags & UNIT_NPC_FLAG_BANKER)
+                return "bank";
+            return NpcAnchorType(info);
+        };
         std::vector<uint32> npcEntries;
         for (auto const& itr : sObjectMgr.GetCreatureInfoMap())
-            if (itr.second && (itr.second->npc_flags & (UNIT_NPC_FLAG_AUCTIONEER | UNIT_NPC_FLAG_BANKER)))
+            if (itr.second && npcType(itr.second.get()))
                 npcEntries.push_back(itr.first);
 
         uint32 dbCount = 0;
@@ -214,7 +226,8 @@ namespace Population
         {
             std::unique_ptr<QueryResult> result = WorldDatabase.PQuery(
                 "SELECT `id`, `map`, `position_x`, `position_y`, `position_z`, `orientation` FROM `creature` "
-                "WHERE `map` IN (0, 1) AND `patch_min` <= %u AND `patch_max` >= %u AND `id` IN (%s)",
+                "WHERE `map` IN (0, 1) AND `patch_min` <= %u AND `patch_max` >= %u AND `id` IN (%s) "
+                "AND `guid` NOT IN (SELECT `guid` FROM `game_event_creature`)",
                 patch, patch, JoinIds(npcEntries).c_str());
             if (result)
             {
@@ -223,10 +236,11 @@ namespace Population
                     Field* f = result->Fetch();
                     CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(f[0].GetUInt32());
                     CityState* s = cityAt(f[1].GetUInt32(), f[2].GetFloat(), f[3].GetFloat());
-                    if (!info || !s)
+                    char const* type = npcType(info);
+                    if (!type || !s)
                         continue;
                     CityAnchor a;
-                    a.type = (info->npc_flags & UNIT_NPC_FLAG_AUCTIONEER) ? "ah" : "bank";
+                    a.type = type;
                     a.label = info->name;
                     a.x = f[2].GetFloat();
                     a.y = f[3].GetFloat();
@@ -239,34 +253,40 @@ namespace Population
             }
         }
 
-        // Mailboxes.
-        std::vector<uint32> mailEntries;
+        // Mailboxes, and chairs, anvils, forges and cooking fires for the day (PlaceAnchors.h).
+        std::vector<uint32> objectEntries;
         for (auto const& itr : sObjectMgr.GetGameObjectInfoMap())
-            if (itr.second && itr.second->type == GAMEOBJECT_TYPE_MAILBOX)
-                mailEntries.push_back(itr.first);
+            if (itr.second && ObjectAnchorType(itr.second.get()))
+                objectEntries.push_back(itr.first);
 
-        if (!mailEntries.empty())
+        if (!objectEntries.empty())
         {
             std::unique_ptr<QueryResult> result = WorldDatabase.PQuery(
                 "SELECT `id`, `map`, `position_x`, `position_y`, `position_z`, `orientation` FROM `gameobject` "
-                "WHERE `map` IN (0, 1) AND `patch_min` <= %u AND `patch_max` >= %u AND `id` IN (%s)",
-                patch, patch, JoinIds(mailEntries).c_str());
+                "WHERE `map` IN (0, 1) AND `patch_min` <= %u AND `patch_max` >= %u AND `id` IN (%s) "
+                "AND `guid` NOT IN (SELECT `guid` FROM `game_event_gameobject`)",
+                patch, patch, JoinIds(objectEntries).c_str());
             if (result)
             {
                 do
                 {
                     Field* f = result->Fetch();
+                    GameObjectInfo const* info = sObjectMgr.GetGameObjectTemplate(f[0].GetUInt32());
                     CityState* s = cityAt(f[1].GetUInt32(), f[2].GetFloat(), f[3].GetFloat());
-                    if (!s)
+                    char const* type = ObjectAnchorType(info);
+                    if (!s || !type)
                         continue;
                     CityAnchor a;
-                    a.type = "mail";
-                    a.label = "mailbox";
+                    a.type = type;
+                    a.label = info->name;
                     a.x = f[2].GetFloat();
                     a.y = f[3].GetFloat();
                     a.z = f[4].GetFloat();
                     a.o = f[5].GetFloat();
                     a.capacity = AnchorCapacity(a.type);
+                    a.object = true;
+                    if (info->type == GAMEOBJECT_TYPE_CHAIR)
+                        a.chairEntry = info->id;
                     if (addAnchor(*s, std::move(a)))
                         ++dbCount;
                 } while (result->NextRow());
@@ -295,6 +315,27 @@ namespace Population
                 s.anchors.push_back(std::move(a));
                 ++manualCount;
             }
+        }
+
+        // Where people go during their day (same order as the anchors).
+        for (CityState& s : states)
+        {
+            auto places = std::make_shared<std::vector<PlaceAnchor>>();
+            for (CityAnchor const& a : s.anchors)
+            {
+                PlaceAnchor p;
+                p.type = a.type;
+                p.x = a.x;
+                p.y = a.y;
+                p.z = a.z;
+                p.o = a.o;
+                p.object = a.object;
+                p.chairEntry = a.chairEntry;
+                p.exactSpot = a.exactSpot;
+                p.visitWeight = VisitWeight(p.type, false);
+                places->push_back(std::move(p));
+            }
+            s.places = std::move(places);
         }
 
         m_states = std::move(states);
@@ -397,6 +438,7 @@ namespace Population
         out.kind = BotKind::City;
         out.cityZone = city.def->zone;
         out.role = role;
+        out.places = city.places;
         out.team = city.def->team;
         out.mapId = city.def->mapId;
         out.tier = role == CityRole::Showcase ? GearTier::Showcase : GearTier::Normal;

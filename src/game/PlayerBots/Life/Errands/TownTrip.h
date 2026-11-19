@@ -15,7 +15,7 @@
  *             request (Requests::Board, intent Errand). It keeps following meanwhile. "yes" or
  *             no answer (the fallback: a player who ignores the popup does not mind): it goes.
  *             "no": it stays and the intent backs off.
- *   Going     the stops in turn: walk there, stand DWELL_MS, then the stop's action.
+ *   Going     the stops in turn: walk there (Trip/Approach.h), stand DWELL_MS, then the stop's action.
  * Done, the leader within NEAR_YD:
  *   Returning back to him (BACK_YD).
  * Done, the leader farther (busy elsewhere in town): it whispers him and asks (intent
@@ -36,6 +36,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Life/Errands/Trip/Approach.h"
 #include "Life/Errands/Trip/TripPlan.h"
 #include <string>
 #include <vector>
@@ -66,7 +67,7 @@ namespace Life
         uint32 nextCheckMs = 0;
         uint32 phaseSinceMs = 0;    // the current phase or stop since
         uint32 nextMoveMs = 0;
-        uint32 arrivedMs = 0;       // standing at the current stop since, 0 = not there
+        Trip::ApproachState leg;    // to the current stop
         uint32 cooldownUntilMs = 0;
         uint32 leaderMap = 0;       // the leader's map when the trip began
         // Where it waits (a town gate, or where it finished) and what it calls the place.

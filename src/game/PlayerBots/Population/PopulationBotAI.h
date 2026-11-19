@@ -14,6 +14,7 @@
 #include "TeamBotAI.h"
 #include "Population/PopulationTypes.h"
 #include "Life/Errands/LootRun.h"
+#include "Population/TownLife.h"
 #include "Timer.h"
 #include <memory>
 
@@ -63,11 +64,9 @@ namespace Population
         void HideFromNearbyPlayers();
         void UpdateSocial(uint32 diff);
         void UpdateIdle();
-        void UpdateStand();
-        void UpdateMover();
         void UpdateCrafter();
-        // Town sitter: on its chair (SpawnRequest::chairEntry) or on the ground, up now and then.
-        void UpdateSitter();
+        // Standers, movers and sitters of a city or town live their day there (TownLife.h).
+        bool LivesTownLife() const;
         void SetupProfession();
         void PickRecipe();
         void ClearCraftedItems();
@@ -104,21 +103,12 @@ namespace Population
         uint32 m_walkRetries = 0;
         // m_initialized comes from CombatBotBaseAI.
 
-        // Movement target of the current MovePoint (stand shuffle or mover leg).
+        // Movement target of the current MovePoint (walking in or out).
         float m_targetX = 0.0f, m_targetY = 0.0f, m_targetZ = 0.0f;
         uint32 m_moveDeadlineMs = 0;
+        float m_homeX = 0.0f, m_homeY = 0.0f, m_homeZ = 0.0f;   // the spawn spot
 
-        // Stand: step away a few yards now and then, come back.
-        enum class Shuffle : uint8 { Home, Leaving, Away, Returning };
-        Shuffle m_shuffle = Shuffle::Home;
-        float m_homeX = 0.0f, m_homeY = 0.0f, m_homeZ = 0.0f;
-        uint32 m_nextShuffleAtMs = 0;
-        uint32 m_shuffleUntilMs = 0;
-
-        // Mover: run between the route spots, wait at each.
-        size_t m_routeIndex = 0;
-        bool m_moving = false;
-        uint32 m_waitUntilMs = 0;
+        TownLife m_townLife;
 
         // Crafter: casts a real recipe in batches (reagents are added, products thrown away).
         uint32 m_professionSkill = 0;
