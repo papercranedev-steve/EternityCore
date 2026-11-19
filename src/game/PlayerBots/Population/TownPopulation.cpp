@@ -25,8 +25,7 @@ namespace Population
         uint32 const TICK_MS = 5 * IN_MILLISECONDS;
         // Creatures this far beyond the core give the residents' levels.
         float const LEVEL_SCAN_YD = 400.0f;
-        // Of the residents: sitting (chairs, fires), walking between the anchors.
-        float const SITTER_SHARE = 0.4f;
+        // Of the residents: walking between the anchors (sitting: SitterShareOf).
         float const MOVER_SHARE = 0.15f;
         // Neutral towns: residents of the observer's side this often (percent).
         uint32 const OWN_SIDE_PCT = 75;
@@ -50,15 +49,15 @@ namespace Population
         {
             if (type == "chair" || type == "trainer")
                 return 1;
-            if (type == "fire" || type == "inn")
+            if (type == "fire" || type == "inn" || type == "quest")
                 return 3;
             return 2;
         }
 
-        // Stand candidates per anchor type (the smith is busy).
+        // Stand candidates per anchor type (the smith and the quest givers are busy).
         uint32 StandWeight(std::string const& type)
         {
-            if (type == "smith")
+            if (type == "smith" || type == "quest")
                 return 3;
             if (type == "inn")
                 return 2;
@@ -120,7 +119,30 @@ namespace Population
                 return "trainer";
             if (npcFlags & UNIT_NPC_FLAG_VENDOR)
                 return "vendor";
+            // Where people crowd in a start area (Deputy Willem, Marshal McBride).
+            if (npcFlags & UNIT_NPC_FLAG_QUESTGIVER)
+                return "quest";
             return nullptr;
+        }
+
+        // Critters carry quest flags too (Northshire's chickens).
+        char const* NpcAnchorType(CreatureInfo const* info)
+        {
+            if (!info || info->type == CREATURE_TYPE_CRITTER)
+                return nullptr;
+            return NpcAnchorType(info->npc_flags);
+        }
+
+        // Of the residents, sitting (chairs, fires): a start area's crowd is outside at the
+        // quest givers, not in the abbey's chairs (user 2026-11-19, Northshire looked empty).
+        float SitterShareOf(SettlementKind kind)
+        {
+            switch (kind)
+            {
+                case SettlementKind::StartArea: return 0.15f;
+                case SettlementKind::Camp:      return 0.25f;
+                default:                        return 0.4f;
+            }
         }
 
         // The object anchor type of a gameobject template, nullptr: none.
@@ -214,7 +236,7 @@ namespace Population
 
         std::vector<uint32> npcEntries;
         for (auto const& itr : sObjectMgr.GetCreatureInfoMap())
-            if (itr.second && NpcAnchorType(itr.second->npc_flags))
+            if (itr.second && NpcAnchorType(itr.second.get()))
                 npcEntries.push_back(itr.first);
         if (!npcEntries.empty())
         {
@@ -230,7 +252,7 @@ namespace Population
                     Field* f = result->Fetch();
                     CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(f[0].GetUInt32());
                     TownState* t = townAt(f[1].GetUInt32(), f[2].GetFloat(), f[3].GetFloat());
-                    char const* type = info ? NpcAnchorType(info->npc_flags) : nullptr;
+                    char const* type = NpcAnchorType(info);
                     if (!t || !type)
                         continue;
                     TownAnchor a;
@@ -320,7 +342,7 @@ namespace Population
 
         TownTargets t;
         t.total = std::min(room, uint32(std::lround(float(ResidentsOf(town.settlement->kind)) * m_scale * hourFactor)));
-        t.sitter = std::min(seats, uint32(std::lround(float(t.total) * SITTER_SHARE)));
+        t.sitter = std::min(seats, uint32(std::lround(float(t.total) * SitterShareOf(town.settlement->kind))));
         t.mover = std::min(t.total - t.sitter, uint32(std::lround(float(t.total) * MOVER_SHARE)));
         return t;
     }

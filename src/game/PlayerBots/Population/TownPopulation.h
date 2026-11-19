@@ -35,7 +35,7 @@ namespace Population
 
     struct TownAnchor
     {
-        CityAnchor spot;                    // types: chair fire inn smith vendor trainer mail flight
+        CityAnchor spot;                    // types: chair fire inn smith vendor trainer quest mail flight
         bool object = false;                // a gameobject (stand all around it), else an NPC (in front)
         uint32 chairEntry = 0;              // type chair: its gameobject entry
     };
