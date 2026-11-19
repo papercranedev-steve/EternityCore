@@ -48,7 +48,7 @@ namespace
             if (Cast(me, s.pLightningShield))
                 return;
 
-            if (bot.m_role == ROLE_HEALER && bot.FindAndHealInjuredAlly())
+            if (bot.HealsForTeam() && bot.FindAndHealInjuredAlly())
                 return;
 
             if (me->GetVictim())
@@ -64,7 +64,7 @@ namespace
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
 
-            if (bot.GetRole() != ROLE_HEALER)
+            if (!bot.HealsForTeam())
                 if (Unit* pVictim = me->GetVictim())
                     if (Damage(pVictim))
                         return;
@@ -72,14 +72,19 @@ namespace
             // A healer heals before it drops totems: up to four totems are four GCDs without a
             // heal (until 2026-11-15 totems came first, also at the pull and after a totem died).
             // The heal module orders nothing while nobody needs a lift (rest): the totems go
-            // down in those gaps.
-            if (bot.GetRole() == ROLE_HEALER)
+            // down in those gaps. One that also deals damage for the team (nobody else does)
+            // takes its damage step last.
+            if (bot.HealsForTeam())
             {
                 if (bot.FindAndHealInjuredAlly(50.0f, 90.0f))
                     return;
                 if (KeepTotems())
                     return;
-                bot.FindAndPreHealTarget();
+                if (bot.FindAndPreHealTarget())
+                    return;
+                if (bot.DealsDamageForTeam())
+                    if (Unit* pVictim = me->GetVictim())
+                        Damage(pVictim);
                 return;
             }
 
@@ -166,7 +171,9 @@ namespace
                 return true;
             if (Cast(pVictim, s.pFlameShock))
                 return true;
-            if ((bot.GetRole() == ROLE_RANGE_DPS || !bot.me->CanReachWithMeleeAutoAttack(pVictim)) &&
+            // (a healer dealing damage too stands back like a caster)
+            if ((bot.GetRole() == ROLE_RANGE_DPS || bot.GetRole() == ROLE_HEALER ||
+                 !bot.me->CanReachWithMeleeAutoAttack(pVictim)) &&
                 Cast(pVictim, s.pLightningBolt))
                 return true;
             return false;

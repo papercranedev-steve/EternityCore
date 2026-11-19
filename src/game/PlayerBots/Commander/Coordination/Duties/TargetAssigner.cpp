@@ -268,7 +268,9 @@ namespace Commander
             FleeFacts const& f = e.flee;
             if (!f.predicted || f.fleeing || f.FocusSaves() <= 0.0f)
                 return 0;
-            float const reach = m.role == ROLE_RANGE_DPS ? DamageTargets::RANGED_REACH : DamageTargets::MELEE_REACH;
+            // (a healer dealing damage too casts from range, as DamageTargets)
+            bool const ranged = m.role == ROLE_RANGE_DPS || m.role == ROLE_HEALER;
+            float const reach = ranged ? DamageTargets::RANGED_REACH : DamageTargets::MELEE_REACH;
             float const slack = f.secToFlee - SwitchCost::Seconds(world, m, e, reach) - TargetAssigner::SUGGEST_MARGIN_SEC;
             if (slack <= 0.0f)
                 return 0;
@@ -328,7 +330,9 @@ namespace Commander
             TargetContext const ctx(world, plan);
             for (PartyMemberFacts const& m : world.party)
             {
-                if (!m.isBot || m.isPet || !m.CanAct() || m.role == ROLE_HEALER || m.role == ROLE_INVALID)
+                // By function, not role: a healer gets a target only when nobody else in the team
+                // deals damage (PartyMemberFacts::functions, TeamPlan::coverage).
+                if (!m.isBot || m.isPet || !m.CanAct() || !m.DealsDamage())
                     continue;
                 if (HeldOut(world, plan, m))
                     continue;

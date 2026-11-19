@@ -22,7 +22,7 @@ namespace DamageTargets
         // killed it (FinishForecast.h). Melee and instant damage dealers: never.
         bool FinishedFor(WorldModel const& world, PartyMemberFacts const& bot, EnemyFacts const& e)
         {
-            if (bot.role != ROLE_RANGE_DPS || !bot.fillerCastMs)
+            if ((bot.role != ROLE_RANGE_DPS && bot.role != ROLE_HEALER) || !bot.fillerCastMs)
                 return false;
             return FinishForecast::Finished(world, e, bot.guid, FinishForecast::FillerLandMs(bot, e));
         }

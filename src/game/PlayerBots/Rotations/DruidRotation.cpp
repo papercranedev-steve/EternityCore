@@ -138,7 +138,9 @@ namespace
                (bot.m_role != ROLE_TANK || !me->CanReachWithMeleeAutoAttack(pVictim)))
                 me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
 
-            if (bot.GetRole() == ROLE_HEALER)
+            // A healer deals damage only when nobody else in the team does (TeamBotAI::
+            // DealsDamageForTeam): from caster form, after the heal step above cast nothing.
+            if (bot.GetRole() == ROLE_HEALER && !bot.DealsDamageForTeam())
                 return;
 
             switch (form)

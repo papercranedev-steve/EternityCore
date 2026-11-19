@@ -47,7 +47,7 @@ namespace
 
             EndBuffing(s.pPowerWordFortitude);
 
-            if (bot.m_role == ROLE_HEALER && bot.FindAndHealInjuredAlly())
+            if (bot.HealsForTeam() && bot.FindAndHealInjuredAlly())
                 return;
 
             if (me->GetVictim())
@@ -71,7 +71,7 @@ namespace
 
             // Made a healer in the fight (a spare healer: Commander CrisisAssigner): no holy
             // spell in Shadowform.
-            if (bot.GetRole() == ROLE_HEALER && me->GetShapeshiftForm() == FORM_SHADOW &&
+            if (bot.HealsForTeam() && me->GetShapeshiftForm() == FORM_SHADOW &&
                 me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT))
             {
                 me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
@@ -82,7 +82,10 @@ namespace
                 bot.CanTryToCastSpell(me, s.pInnerFocus))
                 bot.DoCastSpell(me, s.pInnerFocus);
 
-            if (bot.GetRole() == ROLE_HEALER || (!me->GetVictim() && me->GetShapeshiftForm() == FORM_NONE))
+            // Heals the team (a healer, or nobody else heals): the heal step first; its damage
+            // step only when it also deals damage for the team (nobody else does) and cast nothing.
+            bool const heals = bot.HealsForTeam();
+            if (heals || (!me->GetVictim() && me->GetShapeshiftForm() == FORM_NONE))
             {
                 if (!healPlanned && s.pPowerWordShield)
                     if (Player* pTarget = bot.SelectShieldTarget())
@@ -93,8 +96,12 @@ namespace
                 if (bot.FindAndHealInjuredAlly(80.0f, 90.0f))
                     return;
 
-                if (bot.GetRole() == ROLE_HEALER)
-                    bot.FindAndPreHealTarget();
+                if (bot.GetRole() == ROLE_HEALER && bot.FindAndPreHealTarget())
+                    return;
+
+                if (heals && bot.DealsDamageForTeam())
+                    if (Unit* pVictim = me->GetVictim())
+                        Damage(pVictim);
             }
             // Alone (a team of one, Commander/Team.h): nobody else heals it, as the paladin and
             // shaman rotations heal themselves when low.
@@ -130,7 +137,8 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.priest;
 
-            if (Cast(me, s.pShadowform))
+            // A priest that heals the team stays out of Shadowform (no holy spell in it).
+            if (!bot.HealsForTeam() && Cast(me, s.pShadowform))
                 return;
             if (Cast(pVictim, s.pVampiricEmbrace))
                 return;

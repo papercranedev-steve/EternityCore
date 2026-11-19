@@ -195,6 +195,25 @@ bool TeamBotAI::IsOpeningOn(Unit const* pVictim) const
     return commander && commander->GetPlan().hunt.target == pVictim->GetObjectGuid();
 }
 
+uint8 TeamBotAI::TeamFunctions() const
+{
+    if (sCommanderMgr.IsEnabled())
+        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
+            if (Commander::PartyMemberFacts const* self = commander->GetWorld().FindMember(me->GetObjectGuid()))
+                return self->functions;
+    return Commander::RoleFunctions(uint8(m_role));
+}
+
+bool TeamBotAI::HealsForTeam() const
+{
+    return (TeamFunctions() & Commander::FUNCTION_HEAL) != 0;
+}
+
+bool TeamBotAI::DealsDamageForTeam() const
+{
+    return (TeamFunctions() & Commander::FUNCTION_DAMAGE) != 0;
+}
+
 bool TeamBotAI::UpdateFrameHands(uint32 diff)
 {
     // Commander: second look at a heal being cast, every frame (own CHECK_INTERVAL_MS inside),

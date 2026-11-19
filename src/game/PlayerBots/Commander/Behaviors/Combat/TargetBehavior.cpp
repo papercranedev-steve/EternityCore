@@ -12,8 +12,9 @@ namespace Commander
 {
     bool TargetBehavior::AppliesTo(TeamBotAI const* bot) const
     {
+        // (healers too: TargetAssigner gives one a target only when nobody else deals damage)
         CombatBotRoles const role = bot->GetRole();
-        return role == ROLE_TANK || role == ROLE_MELEE_DPS || role == ROLE_RANGE_DPS;
+        return role == ROLE_TANK || role == ROLE_MELEE_DPS || role == ROLE_RANGE_DPS || role == ROLE_HEALER;
     }
 
     void TargetBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
@@ -32,7 +33,7 @@ namespace Commander
         Unit* enemy = me->GetMap()->GetUnit(duty->enemy);
         if (!enemy || !enemy->IsAlive() || !bot->IsValidHostileTarget(enemy))
             return;
-        if (bot->GetRole() == ROLE_RANGE_DPS &&
+        if ((bot->GetRole() == ROLE_RANGE_DPS || bot->GetRole() == ROLE_HEALER) &&
             (!me->IsWithinDistInMap(enemy, RANGED_SIGHT_RANGE) || !me->IsWithinLOSInMap(enemy)))
             return;
 

@@ -71,7 +71,7 @@ namespace
 
             EndBuffing(m_lastBlessing);
 
-            if (bot.m_role == ROLE_HEALER && bot.FindAndHealInjuredAlly())
+            if (bot.HealsForTeam() && bot.FindAndHealInjuredAlly())
                 return;
         }
 
@@ -99,11 +99,15 @@ namespace
                 }
             }
 
-            if (bot.GetRole() == ROLE_HEALER)
+            // Heals the team (a healer, or nobody else heals): the heal step first, the damage
+            // step only when it also deals damage for the team (nobody else does).
+            if (bot.HealsForTeam())
             {
                 if (bot.FindAndHealInjuredAlly(80.0f, 90.0f))
                     return;
                 if (bot.FindAndPreHealTarget())
+                    return;
+                if (bot.DealsDamageForTeam() && Damage())
                     return;
             }
             else if (Damage())
@@ -113,7 +117,7 @@ namespace
                 Cast(me, s.pBlessingOfFreedom))
                 return;
 
-            if (bot.GetRole() != ROLE_HEALER && me->GetHealthPercent() < 30.0f)
+            if (!bot.HealsForTeam() && me->GetHealthPercent() < 30.0f)
                 bot.HealInjuredTarget(me);
         }
 

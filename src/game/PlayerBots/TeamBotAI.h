@@ -80,6 +80,18 @@ public:
     // the rotation opens on it out of combat.
     bool IsOpeningOn(Unit const* pVictim) const;
 
+    // What this bot does for its team (Commander PartyMemberFacts::functions, TeamFunction bits
+    // in Commander/CommanderTypes.h): its role's own plus what nobody else in the team does
+    // (a lone healer deals damage too; doc .kiro/docs/2026-11-19-any-size-team.md). Without a
+    // Commander or before its first refresh: the role's own.
+    uint8 TeamFunctions() const;
+    // Heals the team: the class rotation's heal step (the heal module's orders in a fight).
+    bool HealsForTeam() const;
+    // Deals damage for the team: the class rotation's damage step. A bot that also heals takes
+    // its heal step first (the heal module orders a heal when one is needed) and its damage
+    // step only when it cast nothing there.
+    bool DealsDamageForTeam() const;
+
     // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
     // change it later by party composition while the role is not locked.
     void AutoAssignRole() override;

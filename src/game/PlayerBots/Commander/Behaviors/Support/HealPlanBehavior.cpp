@@ -303,7 +303,8 @@ namespace Commander
 
     bool HealPlanBehavior::AppliesTo(TeamBotAI const* bot) const
     {
-        return bot->GetRole() == ROLE_HEALER || bot->Kit().FreeSelfHeal();
+        // (heals the team: a healer, or a bot given the heal function because nobody else heals)
+        return bot->GetRole() == ROLE_HEALER || bot->HealsForTeam() || bot->Kit().FreeSelfHeal();
     }
 
     bool HealPlanBehavior::ControlsSelfHealOf(TeamBotAI const* bot, WorldModel const& world)
@@ -320,8 +321,11 @@ namespace Commander
 
     bool HealPlanBehavior::ControlsHealingOf(TeamBotAI const* bot, WorldModel const& world)
     {
-        return sCommanderMgr.IsEnabled() && sCommanderMgr.IsModuleEnabled("heal") &&
-               bot->GetRole() == ROLE_HEALER && world.HasPartyEnemy();
+        if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("heal") || !world.HasPartyEnemy())
+            return false;
+        // Heals the team by function (PartyMemberFacts::HealsTeam: a healer, or nobody else heals).
+        PartyMemberFacts const* self = world.FindMember(bot->me->GetObjectGuid());
+        return self ? self->HealsTeam() : bot->GetRole() == ROLE_HEALER;
     }
 
     void HealPlanBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
