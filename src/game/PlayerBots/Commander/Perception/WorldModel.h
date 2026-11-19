@@ -1234,17 +1234,6 @@ namespace Commander
         // combat, must go to the tank fighting 30 yd away. `inCombat`: the bot's own flag (an
         // ally's fight it joined counts too).
         bool InFight(bool inCombat) const { return inCombat || HasPartyEnemy(); }
-        // A bot alone (a team of one, pets aside, no player anywhere in its team): it plays
-        // tank, healer and damage itself.
-        bool IsSolo() const
-        {
-            if (humanInTeam)
-                return false;
-            uint32 members = 0;
-            for (PartyMemberFacts const& m : party)
-                members += m.isPet ? 0 : 1;
-            return members == 1;
-        }
     };
 }
 

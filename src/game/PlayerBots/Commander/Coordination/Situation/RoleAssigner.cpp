@@ -84,8 +84,14 @@ namespace Commander
     void RoleAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
         // Only between fights: a role change rebuilds the spell lists and switches the rotation.
+        // A team attacked before its first table (a field bot right after login) gets one from
+        // the roles it has now: a lone healer must hit back in that fight too.
         if (world.HasPartyEnemy() || plan.pull.phase != PullPhase::None || plan.clear.active || plan.retreat.active)
+        {
+            if (plan.coverage.members.empty())
+                BuildCoverage(world, plan);
             return;
+        }
 
         ChooseRoles(world, plan);
         BuildCoverage(world, plan);
@@ -166,23 +172,14 @@ namespace Commander
         plan.roles.clear();
         if (free.empty())
             return;
-        // Alone (a team of one): it must kill things itself, so never the healer role (a healer
-        // gets no target, TargetAssigner); it heals itself in its damage role.
-        if (world.IsSolo())
-        {
-            RoleDuty d;
-            d.bot = free.front()->guid;
-            d.role = free.front()->cap.BestSolo();
-            d.reason = "alone: fights by itself";
-            plan.roles.push_back(d);
-            return;
-        }
-        if (members < 2)
-            return;
-
+        // Any size, a team of one too (doc 2026-11-19-any-size-team.md): the same choice. A
+        // team of one needs no tank and no healer (nobody else to hold for or heal): its role is
+        // its best one (a holy priest stays a healer); what nobody else does (the lone healer's
+        // damage) is the coverage's (BuildCoverage).
         bool const small = members <= SMALL_PARTY;
-        uint32 const needTanks = small ? NEED_TANKS_SMALL : NEED_TANKS_RAID;
-        uint32 const needHealers = small ? NEED_HEALERS_SMALL : (members + SMALL_PARTY - 1) / SMALL_PARTY;
+        bool const alone = members < 2;
+        uint32 const needTanks = alone ? 0 : small ? NEED_TANKS_SMALL : NEED_TANKS_RAID;
+        uint32 const needHealers = alone ? 0 : small ? NEED_HEALERS_SMALL : (members + SMALL_PARTY - 1) / SMALL_PARTY;
         uint32 const openTanks = lockedTanks >= needTanks ? 0 : needTanks - lockedTanks;
         uint32 const openHealers = lockedHealers >= needHealers ? 0 : needHealers - lockedHealers;
 
@@ -216,6 +213,11 @@ namespace Commander
             {
                 d.role = ROLE_HEALER;
                 d.reason = "best healer of the party";
+            }
+            else if (!needTanks)
+            {
+                d.role = m->cap.Best();
+                d.reason = "alone: its best role";
             }
             else
             {

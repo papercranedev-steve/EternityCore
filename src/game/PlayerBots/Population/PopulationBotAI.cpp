@@ -191,10 +191,10 @@ namespace Population
         // Below the premade specs (19) a population bot knows no class spell: the trainer's
         // lessons for its level, free (what it learned before we met it).
         BotShared::ClassTraining::LearnAvailable(me, false);
-        // Alone, before the first fight: a healer gets no target (TargetAssigner) and roles
-        // change only between fights (RoleAssigner), so a druid attacked right after login
-        // healed itself under a wolf for minutes. The Commander gives a team of one this role too.
-        m_role = RoleCapabilities::Assess(me).BestSolo();
+        // Its best role, as the Commander gives a team of one (RoleAssigner). A healer alone
+        // deals damage too (TeamPlan::coverage, built in its first fight if it is attacked right
+        // after login: a druid once healed itself under a wolf for minutes with no target).
+        m_role = RoleCapabilities::Assess(me).Best();
         ResetSpellData();
         PopulateSpellData();
         m_rotationCreated = false;

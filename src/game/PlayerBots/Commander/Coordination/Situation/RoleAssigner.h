@@ -21,6 +21,8 @@
  * So a holy paladin with a shield is not made the tank when it is the only healer.
  * Larger groups: greedy, best tank first, then best healer (raids come later).
  * Everyone else: RoleCapability::BestNonTank (a second priest heals too).
+ * A team of one needs no tank and no healer: RoleCapability::Best (a lone healer stays one and
+ * deals damage too by the coverage below).
  *
  * When: not while the party fights, pulls, clears or retreats (the previous result is kept), so
  * a role only changes between fights.
