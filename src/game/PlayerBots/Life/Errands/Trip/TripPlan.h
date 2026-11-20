@@ -19,6 +19,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Life/Requests/RequestBoard.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -83,8 +84,15 @@ namespace Trip
         virtual ~ITripPlanner() = default;
         virtual char const* Name() const = 0;
         virtual bool Worth(Player* me) = 0;
-        // Stops near `leader` (Life/Errands/TownTrip::TRIP_YD), appended to `plan`.
+        // Stops near `leader` (Life/Errands/TownTrip::TRIP_YD; a planner may look further),
+        // appended to `plan`.
         virtual void PlanStops(Player* me, Player const* leader, TripPlanStops& plan) = 0;
+        // Lines the question shows under its text in the popup (what the business is about),
+        // in `reader`'s client language. Default: none.
+        virtual void Notes(Player* /*me*/, Player const* /*reader*/, std::vector<Requests::Ask::Note>& /*out*/) {}
+        // Copper the bot lacks for this business: the question then offers to give it
+        // (TownTrip: "pay"). Default: none.
+        virtual uint32 Shortfall(Player* /*me*/) { return 0; }
     };
 }
 }

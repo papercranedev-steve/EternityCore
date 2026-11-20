@@ -41,6 +41,7 @@
 #include "Life/Errands/QuestItemUse.h"
 #include "Life/Errands/GiveProvisions.h"
 #include "Life/Errands/AskProvisions.h"
+#include "Life/Errands/LessonReminder.h"
 #include "Shared/Trade.h"
 #include <array>
 #include <string>
@@ -184,12 +185,23 @@ public:
     // (Life/Errands/QuestTurnIn.h); the reward is picked by m_rewardChooser.
     Life::QuestTurnInState m_questTurnIn;
     Companions::CompanionRewardChooser m_rewardChooser;
+    // What the trainer business knows of this bot (Life/Errands/Trip/LessonPriority.h: its role,
+    // the spells its AI casts), refreshed by RefreshLessonContext when its spells or role change.
+    Life::Lessons::Context m_lessonContext;
+    // (spells are rebuilt from several places: refreshed every PB_LESSON_CONTEXT_MS and on a
+    // role change)
+    static constexpr uint32 PB_LESSON_CONTEXT_MS = 5 * IN_MILLISECONDS;
+    uint32 m_lessonContextMs = 0;
+    CombatBotRoles m_lessonContextRole = ROLE_INVALID;
+    void RefreshLessonContext();
     // Out of combat: a companion's business at vendors and its class trainer near the leader
     // (Life/Errands/NpcVisit.h, MerchantTasks.h).
     Life::NpcVisitState m_vendorVisit;
-    Life::VendorTask m_vendorTask;
+    Life::VendorTask m_vendorTask{ &m_lessonContext };
     Life::NpcVisitState m_trainerVisit;
-    Life::TrainerTask m_trainerTask;
+    Life::TrainerTask m_trainerTask{ &m_lessonContext };
+    // Out in the field: important lessons waiting at the trainer (Life/Errands/LessonReminder.h).
+    Life::LessonReminderState m_lessonReminder;
     // Farther than the NPC visits, with the leader's consent (Life/Errands/TownTrip.h): the
     // auction house, mailbox and vendors, and the class trainer (m_trainerTask, so TakeLearned
     // sees what the trip learned).

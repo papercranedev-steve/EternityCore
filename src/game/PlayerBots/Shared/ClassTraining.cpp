@@ -50,6 +50,19 @@ namespace BotShared
             return lessons;
         }
 
+        // The spell the lesson teaches this player (its trainer spell's first trigger spell
+        // of the player's class and race), 0 = none.
+        uint32 TaughtSpell(Player const* player, TrainerSpell const& lesson)
+        {
+            SpellEntry const* teach = sSpellMgr.GetSpellEntry(lesson.spell);
+            if (!teach)
+                return 0;
+            for (uint32 spellId : teach->EffectTriggerSpell)
+                if (spellId && !sSpellMgr.IsPrimaryProfessionFirstRankSpell(spellId) && player->IsSpellFitByClassAndRace(spellId))
+                    return spellId;
+            return 0;
+        }
+
         // The trainer spell teaches through its trigger spells (same as the .learn all_trainer helper).
         bool Learn(Player* player, TrainerSpell const& lesson)
         {
@@ -125,6 +138,80 @@ namespace BotShared
                     return true;
                 }
             return false;
+        }
+
+        std::vector<Lesson> Available(Player const* player)
+        {
+            std::vector<Lesson> available;
+            if (!player)
+                return available;
+            for (TrainerSpell const& lesson : LessonsOf(player->GetClass()))
+            {
+                if (player->GetTrainerSpellState(&lesson) != TRAINER_SPELL_GREEN)
+                    continue;
+                if (uint32 const spellId = TaughtSpell(player, lesson))
+                    available.push_back({ spellId, lesson.spellCost });
+            }
+            return available;
+        }
+
+        Result LearnInOrder(Player* player, std::function<uint32(uint32 spellId)> const& rank, uint32 skipFrom)
+        {
+            Result result;
+            if (!player)
+                return result;
+
+            std::vector<TrainerSpell> const& lessons = LessonsOf(player->GetClass());
+            // A learned rank makes the next one available: again until nothing is learned
+            // (capped in case a lesson stays available after learning it: bad trainer data).
+            for (uint32 pass = 0; pass < 20; ++pass)
+            {
+                struct Ranked
+                {
+                    TrainerSpell const* lesson;
+                    uint32 rank;
+                };
+                std::vector<Ranked> green;
+                uint32 total = 0;
+                for (TrainerSpell const& lesson : lessons)
+                {
+                    if (player->GetTrainerSpellState(&lesson) != TRAINER_SPELL_GREEN)
+                        continue;
+                    uint32 const spellId = TaughtSpell(player, lesson);
+                    if (!spellId)
+                        continue;
+                    green.push_back({ &lesson, rank(spellId) });
+                    total += lesson.spellCost;
+                }
+                std::stable_sort(green.begin(), green.end(), [](Ranked const& a, Ranked const& b)
+                {
+                    return a.rank != b.rank ? a.rank < b.rank : a.lesson->spellCost < b.lesson->spellCost;
+                });
+
+                bool const short_ = player->GetMoney() < total;
+                bool learnedAny = false;
+                for (Ranked const& r : green)
+                {
+                    if (short_ && r.rank >= skipFrom)
+                        continue;
+                    if (player->GetMoney() < r.lesson->spellCost || !Learn(player, *r.lesson))
+                        continue;
+                    if (r.lesson->spellCost)
+                    {
+                        player->ModifyMoney(-int32(r.lesson->spellCost));
+                        result.cost += r.lesson->spellCost;
+                    }
+                    ++result.learned;
+                    learnedAny = true;
+                }
+                if (!learnedAny)
+                    break;
+            }
+
+            for (TrainerSpell const& lesson : lessons)
+                if (player->GetTrainerSpellState(&lesson) == TRAINER_SPELL_GREEN)
+                    ++result.tooExpensive;
+            return result;
         }
 
         uint32 CostOfAvailable(Player const* player)

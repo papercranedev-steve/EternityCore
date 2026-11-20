@@ -11,6 +11,8 @@
 #define MANGOS_BOTSHARED_CLASS_TRAINING_H
 
 #include "Common.h"
+#include <functional>
+#include <vector>
 
 class Player;
 
@@ -35,6 +37,21 @@ namespace BotShared
 
         // The cheapest lesson available now; false when there is none.
         bool CheapestAvailable(Player const* player, uint32& cost);
+
+        // A lesson the trainer would give now (first ranks only: none of them unlocks yet).
+        struct Lesson
+        {
+            uint32 spellId = 0;     // the spell it teaches
+            uint32 cost = 0;        // copper
+        };
+        // Cheapest first.
+        std::vector<Lesson> Available(Player const* player);
+
+        // Learns, paying, in the caller's order: `rank` of the taught spell, lower first (the
+        // cheaper of equal ranks first). While the money does not cover every lesson available,
+        // lessons ranked `skipFrom` or higher are left (user 2026-11-20: no junk when money is
+        // short). New ranks that become available on the way are ranked too.
+        Result LearnInOrder(Player* player, std::function<uint32(uint32 spellId)> const& rank, uint32 skipFrom);
     }
 }
 

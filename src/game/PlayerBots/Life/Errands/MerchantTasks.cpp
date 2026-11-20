@@ -20,12 +20,15 @@ namespace Life
             // All of it or nothing (DurabilityRepairAll repairs item by item while money lasts).
             return cost && me->GetMoney() >= cost;
         }
+    }
 
-        // Money the class trainer will want: kept from everything but critical supplies.
-        uint32 TrainingReserve(Player* me)
-        {
+    // Money the class trainer will want for the important lessons: kept from everything but
+    // critical supplies (the junk lessons do not keep food from being bought).
+    uint32 VendorTask::TrainingReserve(Player* me) const
+    {
+        if (!m_lessons)
             return BotShared::ClassTraining::CostOfAvailable(me);
-        }
+        return Lessons::CostUpTo(Lessons::Available(me, *m_lessons), Lessons::IMPORTANT);
     }
 
     bool VendorTask::Wants(Player* me, Creature* npc)
@@ -73,7 +76,17 @@ namespace Life
 
     uint32 TrainerTask::Do(Player* me, Creature* npc)
     {
-        BotShared::ClassTraining::Result const result = BotShared::ClassTraining::LearnAvailable(me, true);
+        BotShared::ClassTraining::Result result;
+        if (m_lessons)
+        {
+            Lessons::Context const& context = *m_lessons;
+            result = BotShared::ClassTraining::LearnInOrder(me, [me, &context](uint32 spellId)
+            {
+                return uint32(Lessons::TierOf(me, spellId, context));
+            }, uint32(Lessons::Tier::Junk));
+        }
+        else
+            result = BotShared::ClassTraining::LearnAvailable(me, true);
         if (result.learned)
             m_learned = true;
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at trainer %s: %u spells for %u copper, %u too expensive.",

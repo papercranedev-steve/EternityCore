@@ -13,6 +13,7 @@
  *   Poll    Open until the leader answers (".partybot reply <id> <option>": Reply, any thread)
  *           or the timeout passes once its turn came: Expired with the request's fallback.
  *           Players often ignore popups: every request has a fallback.
+ *   Notes   lines under the question in the popup (Ask::notes), each its own system line.
  *   Close   the bot is done with it, with how it went (Accepted, Declined, Expired, Cancelled):
  *           the leader gets "PBREQ;<bot>;<id>;close;<answer>", and Declined / Expired start the
  *           intent's quiet time for this bot (Intents.h). Accepted resets the declines.
@@ -53,6 +54,15 @@ namespace Requests
         std::vector<Option> options;
         std::string fallback;           // the answer when nobody answers (one of the keys)
         uint32 timeoutMs = 0;           // 0: the intent's
+        // Lines under the question, in the popup only (the party chat gets the text alone):
+        // "PBREQ;<bot>;<id>;note;<tier>;<text>" after the open line, in order. `tier` picks
+        // the colour (Life/Errands/Trip/LessonPriority tiers 1-6; 0 = plain ink).
+        struct Note
+        {
+            uint8 tier = 0;
+            std::string text;
+        };
+        std::vector<Note> notes;
     };
 
     enum class State : uint8

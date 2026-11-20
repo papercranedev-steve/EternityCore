@@ -102,6 +102,9 @@ namespace Requests
         }
         Send(lines);
         BotShared::BotChat::SystemTo(leader, OpenLine(bot, e.id, e.ask, e.started ? Seconds(e.timeoutMs) : 0));
+        for (Ask::Note const& note : e.ask.notes)
+            BotShared::BotChat::SystemTo(leader, "PBREQ;" + e.botName + ";" + std::to_string(e.id) + ";note;" +
+                                                 std::to_string(note.tier) + ";" + Clean(note.text));
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Request] %s asks %s (%s, #%u%s): %s",
             e.botName.c_str(), leader->GetName(), DefOf(ask.intent).key, e.id, e.started ? "" : ", waits its turn",
             ask.text.c_str());

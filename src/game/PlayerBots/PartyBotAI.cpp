@@ -137,9 +137,33 @@ void PartyBotAI::StopErrands()
     Life::QuestItemUse::Stop(me, m_questItemUse);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
-    Life::TownTrip::Stop(me, m_townTrip);
+    Life::TownTrip::Stop(me, m_townTrip, m_tradeHands);
     Life::CraftRun::Stop(me, m_craftRun);
     Companions::ClassQuestFlow::Stop(m_classQuestFlow);
+}
+
+void PartyBotAI::RefreshLessonContext()
+{
+    m_lessonContextRole = m_role;
+    m_lessonContextMs = std::max<uint32>(WorldTimer::getMSTime(), 1);
+    m_lessonContext.tanks = m_role == ROLE_TANK;
+    m_lessonContext.heals = m_role == ROLE_HEALER;
+    m_lessonContext.usedChains.clear();
+    auto use = [this](SpellEntry const* pSpell)
+    {
+        if (pSpell)
+            m_lessonContext.usedChains.insert(sSpellMgr.GetFirstSpellInChain(pSpell->Id));
+    };
+    // What the rotation and the Commander cast (the class tables, the heal lists, the resurrection).
+    for (SpellEntry const* pSpell : m_spells.raw.spells)
+        use(pSpell);
+    for (SpellEntry const* pSpell : m_spellListDirectHeal)
+        use(pSpell);
+    for (SpellEntry const* pSpell : m_spellListPeriodicHeal)
+        use(pSpell);
+    for (SpellEntry const* pSpell : m_spellListIndirectHeal)
+        use(pSpell);
+    use(m_resurrectionSpell);
 }
 
 bool PartyBotAI::UpdateProvisions(Player* pLeader)
@@ -579,7 +603,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         ResetSpellData();
         PopulateSpellData();
         m_resetSpellData = false;
+        m_lessonContextMs = 0;
     }
+    if (m_lessonContextRole != m_role || !m_lessonContextMs ||
+        WorldTimer::getMSTimeDiff(m_lessonContextMs, WorldTimer::getMSTime()) >= PB_LESSON_CONTEXT_MS)
+        RefreshLessonContext();
 
     Player* pLeader = GetPartyLeader();
     if (!pLeader)
@@ -720,6 +748,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             Companions::ClassQuestFlow::Update(me, pLeader, m_classQuestFlow, m_mirrorLink, PersonalityTags());
             if (Companions::ClassQuestFlow::TakeSpellsChanged(m_classQuestFlow))
                 m_resetSpellData = true;
+            // Out in the field: important lessons waiting (party chat, it keeps following).
+            Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||
@@ -727,7 +757,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
-                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags()) ||
+                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags(),
+                                       m_tradeHands) ||
                 Life::CraftRun::Update(me, m_craftRun, pLeader);
             if (m_trainerTask.TakeLearned())
                 m_resetSpellData = true;    // new ranks: the rotation picks them up

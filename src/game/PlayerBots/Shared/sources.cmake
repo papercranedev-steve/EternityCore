@@ -8,6 +8,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/AuctionMarket.cpp
   ${BOTSHARED_DIR}/BotChat.h
   ${BOTSHARED_DIR}/BotChat.cpp
+  ${BOTSHARED_DIR}/Capitals.h
+  ${BOTSHARED_DIR}/Capitals.cpp
   ${BOTSHARED_DIR}/ClassTraining.h
   ${BOTSHARED_DIR}/ClassTraining.cpp
   ${BOTSHARED_DIR}/ClassQuestAbilities.h

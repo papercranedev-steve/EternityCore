@@ -112,6 +112,18 @@ namespace Phrases
             { "place.comma",     "default",     "、" },
             { "errand.opt.yes",  "default",     "去吧" },
             { "errand.opt.no",   "default",     "先别去" },
+            // Short of money for the trainer (Trip/TrainingPlanner): three answers, the money
+            // line under the lessons. {important}, {all}, {have}: money.
+            { "errand.opt.pay",  "default",     "给钱去学" },
+            { "errand.opt.nopay", "default",    "不给钱去学" },
+            { "errand.paid",     "default",     "谢谢！我这就去。" },
+            { "errand.paid",     "frugal",      "谢啦，这钱我一定花在刀刃上。" },
+            { "training.money",  "default",     "学费：重要技能{important}，全部{all}，我身上有{have}。" },
+            // Out in the field (Life/Errands/LessonReminder). {lessons}: the names.
+            { "lesson.remind",   "default",     "我现在能学{lessons}了，下次进主城记得带我去趟训练师。" },
+            { "lesson.remind",   "chatty",      "对了对了！我能学{lessons}了，进主城的时候陪我去趟训练师好不好？" },
+            { "lesson.remind",   "quiet",       "能学{lessons}了。进城时带我去训练师。" },
+            { "lesson.remind.again", "default", "{lessons}我还没学呢，进主城的时候别忘了带我去训练师。" },
             { "money.gold",      "default",     "金" },
             { "money.silver",    "default",     "银" },
             { "money.copper",    "default",     "铜" },

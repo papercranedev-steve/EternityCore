@@ -4,8 +4,10 @@
  *  - VendorTask: at a vendor sell the junk (Shared/Vendor::SellJunk), at an armorer repair
  *    (when it can pay all of it), then buy the missing supplies by priority
  *    (Shared/Supplies, Shared/Vendor::PlanPurchases) keeping the money the class trainer
- *    will want (Shared/ClassTraining::CostOfAvailable) for everything but critical needs.
- *  - TrainerTask: at its class trainer learn what it can pay (Shared/ClassTraining, paid).
+ *    will want for the important lessons (Trip/LessonPriority.h) for everything but critical
+ *    needs.
+ *  - TrainerTask: at its class trainer learn what it can pay (Shared/ClassTraining, paid), the
+ *    most important first (Trip/LessonPriority.h), the junk only when the money covers all.
  *    TakeLearned tells the bot AI to rebuild its spell data.
  *
  * Map thread of the bot.
@@ -15,23 +17,39 @@
 #define MANGOS_LIFE_MERCHANT_TASKS_H
 
 #include "Life/Errands/NpcVisit.h"
+#include "Life/Errands/Trip/LessonPriority.h"
 
 namespace Life
 {
     class VendorTask final : public INpcTask
     {
     public:
+        // `lessons`: as TrainerTask's; the money kept for the trainer is that of the
+        // important lessons only (Lessons::IMPORTANT). Null: all of them.
+        explicit VendorTask(Lessons::Context const* lessons = nullptr) : m_lessons(lessons) {}
+
         char const* Name() const override { return "vendor"; }
         bool Wants(Player* me, Creature* npc) override;
         uint32 Do(Player* me, Creature* npc) override;
+
+    private:
+        uint32 TrainingReserve(Player* me) const;
+
+        Lessons::Context const* m_lessons;
     };
 
     class TrainerTask final : public INpcTask
     {
     public:
+        // `lessons`: what the bot AI knows of itself (Trip/LessonPriority.h), owned by it;
+        // null: every lesson is the same (cheapest first, as before).
+        explicit TrainerTask(Lessons::Context const* lessons = nullptr) : m_lessons(lessons) {}
+
         char const* Name() const override { return "trainer"; }
         bool Wants(Player* me, Creature* npc) override;
+        // Learns by LessonPriority tier (junk only when the money covers everything).
         uint32 Do(Player* me, Creature* npc) override;
+        Lessons::Context const* LessonContext() const { return m_lessons; }
 
         // Spells were learned since the last call (once).
         bool TakeLearned()
@@ -42,6 +60,7 @@ namespace Life
         }
 
     private:
+        Lessons::Context const* m_lessons;
         bool m_learned = false;
     };
 }

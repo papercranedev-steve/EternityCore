@@ -12,11 +12,17 @@
  *             (one trip does all), the route is ordered by real walking distance
  *             (Trip/RouteOrder.h) and one question names every place (doc §5: merged).
  *   Asking    the bot says the question in party chat (Phrases "errand.ask") and opens a
- *             request (Requests::Board, intent Errand). It keeps following meanwhile. "yes" or
- *             no answer (the fallback: a player who ignores the popup does not mind): it goes.
- *             "no": it stays and the intent backs off.
- *   Going     the stops in turn: walk there (Trip/Approach.h), the stop's action, then stand
- *             its BrowseTime (longer the more it bought / sold / learned).
+ *             request (Requests::Board, intent Errand); the popup also lists the planners'
+ *             notes (the lessons by tier, what they cost). It keeps following meanwhile. "yes"
+ *             or no answer (the fallback: a player who ignores the popup does not mind): it
+ *             goes. "no": it stays and the intent backs off. Short of money for the business
+ *             (ITripPlanner::Shortfall): a third answer, "pay" (user 2026-11-20).
+ *   Collecting "pay": it walks up to the leader and opens a trade for his money; whatever he
+ *             gives (nothing, the window closed: as "yes"), it goes. A trade that does not
+ *             work is tried again MAX_TRADE_RETRIES times.
+ *   Going     the stops in turn: walk there (Trip/Approach.h; an NPC not loaded yet: to its
+ *             spawn point first), the stop's action, then stand its BrowseTime (longer the
+ *             more it bought / sold / learned).
  * Done, the leader within NEAR_YD:
  *   Returning back to him (BACK_YD).
  * Done, the leader farther (busy elsewhere in town): it whispers him and asks (intent
@@ -44,6 +50,8 @@
 
 class Player;
 
+namespace BotShared { namespace Trade { struct Hands; } }
+
 namespace Life
 {
     // Per bot (a member of its AI).
@@ -53,6 +61,7 @@ namespace Life
         {
             Idle,
             Asking,
+            Collecting,     // "pay": takes the leader's money in a trade before it goes
             Going,
             Returning,
             Reporting,
@@ -76,6 +85,10 @@ namespace Life
         float waitX = 0.0f, waitY = 0.0f, waitZ = 0.0f;
         std::string waitName;
         bool hasGate = false;
+        // Collecting: the trade with the leader (Shared/Trade).
+        bool tradeBegun = false;
+        uint32 tradeFailures = 0;
+        uint32 moneyBefore = 0;
     };
 
     namespace TownTrip
@@ -90,18 +103,28 @@ namespace Life
         constexpr float MAX_PATH_DETOUR = 3.0f;
         constexpr uint32 CHECK_MS = 10 * IN_MILLISECONDS;
         constexpr uint32 STOP_GIVE_UP_MS = 60 * IN_MILLISECONDS;
+        // A stop farther than TRIP_YD (a capital's trainer across the city).
+        constexpr uint32 FAR_STOP_GIVE_UP_MS = 3 * MINUTE * IN_MILLISECONDS;
+        // Its spawn point is walked to until the NPC itself is there (its grid loads on the way).
+        constexpr float SPAWN_REACH_YD = 5.0f;
+        // Collecting the leader's money.
+        constexpr float TRADE_YD = 3.0f;
+        constexpr uint32 COLLECT_GIVE_UP_MS = 2 * MINUTE * IN_MILLISECONDS;
+        constexpr uint32 MAX_TRADE_RETRIES = 2;
         constexpr uint32 RETURN_GIVE_UP_MS = 60 * IN_MILLISECONDS;
         constexpr uint32 COME_GIVE_UP_MS = 10 * MINUTE * IN_MILLISECONDS;
         constexpr uint32 GATE_GIVE_UP_MS = 3 * MINUTE * IN_MILLISECONDS;    // the walk there
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 COOLDOWN_MS = 15 * MINUTE * IN_MILLISECONDS;
 
-        // `planners`: the kinds of business; `tags` the bot's personality (what it says).
+        // `planners`: the kinds of business; `tags` the bot's personality (what it says);
+        // `hands`: the bot's trade (Collecting).
         // True: the bot is on its trip this tick (it does not follow).
         bool Update(Player* me, TownTripState& state, Player* leader,
-                    std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags);
+                    std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags,
+                    BotShared::Trade::Hands& hands);
         // Cancels the question or the trip (combat, a Commander plan).
-        void Stop(Player* me, TownTripState& state);
+        void Stop(Player* me, TownTripState& state, BotShared::Trade::Hands& hands);
     }
 }
 

@@ -7,6 +7,7 @@
 #include "Shared/ClassTraining.h"
 #include "Life/Errands/Trip/RouteOrder.h"
 #include "Shared/TownGates.h"
+#include "Shared/Trade.h"
 #include "GameObject.h"
 #include "Player.h"
 #include "Creature.h"
@@ -124,9 +125,15 @@ namespace TownTrip
                 return;
 
             Trip::TripPlanStops plan;
+            std::vector<Trip::ITripPlanner*> going;     // the planners with a stop on this trip
             for (Trip::ITripPlanner* planner : planners)
                 if (planner)
+                {
+                    size_t const before = plan.stops.size();
                     planner->PlanStops(me, leader, plan);
+                    if (plan.stops.size() > before)
+                        going.push_back(planner);
+                }
             if (!Trip::RouteOrder::Order(me, plan))
                 return;
             state.stops = std::move(plan.stops);
@@ -140,11 +147,24 @@ namespace TownTrip
             Requests::Ask ask;
             ask.intent = Requests::Intent::Errand;
             ask.text = Phrases::Say("errand.ask", tags, vars);
-            ask.options = {
-                { "yes", Phrases::Word("errand.opt.yes", "yes") },
-                { "no",  Phrases::Word("errand.opt.no", "no") },
-            };
-            ask.fallback = "yes";   // nobody minds: it goes
+            uint32 shortfall = 0;
+            for (Trip::ITripPlanner* planner : going)
+            {
+                planner->Notes(me, leader, ask.notes);
+                shortfall += planner->Shortfall(me);
+            }
+            if (shortfall)
+                ask.options = {
+                    { "pay", Phrases::Word("errand.opt.pay", "pay") },
+                    { "yes", Phrases::Word("errand.opt.nopay", "yes") },
+                    { "no",  Phrases::Word("errand.opt.no", "no") },
+                };
+            else
+                ask.options = {
+                    { "yes", Phrases::Word("errand.opt.yes", "yes") },
+                    { "no",  Phrases::Word("errand.opt.no", "no") },
+                };
+            ask.fallback = "yes";   // nobody minds: it goes (without his money)
             state.requestId = sRequestBoard.Open(me, leader, ask);
             if (!state.requestId)
             {
@@ -164,7 +184,28 @@ namespace TownTrip
                 Trip::TripStop const& stop = state.stops[state.next];
                 Trip::Destination dest;
                 dest.target = stop.target;
-                switch (Trip::Approach::Update(me, dest, state.leg, now, STOP_GIVE_UP_MS))
+                float const dx = stop.x - me->GetPositionX();
+                float const dy = stop.y - me->GetPositionY();
+                bool const farStop = dx * dx + dy * dy > TRIP_YD * TRIP_YD;
+                uint32 const giveUpMs = farStop || !Trip::Approach::TargetOf(me, stop.target) ? FAR_STOP_GIVE_UP_MS : STOP_GIVE_UP_MS;
+                // An NPC whose grid is not loaded yet (a trainer across a capital): its spawn
+                // point first; on the way it appears.
+                if (!stop.target.IsEmpty() && !Trip::Approach::TargetOf(me, stop.target))
+                {
+                    Trip::Destination spawn;
+                    spawn.x = stop.x;
+                    spawn.y = stop.y;
+                    spawn.z = stop.z;
+                    spawn.reachYd = SPAWN_REACH_YD;
+                    Trip::ApproachResult const result = Trip::Approach::Update(me, spawn, state.leg, now, giveUpMs);
+                    if (result == Trip::ApproachResult::Walking)
+                        return true;
+                    // There and still nobody (dead, walked off), or the walk failed.
+                    ++state.next;
+                    Enter(state, Phase::Going, now);
+                    continue;
+                }
+                switch (Trip::Approach::Update(me, dest, state.leg, now, giveUpMs))
                 {
                     case Trip::ApproachResult::Walking:
                         return true;
@@ -277,12 +318,61 @@ namespace TownTrip
             Enter(state, Phase::Coming, now);
             return false;
         }
+
+        // "pay": up to the leader, a trade for his money. True while it goes on; false: go.
+        bool UpdateCollecting(Player* me, TownTripState& state, Player* leader, BotShared::Trade::Hands& hands, uint32 now)
+        {
+            if (WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > COLLECT_GIVE_UP_MS)
+            {
+                if (state.tradeBegun)
+                    BotShared::Trade::Cancel(me, hands);
+                state.tradeBegun = false;
+                return false;
+            }
+            if (!state.tradeBegun)
+            {
+                if (hands.active)
+                    return true;    // (another trade first)
+                if (!me->IsWithinDistInMap(leader, TRADE_YD))
+                {
+                    MoveTo(me, state, leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), now);
+                    return true;
+                }
+                if (me->IsMoving())
+                {
+                    Errands::StopWalk(me);
+                    return true;
+                }
+                if (leader->IsMoving())
+                    return true;
+                BotShared::Trade::Begin(me, leader, {}, hands);
+                state.tradeBegun = true;
+                return true;
+            }
+            switch (BotShared::Trade::Update(me, hands))
+            {
+                case BotShared::Trade::Result::Busy:
+                    return true;
+                case BotShared::Trade::Result::Completed:
+                case BotShared::Trade::Result::Declined:
+                    state.tradeBegun = false;
+                    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s got %u copper from %s for its trip.", me->GetName(),
+                             me->GetMoney() > state.moneyBefore ? me->GetMoney() - state.moneyBefore : 0, leader->GetName());
+                    return false;
+                default:
+                    state.tradeBegun = false;
+                    return ++state.tradeFailures <= MAX_TRADE_RETRIES;
+            }
+        }
     }
 
-    void Stop(Player* me, TownTripState& state)
+    void Stop(Player* me, TownTripState& state, BotShared::Trade::Hands& hands)
     {
         if (state.phase == Phase::Idle)
             return;
+        if (state.phase == Phase::Collecting && state.tradeBegun)
+            BotShared::Trade::Cancel(me, hands);
+        state.tradeBegun = false;
         if (state.requestId)
             sRequestBoard.Close(state.requestId, Requests::Outcome::Cancelled);
         bool const tripMade = state.phase != Phase::Asking;
@@ -290,7 +380,8 @@ namespace TownTrip
     }
 
     bool Update(Player* me, TownTripState& state, Player* leader,
-                std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags)
+                std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags,
+                BotShared::Trade::Hands& hands)
     {
         uint32 const now = WorldTimer::getMSTime();
         bool const beforeTrip = state.phase == Phase::Idle || state.phase == Phase::Asking;
@@ -298,7 +389,7 @@ namespace TownTrip
         if (!leader || !Errands::MayRun(me, beforeTrip ? leader : nullptr) ||
             (state.phase != Phase::Idle && leader->GetMapId() != state.leaderMap))
         {
-            Stop(me, state);
+            Stop(me, state, hands);
             return false;
         }
 
@@ -325,12 +416,20 @@ namespace TownTrip
                     default:
                         break;
                 }
-                if (status.answer == "yes")
+                if (status.answer == "yes" || status.answer == "pay")
                 {
                     // (no answer counts as a yes: it goes)
                     sRequestBoard.Close(state.requestId, Requests::Outcome::Accepted);
                     state.requestId = 0;
                     state.next = 0;
+                    if (status.answer == "pay")
+                    {
+                        state.tradeBegun = false;
+                        state.tradeFailures = 0;
+                        state.moneyBefore = me->GetMoney();
+                        Enter(state, Phase::Collecting, now);
+                        return true;
+                    }
                     Say(me, "errand.go", tags);
                     Enter(state, Phase::Going, now);
                     return true;
@@ -340,6 +439,14 @@ namespace TownTrip
                 Say(me, "errand.declined", tags);
                 Reset(me, state, now, false);
                 return false;
+            }
+            case Phase::Collecting:
+            {
+                if (UpdateCollecting(me, state, leader, hands, now))
+                    return true;
+                Say(me, me->GetMoney() > state.moneyBefore ? "errand.paid" : "errand.go", tags);
+                Enter(state, Phase::Going, now);
+                return true;
             }
             case Phase::Going:
             {

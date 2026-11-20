@@ -1,8 +1,10 @@
 /*
  * Bot daily life (PlayerBots/Life), town trips: the class trainer (soul companions doc §4.4).
- * Worth a trip: a new rank it can pay for (Shared/ClassTraining). The stop: its class trainer
- * nearest the leader with business (the bot's TrainerTask: Wants / Do, whose TakeLearned tells
- * the AI to rebuild its spell data).
+ * Worth a trip: a lesson that is not junk (Trip/LessonPriority.h), or junk it can pay for;
+ * the leader may give the money (Shortfall, TownTrip's "pay"). The stop: in a capital its class
+ * trainer anywhere in the city (user 2026-11-20: far trainers were never passed by), elsewhere
+ * the one nearest the leader within TownTrip::TRIP_YD. The question lists every lesson by tier
+ * and, when the money is short, what the important ones and all of them cost (Notes).
  *
  * Map thread of the bot.
  */
@@ -15,20 +17,23 @@
 namespace Life
 {
     class INpcTask;
+    class TrainerTask;
 
 namespace Trip
 {
     class TrainingPlanner final : public ITripPlanner
     {
     public:
-        explicit TrainingPlanner(INpcTask& trainerTask) : m_task(trainerTask) {}
+        explicit TrainingPlanner(TrainerTask& trainerTask) : m_task(trainerTask) {}
 
         char const* Name() const override { return "training"; }
         bool Worth(Player* me) override;
         void PlanStops(Player* me, Player const* leader, TripPlanStops& plan) override;
+        void Notes(Player* me, Player const* reader, std::vector<Requests::Ask::Note>& out) override;
+        uint32 Shortfall(Player* me) override;
 
     private:
-        INpcTask& m_task;
+        TrainerTask& m_task;
     };
 
     // Runs an NPC visit task (Life/Errands/NpcVisit.h) as a trip stop.
