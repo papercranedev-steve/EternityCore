@@ -1,7 +1,9 @@
 #include "Shared/Provisions.h"
 #include "Shared/Crafting.h"
+#include "Shared/FoodAndDrink.h"
 #include "Shared/Goods.h"
 #include "Shared/Inventory.h"
+#include "Shared/Supplies.h"
 #include "Item.h"
 #include "ItemPrototype.h"
 #include "ObjectMgr.h"
@@ -37,6 +39,28 @@ namespace Provisions
             if (kind == Kind::Healthstone)
                 return IsHealthstone(proto->ItemId) && taker->CanUseItem(proto) == EQUIP_ERR_OK;
             return Goods::Matches(taker, SpecOf(kind), proto);
+        }
+
+        // Food and drink some vendor sells (not conjured), built once.
+        std::vector<ItemPrototype const*> const& SoldFoodAndDrink()
+        {
+            static std::vector<ItemPrototype const*> const sold = []()
+            {
+                std::vector<ItemPrototype const*> list;
+                for (auto const& itr : sObjectMgr.GetItemPrototypeMap())
+                {
+                    ItemPrototype const* proto = &itr.second;
+                    if (proto->Flags & ITEM_FLAG_CONJURED)
+                        continue;
+                    if (!FoodAndDrink::ItemSpell(proto, FoodAndDrink::Kind::Food) &&
+                        !FoodAndDrink::ItemSpell(proto, FoodAndDrink::Kind::Drink))
+                        continue;
+                    if (Supplies::IsSoldByVendors(proto->ItemId))
+                        list.push_back(proto);
+                }
+                return list;
+            }();
+            return sold;
         }
 
         // `a` is the better gift for the taker.
@@ -117,10 +141,23 @@ namespace Provisions
         return false;
     }
 
-    bool CloseToLevel(Player const* taker, uint32 itemId)
+    float ShareOfBought(Player const* taker, Kind kind, uint32 itemId)
     {
+        if (kind == Kind::Healthstone)
+            return 1.0f;
+        FoodAndDrink::Kind const fd = kind == Kind::Drink ? FoodAndDrink::Kind::Drink : FoodAndDrink::Kind::Food;
         ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
-        return proto && proto->RequiredLevel + TIER_LEVELS >= taker->GetLevel();
+        float const rate = proto ? FoodAndDrink::RatePerSec(taker, FoodAndDrink::ItemSpell(proto, fd), fd) : 0.0f;
+        float best = 0.0f;
+        for (ItemPrototype const* sold : SoldFoodAndDrink())
+            if (FoodAndDrink::IsUsable(taker, sold, fd))
+                best = std::max(best, FoodAndDrink::RatePerSec(taker, FoodAndDrink::ItemSpell(sold, fd), fd));
+        return best > 0.0f ? std::min(rate / best, 1.0f) : 1.0f;
+    }
+
+    bool GoodEnough(Player const* taker, Kind kind, uint32 itemId)
+    {
+        return ShareOfBought(taker, kind, itemId) >= GOOD_ENOUGH_SHARE;
     }
 
     std::vector<Kind> Wanted(Player const* giver, Player const* taker, std::vector<Kind> const& kinds)

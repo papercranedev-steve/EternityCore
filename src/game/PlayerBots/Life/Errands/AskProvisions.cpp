@@ -22,9 +22,9 @@ namespace AskProvisions
 
         Provision::Kinds const FOOD_KINDS = { Kind::Drink, Kind::Food };
 
-        // What `giver` makes that the bot uses; from a bot giver only when close to the bot's
-        // level (else buying is better).
-        Provision::Kinds MadeFor(Player const* giver, Player const* me, bool checkLevel)
+        // What `giver` makes that the bot uses; from a bot giver only when not far worse than
+        // what it can buy (Provisions::GoodEnough).
+        Provision::Kinds MadeFor(Player const* giver, Player const* me, bool checkQuality)
         {
             Provision::Kinds kinds;
             for (Kind kind : FOOD_KINDS)
@@ -33,7 +33,7 @@ namespace AskProvisions
                 if (!Provisions::Uses(me, kind) || Provisions::MakesOwn(me, kind))
                     continue;
                 SpellEntry const* recipe = Provisions::RecipeFor(giver, me, kind);
-                if (!recipe || (checkLevel && !Provisions::CloseToLevel(me, Provisions::ProductOf(recipe))))
+                if (!recipe || (checkQuality && !Provisions::GoodEnough(me, kind, Provisions::ProductOf(recipe))))
                     continue;
                 kinds.push_back(kind);
             }

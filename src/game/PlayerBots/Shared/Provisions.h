@@ -35,9 +35,11 @@ namespace BotShared
 
         constexpr uint32 STACK = 20;
         constexpr uint32 GIFT_STACKS = 2;
-        // A bot taker asks a mage teammate instead of buying only when the conjured item is at
-        // most this many levels below it (a tier of vendor food and drink: every ten levels).
-        constexpr uint32 TIER_LEVELS = 10;
+        // A bot taker asks a mage teammate instead of buying while the conjured item restores
+        // at least this share of the best food / drink a vendor sells it (user 2026-11-20:
+        // "凑活能用" is fine, far worse it buys). Conjured items match the vendor tier of
+        // their level: one rank behind is 60 % (Fresh Water vs Melon Juice), two 24-42 %.
+        constexpr float GOOD_ENOUGH_SHARE = 0.5f;
 
         // The taker has a use for it: drink with mana; food and a healthstone always.
         bool Uses(Player const* taker, Kind kind);
@@ -56,8 +58,11 @@ namespace BotShared
         // The player knows a recipe of this kind for itself (a mage's water, a warlock's
         // healthstone; reagents or not): it is not given nor asked for one.
         bool MakesOwn(Player const* player, Kind kind);
-        // The product is close enough to the taker's level to be worth asking for (TIER_LEVELS).
-        bool CloseToLevel(Player const* taker, uint32 itemId);
+        // The product (drink or food) restores at least GOOD_ENOUGH_SHARE of the best one any
+        // vendor sells that the taker can use (FoodAndDrink::RatePerSec). Healthstones: always.
+        bool GoodEnough(Player const* taker, Kind kind, uint32 itemId);
+        // That share (1 when no vendor sells anything better), for logs and reminders.
+        float ShareOfBought(Player const* taker, Kind kind, uint32 itemId);
 
         // Of `kinds`, those the taker is short of and the giver can make for it.
         std::vector<Kind> Wanted(Player const* giver, Player const* taker, std::vector<Kind> const& kinds);

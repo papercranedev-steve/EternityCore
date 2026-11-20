@@ -2,8 +2,8 @@
  * Bot daily life (PlayerBots/Life), errand: a bot short of food or drink asks a mage of its
  * party for conjured ones instead of buying them (user 2026-11-20).
  *
- * The giver: a mage bot of the party whose conjured goods are close to this bot's level
- * (Provisions::CloseToLevel), else the human leader when he is a mage. While one is there,
+ * The giver: a mage bot of the party whose conjured goods are not far worse than what this bot
+ * can buy (Provisions::GoodEnough), else the human leader when he is a mage. While one is there,
  * Supplies::SetProvided keeps the shopping from buying food and drink; without one (or after
  * it failed, was refused or ignored) the bot buys again.
  *
