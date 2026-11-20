@@ -38,7 +38,8 @@ namespace Requests
 {
     struct Option
     {
-        std::string key;        // what ".partybot reply" sends back ("yes", "2")
+        std::string key;        // what ".partybot reply" sends back ("yes", "2"); the addon draws
+                                // "yes" / "no" as agree / decline (green tick, red cross)
         std::string label;      // the button
     };
 
