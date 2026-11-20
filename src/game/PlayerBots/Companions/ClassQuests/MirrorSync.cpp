@@ -167,6 +167,9 @@ namespace Companions
                 switch (Mirror::Show(leader, wanted))
                 {
                     case Mirror::ShowResult::Shown:
+                        // Put in the log by the server, so the client plays no accept sound: the addon does.
+                        ChatHandler(leader).PSendSysMessage("PBQUEST;%s;mirrorshown;%u", bot->GetName(), wanted);
+                        // (and on: shown now)
                     case Mirror::ShowResult::AlreadyShown:
                         link.shownId = wanted;
                         link.logFullSaid = false;
