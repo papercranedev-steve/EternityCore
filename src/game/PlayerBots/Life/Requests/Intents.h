@@ -23,6 +23,8 @@ namespace Requests
         Rendezvous,     // "done: shall I come to you, or wait at the gate?" (Life/Errands/TownTrip)
         ClassQuest,     // "will you help me with my class quest?" (Companions/ClassQuests/ClassQuestFlow;
                         // it counts its asks itself, no quiet time here)
+        Supply,         // "shall I make you water / a healthstone?", "can you make us water?"
+                        // (Life/Errands/GiveProvisions, AskProvisions; they keep their own quiet)
     };
 
     struct IntentDef

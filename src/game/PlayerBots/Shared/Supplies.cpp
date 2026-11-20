@@ -9,6 +9,7 @@
 #include "SpellEntry.h"
 #include <algorithm>
 #include <map>
+#include <mutex>
 #include <set>
 #include <unordered_set>
 
@@ -18,6 +19,17 @@ namespace Supplies
 {
     namespace
     {
+        // SetProvided: player -> goods kinds a teammate gives it.
+        std::mutex s_providedLock;
+        std::map<ObjectGuid, std::set<Goods::Kind>> s_provided;
+
+        std::set<Goods::Kind> ProvidedTo(ObjectGuid player)
+        {
+            std::lock_guard<std::mutex> guard(s_providedLock);
+            auto itr = s_provided.find(player);
+            return itr != s_provided.end() ? itr->second : std::set<Goods::Kind>();
+        }
+
         // Casts' worth kept of a reagent, by priority.
         uint32 const CASTS_CRITICAL = 5;
         uint32 const CASTS_IMPORTANT = 10;
@@ -365,12 +377,22 @@ namespace Supplies
                 bought.push_back(n);
         }
 
+        std::set<Goods::Kind> const provided = ProvidedTo(player->GetObjectGuid());
         Needs result;
         for (Need const& n : bought)
-            if (n.Missing() && !made.count(n.goods))
+            if (n.Missing() && !made.count(n.goods) && !provided.count(n.goods.kind))
                 result.push_back(n);
         SortByPriority(result);
         return result;
+    }
+
+    void SetProvided(ObjectGuid player, std::set<Goods::Kind> const& kinds)
+    {
+        std::lock_guard<std::mutex> guard(s_providedLock);
+        if (kinds.empty())
+            s_provided.erase(player);
+        else
+            s_provided[player] = kinds;
     }
 
     std::vector<Need> ToMake(Player const* player)

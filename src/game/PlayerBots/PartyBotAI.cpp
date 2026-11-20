@@ -43,6 +43,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
+#include "Commander/Team.h"
 #include "Companions/CompanionMgr.h"
 #include "Shared/GearUpgrade.h"
 #include "SpellMgr.h"
@@ -139,6 +140,27 @@ void PartyBotAI::StopErrands()
     Life::TownTrip::Stop(me, m_townTrip);
     Life::CraftRun::Stop(me, m_craftRun);
     Companions::ClassQuestFlow::Stop(m_classQuestFlow);
+}
+
+bool PartyBotAI::UpdateProvisions(Player* pLeader)
+{
+    if (Life::GiveProvisions::Update(me, m_giveProvisions, pLeader, m_tradeHands, PersonalityTags()))
+        return true;
+    if (!LootsForSelf())
+        return false;
+    // (the other party bots here: the mages among them give, GiveProvisions)
+    std::vector<Player*> mates;
+    for (Player* pMember : Commander::Team::Members(me))
+        if (pMember && pMember != me && pMember->IsBot() && pMember->IsInMap(me) &&
+            dynamic_cast<PartyBotAI*>(pMember->AI()))
+            mates.push_back(pMember);
+    return Life::AskProvisions::Update(me, m_askProvisions, pLeader, mates, m_tradeHands, PersonalityTags());
+}
+
+void PartyBotAI::PauseProvisions()
+{
+    Life::GiveProvisions::Pause(me, m_giveProvisions, m_tradeHands);
+    Life::AskProvisions::Pause(me, m_askProvisions, m_tradeHands);
 }
 
 bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
@@ -399,6 +421,19 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
                 m_resetSpellData = true;
             return;
         }
+        case SMSG_TRADE_STATUS:
+        {
+            if (!me)
+                return;
+            uint32 const status = packet->read<uint32>(0);
+            // Its own trade (Shared/Trade: conjured supplies) is not the default accept-all.
+            if (BotShared::Trade::OnStatus(me, m_tradeHands, status))
+                return;
+            // Someone opens a trade: maybe the leader wants water (Life/Errands/GiveProvisions).
+            if (status == TRADE_STATUS_BEGIN_TRADE && packet->size() >= sizeof(uint32) + sizeof(uint64))
+                Life::GiveProvisions::OnTradeOpened(m_giveProvisions, ObjectGuid(packet->read<uint64>(sizeof(uint32))));
+            break;
+        }
         case SMSG_DUEL_REQUESTED:
         {
             // Party bots do not duel: decline (the request would hang until the challenger
@@ -593,6 +628,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     {
         m_resurrectApproach = Commander::ResurrectApproachState();
         StopErrands();
+        PauseProvisions();
     }
     if (!me->IsInCombat())
     {
@@ -669,6 +705,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Last its business at a vendor / armorer and its class trainer near the leader
         // (Life/Errands/NpcVisit.h): sell, repair, buy supplies, learn. With nothing else to do,
         // it makes what it does not buy (Life/Errands/CraftRun.h: conjured food, poison vials).
+        // Before all of them, conjured supplies for others or from a mage (UpdateProvisions):
+        // the player asked for them, or a bot stands waiting by the mage.
+        if (resurrectFirst || commanderOutOfCombat)
+            PauseProvisions();
+        else if (UpdateProvisions(pLeader))
+            return;
         if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
             StopErrands();
         else

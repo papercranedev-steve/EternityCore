@@ -1,6 +1,6 @@
 /*
  * Shared bot hands (PlayerBots/Shared): a bot talking to players. Party chat as a player types
- * /p, whispers, text emotes (/wave), and system lines to one player (the PB...; lines the
+ * /p, /say, whispers, text emotes (/wave), and system lines to one player (the PB...; lines the
  * PartyBot addon reads).
  * Any thread that may send to a session (map threads, world thread).
  */
@@ -20,6 +20,9 @@ namespace BotShared
     {
         // `speaker` says `text` in party chat (raid: its subgroup). False when it has no group.
         bool SayToParty(Player* speaker, std::string const& text);
+
+        // `speaker` says `text` aloud (white /say: everyone in say range). False on empty text.
+        bool Say(Player* speaker, std::string const& text);
 
         // A system message to `to` only.
         void SystemTo(Player* to, std::string const& text);

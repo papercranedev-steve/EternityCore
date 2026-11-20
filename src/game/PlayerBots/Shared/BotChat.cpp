@@ -23,6 +23,14 @@ namespace BotChat
         return true;
     }
 
+    bool Say(Player* speaker, std::string const& text)
+    {
+        if (!speaker || text.empty())
+            return false;
+        speaker->Say(text.c_str(), LANG_UNIVERSAL);
+        return true;
+    }
+
     bool WhisperTo(Player* from, Player* to, std::string const& text)
     {
         if (!from || !to || !to->GetSession() || text.empty())

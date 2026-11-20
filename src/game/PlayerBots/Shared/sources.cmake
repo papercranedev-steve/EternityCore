@@ -38,6 +38,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/ObjectUse.cpp
   ${BOTSHARED_DIR}/PetFood.h
   ${BOTSHARED_DIR}/PetFood.cpp
+  ${BOTSHARED_DIR}/Provisions.h
+  ${BOTSHARED_DIR}/Provisions.cpp
   ${BOTSHARED_DIR}/Poisons.h
   ${BOTSHARED_DIR}/Poisons.cpp
   ${BOTSHARED_DIR}/QuestRewards.h
@@ -54,6 +56,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/WalkLength.cpp
   ${BOTSHARED_DIR}/TownGates.h
   ${BOTSHARED_DIR}/TownGates.cpp
+  ${BOTSHARED_DIR}/Trade.h
+  ${BOTSHARED_DIR}/Trade.cpp
   ${BOTSHARED_DIR}/Supplies.h
   ${BOTSHARED_DIR}/Supplies.cpp
   ${BOTSHARED_DIR}/Vendor.h

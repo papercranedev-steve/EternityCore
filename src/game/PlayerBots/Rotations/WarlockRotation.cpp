@@ -30,6 +30,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Commands/BotSpeech.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "DamageSpells.h"
@@ -45,6 +46,17 @@ namespace
     // Shards kept for other uses (Soulstone, Healthstone, summoning); HarvestBehavior::KEEP
     // fills up to 10 (user 2026-11-15: "5-10").
     uint32 const SHARD_RESERVE = 5;
+    // Minor Soulstone is trained at this level: below it, not knowing it is no news.
+    uint32 const SOULSTONE_LEVEL = 18;
+
+    // Why the party's healer goes without a Soulstone (WarlockRotation::Note).
+    enum class SoulstoneNote : uint8
+    {
+        None,
+        NotLearned,
+        NoShard,
+        Cooldown,
+    };
 
     class WarlockRotation : public ClassRotation
     {
@@ -120,36 +132,84 @@ namespace
         // bags: use it on the healer (its 30 min cooldown is the warlock's); without: create the
         // best one it knows (a Soul Shard, SHARD_RESERVE is kept for this) while it and the
         // leader stand still out of combat.
+        // The healer goes without one: the warlock says why, once per reason (user 2026-11-20).
         bool Soulstone()
         {
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
-            SpellEntry const* pCreate = bot.m_spells.warlock.pCreateSoulstone;
-            if (!pCreate || me->IsInCombat())
+            if (me->IsInCombat())
                 return false;
+            SpellEntry const* pCreate = bot.m_spells.warlock.pCreateSoulstone;
             uint32 stone = 0;
-            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
-                if (pCreate->Effect[i] == SPELL_EFFECT_CREATE_ITEM)
-                    stone = uint32(pCreate->EffectItemType[i]);
+            if (pCreate)
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (pCreate->Effect[i] == SPELL_EFFECT_CREATE_ITEM)
+                        stone = uint32(pCreate->EffectItemType[i]);
             ItemPrototype const* pProto = stone ? sObjectMgr.GetItemPrototype(stone) : nullptr;
             SpellEntry const* pUse = pProto ? sSpellMgr.GetSpellEntry(pProto->Spells[0].SpellId) : nullptr;
-            if (!pUse || !me->IsSpellReady(pUse, pProto))
-                return false;
             Player* pHealer = SoulstoneTarget(pUse);
             if (!pHealer)
+            {
+                m_soulstoneNote = SoulstoneNote::None;
                 return false;
+            }
+            if (!pCreate || !pUse)
+            {
+                if (me->GetLevel() >= SOULSTONE_LEVEL)
+                    Note(SoulstoneNote::NotLearned, pHealer);
+                return false;
+            }
+            if (!me->IsSpellReady(pUse, pProto))
+            {
+                Note(SoulstoneNote::Cooldown, pHealer, me->GetSpellCooldownLeft(pUse));
+                return false;
+            }
             if (me->HasItemCount(stone, 1))
+            {
+                m_soulstoneNote = SoulstoneNote::None;
                 return me->IsWithinLOSInMap(pHealer) && pUse->IsTargetInRange(me, pHealer) &&
                        bot.UseBagItem(stone, pHealer);
-            if (me->IsMoving())
-                return false;
+            }
             for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
                 if (pCreate->Reagent[i] > 0 && !me->HasItemCount(uint32(pCreate->Reagent[i]), pCreate->ReagentCount[i]))
+                {
+                    Note(SoulstoneNote::NoShard, pHealer);
                     return false;
+                }
+            if (me->IsMoving())
+                return false;
             if (Player* pLeader = bot.GetPartyLeader())
                 if (pLeader != me && (pLeader->IsMoving() || pLeader->IsInCombat()))
                     return false;
             return Cast(me, pCreate);
+        }
+
+        // Why the healer has no Soulstone, in party chat (BotSpeech::Report; speech off: a
+        // system message to the leader). Said again only for another reason.
+        void Note(SoulstoneNote note, Player const* pHealer, int32 cooldownMs = 0)
+        {
+            if (note == m_soulstoneNote)
+                return;
+            m_soulstoneNote = note;
+            std::string text;
+            switch (note)
+            {
+                case SoulstoneNote::NotLearned:
+                    text = "我还没学会制造灵魂石，" + std::string(pHealer->GetName()) + "身上没有灵魂石。";
+                    break;
+                case SoulstoneNote::NoShard:
+                    text = "我没有灵魂碎片了，做不了灵魂石给" + std::string(pHealer->GetName()) + "。";
+                    break;
+                case SoulstoneNote::Cooldown:
+                    text = cooldownMs > 0 ?
+                        "灵魂石还在冷却，大约还要" + std::to_string((cooldownMs + MINUTE * IN_MILLISECONDS - 1) / (MINUTE * IN_MILLISECONDS)) +
+                            "分钟才能给" + pHealer->GetName() + "。" :
+                        "灵魂石还在冷却，暂时给不了" + std::string(pHealer->GetName()) + "。";
+                    break;
+                case SoulstoneNote::None:
+                    return;
+            }
+            Commander::BotSpeech::Report(m_bot.me, m_bot.GetPartyLeader(), text);
         }
 
         // A healer of the party (a healer bot; a player whose best role is healing,
@@ -178,7 +238,7 @@ namespace
         {
             // Soulstone Resurrection, ranks 1-5 (Player::SelectResurrectionSpellId).
             static uint32 const RANKS[] = { 20707, 20762, 20763, 20764, 20765 };
-            if (pMember->HasAura(pUse->Id))
+            if (pUse && pMember->HasAura(pUse->Id))
                 return true;
             for (uint32 id : RANKS)
                 if (pMember->HasAura(id))
@@ -197,6 +257,9 @@ namespace
                 return false;
             return DamageSpells::EstimateDirect(me, pVictim, pSpell) >= float(pVictim->GetHealth());
         }
+
+        // The last reason said (Note); None once the healer has a stone or there is no healer.
+        SoulstoneNote m_soulstoneNote = SoulstoneNote::None;
     };
 }
 

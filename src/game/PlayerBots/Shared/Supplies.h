@@ -32,6 +32,8 @@
 
 #include "Common.h"
 #include "Shared/Goods.h"
+#include "ObjectGuid.h"
+#include <set>
 #include <vector>
 
 class Player;
@@ -70,6 +72,12 @@ namespace BotShared
 
         // Some vendor in the world sells it (index built once).
         bool IsSoldByVendors(uint32 itemId);
+
+        // Goods kinds a teammate gives this player (user 2026-11-20: with a mage in the party
+        // the others ask it for food and drink, Life/Errands/AskProvisions): Missing leaves out
+        // the bought rows of these kinds (the critical ones too: no town trip for them). Set
+        // by the player's own bot every update; empty = it buys everything. Any thread.
+        void SetProvided(ObjectGuid player, std::set<Goods::Kind> const& kinds);
     }
 }
 

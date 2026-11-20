@@ -39,6 +39,9 @@
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Life/Errands/QuestPickUp.h"
 #include "Life/Errands/QuestItemUse.h"
+#include "Life/Errands/GiveProvisions.h"
+#include "Life/Errands/AskProvisions.h"
+#include "Shared/Trade.h"
 #include <array>
 #include <string>
 
@@ -85,6 +88,12 @@ public:
     bool GetsFreeAbilities() const override;
     // Ends every daily-life errand walk (combat, a Commander plan, not a companion).
     void StopErrands();
+    // Conjured supplies out of combat (user 2026-11-20): every party bot gives what it makes
+    // (Life/Errands/GiveProvisions: the leader, bots that ask); a companion, which buys its
+    // food, asks a mage of the party first (AskProvisions). True: busy, the bot stays put.
+    bool UpdateProvisions(Player* pLeader);
+    // Combat, a Commander plan, a resurrection first: their trades and casts stop for now.
+    void PauseProvisions();
     // Out of combat, far from its anchor: teleported there (UpdateAI; and StartResting fills up
     // at once, it is about to be teleported). Party bots beyond PB_TELEPORT_TO_LEADER_YD;
     // companions only on another map (their town trips and the leader's own business keep them
@@ -190,6 +199,11 @@ public:
     // Out of combat: a companion makes its conjured food and water, poison vials
     // (Life/Errands/CraftRun.h).
     Life::CraftRunState m_craftRun;
+    // Conjured supplies (UpdateProvisions). One trade at a time (Shared/Trade.h): while its
+    // hands trade, OnPacketReceived keeps the trade status from the default handling.
+    BotShared::Trade::Hands m_tradeHands;
+    Life::GiveProvisionsState m_giveProvisions;
+    Life::AskProvisionsState m_askProvisions;
 };
 
 #endif
