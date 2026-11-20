@@ -31,6 +31,7 @@ namespace Trip
         void PlanStops(Player* me, Player const* leader, TripPlanStops& plan) override;
         void Notes(Player* me, Player const* reader, std::vector<Requests::Ask::Note>& out) override;
         uint32 Shortfall(Player* me) override;
+        char const* PurposeKey() const override { return "errand.why.train"; }
 
     private:
         TrainerTask& m_task;

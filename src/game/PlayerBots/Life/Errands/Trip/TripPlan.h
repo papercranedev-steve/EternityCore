@@ -9,7 +9,9 @@
  *    (the mailbox after the auction house).
  *  - ITripPlanner: one kind of business (shopping, training). Worth: reason enough to ask the
  *    leader for a trip; PlanStops: its stops for this trip (also when another planner started
- *    it: one trip does all). A new kind of business is a new planner, TownTrip stays as it is.
+ *    it: one trip does all). Only the planners with a stop left after the route is ordered
+ *    are in the question (their purpose, notes and shortfall). A new kind of business is a
+ *    new planner, TownTrip stays as it is.
  *
  * Map thread of the bot.
  */
@@ -65,6 +67,12 @@ namespace Trip
         std::string placeKey;       // Phrases "place.*", empty: not said
         std::shared_ptr<IStopAction> action;
         int after = -1;             // index (in the plan) of a stop that must be visited first
+        // From the spawn table, maybe across the city (a capital's class trainer): its grid,
+        // and so its navmesh, may not be loaded yet. A walk that cannot be measured is no
+        // reason to drop it (Trip/RouteOrder: ordered by the straight distance); the bot walks
+        // towards the spawn point and the grid loads on the way (TownTrip).
+        bool farSpawn = false;
+        int planner = -1;           // TownTrip: index of the planner that added it
     };
 
     struct TripPlanStops
@@ -93,6 +101,9 @@ namespace Trip
         // Copper the bot lacks for this business: the question then offers to give it
         // (TownTrip: "pay"). Default: none.
         virtual uint32 Shortfall(Player* /*me*/) { return 0; }
+        // What the business is for, said in the question (Phrases key "errand.why.*", e.g.
+        // "learn new spells"). nullptr: not said.
+        virtual char const* PurposeKey() const { return nullptr; }
     };
 }
 }

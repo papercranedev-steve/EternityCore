@@ -31,9 +31,10 @@ namespace Trip
                    info->trainer_class == me->GetClass();
         }
 
-        void AddStop(TrainerTask& task, BotShared::NpcDirectory::ServiceNpc const& n, TripPlanStops& plan)
+        void AddStop(TrainerTask& task, BotShared::NpcDirectory::ServiceNpc const& n, TripPlanStops& plan, bool farSpawn)
         {
             TripStop stop;
+            stop.farSpawn = farSpawn;
             stop.target = BotShared::NpcDirectory::GuidOf(n);
             stop.x = n.x;
             stop.y = n.y;
@@ -65,7 +66,7 @@ namespace Trip
                 if (Creature* npc = map->GetCreature(BotShared::NpcDirectory::GuidOf(n)))
                     if (!npc->IsAlive() || npc->IsInCombat() || me->IsHostileTo(npc))
                         continue;
-                AddStop(task, n, plan);
+                AddStop(task, n, plan, true);
                 return true;
             }
             return true;
@@ -94,7 +95,7 @@ namespace Trip
                 continue;
             if (!Errands::WalkIsSafe(me, npc->GetPositionX(), npc->GetPositionY(), npc->GetPositionZ(), TownTrip::MAX_PATH_DETOUR))
                 continue;
-            AddStop(m_task, n, plan);
+            AddStop(m_task, n, plan, false);
             return;
         }
     }

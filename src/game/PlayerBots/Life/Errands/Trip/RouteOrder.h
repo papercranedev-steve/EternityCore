@@ -6,7 +6,9 @@
  * stops (at most MAX_STOPS), so every order is tried and the shortest walk from the bot through
  * all stops wins, keeping each stop's `after` (the mailbox after the auction house). A leg
  * without a full path costs UNREACHABLE_YD on top of its straight distance, so such an order
- * loses to any walkable one; a stop the bot cannot walk to from anywhere is dropped.
+ * loses to any walkable one; a stop the bot cannot walk to from anywhere is dropped. A
+ * `farSpawn` stop (TripPlan.h: its navmesh may not be loaded yet) is never dropped, and its
+ * unmeasured legs cost the straight distance.
  */
 
 #ifndef MANGOS_LIFE_TRIP_ROUTE_ORDER_H

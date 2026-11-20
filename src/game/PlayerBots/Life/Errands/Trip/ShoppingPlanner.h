@@ -40,6 +40,7 @@ namespace Trip
         char const* Name() const override { return "shopping"; }
         bool Worth(Player* me) override;
         void PlanStops(Player* me, Player const* leader, TripPlanStops& plan) override;
+        char const* PurposeKey() const override { return "errand.why.shop"; }
     };
 }
 }

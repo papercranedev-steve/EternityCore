@@ -86,6 +86,8 @@ namespace RouteOrder
 
         std::vector<std::vector<float>> cost(n + 1, std::vector<float>(n + 1, 0.0f));
         std::vector<bool> reachable(n, false);
+        for (size_t i = 0; i < n; ++i)
+            reachable[i] = plan.stops[i].farSpawn;
         for (size_t a = 0; a <= n; ++a)
             for (size_t b = 1; b <= n; ++b)
             {
@@ -97,6 +99,8 @@ namespace RouteOrder
                     cost[a][b] = walk;
                     reachable[b - 1] = true;
                 }
+                else if ((a && plan.stops[a - 1].farSpawn) || plan.stops[b - 1].farSpawn)
+                    cost[a][b] = Straight(points[a], points[b]);    // (its navmesh not loaded yet)
                 else
                     cost[a][b] = Straight(points[a], points[b]) + UNREACHABLE_YD;
             }

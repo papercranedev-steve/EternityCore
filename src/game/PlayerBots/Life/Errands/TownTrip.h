@@ -10,10 +10,12 @@
  *             bot may run errands (ErrandCommon::MayRun) and some planner (Trip/TripPlan.h:
  *             shopping, training) finds it worth a trip. Then every planner adds its stops
  *             (one trip does all), the route is ordered by real walking distance
- *             (Trip/RouteOrder.h) and one question names every place (doc §5: merged).
- *   Asking    the bot says the question in party chat (Phrases "errand.ask") and opens a
- *             request (Requests::Board, intent Errand); the popup also lists the planners'
- *             notes (the lessons by tier, what they cost). It keeps following meanwhile. "yes"
+ *             (Trip/RouteOrder.h) and one question names every place and what for (doc §5:
+ *             merged; shopping and the trainer on one trip, user 2026-11-20).
+ *   Asking    the bot says the question in party chat (Phrases "trip.ask") and opens a
+ *             request (Requests::Board, intent Errand); the popup also lists the notes of the
+ *             planners with a stop left on the route (the lessons by tier, what they cost).
+ *             It keeps following meanwhile. "yes"
  *             or no answer (the fallback: a player who ignores the popup does not mind): it
  *             goes. "no": it stays and the intent backs off. Short of money for the business
  *             (ITripPlanner::Shortfall): a third answer, "pay" (user 2026-11-20).

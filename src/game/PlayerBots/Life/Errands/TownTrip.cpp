@@ -114,6 +114,22 @@ namespace TownTrip
             return places;
         }
 
+        // What the trip is for ("补点东西，顺便学新技能"), from the planners on it.
+        std::string PurposesOf(std::vector<Trip::ITripPlanner*> const& going)
+        {
+            std::string why;
+            for (Trip::ITripPlanner const* planner : going)
+            {
+                char const* key = planner->PurposeKey();
+                if (!key)
+                    continue;
+                if (!why.empty())
+                    why += Phrases::Word("errand.why.and", ", and ");
+                why += Phrases::Word(key, planner->Name());
+            }
+            return why;
+        }
+
         void TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<Trip::ITripPlanner*> const& planners,
                     std::vector<std::string> const& tags, uint32 now)
         {
@@ -125,28 +141,33 @@ namespace TownTrip
                 return;
 
             Trip::TripPlanStops plan;
-            std::vector<Trip::ITripPlanner*> going;     // the planners with a stop on this trip
-            for (Trip::ITripPlanner* planner : planners)
-                if (planner)
+            for (size_t i = 0; i < planners.size(); ++i)
+                if (planners[i])
                 {
                     size_t const before = plan.stops.size();
-                    planner->PlanStops(me, leader, plan);
-                    if (plan.stops.size() > before)
-                        going.push_back(planner);
+                    planners[i]->PlanStops(me, leader, plan);
+                    for (size_t s = before; s < plan.stops.size(); ++s)
+                        plan.stops[s].planner = int(i);
                 }
             if (!Trip::RouteOrder::Order(me, plan))
                 return;
             state.stops = std::move(plan.stops);
+            // The planners with a stop left on the route (a dropped stop is not in the question).
+            std::vector<Trip::ITripPlanner*> going;
+            for (size_t i = 0; i < planners.size(); ++i)
+                if (std::any_of(state.stops.begin(), state.stops.end(), [i](Trip::TripStop const& s) { return s.planner == int(i); }))
+                    going.push_back(planners[i]);
 
             Phrases::Vars vars;
             vars["places"] = PlacesOf(state.stops);
+            vars["why"] = PurposesOf(going);
             vars["leader"] = leader->GetName();
             uint32 const trainerCost = BotShared::ClassTraining::CostOfAvailable(me);
             vars["gold"] = trainerCost ? Phrases::Money(trainerCost) : std::string();
 
             Requests::Ask ask;
             ask.intent = Requests::Intent::Errand;
-            ask.text = Phrases::Say("errand.ask", tags, vars);
+            ask.text = Phrases::Say("trip.ask", tags, vars);
             uint32 shortfall = 0;
             for (Trip::ITripPlanner* planner : going)
             {

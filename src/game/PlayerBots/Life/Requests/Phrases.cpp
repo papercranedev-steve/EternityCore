@@ -17,16 +17,22 @@ namespace Phrases
             char const* text;
         };
 
-        // Seeded into the table once. Errand variables: {places} ("商人和训练师"), {gold}
-        // (what the trainer costs, may be empty), {leader}. Reward: {quest}.
+        // Seeded into the table once. Town trip question (Life/Errands/TownTrip): {places}
+        // ("食物商人和训练师"), {why} (errand.why.* of the business on the trip, joined:
+        // "补点东西，顺便学新技能"), {gold} (what the trainer costs, may be empty), {leader}.
+        // ("trip.ask" replaced "errand.ask", whose lines said lessons on shopping-only trips.)
+        // Reward: {quest}.
         Line const DEFAULTS[] = {
-            { "errand.ask",      "default",     "我想去{places}那里一趟，能等我一下吗？" },
-            { "errand.ask",      "default",     "{leader}，我去趟{places}，很快回来，行吗？" },
-            { "errand.ask",      "frugal",      "{places}那里要花{gold}，我攒了好久了，能等我一下吗？" },
-            { "errand.ask",      "spendthrift", "钱又快花光了……我去{places}那边一下，等我？" },
-            { "errand.ask",      "chatty",      "对了对了，我得去{places}那里一趟，补点东西，顺便学点新本事，等我一下好不好？" },
-            { "errand.ask",      "quiet",       "去{places}，马上回。" },
-            { "errand.ask",      "lazy",        "唉，又得跑一趟{places}……等我会儿？" },
+            { "trip.ask",        "default",     "我想去{places}那里一趟，{why}，能等我一下吗？" },
+            { "trip.ask",        "default",     "{leader}，我去趟{places}，{why}，很快回来，行吗？" },
+            { "trip.ask",        "frugal",      "我去趟{places}，{why}，钱我都算好了，能等我一下吗？" },
+            { "trip.ask",        "spendthrift", "钱又快花光了……我去{places}那边{why}，等我？" },
+            { "trip.ask",        "chatty",      "对了对了，我得去{places}那里一趟，{why}，等我一下好不好？" },
+            { "trip.ask",        "quiet",       "去{places}，{why}，马上回。" },
+            { "trip.ask",        "lazy",        "唉，又得跑一趟{places}，{why}……等我会儿？" },
+            { "errand.why.shop", "default",     "补点东西" },
+            { "errand.why.train", "default",    "学新技能" },
+            { "errand.why.and",  "default",     "，顺便" },
             { "errand.go",       "default",     "好，我去去就回。" },
             { "errand.go",       "diligent",    "马上就好！" },
             { "errand.go",       "quiet",       "嗯。" },
