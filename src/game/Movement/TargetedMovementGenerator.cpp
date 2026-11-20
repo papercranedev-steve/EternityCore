@@ -32,6 +32,9 @@
 #include "Geometry.h"
 #include "Utilities/Random.h"
 
+// A standing follower does not start a move shorter than this (FollowMovementGenerator).
+static constexpr float FOLLOW_MIN_STEP = 0.75f;
+
 //-----------------------------------------------//
 template<class T, typename D>
 bool TargetedMovementGeneratorMedium<T, D>::IsFarEnoughToMoveStationaryFollower(T &owner) const
@@ -680,11 +683,19 @@ void FollowMovementGenerator<T>::_setTargetLocation(T &owner)
         }
     }
 
+    float const dist = path.Length();
+
+    // Fix: a standing follower "far enough" from the leader whose follow point is where it
+    // already stands (the leader above it on stairs or a rock: the 3D distance stays outside
+    // the band; or out of reach: the path ends at the follower) got a 0-1 yd spline every
+    // check, the first step of the run animation over and over (moonwalk in place).
+    if (!forced && owner.movespline->Finalized() && dist < FOLLOW_MIN_STEP)
+        return;
+
     _addUnitStateMove(owner);
     m_bTargetReached = false;
     init.Move(&path);
 
-    float const dist = path.Length();
     if (owner.GetCharmerOrOwnerGuid() == i_target->GetObjectGuid() && dist > owner.GetSpeed(MOVE_RUN) &&
        (!i_target->IsInCombat() && !owner.IsInCombat() || i_target->IsPlayer() && i_target->IsMounted()))
     {

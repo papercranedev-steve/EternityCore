@@ -45,7 +45,10 @@ namespace HumanFollow
         p.offset.angle = float(M_PI) + side;
         p.reactionMs = uint32(dice.Range(float(REACTION_MIN_MS), float(REACTION_MAX_MS)));
         p.startSlack = dice.Range(START_SLACK_MIN, START_SLACK_MAX);
-        p.stopSlack = dice.Range(STOP_SLACK_MIN, STOP_SLACK_MAX);
+        // Fix: the stop band inside the start band. A bot with stopSlack above its startSlack
+        // stopped early where it already counted as left behind and started again: stop, step,
+        // stop.
+        p.stopSlack = std::min(dice.Range(STOP_SLACK_MIN, STOP_SLACK_MAX), p.startSlack - BAND_GAP);
         p.faceArc = dice.Next() < ATTENTIVE_SHARE ? ATTENTIVE_ARC : LAZY_ARC;
         p.turnDelayMs = uint32(dice.Range(float(TURN_DELAY_MIN_MS), float(TURN_DELAY_MAX_MS)));
         p.idleAfterMs = uint32(dice.Range(float(IDLE_AFTER_MIN_MS), float(IDLE_AFTER_MAX_MS)));

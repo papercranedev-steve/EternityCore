@@ -47,6 +47,7 @@ namespace HumanFollow
     constexpr float START_SLACK_MAX = 4.0f;
     constexpr float STOP_SLACK_MIN = 0.3f;
     constexpr float STOP_SLACK_MAX = 2.0f;
+    constexpr float BAND_GAP = 0.5f;              // stopSlack at most startSlack - this
     constexpr float ATTENTIVE_SHARE = 0.6f;
     constexpr float ATTENTIVE_ARC = 1.2f;         // radians, total width
     constexpr float LAZY_ARC = 3.0f;
