@@ -129,6 +129,8 @@ ChatCommand * ChatHandler::getCommandTable()
         { "gate",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotGateCommand,        "", nullptr },
         { "mirror",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotMirrorCommand,      "", nullptr },
         { "classquests", SEC_ADMINISTRATOR,     false, &ChatHandler::HandlePartyBotClassQuestsCommand, "", nullptr },
+        // "companion" first: commands match by prefix, the first one wins
+        { "companion",  SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionCommand,   "", nullptr },
         { "companions", SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionsCommand,  "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };

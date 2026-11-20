@@ -7,6 +7,7 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/CompanionMgr.h
   ${COMPANIONS_DIR}/CompanionMgr.cpp
   ${COMPANIONS_DIR}/CompanionCommands.cpp
+  ${COMPANIONS_DIR}/CompanionSheet.cpp
   ${COMPANIONS_DIR}/RewardChoice.h
   ${COMPANIONS_DIR}/RewardChoice.cpp
   ${COMPANIONS_DIR}/Personality.h
