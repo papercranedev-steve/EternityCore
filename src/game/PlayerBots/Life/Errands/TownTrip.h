@@ -15,8 +15,8 @@
  *             request (Requests::Board, intent Errand). It keeps following meanwhile. "yes" or
  *             no answer (the fallback: a player who ignores the popup does not mind): it goes.
  *             "no": it stays and the intent backs off.
- *   Going     the stops in turn: walk there (Trip/Approach.h), stand the stop's BrowseTime (an
- *             auction house longer than a mailbox), then the stop's action.
+ *   Going     the stops in turn: walk there (Trip/Approach.h), the stop's action, then stand
+ *             its BrowseTime (longer the more it bought / sold / learned).
  * Done, the leader within NEAR_YD:
  *   Returning back to him (BACK_YD).
  * Done, the leader farther (busy elsewhere in town): it whispers him and asks (intent
@@ -69,7 +69,7 @@ namespace Life
         uint32 phaseSinceMs = 0;    // the current phase or stop since
         uint32 nextMoveMs = 0;
         Trip::ApproachState leg;    // to the current stop
-        uint32 browseMs = 0;        // how long it stands at the current stop (0: not there yet)
+        uint32 browseMs = 0;        // how long it stands at the current stop (0: business not done yet)
         uint32 cooldownUntilMs = 0;
         uint32 leaderMap = 0;       // the leader's map when the trip began
         // Where it waits (a town gate, or where it finished) and what it calls the place.
@@ -83,7 +83,7 @@ namespace Life
         constexpr float TRIP_YD = 150.0f;
         // Done and the leader within this: just walk back, no question. A question only pays
         // when he went elsewhere in town (the mage quarter while the bot was at the bank).
-        constexpr float NEAR_YD = 100.0f;
+        constexpr float NEAR_YD = 150.0f;
         constexpr float BACK_YD = 8.0f;
         constexpr float MEET_YD = 20.0f;        // waiting: the leader is here
         constexpr float AT_GATE_YD = 3.0f;

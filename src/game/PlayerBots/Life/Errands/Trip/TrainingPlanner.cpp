@@ -48,11 +48,10 @@ namespace Trip
         return m_task.Name();
     }
 
-    void NpcTaskAction::Do(Player* me, WorldObject* target)
+    uint32 NpcTaskAction::Do(Player* me, WorldObject* target)
     {
         Creature* npc = target->ToCreature();
-        if (npc && m_task.Wants(me, npc))
-            m_task.Do(me, npc);
+        return npc && m_task.Wants(me, npc) ? m_task.Do(me, npc) : 0;
     }
 }
 }

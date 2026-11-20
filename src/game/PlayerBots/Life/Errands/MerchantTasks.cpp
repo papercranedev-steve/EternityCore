@@ -39,9 +39,10 @@ namespace Life
         return !needs.empty() && !BotShared::Vendor::PlanPurchases(me, npc, needs, TrainingReserve(me)).empty();
     }
 
-    void VendorTask::Do(Player* me, Creature* npc)
+    uint32 VendorTask::Do(Player* me, Creature* npc)
     {
-        uint32 const earned = BotShared::Vendor::SellJunk(me, npc);
+        uint32 sold = 0;
+        uint32 const earned = BotShared::Vendor::SellJunk(me, npc, &sold);
 
         uint32 repairCost = 0;
         uint32 repaired = 0;
@@ -50,11 +51,13 @@ namespace Life
 
         // Planned after selling and repairing: the money is what is left now.
         std::vector<BotShared::Supplies::Need> const needs = BotShared::Supplies::Missing(me);
-        uint32 const spent = BotShared::Vendor::Buy(me, npc,
-            BotShared::Vendor::PlanPurchases(me, npc, needs, TrainingReserve(me)));
+        std::vector<BotShared::Vendor::Purchase> const purchases =
+            BotShared::Vendor::PlanPurchases(me, npc, needs, TrainingReserve(me));
+        uint32 const spent = BotShared::Vendor::Buy(me, npc, purchases);
 
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at vendor %s: sold for %u, repaired for %u, bought for %u copper.",
             me->GetName(), npc->GetName(), earned, repaired, spent);
+        return sold + (repaired ? 1 : 0) + uint32(purchases.size());
     }
 
     bool TrainerTask::Wants(Player* me, Creature* npc)
@@ -68,12 +71,13 @@ namespace Life
         return BotShared::ClassTraining::CheapestAvailable(me, cheapest) && me->GetMoney() >= cheapest;
     }
 
-    void TrainerTask::Do(Player* me, Creature* npc)
+    uint32 TrainerTask::Do(Player* me, Creature* npc)
     {
         BotShared::ClassTraining::Result const result = BotShared::ClassTraining::LearnAvailable(me, true);
         if (result.learned)
             m_learned = true;
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at trainer %s: %u spells for %u copper, %u too expensive.",
             me->GetName(), npc->GetName(), result.learned, result.cost, result.tooExpensive);
+        return result.learned;
     }
 }

@@ -23,7 +23,7 @@ namespace Life
     public:
         char const* Name() const override { return "vendor"; }
         bool Wants(Player* me, Creature* npc) override;
-        void Do(Player* me, Creature* npc) override;
+        uint32 Do(Player* me, Creature* npc) override;
     };
 
     class TrainerTask final : public INpcTask
@@ -31,7 +31,7 @@ namespace Life
     public:
         char const* Name() const override { return "trainer"; }
         bool Wants(Player* me, Creature* npc) override;
-        void Do(Player* me, Creature* npc) override;
+        uint32 Do(Player* me, Creature* npc) override;
 
         // Spells were learned since the last call (once).
         bool TakeLearned()

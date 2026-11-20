@@ -2,8 +2,8 @@
  * Bot daily life (PlayerBots/Life), town trips (Life/Errands/TownTrip.h): what a trip is made of.
  *
  *  - IStopAction: the business at one stop (buy at the auction house, take the mail, sell /
- *    repair / buy at a vendor, learn at the trainer). Runs once the bot has stood there for
- *    its BrowseTime.
+ *    repair / buy at a vendor, learn at the trainer). Runs when the bot gets there; then it
+ *    stands its BrowseTime, longer the more it handled.
  *  - TripStop: where (an NPC or a gameobject), what it is called in the question ("place.*"
  *    phrase key, empty: not named), its action, and an optional stop that must come first
  *    (the mailbox after the auction house).
@@ -30,12 +30,15 @@ namespace Life
 {
 namespace Trip
 {
-    // How long the bot stands at a stop before its business runs (a player browses the window
-    // too): a random time in [minMs, maxMs], rolled when it arrives.
+    // How long the bot stands at a stop (a player browses the window too): a look around
+    // (random in [baseMinMs, baseMaxMs]) and then, for every thing handled (Do's count),
+    // perThingMs at 70–130 %. At most capMs.
     struct Browse
     {
-        uint32 minMs;
-        uint32 maxMs;
+        uint32 baseMinMs;
+        uint32 baseMaxMs;
+        uint32 perThingMs;
+        uint32 capMs;
     };
 
     class IStopAction
@@ -44,9 +47,14 @@ namespace Trip
         virtual ~IStopAction() = default;
         virtual char const* Name() const = 0;
         // Default: a vendor or a trainer, looking through the list.
-        virtual Browse BrowseTime() const { return { 8 * IN_MILLISECONDS, 15 * IN_MILLISECONDS }; }
-        // At the stop (in interaction reach of `target`).
-        virtual void Do(Player* me, WorldObject* target) = 0;
+        virtual Browse BrowseTime() const
+        {
+            return { 4 * IN_MILLISECONDS, 8 * IN_MILLISECONDS, 2 * IN_MILLISECONDS, 40 * IN_MILLISECONDS };
+        }
+        // At the stop (in interaction reach of `target`), as soon as it arrives; it stands its
+        // BrowseTime afterwards. Returns how many things it handled (listings bought, stacks
+        // sold, mails taken, spells learned).
+        virtual uint32 Do(Player* me, WorldObject* target) = 0;
     };
 
     struct TripStop

@@ -94,13 +94,16 @@ namespace Trip
         public:
             Needs needs;
             char const* Name() const override { return "auction"; }
-            // (searching the listings takes a while)
-            Browse BrowseTime() const override { return { 25 * IN_MILLISECONDS, 45 * IN_MILLISECONDS }; }
-            void Do(Player* me, WorldObject* target) override
+            // (searching takes a while, every listing is compared and bought on its own)
+            Browse BrowseTime() const override
+            {
+                return { 15 * IN_MILLISECONDS, 25 * IN_MILLISECONDS, 6 * IN_MILLISECONDS, 75 * IN_MILLISECONDS };
+            }
+            uint32 Do(Player* me, WorldObject* target) override
             {
                 Creature* auctioneer = target->ToCreature();
                 if (!auctioneer)
-                    return;
+                    return 0;
                 Budget budget = Budget::Of(me, TrainerReserve(me));
                 std::set<uint32> taken;
                 std::vector<BotShared::AuctionMarket::Listing> const listings =
@@ -108,6 +111,7 @@ namespace Trip
                 uint32 const asked = BotShared::AuctionMarket::Buyout(me, auctioneer, listings);
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at the auction house: %u listings for %u copper.",
                     me->GetName(), uint32(listings.size()), asked);
+                return uint32(listings.size());
             }
         };
 
@@ -115,11 +119,14 @@ namespace Trip
         {
         public:
             char const* Name() const override { return "mailbox"; }
-            Browse BrowseTime() const override { return { 3 * IN_MILLISECONDS, 6 * IN_MILLISECONDS }; }
-            void Do(Player* me, WorldObject* target) override
+            Browse BrowseTime() const override
             {
-                if (GameObject* mailbox = target->ToGameObject())
-                    BotShared::Mailbox::TakeAll(me, mailbox);
+                return { 2 * IN_MILLISECONDS, 4 * IN_MILLISECONDS, 1500, 20 * IN_MILLISECONDS };
+            }
+            uint32 Do(Player* me, WorldObject* target) override
+            {
+                GameObject* mailbox = target->ToGameObject();
+                return mailbox ? BotShared::Mailbox::TakeAll(me, mailbox) : 0;
             }
         };
 
@@ -129,14 +136,18 @@ namespace Trip
             Needs needs;
             bool repair = false;
             char const* Name() const override { return "vendor"; }
-            // (sells, repairs, then picks what to buy)
-            Browse BrowseTime() const override { return { 10 * IN_MILLISECONDS, 20 * IN_MILLISECONDS }; }
-            void Do(Player* me, WorldObject* target) override
+            // (every junk stack, the repair and every item bought is a click or two)
+            Browse BrowseTime() const override
+            {
+                return { 5 * IN_MILLISECONDS, 10 * IN_MILLISECONDS, 2 * IN_MILLISECONDS, 45 * IN_MILLISECONDS };
+            }
+            uint32 Do(Player* me, WorldObject* target) override
             {
                 Creature* vendor = target->ToCreature();
                 if (!vendor)
-                    return;
-                uint32 const earned = BotShared::Vendor::SellJunk(me, vendor);
+                    return 0;
+                uint32 sold = 0;
+                uint32 const earned = BotShared::Vendor::SellJunk(me, vendor, &sold);
                 uint32 repaired = 0;
                 if (repair && vendor->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_REPAIR))
                 {
@@ -145,9 +156,12 @@ namespace Trip
                         repaired = BotShared::Vendor::RepairAll(me, vendor);
                 }
                 Budget budget = Budget::Of(me, TrainerReserve(me));
-                uint32 const spent = BotShared::Vendor::Buy(me, vendor, BotShared::Vendor::PlanPurchases(me, vendor, needs, budget));
+                std::vector<BotShared::Vendor::Purchase> const purchases =
+                    BotShared::Vendor::PlanPurchases(me, vendor, needs, budget);
+                uint32 const spent = BotShared::Vendor::Buy(me, vendor, purchases);
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at vendor %s: sold for %u, repaired for %u, bought for %u copper.",
                     me->GetName(), vendor->GetName(), earned, repaired, spent);
+                return sold + (repaired ? 1 : 0) + uint32(purchases.size());
             }
         };
 

@@ -36,8 +36,10 @@ namespace Life
         // Business with this NPC now (its flags, the bot's needs and money). Cheap checks first:
         // asked for every friendly NPC near the bot.
         virtual bool Wants(Player* me, Creature* npc) = 0;
-        // At the NPC (in interaction distance): do the business.
-        virtual void Do(Player* me, Creature* npc) = 0;
+        // At the NPC (in interaction distance): do the business. Returns how many things it
+        // handled (stacks sold, items bought, a repair, spells learned): a town trip stands
+        // longer for more (Trip/TripPlan.h, Browse).
+        virtual uint32 Do(Player* me, Creature* npc) = 0;
     };
 
     // Per bot and task (a member of its AI). Plain data.

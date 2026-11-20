@@ -94,7 +94,7 @@ namespace Vendor
         return found;
     }
 
-    uint32 SellJunk(Player* player, Creature* vendor)
+    uint32 SellJunk(Player* player, Creature* vendor, uint32* stacksSold)
     {
         std::vector<ObjectGuid> junk;
         ForEachBagItem(player, [&junk](Item* item)
@@ -102,6 +102,8 @@ namespace Vendor
             if (IsJunk(item))
                 junk.push_back(item->GetObjectGuid());
         });
+        if (stacksSold)
+            *stacksSold = uint32(junk.size());
         uint32 const before = player->GetMoney();
         for (ObjectGuid const& guid : junk)
         {

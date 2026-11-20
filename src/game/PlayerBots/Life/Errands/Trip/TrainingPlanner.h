@@ -37,7 +37,7 @@ namespace Trip
     public:
         explicit NpcTaskAction(INpcTask& task) : m_task(task) {}
         char const* Name() const override;
-        void Do(Player* me, WorldObject* target) override;
+        uint32 Do(Player* me, WorldObject* target) override;
 
     private:
         INpcTask& m_task;

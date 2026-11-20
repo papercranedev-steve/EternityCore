@@ -80,6 +80,15 @@ namespace TownTrip
             me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE);
         }
 
+        // How long it stands at a stop where it handled `things` (Trip::Browse).
+        uint32 BrowseMs(Trip::Browse const& browse, uint32 things)
+        {
+            uint32 ms = urand(browse.baseMinMs, std::max(browse.baseMinMs, browse.baseMaxMs));
+            for (uint32 i = 0; i < things && ms < browse.capMs; ++i)
+                ms += urand(browse.perThingMs * 7 / 10, browse.perThingMs * 13 / 10);
+            return std::min(ms, std::max(browse.capMs, browse.baseMinMs));
+        }
+
         // "拍卖行、护甲商和训练师": the named stops in route order, each word once.
         std::string PlacesOf(std::vector<Trip::TripStop> const& stops)
         {
@@ -167,17 +176,16 @@ namespace TownTrip
                         break;
                 }
 
-                // (gone while it stood there: the next stop)
+                // Arrived: the business at once, then it stands there longer the more it did
+                // (gone while it stands: the next stop).
                 WorldObject* target = Trip::Approach::TargetOf(me, stop.target);
                 if (!state.browseMs)
                 {
-                    Trip::Browse const browse = stop.action->BrowseTime();
-                    state.browseMs = urand(browse.minMs, std::max(browse.minMs, browse.maxMs));
+                    uint32 const things = target ? stop.action->Do(me, target) : 0;
+                    state.browseMs = std::max<uint32>(BrowseMs(stop.action->BrowseTime(), things), 1);
                 }
                 if (target && WorldTimer::getMSTimeDiff(state.leg.arrivedMs, now) < state.browseMs)
                     return true;
-                if (target)
-                    stop.action->Do(me, target);
                 ++state.next;
                 Enter(state, Phase::Going, now);
             }
