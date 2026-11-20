@@ -2,7 +2,8 @@
  * Bot daily life (PlayerBots/Life), town trips (Life/Errands/TownTrip.h): what a trip is made of.
  *
  *  - IStopAction: the business at one stop (buy at the auction house, take the mail, sell /
- *    repair / buy at a vendor, learn at the trainer). Runs once the bot stands there.
+ *    repair / buy at a vendor, learn at the trainer). Runs once the bot has stood there for
+ *    its BrowseTime.
  *  - TripStop: where (an NPC or a gameobject), what it is called in the question ("place.*"
  *    phrase key, empty: not named), its action, and an optional stop that must come first
  *    (the mailbox after the auction house).
@@ -29,11 +30,21 @@ namespace Life
 {
 namespace Trip
 {
+    // How long the bot stands at a stop before its business runs (a player browses the window
+    // too): a random time in [minMs, maxMs], rolled when it arrives.
+    struct Browse
+    {
+        uint32 minMs;
+        uint32 maxMs;
+    };
+
     class IStopAction
     {
     public:
         virtual ~IStopAction() = default;
         virtual char const* Name() const = 0;
+        // Default: a vendor or a trainer, looking through the list.
+        virtual Browse BrowseTime() const { return { 8 * IN_MILLISECONDS, 15 * IN_MILLISECONDS }; }
         // At the stop (in interaction reach of `target`).
         virtual void Do(Player* me, WorldObject* target) = 0;
     };

@@ -13,6 +13,7 @@
 #include "Map.h"
 #include "MotionMaster.h"
 #include "Timer.h"
+#include "Utilities/Random.h"
 #include "Log.h"
 #include <algorithm>
 
@@ -40,6 +41,7 @@ namespace TownTrip
             state.phase = phase;
             state.phaseSinceMs = now;
             state.nextMoveMs = 0;
+            state.browseMs = 0;
             Trip::Approach::Begin(state.leg, now);
         }
 
@@ -167,7 +169,12 @@ namespace TownTrip
 
                 // (gone while it stood there: the next stop)
                 WorldObject* target = Trip::Approach::TargetOf(me, stop.target);
-                if (target && WorldTimer::getMSTimeDiff(state.leg.arrivedMs, now) < NpcVisit::DWELL_MS)
+                if (!state.browseMs)
+                {
+                    Trip::Browse const browse = stop.action->BrowseTime();
+                    state.browseMs = urand(browse.minMs, std::max(browse.minMs, browse.maxMs));
+                }
+                if (target && WorldTimer::getMSTimeDiff(state.leg.arrivedMs, now) < state.browseMs)
                     return true;
                 if (target)
                     stop.action->Do(me, target);

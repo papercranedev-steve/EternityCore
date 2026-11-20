@@ -94,6 +94,8 @@ namespace Trip
         public:
             Needs needs;
             char const* Name() const override { return "auction"; }
+            // (searching the listings takes a while)
+            Browse BrowseTime() const override { return { 25 * IN_MILLISECONDS, 45 * IN_MILLISECONDS }; }
             void Do(Player* me, WorldObject* target) override
             {
                 Creature* auctioneer = target->ToCreature();
@@ -113,6 +115,7 @@ namespace Trip
         {
         public:
             char const* Name() const override { return "mailbox"; }
+            Browse BrowseTime() const override { return { 3 * IN_MILLISECONDS, 6 * IN_MILLISECONDS }; }
             void Do(Player* me, WorldObject* target) override
             {
                 if (GameObject* mailbox = target->ToGameObject())
@@ -126,6 +129,8 @@ namespace Trip
             Needs needs;
             bool repair = false;
             char const* Name() const override { return "vendor"; }
+            // (sells, repairs, then picks what to buy)
+            Browse BrowseTime() const override { return { 10 * IN_MILLISECONDS, 20 * IN_MILLISECONDS }; }
             void Do(Player* me, WorldObject* target) override
             {
                 Creature* vendor = target->ToCreature();
