@@ -48,7 +48,10 @@ namespace Life
         constexpr uint32 SEARCH_MS = 2000;
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 20000;
-        constexpr uint32 CHOICE_WAIT_MS = 30000;
+        // A cap only: a chooser asking the player gets the request board's answer first (its
+        // timeout runs once the leader's earlier questions are done; several companions
+        // turning in together are asked one after another).
+        constexpr uint32 CHOICE_WAIT_MS = 180000;
         constexpr size_t DONE_KEEP = 8;
         constexpr uint32 RETRY_MS = 60000;      // a giver it gave up on is tried again after this
 

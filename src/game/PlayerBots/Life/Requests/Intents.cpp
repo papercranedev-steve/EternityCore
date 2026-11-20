@@ -12,7 +12,7 @@ namespace Requests
         IntentDef const INTENTS[] = {
             //  intent                 key        timeout   after "no"  after silence
             { Intent::Errand,       "errand",    30 * SEC,  60 * MIN,   10 * MIN },
-            // (the turn-in waits QuestTurnIn::CHOICE_WAIT_MS: the popup closes before it)
+            // (from its turn: questions of one leader are asked one after another, RequestBoard.h)
             { Intent::RewardChoice, "reward",    25 * SEC,  0,          0 },
             { Intent::Rendezvous,   "meet",      60 * SEC,  0,          0 },
             { Intent::ClassQuest,   "classquest", 30 * SEC, 0,          0 },

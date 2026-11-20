@@ -7,13 +7,16 @@
  *           The leader gets "PBREQ;<bot>;<id>;open;<intent>;<timeoutSec>;<race:gender:class>;<options>;<text>",
  *           options "key=label,key=label" (labels without ; , =), the text last. Race, gender
  *           and class let the popup draw the speaker when the client has no unit for the bot.
+ *   Turn    a leader answers one question at a time: the timeout runs only for the oldest open
+ *           question of each leader. Others wait (timeoutSec 0 in their open line) and get
+ *           "PBREQ;<bot>;<id>;turn;<timeoutSec>" when the earlier one is answered or expired.
  *   Poll    Open until the leader answers (".partybot reply <id> <option>": Reply, any thread)
- *           or the intent's timeout passes: Expired with the request's fallback as the answer.
+ *           or the timeout passes once its turn came: Expired with the request's fallback.
  *           Players often ignore popups: every request has a fallback.
  *   Close   the bot is done with it, with how it went (Accepted, Declined, Expired, Cancelled):
  *           the leader gets "PBREQ;<bot>;<id>;close;<answer>", and Declined / Expired start the
  *           intent's quiet time for this bot (Intents.h). Accepted resets the declines.
- * Requests nobody closes (the bot logged out) are dropped after their timeout plus STALE_MS.
+ * Requests nobody closes (the bot logged out) are dropped STALE_MS after their timeout.
  *
  * What the bot says in party chat is the caller's (Phrases.h): the popup is for the answer,
  * the chat is the character talking.
@@ -106,7 +109,8 @@ namespace Requests
             ObjectGuid leader;
             std::string botName;
             Ask ask;
-            uint32 openedMs = 0;
+            bool started = false;       // its clock runs (false: waits behind the leader's earlier question)
+            uint32 startedMs = 0;
             uint32 timeoutMs = 0;
             State state = State::Open;
             std::string answer;
@@ -118,6 +122,13 @@ namespace Requests
             uint32 declines = 0;
         };
 
+        using Lines = std::vector<std::pair<ObjectGuid, std::string>>;  // leader, system message
+
+        // With m_lock held. A started question of this leader is still open.
+        bool LeaderBusy(ObjectGuid leader) const;
+        // With m_lock held: expires started questions past their timeout, starts each leader's
+        // next waiting one (its "turn" line goes to `out`, sent after the lock is released).
+        void Advance(uint32 now, Lines& out);
         void DropStale(uint32 now);
         static void SendClose(Entry const& e);
 

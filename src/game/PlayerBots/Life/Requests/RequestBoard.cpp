@@ -5,6 +5,7 @@
 #include "Timer.h"
 #include "Log.h"
 #include <algorithm>
+#include <set>
 
 namespace Life
 {
@@ -27,7 +28,13 @@ namespace Requests
                    std::to_string(bot->GetClass());
         }
 
-        std::string OpenLine(Player const* bot, uint32 id, Ask const& ask, uint32 timeoutMs)
+        uint32 Seconds(uint32 ms)
+        {
+            return (ms + 999) / 1000;
+        }
+
+        // timeoutSec 0: it waits behind the leader's earlier questions (a "turn" line starts it)
+        std::string OpenLine(Player const* bot, uint32 id, Ask const& ask, uint32 timeoutSec)
         {
             std::string options;
             for (Option const& o : ask.options)
@@ -39,7 +46,14 @@ namespace Requests
             std::string text = ask.text;
             std::replace(text.begin(), text.end(), '\n', ' ');
             return "PBREQ;" + std::string(bot->GetName()) + ";" + std::to_string(id) + ";open;" + DefOf(ask.intent).key + ";" +
-                   std::to_string((timeoutMs + 999) / 1000) + ";" + Looks(bot) + ";" + options + ";" + text;
+                   std::to_string(timeoutSec) + ";" + Looks(bot) + ";" + options + ";" + text;
+        }
+
+        void Send(std::vector<std::pair<ObjectGuid, std::string>> const& lines)
+        {
+            for (auto const& line : lines)
+                if (Player* leader = sObjectAccessor.FindPlayer(line.first))
+                    BotShared::BotChat::SystemTo(leader, line.second);
         }
     }
 
@@ -71,43 +85,51 @@ namespace Requests
         e.leader = leader->GetObjectGuid();
         e.botName = bot->GetName();
         e.ask = ask;
-        e.openedMs = WorldTimer::getMSTime();
         e.timeoutMs = ask.timeoutMs ? ask.timeoutMs : DefOf(ask.intent).timeoutMs;
         if (e.ask.fallback.empty())
             e.ask.fallback = ask.options.back().key;
+
+        Lines lines;
         {
             std::lock_guard<std::mutex> guard(m_lock);
-            DropStale(e.openedMs);
+            uint32 const now = WorldTimer::getMSTime();
+            DropStale(now);
+            Advance(now, lines);
             e.id = m_nextId++;
+            e.started = !LeaderBusy(e.leader);
+            e.startedMs = now;
             m_open[e.id] = e;
         }
-        BotShared::BotChat::SystemTo(leader, OpenLine(bot, e.id, e.ask, e.timeoutMs));
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Request] %s asks %s (%s, #%u): %s",
-            e.botName.c_str(), leader->GetName(), DefOf(ask.intent).key, e.id, ask.text.c_str());
+        Send(lines);
+        BotShared::BotChat::SystemTo(leader, OpenLine(bot, e.id, e.ask, e.started ? Seconds(e.timeoutMs) : 0));
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Request] %s asks %s (%s, #%u%s): %s",
+            e.botName.c_str(), leader->GetName(), DefOf(ask.intent).key, e.id, e.started ? "" : ", waits its turn",
+            ask.text.c_str());
         return e.id;
     }
 
     Status Board::Poll(uint32 id)
     {
-        std::lock_guard<std::mutex> guard(m_lock);
         Status status;
-        auto itr = m_open.find(id);
-        if (itr == m_open.end())
-            return status;
-        Entry& e = itr->second;
-        if (e.state == State::Open && WorldTimer::getMSTimeDiff(e.openedMs, WorldTimer::getMSTime()) >= e.timeoutMs)
+        Lines lines;
         {
-            e.state = State::Expired;
-            e.answer = e.ask.fallback;
+            std::lock_guard<std::mutex> guard(m_lock);
+            Advance(WorldTimer::getMSTime(), lines);
+            auto itr = m_open.find(id);
+            if (itr != m_open.end())
+            {
+                status.state = itr->second.state;
+                status.answer = itr->second.answer;
+            }
         }
-        status.state = e.state;
-        status.answer = e.answer;
+        Send(lines);
         return status;
     }
 
     void Board::Close(uint32 id, Outcome outcome)
     {
         Entry closed;
+        Lines lines;
         {
             std::lock_guard<std::mutex> guard(m_lock);
             auto itr = m_open.find(id);
@@ -134,10 +156,12 @@ namespace Requests
                 case Outcome::Cancelled:
                     break;
             }
+            Advance(now, lines);
         }
         if (closed.answer.empty())
             closed.answer = outcome == Outcome::Cancelled ? "cancel" : closed.ask.fallback;
         SendClose(closed);
+        Send(lines);
     }
 
     bool Board::Reply(Player const* from, uint32 id, std::string const& key, std::string& error)
@@ -164,25 +188,69 @@ namespace Requests
         }
         e.state = State::Answered;
         e.answer = key;
+        // (the next question starts on the next Advance: the asking bots poll every tick)
         return true;
     }
 
     void Board::Forget(ObjectGuid bot)
     {
-        std::lock_guard<std::mutex> guard(m_lock);
-        for (auto itr = m_open.begin(); itr != m_open.end();)
+        Lines lines;
         {
-            if (itr->second.bot == bot)
-                itr = m_open.erase(itr);
-            else
-                ++itr;
+            std::lock_guard<std::mutex> guard(m_lock);
+            for (auto itr = m_open.begin(); itr != m_open.end();)
+            {
+                if (itr->second.bot == bot)
+                    itr = m_open.erase(itr);
+                else
+                    ++itr;
+            }
+            for (auto itr = m_quiet.begin(); itr != m_quiet.end();)
+            {
+                if (itr->first.first == bot)
+                    itr = m_quiet.erase(itr);
+                else
+                    ++itr;
+            }
+            Advance(WorldTimer::getMSTime(), lines);
         }
-        for (auto itr = m_quiet.begin(); itr != m_quiet.end();)
+        Send(lines);
+    }
+
+    bool Board::LeaderBusy(ObjectGuid leader) const
+    {
+        return std::any_of(m_open.begin(), m_open.end(), [&leader](auto const& itr)
         {
-            if (itr->first.first == bot)
-                itr = m_quiet.erase(itr);
-            else
-                ++itr;
+            return itr.second.leader == leader && itr.second.started && itr.second.state == State::Open;
+        });
+    }
+
+    void Board::Advance(uint32 now, Lines& out)
+    {
+        for (auto& itr : m_open)
+        {
+            Entry& e = itr.second;
+            if (e.started && e.state == State::Open && WorldTimer::getMSTimeDiff(e.startedMs, now) >= e.timeoutMs)
+            {
+                e.state = State::Expired;
+                e.answer = e.ask.fallback;
+            }
+        }
+
+        // the oldest waiting question of each leader whose earlier one is done (ids grow: map order)
+        std::set<ObjectGuid> busy;
+        for (auto const& itr : m_open)
+            if (itr.second.started && itr.second.state == State::Open)
+                busy.insert(itr.second.leader);
+        for (auto& itr : m_open)
+        {
+            Entry& e = itr.second;
+            if (e.started || e.state != State::Open || busy.count(e.leader))
+                continue;
+            e.started = true;
+            e.startedMs = now;
+            busy.insert(e.leader);
+            out.emplace_back(e.leader, "PBREQ;" + e.botName + ";" + std::to_string(e.id) + ";turn;" +
+                                       std::to_string(Seconds(e.timeoutMs)));
         }
     }
 
@@ -190,7 +258,8 @@ namespace Requests
     {
         for (auto itr = m_open.begin(); itr != m_open.end();)
         {
-            if (WorldTimer::getMSTimeDiff(itr->second.openedMs, now) > itr->second.timeoutMs + STALE_MS)
+            Entry const& e = itr->second;
+            if (e.started && WorldTimer::getMSTimeDiff(e.startedMs, now) > e.timeoutMs + STALE_MS)
                 itr = m_open.erase(itr);
             else
                 ++itr;
