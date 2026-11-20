@@ -7,7 +7,9 @@
  * caller's (a companion's class quest chain, Companions/ClassQuests/ClassQuestFlow).
  * Design: .kiro/docs/2026-11-18-companion-class-quests.md, stage C5 (workspace root).
  *
- * Same gate and limits as the turn-in errand (QuestTurnIn.h). Map thread of the bot.
+ * Same gate and limits as the turn-in errand (QuestTurnIn.h), including RETRY_MS: a class
+ * trainer seen from the street above (the search is 2D) fails the walk check there, and the bot
+ * must still take the quest once it stands next to him. Map thread of the bot.
  */
 
 #ifndef MANGOS_LIFE_QUEST_PICK_UP_H
@@ -15,7 +17,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
-#include <deque>
+#include "Life/Errands/ErrandCommon.h"
 #include <vector>
 
 class Player;
@@ -30,7 +32,7 @@ namespace Life
         uint32 startedMs = 0;
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
-        std::deque<ObjectGuid> done;
+        Errands::DoneList done;
     };
 
     namespace QuestPickUp
@@ -42,6 +44,7 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 20000;
         constexpr size_t DONE_KEEP = 8;
+        constexpr uint32 RETRY_MS = 60000;      // a giver it gave up on is tried again after this
 
         // `wanted`: quests to take (not in the log yet). True: the bot walks to a giver this tick.
         bool Update(Player* me, QuestPickUpState& state, Player const* anchor, std::vector<uint32> const& wanted);

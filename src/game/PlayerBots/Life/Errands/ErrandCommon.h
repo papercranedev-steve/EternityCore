@@ -29,8 +29,18 @@ namespace Life
         bool WalkIsSafe(Player* me, float x, float y, float z, float maxDetour);
 
         // Objects an errand is done with (used, unreachable), the last `keep`.
-        bool IsDone(std::deque<ObjectGuid> const& done, ObjectGuid guid);
-        void MarkDone(std::deque<ObjectGuid>& done, ObjectGuid guid, size_t keep);
+        struct DoneMark
+        {
+            ObjectGuid guid;
+            uint32 atMs = 0;
+        };
+        typedef std::deque<DoneMark> DoneList;
+
+        // `forgetAfterMs`: a mark older than this no longer counts (0: until pushed out by
+        // `keep` newer ones). For objects that stay (a quest giver): unreachable from where the
+        // bot stood is not unreachable for good.
+        bool IsDone(DoneList const& done, ObjectGuid guid, uint32 forgetAfterMs = 0);
+        void MarkDone(DoneList& done, ObjectGuid guid, size_t keep);
 
         // Ends a walk the errand started (idle; the bot's follow starts again next tick).
         void StopWalk(Player* me);

@@ -20,7 +20,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
-#include <deque>
+#include "Life/Errands/ErrandCommon.h"
 
 class Player;
 
@@ -34,7 +34,7 @@ namespace Life
         uint32 startedMs = 0;
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
-        std::deque<ObjectGuid> done;
+        Errands::DoneList done;
     };
 
     namespace QuestItemUse

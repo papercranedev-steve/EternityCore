@@ -9,6 +9,7 @@
 #include "QuestDef.h"
 #include "WorldSession.h"
 #include "Timer.h"
+#include "Log.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
@@ -33,6 +34,13 @@ namespace QuestPickUp
                     quests.push_back(questId);
             }
             return quests;
+        }
+
+        void GiveUp(Player* me, QuestPickUpState& state, ObjectGuid giver, char const* why)
+        {
+            Errands::MarkDone(state.done, giver, DONE_KEEP);
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[QuestPickUp] %s: giver %s skipped for %u s (%s).",
+                me->GetName(), giver.GetString().c_str(), RETRY_MS / 1000, why);
         }
 
         uint32 GivenBy(WorldObject const* giver, std::vector<uint32> const& quests)
@@ -92,7 +100,7 @@ namespace QuestPickUp
             givers.insert(givers.end(), objects.begin(), objects.end());
             givers.erase(std::remove_if(givers.begin(), givers.end(), [&](WorldObject* g)
             {
-                return Errands::IsDone(state.done, g->GetObjectGuid()) || !anchor->IsWithinDist(g, ANCHOR_YD, false);
+                return Errands::IsDone(state.done, g->GetObjectGuid(), RETRY_MS) || !anchor->IsWithinDist(g, ANCHOR_YD, false);
             }), givers.end());
             std::sort(givers.begin(), givers.end(), [me](WorldObject* a, WorldObject* b)
             {
@@ -106,7 +114,7 @@ namespace QuestPickUp
                     questId = GivenBy(g, quests);
                     return g;
                 }
-                Errands::MarkDone(state.done, g->GetObjectGuid(), DONE_KEEP);
+                GiveUp(me, state, g->GetObjectGuid(), "no safe walk");
             }
             return nullptr;
         }
@@ -145,7 +153,7 @@ namespace QuestPickUp
                 WorldTimer::getMSTimeDiff(state.startedMs, now) > GIVE_UP_MS)
             {
                 if (!me->IsCurrentQuest(state.questId))
-                    Errands::MarkDone(state.done, state.giver, DONE_KEEP);
+                    GiveUp(me, state, state.giver, giver ? "not reached in time" : "giver gone");
                 Stop(me, state);
                 return false;
             }
@@ -180,7 +188,7 @@ namespace QuestPickUp
             me->GetSession()->HandleQuestgiverAcceptQuestOpcode(packet);
 
             if (!me->IsCurrentQuest(state.questId))
-                Errands::MarkDone(state.done, giver->GetObjectGuid(), DONE_KEEP);
+                GiveUp(me, state, giver->GetObjectGuid(), "accept refused");
             Clear(state);
             state.nextSearchMs = 0;
             return true;

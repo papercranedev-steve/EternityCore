@@ -111,7 +111,7 @@ namespace QuestTurnIn
             givers.insert(givers.end(), objects.begin(), objects.end());
             givers.erase(std::remove_if(givers.begin(), givers.end(), [&](WorldObject* g)
             {
-                return Errands::IsDone(state.done, g->GetObjectGuid()) || !anchor->IsWithinDist(g, ANCHOR_YD, false);
+                return Errands::IsDone(state.done, g->GetObjectGuid(), RETRY_MS) || !anchor->IsWithinDist(g, ANCHOR_YD, false);
             }), givers.end());
             std::sort(givers.begin(), givers.end(), [me](WorldObject* a, WorldObject* b)
             {

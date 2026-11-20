@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Group.h"
 #include "MotionMaster.h"
+#include "Timer.h"
 #include <algorithm>
 #include <cmath>
 
@@ -46,14 +47,21 @@ namespace Errands
         return Commander::SafeRoute::PathIsSafe(me, idle, to, maxDetour);
     }
 
-    bool IsDone(std::deque<ObjectGuid> const& done, ObjectGuid guid)
+    bool IsDone(DoneList const& done, ObjectGuid guid, uint32 forgetAfterMs)
     {
-        return std::find(done.begin(), done.end(), guid) != done.end();
+        uint32 const now = WorldTimer::getMSTime();
+        return std::any_of(done.begin(), done.end(), [&](DoneMark const& mark)
+        {
+            return mark.guid == guid && (!forgetAfterMs || WorldTimer::getMSTimeDiff(mark.atMs, now) < forgetAfterMs);
+        });
     }
 
-    void MarkDone(std::deque<ObjectGuid>& done, ObjectGuid guid, size_t keep)
+    void MarkDone(DoneList& done, ObjectGuid guid, size_t keep)
     {
-        done.push_back(guid);
+        DoneMark mark;
+        mark.guid = guid;
+        mark.atMs = WorldTimer::getMSTime();
+        done.push_back(mark);
         while (done.size() > keep)
             done.pop_front();
     }

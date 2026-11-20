@@ -21,7 +21,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
-#include <deque>
+#include "Life/Errands/ErrandCommon.h"
 #include <set>
 
 class Player;
@@ -37,7 +37,7 @@ namespace Life
         uint32 nextSearchMs = 0;
         bool opening = false;       // the use was started (a cast may be running)
         std::set<ObjectGuid> bagsBefore;    // to put on what the object gave
-        std::deque<ObjectGuid> done;
+        Errands::DoneList done;
     };
 
     namespace QuestObjectRun

@@ -9,7 +9,8 @@
  *
  * Same gate as the other errands (ErrandCommon::MayRun), safe walk, SEARCH_YD of the bot and
  * ANCHOR_YD of the anchor. A giver it could not reach in GIVE_UP_MS or that refused the
- * reward is not tried again for DONE_KEEP givers.
+ * reward is not tried again for RETRY_MS (a giver stays where it is: from another spot, a
+ * floor lower, the walk may work).
  *
  * Map thread of the bot.
  */
@@ -19,7 +20,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
-#include <deque>
+#include "Life/Errands/ErrandCommon.h"
 
 class Player;
 
@@ -36,7 +37,7 @@ namespace Life
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
         uint32 choiceSinceMs = 0;   // standing at the giver waiting for the chooser, 0 = not yet
-        std::deque<ObjectGuid> done;
+        Errands::DoneList done;
     };
 
     namespace QuestTurnIn
@@ -49,6 +50,7 @@ namespace Life
         constexpr uint32 GIVE_UP_MS = 20000;
         constexpr uint32 CHOICE_WAIT_MS = 30000;
         constexpr size_t DONE_KEEP = 8;
+        constexpr uint32 RETRY_MS = 60000;      // a giver it gave up on is tried again after this
 
         // `anchor`: givers near it only (the party leader); null = near the bot.
         // True: the bot walks to a giver or stands at it this tick.
