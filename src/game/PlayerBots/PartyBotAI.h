@@ -39,6 +39,8 @@
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Life/Errands/QuestPickUp.h"
 #include "Life/Errands/QuestItemUse.h"
+#include <array>
+#include <string>
 
 class PartyBotAI : public TeamBotAI
 {
@@ -94,12 +96,13 @@ public:
     // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/
     // HumanFollow.h), moved out of idle creatures' aggro range (FollowSpot.h); on a transport
     // the original random offset.
-    void StartFollowing(Unit* pLeader);
+    // `why`: the caller, kept in m_followEvents (dev console `ai().follow.events`).
+    void StartFollowing(Unit* pLeader, char const* why);
     // While following: re-check the follow point after the leader moved or its heading turned enough.
     void KeepFollowSpotSafe(Unit* pLeader);
     bool UsesSafeFollow() const;
     Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader, float heading);
-    void IssueFollow(Unit* pLeader, float heading);
+    void IssueFollow(Unit* pLeader, float heading, char const* why);
     // Every update with a leader: HumanFollow::Tick (drift, idle look / step / sit).
     void UpdateHumanFollow(Unit* pLeader, bool follows);
     // A dead leader (a body, or a ghost on its corpse run): stops the follow and the trail walk
@@ -150,6 +153,19 @@ public:
     bool m_followChecked = false;
     // Who the last MoveFollow follows (IssueFollow): a new guide restarts the follow.
     ObjectGuid m_followTargetGuid;
+    // The last MoveFollow calls (IssueFollow), for the dev console: who started the follow and
+    // what movement it replaced (a follow restarted every few ticks: something else stops it).
+    struct FollowEvent
+    {
+        uint32 ms = 0;
+        char const* why = "";       // a string literal of the caller
+        uint8 prevMotion = 0;       // MovementGeneratorType before the MoveFollow
+        std::string owner;          // BotDirectives movement owner at that moment, if any
+    };
+    static constexpr size_t PB_FOLLOW_EVENTS = 16;
+    std::array<FollowEvent, PB_FOLLOW_EVENTS> m_followEvents;
+    size_t m_followEventNext = 0;
+    uint32 m_followIssues = 0;
     Commander::HumanFollow::IdleState m_humanIdle;
     // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
     Life::LootRunState m_lootRun;

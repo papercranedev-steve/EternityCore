@@ -210,8 +210,18 @@ Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader, floa
     return Commander::FollowSpot::Choose(me, pLeader, m_followOffset, lookaheadSec, heading);
 }
 
-void PartyBotAI::IssueFollow(Unit* pLeader, float heading)
+void PartyBotAI::IssueFollow(Unit* pLeader, float heading, char const* why)
 {
+    uint32 const now = WorldTimer::getMSTime();
+    FollowEvent& e = m_followEvents[m_followEventNext];
+    m_followEventNext = (m_followEventNext + 1) % PB_FOLLOW_EVENTS;
+    ++m_followIssues;
+    e.ms = now;
+    e.why = why;
+    e.prevMotion = uint8(me->GetMotionMaster()->GetCurrentMovementGeneratorType());
+    char const* owner = Directives().GetMovementOwner(now);
+    e.owner = owner ? owner : "";
+
     m_followTargetGuid = pLeader->GetObjectGuid();
     // (on a transport: the original follow, the offset at the leader's facing)
     if (UsesSafeFollow())
@@ -221,7 +231,7 @@ void PartyBotAI::IssueFollow(Unit* pLeader, float heading)
         me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle);
 }
 
-void PartyBotAI::StartFollowing(Unit* pLeader)
+void PartyBotAI::StartFollowing(Unit* pLeader, char const* why)
 {
     m_followChecked = false;
     float const heading = Commander::HumanFollow::Heading(me, pLeader);
@@ -241,7 +251,7 @@ void PartyBotAI::StartFollowing(Unit* pLeader)
         m_followOffset.dist = urand(PB_MIN_FOLLOW_DIST, PB_MAX_FOLLOW_DIST);
         m_followOffset.angle = frand(PB_MIN_FOLLOW_ANGLE, PB_MAX_FOLLOW_ANGLE);
     }
-    IssueFollow(pLeader, heading);
+    IssueFollow(pLeader, heading, why);
 }
 
 void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
@@ -277,7 +287,7 @@ void PartyBotAI::KeepFollowSpotSafe(Unit* pLeader)
     if (o.dist == m_followOffset.dist && o.angle == m_followOffset.angle)
         return;
     m_followOffset = o;
-    IssueFollow(pLeader, heading);
+    IssueFollow(pLeader, heading, "spot");
 }
 
 void PartyBotAI::UpdateHumanFollow(Unit* pLeader, bool follows)
@@ -298,7 +308,7 @@ void PartyBotAI::UpdateHumanFollow(Unit* pLeader, bool follows)
     m_followCheckY = pLeader->GetPositionY();
     m_followCheckO = heading;
     m_followChecked = true;
-    IssueFollow(pLeader, heading);
+    IssueFollow(pLeader, heading, "human");
 }
 
 bool PartyBotAI::WaitForDeadLeader(Player* pLeader)
@@ -759,7 +769,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // The guide changed (set, gone, back): the running follow is the old one's.
             if (follows && me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE &&
                 m_followTargetGuid != pFollow->GetObjectGuid())
-                StartFollowing(pFollow);
+                StartFollowing(pFollow, "guide");
             else if (follows)
                 KeepFollowSpotSafe(pFollow);
             UpdateHumanFollow(pFollow, follows);
@@ -821,7 +831,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // that had not healed yet with the player while the tank fought further away.
         if (pFollow && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
             me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
-            StartFollowing(pFollow);
+            StartFollowing(pFollow, "restart");
     }
 
     // Swing at / chase the victim, face it, the rotation in combat (TeamBotAI).

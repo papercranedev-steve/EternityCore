@@ -49,6 +49,7 @@
 #include "Packets/Spell.h"
 #include "MotionMaster.h"
 #include "MoveSpline.h"
+#include "TargetedMovementGenerator.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -625,6 +626,40 @@ namespace DevConsole
         SetFieldN(L, "angle", Round2(ai->m_followOffset.angle));
         SetFieldB(L, "checked", ai->m_followChecked);
         SetField(L, "motion", u->GetMotionMaster()->GetCurrentMovementGeneratorType());
+        // the running follow generator: styled (HumanFollow) or the original, whom, its heading
+        if (Player* bot = u->ToPlayer())
+        {
+            MotionMaster* mm = bot->GetMotionMaster();
+            if (!mm->empty() && mm->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+                if (auto const* gen = dynamic_cast<FollowMovementGenerator<Player> const*>(mm->GetCurrent()))
+                {
+                    SetFieldB(L, "styled", gen->HasStyle());
+                    SetFieldN(L, "heading", Round2(gen->GetHeading()));
+                    SetFieldU(L, "target", gen->GetTarget());
+                }
+            SetFieldB(L, "transport", bot->GetTransport() != nullptr);
+        }
+        // the last MoveFollow calls, newest first: who (why), after what movement (prev), the
+        // movement owner then; a follow restarted every few ticks means something else stops it
+        SetField(L, "issues", ai->m_followIssues);
+        lua_newtable(L);
+        {
+            lua_Integer n = 0;
+            for (size_t k = 1; k <= PartyBotAI::PB_FOLLOW_EVENTS; ++k)
+            {
+                auto const& e = ai->m_followEvents[(ai->m_followEventNext + PartyBotAI::PB_FOLLOW_EVENTS - k) % PartyBotAI::PB_FOLLOW_EVENTS];
+                if (!e.ms)
+                    break;
+                lua_createtable(L, 0, 4);
+                SetField(L, "agoMs", WorldTimer::getMSTimeDiff(e.ms, now));
+                SetFieldS(L, "why", e.why);
+                SetField(L, "prev", e.prevMotion);
+                if (!e.owner.empty())
+                    SetFieldS(L, "owner", e.owner.c_str());
+                lua_rawseti(L, -2, ++n);
+            }
+        }
+        lua_setfield(L, -2, "events");
         lua_setfield(L, -2, "follow");
         if (!d.GetLastDecision().empty())
         {
