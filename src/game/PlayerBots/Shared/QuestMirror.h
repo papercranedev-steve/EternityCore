@@ -16,6 +16,7 @@
 #define MANGOS_BOTSHARED_QUEST_MIRROR_H
 
 #include "Common.h"
+#include <string>
 #include <vector>
 
 class Player;
@@ -75,6 +76,11 @@ namespace BotShared
 
         // Out of the quest log, not rewarded (as if abandoned).
         bool Remove(Player* player, uint32 mirrorId);
+
+        // A flag on the player's map and minimap at x, y of the player's map, like a guard's
+        // directions (SMSG_GOSSIP_POI): "[Companion] <name>". One at a time: the next flag (also a
+        // guard's) replaces it; there is no packet to take it away.
+        void ShowPoint(Player* player, float x, float y, std::string const& name);
 
         // Makes the mirror quests (QuestDef.h: a friend of Quest, it sets the protected fields).
         class Builder

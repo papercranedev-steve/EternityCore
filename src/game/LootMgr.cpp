@@ -59,6 +59,7 @@ public:
     bool HasQuestDrop() const;                          // True if group includes at least 1 quest drop entry
     bool HasQuestDropForPlayer(Player const* player) const;
     // The same for active quests of the player
+    void CollectItems(std::vector<uint32>& items) const; // Item ids of the group
     void Process(Loot& loot) const;                     // Rolls an item from the group (if any) and adds the item to the loot
     float RawTotalChance() const;                       // Overall chance for the group (without equal chanced items)
     float TotalChance() const;                          // Overall chance for the group
@@ -1116,6 +1117,14 @@ bool LootTemplate::LootGroup::HasQuestDropForPlayer(Player const* player) const
     return false;
 }
 
+void LootTemplate::LootGroup::CollectItems(std::vector<uint32>& items) const
+{
+    for (const auto& i : ExplicitlyChanced)
+        items.push_back(i.itemid);
+    for (const auto& i : EqualChanced)
+        items.push_back(i.itemid);
+}
+
 // Rolls an item from the group (if any takes its chance) and adds the item to the loot
 void LootTemplate::LootGroup::Process(Loot& loot) const
 {
@@ -1273,6 +1282,15 @@ bool LootTemplate::HasQuestDrop(uint8 groupId) const
             return true;
 
     return false;
+}
+
+void LootTemplate::CollectOwnItems(std::vector<uint32>& items) const
+{
+    for (const auto& itr : Entries)
+        if (itr.mincountOrRef > 0)                          // not a reference
+            items.push_back(itr.itemid);
+    for (const auto& group : Groups)
+        group.CollectItems(items);
 }
 
 // True if template includes at least 1 quest drop for an active quest of the player

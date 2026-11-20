@@ -224,6 +224,8 @@ class LootTemplate
         bool HasQuestDrop(uint8 groupId = 0) const;
         // True if template includes at least 1 quest drop for an active quest of the player
         bool HasQuestDropForPlayer(Player const* player, uint8 groupId = 0) const;
+        // Item ids the template can drop by itself, grouped or not (references not followed)
+        void CollectOwnItems(std::vector<uint32>& items) const;
 
         // Checks integrity of the template
         void Verify(LootStore const& store, uint32 Id) const;

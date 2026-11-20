@@ -2,6 +2,8 @@
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
+#include "GossipDef.h"
+#include "WorldSession.h"
 #include "Log.h"
 #include <algorithm>
 #include <unordered_map>
@@ -91,6 +93,13 @@ namespace BotShared
                 QuestLocale const* locale;
                 std::string const& Title(int idx) const { return Localized(locale ? &locale->Title : nullptr, idx, quest->GetTitle()); }
                 std::string const& Objectives(int idx) const { return Localized(locale ? &locale->Objectives : nullptr, idx, quest->GetObjectives()); }
+                std::string const& Details(int idx) const { return Localized(locale ? &locale->Details : nullptr, idx, quest->GetDetails()); }
+                // The quest giver's text, as the quest log shows it under "Description".
+                std::string Description(int idx) const
+                {
+                    std::string const& details = Details(idx);
+                    return details.empty() ? Objectives(idx) : details;
+                }
                 std::string const& ObjectiveText(uint32 i, int idx) const
                 {
                     return Localized(locale ? &locale->ObjectiveText[i] : nullptr, idx, quest->ObjectiveText[i]);
@@ -263,12 +272,12 @@ namespace BotShared
                     mirror->m_reqCreatureOrGOcount = uint32(counters.size());
                     mirror->Title = TextsFor(-1).prefix + text.Title(-1);
                     mirror->Objectives = text.Objectives(-1);
-                    mirror->Details = TextsFor(-1).mirrorIntro + text.Objectives(-1);
+                    mirror->Details = TextsFor(-1).mirrorIntro + text.Description(-1);
                     for (int idx : locales)
                     {
                         SetLocale(locale.Title, idx, TextsFor(idx).prefix + text.Title(idx));
                         SetLocale(locale.Objectives, idx, text.Objectives(idx));
-                        SetLocale(locale.Details, idx, TextsFor(idx).mirrorIntro + text.Objectives(idx));
+                        SetLocale(locale.Details, idx, TextsFor(idx).mirrorIntro + text.Description(idx));
                     }
                     if (sObjectMgr.AddCodeQuest(std::move(mirror), std::move(locale)))
                         ++made;
@@ -293,13 +302,13 @@ namespace BotShared
                     placeholder->ObjectiveText[0] = Format(TextsFor(-1).placeholderGoal, giverName(-1));
                     placeholder->Title = TextsFor(-1).prefix + text.Title(-1);
                     placeholder->Objectives = text.Objectives(-1);
-                    placeholder->Details = Format(TextsFor(-1).placeholderIntro, giverName(-1)) + text.Objectives(-1);
+                    placeholder->Details = Format(TextsFor(-1).placeholderIntro, giverName(-1)) + text.Description(-1);
                     for (int idx : locales)
                     {
                         SetLocale(locale.ObjectiveText[0], idx, Format(TextsFor(idx).placeholderGoal, giverName(idx)));
                         SetLocale(locale.Title, idx, TextsFor(idx).prefix + text.Title(idx));
                         SetLocale(locale.Objectives, idx, text.Objectives(idx));
-                        SetLocale(locale.Details, idx, Format(TextsFor(idx).placeholderIntro, giverName(idx)) + text.Objectives(idx));
+                        SetLocale(locale.Details, idx, Format(TextsFor(idx).placeholderIntro, giverName(idx)) + text.Description(idx));
                     }
                     if (sObjectMgr.AddCodeQuest(std::move(placeholder), std::move(locale)))
                         ++made;
@@ -373,6 +382,17 @@ namespace BotShared
                 return false;
             player->RemoveQuestAtSlot(slot);
             return true;
+        }
+
+        void ShowPoint(Player* player, float x, float y, std::string const& name)
+        {
+            if (!player || !player->GetSession() || !player->PlayerTalkClass)
+                return;
+            // Icon and flags of the guards' directions (points_of_interest).
+            uint32 const ICON_RED_FLAG = 6;
+            uint32 const FLAGS = 99;
+            std::string const label = TextsFor(player->GetSession()->GetSessionDbLocaleIndex()).prefix + name;
+            player->PlayerTalkClass->SendPointOfInterest(x, y, ICON_RED_FLAG, FLAGS, 0, label.c_str());
         }
     }
 }
