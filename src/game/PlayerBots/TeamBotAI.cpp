@@ -839,6 +839,14 @@ bool TeamBotAI::StartResting()
         return false;
     }
 
+    // Fix: the drink used one tick was still waiting for its cast when the arbiter asked
+    // IsResting(): "failed", the follow started again, the walk cancelled the drink, and the
+    // next tick stopped the bot to drink again. A healer ran on the spot every 100 ms (the run
+    // animation's first step over and over) until one drink happened to land. A rest spell
+    // on its way counts as started; nothing else is used meanwhile.
+    if (IsRestPending())
+        return true;
+
     bool const startEat = needToEat && !ActiveRest(Kind::Food);
     bool const startDrink = needToDrink && !ActiveRest(Kind::Drink);
     if (startEat || startDrink)
@@ -855,9 +863,22 @@ bool TeamBotAI::StartResting()
     if (startEat)
         BeginRest(Kind::Food);
     // (an item that is food and drink at once covers both)
-    if (startDrink && !ActiveRest(Kind::Drink))
+    if (startDrink && !ActiveRest(Kind::Drink) && !IsRestPending())
         BeginRest(Kind::Drink);
-    return IsResting();
+    return IsResting() || IsRestPending();
+}
+
+bool TeamBotAI::IsRestPending() const
+{
+    using BotShared::FoodAndDrink::Kind;
+    Spell const* pSpell = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+    if (!pSpell || !pSpell->m_spellInfo || pSpell->getState() != SPELL_STATE_PREPARING)
+        return false;
+    for (Kind kind : { Kind::Food, Kind::Drink })
+        if (SpellEntry const* pRest = NextRest(kind))
+            if (pRest->Id == pSpell->m_spellInfo->Id)
+                return true;
+    return false;
 }
 
 void TeamBotAI::EndRestWhenFull()

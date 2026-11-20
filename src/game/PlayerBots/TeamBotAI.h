@@ -302,6 +302,9 @@ public:
     float RestRatePerSec(BotShared::FoodAndDrink::Kind kind) const;
     // Starts eating / drinking NextRest. True: started.
     bool BeginRest(BotShared::FoodAndDrink::Kind kind);
+    // The food or drink spell used but not cast yet: an instant with a global cooldown is cast
+    // at the next spell update, its aura comes only then.
+    bool IsRestPending() const;
     // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
     // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
     // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's
