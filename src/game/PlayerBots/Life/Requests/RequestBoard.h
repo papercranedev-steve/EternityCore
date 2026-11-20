@@ -4,8 +4,9 @@
  *
  * Lifecycle (the asking bot drives it from its map thread):
  *   Open    the bot asks (one open request per bot; not while its intent is backing off).
- *           The leader gets "PBREQ;<bot>;<id>;open;<intent>;<timeoutSec>;<options>;<text>",
- *           options "key=label,key=label" (labels without ; , =), the text last.
+ *           The leader gets "PBREQ;<bot>;<id>;open;<intent>;<timeoutSec>;<race:gender:class>;<options>;<text>",
+ *           options "key=label,key=label" (labels without ; , =), the text last. Race, gender
+ *           and class let the popup draw the speaker when the client has no unit for the bot.
  *   Poll    Open until the leader answers (".partybot reply <id> <option>": Reply, any thread)
  *           or the intent's timeout passes: Expired with the request's fallback as the answer.
  *           Players often ignore popups: every request has a fallback.

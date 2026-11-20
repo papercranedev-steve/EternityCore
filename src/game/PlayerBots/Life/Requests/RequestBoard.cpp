@@ -20,7 +20,14 @@ namespace Requests
             return text;
         }
 
-        std::string OpenLine(std::string const& botName, uint32 id, Ask const& ask, uint32 timeoutMs)
+        // race:gender:class, so the popup can draw the speaker when the client has no unit for them
+        std::string Looks(Player const* bot)
+        {
+            return std::to_string(bot->GetRace()) + ":" + std::to_string(bot->GetGender()) + ":" +
+                   std::to_string(bot->GetClass());
+        }
+
+        std::string OpenLine(Player const* bot, uint32 id, Ask const& ask, uint32 timeoutMs)
         {
             std::string options;
             for (Option const& o : ask.options)
@@ -31,8 +38,8 @@ namespace Requests
             }
             std::string text = ask.text;
             std::replace(text.begin(), text.end(), '\n', ' ');
-            return "PBREQ;" + botName + ";" + std::to_string(id) + ";open;" + DefOf(ask.intent).key + ";" +
-                   std::to_string((timeoutMs + 999) / 1000) + ";" + options + ";" + text;
+            return "PBREQ;" + std::string(bot->GetName()) + ";" + std::to_string(id) + ";open;" + DefOf(ask.intent).key + ";" +
+                   std::to_string((timeoutMs + 999) / 1000) + ";" + Looks(bot) + ";" + options + ";" + text;
         }
     }
 
@@ -74,7 +81,7 @@ namespace Requests
             e.id = m_nextId++;
             m_open[e.id] = e;
         }
-        BotShared::BotChat::SystemTo(leader, OpenLine(e.botName, e.id, e.ask, e.timeoutMs));
+        BotShared::BotChat::SystemTo(leader, OpenLine(bot, e.id, e.ask, e.timeoutMs));
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Request] %s asks %s (%s, #%u): %s",
             e.botName.c_str(), leader->GetName(), DefOf(ask.intent).key, e.id, ask.text.c_str());
         return e.id;
