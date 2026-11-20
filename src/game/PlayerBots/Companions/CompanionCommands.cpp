@@ -15,6 +15,12 @@
  *   .partybot classquests [bot]               dev: the class quest chains for a bot (done or not, asks)
  *   .partybot classquests visit [bot]         dev: counts as a capital visit now (ClassQuestFlow)
  *   .partybot classquests class <classId>     dev: all chains of a class (Shared/ClassQuestChains)
+ *   .partybot companions                      the companions you recruited (addon Companions panel):
+ *     PBCMP;BEGIN;<count>
+ *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
+ *            <affinity 0-100>;<state 0 offline, 1 online, 2 in your group>;<zone id>;<recruited at>;
+ *            <tag,tag,...>;<name>
+ *     PBCMP;END
  */
 
 #include "Chat.h"
@@ -24,11 +30,123 @@
 #include "Shared/QuestMirror.h"
 #include "Shared/ClassQuestChains.h"
 #include "Shared/TownGates.h"
+#include "Shared/TalentSpread.h"
 #include "PartyBotAI.h"
 #include "ObjectMgr.h"
+#include "ObjectAccessor.h"
 #include "QuestDef.h"
+#include "World.h"
 #include "WorldSession.h"
+#include "Database/DatabaseEnv.h"
 #include <cstring>
+#include <sstream>
+#include <unordered_map>
+#include <unordered_set>
+
+bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    if (!player)
+        return false;
+
+    struct Row
+    {
+        uint32 race = 0, cls = 0, gender = 0, level = 0, xp = 0, nextXp = 0, zone = 0, state = 0;
+        BotShared::TalentSpread::Points talents = { 0, 0, 0 };
+        std::string name;
+        bool known = false;
+    };
+
+    std::vector<Companions::CompanionInfo> const companions = sCompanionMgr.OfRecruiter(player->GetGUIDLow());
+    uint32 const maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
+    std::unordered_map<uint32, Row> rows;
+    std::string offline;    // guids for the database, "1,2,3"
+
+    for (Companions::CompanionInfo const& info : companions)
+    {
+        Row& row = rows[info.charGuid];
+        Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, info.charGuid));
+        if (!bot || !bot->IsInWorld())
+        {
+            offline += (offline.empty() ? "" : ",") + std::to_string(info.charGuid);
+            continue;
+        }
+        row.known = true;
+        row.race = bot->GetRace();
+        row.cls = bot->GetClass();
+        row.gender = bot->GetGender();
+        row.level = bot->GetLevel();
+        row.xp = bot->GetUInt32Value(PLAYER_XP);
+        row.nextXp = row.level >= maxLevel ? 0 : bot->GetUInt32Value(PLAYER_NEXT_LEVEL_XP);
+        row.zone = bot->GetZoneId();
+        row.talents = BotShared::TalentSpread::Of(bot);
+        row.state = player->GetGroup() && bot->GetGroup() == player->GetGroup() ? 2 : 1;
+        row.name = bot->GetName();
+    }
+
+    if (!offline.empty())
+    {
+        std::unique_ptr<QueryResult> chars(CharacterDatabase.PQuery(
+            "SELECT `guid`, `name`, `race`, `class`, `gender`, `level`, `xp`, `zone` FROM `characters` WHERE `guid` IN (%s)", offline.c_str()));
+        if (chars)
+        {
+            do
+            {
+                Field* f = chars->Fetch();
+                Row& row = rows[f[0].GetUInt32()];
+                row.known = true;
+                row.name = f[1].GetCppString();
+                row.race = f[2].GetUInt8();
+                row.cls = f[3].GetUInt8();
+                row.gender = f[4].GetUInt8();
+                row.level = f[5].GetUInt8();
+                row.xp = f[6].GetUInt32();
+                row.nextXp = row.level >= maxLevel ? 0 : sObjectMgr.GetXPForLevel(row.level);
+                row.zone = f[7].GetUInt32();
+            } while (chars->NextRow());
+        }
+
+        std::unordered_map<uint32, std::unordered_set<uint32>> spells;
+        std::unique_ptr<QueryResult> learned(CharacterDatabase.PQuery(
+            "SELECT `guid`, `spell` FROM `character_spell` WHERE `disabled` = 0 AND `guid` IN (%s)", offline.c_str()));
+        if (learned)
+        {
+            do
+            {
+                Field* f = learned->Fetch();
+                spells[f[0].GetUInt32()].insert(f[1].GetUInt32());
+            } while (learned->NextRow());
+        }
+        for (auto& itr : rows)
+            if (itr.second.state == 0 && itr.second.known)
+                itr.second.talents = BotShared::TalentSpread::Of(uint8(itr.second.cls), spells[itr.first]);
+    }
+
+    uint32 count = 0;
+    for (auto const& itr : rows)
+        count += itr.second.known ? 1 : 0;
+    PSendSysMessage("PBCMP;BEGIN;%u", count);
+
+    for (Companions::CompanionInfo const& info : companions)
+    {
+        Row const& row = rows[info.charGuid];
+        if (!row.known)
+            continue;
+        std::string tags;
+        for (std::string const& tag : info.tags)
+            tags += (tags.empty() ? "" : ",") + tag;
+        std::ostringstream ss;
+        ss << "PBCMP;C;" << info.charGuid << ";" << row.race << ";" << row.cls << ";" << row.gender << ";"
+           << row.level << ";" << row.xp << ";" << row.nextXp << ";"
+           << row.talents[0] << "/" << row.talents[1] << "/" << row.talents[2] << ";"
+           << info.affinity << ";" << row.state << ";" << row.zone << ";" << info.recruitedAt << ";"
+           << tags << ";" << row.name;
+        SendSysMessage(ss.str().c_str());
+    }
+
+    SendSysMessage("PBCMP;END");
+    return true;
+}
 
 bool ChatHandler::HandlePartyBotReplyCommand(char* args)
 {

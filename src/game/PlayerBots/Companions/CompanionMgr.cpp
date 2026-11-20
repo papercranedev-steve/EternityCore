@@ -203,6 +203,16 @@ namespace Companions
         return itr != m_companions.end() ? &itr->second : nullptr;
     }
 
+    std::vector<CompanionInfo> CompanionMgr::OfRecruiter(uint32 recruiterGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);   // affinity changes on map threads
+        std::vector<CompanionInfo> list;
+        for (auto const& itr : m_companions)
+            if (itr.second.recruiterGuid == recruiterGuid)
+                list.push_back(itr.second);
+        return list;
+    }
+
     RewardMode CompanionMgr::GetRewardMode(uint32 charGuid) const
     {
         CompanionInfo const* info = Find(charGuid);

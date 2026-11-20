@@ -67,6 +67,8 @@ namespace Companions
         bool IsEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
         bool IsCompanion(uint32 charGuid) const { return m_companions.find(charGuid) != m_companions.end(); }
         CompanionInfo const* Find(uint32 charGuid) const;
+        // World thread. Copies of everyone `recruiterGuid` recruited (temporary ones too), any order.
+        std::vector<CompanionInfo> OfRecruiter(uint32 recruiterGuid) const;
         // Auto for anyone that is not a companion.
         RewardMode GetRewardMode(uint32 charGuid) const;
         // World thread (a command, later the affinity system); stored at once.

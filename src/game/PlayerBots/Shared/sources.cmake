@@ -52,6 +52,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/QuestPlaces.cpp
   ${BOTSHARED_DIR}/Purchasing.h
   ${BOTSHARED_DIR}/Purchasing.cpp
+  ${BOTSHARED_DIR}/TalentSpread.h
+  ${BOTSHARED_DIR}/TalentSpread.cpp
   ${BOTSHARED_DIR}/WalkLength.h
   ${BOTSHARED_DIR}/WalkLength.cpp
   ${BOTSHARED_DIR}/TownGates.h
