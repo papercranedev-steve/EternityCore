@@ -810,8 +810,8 @@ namespace Companions
         std::string const subject = Life::Phrases::Say("parcel.subject", info.tags, vars);
         std::string const body = Life::Phrases::Say(benched.zone ? "parcel.body" : "parcel.body.nozone", info.tags, vars);
         if (Expedition::Send(owner, info.charGuid, parcel, subject, body))
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items, bench place %u).",
-                name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()), rank + 1);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items, surprise %u, bench place %u).",
+                name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()), parcel.surprise, rank + 1);
     }
 
     bool CompanionMgr::TakeStay(uint32 charGuid)

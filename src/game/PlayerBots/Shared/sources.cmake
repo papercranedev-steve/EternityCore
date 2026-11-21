@@ -32,6 +32,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/GatheringYield.cpp
   ${BOTSHARED_DIR}/MarketValue.h
   ${BOTSHARED_DIR}/MarketValue.cpp
+  ${BOTSHARED_DIR}/WorldDrops.h
+  ${BOTSHARED_DIR}/WorldDrops.cpp
   ${BOTSHARED_DIR}/GearSources.h
   ${BOTSHARED_DIR}/GearSources.cpp
   ${BOTSHARED_DIR}/GearUpgrade.h

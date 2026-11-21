@@ -65,7 +65,13 @@ namespace Companions
         {
             uint32 money = 0;
             std::vector<std::pair<uint32, uint32>> items;   // item entry, count
+            uint32 surprise = 0;                            // the world drop among them, 0 = none
         };
+
+        // The surprise (bench doc §3.5.5), on top of the worth: a tradeable world drop for the
+        // owner's level (Shared/WorldDrops), blue at RARE_CHANCE, else green at UNCOMMON_CHANCE.
+        float const UNCOMMON_CHANCE = 0.15f;
+        float const RARE_CHANCE = 0.01f;
 
         // The profit part (bench doc §3.5.3): money, materials (what its gathering skills bring
         // in, Shared/GatheringYield; cloth of its level without one), consumables (what its

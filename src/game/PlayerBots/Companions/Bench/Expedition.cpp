@@ -3,6 +3,7 @@
 #include "Shared/GatheringYield.h"
 #include "Shared/MarketValue.h"
 #include "Shared/Professions.h"
+#include "Shared/WorldDrops.h"
 #include "SpellMgr.h"
 #include "ItemPrototype.h"
 #include "Item.h"
@@ -217,6 +218,19 @@ namespace Companions
             uint32 const consumables = Fill(ConsumablesOf(saved), uint32(profit * CONSUMABLES_SHARE), parcel.items);
             float const money = training + profit - float(materials + consumables);
             parcel.money = std::max<uint32>(1, uint32(std::max(0.0f, money) + 0.5f));
+
+            // The surprise, on top (§3.5.5): a world drop for the owner's level.
+            float const roll = frand(0.0f, 1.0f);
+            uint32 const quality = roll < RARE_CHANCE ? ITEM_QUALITY_RARE : roll < RARE_CHANCE + UNCOMMON_CHANCE ? ITEM_QUALITY_UNCOMMON : 0;
+            if (quality && parcel.items.size() < MAX_NR_LOOT_ITEMS)
+            {
+                std::vector<uint32> const pool = BotShared::WorldDrops::For(quality, ownerLevel);
+                if (!pool.empty())
+                {
+                    parcel.surprise = pool[urand(0, uint32(pool.size()) - 1)];
+                    parcel.items.emplace_back(parcel.surprise, 1);
+                }
+            }
             return parcel;
         }
 
@@ -270,6 +284,8 @@ namespace Companions
                 AddItemLootFiller(&FillParcel);
                 registered = true;
             }
+            // (the pool takes a second of database to build: at startup, not in the middle of a game)
+            BotShared::WorldDrops::For(ITEM_QUALITY_UNCOMMON, 1);
         }
 
         bool FillParcel(Item* item, Player* /*opener*/, Loot& loot)
