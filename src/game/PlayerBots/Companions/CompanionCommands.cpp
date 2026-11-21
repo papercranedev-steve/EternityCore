@@ -18,8 +18,9 @@
  *   .partybot callover <guid>                 one of them comes to you (CompanionMgr::CallOver)
  *   .partybot companions                      the companions you recruited (addon Companions panel):
  *     PBCMP;BEGIN;<count>
- *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<label>   what affinity allows (Affinity/Gates,
- *            ready ones, by affinity)
+ *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<ready 1, 0 = not built yet>;<label>   what
+ *            affinity allows (Affinity/Gates, all of them by affinity: the addon shows the goals
+ *            that are not built yet as "尚未开放")
  *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
  *            <affinity 0-100>;<state 0 at his place (not in the world), 1 in the world, 2 in your
  *            group (also while coming back with you)>;<zone id: where he is>;<recruited at>;
@@ -144,8 +145,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         count += itr.second.known ? 1 : 0;
     PSendSysMessage("PBCMP;BEGIN;%u", count);
     for (Companions::Gates::Info const& gate : Companions::Gates::All())
-        if (gate.ready)
-            PSendSysMessage("PBCMP;GATE;%u;%u;%s;%s", gate.affinity, gate.classMask, gate.key, gate.label);
+        PSendSysMessage("PBCMP;GATE;%u;%u;%s;%u;%s", gate.affinity, gate.classMask, gate.key, gate.ready ? 1u : 0u, gate.label);
 
     for (Companions::CompanionInfo const& info : companions)
     {
