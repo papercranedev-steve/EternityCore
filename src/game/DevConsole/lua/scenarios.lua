@@ -791,6 +791,9 @@ function scenario.command(leader, args)
     elseif args == "life" or args:match("^life%s") then
         -- life (non-combat) test scenarios: tests/life/life.lua, the addon's 生活测试 window
         lifetest.command(leader, args:match("^life%s*(.*)$"))
+    elseif args == "prof" or args:match("^prof%s") then
+        -- companion profession tests: tests/prof/prof.lua, the addon's 专业测试 window
+        proftest.command(leader, args:match("^prof%s*(.*)$"))
     elseif args:match("^mark") then
         local text = args:match("^mark%s+(.+)$") or ""
         if not rec.mark(leader, text) then say(leader, "现在没有在录制战斗，标记不了") end

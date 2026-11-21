@@ -2011,7 +2011,20 @@ namespace DevConsole
             return 1;
         }
         Player* recruiter = CheckPlayer(L, 3);
-        lua_pushboolean(L, sCompanionMgr.MarkTemporary(p, recruiter));
+        // optional 4th: personality tag keys, e.g. { "gatherer", "frugal" } (Companions/Personality.h)
+        std::vector<std::string> tags;
+        if (lua_istable(L, 4))
+        {
+            lua_Integer const n = luaL_len(L, 4);
+            for (lua_Integer i = 1; i <= n; ++i)
+            {
+                lua_geti(L, 4, i);
+                if (char const* s = lua_tostring(L, -1))
+                    tags.push_back(s);
+                lua_pop(L, 1);
+            }
+        }
+        lua_pushboolean(L, sCompanionMgr.MarkTemporary(p, recruiter, std::move(tags)));
         return 1;
     }
     // u:resting() -> bool: in a rest area (inn, city); the town trips wait for a resting leader
@@ -2189,6 +2202,32 @@ namespace DevConsole
         return 1;
     }
 
+    // u:setprof(skill, value) -> max: the ranks of a profession up to the one that holds `value`,
+    // free (Shared/Professions::Grant), no recipes; 0 = no trainer teaches it.
+    static int U_setprof(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_Integer const skill = luaL_checkinteger(L, 2);
+        lua_Integer const value = luaL_checkinteger(L, 3);
+        if (!BotShared::Professions::IsProfession(uint32(skill)))
+            return luaL_error(L, "%d is not a profession skill", int(skill));
+        if (value < 1 || value > 300)
+            return luaL_error(L, "value must be 1..300");
+        lua_pushinteger(L, BotShared::Professions::Grant(p, uint32(skill), uint32(value)));
+        if (PartyBotAI* ai = GetPartyBotAI(p))
+            ai->m_resetSpellData = true;
+        return 1;
+    }
+    // u:forgetprofs(): every profession forgotten (Shared/Professions::ForgetAll)
+    static int U_forgetprofs(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        BotShared::Professions::ForgetAll(p);
+        if (PartyBotAI* ai = GetPartyBotAI(p))
+            ai->m_resetSpellData = true;
+        return 0;
+    }
+
     // u:reprof() -> {first, firstvalue, second, secondvalue, recipes}
     // A companion party bot forgets its professions and gets them again (PastProfessions).
     static int U_reprof(lua_State* L)
@@ -2281,6 +2320,7 @@ namespace DevConsole
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
+            { "setprof", U_setprof }, { "forgetprofs", U_forgetprofs },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },
