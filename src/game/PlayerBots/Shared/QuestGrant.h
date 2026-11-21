@@ -28,9 +28,15 @@ namespace BotShared
         std::vector<Quest const*> ChainUpTo(Quest const* quest, std::function<bool(Quest const*)> const& fits);
         // ... the quests of the player's class and race.
         std::vector<Quest const*> ChainUpTo(Player const* player, Quest const* quest);
+        // Every way to `quest` when several quests lead to it (Felsteed: four starters, one per
+        // capital; Felhunter: a Horde and an Alliance branch into the same last quest), each like
+        // ChainUpTo. At most 16 ways.
+        std::vector<std::vector<Quest const*>> AllChainsUpTo(Quest const* quest, std::function<bool(Quest const*)> const& fits);
 
         // The chain up to `quest` counts as rewarded (quests in the quest log are left alone).
         void MarkChainRewarded(Player* player, Quest const* quest);
+        // ... exactly these quests (a way picked from AllChainsUpTo).
+        void MarkStepsRewarded(Player* player, std::vector<Quest const*> const& steps);
 
         // What `quest` teaches (learn effects of its reward spell) and its fixed reward items (no
         // room: that item is skipped and logged). Nothing is marked.

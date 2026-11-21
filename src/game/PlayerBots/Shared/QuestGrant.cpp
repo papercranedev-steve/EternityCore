@@ -48,6 +48,52 @@ namespace BotShared
             return nullptr;
         }
 
+        // Every quest done right before `quest` (PrevQuestId first, then the quests leading to it).
+        std::vector<Quest const*> AllBefore(Quest const* quest, std::function<bool(Quest const*)> const& fits)
+        {
+            std::vector<Quest const*> before;
+            auto consider = [&](uint32 id)
+            {
+                Quest const* prev = sObjectMgr.GetQuestTemplate(id);
+                if (prev && fits(prev) && std::find(before.begin(), before.end(), prev) == before.end())
+                    before.push_back(prev);
+            };
+            if (quest->GetPrevQuestId() > 0)
+                consider(uint32(quest->GetPrevQuestId()));
+            auto const itr = ChainPredecessors().find(quest->GetQuestId());
+            if (itr != ChainPredecessors().end())
+                for (uint32 id : itr->second)
+                    consider(id);
+            return before;
+        }
+
+        size_t const MAX_WAYS = 16;
+        size_t const MAX_STEPS = 20;
+
+        // Walks back from the newest step of `way` (newest first) and adds every finished way.
+        void CollectWays(std::vector<Quest const*>& way, std::function<bool(Quest const*)> const& fits,
+                         std::vector<std::vector<Quest const*>>& ways)
+        {
+            if (ways.size() >= MAX_WAYS)
+                return;
+            std::vector<Quest const*> before;
+            if (way.size() < MAX_STEPS)
+                for (Quest const* prev : AllBefore(way.back(), fits))
+                    if (std::find(way.begin(), way.end(), prev) == way.end())
+                        before.push_back(prev);
+            if (before.empty())
+            {
+                ways.emplace_back(way.rbegin(), way.rend());
+                return;
+            }
+            for (Quest const* prev : before)
+            {
+                way.push_back(prev);
+                CollectWays(way, fits, ways);
+                way.pop_back();
+            }
+        }
+
         void MarkRewarded(Player* player, Quest const* quest)
         {
             uint32 const id = quest->GetQuestId();
@@ -88,6 +134,25 @@ namespace BotShared
                 return;
             for (Quest const* step : ChainUpTo(player, quest))
                 MarkRewarded(player, step);
+        }
+
+        std::vector<std::vector<Quest const*>> AllChainsUpTo(Quest const* quest, std::function<bool(Quest const*)> const& fits)
+        {
+            std::vector<std::vector<Quest const*>> ways;
+            if (!quest)
+                return ways;
+            std::vector<Quest const*> way{ quest };
+            CollectWays(way, fits, ways);
+            return ways;
+        }
+
+        void MarkStepsRewarded(Player* player, std::vector<Quest const*> const& steps)
+        {
+            if (!player)
+                return;
+            for (Quest const* step : steps)
+                if (step)
+                    MarkRewarded(player, step);
         }
 
         void GiveRewards(Player* player, Quest const* quest)

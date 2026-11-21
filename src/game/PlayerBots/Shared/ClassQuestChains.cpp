@@ -259,11 +259,24 @@ namespace BotShared
             Quest const* last = sObjectMgr.GetQuestTemplate(chain.id);
             if (!player || !last || !player->SatisfyQuestClass(last, false) || !player->SatisfyQuestRace(last, false))
                 return {};
-            std::vector<Quest const*> steps = QuestGrant::ChainUpTo(last, [player](Quest const* q)
+            // Several ways can lead to the last quest (one starter per capital, a Horde and an
+            // Alliance branch): the one whose first giver is friendliest, then the longest (a way
+            // that stops early ran into the other side's quest).
+            std::vector<Quest const*> steps;
+            int bestStanding = 0;
+            for (std::vector<Quest const*>& way : QuestGrant::AllChainsUpTo(last, [player](Quest const* q)
+                 {
+                     return IsChainQuest(q) && player->SatisfyQuestClass(q, false) && player->SatisfyQuestRace(q, false);
+                 }))
             {
-                return IsChainQuest(q) && player->SatisfyQuestClass(q, false) && player->SatisfyQuestRace(q, false);
-            });
-            if (steps.empty() || GiverStanding(player, steps.front()) == 0)
+                int const standing = GiverStanding(player, way.front());
+                if (standing > bestStanding || (standing == bestStanding && standing && way.size() > steps.size()))
+                {
+                    bestStanding = standing;
+                    steps = std::move(way);
+                }
+            }
+            if (steps.empty())
                 return {};
             if (chain.afterAbility)
             {
@@ -332,7 +345,7 @@ namespace BotShared
             std::vector<Quest const*> const steps = StepsFor(player, chain);
             if (steps.empty())
                 return false;
-            QuestGrant::MarkChainRewarded(player, steps.back());
+            QuestGrant::MarkStepsRewarded(player, steps);
             if (chain.kind == Kind::Ability)
                 for (Quest const* step : steps)
                     if (ClassQuestAbilities::AbilityOf(step->GetQuestId()))
