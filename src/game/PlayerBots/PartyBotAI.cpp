@@ -1188,9 +1188,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // something is missing, and a resting bot stands up when the Commander has something better
     // (the arbiter before any other action, the heal order step), here for a resurrection, or
     // once full (EndRestWhenFull).
+    // The one it follows walked away from its rest (Commander/Behaviors/Movement/RestCatchUp.h):
+    // it stands up and catches up before it sits again. Only the free rest: not with the
+    // Commander's out-of-combat plan, at a stay spot or with a resurrection first.
+    Commander::RestCatchUp::Update(this, m_restCatchUp,
+        staying || resurrectFirst || commanderOutOfCombat ? nullptr : GetFollowTarget(pLeader));
     EndRestWhenFull();
     bool const needsRest = !me->IsInCombat() && NeedsRest();
-    bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst;
+    bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst && !HoldsOffRest();
     // (also not a bot sitting idle while the leader stands, HumanFollow: it rises when it
     // follows again or the fight comes)
     // (and not one sitting at its stay spot, WaitAround)

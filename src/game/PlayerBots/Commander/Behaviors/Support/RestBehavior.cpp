@@ -57,6 +57,9 @@ namespace Commander
         // Retreat, the boss module's waves, the pull's tank on its way (the plan's constraint).
         if (plan.ForbidsRest(me->GetObjectGuid()))
             return;
+        // The leader walked away: it catches up first (Movement/RestCatchUp.h).
+        if (bot->HoldsOffRest())
+            return;
         if (me->IsInCombat() || me->GetVictim() || me->IsNonMeleeSpellCasted(false, false, true))
             return;
         // Walking to its place (stance modules, the pull's hiding point): arrive first.

@@ -382,6 +382,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/Arrival.h
   ${COMMANDER_DIR}/Behaviors/Movement/Arrival.cpp
+  ${COMMANDER_DIR}/Behaviors/Movement/RestCatchUp.h
+  ${COMMANDER_DIR}/Behaviors/Movement/RestCatchUp.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/Landing.h
   ${COMMANDER_DIR}/Behaviors/Movement/Landing.cpp
   ${COMMANDER_DIR}/Behaviors/Support/CorpseRun.h

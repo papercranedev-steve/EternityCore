@@ -16,7 +16,7 @@ namespace RestValue
         bool const fighting = world.HasPartyEnemy() || !world.targeted.empty();
 
         if (member.UsesMana() && member.drinkManaPerSec > 0.0f &&
-            float(member.mana) < float(member.maxMana) * FULL_SHARE)
+            float(member.mana) < float(member.maxMana) * (member.drinking ? FULL_SHARE : START_SHARE))
         {
             w.drink = true;
             w.mana = float(member.maxMana) - float(member.mana);
@@ -25,7 +25,7 @@ namespace RestValue
             w.sec = std::max(w.sec, w.mana / std::max(1.0f, rate));
         }
         if (!fighting && member.foodHealthPerSec > 0.0f &&
-            float(member.health) < float(member.maxHealth) * FULL_SHARE)
+            float(member.health) < float(member.maxHealth) * (member.eating ? FULL_SHARE : START_SHARE))
         {
             w.eat = true;
             w.health = float(member.maxHealth) - float(member.health);

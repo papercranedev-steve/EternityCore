@@ -1933,6 +1933,7 @@ namespace WorldModelBuilder
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
+                    f.eating = ai->IsEating();
                     f.canShootWand = ai->CanShootWand();
                     f.healerDamageSet = ai->m_healerDamageTier;
                     if (member->IsAlive())

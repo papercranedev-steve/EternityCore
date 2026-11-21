@@ -892,9 +892,27 @@ bool TeamBotAI::IsDrinking() const
     return ActiveRest(BotShared::FoodAndDrink::Kind::Drink) != nullptr;
 }
 
+bool TeamBotAI::IsEating() const
+{
+    return ActiveRest(BotShared::FoodAndDrink::Kind::Food) != nullptr;
+}
+
 bool TeamBotAI::IsResting() const
 {
-    return IsDrinking() || ActiveRest(BotShared::FoodAndDrink::Kind::Food) != nullptr;
+    return IsDrinking() || IsEating();
+}
+
+float TeamBotAI::RestSecondsLeft() const
+{
+    using BotShared::FoodAndDrink::Kind;
+    float sec = 0.0f;
+    if (IsDrinking() && me->GetPowerType() == POWER_MANA)
+        if (float const rate = RestRatePerSec(Kind::Drink))
+            sec = std::max(sec, float(me->GetMaxPower(POWER_MANA) - me->GetPower(POWER_MANA)) / rate);
+    if (IsEating())
+        if (float const rate = RestRatePerSec(Kind::Food))
+            sec = std::max(sec, float(me->GetMaxHealth() - me->GetHealth()) / rate);
+    return sec;
 }
 
 bool TeamBotAI::NeedsRest() const
@@ -932,8 +950,13 @@ bool TeamBotAI::StartResting()
     if (IsRestPending())
         return true;
 
-    bool const startEat = needToEat && !ActiveRest(Kind::Food);
-    bool const startDrink = needToDrink && !ActiveRest(Kind::Drink);
+    // A new food or drink only below RestValue::START_SHARE (user 2026-11-21: each sitting uses
+    // one up; a sip for the last few percent wastes it). The one on runs to full.
+    float const start = Commander::RestValue::START_SHARE;
+    bool const startEat = needToEat && !ActiveRest(Kind::Food) &&
+        float(me->GetHealth()) < float(me->GetMaxHealth()) * start;
+    bool const startDrink = needToDrink && !ActiveRest(Kind::Drink) &&
+        float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * start;
     if (startEat || startDrink)
     {
         if (me->IsMounted())

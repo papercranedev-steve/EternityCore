@@ -39,6 +39,9 @@ namespace Commander
     {
         // Mana and health at or above this share count as full (resting ends at 100%).
         static constexpr float FULL_SHARE = 0.99f;
+        // A new food or drink starts below this share only (user 2026-11-21: each sitting uses
+        // one up, a sip for the last few percent wastes it); the one on keeps going to full.
+        static constexpr float START_SHARE = 0.95f;
 
         struct Worth
         {

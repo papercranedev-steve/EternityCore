@@ -39,6 +39,7 @@
 #include "Commander/Behaviors/Movement/Landing.h"
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
+#include "Commander/Behaviors/Movement/RestCatchUp.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
 
@@ -296,7 +297,13 @@ public:
     // Health per second its food restores at the server's health rate; 0 without food.
     float FoodHealthPerSec() const;
     bool IsDrinking() const;
+    bool IsEating() const;
     bool IsResting() const;     // the food or the drink is on
+    // Seconds until the food and drink on now have filled it up (the longer of the two, their
+    // own rates without regeneration); 0 when not resting.
+    float RestSecondsLeft() const;
+    // Catching up with a leader who walked away (RestCatchUp): no resting until then.
+    bool HoldsOffRest() const { return m_restCatchUp.active; }
     // Health (when it has food) or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
     bool NeedsRest() const;
     // Commander rest (BotActionType::Rest, Behaviors/Support/RestBehavior.h; the original eat and drink
@@ -433,6 +440,9 @@ public:
     // Out of combat: the walk to a dead member out of range or sight of the resurrection
     // (Commander/Behaviors/Support/ResurrectApproach.h).
     Commander::ResurrectApproachState m_resurrectApproach;
+    // Out of combat: the leader walked away from its rest, it catches up before sitting again
+    // (Commander/Behaviors/Movement/RestCatchUp.h; updated by the subclass that follows a leader).
+    Commander::RestCatchUpState m_restCatchUp;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;
