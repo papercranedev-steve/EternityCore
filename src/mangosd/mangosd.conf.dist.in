@@ -3417,7 +3417,7 @@ AHBuyer.MaxMarkup = 50
 #    Companion.Slots.FreeLevels
 #        Player levels at which a free companion slot opens (companions in the party and on the
 #        bench count, former ones do not), space separated.
-#        Default: "6 10 13 16 30 40 50 60"
+#        Default: "1 10 13 16 30 40 50 60"
 #
 #    Companion.Slots.Prices
 #        Gold of the bought slots, "slot:gold" steps (from that slot number on). Slots can be
@@ -3490,7 +3490,7 @@ PopBot.Roster.ElderSharePct = 30
 PopBot.Roster.RespawnCooldownMin = 30
 Companion.Enable = 1
 Companion.Account = "COMPANIONS"
-Companion.Slots.FreeLevels = "6 10 13 16 30 40 50 60"
+Companion.Slots.FreeLevels = "1 10 13 16 30 40 50 60"
 Companion.Slots.Prices = "9:150 13:250 20:400"
 Companion.Slots.Max = 80
 

@@ -20,9 +20,10 @@ namespace Companions
                 uint32 gold = 0;
             };
 
-            // Slots 1-5 by the first dungeons and the bench, 6-8 one per class of a faction
-            // (each can later join the account), slots 9+ bought (slots doc §2).
-            char const* const DEFAULT_FREE_LEVELS = "6 10 13 16 30 40 50 60";
+            // Slot 1 at level 1 for the first companion (he comes with the first quest), 2-5 by
+            // the first dungeons and the bench, 6-8 one per class of a faction (each can later
+            // join the account), slots 9+ bought (slots doc §2).
+            char const* const DEFAULT_FREE_LEVELS = "1 10 13 16 30 40 50 60";
             // Gold at Rate.Drop.Money = 1 (PriceOf scales them: what a level 60 earns follows it).
             char const* const DEFAULT_PRICES = "9:150 13:250 20:400";
             uint32 const DEFAULT_MAX = 80;
