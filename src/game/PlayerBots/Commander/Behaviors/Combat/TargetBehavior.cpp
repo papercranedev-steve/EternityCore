@@ -33,8 +33,10 @@ namespace Commander
         Unit* enemy = me->GetMap()->GetUnit(duty->enemy);
         if (!enemy || !enemy->IsAlive() || !bot->IsValidHostileTarget(enemy))
             return;
-        if ((bot->GetRole() == ROLE_RANGE_DPS || bot->GetRole() == ROLE_HEALER) &&
-            (!me->IsWithinDistInMap(enemy, RANGED_SIGHT_RANGE) || !me->IsWithinLOSInMap(enemy)))
+        // (a healer in melee walks there like a melee damage dealer: Doctrine/HealerDamage.h)
+        bool const ranged = bot->GetRole() == ROLE_RANGE_DPS ||
+            (bot->GetRole() == ROLE_HEALER && !plan.healerDamage.Melee(me->GetObjectGuid()));
+        if (ranged && (!me->IsWithinDistInMap(enemy, RANGED_SIGHT_RANGE) || !me->IsWithinLOSInMap(enemy)))
             return;
 
         // A suggestion (header): spend the combo points on the current victim first.

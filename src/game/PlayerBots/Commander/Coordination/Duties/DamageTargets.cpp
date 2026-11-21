@@ -59,7 +59,8 @@ namespace DamageTargets
     TargetPick Choose(TargetContext const& ctx, PartyMemberFacts const& bot, EnemyFacts const* current)
     {
         WorldModel const& world = ctx.world;
-        bool const melee = bot.role == ROLE_MELEE_DPS;
+        // (a healer in melee too: Doctrine/HealerDamage.h)
+        bool const melee = bot.role == ROLE_MELEE_DPS || ctx.plan.healerDamage.Melee(bot.guid);
         float const reach = melee ? MELEE_REACH : RANGED_REACH;
         // A melee bot that cannot walk to its target (the route passes an idle pack, or no
         // path): the melee stance module stops the chase, so it is a bot without a target.

@@ -244,7 +244,8 @@ namespace Commander
 
     bool MeleeStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
-        return bot->GetRole() == ROLE_MELEE_DPS;
+        // A healer in melee too (Doctrine/HealerDamage.h): only while it has an enemy (Propose).
+        return bot->GetRole() == ROLE_MELEE_DPS || bot->IsMeleeHealer();
     }
 
     bool MeleeStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
@@ -298,6 +299,9 @@ namespace Commander
             enemy = me->GetVictim();
         if (enemy && enemy->IsAlive() && bot->IsValidHostileTarget(enemy) &&
             ProposeChase(bot, world, plan, *self, enemy, assigned, out))
+            return;
+        // A healer without an enemy to walk to: the healer stance places it.
+        if (bot->GetRole() == ROLE_HEALER)
             return;
         ProposeWait(bot, world, plan, *self, out);
     }

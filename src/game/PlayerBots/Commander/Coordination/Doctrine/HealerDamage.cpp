@@ -11,6 +11,12 @@ namespace Commander
     {
         using HD = HealerDamageAssigner;
 
+        // Swings a weapon as a healer (a mail wearer with a shield or a two-hander).
+        bool MeleeClass(PartyMemberFacts const& m)
+        {
+            return m.classId == CLASS_PALADIN || m.classId == CLASS_SHAMAN;
+        }
+
         uint32 ActingEnemies(WorldModel const& world)
         {
             uint32 count = 0;
@@ -59,7 +65,7 @@ namespace Commander
         HealerDamageDuty const* d = plan.healerDamage.Find(m.guid);
         if (!d)
             return false;
-        return d->tier >= HEALER_DAMAGE_SPARE || (d->tier == HEALER_DAMAGE_FREE && m.canShootWand);
+        return d->tier >= HEALER_DAMAGE_SPARE || (d->tier == HEALER_DAMAGE_FREE && (m.canShootWand || d->melee));
     }
 
     void HealerDamageAssigner::Clear(TeamPlan& plan) const
@@ -114,7 +120,8 @@ namespace Commander
             else if (cover && (cover->added & FUNCTION_DAMAGE))
             {
                 duty.tier = HEALER_DAMAGE_FULL;
-                duty.noReserve = !m.canShootWand;
+                // (swings in the open world are a free attack too: melee below)
+                duty.noReserve = !m.canShootWand && !(world.mapKind == MapKind::World && MeleeClass(m));
                 duty.reason = duty.noReserve ? "nobody else deals damage, no wand: no reserve" : "nobody else deals damage";
             }
             else if (world.mapKind == MapKind::Raid)
@@ -155,6 +162,8 @@ namespace Commander
                     duty.reason = "open world";
                 }
             }
+            // Melee (header): a paladin or shaman with a free attack tier in the open world.
+            duty.melee = duty.tier >= HEALER_DAMAGE_FREE && world.mapKind == MapKind::World && MeleeClass(m);
             d.healers.push_back(duty);
         }
     }

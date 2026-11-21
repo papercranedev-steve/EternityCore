@@ -305,8 +305,9 @@ namespace
             handler->PSendSysMessage("Healer damage (0 none / 1 free / 2 spare / 3 full)%s:",
                 plan.healerDamage.hard ? ", forecast hard" : "");
             for (Commander::HealerDamageDuty const& d : plan.healerDamage.healers)
-                handler->PSendSysMessage("    %s: %u %s (%s)", NameOf(map, d.bot).c_str(), uint32(d.tier),
-                    Commander::HealerDamageAssigner::Name(d.tier), d.reason);
+                handler->PSendSysMessage("    %s: %u %s%s%s (%s)", NameOf(map, d.bot).c_str(), uint32(d.tier),
+                    Commander::HealerDamageAssigner::Name(d.tier), d.melee ? ", melee" : "",
+                    d.noReserve ? ", no reserve" : "", d.reason);
         }
 
         handler->SendSysMessage("Interrupters:");

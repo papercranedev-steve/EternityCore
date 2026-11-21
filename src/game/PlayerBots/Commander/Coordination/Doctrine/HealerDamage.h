@@ -23,6 +23,10 @@
  * The open world forecast is made at such a change and every FORECAST_MS in between (a forecast
  * that turns hard lowers the tier at once).
  * Battlegrounds count as the open world (MapKind::World).
+ * Melee (HealerDamageDuty::melee, doc step 5): a paladin or shaman at FREE or above in the open
+ * world walks to its target and swings (MeleeStanceBehavior instead of HealerStanceBehavior,
+ * melee reach for its target); its swings stop near aggro (TeamBotAI::FightVictim). Never in
+ * dungeons and raids (user 2026-11-21).
  * No mana reserve (HealerDamageDuty::noReserve, doc section 5): FULL because nobody else deals
  * damage and no free attack (no wand): kept to a reserve it would stand idle and the enemy
  * would never die.

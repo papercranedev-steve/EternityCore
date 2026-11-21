@@ -1388,6 +1388,9 @@ namespace Commander
         ObjectGuid bot;
         uint8 tier = HEALER_DAMAGE_NONE;    // HealerDamageTier
         bool noReserve = false;             // FULL without the mana reserve (HealerDamage.h)
+        // Fights in melee (HealerDamage.h): walks to its target and swings (MeleeStanceBehavior),
+        // instead of standing back with the healer stance.
+        bool melee = false;
         char const* reason = "";            // static string
     };
 
@@ -1406,6 +1409,11 @@ namespace Commander
                 if (d.bot == bot)
                     return &d;
             return nullptr;
+        }
+        bool Melee(ObjectGuid bot) const
+        {
+            HealerDamageDuty const* d = Find(bot);
+            return d && d->melee;
         }
     };
 

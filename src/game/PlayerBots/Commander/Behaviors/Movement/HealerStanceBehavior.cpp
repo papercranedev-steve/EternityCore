@@ -231,6 +231,19 @@ namespace Commander
                 cost *= HS::IDLE_COST_FACTOR;
             p.SetValue(benefit, cost);
         }
+
+        // The enemy the melee stance module walks a melee healer to: the brain's target, else
+        // the victim (MeleeStanceBehavior::Propose).
+        bool HasMeleeEnemy(TeamBotAI const* bot, TeamPlan const& plan)
+        {
+            Player* me = bot->me;
+            if (TargetDuty const* duty = plan.FindTargetFor(me->GetObjectGuid()))
+                if (Unit* enemy = me->GetMap()->GetUnit(duty->enemy))
+                    if (enemy->IsAlive() && bot->IsValidHostileTarget(enemy))
+                        return true;
+            Unit* victim = me->GetVictim();
+            return victim && victim->IsAlive() && bot->IsValidHostileTarget(victim);
+        }
     }
 
     bool HealerStanceBehavior::AppliesTo(TeamBotAI const* bot) const
@@ -277,6 +290,11 @@ namespace Commander
             if (!inCombat && plan.pull.HoldsWaiting(true))
                 return;
         }
+
+        // A healer in melee with an enemy to walk to (Doctrine/HealerDamage.h): the melee stance
+        // module places it (its target is next to the tank, in heal range).
+        if (!prepare && bot->IsMeleeHealer() && HasMeleeEnemy(bot, plan))
+            return;
 
         Position3 const here = PositionOf(me);
         SafeRoute::IdleCreatures const idle(me);

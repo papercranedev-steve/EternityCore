@@ -98,6 +98,10 @@ public:
     uint8 HealerDamageNow() const;
     // RESERVE_HEALS x the mana of its biggest single target direct heal.
     float HealerManaReserve() const;
+    // A healer the plan sends into melee (Commander HealerDamageDuty::melee: a paladin or shaman
+    // in the open world): the melee stance module places it, it chases and swings like a melee
+    // damage dealer, and stops swinging near aggro (FightVictim).
+    bool IsMeleeHealer() const;
 
     // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
     // change it later by party composition while the role is not locked.
@@ -336,6 +340,8 @@ public:
     // the damage dealers stop by the threat module's HoldFire, which would skip a healer's heal
     // step as well (healer damage tiers doc, 2026-11-21).
     bool IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpell) const;
+    // The same rule for any hit of a healer on `pTarget` (its melee swings, FightVictim).
+    bool IsSwingPullingAggro(Unit const* pTarget) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).

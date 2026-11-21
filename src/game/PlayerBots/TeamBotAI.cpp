@@ -157,10 +157,21 @@ bool TeamBotAI::RunCommanderHook(bool outOfCombatControl, bool needsRest, bool r
 
 void TeamBotAI::FightVictim(Unit* pVictim)
 {
+    // A healer in melee (Commander HealerDamageDuty::melee): swings like a melee damage dealer,
+    // but stops them near aggro itself (the damage dealers' HoldFire would skip its heal step:
+    // ThreatBehavior::DamageNearAggro, as its spells in IsDamagePullingAggro).
+    bool const meleeHealer = pVictim && IsMeleeHealer();
+    bool const swingsPull = meleeHealer && IsSwingPullingAggro(pVictim);
+    if (swingsPull && me->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
+    {
+        me->ClearUnitState(UNIT_STATE_MELEE_ATTACKING);
+        me->SendMeleeAttackStop(pVictim);
+    }
+
     if (pVictim && !me->IsMoving() && !IsMovementHeld())
     {
         if (!me->HasUnitState(UNIT_STATE_MELEE_ATTACKING) &&
-           (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) &&
+           (GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK || (meleeHealer && !swingsPull)) &&
             IsValidHostileTarget(pVictim) &&
             AttackStart(pVictim))
             return;
@@ -239,6 +250,14 @@ uint8 TeamBotAI::HealerDamageNow() const
         default:
             return duty->tier;
     }
+}
+
+bool TeamBotAI::IsMeleeHealer() const
+{
+    if (GetRole() != ROLE_HEALER || !sCommanderMgr.IsEnabled())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().healerDamage.Melee(me->GetObjectGuid());
 }
 
 float TeamBotAI::HealerManaReserve() const
@@ -382,7 +401,8 @@ bool TeamBotAI::IsStanceControlled() const
 
 bool TeamBotAI::IsChaseControlled() const
 {
-    return (UsesCasterChase() || GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK) && IsStanceControlled();
+    return (UsesCasterChase() || GetRole() == ROLE_MELEE_DPS || m_role == ROLE_TANK || IsMeleeHealer()) &&
+           IsStanceControlled();
 }
 
 bool TeamBotAI::OrderChase(Unit* pVictim, float angle)
@@ -562,9 +582,15 @@ bool TeamBotAI::IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpe
 {
     // Cheap tests first: only a healer's damage at a creature in combat. The damage dealers get
     // the same rule as a HoldFire from the threat module (ThreatBehavior::ProposeDamage).
-    if (!pSpell || !pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
-        GetRole() != ROLE_HEALER || !Commander::SpellTags::DealsDamage(pSpell) ||
-        !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
+    if (!pSpell || !Commander::SpellTags::DealsDamage(pSpell))
+        return false;
+    return IsSwingPullingAggro(pTarget);
+}
+
+bool TeamBotAI::IsSwingPullingAggro(Unit const* pTarget) const
+{
+    if (!pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
+        GetRole() != ROLE_HEALER || !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && Commander::ThreatBehavior::DamageNearAggro(this, commander->GetWorld(), commander->GetPlan(),
