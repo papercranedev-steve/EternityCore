@@ -4,6 +4,8 @@
 set(BOTSHARED_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 set(BOTSHARED_SRCS
+  ${BOTSHARED_DIR}/ArtisanTrainers.h
+  ${BOTSHARED_DIR}/ArtisanTrainers.cpp
   ${BOTSHARED_DIR}/AuctionMarket.h
   ${BOTSHARED_DIR}/AuctionMarket.cpp
   ${BOTSHARED_DIR}/BotChat.h

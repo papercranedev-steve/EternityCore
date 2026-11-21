@@ -320,6 +320,77 @@ namespace BotShared
             return made;
         }
 
+        bool Builder::BuildTrip(uint32 id, uint32 questLevel, std::function<TripText(int localeIdx)> const& text)
+        {
+            std::unique_ptr<Quest> quest(new Quest());
+            quest->QuestId = id;
+            quest->QuestMethod = QUEST_METHOD_DELIVER;   // nobody turns it in
+            quest->ZoneOrSort = 0;
+            quest->QuestLevel = int32(questLevel);
+            quest->m_SpecialFlags = QUEST_SPECIAL_FLAG_MIRROR | QUEST_SPECIAL_FLAG_KILL_OR_CAST;
+            for (uint32 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+            {
+                quest->ReqCreatureOrGOId[i] = 0;
+                quest->ReqCreatureOrGOCount[i] = 0;
+                quest->ReqSpell[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+            {
+                quest->ReqItemId[i] = 0;
+                quest->ReqItemCount[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
+            {
+                quest->ReqSourceId[i] = 0;
+                quest->ReqSourceCount[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_REWARD_CHOICES_COUNT; ++i)
+            {
+                quest->RewChoiceItemId[i] = 0;
+                quest->RewChoiceItemCount[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_REWARDS_COUNT; ++i)
+            {
+                quest->RewItemId[i] = 0;
+                quest->RewItemCount[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_REPUTATIONS_COUNT; ++i)
+            {
+                quest->RewRepFaction[i] = 0;
+                quest->RewRepValue[i] = 0;
+            }
+            for (uint32 i = 0; i < QUEST_EMOTE_COUNT; ++i)
+            {
+                quest->DetailsEmote[i] = 0;
+                quest->DetailsEmoteDelay[i] = 0;
+                quest->OfferRewardEmote[i] = 0;
+                quest->OfferRewardEmoteDelay[i] = 0;
+            }
+            quest->ReqCreatureOrGOId[0] = STAND_IN_CREATURES[0];
+            quest->ReqCreatureOrGOCount[0] = 1;
+            quest->m_reqCreatureOrGOcount = 1;
+
+            TripText const base = text(-1);
+            quest->Title = TextsFor(-1).prefix + base.title;
+            quest->Objectives = base.objective;
+            quest->Details = base.details;
+            quest->ObjectiveText[0] = base.objective;
+            QuestLocale locale;
+            for (int idx : LoadedLocaleIndexes())
+            {
+                TripText const t = text(idx);
+                SetLocale(locale.Title, idx, TextsFor(idx).prefix + t.title);
+                SetLocale(locale.Objectives, idx, t.objective);
+                SetLocale(locale.Details, idx, t.details);
+                SetLocale(locale.ObjectiveText[0], idx, t.objective);
+            }
+            quest->SetQuestActiveState(true);
+            if (sObjectMgr.AddCodeQuest(std::move(quest), std::move(locale)))
+                return true;
+            sLog.Out(LOG_DBERROR, LOG_LVL_MINIMAL, "[QuestMirror] Quest id %u is taken, no trip quest.", id);
+            return false;
+        }
+
         uint32 BuildAll()
         {
             return Builder::BuildAll();

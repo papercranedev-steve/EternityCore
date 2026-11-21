@@ -108,6 +108,11 @@ namespace BotShared
         // stays at `keep` or above; also what becomes available on the way (recipes of a new rank).
         Paid LearnAt(Player* player, Creature const* trainer, uint32 keep);
 
+        // The Artisan rank of `skill` is green for the player (skill, level, Expert known).
+        bool ArtisanAvailable(Player const* player, uint32 skill);
+        // Paid, at `trainer` (it teaches it): the Artisan rank of `skill`. True: learned.
+        bool LearnArtisanAt(Player* player, Creature const* trainer, uint32 skill);
+
         // Forgets every profession: its spells (ranks, recipes, Find Herbs ...) and skill line,
         // and gives the primary profession slots back.
         void ForgetAll(Player* player);

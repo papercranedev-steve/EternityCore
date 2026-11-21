@@ -138,6 +138,8 @@ void PartyBotAI::StopErrands()
     Life::QuestItemUse::Stop(me, m_questItemUse);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
+    Life::NpcVisit::Stop(me, m_artisanVisit);
+    Companions::ArtisanTrip::Stop(m_artisanTrip);
     Life::TownTrip::Stop(me, m_townTrip, m_tradeHands);
     Life::CraftRun::Stop(me, m_craftRun);
     Companions::ClassQuestFlow::Stop(m_classQuestFlow);
@@ -750,6 +752,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             Companions::ClassQuestFlow::Update(me, pLeader, m_classQuestFlow, m_mirrorLink, PersonalityTags());
             if (Companions::ClassQuestFlow::TakeSpellsChanged(m_classQuestFlow))
                 m_resetSpellData = true;
+            // An Artisan trainer far away: asks once per capital visit, then leads the leader there.
+            Companions::ArtisanTrip::Update(me, pLeader, m_artisanTrip, m_artisanTask, PersonalityTags());
             // Out in the field: important lessons waiting (party chat, it keeps following).
             Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
@@ -760,6 +764,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
+                Life::NpcVisit::Update(me, m_artisanVisit, pLeader, m_artisanTask) ||
                 Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner, &m_professionPlanner }, PersonalityTags(),
                                        m_tradeHands) ||
                 Life::CraftRun::Update(me, m_craftRun, pLeader);

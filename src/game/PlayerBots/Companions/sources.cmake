@@ -17,6 +17,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/PastProfessions.cpp
   ${COMPANIONS_DIR}/OfflineLife.h
   ${COMPANIONS_DIR}/OfflineLife.cpp
+  ${COMPANIONS_DIR}/ArtisanTrip.h
+  ${COMPANIONS_DIR}/ArtisanTrip.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.cpp
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.h

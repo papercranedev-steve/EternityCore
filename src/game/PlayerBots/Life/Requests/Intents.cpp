@@ -16,6 +16,7 @@ namespace Requests
             { Intent::RewardChoice, "reward",    25 * SEC,  0,          0 },
             { Intent::Rendezvous,   "meet",      60 * SEC,  0,          0 },
             { Intent::ClassQuest,   "classquest", 30 * SEC, 0,          0 },
+            { Intent::Artisan,      "artisan",   30 * SEC,  0,          0 },
             { Intent::Supply,       "supply",    30 * SEC,  0,          0 },
         };
     }

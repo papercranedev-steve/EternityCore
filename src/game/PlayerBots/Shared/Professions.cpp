@@ -308,6 +308,36 @@ namespace Professions
         return paid;
     }
 
+    bool ArtisanAvailable(Player const* player, uint32 skill)
+    {
+        SkillData const* d = DataOf(skill);
+        if (!player || !d || !player->HasSkill(uint16(skill)))
+            return false;
+        for (size_t i = 0; i < d->ranks.size(); ++i)
+            if (d->ranks[i].maxValue >= ARTISAN_MAX)
+                return player->GetTrainerSpellState(&d->rankLessons[i]) == TRAINER_SPELL_GREEN;
+        return false;
+    }
+
+    bool LearnArtisanAt(Player* player, Creature const* trainer, uint32 skill)
+    {
+        SkillData const* d = DataOf(skill);
+        if (!player || !trainer || !d || !ArtisanAvailable(player, skill))
+            return false;
+        for (Rank const& rank : d->ranks)
+        {
+            if (rank.maxValue < ARTISAN_MAX)
+                continue;
+            if (!Teaches(trainer->GetEntry(), rank.spellId) || player->GetMoney() < rank.cost)
+                return false;
+            player->LearnSpell(rank.spellId, false);
+            if (rank.cost)
+                player->ModifyMoney(-int32(rank.cost));
+            return true;
+        }
+        return false;
+    }
+
     void ForgetAll(Player* player)
     {
         if (!player)

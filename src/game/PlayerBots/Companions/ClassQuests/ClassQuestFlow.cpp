@@ -127,8 +127,8 @@ namespace Companions
                 if (Persists(me))
                 {
                     std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
-                        "SELECT `chain_id`, `state`, `asks_left`, `declined`, `helped` FROM `custom_soulbot_request` WHERE `char_guid` = %u",
-                        me->GetGUIDLow()));
+                        "SELECT `chain_id`, `state`, `asks_left`, `declined`, `helped` FROM `custom_soulbot_request` WHERE `char_guid` = %u"
+                        " AND `chain_id` < %u", me->GetGUIDLow(), BotShared::QuestMirror::TRIP_OFFSET));     // (trips: ArtisanTrip)
                     if (result)
                     {
                         do

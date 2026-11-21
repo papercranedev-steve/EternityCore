@@ -18,6 +18,7 @@
 
 #include "Life/Errands/NpcVisit.h"
 #include "Life/Errands/Trip/LessonPriority.h"
+#include <set>
 
 namespace Life
 {
@@ -62,6 +63,19 @@ namespace Life
     private:
         Lessons::Context const* m_lessons;
         bool m_learned = false;
+    };
+
+    // At an Artisan trainer the player took it to (Companions/ArtisanTrip): the Artisan rank of
+    // the professions the trip is for, paid (Shared/Professions::LearnArtisanAt). The trip sets
+    // `wanted` every tick; empty: no business with any trainer.
+    class ArtisanTask final : public INpcTask
+    {
+    public:
+        char const* Name() const override { return "artisan trainer"; }
+        bool Wants(Player* me, Creature* npc) override;
+        uint32 Do(Player* me, Creature* npc) override;
+
+        std::set<uint32> wanted;    // skill lines
     };
 }
 

@@ -1,5 +1,7 @@
 #include "Life/Errands/MerchantTasks.h"
+#include "Shared/ArtisanTrainers.h"
 #include "Shared/ClassTraining.h"
+#include "Shared/Professions.h"
 #include "Shared/Supplies.h"
 #include "Shared/Vendor.h"
 #include "Shared/Inventory.h"
@@ -92,5 +94,30 @@ namespace Life
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at trainer %s: %u spells for %u copper, %u too expensive.",
             me->GetName(), npc->GetName(), result.learned, result.cost, result.tooExpensive);
         return result.learned;
+    }
+
+    bool ArtisanTask::Wants(Player* me, Creature* npc)
+    {
+        if (wanted.empty() || !npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_TRAINER))
+            return false;
+        CreatureInfo const* info = npc->GetCreatureInfo();
+        if (!info || info->trainer_type != TRAINER_TYPE_TRADESKILLS)
+            return false;
+        for (uint32 skill : wanted)
+            if (BotShared::Professions::ArtisanAvailable(me, skill) &&
+                BotShared::Professions::Teaches(npc->GetEntry(), BotShared::ArtisanTrainers::RankSpell(skill)) &&
+                me->GetMoney() >= BotShared::ArtisanTrainers::RankCost(skill))
+                return true;
+        return false;
+    }
+
+    uint32 ArtisanTask::Do(Player* me, Creature* npc)
+    {
+        uint32 learned = 0;
+        for (uint32 skill : wanted)
+            if (BotShared::Professions::LearnArtisanAt(me, npc, skill))
+                ++learned;
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at Artisan trainer %s: %u ranks learned.", me->GetName(), npc->GetName(), learned);
+        return learned;
     }
 }

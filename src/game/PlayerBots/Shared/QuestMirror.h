@@ -16,6 +16,7 @@
 #define MANGOS_BOTSHARED_QUEST_MIRROR_H
 
 #include "Common.h"
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -82,11 +83,26 @@ namespace BotShared
         // guard's) replaces it; there is no packet to take it away.
         void ShowPoint(Player* player, float x, float y, std::string const& name);
 
+        // Trip quests: "take your companion to ..." for an errand that is no quest of the bot's
+        // (an Artisan trainer far away: Shared/ArtisanTrainers). Ids from TRIP_OFFSET, one counter
+        // nobody but the server sets, like a placeholder.
+        uint32 const TRIP_OFFSET = 300000;
+        inline uint32 TripId(uint32 key) { return key + TRIP_OFFSET; }
+
+        struct TripText
+        {
+            std::string title;      // without the "[Companion] " prefix (added)
+            std::string objective;
+            std::string details;
+        };
+
         // Makes the mirror quests (QuestDef.h: a friend of Quest, it sets the protected fields).
         class Builder
         {
         public:
             static uint32 BuildAll();
+            // One trip quest; `text(localeIdx)`, -1 = the base (enUS) strings. False: id taken.
+            static bool BuildTrip(uint32 id, uint32 questLevel, std::function<TripText(int localeIdx)> const& text);
         };
     }
 }
