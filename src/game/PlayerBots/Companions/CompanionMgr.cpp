@@ -52,6 +52,10 @@ namespace Companions
         // (one still logging out from his last session is tried again until then).
         uint32 const RETURN_WINDOW_MS = 60 * IN_MILLISECONDS;
 
+        // Out of the party this long, it goes home (user 2026-11-21: 4 hours); looked at this often.
+        uint32 const HOME_AFTER_SEC = 4 * HOUR;
+        uint32 const HOME_CHECK_MS = 5 * MINUTE * IN_MILLISECONDS;
+
         uint32 TrainedUpToLevel(Player const* bot)
         {
             uint32 const span = UNTRAINED_LEVELS_MAX - UNTRAINED_LEVELS_MIN + 1;
@@ -560,6 +564,60 @@ namespace Companions
         CharacterDatabase.PExecute("UPDATE `custom_companion` SET `staying` = %u WHERE `char_guid` = %u", value ? 1 : 0, charGuid);
     }
 
+    std::string CompanionMgr::CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly)
+    {
+        CompanionInfo const* info = Find(charGuid);
+        if (!IsEnabled() || !m_available || !leader || !leader->IsInWorld() || !info || info->temporary)
+            return "notcompanion";
+        if (ownerOnly && info->recruiterGuid != leader->GetGUIDLow())
+            return "notyours";
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
+            return "online";
+
+        // Its place in his group: already his offline member (it comes back), else a free slot.
+        Group* group = leader->GetGroup();
+        bool const member = group && group->IsMember(guid);
+        if (group && !member && group->IsFull())
+            return "full";
+        // (an offline member of someone else's group: it leaves that one)
+        if (!member)
+            if (Group* other = sObjectMgr.GetGroupByMember(guid))
+                Player::RemoveFromGroup(other, guid);
+
+        PartyBotAI* ai = new PartyBotAI(leader->GetObjectGuid());
+        ai->m_role = CombatBotRoles(role);
+        ai->m_roleLocked = CombatBotRoles(role) != ROLE_INVALID;
+        if (!sPlayerBotMgr.AddBot(charGuid, false, ai, true))
+        {
+            delete ai;
+            return "failed";
+        }
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s calls companion %u over.", leader->GetName(), charGuid);
+        return "";
+    }
+
+    void CompanionMgr::SendHome()
+    {
+        uint32 const now = uint32(time(nullptr));
+        for (auto& itr : m_companions)
+        {
+            CompanionInfo& info = itr.second;
+            uint32 const away = info.lastSeen ? info.lastSeen : info.recruitedAt;
+            if (info.temporary || info.home || !away || now < away + HOME_AFTER_SEC)
+                continue;
+            ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
+            // (in the world, or with a group: with someone, not at home)
+            if (sPlayerBotMgr.HasBot(info.charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid) || sObjectMgr.GetGroupByMember(guid))
+                continue;
+            info.home = true;
+            CharacterDatabase.PExecute("UPDATE `characters` c JOIN `character_homebind` h ON h.`guid` = c.`guid`"
+                " SET c.`map` = h.`map`, c.`zone` = h.`zone`, c.`position_x` = h.`position_x`, c.`position_y` = h.`position_y`,"
+                " c.`position_z` = h.`position_z`, c.`instance` = 0, c.`transport_guid` = 0"
+                " WHERE c.`guid` = %u AND c.`online` = 0", info.charGuid);
+        }
+    }
+
     bool CompanionMgr::TakeStay(uint32 charGuid)
     {
         auto itr = m_companions.find(charGuid);
@@ -729,6 +787,7 @@ namespace Companions
                 m_arrivingSinceMs.erase(info.charGuid);
                 continue;
             }
+            info.home = false;      // (out again later: away from home)
             if (m_present.count(info.charGuid))
             {
                 if (writeLastSeen)
@@ -764,6 +823,11 @@ namespace Companions
         }
         if (!m_returns.empty())
             UpdateReturns();
+        if (m_nowMs - m_homeCheckMs >= HOME_CHECK_MS)
+        {
+            m_homeCheckMs = m_nowMs;
+            SendHome();
+        }
         if (m_pending.empty())
             return;
 

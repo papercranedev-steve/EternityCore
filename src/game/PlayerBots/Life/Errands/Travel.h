@@ -74,6 +74,14 @@ namespace Life
         bool InSight(Player const* me, Player const* who);
 
         void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags);
+        // It came into the world where he can see it (a companion called over, logging in at its
+        // place next to him): hidden at once, then out of his sight and walking in like an
+        // arrival. The caller hides it before the world shows it (at login).
+        void BeginHidden(Player* me, TravelState& state);
+        inline bool IsHidden(TravelState const& state)
+        {
+            return state.phase == TravelState::Phase::Hidden || state.phase == TravelState::Phase::Revealing;
+        }
         Step Update(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags);
         // Shows the bot again if it was hidden.
         void Stop(Player* me, TravelState& state);

@@ -140,6 +140,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "stay",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotStayCommand,        "", nullptr },
         { "summon",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotSummonCommand,      "", nullptr },
         { "follow",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotFollowCommand,      "", nullptr },
+        { "callover",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCallOverCommand,    "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

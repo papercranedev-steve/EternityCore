@@ -66,6 +66,8 @@ namespace Companions
         // It logged out with its leader while told to wait (Commander Situation/Stay): it waits
         // there again when it comes back with him (TakeStay). World thread.
         bool staying = false;
+        // Sent home this server run (SendHome); false again once it is online. World thread.
+        bool home = false;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
@@ -122,6 +124,14 @@ namespace Companions
         // It came back with its leader: was it waiting? Cleared once taken. World thread.
         bool TakeStay(uint32 charGuid);
 
+        // The player calls a companion over (presence §2.3: the companions panel, `.partybot
+        // call`; `.partybot load` of a companion too): it logs in where it is (its place, its
+        // home), joins his group and comes to him (summoned or on its own, PartyBotAI::
+        // UpdateTravel). `role`: CombatBotRoles, ROLE_INVALID = its own. `ownerOnly`: only his
+        // own companions. World thread. "" = on its way, else an error key: notcompanion,
+        // notyours, online, full, failed.
+        std::string CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly);
+
         // Dev console test scenarios (lua/tests/life): a temporary bot (saving disabled) counts as a
         // companion of `recruiter` until it logs out (PlayerBotMgr calls ForgetTemporary). Never
         // saved, no rows written; it cannot be recruited while marked. World thread, maps idle.
@@ -162,6 +172,11 @@ namespace Companions
         void LoginAsPartyBot(uint32 charGuid, Player* leader);
         // OnLoginRequest's companions: logged in at their own position, until RETURN_WINDOW_MS.
         void UpdateReturns();
+        // Companions out of the world and of any group, away for HOME_AFTER_SEC: their saved
+        // position becomes their home (character_homebind, the city they were recruited in), as
+        // if they had gone back there (presence §2.2). Every HOME_CHECK_MS.
+        void SendHome();
+        uint32 m_homeCheckMs = 0;
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();

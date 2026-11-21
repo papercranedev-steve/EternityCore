@@ -776,6 +776,12 @@ void PartyBotAI::OnPlayerLogin()
 {
     if (!m_initialized)
         me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
+    // Called over, it logs in at its place, which he may see: it must not pop up there (hidden
+    // before the world shows it; it appears out of his sight and walks in, UpdateTravel).
+    if (m_atSavedPosition && LootsForSelf())
+        if (Player* pLeader = ObjectAccessor::FindPlayer(m_leaderGuid))
+            if (Life::Travel::InSight(me, pLeader))
+                Life::Travel::BeginHidden(me, m_travel);
 }
 
 void PartyBotAI::UpdateAI(uint32 const diff)
@@ -953,6 +959,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // Falling, controlled, dead, auto-repeating, casting (TeamBotAI).
     if (UpdateBody())
         return;
+
+    // Hidden on its way in (Life/Errands/Travel): nothing else until it shows itself out of
+    // sight (no errand by the leader while invisible next to him).
+    if (Life::Travel::IsHidden(m_travel) && !me->IsInCombat())
+    {
+        UpdateTravel(FollowAnchor(pLeader));
+        return;
+    }
 
     bool const commanderOutOfCombat = !me->IsInCombat() && sCommanderMgr.WantsOutOfCombatControl(this);
 

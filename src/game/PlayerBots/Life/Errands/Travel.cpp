@@ -142,6 +142,16 @@ namespace Travel
             me->GetMapId(), meet->GetMapId(), seconds, j.flies ? ", flies" : "", j.sails ? ", sails" : "");
     }
 
+    void BeginHidden(Player* me, TravelState& state)
+    {
+        state = TravelState();
+        state.phase = TravelState::Phase::Hidden;
+        state.from = Here(me);
+        state.sinceMs = WorldTimer::getMSTime();
+        state.hiddenSinceMs = state.sinceMs;
+        me->SetVisibility(VISIBILITY_OFF);
+    }
+
     void Stop(Player* me, TravelState& state)
     {
         if (me && state.phase != TravelState::Phase::None && state.phase != TravelState::Phase::OnRoad)

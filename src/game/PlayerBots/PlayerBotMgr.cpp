@@ -1033,6 +1033,20 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
         return false;
     }
 
+    // A companion is somewhere in the world: it logs in there and comes (CompanionMgr::CallOver).
+    if (sCompanionMgr.IsCompanion(guid.GetCounter()))
+    {
+        std::string const error = sCompanionMgr.CallOver(pPlayer, guid.GetCounter(), uint8(role), false);
+        if (!error.empty())
+        {
+            PSendSysMessage("Companion %s cannot come: %s.", name.c_str(), error.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("Loading %s as party bot (it comes from where it is).", name.c_str());
+        return true;
+    }
+
     float x, y, z;
     pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
 

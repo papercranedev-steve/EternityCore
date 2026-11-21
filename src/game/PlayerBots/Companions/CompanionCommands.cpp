@@ -15,6 +15,7 @@
  *   .partybot classquests [bot]               dev: the class quest chains for a bot (done or not, asks)
  *   .partybot classquests visit [bot]         dev: counts as a capital visit now (ClassQuestFlow)
  *   .partybot classquests class <classId>     dev: all chains of a class (Shared/ClassQuestChains)
+ *   .partybot callover <guid>                 one of them comes to you (CompanionMgr::CallOver)
  *   .partybot companions                      the companions you recruited (addon Companions panel):
  *     PBCMP;BEGIN;<count>
  *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<label>   what affinity allows (Affinity/Gates,
@@ -166,6 +167,31 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
     }
 
     SendSysMessage("PBCMP;END");
+    return true;
+}
+
+// .partybot callover <guid>: one of your companions comes to you (the companions panel).
+// PBOK;<name>;callover | PBERR;<name>;<notcompanion|notyours|online|full|failed>
+bool ChatHandler::HandlePartyBotCallOverCommand(char* args)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    uint32 guid = 0;
+    if (!player || !ExtractUInt32(&args, guid))
+    {
+        SendSysMessage("PBERR;;usage;.partybot callover <guid>");
+        SetSentErrorMessage(true);
+        return false;
+    }
+    std::string name;
+    sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, guid), name);
+    std::string const error = sCompanionMgr.CallOver(player, guid, ROLE_INVALID, true);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("PBOK;%s;callover", name.c_str());
     return true;
 }
 

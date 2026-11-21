@@ -318,6 +318,7 @@ class ChatHandler
         bool HandlePartyBotMirrorCommand(char * args);
         bool HandlePartyBotClassQuestsCommand(char * args);
         bool HandlePartyBotCompanionsCommand(char * args);
+        bool HandlePartyBotCallOverCommand(char * args);
         bool HandlePartyBotCompanionCommand(char * args);   // PlayerBots/Companions/CompanionSheet.cpp
         bool HandlePartyBotTalkCommand(char * args);        // PlayerBots/Companions/Talk/TalkCommands.cpp
         bool HandlePartyBotRecipesCommand(char * args);
