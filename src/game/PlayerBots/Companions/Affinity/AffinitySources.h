@@ -6,6 +6,8 @@
  *   level-up   PER_LEVEL for every level it gains while its party has a real player in it
  *   money      MONEY_GIFT when it asked for money (a town trip, "pay") and the player gave some,
  *              at most MAX_MONEY_GIFTS times in its life
+ *   clears     a max-level dungeon segment first 2, later 1; a raid first 5, later 3; Onyxia
+ *              first 3, later 2 (no limit on repeats, user's choice). Only when the last boss dies.
  * Each gain goes to the leader as PBAFF (the addon prints it).
  *
  * Map thread (the bot's AI), except StartAt.
@@ -15,7 +17,9 @@
 #define MANGOS_COMPANIONS_AFFINITY_SOURCES_H
 
 #include "Common.h"
+#include "Shared/DungeonClears.h"
 
+class Map;
 class Player;
 
 namespace Companions
@@ -39,6 +43,17 @@ namespace Companions
         // Every bot tick (cheap). `paidCopper`: what the leader gave it this tick for a town trip
         // it asked money for (Life::TownTrip::TakePaid), 0 = nothing.
         void Update(Player* me, Player* leader, State& state, uint32 paidCopper);
+
+        // A max-level dungeon segment or raid cleared (its last boss died). Every companion in the
+        // instance whose party has a real player there gets ClearPoints. DungeonClears listener,
+        // the instance's map thread.
+        struct ClearPoints
+        {
+            uint32 first;
+            uint32 later;
+        };
+        ClearPoints PointsFor(BotShared::DungeonClears::Info const& segment);
+        void OnClear(Map* map, BotShared::DungeonClears::Info const& segment);
     }
 }
 

@@ -57,6 +57,9 @@ namespace Companions
         // Times it got affinity for money the player gave when it asked (AffinitySources). Under
         // the affinity lock.
         uint32 moneyGifts = 0;
+        // Max-level dungeon and raid clears with the player, segment (Shared/DungeonClears) ->
+        // times. Under the affinity lock.
+        std::map<uint8, uint32> clears;
         // Unix time it was last seen online (OfflineLife counts from it), 0 = never. World thread.
         uint32 lastSeen = 0;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
@@ -95,6 +98,9 @@ namespace Companions
         // Any thread. Counts one money gift if it had fewer than `max` (stored at once, not for
         // temporary companions); false: not a companion, or `max` reached.
         bool CountMoneyGift(uint32 charGuid, uint32 max);
+        // Any thread. Counts one clear of `segment` (stored at once, not for temporary companions);
+        // returns how many it has now (1 = the first), 0 = not a companion.
+        uint32 CountClear(uint32 charGuid, uint8 segment);
 
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.

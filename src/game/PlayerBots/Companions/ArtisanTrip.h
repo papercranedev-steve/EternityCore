@@ -8,7 +8,7 @@
  *   Waiting    may be asked (3 asks)
  *   Active     the player said yes: the trip quest is in his log, with a map flag at the nearest
  *              trainer on his continent; near a trainer the bot walks over and learns
- *              (Life::ArtisanTask through NpcVisit), then Done (affinity, thanks)
+ *              (Life::ArtisanTask through NpcVisit), then Done (thanks; no affinity)
  *   Exhausted  nobody took it: it learns Artisan by itself at its next login (when it has the fee)
  *   Done       learned (helped: the player took it)
  * When: once per visit of the leader to a capital, as the class quests: the Artisan rank is

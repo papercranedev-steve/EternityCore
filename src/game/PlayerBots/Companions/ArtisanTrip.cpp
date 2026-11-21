@@ -30,7 +30,6 @@ namespace Companions
 
             uint32 const CHECK_MS = 1000;
             float const ASK_RANGE_YD = 30.0f;
-            uint32 const AFFINITY = 5;      // the player took it there
 
             bool Persists(Player const* me)
             {
@@ -244,10 +243,8 @@ namespace Companions
                 r.state = RecordState::Done;
                 r.helped = true;
                 Save(me, skill, r);
-                uint32 const now = sCompanionMgr.AddAffinity(me->GetGUIDLow(), AFFINITY, "artisan trip");
+                // (no affinity: not one of its sources, user 2026-11-21, affinity doc §2)
                 Say(me, "artisan.thanks", tags, VarsFor(me, leader, skill));
-                BotShared::BotChat::SystemTo(leader, "PBAFF;" + std::string(me->GetName()) + ";" + std::to_string(now) +
-                    ";" + std::to_string(AFFINITY) + ";artisan");
             }
 
             // The Active trip, leader on the bot's map: the quest in his log, the flag, done.

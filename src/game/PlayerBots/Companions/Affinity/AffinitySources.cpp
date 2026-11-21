@@ -3,6 +3,7 @@
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Group.h"
+#include "Map.h"
 #include <algorithm>
 #include <string>
 
@@ -46,6 +47,38 @@ namespace Companions
 
             if (paidCopper && sCompanionMgr.CountMoneyGift(guid, MAX_MONEY_GIFTS))
                 Gain(me, leader, MONEY_GIFT, "gift");
+        }
+
+        ClearPoints PointsFor(BotShared::DungeonClears::Info const& segment)
+        {
+            if (segment.segment == BotShared::DungeonClears::Segment::Onyxia)
+                return { 3, 2 };
+            return segment.raid ? ClearPoints{ 5, 3 } : ClearPoints{ 2, 1 };
+        }
+
+        void OnClear(Map* map, BotShared::DungeonClears::Info const& segment)
+        {
+            if (!map)
+                return;
+            ClearPoints const points = PointsFor(segment);
+            for (auto itr = map->GetPlayers().getFirst(); itr != nullptr; itr = itr->next())
+            {
+                Player* bot = itr->getSource();
+                if (!bot || !bot->IsInWorld() || !sCompanionMgr.IsCompanion(bot->GetGUIDLow()))
+                    continue;
+                // A real player of its party in the instance too (the one told about it).
+                Player* player = nullptr;
+                if (Group* group = bot->GetGroup())
+                    for (GroupReference* ref = group->GetFirstMember(); ref && !player; ref = ref->next())
+                        if (Player* member = ref->getSource())
+                            if (!member->IsBot() && member->IsInWorld() && member->GetMap() == map)
+                                player = member;
+                if (!player)
+                    continue;
+                uint32 const times = sCompanionMgr.CountClear(bot->GetGUIDLow(), uint8(segment.segment));
+                if (times)
+                    Gain(bot, player, times == 1 ? points.first : points.later, times == 1 ? "firstclear" : "clear");
+            }
         }
     }
 }

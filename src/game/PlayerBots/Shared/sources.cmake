@@ -56,6 +56,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/QuestRewards.cpp
   ${BOTSHARED_DIR}/QuestGrant.h
   ${BOTSHARED_DIR}/QuestGrant.cpp
+  ${BOTSHARED_DIR}/DungeonClears.h
+  ${BOTSHARED_DIR}/DungeonClears.cpp
   ${BOTSHARED_DIR}/QuestMirror.h
   ${BOTSHARED_DIR}/QuestMirror.cpp
   ${BOTSHARED_DIR}/QuestPlaces.h

@@ -62,6 +62,7 @@
 #include "DevConsole/CombatEvents.h"
 #include "PlayerBots/Commander/Perception/Forecast/DamageIntake.h"
 #include "PlayerBots/Commander/Perception/Forecast/DamageDealt.h"
+#include "PlayerBots/Shared/DungeonClears.h"
 
 #include <limits>
 
@@ -1260,6 +1261,7 @@ void Unit::Kill(Unit* pVictim, SpellEntry const* spellProto, bool durabilityLoss
         // Dungeon specific stuff, only applies to players killing creatures
         if (pCreatureVictim->GetInstanceId() && pCreatureVictim->GetMapId() > 1)
         {
+            BotShared::DungeonClears::OnCreatureDeath(pCreatureVictim);    // a last boss: companion affinity
             Player* playerKiller = GetCharmerOrOwnerPlayerOrPlayerItself();
 
             if (!playerKiller && this == pCreatureVictim && pPlayerTap)

@@ -6,6 +6,7 @@
 #include "Companions/OfflineLife.h"
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
+#include "Shared/DungeonClears.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/TownGates.h"
 #include "PlayerBotMgr.h"
@@ -103,6 +104,15 @@ namespace Companions
             " PRIMARY KEY (`char_guid`, `skill`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: profession points grown offline today'");
 
+        // Max-level dungeon and raid clears with the player (Affinity/AffinitySources).
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_companion_clear` ("
+            " `char_guid` INT UNSIGNED NOT NULL,"
+            " `segment` TINYINT UNSIGNED NOT NULL COMMENT 'Shared/DungeonClears::Segment',"
+            " `clears` INT UNSIGNED NOT NULL DEFAULT 0,"
+            " PRIMARY KEY (`char_guid`, `segment`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: dungeon and raid clears with the player'");
+
         // Class quest asks (ClassQuests/ClassQuestFlow), one row per companion and chain.
         CharacterDatabase.DirectExecute(
             "CREATE TABLE IF NOT EXISTS `custom_soulbot_request` ("
@@ -187,6 +197,19 @@ namespace Companions
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
+
+        std::unique_ptr<QueryResult> clears(CharacterDatabase.Query("SELECT `char_guid`, `segment`, `clears` FROM `custom_companion_clear`"));
+        if (clears)
+        {
+            do
+            {
+                Field* f = clears->Fetch();
+                auto itr = m_companions.find(f[0].GetUInt32());
+                if (itr != m_companions.end())
+                    itr->second.clears[f[1].GetUInt8()] = f[2].GetUInt32();
+            } while (clears->NextRow());
+        }
+        BotShared::DungeonClears::SetListener(&AffinitySources::OnClear);
 
         // Personality: the roster member's tags. The roster creates its tables on first use, which can
         // come after this load: no table yet means no tags yet.
@@ -308,6 +331,20 @@ namespace Companions
         if (!info.temporary)
             CharacterDatabase.PExecute("UPDATE `custom_companion` SET `money_gifts` = %u WHERE `char_guid` = %u", info.moneyGifts, charGuid);
         return true;
+    }
+
+    uint32 CompanionMgr::CountClear(uint32 charGuid, uint8 segment)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end())
+            return 0;
+        CompanionInfo& info = itr->second;
+        uint32 const times = ++info.clears[segment];
+        if (!info.temporary)
+            CharacterDatabase.PExecute("REPLACE INTO `custom_companion_clear` (`char_guid`, `segment`, `clears`) VALUES (%u, %u, %u)",
+                charGuid, uint32(segment), times);
+        return times;
     }
 
     void CompanionMgr::SetRewardMode(uint32 charGuid, RewardMode mode)
