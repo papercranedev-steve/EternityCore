@@ -11,6 +11,7 @@
 #define MANGOS_COMPANIONS_SLOTS_H
 
 #include "Common.h"
+#include <vector>
 
 namespace Companions
 {
@@ -19,6 +20,8 @@ namespace Companions
         // Companion.Slots.FreeLevels, .Prices, .Max (called from CompanionMgr::LoadConfig).
         void LoadConfig();
 
+        // The levels the free slots open at, ascending (the addon's slots panel draws them).
+        std::vector<uint32> const& FreeLevels();
         // Free slots a player of `level` has.
         uint32 FreeAt(uint32 level);
         // The level his next free slot opens at; 0: all are open.

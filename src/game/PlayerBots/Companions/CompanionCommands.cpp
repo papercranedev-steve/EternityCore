@@ -28,7 +28,8 @@
  *     PBCMP;BLOCK;<guid>;<gate key>;<text>   after its C line, online only: an open gate's service
  *            cannot be had now (Talk services' Blockers: "缺传送门符文")
  *     PBCMP;SLOTS;<used>;<total>;<max>;<level of the next free one, 0 = all open>;<can buy 0/1>;
- *            <copper of the next one to buy>   (after BEGIN; companion slots doc)
+ *            <copper of the next one to buy>;<levels the free ones open at, l,l,...>
+ *            (after BEGIN; companion slots doc)
  *     PBCMP;END
  *     C lines with state 3 are former companions (故人): no slot, not called over.
  *   .partybot farewell <guid>    道别: he becomes a former companion (leaves you if with you)
@@ -160,8 +161,11 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         count += itr.second.known ? 1 : 0;
     PSendSysMessage("PBCMP;BEGIN;%u", count);
     Companions::CompanionMgr::SlotCount const slots = sCompanionMgr.SlotsOf(player);
-    PSendSysMessage("PBCMP;SLOTS;%u;%u;%u;%u;%u;%u", slots.used, slots.total, Companions::Slots::Max(),
-        slots.nextFreeLevel, slots.canBuy ? 1 : 0, slots.price);
+    std::string freeLevels;
+    for (uint32 level : Companions::Slots::FreeLevels())
+        freeLevels += (freeLevels.empty() ? "" : ",") + std::to_string(level);
+    PSendSysMessage("PBCMP;SLOTS;%u;%u;%u;%u;%u;%u;%s", slots.used, slots.total, Companions::Slots::Max(),
+        slots.nextFreeLevel, slots.canBuy ? 1 : 0, slots.price, freeLevels.c_str());
     for (Companions::Gates::Info const& gate : Companions::Gates::All())
         PSendSysMessage("PBCMP;GATE;%u;%u;%s;%u;%s", gate.affinity, gate.classMask, gate.key, gate.ready ? 1u : 0u, gate.label);
 

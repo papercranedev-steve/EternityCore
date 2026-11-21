@@ -80,6 +80,11 @@ namespace Companions
             g_max = std::max<uint32>(sConfig.GetIntDefault("Companion.Slots.Max", DEFAULT_MAX), uint32(g_freeLevels.size()));
         }
 
+        std::vector<uint32> const& FreeLevels()
+        {
+            return g_freeLevels;
+        }
+
         uint32 FreeAt(uint32 level)
         {
             return uint32(std::upper_bound(g_freeLevels.begin(), g_freeLevels.end(), level) - g_freeLevels.begin());
