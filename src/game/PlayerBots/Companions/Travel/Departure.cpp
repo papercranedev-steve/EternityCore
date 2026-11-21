@@ -1,4 +1,5 @@
 #include "Companions/Travel/Departure.h"
+#include "Companions/Travel/HearthAlong.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Life/Requests/Phrases.h"
@@ -71,6 +72,22 @@ namespace Departure
             return false;
         }
 
+        // He hearths and some of the party goes home with him (HearthAlong): nobody asks, the
+        // others follow him on their own.
+        bool AnyHearthsAlong(Player* leader)
+        {
+            if (!HearthAlong::LeavesByHearth(leader))
+                return false;
+            for (Player* bot : PartyBots(leader))
+            {
+                Commander::StaySpot spot;
+                bool const staying = sCommanderMgr.GetStay(dynamic_cast<PartyBotAI*>(bot->AI()), spot);
+                if (HearthAlong::LeavesByHearth(bot) || HearthAlong::GoesAlong(bot, leader, staying))
+                    return true;
+            }
+            return false;
+        }
+
         void Say(Player* me, Player* leader, std::vector<std::string> const& tags, char const* key)
         {
             Life::Phrases::Vars vars;
@@ -115,7 +132,7 @@ namespace Departure
         if (staying || !Leaving(leader) || leader->IsInCombat() || me->IsInCombat() || !IsAsker(me, leader))
             return;
         state.asked = true;
-        if (AnyStays(leader) || !sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Departure))
+        if (AnyStays(leader) || AnyHearthsAlong(leader) || !sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Departure))
             return;
 
         Life::Phrases::Vars vars;

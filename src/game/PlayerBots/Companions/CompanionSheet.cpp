@@ -4,7 +4,7 @@
  * object, offline ones from the database; stats exist only while online (they are computed
  * at login).
  *
- *   .partybot companion <guid> char|rep|skill|honor     only companions you recruited
+ *   .partybot companion <guid> char|rep|skill|honor     companions you recruited, your account's characters
  *
  * Replies (system messages, ';' separated):
  *   PBCMV;<guid>;BEGIN;<page>;<online 0/1>
@@ -237,8 +237,8 @@ bool ChatHandler::HandlePartyBotCompanionCommand(char* args)
         return false;
     }
 
-    Companions::CompanionInfo const* info = sCompanionMgr.Find(guid);
-    if (!info || info->recruiterGuid != player->GetGUIDLow())
+    // (yours, or a character of your account: companion account doc)
+    if (!sCompanionMgr.MayManage(player, guid))
     {
         PSendSysMessage("PBERR;;notcompanion;%u", guid);
         SetSentErrorMessage(true);

@@ -29,6 +29,10 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Affinity/AffinitySources.cpp
   ${COMPANIONS_DIR}/Affinity/Gates.h
   ${COMPANIONS_DIR}/Affinity/Gates.cpp
+  ${COMPANIONS_DIR}/Affinity/Traits.h
+  ${COMPANIONS_DIR}/Affinity/Traits.cpp
+  ${COMPANIONS_DIR}/Affinity/TraitEffects.h
+  ${COMPANIONS_DIR}/Affinity/TraitEffects.cpp
   ${COMPANIONS_DIR}/Affinity/TradeGate.h
   ${COMPANIONS_DIR}/Affinity/TradeGate.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
@@ -43,6 +47,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Travel/SummonOffer.cpp
   ${COMPANIONS_DIR}/Travel/HomeBind.h
   ${COMPANIONS_DIR}/Travel/HomeBind.cpp
+  ${COMPANIONS_DIR}/Travel/HearthAlong.h
+  ${COMPANIONS_DIR}/Travel/HearthAlong.cpp
   ${COMPANIONS_DIR}/Talk/TalkService.h
   ${COMPANIONS_DIR}/Talk/Talk.h
   ${COMPANIONS_DIR}/Talk/Talk.cpp
@@ -54,6 +60,9 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Talk/Services/CraftService.cpp
   ${COMPANIONS_DIR}/Talk/Services/PortalService.cpp
   ${COMPANIONS_DIR}/Talk/Services/BondService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/AccountService.cpp
+  ${COMPANIONS_DIR}/Account/JoinOffer.h
+  ${COMPANIONS_DIR}/Account/JoinOffer.cpp
   ${COMPANIONS_DIR}/Recruit/Trial.h
   ${COMPANIONS_DIR}/Recruit/Trial.cpp
   ${COMPANIONS_DIR}/Recruit/FirstCompanion.h

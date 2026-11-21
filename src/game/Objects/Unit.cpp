@@ -23,6 +23,7 @@
 #include "Pet.h"
 #include "Totem.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Log.h"
 #include "Opcodes.h"
 #include "WorldPacket.h"
@@ -664,6 +665,11 @@ void Unit::DoKillUnit(Unit* pVictim)
 
 uint32 Unit::DealDamage(Unit* pVictim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellEntry const* spellProto, bool durabilityLoss, Spell* spell, bool reflected)
 {
+    // A bot's own character may take a little less (PlayerAI: companion friend traits).
+    if (Player* pVictimPlayer = pVictim->ToPlayer())
+        if (PlayerAI* pVictimAI = pVictimPlayer->AI())
+            pVictimAI->ChangeDamageTaken(this, damage, spellProto);
+
     DEVCONSOLE_COMBAT_EVENT(OnDamage(this, pVictim, damage, spellProto ? spellProto->Id : 0, uint32(damageSchoolMask), uint32(damagetype)));
     Commander::DamageIntake::OnDamage(pVictim, damage);
     Commander::DamageDealt::OnDamage(this, pVictim, damage, damagetype == DOT);
@@ -6605,6 +6611,10 @@ bool Unit::CanDetectStealthOf(Unit const* target, float distance, bool* alert) c
     int32 stealthSkill = target->IsPlayer() ? target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH) : target->GetLevelForTarget(this) * 5;
     stealthSkill += target->GetTotalAuraModifier(SPELL_AURA_MOD_STEALTH_LEVEL);
     int32 detectSkill = GetLevelForTarget(target) * 5 + int32(GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_STEALTH_DETECT, 0));
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (Player const* pDetector = ToPlayer())
+        if (PlayerAI const* pDetectorAI = pDetector->AI())
+            detectSkill += pDetectorAI->StealthDetectBonus();
     int32 const levelDiff = int32(GetLevelForTarget(target)) - int32(target->GetLevelForTarget(this));
     if (levelDiff > 3)
         yardsPerLevel *= 2;
@@ -7054,6 +7064,10 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
     {
         if (GetDeathState() == CORPSE)
             speed *= sWorld.getConfig(((Player*)this)->InBattleGround() ? CONFIG_FLOAT_GHOST_RUN_SPEED_BG : CONFIG_FLOAT_GHOST_RUN_SPEED_WORLD);
+        // A bot's own character (PlayerAI: companion friend traits).
+        if (mtype == MOVE_SWIM)
+            if (PlayerAI const* pPlayerAI = static_cast<Player const*>(this)->AI())
+                speed *= pPlayerAI->SwimSpeedRate();
     }
 
     switch (mtype)

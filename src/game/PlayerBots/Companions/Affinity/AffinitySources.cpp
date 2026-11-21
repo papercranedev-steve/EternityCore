@@ -1,6 +1,7 @@
 #include "Companions/Affinity/AffinitySources.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
+#include "Companions/Affinity/Traits.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
@@ -27,6 +28,43 @@ namespace Companions
                 if (leader)
                     BotShared::BotChat::SystemTo(leader, "PBAFF;" + std::string(me->GetName()) + ";" + std::to_string(now) +
                         ";" + std::to_string(points) + ";" + reason);
+            }
+
+            // Friend traits (Traits) its affinity reached and it has not rolled yet. Also at the
+            // first look (affinity it had before), then without a line. Every rolled one: PBGATE
+            // "trait" (the addon reloads the companion list).
+            void RollTraits(Player* me, Player* leader, State const& state, uint32 affinity, std::vector<std::string> const& tags)
+            {
+                uint32 const guid = me->GetGUIDLow();
+                for (Traits::Tier tier : { Traits::Tier::Life, Traits::Tier::Combat })
+                {
+                    uint32 const at = Traits::TierAt(tier);
+                    if (affinity < at)
+                        continue;
+                    TraitPair const have = sCompanionMgr.GetTraits(guid);
+                    if ((tier == Traits::Tier::Life ? have.life : have.combat) != Traits::Trait::None)
+                        continue;
+                    Traits::Trait const trait = Traits::Roll(guid, tier, me->GetClass(), tags);
+                    Traits::Info const* info = Traits::Of(trait);
+                    if (!info)
+                        continue;
+                    sCompanionMgr.SetTrait(guid, tier, trait);
+                    if (!leader)
+                        continue;
+                    bool const crossed = state.lastAffinity != UINT32_MAX && state.lastAffinity < at;
+                    if (crossed)
+                    {
+                        Life::Phrases::Vars vars;
+                        vars["leader"] = leader->GetName();
+                        vars["trait"] = info->label;
+                        std::string text = Life::Phrases::Say(std::string("affinity.trait.") + info->key, tags, vars);
+                        if (text.empty())
+                            text = Life::Phrases::Say(tier == Traits::Tier::Life ? "affinity.trait.life" : "affinity.trait.combat", tags, vars);
+                        if (!text.empty())
+                            BotShared::BotChat::SayToParty(me, text);
+                    }
+                    BotShared::BotChat::SystemTo(leader, "PBGATE;" + std::string(me->GetName()) + ";trait");
+                }
             }
         }
 
@@ -65,6 +103,8 @@ namespace Companions
                     BotShared::BotChat::SystemTo(leader, "PBGATE;" + std::string(me->GetName()) + ";" + gate->key);
                 }
             }
+            if (affinity != state.lastAffinity)
+                RollTraits(me, leader, state, affinity, tags);
             state.lastAffinity = affinity;
         }
 

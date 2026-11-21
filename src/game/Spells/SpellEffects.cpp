@@ -29,6 +29,7 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Spell.h"
 #include "DynamicObject.h"
 #include "SpellAuras.h"
@@ -1924,6 +1925,12 @@ void Spell::DoCreateItem(SpellEffectIndex effIdx, uint32 itemtype)
 
     if (numToAdd < 1)
         numToAdd = 1;
+    // A recipe that makes several: a bot's own character may make one more (PlayerAI: companion
+    // friend traits).
+    if (bgType == 0 && (m_spellInfo->EffectBasePoints[effIdx] > 0 || m_spellInfo->EffectDieSides[effIdx] > 1))
+        if (PlayerAI* pPlayerAI = player->AI())
+            if (roll_chance_f(pPlayerAI->CraftExtraChance(m_spellInfo) * 100.0f))
+                ++numToAdd;
     if (numToAdd > pProto->Stackable)
         numToAdd = pProto->Stackable;
 

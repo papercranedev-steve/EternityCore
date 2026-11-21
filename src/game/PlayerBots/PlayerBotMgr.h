@@ -5,9 +5,11 @@
 #include "Policies/Singleton.h"
 #include "Database/DatabaseEnv.h"
 #include "PlayerBotAI.h"
+#include "SharedDefines.h"
 
 #include <vector>
 #include <memory>
+#include <string>
 
 class PlayerBotAI;
 class WorldSession;
@@ -108,6 +110,13 @@ class PlayerBotMgr
         // The guid has a bot entry (online, loading or waiting for removal).
         bool HasBot(uint32 playerGuid) const { return m_bots.find(playerGuid) != m_bots.end(); }
 
+        // A client of `accountId` logs into one of its characters that is in the world as a bot
+        // (a companion who joined the account, or the player's own character: companion account
+        // doc §3). The bot is logged out first; once it is gone the session's login goes on
+        // (WorldSession::StartPlayerLogin), or fails after DEFERRED_LOGIN_TIMEOUT_MS. False: no
+        // such bot (the login goes on now). World thread.
+        bool DeferLoginWhileBot(uint32 accountId, ObjectGuid guid);
+
         // Quests for persistent party bots (saved characters). Bots only take quests and make progress,
         // turning in is done by logging in the bot's own account.
         // A real player accepted a quest: nearby bots of the group take it too.
@@ -132,6 +141,17 @@ class PlayerBotMgr
         std::map<uint32 /*account*/, uint32> m_tempBots;
         PlayerBotStats m_stats;
 
+        // DeferLoginWhileBot: logins waiting for their character's bot to leave.
+        struct DeferredLogin
+        {
+            uint32 accountId = 0;
+            ObjectGuid guid;
+            uint32 waitedMs = 0;
+        };
+        static constexpr uint32 DEFERRED_LOGIN_TIMEOUT_MS = 30 * 1000;
+        std::vector<DeferredLogin> m_deferredLogins;
+        void UpdateDeferredLogins(uint32 diff);
+
         uint32 m_confMinRandomBots;
         uint32 m_confMaxRandomBots;
         uint32 m_confRandomBotsRefresh;
@@ -142,4 +162,9 @@ class PlayerBotMgr
 };
 
 #define sPlayerBotMgr MaNGOS::Singleton<PlayerBotMgr>::Instance()
+
+// Role keywords of the chat commands (.partybot load / setrole / callover): auto, tank, healer,
+// dps, meleedps, rangedps; "auto" = ROLE_INVALID (picked from class and talents). False:
+// unknown, or not one of the class.
+bool ParsePartyBotRole(std::string const& str, uint8 classId, CombatBotRoles& role);
 #endif

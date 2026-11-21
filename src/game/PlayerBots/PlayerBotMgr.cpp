@@ -84,7 +84,64 @@ bool PlayerBotMgr::IsSavingAllowed(uint32 playerGuid) const
     // (a test scenario's temporary companion is never saved: CompanionMgr::MarkTemporary)
     if (playerGuid && sCompanionMgr.IsTemporary(playerGuid))
         return false;
-    return m_confAllowSaving || (playerGuid && sCompanionMgr.IsCompanion(playerGuid));
+    // (and a character of its leader's own account: CompanionMgr::IsAccountBot)
+    return m_confAllowSaving || (playerGuid && (sCompanionMgr.IsCompanion(playerGuid) || sCompanionMgr.IsAccountBot(playerGuid)));
+}
+
+bool PlayerBotMgr::DeferLoginWhileBot(uint32 accountId, ObjectGuid guid)
+{
+    Player* bot = ObjectAccessor::FindPlayerNotInWorld(guid);
+    auto iter = m_bots.find(guid.GetCounter());
+    bool const isBot = (bot && bot->GetSession() && bot->GetSession()->GetBot()) ||
+        (iter != m_bots.end() && iter->second->state != PB_STATE_OFFLINE);
+    if (!isBot)
+        return false;
+    // (only his own character: anything else is refused by the login as before)
+    PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(guid.GetCounter());
+    if (!data || data->uiAccount != accountId)
+        return false;
+    if (iter != m_bots.end())
+        iter->second->requestRemoval = true;
+    for (DeferredLogin const& d : m_deferredLogins)
+        if (d.accountId == accountId)
+            return true;
+    DeferredLogin login;
+    login.accountId = accountId;
+    login.guid = guid;
+    m_deferredLogins.push_back(login);
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[PlayerBotMgr] Account %u logs into %u, its bot logs out first.", accountId, guid.GetCounter());
+    return true;
+}
+
+void PlayerBotMgr::UpdateDeferredLogins(uint32 diff)
+{
+    for (auto itr = m_deferredLogins.begin(); itr != m_deferredLogins.end();)
+    {
+        itr->waitedMs += diff;
+        WorldSession* session = sWorld.FindSession(itr->accountId);
+        // (the client went away meanwhile)
+        if (!session || session->GetBot() || session->GetPlayer())
+        {
+            itr = m_deferredLogins.erase(itr);
+            continue;
+        }
+        auto bot = m_bots.find(itr->guid.GetCounter());
+        bool const gone = !ObjectAccessor::FindPlayerNotInWorld(itr->guid) &&
+            (bot == m_bots.end() || bot->second->state == PB_STATE_OFFLINE);
+        if (gone)
+            session->StartPlayerLogin(itr->guid);
+        else if (itr->waitedMs >= DEFERRED_LOGIN_TIMEOUT_MS)
+            session->FailPlayerLogin();
+        else
+        {
+            // (it may have been loading when asked: removal is done once it is online)
+            if (bot != m_bots.end())
+                bot->second->requestRemoval = true;
+            ++itr;
+            continue;
+        }
+        itr = m_deferredLogins.erase(itr);
+    }
 }
 
 void PlayerBotMgr::Load()
@@ -228,6 +285,9 @@ void PlayerBotMgr::Update(uint32 diff)
     sPopulationMgr.Update(diff);
     // Recruited companions: logins as party bots after their temporary bot left.
     sCompanionMgr.Update(diff);
+    // A player's logins into characters that were his bots, once they are gone.
+    if (!m_deferredLogins.empty())
+        UpdateDeferredLogins(diff);
 
     // Temporary bots.
     std::map<uint32, uint32>::iterator it;
@@ -297,6 +357,8 @@ void PlayerBotMgr::Update(uint32 diff)
                 if (WorldSession* sess = sWorld.FindSession(iter->second->accountId))
                     if (sess->GetBot() == iter->second.get())
                         sess->LogoutPlayer(IsSavingAllowed(uint32(iter->first)));
+                // (saved above as an account character: no longer one of its bots)
+                sCompanionMgr.ForgetAccountBot(uint32(iter->first));
 
                 // A test scenario's companion mark and requests go with it: the guid of a
                 // temporary bot is given out again.
@@ -334,6 +396,7 @@ void PlayerBotMgr::Update(uint32 diff)
             // A client logged into the same account before the bot was loaded and replaced its session.
             sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[PlayerBotMgr] Session of account %u was taken over by a client, bot %u not loaded.",
                 iter->second->accountId, uint32(iter->first));
+            sCompanionMgr.ForgetAccountBot(uint32(iter->first));
             DeleteBot(iter);
             if (iter->second->customBot)
                 iter = m_bots.erase(iter);
@@ -355,6 +418,7 @@ void PlayerBotMgr::Update(uint32 diff)
         else
         {
             sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "PLAYERBOT: Unable to load session id %u", iter->second->accountId);
+            sCompanionMgr.ForgetAccountBot(uint32(iter->first));
             DeleteBot(iter);
 
             if (iter->second->customBot)
@@ -962,7 +1026,7 @@ bool ChatHandler::HandlePartyBotCloneCommand(char* args)
 
 // Role keywords used by .partybot load / setrole and the PBCHR reply.
 // "auto" -> ROLE_INVALID with isAuto = true (AutoAssignRole picks one from class and talents).
-static bool ParsePartyBotRole(std::string const& str, uint8 classId, CombatBotRoles& role)
+bool ParsePartyBotRole(std::string const& str, uint8 classId, CombatBotRoles& role)
 {
     role = ROLE_INVALID;
     if (str == "auto")
@@ -1054,8 +1118,14 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
     pAI->m_role = role; // ROLE_INVALID -> auto assigned in the first UpdateAI
     pAI->m_roleLocked = role != ROLE_INVALID;
 
+    // One of your own characters: a real one, saved like a companion (companion account doc §3).
+    bool const ownChar = Companions::CompanionMgr::IsOfAccount(pPlayer, guid.GetCounter());
+    if (ownChar)
+        sCompanionMgr.MarkAccountBot(guid.GetCounter());
     if (!sPlayerBotMgr.AddBot(guid, false, pAI, true))
     {
+        if (ownChar)
+            sCompanionMgr.ForgetAccountBot(guid.GetCounter());
         delete pAI;
         SendSysMessage("Error spawning bot.");
         SetSentErrorMessage(true);
@@ -2841,8 +2911,9 @@ void PlayerBotMgr::OnPlayerLootedQuestItem(Player* pPlayer, uint32 itemId, uint3
         Player* pBot = itr->getSource();
         if (pBot == pPlayer || !IsPersistentPartyBot(pBot))
             continue;
-        // Companions loot their own copy from the corpse (Life/Errands/LootRun.h).
-        if (sCompanionMgr.IsCompanion(pBot->GetGUIDLow()))
+        // Companions (and the player's own characters) loot their own copy from the corpse
+        // (Life/Errands/LootRun.h).
+        if (sCompanionMgr.IsCompanion(pBot->GetGUIDLow()) || sCompanionMgr.IsAccountBot(pBot->GetGUIDLow()))
             continue;
 
         // same range as kill credit, only bots that still need the item for a quest in their log

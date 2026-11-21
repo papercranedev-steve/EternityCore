@@ -126,7 +126,8 @@ void PartyBotAI::CloneFromPlayer(Player const* pPlayer)
 
 bool PartyBotAI::LootsForSelf() const
 {
-    return me && sCompanionMgr.IsCompanion(me->GetGUIDLow());
+    // (a character of the leader's own account too: a real character, saved, account doc §3)
+    return me && (sCompanionMgr.IsCompanion(me->GetGUIDLow()) || sCompanionMgr.IsAccountBot(me->GetGUIDLow()));
 }
 
 bool PartyBotAI::GetsFreeSupplies() const
@@ -233,8 +234,7 @@ bool PartyBotAI::UpdateTravel(Player* pAnchor)
     uint32 const now = std::max<uint32>(WorldTimer::getMSTime(), 1);
     if (!Life::Travel::IsActive(m_travel))
     {
-        bool const farBehind = !me->IsInMap(pAnchor) || !me->IsWithinDistInMap(pAnchor, Commander::Summon::FAR_YD);
-        if (!farBehind || Life::Travel::InSight(me, pAnchor))
+        if (!FarBehind(pAnchor))
         {
             m_farSinceMs = 0;
             return false;
@@ -252,7 +252,10 @@ bool PartyBotAI::UpdateTravel(Player* pAnchor)
             }
             return true;
         }
-        Life::Travel::Begin(me, m_travel, pAnchor, PersonalityTags());
+        Life::TravelPace pace;
+        pace.timeRate = Companions::TraitEffects::TravelTimeRate(m_traitEffects);
+        pace.skipsSailing = Companions::TraitEffects::SkipsSailing(m_traitEffects);
+        Life::Travel::Begin(me, m_travel, pAnchor, PersonalityTags(), pace);
     }
 
     switch (Life::Travel::Update(me, m_travel, pAnchor, PersonalityTags()))
@@ -269,11 +272,11 @@ bool PartyBotAI::UpdateTravel(Player* pAnchor)
     }
 }
 
-bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
+bool PartyBotAI::FarBehind(Player const* pAnchor) const
 {
-    if (LootsForSelf())
-        return !me->IsInMap(pAnchor);
-    return !me->IsWithinDistInMap(pAnchor, PB_TELEPORT_TO_LEADER_YD);
+    if (!me->IsInMap(pAnchor))
+        return true;
+    return !me->IsWithinDistInMap(pAnchor, Commander::Summon::FAR_YD) && !Life::Travel::InSight(me, pAnchor);
 }
 
 std::vector<std::string> const& PartyBotAI::PersonalityTags() const
@@ -282,6 +285,42 @@ std::vector<std::string> const& PartyBotAI::PersonalityTags() const
     Companions::CompanionInfo const* info = me ? sCompanionMgr.Find(me->GetGUIDLow()) : nullptr;
     return info ? info->tags : none;
 }
+
+// Friend traits (Companions/Affinity/TraitEffects): the PlayerAI hooks.
+void PartyBotAI::ChangeDamageTaken(Unit* /*attacker*/, uint32& damage, SpellEntry const* spell)
+{
+    Companions::TraitEffects::ChangeDamageTaken(me, m_traitEffects, damage, spell);
+}
+void PartyBotAI::ChangeHealingTaken(uint32& heal)
+{
+    Companions::TraitEffects::ChangeHealingTaken(me, m_traitEffects, heal);
+}
+void PartyBotAI::ChangeAuraDuration(SpellEntry const* spell, bool positive, int32& duration)
+{
+    Companions::TraitEffects::ChangeAuraDuration(m_traitEffects, spell, positive, duration);
+}
+void PartyBotAI::ChangeResurrection(uint32& health, uint32& mana)
+{
+    Companions::TraitEffects::ChangeResurrection(me, m_traitEffects, health, mana);
+}
+float PartyBotAI::RegenRate() const { return Companions::TraitEffects::RegenRate(m_traitEffects); }
+float PartyBotAI::CastTimeRate(SpellEntry const* spell) const { return Companions::TraitEffects::CastTimeRate(m_traitEffects, spell); }
+float PartyBotAI::PushbackRate() const { return Companions::TraitEffects::PushbackRate(m_traitEffects); }
+float PartyBotAI::LockoutRate() const { return Companions::TraitEffects::LockoutRate(m_traitEffects); }
+float PartyBotAI::FallDamageRate() const { return Companions::TraitEffects::FallDamageRate(m_traitEffects); }
+float PartyBotAI::BreathRate() const { return Companions::TraitEffects::BreathRate(m_traitEffects); }
+float PartyBotAI::SwimSpeedRate() const { return Companions::TraitEffects::SwimSpeedRate(m_traitEffects); }
+float PartyBotAI::ReputationRate() const { return Companions::TraitEffects::ReputationRate(m_traitEffects); }
+float PartyBotAI::RepairCostRate() const { return Companions::TraitEffects::RepairCostRate(m_traitEffects); }
+float PartyBotAI::SellPriceRate(ItemPrototype const* proto) const { return Companions::TraitEffects::SellPriceRate(m_traitEffects, proto); }
+float PartyBotAI::BuyPriceRate(ItemPrototype const* proto) const { return Companions::TraitEffects::BuyPriceRate(m_traitEffects, proto); }
+float PartyBotAI::LootMoneyRate() const { return Companions::TraitEffects::LootMoneyRate(m_traitEffects); }
+float PartyBotAI::DurabilityLossRate() const { return Companions::TraitEffects::DurabilityLossRate(m_traitEffects); }
+float PartyBotAI::DetectedRangeRate() const { return Companions::TraitEffects::DetectedRangeRate(m_traitEffects); }
+int32 PartyBotAI::StealthDetectBonus() const { return Companions::TraitEffects::StealthDetectBonus(m_traitEffects); }
+float PartyBotAI::CraftExtraChance(SpellEntry const* spell) const { return Companions::TraitEffects::CraftExtraChance(m_traitEffects, spell); }
+uint32 PartyBotAI::SavedReagent(SpellEntry const* spell) { return Companions::TraitEffects::SavedReagent(m_traitEffects, spell); }
+float PartyBotAI::GatherExtraChance() const { return Companions::TraitEffects::GatherExtraChance(m_traitEffects); }
 
 uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
 {
@@ -301,7 +340,7 @@ bool PartyBotAI::FillsUpAtOnce()
     Player* pLeader = GetPartyLeader();
     Player* pAnchor = pLeader ? FollowAnchor(pLeader) : nullptr;
     Commander::StaySpot stay;
-    return pAnchor && CatchesUpByTeleport(pAnchor) && !IsArriving() && !sCommanderMgr.GetStay(this, stay);
+    return pAnchor && FarBehind(pAnchor) && !IsArriving() && !sCommanderMgr.GetStay(this, stay);
 }
 
 Player* PartyBotAI::GetPartyLeader() const
@@ -837,6 +876,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!me->IsInWorld() || me->IsBeingTeleported())
         return;
 
+    // A companion's friend traits: what they change on him, fights (also in combat).
+    Companions::TraitEffects::Update(me, m_traitEffects);
+
     if (!m_initialized)
     {
         // Back with its leader before he is in the world: it stands where it logged out (still
@@ -968,10 +1010,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     // He leaves by hearthstone or flight path: shall we wait? A waiting warlock: shall I summon
     // you back? (before the taxi wait below: the question comes as he takes off)
+    // (his hearthstone, ours bound at his inn: home together, before anyone asks)
+    Companions::HearthAlong::Update(me, pLeader, m_hearthAlong, staying, PersonalityTags());
     Companions::Departure::Update(me, pLeader, m_departure, staying, PersonalityTags());
-    // He made an inn his home: a companion with him does the same.
+    // A companion's hearthstone is bound where his is.
     if (LootsForSelf())
-        Companions::HomeBind::Update(me, pLeader, m_homeBind, staying, PersonalityTags());
+        Companions::HomeBind::Update(me, pLeader, m_homeBind, PersonalityTags());
     if (me->GetClass() == CLASS_WARLOCK)
         Companions::SummonOffer::Update(me, pLeader, m_summonOffer, staying, PersonalityTags());
 
@@ -1110,7 +1154,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         Companions::AffinitySources::Update(me, pLeader, m_affinitySources, Life::TownTrip::TakePaid(m_townTrip), PersonalityTags());
         // A trial partner (搭伙): the deal once, then his offer to stay when it is due.
         if (!resurrectFirst && !commanderOutOfCombat)
+        {
             Companions::Trial::Update(me, pLeader, m_trial, PersonalityTags());
+            // At affinity 100: once, may he join the player's account?
+            Companions::JoinOffer::Update(me, pLeader, m_joinOffer);
+        }
         if (resurrectFirst || commanderOutOfCombat)
             PauseProvisions();
         else if (UpdateProvisions(pLeader))
@@ -1127,6 +1175,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // quests; nothing a companion asks of the player (class quests, town trips and their
             // money, lessons, crafting).
             bool const bonded = sCompanionMgr.IsBonded(me->GetGUIDLow());
+            // One of the player's own characters (account doc §3): its own trainer, vendor and
+            // crafting errands, paid from its own purse; no class quest nor Artisan asks.
+            bool const ownChar = !bonded && sCompanionMgr.IsAccountBot(me->GetGUIDLow());
+            bool const errands = bonded || ownChar;
+            m_townTrip.paysOwnWay = sCompanionMgr.PaysOwnWay(me->GetGUIDLow());
             if (bonded)
             {
                 // First the class quest question of a visit to a capital (it asks while following,
@@ -1136,9 +1189,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                     m_resetSpellData = true;
                 // An Artisan trainer far away: asks once per capital visit, then leads the leader there.
                 Companions::ArtisanTrip::Update(me, pLeader, m_artisanTrip, m_artisanTask, PersonalityTags());
-                // Out in the field: important lessons waiting (party chat, it keeps following).
-                Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
             }
+            // Out in the field: important lessons waiting (party chat, it keeps following).
+            if (errands)
+                Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
             static std::vector<uint32> const noPickUps;
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
@@ -1147,7 +1201,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
                 Life::QuestPickUp::Update(me, m_questPickUp, pLeader,
                     bonded ? Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow) : noPickUps) ||
-                (bonded && (Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
+                (errands && (Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                     Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
                     Life::NpcVisit::Update(me, m_artisanVisit, pLeader, m_artisanTask) ||
                     Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner, &m_professionPlanner }, PersonalityTags(),
@@ -1165,7 +1219,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // (to the guide the party follows, Commander/Coordination/Situation/Guide.h; the guide
         // itself to the leader)
         // The leader went through a mage's portal: after him through it, before walking or
-        // being teleported to him (not a bot told to wait).
+        // travelling to him (not a bot told to wait).
         if (!staying && !resurrectFirst && FollowThroughPortal(pLeader))
             return;
 
@@ -1174,32 +1228,17 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         if (!staying && !resurrectFirst && !pAnchor->IsDead() && Commander::Arrival::Update(this, m_arrival, pAnchor))
             return;
 
-        // Teleport to leader if too far away. Fix: not to a dead leader: after a wipe the
-        // surviving bots were teleported to the player's ghost at the graveyard, fell behind on
-        // its run back and were teleported again every 100 yd. They wait where they are, by
-        // the corpse the ghost runs to.
-        // Companions far behind: summoned, or they travel (UpdateTravel); the teleport below is
-        // their last resort only.
-        if (!staying && !resurrectFirst && !pAnchor->IsDead() && LootsForSelf() && UpdateTravel(pAnchor))
+        // Far behind: summoned, or it travels (UpdateTravel), every party bot; none is
+        // teleported to the leader. Not to a dead leader: after a wipe the surviving bots were
+        // teleported to the player's ghost at the graveyard, fell behind on its run back and
+        // were teleported again every 100 yd. They wait where they are, by the corpse the ghost
+        // runs to.
+        if (!staying && !resurrectFirst && !pAnchor->IsDead() && UpdateTravel(pAnchor))
             return;
-        if (Life::Travel::IsActive(m_travel) && (staying || resurrectFirst || pAnchor->IsDead() || !LootsForSelf()))
+        if (Life::Travel::IsActive(m_travel) && (staying || resurrectFirst || pAnchor->IsDead()))
         {
             Life::Travel::Stop(me, m_travel);
             m_farSinceMs = 0;
-        }
-
-        // Companions only when on another map: on the same map they walk (a town trip, the
-        // leader at his own trainer: CatchesUpByTeleport).
-        if (!staying && !resurrectFirst && !pAnchor->IsDead() && CatchesUpByTeleport(pAnchor))
-        {
-            if (!me->IsStopped())
-                me->StopMoving();
-            me->GetMotionMaster()->Clear(false, true);
-            me->GetMotionMaster()->MoveIdle();
-            char name[128] = {};
-            snprintf(name, sizeof(name), "%s", pAnchor->GetName());
-            ChatHandler(me).HandleGonameCommand(name);
-            return;
         }
     }
 

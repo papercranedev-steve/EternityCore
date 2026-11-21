@@ -39,6 +39,18 @@ namespace Travel
             return std::min<uint32>(MAX_SEC, std::max<uint32>(MIN_SEC, uint32(std::max(0.0f, seconds))));
         }
 
+        // The road's journey at this traveller's pace.
+        Commander::TravelTime::Journey Paced(Commander::TravelTime::Journey j, TravelPace const& pace)
+        {
+            if (pace.skipsSailing && j.sails)
+            {
+                j.seconds = std::max(0.0f, j.seconds - Commander::TravelTime::SAILING_SEC);
+                j.sails = false;
+            }
+            j.seconds *= pace.timeRate;
+            return j;
+        }
+
         // On the road from now for `seconds`, invisible; its position follows the line to `to`
         // when both ends are on the continent it is on.
         void SetOut(Player* me, TravelState& state, WorldLocation const& to, uint32 nowMs, uint32 seconds, bool sails)
@@ -59,6 +71,16 @@ namespace Travel
             state.roadSinceMs = nowMs;
             state.roadMs = seconds * IN_MILLISECONDS;
             state.nextHopMs = nowMs + HOP_MS;
+        }
+
+        // He went on to another map while it waited hidden on his last one (a dungeon, a boat):
+        // a new journey from here, quietly (it said where it was when it set out).
+        void SetOutAgain(Player* me, TravelState& state, Player* meet, uint32 nowMs)
+        {
+            state.from = Here(me);
+            Commander::TravelTime::Journey const j = Paced(Commander::TravelTime::JourneyOf(state.from, Here(meet), me->GetSpeed(MOVE_RUN)), state.pace);
+            SetOut(me, state, Here(meet), nowMs, Clamped(j.seconds), j.sails);
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s: %s moved on to map %u, on from here.", me->GetName(), meet->GetName(), meet->GetMapId());
         }
 
         // Its dot on the world map goes along the road (invisible; not into his sight).
@@ -163,14 +185,15 @@ namespace Travel
             if (itr->step != Commander::TrailStep::Ground || itr->magma)
                 continue;
             float const d = std::hypot(itr->pos.x - at.x, itr->pos.y - at.y);
-            if (d < sight || d > 2.0f * sight)
+            if (d < sight || d > TRAIL_MAX_SIGHTS * sight)
                 continue;
             out = WorldLocation(map->GetId(), itr->pos.x, itr->pos.y, itr->pos.z, 0.0f);
             return true;
         }
 
         // Open ground around him with a walk to him, `angle` first.
-        for (float extra : { 0.0f, 30.0f, 60.0f })
+        // (further out too: a closed valley, a building, a ledge with no way down near him)
+        for (float extra : { 0.0f, 30.0f, 60.0f, 100.0f, 150.0f })
         {
             float const dist = sight + extra;
             for (uint32 i = 0; i < 12; ++i)
@@ -194,14 +217,15 @@ namespace Travel
         return me && who && me->IsInMap(who) && me->IsWithinDist(who, SightYd(who->GetMap()));
     }
 
-    void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags)
+    void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags, TravelPace const& pace)
     {
         state = TravelState();
+        state.pace = pace;
         state.from = Here(me);
         state.sinceMs = WorldTimer::getMSTime();
 
         float const run = me->GetSpeed(MOVE_RUN);
-        Commander::TravelTime::Journey const j = Commander::TravelTime::JourneyOf(state.from, Here(meet), run);
+        Commander::TravelTime::Journey const j = Paced(Commander::TravelTime::JourneyOf(state.from, Here(meet), run), pace);
         uint32 seconds = Clamped(j.seconds);
         state.fromHereSec = seconds;
         state.fromHereSails = j.sails;
@@ -216,7 +240,7 @@ namespace Travel
         Commander::TravelTime::Journey home;
         if (HearthReady(me) && !NearHome(me))
         {
-            home = Commander::TravelTime::JourneyOf(me->GetHomeBind(), Here(meet), run);
+            home = Paced(Commander::TravelTime::JourneyOf(me->GetHomeBind(), Here(meet), run), pace);
             uint32 const viaHome = Clamped(home.seconds) + HEARTH_CAST_SEC;
             if (viaHome + HEARTH_GAIN_SEC <= seconds && UseHearth(me))
             {
@@ -344,28 +368,37 @@ namespace Travel
             // fall through
             case TravelState::Phase::Hidden:
             {
+                // He moved on meanwhile: on the road again, from here.
                 if (!me->IsInMap(meet))
                 {
-                    if (WorldTimer::getMSTimeDiff(state.hiddenSinceMs, now) > HIDDEN_GIVE_UP_MS)
-                    {
-                        Stop(me, state);
-                        return Step::None;
-                    }
+                    SetOutAgain(me, state, meet, now);
                     return Step::OnRoad;
                 }
+                if (now < state.nextTryMs)
+                    return Step::OnRoad;
                 WorldLocation spot;
                 float const angle = state.from.mapId == meet->GetMapId()
                     ? std::atan2(state.from.y - meet->GetPositionY(), state.from.x - meet->GetPositionX())
                     : frand(0.0f, 2.0f * float(M_PI));
-                if (!SpotOutOfSight(me, meet, angle, spot) || !me->TeleportTo(spot))
+                if (SpotOutOfSight(me, meet, angle, spot) && me->TeleportTo(spot))
                 {
-                    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s: no spot out of %s's sight, shows itself here.", me->GetName(), meet->GetName());
-                    FaceAndShow(me, meet);
-                    state = TravelState();
-                    return Step::Arrived;
+                    state.phase = TravelState::Phase::Revealing;
+                    return Step::OnRoad;
                 }
-                state.phase = TravelState::Phase::Revealing;
-                return Step::OnRoad;
+                // No spot: where it is, once he cannot see it there (he walked on, or it waits on
+                // the road out of his sight); else hidden a while longer (he walks, his trail
+                // grows) and only then here, next to him.
+                bool const giveUp = WorldTimer::getMSTimeDiff(state.hiddenSinceMs, now) > HIDDEN_GIVE_UP_MS;
+                if (InSight(me, meet) && !giveUp)
+                {
+                    state.nextTryMs = now + HIDDEN_RETRY_MS;
+                    return Step::OnRoad;
+                }
+                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s: no spot out of %s's sight, shows itself here (%s).", me->GetName(),
+                    meet->GetName(), giveUp ? "gave up" : "out of his sight");
+                FaceAndShow(me, meet);
+                state = TravelState();
+                return Step::Arrived;
             }
 
             case TravelState::Phase::Revealing:

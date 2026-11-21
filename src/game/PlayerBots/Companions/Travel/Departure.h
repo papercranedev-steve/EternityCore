@@ -7,7 +7,8 @@
  * One bot of the party asks (the first party bot of the group next to him), once per departure
  * (again only after he was back with it). "Wait here" (or no answer) puts every party bot of the
  * group into its stay (Commander/Coordination/Situation/Stay.h); "follow" leaves them as they
- * are. Not while any of them already waits.
+ * are. Not while any of them already waits, nor when he hearths and some of them go home with
+ * him (Companions/Travel/HearthAlong; the others follow on their own, Life/Errands/Travel).
  *
  * Map thread of the bot (each bot runs it; only the asker does anything).
  */

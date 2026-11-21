@@ -384,7 +384,22 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin 
         return;
     }
 
-    LoginQueryHolder* holder = new LoginQueryHolder(GetAccountId(), packet.guid);
+    // His own character is in the world as a bot (a companion who joined his account, one of
+    // his characters he played with): it logs out first, the login goes on once it is gone
+    // (PlayerBotMgr::UpdateDeferredLogins calls StartPlayerLogin).
+    if (!GetBot() && sPlayerBotMgr.DeferLoginWhileBot(GetAccountId(), packet.guid))
+    {
+        m_playerLoading = true;
+        return;
+    }
+
+    StartPlayerLogin(packet.guid);
+}
+
+void WorldSession::StartPlayerLogin(ObjectGuid guid)
+{
+    m_playerLoading = false;
+    LoginQueryHolder* holder = new LoginQueryHolder(GetAccountId(), guid);
     if (!holder->Initialize())
     {
         delete holder;                                      // delete all unprocessed queries
@@ -396,10 +411,18 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin 
     // Population bots: the crowd around the logout position is placed during the loading screen.
     if (!GetBot())
     {
-        sPopulationMgr.OnLoginRequest(GetAccountId(), packet.guid.GetCounter());
+        sPopulationMgr.OnLoginRequest(GetAccountId(), guid.GetCounter());
         // Companions of his group come back with him, where they logged out.
-        sCompanionMgr.OnLoginRequest(packet.guid.GetCounter());
+        sCompanionMgr.OnLoginRequest(guid.GetCounter());
     }
+}
+
+void WorldSession::FailPlayerLogin()
+{
+    m_playerLoading = false;
+    auto loginFailedPacket = std::make_unique<WorldPackets::Character::CharacterLoginFailed>();
+    loginFailedPacket->result = 1;
+    SendPacket(std::move(loginFailedPacket));
 }
 
 void WorldSession::LoginPlayer(ObjectGuid loginPlayerGuid)

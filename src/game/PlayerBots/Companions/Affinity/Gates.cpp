@@ -23,7 +23,7 @@ namespace Companions
                 { Gate::MagePortal,    45,  MAGE,    true,  "portal",   "请他开传送门" },
                 { Gate::TakeMoney,     50,  0,       true,  "money",    "从他那里拿钱" },
                 { Gate::PickRewards,   60,  0,       true,  "rewards",  "帮他挑任务奖励" },
-                { Gate::JoinAccount,   100, 0,       false, "account",  "招募他进你的账号" },
+                { Gate::JoinAccount,   100, 0,       true,  "account",  "招募他进你的账号" },
             };
         }
 

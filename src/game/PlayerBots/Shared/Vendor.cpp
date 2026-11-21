@@ -1,6 +1,7 @@
 #include "Shared/Vendor.h"
 #include "Shared/Inventory.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Creature.h"
 #include "Bag.h"
 #include "Item.h"
@@ -80,6 +81,9 @@ namespace Vendor
                     best.entry = v;
                     best.proto = proto;
                     best.price = uint32(proto->BuyPrice * discount + 0.5f);
+                    // (as BuyItemFromVendor: his own rate, PlayerAI)
+                    if (PlayerAI const* ai = player->AI())
+                        best.price = uint32(best.price * ai->BuyPriceRate(proto) + 0.5f);
                 }
             }
             return best;
@@ -118,7 +122,8 @@ namespace Vendor
 
     uint32 RepairCost(Player* player, Creature const* npc)
     {
-        float const discount = player->GetReputationPriceDiscount(npc);
+        // (as HandleRepairItemOpcode: his own rate, PlayerAI)
+        float const discount = player->GetReputationPriceDiscount(npc) * (player->AI() ? player->AI()->RepairCostRate() : 1.0f);
         uint32 cost = 0;
         for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
             if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))

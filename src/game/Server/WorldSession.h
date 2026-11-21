@@ -244,6 +244,11 @@ class WorldSession
         void SetPlayer(Player* plr) { _player = plr; }
         void SetMasterPlayer(MasterPlayer* plr) { m_masterPlayer = plr; }
         void LoginPlayer(ObjectGuid playerGuid);
+        // The character login of the client (HandlePlayerLoginOpcode after its checks); also a
+        // login that waited for the character's bot to leave (PlayerBotMgr::DeferLoginWhileBot),
+        // or its failure.
+        void StartPlayerLogin(ObjectGuid guid);
+        void FailPlayerLogin();
         std::shared_ptr<WorldSocket> GetSocket() { return m_socket; }
 
         // Session in auth.queue currently

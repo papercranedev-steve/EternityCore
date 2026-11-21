@@ -26,6 +26,7 @@
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Item.h"
 #include "Bag.h"
 #include "Chat.h"
@@ -535,6 +536,10 @@ void WorldSession::HandleSellItemOpcode(WorldPackets::Item::SellItem const& pack
             break;
         }
     }
+
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (PlayerAI* pPlayerAI = _player->AI())
+        money = uint32(money * pPlayerAI->SellPriceRate(pProto) + 0.5f);
 
     uint32 maxDurability = pItem->GetUInt32Value(ITEM_FIELD_MAXDURABILITY);
     if (maxDurability)

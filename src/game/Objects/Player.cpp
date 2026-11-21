@@ -24,6 +24,7 @@
 #include <sstream>
 
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Bag.h"
 #include "Language.h"
 #include "Database/DatabaseEnv.h"
@@ -810,7 +811,9 @@ void Player::SetDrunkValue(uint16 newDrunkenValue, uint32 itemId)
 
 uint32 Player::GetWaterBreathingInterval() const
 {
-    return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier);
+    // (a bot's own character: PlayerAI, companion friend traits)
+    float const aiRate = m_AI ? m_AI->BreathRate() : 1.0f;
+    return uint32(sWorld.getConfig(CONFIG_UINT32_MIRRORTIMER_BREATH_MAX) * IN_MILLISECONDS * m_environmentBreathingMultiplier * aiRate);
 }
 
 void Player::SetWaterBreathingIntervalMultiplier(float multiplier)
@@ -2307,6 +2310,9 @@ void Player::Regenerate(Powers power)
             }
             else
                 addValue = m_modManaRegen * ManaIncreaseRate * 2.00f;
+            // A bot's own character (PlayerAI: companion friend traits).
+            if (m_AI && !IsInCombat())
+                addValue *= m_AI->RegenRate();
         }
         break;
         case POWER_RAGE:                                    // Regenerate rage
@@ -2376,6 +2382,9 @@ void Player::RegenerateHealth()
             AuraList const& lModHealthRegenPct = GetAurasByType(SPELL_AURA_MOD_HEALTH_REGEN_PERCENT);
             for (const auto i : lModHealthRegenPct)
                 addValue *= (100.0f + i->GetModifier()->m_amount) / 100.0f;
+            // A bot's own character (PlayerAI: companion friend traits).
+            if (m_AI)
+                addValue *= m_AI->RegenRate();
         }
         else if (HasAuraType(SPELL_AURA_MOD_REGEN_DURING_COMBAT))
             addValue *= GetTotalAuraModifier(SPELL_AURA_MOD_REGEN_DURING_COMBAT) / 100.0f;
@@ -4794,6 +4803,10 @@ Corpse* Player::GetCorpse() const
 
 void Player::DurabilityLossAll(double percent, bool inventory)
 {
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (m_AI)
+        percent *= m_AI->DurabilityLossRate();
+
     for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
         if (Item* pItem = GetItemByPos(INVENTORY_SLOT_BAG_0, i))
             DurabilityLoss(pItem, percent);
@@ -4894,6 +4907,9 @@ void Player::DurabilityPointsLoss(Item* item, int32 points)
 
 void Player::DurabilityPointLossForEquipSlot(EquipmentSlots slot)
 {
+    // A bot's own character (PlayerAI: companion friend traits): one point, so a chance.
+    if (m_AI && !roll_chance_f(m_AI->DurabilityLossRate() * 100.0f))
+        return;
     if (Item* pItem = GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
         DurabilityPointsLoss(pItem, 1);
 }
@@ -6320,6 +6336,10 @@ int32 Player::CalculateReputationGain(ReputationSource source, int32 rep, int32 
         }
 
         percent *= rate;
+
+        // A bot's own character (PlayerAI: companion friend traits).
+        if (m_AI)
+            percent *= m_AI->ReputationRate();
     }
 
     if (percent <= 0.0f)
@@ -7612,6 +7632,35 @@ void Player::SendLootError(ObjectGuid guid, LootError error) const
     GetSession()->SendPacket(std::move(packet));
 }
 
+// An herb or ore node (its lock needs Herbalism or Mining).
+static bool IsGatheringNode(GameObject const* go)
+{
+    LockEntry const* lock = sLockStore.LookupEntry(go->GetGOInfo()->GetLockId());
+    if (!lock)
+        return false;
+    for (int i = 0; i < MAX_LOCK_CASE; ++i)
+        if (lock->Type[i] == LOCK_KEY_SKILL && (lock->Index[i] == LOCKTYPE_HERBALISM || lock->Index[i] == LOCKTYPE_MINING))
+            return true;
+    return false;
+}
+
+// Gathering loot just made for this player: a bot's own character may get one more of its first
+// item (PlayerAI: companion friend traits).
+void Player::AddGatherExtra(Loot& loot)
+{
+    if (!m_AI || !roll_chance_f(m_AI->GatherExtraChance() * 100.0f))
+        return;
+    for (LootItem& item : loot.items)
+    {
+        if (item.needs_quest || item.is_looted)
+            continue;
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item.itemid);
+        if (proto && item.count < proto->Stackable && item.count < 255)
+            ++item.count;
+        return;
+    }
+}
+
 void Player::SendLoot(ObjectGuid guid, LootType lootType, Player const* pVictim)
 {
     // Nostalrius : loot disabled per map
@@ -7690,6 +7739,8 @@ void Player::SendLoot(ObjectGuid guid, LootType lootType, Player const* pVictim)
                     }
 
                     loot->FillLoot(lootId, LootTemplates_Gameobject, this, !groupRules, false);
+                    if (IsGatheringNode(go))
+                        AddGatherExtra(*loot);
                     loot->GenerateMoneyLoot(go->GetGOInfo()->MinMoneyLoot, go->GetGOInfo()->MaxMoneyLoot);
                     if (go->GetInstanceId())
                         go->GetMap()->BindToInstanceOrRaid(this, go->GetRespawnTimeEx(), false);
@@ -7923,6 +7974,7 @@ void Player::SendLoot(ObjectGuid guid, LootType lootType, Player const* pVictim)
                         creature->lootForSkin = true;
                         loot->clear();
                         loot->FillLoot(creature->GetCreatureInfo()->skinning_loot_id, LootTemplates_Skinning, this, false);
+                        AddGatherExtra(*loot);
 
                         // let reopen skinning loot if will closed.
                         if (!loot->empty())
@@ -18456,6 +18508,9 @@ bool Player::BuyItemFromVendor(ObjectGuid vendorGuid, uint32 item, uint8 count, 
 
     // reputation discount
     price = uint32(price * GetReputationPriceDiscount(pCreature) + 0.5f);
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (m_AI)
+        price = uint32(price * m_AI->BuyPriceRate(pProto) + 0.5f);
 
     if (GetMoney() < price)
     {
@@ -20137,6 +20192,10 @@ void Player::ResurrectUsingRequestData()
 
     ResurrectPlayer(0.0f, false);
 
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (m_AI)
+        m_AI->ChangeResurrection(m_resurrectData.health, m_resurrectData.mana);
+
     if (GetMaxHealth() > m_resurrectData.health)
         SetHealth(m_resurrectData.health);
     else
@@ -20889,6 +20948,9 @@ void Player::HandleFall(MovementInfo const& movementInfo)
             TakenTotalMod *= GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN, SPELL_SCHOOL_MASK_NORMAL);
 
             uint32 damage = (uint32)(dmgPct * GetMaxHealth() * sWorld.getConfig(CONFIG_FLOAT_RATE_DAMAGE_FALL) * TakenTotalMod);
+            // A bot's own character (PlayerAI: companion friend traits).
+            if (m_AI)
+                damage = uint32(damage * m_AI->FallDamageRate());
 
             float height = movementInfo.GetPos().z;
             UpdateAllowedPositionZ(movementInfo.GetPos().x, movementInfo.GetPos().y, height);
@@ -21832,6 +21894,10 @@ void Player::LootMoney(int32 money, Loot* loot)
         money /= 2;
 #endif
 
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (m_AI && money > 0)
+        money = int32(money * m_AI->LootMoneyRate() + 0.5f);
+
     if (!money)
         return;
 
@@ -22347,6 +22413,9 @@ void Player::RemoveAllCooldowns(bool sendOnly /*= false*/)
 
 void Player::LockOutSpells(SpellSchoolMask schoolMask, uint32 duration)
 {
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (m_AI)
+        duration = uint32(duration * m_AI->LockoutRate());
     TimePoint lockoutExpireTime = std::chrono::milliseconds(duration) + sWorld.GetCurrentClockTime();
     ByteBuffer cdData;
     uint32 spellCount = 0;

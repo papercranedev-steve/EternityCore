@@ -4,8 +4,8 @@
  *
  * NpcVisit.h does the business with NPCs right by the party. This one walks out of the party
  * to NPCs further away (up to TRIP_YD from the leader), with the leader's consent. The leader
- * is free meanwhile (his own trainer, the bank): the bot does not follow, and companions are
- * not teleported to a far leader on the same map (PartyBotAI::CatchesUpByTeleport).
+ * is free meanwhile (his own trainer, the bank): the bot does not follow, and walks back to a
+ * leader up to Summon::FAR_YD away (PartyBotAI::FarBehind).
  *   Idle      every CHECK_MS: the leader is in a rest area (a city or an inn) and standing, the
  *             bot may run errands (ErrandCommon::MayRun) and some planner (Trip/TripPlan.h:
  *             shopping, training) finds it worth a trip. Then every planner adds its stops
@@ -74,6 +74,10 @@ namespace Life
             ToGate,
             Waiting,
         };
+
+        // Set by the AI: the bot pays its own way (a character of the player's own account): the
+        // question never offers "pay", whatever it lacks.
+        bool paysOwnWay = false;
 
         Phase phase = Phase::Idle;
         uint32 requestId = 0;

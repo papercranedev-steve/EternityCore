@@ -13,6 +13,8 @@ namespace Talk
 {
     // "以后跟我一起走吧？": a trial partner ready to stay (Recruit/Trial); his yes promotes him.
     std::unique_ptr<Service> MakeBondService();
+    // "到我的账号里来吧？": a companion at affinity 100 joins the player's account (Account/JoinOffer).
+    std::unique_ptr<Service> MakeAccountService();
     // "在这儿等我" / "跟我走" (Commander/Coordination/Situation/Stay.h). Anyone.
     std::unique_ptr<Service> MakeStayService();
     // "让我看看你的包": the inspect window with his bags (Gates ManageBags).

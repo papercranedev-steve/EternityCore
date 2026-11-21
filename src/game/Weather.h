@@ -79,6 +79,7 @@ class Weather
                     return false;
             }
         }
+        WeatherType GetType() const { return m_type; }
 
     private:
         uint32 GetSound();

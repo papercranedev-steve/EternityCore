@@ -20,6 +20,8 @@
 #include "GameObject.h"
 #include "Totem.h"
 #include "CreatureAI.h"
+#include "Player.h"
+#include "PlayerAI.h"
 #include "Chat.h"
 #include "Spell.h"
 #include "SpellAuras.h"
@@ -1027,6 +1029,11 @@ float SpellCaster::SpellCriticalHealingBonus(SpellEntry const* spellProto, uint3
 int32 SpellCaster::DealHeal(Unit* pVictim, uint32 addhealth, SpellEntry const* spellProto, bool critical)
 {
     Unit* pUnit = ToUnit();
+
+    // A bot's own character may get a little more (PlayerAI: companion friend traits).
+    if (Player* pVictimPlayer = pVictim->ToPlayer())
+        if (PlayerAI* pVictimAI = pVictimPlayer->AI())
+            pVictimAI->ChangeHealingTaken(addhealth);
 
     // Script Event HealedBy
     if (pVictim->AI() && pUnit)

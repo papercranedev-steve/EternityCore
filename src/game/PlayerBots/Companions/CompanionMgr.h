@@ -18,6 +18,7 @@
 #include "ObjectGuid.h"
 #include "Companions/OfflineLife.h"
 #include "Companions/PastProfessions.h"
+#include "Companions/Affinity/Traits.h"
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -89,6 +90,24 @@ namespace Companions
         bool trial = false;
         uint32 trialQuests = 0;         // quests done with the player (Recruit/Trial)
         uint32 trialOfferAtMs = 0;      // WorldTimer ms he offers to stay, 0 = none due (runtime)
+        // Friend traits (Affinity/Traits): rolled at affinity 80 / 90, then kept. None = not yet.
+        // Through Get/SetTraits only (map threads set them).
+        Traits::Trait traitLife = Traits::Trait::None;
+        Traits::Trait traitCombat = Traits::Trait::None;
+        // At affinity 100 he joined his player's account (account doc .kiro/docs/
+        // 2026-11-21-companion-account.md): the character is the player's now, any character of
+        // that account calls him and may log him in. No slot, no bench growth, parcels, home
+        // trips nor offline life (the player may be playing him). World thread.
+        bool inAccount = false;
+        // He asked the player once to join the account (Account/JoinOffer); he does not ask
+        // again, the companions panel and the talk window still offer it. World thread.
+        bool joinAsked = false;
+    };
+
+    struct TraitPair
+    {
+        Traits::Trait life = Traits::Trait::None;
+        Traits::Trait combat = Traits::Trait::None;
     };
 
     uint32 const MAX_AFFINITY = 100;
@@ -134,6 +153,11 @@ namespace Companions
         // Any thread (dev console affinity tests). Sets it, capped at MAX_AFFINITY, stored at once
         // (not for temporary companions); returns the new value (0: not a companion).
         uint32 SetAffinity(uint32 charGuid, uint32 value);
+        // Any thread. Its friend traits (Affinity/Traits); both None when not a companion.
+        TraitPair GetTraits(uint32 charGuid) const;
+        // Any thread. Gives it the trait of `tier` (None clears it), stored at once (not for
+        // temporary companions).
+        void SetTrait(uint32 charGuid, Traits::Tier tier, Traits::Trait trait);
         // Any thread. Counts one money gift if it had fewer than `max` (stored at once, not for
         // temporary companions); false: not a companion, or `max` reached.
         bool CountMoneyGift(uint32 charGuid, uint32 max);
@@ -216,6 +240,63 @@ namespace Companions
         // own companions. World thread. "" = on its way, else an error key: notcompanion,
         // notyours, online, full, failed.
         std::string CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly);
+
+        // Account characters (account doc): the characters of the player's own account, a
+        // companion who joined it at affinity 100 and the player's own ones. Any other character
+        // of the account calls them over like companions (CallOver); they are saved, loot for
+        // themselves and pay their own way (no money asks).
+        //
+        // `charGuid` is another character of `owner`'s account (owner a real player). Any thread
+        // (the name cache).
+        static bool IsOfAccount(Player const* owner, uint32 charGuid);
+        // `owner` may do what a companion's owner does with him: his recruiter (a companion not in
+        // an account), or any character of the account he is in (account characters). Any thread.
+        bool MayManage(Player const* owner, uint32 charGuid) const;
+        // A companion who joined his player's account (CompanionInfo::inAccount). Any thread.
+        bool IsInAccount(uint32 charGuid) const
+        {
+            CompanionInfo const* info = Find(charGuid);
+            return info && info->inAccount;
+        }
+        // The guid is in the world (or on its way) as a bot of a character of its own account:
+        // saved like a companion, loots for itself. Marked by CallOver, `.partybot add` and the
+        // return with the leader (UpdateReturns); forgotten when it logs out (PlayerBotMgr). Any
+        // thread.
+        bool IsAccountBot(uint32 charGuid) const;
+        void MarkAccountBot(uint32 charGuid);
+        void ForgetAccountBot(uint32 charGuid);
+        // An account character playing as a bot (a former companion in an account, or the
+        // player's own one): pays its own way, never asks the player for money. Any thread.
+        bool PaysOwnWay(uint32 charGuid) const { return IsInAccount(charGuid) || IsAccountBot(charGuid); }
+
+        // The other characters of `owner`'s account (not him), by kind (the companions panel). World
+        // thread.
+        enum class AccountKind : uint8
+        {
+            Companion = 1,      // joined at affinity 100 (has a companion record)
+            Own = 2,            // the player made him
+        };
+        struct AccountCharacter
+        {
+            uint32 charGuid = 0;
+            AccountKind kind = AccountKind::Own;
+        };
+        std::vector<AccountCharacter> AccountCharactersOf(Player const* owner) const;
+
+        // At affinity MAX_AFFINITY a companion joins `owner`'s account (account doc §2): the
+        // character moves to it, nothing else changes (online he stays in the party). "" = done,
+        // else an error key: notcompanion (also a trial partner), notyours, inaccount, locked
+        // (affinity below MAX_AFFINITY), accountfull (CharactersPerRealm characters already).
+        // World thread (the command, the talk window).
+        std::string JoinAccount(Player* owner, uint32 charGuid);
+        // He asked once (Account/JoinOffer, the answer or the window closed): not again.
+        void MarkJoinAsked(uint32 charGuid);
+        // Sends an account companion back to the companions account, as a companion of `owner`
+        // (account doc §4): with a free slot he is one again (on the bench or with him), else
+        // a former companion (故人; online he says goodbye). `parted`: which one. "" = done, else:
+        // notcompanion (the player's own character: those are deleted at character select only),
+        // notyours, notinaccount, self (the character he plays).
+        std::string SendBack(Player* owner, uint32 charGuid, bool& parted);
 
         // Dev console test scenarios (lua/tests/life): a temporary bot (saving disabled) counts as a
         // companion of `recruiter` until it logs out (PlayerBotMgr calls ForgetTemporary). Never
@@ -321,6 +402,17 @@ namespace Companions
             uint32 sinceMs = 0;
             std::unordered_set<uint32> sent;    // char guids logged in for him already
         };
+
+        // Sets the character's account (`characters`, the name cache, the online bot's save
+        // target, both accounts' character counts). World thread.
+        void MoveToAccount(uint32 charGuid, uint32 fromAccount, uint32 toAccount);
+        // A player logs in a character that is still an offline member of the party of another
+        // character of his account (it was his bot there): it leaves that party, he starts on
+        // his own (account doc §3).
+        void LeaveAltsParty(uint32 charGuid);
+
+        std::unordered_set<uint32> m_accountBots;   // char guids (IsAccountBot)
+        mutable std::mutex m_accountBotsLock;
 
         std::atomic<bool> m_enabled{ true };
         std::vector<Return> m_returns;

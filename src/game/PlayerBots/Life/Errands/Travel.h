@@ -1,8 +1,9 @@
 /*
  * Bot daily life (PlayerBots/Life): a bot far from someone it should join travels there on its
  * own, as a player would (design doc .kiro/docs/2026-11-21-companion-presence.md §2.4, user
- * 2026-11-21: "both ends real, the middle simulated"). Used by a companion left behind that no
- * warlock will summon (PartyBotAI; who summons is the Commander's, GatherPlanner).
+ * 2026-11-21: "both ends real, the middle simulated"). Used by a party bot left behind that no
+ * warlock will summon (PartyBotAI, companions and temporary bots alike: none is teleported to
+ * the leader; who summons is the Commander's, GatherPlanner).
  *
  *  - Begin: how long the journey takes (Commander/Perception/Spatial/TravelTime::JourneyOf: run,
  *    flight path, boat), clamped to MIN_SEC..MAX_SEC; one party line where it is and how long
@@ -20,8 +21,10 @@
  *      else on his map, beyond the visibility distance: first ground he walked lately
  *      (LeaderTrail), else open ground around him with a walk to him (from the side the bot
  *      comes from). On another map it first goes there hidden (invisible, next to him), picks
- *      the spot on that map's thread, moves there and shows itself.
- *    Nowhere hidden found: it shows itself where it is (logged).
+ *      the spot on that map's thread, moves there and shows itself. He went on to another map
+ *      meanwhile: a new journey from there (quietly), never a teleport to him.
+ *    Nowhere hidden found: it stays hidden and looks again every HIDDEN_RETRY_MS; it shows
+ *    itself where it is once he cannot see it there, or after HIDDEN_GIVE_UP_MS (logged).
  *  - Not to a battleground: it waits on the road.
  *
  * Map thread of the bot (Update runs on the map it is on: the spot is picked after the hidden
@@ -40,6 +43,14 @@ class Player;
 
 namespace Life
 {
+    // How fast this traveller gets about (a companion's friend trait, Companions/Affinity/Traits:
+    // 熟路, 神行). Default: as the road says.
+    struct TravelPace
+    {
+        float timeRate = 1.0f;
+        bool skipsSailing = false;      // no wait for the ship at the docks
+    };
+
     // Per bot (a member of its AI). Plain data.
     struct TravelState
     {
@@ -58,6 +69,7 @@ namespace Life
         uint32 sailMs = 0;          // 0: no sea to cross
         bool sailSaid = false;
         uint32 hiddenSinceMs = 0;
+        uint32 nextTryMs = 0;       // hidden: the next look for a spot out of his sight
         // Hearthing: the journey from home, and the one from here if the cast breaks.
         uint32 fromHomeSec = 0;
         bool fromHomeSails = false;
@@ -70,6 +82,7 @@ namespace Life
         uint32 roadSinceMs = 0;
         uint32 roadMs = 0;
         uint32 nextHopMs = 0;
+        TravelPace pace;            // this journey's (Begin)
     };
 
     namespace Travel
@@ -78,7 +91,12 @@ namespace Life
         constexpr uint32 MAX_SEC = 10 * MINUTE;
         constexpr float SIGHT_MARGIN_YD = 25.0f;    // beyond his visibility distance
         constexpr float MAX_WALK_FACTOR = 2.5f;     // the walk in at most this times the straight way
-        constexpr uint32 HIDDEN_GIVE_UP_MS = 15 * IN_MILLISECONDS;
+        // Hidden next to him with no spot out of his sight: tries again every HIDDEN_RETRY_MS
+        // (he walks, his trail grows); shows itself there after HIDDEN_GIVE_UP_MS.
+        constexpr uint32 HIDDEN_RETRY_MS = 3 * IN_MILLISECONDS;
+        constexpr uint32 HIDDEN_GIVE_UP_MS = 60 * IN_MILLISECONDS;
+        // Ground he walked lately counts up to this many sight distances away.
+        constexpr float TRAIL_MAX_SIGHTS = 3.0f;
         // The hearthstone (presence §2.4, P4: cast for real): when home is on the way, the
         // journey from home plus the cast saves at least HEARTH_GAIN_SEC.
         constexpr uint32 HEARTHSTONE = 6948;
@@ -112,7 +130,8 @@ namespace Life
         // Could `who` see `me`: the same map and instance, within its visibility distance (+ margin).
         bool InSight(Player const* me, Player const* who);
 
-        void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags);
+        void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags,
+                   TravelPace const& pace = TravelPace());
         // It came into the world where he can see it (a companion called over, logging in at its
         // place next to him): hidden at once, then out of his sight and walking in like an
         // arrival. The caller hides it before the world shows it (at login).

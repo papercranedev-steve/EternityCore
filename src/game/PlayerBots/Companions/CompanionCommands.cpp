@@ -27,15 +27,23 @@
  *            <tag,tag,...>;<name>
  *     PBCMP;BLOCK;<guid>;<gate key>;<text>   after its C line, online only: an open gate's service
  *            cannot be had now (Talk services' Blockers: "缺传送门符文")
+ *     PBCMP;TRAIT;<guid>;<affinity it came at, 80 / 90>;<key>;<rarity 0 common, 1 rare, 2 epic>;
+ *            <label>;<text>   after its C line: a friend trait he has (Affinity/Traits)
  *     PBCMP;SLOTS;<used>;<total>;<max>;<level of the next free one, 0 = all open>;<can buy 0/1>;
  *            <copper of the next one to buy>;<levels the free ones open at, l,l,...>
  *            (after BEGIN; companion slots doc)
  *     PBCMP;END
+ *     PBCMP;ACC;<guid>;<1 a companion who joined your account, 2 a character you made>   after its C
+ *            line: one of your account's characters (companion account doc §5; affinity 0 for
+ *            your own ones), called over like a companion, takes no slot
  *     C lines with state 3 are former companions (故人): no slot, not called over.
  *   .partybot farewell <guid>    道别: he becomes a former companion (leaves you if with you)
  *   .partybot rehire <guid>      a former companion comes back (needs a free slot; comes over if he can)
  *   .partybot forget <guid>      永别: a former companion's character is deleted, he lives on as a stranger
  *   .partybot buyslot            buys the next companion slot (all free ones open)
+ *   .partybot joinaccount <guid> a companion at affinity 100 joins your account (companion account doc)
+ *   .partybot sendback <guid>    one who joined your account goes back to being your companion
+ *                                (a former one without a free slot)
  */
 
 #include "Chat.h"
@@ -45,6 +53,7 @@
 #include "Companions/Affinity/Gates.h"
 #include "Companions/Slots/Slots.h"
 #include "Companions/Talk/TalkService.h"
+#include "Companions/Talk/Talk.h"
 #include "Population/PopulationMgr.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
@@ -52,6 +61,8 @@
 #include "Shared/TownGates.h"
 #include "Shared/TalentSpread.h"
 #include "PartyBotAI.h"
+#include "PlayerBotMgr.h"
+#include "Shared/BotChat.h"
 #include "ObjectMgr.h"
 #include "ObjectAccessor.h"
 #include "QuestDef.h"
@@ -81,9 +92,25 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
     };
 
     std::vector<Companions::CompanionInfo> companions = sCompanionMgr.OfRecruiter(player->GetGUIDLow());
-    // (a trial partner is no companion yet: not on the panel, recruiting doc §2.2)
+    // (a trial partner is no companion yet: not on the panel, recruiting doc §2.2; one who joined
+    // an account is listed with that account's characters below)
     companions.erase(std::remove_if(companions.begin(), companions.end(),
-        [](Companions::CompanionInfo const& info) { return info.trial; }), companions.end());
+        [](Companions::CompanionInfo const& info) { return info.trial || info.inAccount; }), companions.end());
+    // The other characters of his account (companion account doc §5): who joined it, his own ones.
+    std::unordered_map<uint32, uint32> accountKinds;
+    for (Companions::CompanionMgr::AccountCharacter const& character : sCompanionMgr.AccountCharactersOf(player))
+    {
+        Companions::CompanionInfo info;
+        if (Companions::CompanionInfo const* known = sCompanionMgr.Find(character.charGuid))
+            info = *known;
+        info.charGuid = character.charGuid;
+        if (character.kind == Companions::CompanionMgr::AccountKind::Own)
+            info.affinity = 0;
+        else
+            info.affinity = sCompanionMgr.GetAffinity(character.charGuid);
+        accountKinds[character.charGuid] = uint32(character.kind);
+        companions.push_back(std::move(info));
+    }
     uint32 const maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
     std::unordered_map<uint32, Row> rows;
     std::string offline;    // guids for the database, "1,2,3"
@@ -184,29 +211,46 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
            << info.affinity << ";" << row.state << ";" << row.zone << ";" << info.recruitedAt << ";"
            << tags << ";" << row.name;
         SendSysMessage(ss.str().c_str());
+        auto const kind = accountKinds.find(info.charGuid);
+        if (kind != accountKinds.end())
+            PSendSysMessage("PBCMP;ACC;%u;%u", info.charGuid, kind->second);
         for (Companions::Talk::Blocker const& b : row.blockers)
             PSendSysMessage("PBCMP;BLOCK;%u;%s;%s", info.charGuid, b.gateKey.c_str(), b.text.c_str());
+        Companions::TraitPair const traits = sCompanionMgr.GetTraits(info.charGuid);
+        for (Companions::Traits::Trait trait : { traits.life, traits.combat })
+            if (Companions::Traits::Info const* t = Companions::Traits::Of(trait))
+                PSendSysMessage("PBCMP;TRAIT;%u;%u;%s;%u;%s;%s", info.charGuid, Companions::Traits::TierAt(t->tier), t->key,
+                    uint32(t->rarity), t->label, Companions::Traits::TextFor(*t, info.charGuid).c_str());
     }
 
     SendSysMessage("PBCMP;END");
     return true;
 }
 
-// .partybot callover <guid>: one of your companions comes to you (the companions panel).
-// PBOK;<name>;callover | PBERR;<name>;<notcompanion|notyours|online|full|failed>
+// .partybot callover <guid> [role]: one of your companions (or of your account's characters)
+// comes to you (the companions panel); role: auto, tank, healer, meleedps, rangedps (default auto).
+// PBOK;<name>;callover | PBERR;<name>;<notcompanion|notyours|online|full|failed|usage>
 bool ChatHandler::HandlePartyBotCallOverCommand(char* args)
 {
     Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
     uint32 guid = 0;
     if (!player || !ExtractUInt32(&args, guid))
     {
-        SendSysMessage("PBERR;;usage;.partybot callover <guid>");
+        SendSysMessage("PBERR;;usage;.partybot callover <guid> [role]");
         SetSentErrorMessage(true);
         return false;
     }
     std::string name;
     sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, guid), name);
-    std::string const error = sCompanionMgr.CallOver(player, guid, ROLE_INVALID, true);
+    CombatBotRoles role = ROLE_INVALID;
+    if (char* roleArg = ExtractLiteralArg(&args))
+        if (!ParsePartyBotRole(roleArg, sObjectMgr.GetPlayerClassByGUID(ObjectGuid(HIGHGUID_PLAYER, guid)), role))
+        {
+            PSendSysMessage("PBERR;%s;usage", name.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        }
+    std::string const error = sCompanionMgr.CallOver(player, guid, uint8(role), true);
     if (!error.empty())
     {
         PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
@@ -291,6 +335,55 @@ bool ChatHandler::HandlePartyBotForgetCommand(char* args)
     if (memberId)
         sPopulationMgr.ReturnToRoster(memberId, uint8(std::min<uint32>(level, 255)));
     PSendSysMessage("PBOK;%s;forget", name.c_str());
+    return true;
+}
+
+// .partybot joinaccount <guid>: PBOK;<name>;joinaccount
+//                               | PBERR;<name>;<notcompanion|notyours|inaccount|locked|accountfull>
+// (online and in your group he says his line, as after the talk window's yes)
+bool ChatHandler::HandlePartyBotJoinAccountCommand(char* args)
+{
+    Player* player = nullptr;
+    uint32 guid = 0;
+    std::string name;
+    if (!ExtractCompanionSlotTarget(&args, ".partybot joinaccount <guid>", player, guid, name))
+        return false;
+    std::string const error = sCompanionMgr.JoinAccount(player, guid);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, guid));
+    if (bot && bot->IsInWorld() && bot->GetGroup() && bot->GetGroup() == player->GetGroup())
+    {
+        std::string const line = Companions::Talk::Line(Companions::Talk::ContextOf(player, bot), "account.join.done");
+        if (!line.empty())
+            BotShared::BotChat::SayToParty(bot, line);
+    }
+    PSendSysMessage("PBOK;%s;joinaccount", name.c_str());
+    return true;
+}
+
+// .partybot sendback <guid>: PBOK;<name>;sendback;<1 a companion again, 0 a former one (no free slot)>
+//                            | PBERR;<name>;<notcompanion|notyours|notinaccount|self|failed>
+bool ChatHandler::HandlePartyBotSendBackCommand(char* args)
+{
+    Player* player = nullptr;
+    uint32 guid = 0;
+    std::string name;
+    if (!ExtractCompanionSlotTarget(&args, ".partybot sendback <guid>", player, guid, name))
+        return false;
+    bool parted = false;
+    std::string const error = sCompanionMgr.SendBack(player, guid, parted);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("PBOK;%s;sendback;%u", name.c_str(), parted ? 0 : 1);
     return true;
 }
 

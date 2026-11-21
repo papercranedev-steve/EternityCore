@@ -145,6 +145,8 @@ ChatCommand * ChatHandler::getCommandTable()
         { "rehire",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRehireCommand,      "", nullptr },
         { "forget",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotForgetCommand,      "", nullptr },
         { "buyslot",    SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotBuySlotCommand,     "", nullptr },
+        { "joinaccount", SEC_ADMINISTRATOR,     false, &ChatHandler::HandlePartyBotJoinAccountCommand, "", nullptr },
+        { "sendback",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotSendBackCommand,    "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

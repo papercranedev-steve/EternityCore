@@ -69,6 +69,14 @@ namespace Companions
         uint32 const BENCH_CHECK_MS = MINUTE * IN_MILLISECONDS;
         uint32 const BENCH_SETTLE_SEC = 2 * MINUTE;
 
+        // The account the character is saved on (the name cache: an online bot's session has a
+        // generated id, PlayerBotMgr::AddBot), 0 = unknown.
+        uint32 SavedAccountOf(uint32 charGuid)
+        {
+            PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid);
+            return data ? data->uiAccount : 0;
+        }
+
         uint32 TrainedUpToLevel(Player const* bot)
         {
             uint32 const span = UNTRAINED_LEVELS_MAX - UNTRAINED_LEVELS_MIN + 1;
@@ -203,6 +211,16 @@ namespace Companions
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `trial` TINYINT UNSIGNED NOT NULL DEFAULT 0"
                 " COMMENT '1 = a trial partner (搭伙, recruiting doc), not a companion yet', ADD COLUMN `trial_quests` TINYINT UNSIGNED NOT NULL DEFAULT 0"
                 " COMMENT 'quests done with the player while a trial partner' AFTER `parted`");
+        std::unique_ptr<QueryResult> traits(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'trait_life'"));
+        if (!traits)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `trait_life` VARCHAR(24) NOT NULL DEFAULT ''"
+                " COMMENT 'friend trait key rolled at affinity 80 (Affinity/Traits), empty = not yet', ADD COLUMN `trait_combat` VARCHAR(24) NOT NULL DEFAULT ''"
+                " COMMENT 'friend trait key rolled at affinity 90' AFTER `trial_quests`");
+        std::unique_ptr<QueryResult> inAccount(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'in_account'"));
+        if (!inAccount)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `in_account` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = joined his player''s account at affinity 100 (account doc)', ADD COLUMN `join_asked` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = asked the player once to join (Account/JoinOffer)' AFTER `trait_combat`");
         std::unique_ptr<QueryResult> firstOffered(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion_owner` LIKE 'first_offered'"));
         if (!firstOffered)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion_owner` ADD COLUMN `first_offered` TINYINT UNSIGNED NOT NULL DEFAULT 0"
@@ -226,6 +244,10 @@ namespace Companions
         m_trialEnds.clear();
         m_pending.clear();
         m_returns.clear();
+        {
+            std::lock_guard<std::mutex> guard(m_accountBotsLock);
+            m_accountBots.clear();
+        }
         m_pastQuestsPending.clear();
         m_professionsPending.clear();
         m_available = EnsureTable();
@@ -237,7 +259,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs`, c.`parted`, c.`trial`, c.`trial_quests` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs`, c.`parted`, c.`trial`, c.`trial_quests`, c.`trait_life`, c.`trait_combat`, c.`in_account`, c.`join_asked` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -263,6 +285,12 @@ namespace Companions
                 info.parted = f[13].GetUInt8() != 0;
                 info.trial = f[14].GetUInt8() != 0;
                 info.trialQuests = f[15].GetUInt32();
+                if (Traits::Info const* life = Traits::Find(f[16].GetCppString()))
+                    info.traitLife = life->trait;
+                if (Traits::Info const* combat = Traits::Find(f[17].GetCppString()))
+                    info.traitCombat = combat->trait;
+                info.inAccount = f[18].GetUInt8() != 0;
+                info.joinAsked = f[19].GetUInt8() != 0;
                 // (a trial ends when he leaves the world: the server stopped under him)
                 if (info.trial)
                     m_trialEnds.push_back(info.charGuid);
@@ -427,6 +455,34 @@ namespace Companions
             CharacterDatabase.PExecute("UPDATE `custom_companion` SET `affinity` = %u WHERE `char_guid` = %u", info.affinity, charGuid);
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u: affinity set to %u.", charGuid, info.affinity);
         return info.affinity;
+    }
+
+    TraitPair CompanionMgr::GetTraits(uint32 charGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        TraitPair pair;
+        if (CompanionInfo const* info = Find(charGuid))
+        {
+            pair.life = info->traitLife;
+            pair.combat = info->traitCombat;
+        }
+        return pair;
+    }
+
+    void CompanionMgr::SetTrait(uint32 charGuid, Traits::Tier tier, Traits::Trait trait)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end())
+            return;
+        CompanionInfo& info = itr->second;
+        bool const life = tier == Traits::Tier::Life;
+        (life ? info.traitLife : info.traitCombat) = trait;
+        Traits::Info const* row = Traits::Of(trait);
+        if (!info.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `%s` = '%s' WHERE `char_guid` = %u",
+                life ? "trait_life" : "trait_combat", row ? row->key : "", charGuid);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u: %s trait %s.", charGuid, life ? "life" : "combat", row ? row->key : "cleared");
     }
 
     bool CompanionMgr::CountMoneyGift(uint32 charGuid, uint32 max)
@@ -744,6 +800,7 @@ namespace Companions
     {
         if (!IsEnabled() || !m_available || !charGuid)
             return;
+        LeaveAltsParty(charGuid);
         ObjectGuid const leader(HIGHGUID_PLAYER, charGuid);
         for (Return const& r : m_returns)
             if (r.leader == leader)
@@ -770,19 +827,25 @@ namespace Companions
                 itr = m_returns.erase(itr);
                 continue;
             }
+            uint32 const leaderAccount = SavedAccountOf(itr->leader.GetCounter());
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
             {
                 uint32 const guid = slot.guid.GetCounter();
                 CompanionInfo const* info = Find(guid);
-                if (slot.guid == itr->leader || !info || info->temporary || itr->sent.count(guid))
+                // (an account character: his own one that was his bot here, account doc §3)
+                bool const accountChar = !info && leaderAccount && SavedAccountOf(guid) == leaderAccount;
+                if (slot.guid == itr->leader || (!info && !accountChar) || (info && info->temporary) || itr->sent.count(guid))
                     continue;
                 // (still leaving from his last session: next time)
                 if (sPlayerBotMgr.HasBot(guid) || sObjectAccessor.FindPlayerNotInWorld(slot.guid))
                     continue;
                 itr->sent.insert(guid);
+                if (accountChar)
+                    MarkAccountBot(guid);
                 PartyBotAI* ai = new PartyBotAI(itr->leader);
                 if (!sPlayerBotMgr.AddBot(guid, false, ai, true))
                 {
+                    ForgetAccountBot(guid);
                     delete ai;
                     sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Companion] Could not log in companion %u with its leader %u.", guid, itr->leader.GetCounter());
                     continue;
@@ -808,11 +871,15 @@ namespace Companions
     std::string CompanionMgr::CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly)
     {
         CompanionInfo const* info = Find(charGuid);
-        if (!IsEnabled() || !m_available || !leader || !leader->IsInWorld() || !info || info->temporary || info->trial)
+        if (!IsEnabled() || !m_available || !leader || !leader->IsInWorld())
             return "notcompanion";
-        if (ownerOnly && info->recruiterGuid != leader->GetGUIDLow())
+        // A companion, or one of the leader's own characters (account doc §3).
+        bool const ownChar = !info && IsOfAccount(leader, charGuid);
+        if ((!info && !ownChar) || (info && (info->temporary || info->trial)))
+            return "notcompanion";
+        if (ownerOnly && !MayManage(leader, charGuid))
             return "notyours";
-        if (info->parted)
+        if (info && info->parted)
             return "former";
         ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
         if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
@@ -828,16 +895,196 @@ namespace Companions
             if (Group* other = sObjectMgr.GetGroupByMember(guid))
                 Player::RemoveFromGroup(other, guid);
 
+        if (ownChar)
+            MarkAccountBot(charGuid);
         PartyBotAI* ai = new PartyBotAI(leader->GetObjectGuid());
         ai->m_role = CombatBotRoles(role);
         ai->m_roleLocked = CombatBotRoles(role) != ROLE_INVALID;
         if (!sPlayerBotMgr.AddBot(charGuid, false, ai, true))
         {
+            ForgetAccountBot(charGuid);
             delete ai;
             return "failed";
         }
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s calls companion %u over.", leader->GetName(), charGuid);
         return "";
+    }
+
+    bool CompanionMgr::IsOfAccount(Player const* owner, uint32 charGuid)
+    {
+        if (!owner || owner->IsBot() || !owner->GetSession() || !charGuid || charGuid == owner->GetGUIDLow())
+            return false;
+        uint32 const account = owner->GetSession()->GetAccountId();
+        return account && SavedAccountOf(charGuid) == account;
+    }
+
+    bool CompanionMgr::MayManage(Player const* owner, uint32 charGuid) const
+    {
+        if (!owner)
+            return false;
+        CompanionInfo const* info = Find(charGuid);
+        if (info && !info->inAccount)
+            return info->recruiterGuid == owner->GetGUIDLow();
+        return IsOfAccount(owner, charGuid);
+    }
+
+    bool CompanionMgr::IsAccountBot(uint32 charGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_accountBotsLock);
+        return m_accountBots.count(charGuid) != 0;
+    }
+
+    void CompanionMgr::MarkAccountBot(uint32 charGuid)
+    {
+        std::lock_guard<std::mutex> guard(m_accountBotsLock);
+        m_accountBots.insert(charGuid);
+    }
+
+    void CompanionMgr::ForgetAccountBot(uint32 charGuid)
+    {
+        std::lock_guard<std::mutex> guard(m_accountBotsLock);
+        m_accountBots.erase(charGuid);
+    }
+
+    std::vector<CompanionMgr::AccountCharacter> CompanionMgr::AccountCharactersOf(Player const* owner) const
+    {
+        std::vector<AccountCharacter> list;
+        if (!owner || owner->IsBot() || !owner->GetSession())
+            return list;
+        std::vector<PlayerCacheData const*> chars;
+        sObjectMgr.GetPlayerDataForAccount(owner->GetSession()->GetAccountId(), chars);
+        for (PlayerCacheData const* data : chars)
+        {
+            if (data->uiGuid == owner->GetGUIDLow())
+                continue;
+            AccountCharacter entry;
+            entry.charGuid = data->uiGuid;
+            entry.kind = IsInAccount(data->uiGuid) ? AccountKind::Companion : AccountKind::Own;
+            list.push_back(entry);
+        }
+        return list;
+    }
+
+    void CompanionMgr::MoveToAccount(uint32 charGuid, uint32 fromAccount, uint32 toAccount)
+    {
+        CharacterDatabase.PExecute("UPDATE `characters` SET `account` = %u WHERE `guid` = %u", toAccount, charGuid);
+        // (online: his next save goes to the new account, Player::SaveToDB)
+        if (Player* bot = sObjectAccessor.FindPlayerNotInWorld(ObjectGuid(HIGHGUID_PLAYER, charGuid)))
+            if (bot->IsBot())
+                bot->EnableSaving(toAccount);
+        if (PlayerCacheData* data = sObjectMgr.GetPlayerDataByGUID(charGuid))
+            data->uiAccount = toAccount;
+        if (fromAccount)
+            sWorld.UpdateRealmCharCount(fromAccount);
+        sWorld.UpdateRealmCharCount(toAccount);
+    }
+
+    std::string CompanionMgr::JoinAccount(Player* owner, uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (!owner || owner->IsBot() || !owner->GetSession() || itr == m_companions.end() || itr->second.temporary || itr->second.trial)
+            return "notcompanion";
+        CompanionInfo& info = itr->second;
+        if (info.inAccount)
+            return "inaccount";
+        if (info.recruiterGuid != owner->GetGUIDLow())
+            return "notyours";
+        if (GetAffinity(charGuid) < MAX_AFFINITY)
+            return "locked";
+        uint32 const account = owner->GetSession()->GetAccountId();
+        std::vector<PlayerCacheData const*> chars;
+        sObjectMgr.GetPlayerDataForAccount(account, chars);
+        if (chars.size() >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM))
+            return "accountfull";
+
+        MoveToAccount(charGuid, ResolveAccount(), account);
+        info.inAccount = true;
+        info.joinAsked = true;
+        info.staying = false;
+        info.expeditionSecs = 0;
+        m_benched.erase(charGuid);
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `in_account` = 1, `join_asked` = 1, `staying` = 0, `expedition_secs` = 0"
+            " WHERE `char_guid` = %u", charGuid);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] Companion %u joined the account of %s (%u).", charGuid, owner->GetName(), account);
+        return "";
+    }
+
+    void CompanionMgr::MarkJoinAsked(uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || itr->second.joinAsked)
+            return;
+        itr->second.joinAsked = true;
+        if (!itr->second.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `join_asked` = 1 WHERE `char_guid` = %u", charGuid);
+    }
+
+    std::string CompanionMgr::SendBack(Player* owner, uint32 charGuid, bool& parted)
+    {
+        parted = false;
+        if (!owner)
+            return "notcompanion";
+        if (charGuid == owner->GetGUIDLow())
+            return "self";
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || itr->second.temporary)
+            return "notcompanion";
+        CompanionInfo& info = itr->second;
+        if (!info.inAccount)
+            return "notinaccount";
+        if (!IsOfAccount(owner, charGuid))
+            return "notyours";
+        uint32 const account = ResolveAccount();
+        if (!account)
+            return "failed";
+
+        // (before he counts: an account character takes no slot)
+        parted = !HasFreeSlot(owner);
+        MoveToAccount(charGuid, SavedAccountOf(charGuid), account);
+        info.inAccount = false;
+        info.recruiterGuid = owner->GetGUIDLow();
+        info.parted = parted;
+        info.staying = false;
+        // (no offline life nor bench growth for the time in the account)
+        info.lastSeen = uint32(time(nullptr));
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `in_account` = 0, `recruiter_guid` = %u, `parted` = %u, `staying` = 0,"
+            " `last_seen` = %u WHERE `char_guid` = %u", info.recruiterGuid, parted ? 1 : 0, info.lastSeen, charGuid);
+
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        Player* bot = sObjectAccessor.FindPlayer(guid);
+        PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+        if (parted)
+        {
+            // As a goodbye (Part): online he walks off, else he leaves the group he is in.
+            if (ai)
+                ai->Dismiss();
+            else if (Group* group = sObjectMgr.GetGroupByMember(guid))
+                Player::RemoveFromGroup(group, guid);
+        }
+        else if (!ai)
+        {
+            // (an offline member of another character's party: his place is with his owner now)
+            if (Group* group = sObjectMgr.GetGroupByMember(guid))
+                if (!owner->GetGroup() || owner->GetGroup() != group)
+                    Player::RemoveFromGroup(group, guid);
+        }
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s sent account character %u back as a %s.", owner->GetName(), charGuid,
+            parted ? "former companion" : "companion");
+        return "";
+    }
+
+    void CompanionMgr::LeaveAltsParty(uint32 charGuid)
+    {
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        Group* group = sObjectMgr.GetGroupByMember(guid);
+        if (!group || group->GetLeaderGuid() == guid)
+            return;
+        ObjectGuid const leader = group->GetLeaderGuid();
+        uint32 const account = SavedAccountOf(charGuid);
+        if (!account || SavedAccountOf(leader.GetCounter()) != account || sObjectAccessor.FindPlayerNotInWorld(leader))
+            return;
+        Player::RemoveFromGroup(group, guid);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u logs in: leaves the party of his account's character %u.", charGuid, leader.GetCounter());
     }
 
     CompanionMgr::SlotCount CompanionMgr::SlotsOf(Player const* owner) const
@@ -847,7 +1094,7 @@ namespace Companions
             return count;
         uint32 const ownerGuid = owner->GetGUIDLow();
         for (auto const& itr : m_companions)
-            if (itr.second.recruiterGuid == ownerGuid && !itr.second.temporary && !itr.second.parted)
+            if (itr.second.recruiterGuid == ownerGuid && !itr.second.temporary && !itr.second.parted && !itr.second.inAccount)
                 ++count.used;
         auto const bought = m_slotsBought.find(ownerGuid);
         count.total = std::min(Slots::FreeAt(owner->GetLevel()) + (bought != m_slotsBought.end() ? bought->second : 0), Slots::Max());
@@ -892,6 +1139,8 @@ namespace Companions
         if (!owner || itr == m_companions.end() || itr->second.temporary)
             return "notcompanion";
         CompanionInfo& info = itr->second;
+        if (info.inAccount)
+            return "inaccount";
         if (info.recruiterGuid != owner->GetGUIDLow())
             return "notyours";
         if (info.parted)
@@ -934,6 +1183,8 @@ namespace Companions
         if (!owner || itr == m_companions.end() || itr->second.temporary)
             return "notcompanion";
         CompanionInfo& info = itr->second;
+        if (info.inAccount)
+            return "inaccount";
         if (info.recruiterGuid != owner->GetGUIDLow())
             return "notyours";
         if (!info.parted)
@@ -956,6 +1207,8 @@ namespace Companions
         auto itr = m_companions.find(charGuid);
         if (!owner || itr == m_companions.end() || itr->second.temporary)
             return "notcompanion";
+        if (itr->second.inAccount)
+            return "inaccount";
         if (itr->second.recruiterGuid != owner->GetGUIDLow())
             return "notyours";
         if (!itr->second.parted)
@@ -981,7 +1234,7 @@ namespace Companions
         {
             CompanionInfo& info = itr.second;
             uint32 const away = info.lastSeen ? info.lastSeen : info.recruitedAt;
-            if (info.temporary || info.home || !away || now < away + HOME_AFTER_SEC)
+            if (info.temporary || info.inAccount || info.home || !away || now < away + HOME_AFTER_SEC)
                 continue;
             ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
             // (in the world, or with a group: with someone, not at home)
@@ -1042,7 +1295,7 @@ namespace Companions
         {
             CompanionInfo& info = itr.second;
             auto owner = owners.find(info.recruiterGuid);
-            if (info.temporary || info.parted || owner == owners.end() || !owner->second.player)
+            if (info.temporary || info.parted || info.inAccount || owner == owners.end() || !owner->second.player)
                 continue;
             ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
             // On the bench: out of the world and not in his party. With him: no expedition.
@@ -1090,10 +1343,13 @@ namespace Companions
             // Expedition (bench doc §3): his active time only; stops while he has MAX_UNOPENED of its parcels.
             if (!owner->second.active)
                 continue;
-            uint32 const secs = std::min(info.expeditionSecs + tickSecs, Expedition::EVERY_SECS);
+            // (远行, a friend trait: more often)
+            uint32 const every = GetTraits(info.charGuid).life == Traits::Trait::Wanderer
+                ? Expedition::EVERY_SECS * 3 / 4 : Expedition::EVERY_SECS;
+            uint32 const secs = std::min(info.expeditionSecs + tickSecs, every);
             // (past his first PARCEL_SENDERS benched ones: nobody else sends)
-            uint32 const rank = secs >= Expedition::EVERY_SECS ? BenchRank(owner->second.player, info) : 0;
-            if (secs >= Expedition::EVERY_SECS && rank < PARCEL_SENDERS
+            uint32 const rank = secs >= every ? BenchRank(owner->second.player, info) : 0;
+            if (secs >= every && rank < PARCEL_SENDERS
                 && Expedition::Unopened(info.charGuid, info.recruiterGuid) < Expedition::MAX_UNOPENED)
             {
                 SendParcel(owner->second.player, info, *benched, rank);
@@ -1130,7 +1386,7 @@ namespace Companions
         for (auto const& itr : m_companions)
         {
             CompanionInfo const& other = itr.second;
-            if (other.charGuid == info.charGuid || other.temporary || other.parted || other.recruiterGuid != info.recruiterGuid)
+            if (other.charGuid == info.charGuid || other.temporary || other.parted || other.inAccount || other.recruiterGuid != info.recruiterGuid)
                 continue;
             bool const earlier = other.recruitedAt < info.recruitedAt
                 || (other.recruitedAt == info.recruitedAt && other.charGuid < info.charGuid);
@@ -1339,7 +1595,8 @@ namespace Companions
         for (auto& itr : m_companions)
         {
             CompanionInfo& info = itr.second;
-            if (info.temporary)
+            // (an account character has no offline life: the player may have been playing him)
+            if (info.temporary || info.inAccount)
                 continue;
             Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, info.charGuid));
             PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;

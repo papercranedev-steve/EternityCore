@@ -5,8 +5,10 @@
  * they hearth to (Life/Errands/Travel, WalkAway) and where they go back to after 4 hours away
  * (CompanionMgr::SendHome).
  *
- * Seen as a change of his bind point while this bot is within WITH_YD of him (the innkeeper
- * talk itself is not watched); one line in party chat. Not a bot that waits elsewhere.
+ * Always his bind point while in his party (user 2026-11-21: "直接和玩家绑定同一炉石"): set as
+ * soon as it differs (joining him, his new inn, also while it waits elsewhere; the innkeeper
+ * talk itself is not watched). One line in party chat only when it saw him bind (within
+ * WITH_YD of him); joining is silent. So it hearths home with him (HearthAlong).
  *
  * Map thread of the bot.
  */
@@ -34,7 +36,10 @@ namespace HomeBind
     float constexpr WITH_YD = 30.0f;
     float constexpr SAME_YD = 5.0f;
 
-    void Update(Player* me, Player* leader, State& state, bool staying, std::vector<std::string> const& tags);
+    // Two bind points at one inn (within SAME_YD).
+    bool SameBind(WorldLocation const& a, WorldLocation const& b);
+
+    void Update(Player* me, Player* leader, State& state, std::vector<std::string> const& tags);
 }
 }
 

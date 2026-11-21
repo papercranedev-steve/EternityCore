@@ -29,6 +29,7 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "GossipDef.h"
 #include "ScriptMgr.h"
 #include "Creature.h"
@@ -1014,6 +1015,9 @@ void WorldSession::HandleRepairItemOpcode(WorldPackets::Npc::RepairItem const& p
 
     // reputation discount
     float discountMod = _player->GetReputationPriceDiscount(unit);
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (PlayerAI* pPlayerAI = _player->AI())
+        discountMod *= pPlayerAI->RepairCostRate();
 
     if (packet.itemGuid)
     {

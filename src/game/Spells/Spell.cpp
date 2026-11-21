@@ -31,6 +31,7 @@
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Pet.h"
 #include "DynamicObject.h"
 #include "Group.h"
@@ -1798,6 +1799,11 @@ void Spell::DoSpellHitOnUnit(Unit* unit, uint32 effectMask)
                     }
                     return;
                 }
+
+                // A bot's own character (PlayerAI: companion friend traits).
+                if (Player* pTargetPlayer = unit->ToPlayer())
+                    if (PlayerAI* pTargetAI = pTargetPlayer->AI())
+                        pTargetAI->ChangeAuraDuration(m_spellInfo, m_spellAuraHolder->IsPositive(), duration);
             }
 
             if (duration != originalDuration)
@@ -3433,8 +3439,12 @@ SpellCastResult Spell::prepare(Aura* triggeredByAura, uint32 chance)
         m_casttime = m_spellInfo->GetCastTime(m_caster, this);
 
         if (Player* pPlayerCaster = m_caster->ToPlayer())
+        {
             if (pPlayerCaster->HasCheatOption(PLAYER_CHEAT_NO_CAST_TIME))
                 m_casttime = 0;
+            else if (PlayerAI* pCasterAI = pPlayerCaster->AI())
+                m_casttime = int32(m_casttime * pCasterAI->CastTimeRate(m_spellInfo));
+        }
 
         m_duration = m_spellInfo->CalculateDuration(m_caster);
 
@@ -5102,6 +5112,8 @@ void Spell::TakeReagents()
         return;
 
     Player* p_caster = (Player*)m_caster;
+    // A bot's own character may save one (PlayerAI: companion friend traits).
+    uint32 const savedReagent = p_caster->AI() ? p_caster->AI()->SavedReagent(m_spellInfo) : 0;
 
     for (uint32 x = 0; x < MAX_SPELL_REAGENTS; ++x)
     {
@@ -5135,6 +5147,9 @@ void Spell::TakeReagents()
         // if getItemTarget is also spell reagent
         if (m_targets.getItemTargetEntry() == itemid)
             m_targets.setItemTarget(nullptr);
+
+        if (savedReagent && itemid == savedReagent)
+            continue;
 
         p_caster->DestroyItemCount(itemid, itemcount, true);
     }
@@ -7499,6 +7514,8 @@ void Spell::Delayed()
         return;
 
     int32 delayTime = GetNextDelayAtDamageMsTime();
+    if (PlayerAI* pCasterAI = static_cast<Player*>(m_caster)->AI())
+        delayTime = int32(delayTime * pCasterAI->PushbackRate());
 
     if (int32(m_timer) + delayTime > m_casttime)
     {
@@ -7529,6 +7546,8 @@ void Spell::DelayedChannel()
         return;
 
     int32 delayTime = GetNextDelayAtDamageMsTime();
+    if (PlayerAI* pCasterAI = static_cast<Player*>(m_caster)->AI())
+        delayTime = int32(delayTime * pCasterAI->PushbackRate());
 
     if (int32(m_timer) < delayTime)
     {

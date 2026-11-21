@@ -175,7 +175,7 @@ namespace TownTrip
                 planner->Notes(me, leader, ask.notes);
                 shortfall += planner->Shortfall(me);
             }
-            if (shortfall)
+            if (shortfall && !state.paysOwnWay)
                 ask.options = {
                     { "pay", Phrases::Word("errand.opt.pay", "pay") },
                     { "yes", Phrases::Word("errand.opt.nopay", "yes") },

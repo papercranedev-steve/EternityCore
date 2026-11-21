@@ -324,6 +324,9 @@ class ChatHandler
         bool HandlePartyBotRehireCommand(char * args);
         bool HandlePartyBotForgetCommand(char * args);
         bool HandlePartyBotBuySlotCommand(char * args);
+        // account characters (companion account doc)
+        bool HandlePartyBotJoinAccountCommand(char * args);
+        bool HandlePartyBotSendBackCommand(char * args);
         bool ExtractCompanionSlotTarget(char** args, char const* usage, Player*& player, uint32& guid, std::string& name);
         bool HandlePartyBotCompanionCommand(char * args);   // PlayerBots/Companions/CompanionSheet.cpp
         bool HandlePartyBotTalkCommand(char * args);        // PlayerBots/Companions/Talk/TalkCommands.cpp

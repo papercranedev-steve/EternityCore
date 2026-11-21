@@ -29,6 +29,7 @@
 #include "SpellMgr.h"
 #include "GossipDef.h"
 #include "Player.h"
+#include "PlayerAI.h"
 #include "Group.h"
 #include "GameEventMgr.h"
 #include "PoolManager.h"
@@ -2230,6 +2231,11 @@ float Creature::GetAttackDistance(Unit const* pTarget) const
 
     // detected range auras
     finalDistance += pTarget->GetTotalAuraModifier(SPELL_AURA_MOD_DETECTED_RANGE);
+
+    // A bot's own character (PlayerAI: companion friend traits).
+    if (Player const* pTargetPlayer = pTarget->ToPlayer())
+        if (PlayerAI const* pTargetAI = pTargetPlayer->AI())
+            finalDistance *= pTargetAI->DetectedRangeRate();
 
     // "Minimum Aggro Radius for a mob seems to be combat range (5 yards)"
     float const minDistance = std::min(detectionRange, 5.0f);

@@ -12,6 +12,7 @@ namespace Talk
         {
             std::vector<std::unique_ptr<Service>> list;
             list.push_back(MakeBondService());
+            list.push_back(MakeAccountService());
             list.push_back(MakeStayService());
             list.push_back(MakeBagsService());
             list.push_back(MakePortalService());

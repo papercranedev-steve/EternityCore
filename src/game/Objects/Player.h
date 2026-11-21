@@ -1042,6 +1042,7 @@ class Player final: public Unit
         void SetLootGuid(ObjectGuid const& guid) { m_lootGuid = guid; }
         void RemovedInsignia(Player* looterPlr, Corpse* corpse);
         void SendLoot(ObjectGuid guid, LootType lootType, Player const* pVictim = nullptr);
+        void AddGatherExtra(Loot& loot);
         void SendLootRelease(ObjectGuid guid) const;
         void SendLootError(ObjectGuid guid, LootError error) const;
         void SendNotifyLootItemRemoved(uint8 lootSlot) const;
@@ -1970,6 +1971,7 @@ class Player final: public Unit
         // PlayerAI management
         PlayerAI* m_AI;
         PlayerAI* AI() { return m_AI; }
+        PlayerAI const* AI() const { return m_AI; }
         void SetAI(PlayerAI* otherAI) { m_AI = otherAI; }
         void SetControlledBy(Unit* pWho);
         void RemoveAI();

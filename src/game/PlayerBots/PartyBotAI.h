@@ -42,7 +42,9 @@
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Companions/ArtisanTrip.h"
 #include "Companions/Affinity/AffinitySources.h"
+#include "Companions/Affinity/TraitEffects.h"
 #include "Companions/Recruit/Trial.h"
+#include "Companions/Account/JoinOffer.h"
 #include "Life/Errands/QuestPickUp.h"
 #include "Life/Errands/QuestItemUse.h"
 #include "Life/Errands/GiveProvisions.h"
@@ -50,6 +52,7 @@
 #include "Life/Errands/LessonReminder.h"
 #include "Life/Pastimes/WaitAround.h"
 #include "Companions/Travel/Departure.h"
+#include "Companions/Travel/HearthAlong.h"
 #include "Companions/Travel/SummonOffer.h"
 #include "Life/Errands/Travel.h"
 #include "Life/Errands/WalkAway.h"
@@ -104,7 +107,7 @@ public:
     // The player who spawned the bot, while bot and player are in the same group and the bot
     // does not lead it.
     Player* GetPartyLeader() const override;
-    // Far behind the anchor it is teleported to (CatchesUpByTeleport), not walking back to it.
+    // Far behind the anchor (FarBehind): it travels there, not sitting down first.
     bool FillsUpAtOnce() override;
 
     // A recruited companion (Companions/CompanionMgr): loots corpses itself, keeps its round
@@ -123,16 +126,14 @@ public:
     bool UpdateProvisions(Player* pLeader);
     // Combat, a Commander plan, a resurrection first: their trades and casts stop for now.
     void PauseProvisions();
-    // Out of combat, far from its anchor: teleported there (UpdateAI; and StartResting fills up
-    // at once, it is about to be teleported). Party bots beyond PB_TELEPORT_TO_LEADER_YD;
-    // companions only on another map (their town trips and the leader's own business keep them
-    // apart on purpose: they walk, Life/Errands/TownTrip.h).
-    bool CatchesUpByTeleport(Player const* pAnchor) const;
-    static constexpr float PB_TELEPORT_TO_LEADER_YD = 100.0f;
-    // A companion far behind its anchor (another map, or beyond Summon::FAR_YD and out of his
-    // sight), out of combat: a warlock of the team will summon it (GatherPlanner::SummonComing:
-    // it waits, up to PB_SUMMON_WAIT_MS), else it travels there on its own (Life/Errands/Travel)
-    // and walks the last stretch (Arrival). True: busy, nothing else this tick (no teleport).
+    // Too far from its anchor to walk: another map, or beyond Summon::FAR_YD and out of his
+    // sight (closer it walks: a town trip, the leader at his own trainer, Life/Errands/TownTrip.h).
+    bool FarBehind(Player const* pAnchor) const;
+    // A party bot far behind its anchor (FarBehind), out of combat: a warlock of the team will
+    // summon it (GatherPlanner::SummonComing: it waits, up to PB_SUMMON_WAIT_MS), else it
+    // travels there on its own (Life/Errands/Travel) and walks the last stretch (Arrival).
+    // Companions and temporary bots alike: no party bot is teleported to the leader.
+    // True: busy, nothing else this tick.
     bool UpdateTravel(Player* pAnchor);
     // Out of the party while the player who led it sees it (kicked, `.partybot remove`, he left
     // the group): a companion says goodbye and leaves by hearthstone or on foot out of his
@@ -149,6 +150,32 @@ public:
     uint32 m_farSinceMs = 0;
     // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
     std::vector<std::string> const& PersonalityTags() const;
+
+    // A companion's friend traits (Companions/Affinity/TraitEffects.h): the PlayerAI hooks core
+    // code asks while this AI plays the character. Others have no traits (no change).
+    Companions::TraitEffects::State m_traitEffects;
+    void ChangeDamageTaken(Unit* attacker, uint32& damage, SpellEntry const* spell) override;
+    void ChangeHealingTaken(uint32& heal) override;
+    void ChangeAuraDuration(SpellEntry const* spell, bool positive, int32& duration) override;
+    void ChangeResurrection(uint32& health, uint32& mana) override;
+    float RegenRate() const override;
+    float CastTimeRate(SpellEntry const* spell) const override;
+    float PushbackRate() const override;
+    float LockoutRate() const override;
+    float FallDamageRate() const override;
+    float BreathRate() const override;
+    float SwimSpeedRate() const override;
+    float ReputationRate() const override;
+    float RepairCostRate() const override;
+    float SellPriceRate(ItemPrototype const* proto) const override;
+    float BuyPriceRate(ItemPrototype const* proto) const override;
+    float LootMoneyRate() const override;
+    float DurabilityLossRate() const override;
+    float DetectedRangeRate() const override;
+    int32 StealthDetectBonus() const override;
+    float CraftExtraChance(SpellEntry const* spell) const override;
+    uint32 SavedReagent(SpellEntry const* spell) override;
+    float GatherExtraChance() const override;
     // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/
     // HumanFollow.h), moved out of idle creatures' aggro range (FollowSpot.h); on a transport
     // the original random offset.
@@ -199,6 +226,8 @@ public:
     // The leader leaves by hearthstone or flight path: "shall we wait here?" (one bot asks,
     // Companions/Travel/Departure.h); a waiting warlock offers to summon him back (SummonOffer.h).
     Companions::Departure::State m_departure;
+    // He hearths, ours bound at the same inn: it hearths with him (Companions/Travel/HearthAlong.h).
+    Companions::HearthAlong::State m_hearthAlong;
     Companions::SummonOffer::State m_summonOffer;
     static constexpr uint32 PB_SUMMON_HELPERS_MS = 60 * IN_MILLISECONDS;   // nobody clicked: it gives up
     static constexpr uint32 PB_SUMMON_ACCEPT_MS = 125 * IN_MILLISECONDS;   // the confirmation's 2 minutes
@@ -233,6 +262,8 @@ public:
     Companions::AffinitySources::State m_affinitySources;
     // A trial partner (搭伙, Companions/Recruit/Trial.h): says the deal, offers to stay when due.
     Companions::Trial::State m_trial;
+    // At affinity 100 he asks once to join the player's account (Companions/Account/JoinOffer.h).
+    Companions::JoinOffer::State m_joinOffer;
     Life::ArtisanTask m_artisanTask;
     Life::NpcVisitState m_artisanVisit;
     // Out of combat: takes the class quest steps the flow wants from their givers near the leader
