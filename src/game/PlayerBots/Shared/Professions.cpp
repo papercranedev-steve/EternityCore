@@ -155,6 +155,13 @@ namespace Professions
         return KindOf(skill) != Kind::None;
     }
 
+    std::vector<uint32> const& Primaries()
+    {
+        static std::vector<uint32> const list = { ALCHEMY, BLACKSMITHING, ENCHANTING, ENGINEERING, HERBALISM,
+                                                  LEATHERWORKING, MINING, SKINNING, TAILORING };
+        return list;
+    }
+
     std::vector<uint32> const& Secondaries()
     {
         static std::vector<uint32> const list = { FIRST_AID, COOKING, FISHING };
@@ -185,6 +192,15 @@ namespace Professions
         }
         player->SetSkill(uint16(skill), uint16(std::max<uint32>(1, std::min(value, maxValue))), uint16(maxValue));
         return maxValue;
+    }
+
+    std::vector<TrainerRecipe> TrainerRecipes(uint32 skill)
+    {
+        std::vector<TrainerRecipe> out;
+        if (SkillData const* data = DataOf(skill))
+            for (RecipeLesson const& r : data->recipes)
+                out.push_back({ r.spellId, r.lesson.reqSkillValue });
+        return out;
     }
 
     uint32 LearnRecipes(Player* player, uint32 skill, std::function<bool(uint32 reqSkillValue, uint32 spellId)> const& keep)
@@ -304,10 +320,10 @@ namespace Professions
         for (uint32 spellId : spells)
             player->RemoveSpell(spellId, false, false);
 
-        for (uint32 skill : { ALCHEMY, BLACKSMITHING, ENCHANTING, ENGINEERING, HERBALISM, LEATHERWORKING, MINING,
-                              SKINNING, TAILORING, FIRST_AID, COOKING, FISHING })
-            if (player->HasSkill(uint16(skill)))
-                player->SetSkill(uint16(skill), 0, 0);
+        for (std::vector<uint32> const* list : { &Primaries(), &Secondaries() })
+            for (uint32 skill : *list)
+                if (player->HasSkill(uint16(skill)))
+                    player->SetSkill(uint16(skill), 0, 0);
 
         player->SetFreePrimaryProfessions(uint16(sWorld.getConfig(CONFIG_UINT32_MAX_PRIMARY_TRADE_SKILL)));
     }

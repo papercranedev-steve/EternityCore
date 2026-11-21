@@ -33,6 +33,11 @@ namespace BotShared
 
         // What repairing everything would cost now at `npc` (its reputation discount).
         uint32 RepairCost(Player* player, Creature const* npc);
+        // The same at no NPC in particular (no discount): money to keep for it.
+        uint32 RepairCost(Player const* player);
+        // What `needs` (Missing units) cost at list price: the item a vendor would sell for each
+        // (the best that matches, Goods::Better, of every item some vendor sells). Money to keep.
+        uint32 ListPrice(Player const* player, std::vector<Supplies::Need> const& needs);
         // Repairs all through the repair handler; returns the copper spent.
         uint32 RepairAll(Player* player, Creature* npc);
 

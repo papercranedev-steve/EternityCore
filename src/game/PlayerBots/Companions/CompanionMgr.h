@@ -20,8 +20,10 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+class PartyBotAI;
 class Player;
 
 namespace Companions
@@ -49,6 +51,8 @@ namespace Companions
         // 0..MAX_AFFINITY: what the player did for it (class quests, design doc 2026-11-18 §6).
         // Through Get/AddAffinity only (map threads change it).
         uint32 affinity = 0;
+        // Unix time it was last seen online (OfflineLife counts from it), 0 = never. World thread.
+        uint32 lastSeen = 0;
     };
 
     uint32 const MAX_AFFINITY = 100;
@@ -112,6 +116,10 @@ namespace Companions
         // Companions recruited before professions existed: given theirs once each is online as a
         // party bot (PastProfessions).
         void DecideProfessionsOfOnline();
+        // Who is online: a companion back for ARRIVE_SETTLE_MS (its AI has looked at itself)
+        // gets what it did while away (OfflineLife); last_seen is written every LAST_SEEN_MS.
+        void UpdatePresence();
+        void Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info);
 
         struct PendingLogin
         {
@@ -131,6 +139,11 @@ namespace Companions
         std::vector<PendingLogin> m_pending;
         std::vector<uint32> m_pastQuestsPending;    // char guids, see DecidePastQuestsOfOnline
         std::vector<uint32> m_professionsPending;   // char guids, see DecideProfessionsOfOnline
+        std::unordered_map<uint32, uint32> m_arrivingSinceMs;   // char guid -> m_nowMs first seen
+        std::unordered_set<uint32> m_present;                   // char guids arrived this session
+        uint32 m_presenceCheckMs = 0;
+        uint32 m_lastSeenWriteMs = 0;
+        float m_skillUpPriceFactor = 1.0f;          // Companion.SkillUp.PriceFactor
         mutable std::mutex m_affinityLock;
     };
 }

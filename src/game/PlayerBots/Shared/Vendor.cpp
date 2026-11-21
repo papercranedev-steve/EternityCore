@@ -127,6 +127,41 @@ namespace Vendor
         return cost;
     }
 
+    uint32 RepairCost(Player const* player)
+    {
+        uint32 cost = 0;
+        for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
+            if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                cost += RepairCostOf(item, 1.0f);
+        ForEachBagItem(player, [&cost](Item* item) { cost += RepairCostOf(item, 1.0f); });
+        return cost;
+    }
+
+    uint32 ListPrice(Player const* player, std::vector<Supplies::Need> const& needs)
+    {
+        uint32 total = 0;
+        for (Supplies::Need const& need : needs)
+        {
+            uint32 const missing = need.Missing();
+            if (!missing || need.recipe)
+                continue;
+            ItemPrototype const* best = nullptr;
+            if (need.goods.kind == Goods::Kind::Item)
+                best = sObjectMgr.GetItemPrototype(need.goods.id);
+            else
+                for (uint32 itemId : Supplies::SoldByVendors())
+                {
+                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                    if (!proto || !Goods::Matches(player, need.goods, proto))
+                        continue;
+                    if (!best || Goods::Better(player, need.goods, proto, best))
+                        best = proto;
+                }
+            total += UnitPrice(best) * missing;
+        }
+        return total;
+    }
+
     uint32 RepairAll(Player* player, Creature* npc)
     {
         uint32 const before = player->GetMoney();

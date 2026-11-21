@@ -2,6 +2,8 @@
 #include "Companions/ClassQuests/PastQuests.h"
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
+#include "Companions/OfflineLife.h"
+#include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/TownGates.h"
@@ -19,6 +21,7 @@
 #include "Log.h"
 #include <algorithm>
 #include <ctime>
+#include <map>
 
 namespace Companions
 {
@@ -34,6 +37,13 @@ namespace Companions
         uint32 const UNTRAINED_LEVELS_MIN = 4;
         uint32 const UNTRAINED_LEVELS_MAX = 8;
         uint32 const KEY_UNTRAINED = 0x80000002;   // PastRoll key (PastRoll.h)
+
+        // Presence (UpdatePresence): how often it looks, how long a companion is online before
+        // its time away is counted (its AI refreshes what it knows of itself every 5 s), how
+        // often last_seen is written.
+        uint32 const PRESENCE_CHECK_MS = 5 * IN_MILLISECONDS;
+        uint32 const ARRIVE_SETTLE_MS = 15 * IN_MILLISECONDS;
+        uint32 const LAST_SEEN_MS = 60 * IN_MILLISECONDS;
 
         uint32 TrainedUpToLevel(Player const* bot)
         {
@@ -53,6 +63,7 @@ namespace Companions
     void CompanionMgr::LoadConfig()
     {
         m_enabled.store(sConfig.GetBoolDefault("Companion.Enable", true));
+        m_skillUpPriceFactor = std::max(0.0f, sConfig.GetFloatDefault("Companion.SkillUp.PriceFactor", 1.0f));
         std::string account = sConfig.GetStringDefault("Companion.Account", "COMPANIONS");
         if (account.empty())
             account = "COMPANIONS";
@@ -76,8 +87,19 @@ namespace Companions
             " `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = class quests done before recruiting are decided (ClassQuests/PastQuests)',"
             " `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..100, what the player did for it (class quests)',"
             " `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = professions before recruiting are given (PastProfessions)',"
+            " `last_seen` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'unix time last seen online (OfflineLife), 0 = never'," 
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
+
+        // Skill points of the day grown offline (OfflineLife), one row per companion and skill.
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_companion_skillup` ("
+            " `char_guid` INT UNSIGNED NOT NULL,"
+            " `skill` SMALLINT UNSIGNED NOT NULL,"
+            " `day` INT UNSIGNED NOT NULL COMMENT 'local day, year * 1000 + day of the year',"
+            " `points` SMALLINT UNSIGNED NOT NULL DEFAULT 0,"
+            " PRIMARY KEY (`char_guid`, `skill`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: profession points grown offline today'");
 
         // Class quest asks (ClassQuests/ClassQuestFlow), one row per companion and chain.
         CharacterDatabase.DirectExecute(
@@ -110,6 +132,9 @@ namespace Companions
         std::unique_ptr<QueryResult> professions(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'professions_decided'"));
         if (!professions)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `affinity`");
+        std::unique_ptr<QueryResult> lastSeen(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'last_seen'"));
+        if (!lastSeen)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `last_seen` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `professions_decided`");
         return true;
     }
 
@@ -134,7 +159,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -152,6 +177,7 @@ namespace Companions
                 info.affinity = f[6].GetUInt32();
                 if (!f[7].GetUInt8())
                     m_professionsPending.push_back(info.charGuid);
+                info.lastSeen = f[8].GetUInt32();
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -365,8 +391,9 @@ namespace Companions
         info.recruiterGuid = recruiter->GetGUIDLow();
         info.recruitedAt = uint32(time(nullptr));
         info.tags = tags;
-        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `professions_decided`)"
-            " VALUES (%u, %u, %u, %u, 1, 1)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
+        info.lastSeen = info.recruitedAt;
+        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `professions_decided`, `last_seen`)"
+            " VALUES (%u, %u, %u, %u, 1, 1, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt, info.lastSeen);
         m_companions[guid] = info;
 
         // The name cache holds the temporary session's account; after a restart it is read from `characters`.
@@ -443,6 +470,85 @@ namespace Companions
         }
     }
 
+    void CompanionMgr::Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info)
+    {
+        uint32 const now = uint32(time(nullptr));
+        uint32 const offline = info.lastSeen && now > info.lastSeen ? now - info.lastSeen : 0;
+        uint32 const today = OfflineLife::DayOf(time_t(now));
+
+        // The points of today so far (rows of an earlier day count nothing).
+        std::map<uint32, uint32> points;
+        std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
+            "SELECT `skill`, `points` FROM `custom_companion_skillup` WHERE `char_guid` = %u AND `day` = %u", info.charGuid, today));
+        if (rows)
+        {
+            do
+            {
+                Field* f = rows->Fetch();
+                points[f[0].GetUInt32()] = f[1].GetUInt32();
+            } while (rows->NextRow());
+        }
+
+        OfflineLife::Result const result = OfflineLife::Apply(bot, ai->m_lessonContext, info.tags, offline, m_skillUpPriceFactor, points);
+        for (OfflineLife::Gain const& g : result.gains)
+            CharacterDatabase.PExecute("REPLACE INTO `custom_companion_skillup` (`char_guid`, `skill`, `day`, `points`) VALUES (%u, %u, %u, %u)",
+                info.charGuid, g.skill, today, points[g.skill]);
+
+        info.lastSeen = now;
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `last_seen` = %u WHERE `char_guid` = %u", now, info.charGuid);
+
+        Player* leader = ai->GetPartyLeader();
+        LocaleConstant const locale = leader && leader->GetSession() ? leader->GetSession()->GetSessionDbcLocale() : LOCALE_enUS;
+        std::string const line = OfflineLife::Line(result, info.tags, locale);
+        if (!line.empty())
+            BotShared::BotChat::SayToParty(bot, line);
+        if (!result.gains.empty() || result.shortOfMoney)
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' back after %u min: %u professions grew for %u copper%s.",
+                bot->GetName(), offline / MINUTE, uint32(result.gains.size()), result.spent, result.shortOfMoney ? ", short of money" : "");
+    }
+
+    void CompanionMgr::UpdatePresence()
+    {
+        bool const writeLastSeen = m_nowMs - m_lastSeenWriteMs >= LAST_SEEN_MS;
+        if (writeLastSeen)
+            m_lastSeenWriteMs = m_nowMs;
+        uint32 const now = uint32(time(nullptr));
+        std::string seen;
+
+        for (auto& itr : m_companions)
+        {
+            CompanionInfo& info = itr.second;
+            if (info.temporary)
+                continue;
+            Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, info.charGuid));
+            PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+            if (!ai)
+            {
+                m_present.erase(info.charGuid);
+                m_arrivingSinceMs.erase(info.charGuid);
+                continue;
+            }
+            if (m_present.count(info.charGuid))
+            {
+                if (writeLastSeen)
+                {
+                    info.lastSeen = now;
+                    seen += (seen.empty() ? "" : ",") + std::to_string(info.charGuid);
+                }
+                continue;
+            }
+            auto arriving = m_arrivingSinceMs.emplace(info.charGuid, m_nowMs).first;
+            if (m_nowMs - arriving->second < ARRIVE_SETTLE_MS)
+                continue;
+            m_arrivingSinceMs.erase(arriving);
+            m_present.insert(info.charGuid);
+            Arrive(bot, ai, info);
+        }
+
+        if (!seen.empty())
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `last_seen` = %u WHERE `char_guid` IN (%s)", now, seen.c_str());
+    }
+
     void CompanionMgr::Update(uint32 diff)
     {
         m_nowMs += diff;
@@ -450,6 +556,11 @@ namespace Companions
             DecidePastQuestsOfOnline();
         if (!m_professionsPending.empty())
             DecideProfessionsOfOnline();
+        if (m_nowMs - m_presenceCheckMs >= PRESENCE_CHECK_MS)
+        {
+            m_presenceCheckMs = m_nowMs;
+            UpdatePresence();
+        }
         if (m_pending.empty())
             return;
 

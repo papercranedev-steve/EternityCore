@@ -333,6 +333,12 @@ namespace Supplies
 
     bool IsSoldByVendors(uint32 itemId)
     {
+        std::unordered_set<uint32> const& sold = SoldByVendors();
+        return sold.find(itemId) != sold.end();
+    }
+
+    std::unordered_set<uint32> const& SoldByVendors()
+    {
         static std::unordered_set<uint32> sold;
         static bool built = false;
         if (!built)
@@ -357,7 +363,7 @@ namespace Supplies
                     addList(sObjectMgr.GetNpcVendorTemplateItemList(cInfo->vendor_id));
             }
         }
-        return sold.find(itemId) != sold.end();
+        return sold;
     }
 
     std::vector<Need> Missing(Player const* player)

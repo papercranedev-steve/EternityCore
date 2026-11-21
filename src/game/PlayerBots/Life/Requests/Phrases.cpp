@@ -127,6 +127,18 @@ namespace Phrases
             { "errand.paid",     "default",     "谢谢！我这就去。" },
             { "errand.paid",     "frugal",      "谢啦，这钱我一定花在刀刃上。" },
             { "training.money",  "default",     "学费：重要技能{important}，全部{all}，我身上有{have}。" },
+            // Back after a while away (Companions/OfflineLife). {gains}: "裁缝 +12、草药学 +2",
+            // {gold}: what it spent.
+            { "offline.skillup",      "default",     "我不在的时候练了练专业：{gains}，材料花了{gold}。" },
+            { "offline.skillup",      "crafty",      "这几天手痒，做了不少东西：{gains}，材料花了{gold}。" },
+            { "offline.skillup",      "frugal",      "专业练了一点：{gains}，花了{gold}，每个铜板都算过的。" },
+            { "offline.skillup",      "spendthrift", "材料买得有点多……{gains}，花了{gold}。" },
+            { "offline.skillup",      "quiet",       "{gains}。花了{gold}。" },
+            { "offline.skillup.free", "default",     "我不在的时候出去转了转：{gains}。" },
+            { "offline.skillup.free", "gatherer",    "这几天到处采东西：{gains}。" },
+            { "offline.broke",        "default",     "这阵子手头紧，专业没敢练。" },
+            { "offline.broke",        "spendthrift", "钱……都花光了，专业也没练成。" },
+            { "offline.broke",        "quiet",       "没钱，专业没练。" },
             // Profession trainers (Trip/ProfessionPlanner): {skill}, {count}.
             { "training.recipes", "default",    "{skill}：{count}个新配方" },
             // Out in the field (Life/Errands/LessonReminder). {lessons}: the names.

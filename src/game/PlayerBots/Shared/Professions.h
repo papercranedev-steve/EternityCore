@@ -46,6 +46,7 @@ namespace BotShared
 
         Kind KindOf(uint32 skill);
         bool IsProfession(uint32 skill);
+        std::vector<uint32> const& Primaries();     // crafting and gathering
         std::vector<uint32> const& Secondaries();
 
         // A rank a profession trainer teaches: the spell that sets the skill line's maximum.
@@ -64,6 +65,14 @@ namespace BotShared
         // highest rank there is when none does), whatever the player's level, and sets the skill
         // to `value` (at most that maximum). Returns the maximum, 0 = no trainer teaches it.
         uint32 Grant(Player* player, uint32 skill, uint32 value);
+
+        // Every recipe a trainer teaches for `skill`, by the skill it is learned at (lowest first).
+        struct TrainerRecipe
+        {
+            uint32 spellId = 0;
+            uint32 reqSkillValue = 0;
+        };
+        std::vector<TrainerRecipe> TrainerRecipes(uint32 skill);
 
         // Free: every recipe lesson of `skill` the trainers would give now (green in the trainer
         // window: skill value, level, previous rank) and `keep` agrees to, also those that become

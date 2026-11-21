@@ -34,6 +34,7 @@
 #include "Shared/Goods.h"
 #include "ObjectGuid.h"
 #include <set>
+#include <unordered_set>
 #include <vector>
 
 class Player;
@@ -72,6 +73,8 @@ namespace BotShared
 
         // Some vendor in the world sells it (index built once).
         bool IsSoldByVendors(uint32 itemId);
+        // Every item some vendor sells (the same index).
+        std::unordered_set<uint32> const& SoldByVendors();
 
         // Goods kinds a teammate gives this player (user 2026-11-20: with a mage in the party
         // the others ask it for food and drink, Life/Errands/AskProvisions): Missing leaves out
