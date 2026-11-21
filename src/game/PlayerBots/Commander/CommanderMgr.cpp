@@ -1,6 +1,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Situation/Guide.h"
+#include "Commander/Coordination/Situation/Stay.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Config/Config.h"
@@ -174,6 +175,29 @@ namespace Commander
             return nullptr;
         std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
         return commander ? Guide::Current(commander->GetPlan(), bot->me) : nullptr;
+    }
+
+    bool CommanderMgr::GetStay(TeamBotAI const* bot, StaySpot& spot)
+    {
+        if (!IsEnabled() || !bot || !bot->me)
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
+        StaySpot const* current = commander ? Stay::Current(commander->GetPlan(), bot->me) : nullptr;
+        if (!current)
+            return false;
+        spot = *current;
+        return true;
+    }
+
+    bool CommanderMgr::SetStay(Player const* member, bool stay)
+    {
+        if (!IsEnabled() || !member)
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(member);
+        if (!commander)
+            return false;
+        TeamPlan& plan = commander->GetPlanMutable();
+        return stay ? Stay::Begin(plan, member) : Stay::End(plan, member);
     }
 
     bool CommanderMgr::IsModuleEnabled(std::string const& id) const

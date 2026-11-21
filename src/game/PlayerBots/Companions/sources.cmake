@@ -31,6 +31,14 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.cpp
   ${COMPANIONS_DIR}/ClassQuests/ClassQuestFlow.h
   ${COMPANIONS_DIR}/ClassQuests/ClassQuestFlow.cpp
+  ${COMPANIONS_DIR}/Talk/TalkService.h
+  ${COMPANIONS_DIR}/Talk/Talk.h
+  ${COMPANIONS_DIR}/Talk/Talk.cpp
+  ${COMPANIONS_DIR}/Talk/Services.cpp
+  ${COMPANIONS_DIR}/Talk/TalkCommands.cpp
+  ${COMPANIONS_DIR}/Talk/Services/ServiceList.h
+  ${COMPANIONS_DIR}/Talk/Services/StayService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/BagsService.cpp
 )
 
 target_sources(game PRIVATE ${COMPANIONS_SRCS})

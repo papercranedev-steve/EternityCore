@@ -46,9 +46,12 @@
 #include "Life/Errands/GiveProvisions.h"
 #include "Life/Errands/AskProvisions.h"
 #include "Life/Errands/LessonReminder.h"
+#include "Life/Pastimes/WaitAround.h"
 #include "Shared/Trade.h"
 #include <array>
 #include <string>
+
+namespace Commander { struct StaySpot; }
 
 class PartyBotAI : public TeamBotAI
 {
@@ -130,6 +133,11 @@ public:
     Player* FollowAnchor(Player* pLeader);
     // The guide: stops its own follow (nothing else), so it stands where it is walked to.
     void StandAsGuide();
+    // Told to wait here (Commander/Coordination/Situation/Stay.h): no follow; out of a fight it
+    // walks back to its spot and passes the time there (Life/Pastimes/WaitAround.h). `free`:
+    // nothing else has the bot now (no fight, no rest, no Commander plan or hold).
+    void HoldStay(Commander::StaySpot const& spot, bool free);
+    static constexpr float PB_STAY_BACK_YD = 4.0f;    // farther from its spot: walks back
 
     ObjectGuid m_leaderGuid;
     ObjectGuid m_cloneGuid;
@@ -188,6 +196,8 @@ public:
     size_t m_followEventNext = 0;
     uint32 m_followIssues = 0;
     Commander::HumanFollow::IdleState m_humanIdle;
+    // Waiting at its stay spot (HoldStay).
+    Life::Pastimes::WaitAroundState m_waitAround;
     // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
     Life::LootRunState m_lootRun;
     // Out of combat: a companion skins corpses and opens herb and ore nodes (Life/Errands/GatherRun.h).

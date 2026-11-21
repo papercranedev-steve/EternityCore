@@ -36,6 +36,7 @@
 #include "Rotations/ClassRotation.h"
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
@@ -225,7 +226,8 @@ bool PartyBotAI::FillsUpAtOnce()
 {
     Player* pLeader = GetPartyLeader();
     Player* pAnchor = pLeader ? FollowAnchor(pLeader) : nullptr;
-    return pAnchor && CatchesUpByTeleport(pAnchor) && !IsArriving();
+    Commander::StaySpot stay;
+    return pAnchor && CatchesUpByTeleport(pAnchor) && !IsArriving() && !sCommanderMgr.GetStay(this, stay);
 }
 
 Player* PartyBotAI::GetPartyLeader() const
@@ -409,6 +411,29 @@ void PartyBotAI::StandAsGuide()
     m_followChecked = false;
     // (HumanFollow's sit while the leader stood: the guide gets up)
     m_humanIdle.sat = false;
+}
+
+void PartyBotAI::HoldStay(Commander::StaySpot const& spot, bool free)
+{
+    // Its own follow stops, as the guide's (a Commander walk or a fight is not stopped).
+    StandAsGuide();
+    if (!free)
+    {
+        Life::Pastimes::WaitAround::End(me, m_waitAround);
+        return;
+    }
+
+    // Back to the spot after a fight or a walk of the Commander.
+    if (me->GetDistance2d(spot.x, spot.y, SizeFactor::None) > PB_STAY_BACK_YD)
+    {
+        Life::Pastimes::WaitAround::End(me, m_waitAround);
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
+            me->GetMotionMaster()->MovePoint(0, spot.x, spot.y, spot.z, MOVE_PATHFINDING | MOVE_RUN_MODE);
+        return;
+    }
+    if (me->IsMoving())
+        return;
+    Life::Pastimes::WaitAround::Update(me, m_waitAround, WorldTimer::getMSTime());
 }
 
 void PartyBotAI::AddToPlayerGroup()
@@ -652,7 +677,15 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     sCommanderMgr.OnBotUpdate(this);
 
-    if (pLeader->IsTaxiFlying())
+    // Told to wait here (Commander/Coordination/Situation/Stay.h): it follows nobody, is not
+    // teleported to the leader and runs no errands away from its spot (HoldStay below).
+    Commander::StaySpot staySpot;
+    bool const staying = sCommanderMgr.GetStay(this, staySpot);
+    if (!staying && m_waitAround.nextActMs)
+        Life::Pastimes::WaitAround::End(me, m_waitAround);
+
+    // (a bot waiting somewhere else does not care how the leader travels)
+    if (pLeader->IsTaxiFlying() && !staying)
     {
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
@@ -766,7 +799,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             PauseProvisions();
         else if (UpdateProvisions(pLeader))
             return;
-        if (resurrectFirst || commanderOutOfCombat || !LootsForSelf())
+        if (resurrectFirst || commanderOutOfCombat || !LootsForSelf() || staying)
             StopErrands();
         else
         {
@@ -802,8 +835,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Not to a dead leader (WaitForDeadLeader).
         // (to the guide the party follows, Commander/Coordination/Situation/Guide.h; the guide
         // itself to the leader)
+        // (a bot told to wait: neither, HoldStay)
         Player* pAnchor = FollowAnchor(pLeader);
-        if (!resurrectFirst && !pAnchor->IsDead() && Commander::Arrival::Update(this, m_arrival, pAnchor))
+        if (!staying && !resurrectFirst && !pAnchor->IsDead() && Commander::Arrival::Update(this, m_arrival, pAnchor))
             return;
 
         // Teleport to leader if too far away. Fix: not to a dead leader: after a wipe the
@@ -812,7 +846,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // the corpse the ghost runs to.
         // Companions only when on another map: on the same map they walk (a town trip, the
         // leader at his own trainer: CatchesUpByTeleport).
-        if (!resurrectFirst && !pAnchor->IsDead() && CatchesUpByTeleport(pAnchor))
+        if (!staying && !resurrectFirst && !pAnchor->IsDead() && CatchesUpByTeleport(pAnchor))
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -834,7 +868,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     bool const commanderResting = !me->IsInCombat() && IsResting() && !resurrectFirst;
     // (also not a bot sitting idle while the leader stands, HumanFollow: it rises when it
     // follows again or the fight comes)
-    bool const idleSitting = m_humanIdle.sat && !me->IsInCombat() && !resurrectFirst;
+    // (and not one sitting at its stay spot, WaitAround)
+    bool const idleSitting = (m_humanIdle.sat || (staying && Life::Pastimes::WaitAround::Seated(m_waitAround))) &&
+        !me->IsInCombat() && !resurrectFirst;
     if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting && !idleSitting)
         me->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -863,7 +899,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // (also while walking: the follow point moves with the leader)
         // The leader's way when the navmesh has none or only a long detour (a drop, a jump):
         // Commander/Behaviors/Movement/TrailFollow.h.
-        if (!pFollow)
+        if (staying)
+            HoldStay(staySpot, !me->IsInCombat() && !me->GetVictim() && !commanderResting && !commanderOutOfCombat &&
+                               !resurrectFirst && !IsMovementHeld() && !IsStanceControlled());
+        else if (!pFollow)
             StandAsGuide();
         else
         {
@@ -895,8 +934,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!me->IsInCombat())
     {
-        // Mount if leader is mounted and we don't have a target.
-        if (pLeader->IsMounted() && !me->GetVictim())
+        // Mount if leader is mounted and we don't have a target (not while waiting elsewhere).
+        if (pLeader->IsMounted() && !me->GetVictim() && !staying)
         {
             if (!me->IsMounted())
             {
@@ -933,7 +972,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // put them while the party fights, in combat themselves or not yet: following the leader walked the
         // priest into the next pack (Stockade, stockade-20261101-143825) and kept a healer
         // that had not healed yet with the player while the tank fought further away.
-        if (pFollow && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
+        if (pFollow && !staying && !IsStanceControlled() && !IsTrailFollowing() && !pFollow->IsDead() &&
             me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
             StartFollowing(pFollow, "restart");
     }

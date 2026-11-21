@@ -40,6 +40,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Pastimes/PlaceActs.cpp
   ${LIFE_DIR}/Pastimes/Notice.h
   ${LIFE_DIR}/Pastimes/Notice.cpp
+  ${LIFE_DIR}/Pastimes/WaitAround.h
+  ${LIFE_DIR}/Pastimes/WaitAround.cpp
   ${LIFE_DIR}/Errands/Trip/RouteOrder.h
   ${LIFE_DIR}/Errands/Trip/RouteOrder.cpp
   ${LIFE_DIR}/Errands/Trip/ShoppingPlanner.h

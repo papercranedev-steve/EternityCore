@@ -30,6 +30,7 @@ class Player;
 namespace Commander
 {
     class PartyCommander;
+    struct StaySpot;
 
     struct TickStats
     {
@@ -75,6 +76,12 @@ namespace Commander
         bool IsRetreating(TeamBotAI* bot);
         // The party bot the bot's party follows instead of the player (Guide.h), null = the player.
         Player* GetGuide(TeamBotAI* bot);
+        // The bot waits where the player left it (Situation/Stay.h): true and its spot.
+        bool GetStay(TeamBotAI const* bot, StaySpot& spot);
+        // The player's "wait here" / "follow me" for one member (its own team's plan: the member
+        // may be on another map than the player). False: no commander of its team yet, or
+        // nothing changed (follow while not staying).
+        bool SetStay(Player const* member, bool stay);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

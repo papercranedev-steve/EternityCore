@@ -134,6 +134,9 @@ ChatCommand * ChatHandler::getCommandTable()
         // "companion" first: commands match by prefix, the first one wins
         { "companion",  SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionCommand,   "", nullptr },
         { "companions", SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionsCommand,  "", nullptr },
+        { "talk",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTalkCommand,        "", nullptr },
+        { "stay",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotStayCommand,        "", nullptr },
+        { "follow",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotFollowCommand,      "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },
     };
 

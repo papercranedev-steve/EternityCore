@@ -1597,6 +1597,29 @@ namespace Commander
         StandInWay way = StandInWay::None;  // a tank: how it holds (the note)
     };
 
+    // Members the player told to wait where they stand ("在这儿等我", Situation/Stay.h): they do
+    // not follow and are not teleported to the leader until told to follow again.
+    struct StaySpot
+    {
+        ObjectGuid member;
+        uint32 mapId = 0;
+        float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
+        uint32 sinceMs = 0;
+    };
+
+    struct StayPlan
+    {
+        std::vector<StaySpot> members;
+
+        StaySpot const* Find(ObjectGuid member) const
+        {
+            for (StaySpot const& s : members)
+                if (s.member == member)
+                    return &s;
+            return nullptr;
+        }
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
@@ -1640,6 +1663,8 @@ namespace Commander
         // The party bot the party follows out of combat instead of the player (Guide.h: the
         // push mode's tank). Empty = the player. Only Guide::Current says whether it leads now.
         ObjectGuid guide;
+        // Who waits where the player left them (Situation/Stay.h); kept until told to follow.
+        StayPlan stay;
         RetreatPlan retreat;
         CrisisPlan crisis;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)
