@@ -414,7 +414,9 @@ namespace TownTrip
         uint32 const now = WorldTimer::getMSTime();
         bool const beforeTrip = state.phase == Phase::Idle || state.phase == Phase::Asking;
         // (out on the trip the leader may ride off: the bot is not his anchor-bound follower then)
-        if (!leader || !Errands::MayRun(me, beforeTrip ? leader : nullptr) ||
+        // (asking: it follows meanwhile and may sit down to drink; that does not withdraw the
+        // question, the popup stayed on the leader's screen then vanished)
+        if (!leader || !Errands::MayRun(me, beforeTrip ? leader : nullptr, state.phase == Phase::Asking) ||
             (state.phase != Phase::Idle && leader->GetMapId() != state.leaderMap))
         {
             Stop(me, state, hands);
@@ -450,6 +452,10 @@ namespace TownTrip
                     sRequestBoard.Close(state.requestId, Requests::Outcome::Accepted);
                     state.requestId = 0;
                     state.next = 0;
+                    // Sat down while it waited (a drink): it gets up and goes, as the leader
+                    // said (in town; it drinks again when back).
+                    if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+                        me->SetStandState(UNIT_STAND_STATE_STAND);
                     if (status.answer == "pay")
                     {
                         state.tradeBegun = false;

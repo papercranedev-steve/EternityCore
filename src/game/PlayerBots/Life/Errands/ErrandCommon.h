@@ -21,8 +21,9 @@ namespace Life
 
         // The bot may go on an errand now: alive, out of combat, nobody of its group fighting,
         // not mounted, standing (not eating or drinking), the anchor (if any) not mounted
-        // (the party is moving on).
-        bool MayRun(Player* me, Player const* anchor);
+        // (the party is moving on). `seatedOk`: sitting (eating, drinking) does not stop it: an
+        // errand still waiting for an answer while the bot follows (TownTrip's question).
+        bool MayRun(Player* me, Player const* anchor, bool seatedOk = false);
 
         // No idle pack on the walk from the bot to x/y/z (Commander/Perception/Spatial/SafeRoute;
         // the scan covers the whole walk).

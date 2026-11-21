@@ -23,10 +23,10 @@ namespace Errands
         return false;
     }
 
-    bool MayRun(Player* me, Player const* anchor)
+    bool MayRun(Player* me, Player const* anchor, bool seatedOk)
     {
         return me->IsAlive() && !me->IsInCombat() && !me->IsMounted() &&
-               me->GetStandState() == UNIT_STAND_STATE_STAND &&
+               (seatedOk || me->GetStandState() == UNIT_STAND_STATE_STAND) &&
                !(anchor && anchor->IsMounted()) && !GroupFights(me);
     }
 
