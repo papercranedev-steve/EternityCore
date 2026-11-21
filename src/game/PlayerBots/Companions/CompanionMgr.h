@@ -68,6 +68,9 @@ namespace Companions
         bool staying = false;
         // Sent home this server run (SendHome); false again once it is online. World thread.
         bool home = false;
+        // Levels it grew on the bench since it was last online (UpdateBench); said and cleared
+        // when it arrives. World thread.
+        uint32 benchLevels = 0;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
@@ -177,6 +180,16 @@ namespace Companions
         // if they had gone back there (presence §2.2). Every HOME_CHECK_MS.
         void SendHome();
         uint32 m_homeCheckMs = 0;
+        // Companions on the bench (out of the world, not in their owner's group) grow with the
+        // experience their online owner gains (Bench/BenchLeveling, bench doc §2): written
+        // straight into their saved character. Every BENCH_CHECK_MS.
+        void UpdateBench();
+        uint32 m_benchCheckMs = 0;
+        // Owner char guid -> his total experience at the last look (custom_companion_owner).
+        std::unordered_map<uint32, uint32> m_ownerXpSeen;
+        // Benched companion char guid -> its saved level and experience, read once from
+        // `characters` and kept while it stays out (forgotten once it is online).
+        std::unordered_map<uint32, std::pair<uint32, uint32>> m_benchProgress;
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();

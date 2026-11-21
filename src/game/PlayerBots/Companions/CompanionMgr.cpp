@@ -1,5 +1,6 @@
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/AffinitySources.h"
+#include "Companions/Bench/BenchLeveling.h"
 #include "Companions/ClassQuests/PastQuests.h"
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
@@ -55,6 +56,11 @@ namespace Companions
         // Out of the party this long, it goes home (user 2026-11-21: 4 hours); looked at this often.
         uint32 const HOME_AFTER_SEC = 4 * HOUR;
         uint32 const HOME_CHECK_MS = 5 * MINUTE * IN_MILLISECONDS;
+
+        // Bench leveling (UpdateBench): how often it looks at the owners; a companion that left
+        // the world less than this ago is not written yet (its logout save may still be queued).
+        uint32 const BENCH_CHECK_MS = MINUTE * IN_MILLISECONDS;
+        uint32 const BENCH_SETTLE_SEC = 2 * MINUTE;
 
         uint32 TrainedUpToLevel(Player const* bot)
         {
@@ -135,6 +141,14 @@ namespace Companions
             " PRIMARY KEY (`char_guid`, `chain_id`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: class quest asks and their outcome'");
 
+        // Players who own companions: what bench leveling measured of them last (UpdateBench).
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_companion_owner` ("
+            " `owner_guid` INT UNSIGNED NOT NULL,"
+            " `xp_seen` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'his total experience at the last look (bench leveling)',"
+            " PRIMARY KEY (`owner_guid`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: their owners, as the companions keep track of them'");
+
         std::unique_ptr<QueryResult> exists(CharacterDatabase.Query("SHOW TABLES LIKE 'custom_companion'"));
         if (!exists)
             return false;
@@ -163,6 +177,10 @@ namespace Companions
         std::unique_ptr<QueryResult> staying(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'staying'"));
         if (!staying)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `staying` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `money_gifts`");
+        std::unique_ptr<QueryResult> benchLevels(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'bench_levels'"));
+        if (!benchLevels)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `bench_levels` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT 'levels grown on the bench since last online, said when it arrives' AFTER `staying`");
         return true;
     }
 
@@ -188,7 +206,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -209,8 +227,21 @@ namespace Companions
                 info.lastSeen = f[8].GetUInt32();
                 info.moneyGifts = f[9].GetUInt32();
                 info.staying = f[10].GetUInt8() != 0;
+                info.benchLevels = f[11].GetUInt32();
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
+        }
+
+        m_ownerXpSeen.clear();
+        m_benchProgress.clear();
+        std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen` FROM `custom_companion_owner`"));
+        if (owners)
+        {
+            do
+            {
+                Field* f = owners->Fetch();
+                m_ownerXpSeen[f[0].GetUInt32()] = f[1].GetUInt32();
+            } while (owners->NextRow());
         }
 
         std::unique_ptr<QueryResult> clears(CharacterDatabase.Query("SELECT `char_guid`, `segment`, `clears` FROM `custom_companion_clear`"));
@@ -618,6 +649,93 @@ namespace Companions
         }
     }
 
+    void CompanionMgr::UpdateBench()
+    {
+        struct Owner
+        {
+            Group const* group = nullptr;
+            uint32 gained = 0;
+            uint32 cap = 0;
+        };
+        if (!IsEnabled() || !m_available)
+            return;
+        std::unordered_map<uint32, Owner> owners;     // owner char guid -> what he gained since the last look
+
+        for (auto const& itr : m_companions)
+        {
+            uint32 const ownerGuid = itr.second.recruiterGuid;
+            if (itr.second.temporary || !ownerGuid || owners.count(ownerGuid))
+                continue;
+            Owner& owner = owners[ownerGuid];
+            Player* player = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, ownerGuid));
+            if (!player || !player->IsInWorld() || player->IsBot())
+                continue;
+            uint32 const total = BenchLeveling::TotalXp(player);
+            auto seen = m_ownerXpSeen.find(ownerGuid);
+            // (first look, or he went down a level: counting starts here)
+            bool const counts = seen != m_ownerXpSeen.end() && total > seen->second;
+            if (counts)
+                owner.gained = total - seen->second;
+            if (seen == m_ownerXpSeen.end() || seen->second != total)
+            {
+                m_ownerXpSeen[ownerGuid] = total;
+                CharacterDatabase.PExecute("REPLACE INTO `custom_companion_owner` (`owner_guid`, `xp_seen`) VALUES (%u, %u)", ownerGuid, total);
+            }
+            owner.group = player->GetGroup();
+            owner.cap = BenchLeveling::CapFor(player->GetLevel());
+        }
+
+        uint32 const now = uint32(time(nullptr));
+        for (auto& itr : m_companions)
+        {
+            CompanionInfo& info = itr.second;
+            auto owner = owners.find(info.recruiterGuid);
+            if (info.temporary || owner == owners.end() || !owner->second.gained)
+                continue;
+            ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
+            // On the bench: out of the world and not in his party.
+            if (sPlayerBotMgr.HasBot(info.charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
+            {
+                m_benchProgress.erase(info.charGuid);
+                continue;
+            }
+            if (owner->second.group && owner->second.group->IsMember(guid))
+                continue;
+            if (info.lastSeen && now < info.lastSeen + BENCH_SETTLE_SEC)
+                continue;
+
+            auto progress = m_benchProgress.find(info.charGuid);
+            if (progress == m_benchProgress.end())
+            {
+                std::unique_ptr<QueryResult> row(CharacterDatabase.PQuery(
+                    "SELECT `level`, `xp` FROM `characters` WHERE `guid` = %u AND `online` = 0", info.charGuid));
+                if (!row)
+                    continue;
+                Field* f = row->Fetch();
+                progress = m_benchProgress.emplace(info.charGuid, std::make_pair(f[0].GetUInt32(), f[1].GetUInt32())).first;
+            }
+
+            BenchLeveling::Progress const before{ progress->second.first, progress->second.second };
+            BenchLeveling::Progress const after = BenchLeveling::Grow(before,
+                BenchLeveling::ShareOf(owner->second.gained), owner->second.cap);
+            if (after.level == before.level && after.xp == before.xp)
+                continue;
+            progress->second = std::make_pair(after.level, after.xp);
+            CharacterDatabase.PExecute("UPDATE `characters` SET `level` = %u, `xp` = %u WHERE `guid` = %u AND `online` = 0",
+                after.level, after.xp, info.charGuid);
+            if (after.level == before.level)
+                continue;
+
+            info.benchLevels += after.level - before.level;
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `bench_levels` = %u WHERE `char_guid` = %u",
+                std::min<uint32>(info.benchLevels, 255), info.charGuid);
+            if (PlayerCacheData* data = sObjectMgr.GetPlayerDataByGUID(info.charGuid))
+                data->uiLevel = after.level;
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %u grew on the bench to level %u (owner %u).",
+                info.charGuid, after.level, info.recruiterGuid);
+        }
+    }
+
     bool CompanionMgr::TakeStay(uint32 charGuid)
     {
         auto itr = m_companions.find(charGuid);
@@ -765,6 +883,20 @@ namespace Companions
         std::string const line = OfflineLife::Line(result, info.tags, locale);
         if (!line.empty())
             BotShared::BotChat::SayToParty(bot, line);
+
+        // It grew on the bench meanwhile (UpdateBench): one line about it.
+        if (info.benchLevels)
+        {
+            Life::Phrases::Vars vars;
+            vars["level"] = std::to_string(bot->GetLevel());
+            std::string const leveled = Life::Phrases::Say("bench.leveled", info.tags, vars);
+            if (!leveled.empty())
+                BotShared::BotChat::SayToParty(bot, leveled);
+            info.benchLevels = 0;
+            if (!info.temporary)
+                CharacterDatabase.PExecute("UPDATE `custom_companion` SET `bench_levels` = 0 WHERE `char_guid` = %u", info.charGuid);
+        }
+
         if (!result.gains.empty() || result.shortOfMoney)
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' back after %u min: %u professions grew for %u copper%s.",
                 bot->GetName(), offline / MINUTE, uint32(result.gains.size()), result.spent, result.shortOfMoney ? ", short of money" : "");
@@ -793,6 +925,7 @@ namespace Companions
                 continue;
             }
             info.home = false;      // (out again later: away from home)
+            m_benchProgress.erase(info.charGuid);   // (its saved level changes while it plays)
             if (m_present.count(info.charGuid))
             {
                 if (writeLastSeen)
@@ -832,6 +965,11 @@ namespace Companions
         {
             m_homeCheckMs = m_nowMs;
             SendHome();
+        }
+        if (m_nowMs - m_benchCheckMs >= BENCH_CHECK_MS)
+        {
+            m_benchCheckMs = m_nowMs;
+            UpdateBench();
         }
         if (m_pending.empty())
             return;

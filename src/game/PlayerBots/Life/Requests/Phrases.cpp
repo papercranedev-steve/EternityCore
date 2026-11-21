@@ -302,6 +302,10 @@ namespace Phrases
             { "offline.broke",        "default",     "这阵子手头紧，专业没敢练。" },
             { "offline.broke",        "spendthrift", "钱……都花光了，专业也没练成。" },
             { "offline.broke",        "quiet",       "没钱，专业没练。" },
+            // Grew on the bench (Companions/Bench/BenchLeveling). {level}: its level now.
+            { "bench.leveled",        "default",     "这阵子我自己也出去练了练，现在{level}级了。" },
+            { "bench.leveled",        "chatty",      "你不在的时候我可没闲着！自己出去打了好多怪，现在{level}级啦！" },
+            { "bench.leveled",        "quiet",       "自己练到{level}级了。" },
             // Profession trainers (Trip/ProfessionPlanner): {skill}, {count}.
             { "training.recipes", "default",    "{skill}：{count}个新配方" },
             // Out in the field (Life/Errands/LessonReminder). {lessons}: the names.
