@@ -1620,6 +1620,17 @@ namespace Commander
         }
     };
 
+    // A warlock's Ritual of Summoning for a member far away (Situation/Summon.h): who casts, who
+    // clicks the portal, who is summoned.
+    struct SummonPlan
+    {
+        bool active = false;
+        ObjectGuid warlock;
+        ObjectGuid target;
+        std::vector<ObjectGuid> helpers;    // two members who click the portal
+        uint32 sinceMs = 0;
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
@@ -1665,6 +1676,8 @@ namespace Commander
         ObjectGuid guide;
         // Who waits where the player left them (Situation/Stay.h); kept until told to follow.
         StayPlan stay;
+        // A summoning ritual under way (Situation/Summon.h).
+        SummonPlan summon;
         RetreatPlan retreat;
         CrisisPlan crisis;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)

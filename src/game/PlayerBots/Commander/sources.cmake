@@ -110,6 +110,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Stay.h
   ${COMMANDER_DIR}/Coordination/Situation/Stay.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Summon.h
+  ${COMMANDER_DIR}/Coordination/Situation/Summon.cpp
   ${COMMANDER_DIR}/Coordination/Situation/PushPlanner.h
   ${COMMANDER_DIR}/Coordination/Situation/PushPlanner.cpp
   ${COMMANDER_DIR}/Perception/Forecast/AssistPredictor.h

@@ -2,6 +2,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/Stay.h"
+#include "Commander/Coordination/Situation/Summon.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Config/Config.h"
@@ -198,6 +199,39 @@ namespace Commander
             return false;
         TeamPlan& plan = commander->GetPlanMutable();
         return stay ? Stay::Begin(plan, member) : Stay::End(plan, member);
+    }
+
+    bool CommanderMgr::StartSummon(Player const* warlock, ObjectGuid target, std::vector<ObjectGuid> const& helpers)
+    {
+        if (!IsEnabled() || !warlock)
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(warlock);
+        return commander && Summon::Start(commander->GetPlanMutable(), warlock, target, helpers);
+    }
+
+    SummonRole CommanderMgr::GetSummonRole(TeamBotAI const* bot, ObjectGuid& warlock, ObjectGuid& target)
+    {
+        if (!IsEnabled() || !bot || !bot->me)
+            return SummonRole::None;
+        std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
+        if (!commander)
+            return SummonRole::None;
+        TeamPlan const& plan = commander->GetPlan();
+        SummonRole const role = Summon::RoleOf(plan, bot->me->GetObjectGuid());
+        if (role != SummonRole::None)
+        {
+            warlock = plan.summon.warlock;
+            target = plan.summon.target;
+        }
+        return role;
+    }
+
+    void CommanderMgr::EndSummon(Player const* member, bool arrived)
+    {
+        if (!member)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(member))
+            Summon::End(commander->GetPlanMutable(), arrived);
     }
 
     bool CommanderMgr::IsModuleEnabled(std::string const& id) const

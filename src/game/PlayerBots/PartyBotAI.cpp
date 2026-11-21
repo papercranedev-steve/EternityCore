@@ -52,7 +52,9 @@
 #include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
 #include "Shared/Portals.h"
+#include "Life/Errands/ErrandCommon.h"
 #include "GameObject.h"
+#include "Log.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
 
@@ -415,6 +417,116 @@ void PartyBotAI::StandAsGuide()
     m_humanIdle.sat = false;
 }
 
+bool PartyBotAI::UpdateSummon()
+{
+    ObjectGuid warlockGuid, targetGuid;
+    Commander::SummonRole const role = sCommanderMgr.GetSummonRole(this, warlockGuid, targetGuid);
+    if (role == Commander::SummonRole::None)
+    {
+        m_summonHands = SummonHands();
+        return false;
+    }
+    auto say = [this, targetGuid](char const* key)
+    {
+        Player* pTarget = sObjectAccessor.FindPlayer(targetGuid);
+        Life::Phrases::Vars vars;
+        vars["leader"] = pTarget ? pTarget->GetName() : "";
+        BotShared::BotChat::SayToParty(me, Life::Phrases::Say(key, PersonalityTags(), vars));
+    };
+    if (!me->IsAlive() || me->IsInCombat())
+    {
+        if (role == Commander::SummonRole::Caster)
+        {
+            sCommanderMgr.EndSummon(me, false);
+            say("summon.broken");
+        }
+        return false;
+    }
+
+    uint32 const now = WorldTimer::getMSTime();
+    if (role == Commander::SummonRole::Caster)
+    {
+        Player* pTarget = sObjectAccessor.FindPlayer(targetGuid);
+        Spell const* pChannel = me->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+        bool const channeling = pChannel && pChannel->m_spellInfo && pChannel->m_spellInfo->Id == Commander::Summon::RITUAL_OF_SUMMONING;
+        if (!m_summonHands.cast)
+        {
+            SpellEntry const* pRitual = sSpellMgr.GetSpellEntry(Commander::Summon::RITUAL_OF_SUMMONING);
+            if (!pTarget || !pRitual)
+            {
+                sCommanderMgr.EndSummon(me, false);
+                return false;
+            }
+            Life::Errands::StopWalk(me);
+            if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+                me->SetStandState(UNIT_STAND_STATE_STAND);
+            // (the ritual summons the caster's selection)
+            me->SetSelectionGuid(targetGuid);
+            SpellCastResult const result = me->CastSpell(me, pRitual, false);
+            if (result != SPELL_CAST_OK)
+            {
+                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Summon] %s cannot start the ritual (result %u).", me->GetName(), uint32(result));
+                sCommanderMgr.EndSummon(me, false);
+                say("summon.broken");
+                return false;
+            }
+            m_summonHands.cast = true;
+            m_summonHands.castMs = now;
+            return true;
+        }
+        if (me->IsNonMeleeSpellCasted(false) && !channeling)
+            return true;    // (the ritual's cast time)
+        if (channeling)
+        {
+            GameObject* pPortal = me->GetGameObject(Commander::Summon::RITUAL_OF_SUMMONING);
+            if (pPortal && pPortal->GetGoState() != GO_STATE_ACTIVE &&
+                WorldTimer::getMSTimeDiff(m_summonHands.castMs, now) > PB_SUMMON_HELPERS_MS)
+            {
+                me->InterruptSpell(CURRENT_CHANNELED_SPELL);
+                sCommanderMgr.EndSummon(me, false);
+                say("summon.nohelp");
+                return false;
+            }
+            return true;
+        }
+        // The channel is over: the summon went out; he comes, or the confirmation runs out.
+        if (!m_summonHands.sentMs)
+            m_summonHands.sentMs = now;
+        if (pTarget && pTarget->IsInMap(me) && me->IsWithinDist(pTarget, PB_SUMMON_ARRIVED_YD))
+        {
+            sCommanderMgr.EndSummon(me, true);
+            say("summon.arrived");
+            return false;
+        }
+        if (WorldTimer::getMSTimeDiff(m_summonHands.sentMs, now) > PB_SUMMON_ACCEPT_MS)
+            sCommanderMgr.EndSummon(me, false);
+        return false;
+    }
+
+    // A helper: to the portal and click it, then keep still (its channel).
+    Player* pWarlock = me->GetMap()->GetPlayer(warlockGuid);
+    GameObject* pPortal = pWarlock ? pWarlock->GetGameObject(Commander::Summon::RITUAL_OF_SUMMONING) : nullptr;
+    if (!pPortal || pPortal->GetGoState() == GO_STATE_ACTIVE)
+        return false;
+    if (pPortal->HasUniqueUser(me))
+        return true;
+    if (!me->IsWithinDistInMap(pPortal, INTERACTION_DISTANCE))
+    {
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
+            me->GetMotionMaster()->MovePoint(0, pPortal->GetPositionX(), pPortal->GetPositionY(), pPortal->GetPositionZ(),
+                                             MOVE_PATHFINDING | MOVE_RUN_MODE);
+        return true;
+    }
+    if (me->IsNonMeleeSpellCasted(false))
+        return true;
+    Life::Errands::StopWalk(me);
+    Life::Pastimes::WaitAround::End(me, m_waitAround);
+    if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+        me->SetStandState(UNIT_STAND_STATE_STAND);
+    pPortal->Use(me);
+    return true;
+}
+
 bool PartyBotAI::FollowThroughPortal(Player* pLeader)
 {
     GameObject* pPortal = BotShared::Portals::LeaderWentThrough(me, pLeader, PB_PORTAL_FOLLOW_YD);
@@ -708,6 +820,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!staying && m_waitAround.nextActMs)
         Life::Pastimes::WaitAround::End(me, m_waitAround);
 
+    // He leaves by hearthstone or flight path: shall we wait? A waiting warlock: shall I summon
+    // you back? (before the taxi wait below: the question comes as he takes off)
+    Companions::Departure::Update(me, pLeader, m_departure, staying, PersonalityTags());
+    if (me->GetClass() == CLASS_WARLOCK)
+        Companions::SummonOffer::Update(me, pLeader, m_summonOffer, staying, PersonalityTags());
+
     // (a bot waiting somewhere else does not care how the leader travels)
     if (pLeader->IsTaxiFlying() && !staying)
     {
@@ -718,6 +836,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         }
         return;
     }
+
+    // Its part in a summoning ritual: before the body (a channel is a cast there).
+    if (UpdateSummon())
+        return;
 
     // Falling, controlled, dead, auto-repeating, casting (TeamBotAI).
     if (UpdateBody())

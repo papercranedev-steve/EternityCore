@@ -23,6 +23,10 @@
  *     PBOK;<bot>;craft;<spell>;<count>, then PBCRAFT;<bot>;made;<item>;<made>;<left> per item and
  *     PBCRAFT;<bot>;stop;<done|nomats|far|combat|stopped|bagsfull|failed|cooldown|gone> at the end
  *     PBERR;<bot>;norecipe | far | notgroup
+ *   .partybot summon [warlock]            a warlock of the team summons you (Companions/Travel/SummonOffer;
+ *                                         no name: the first warlock party bot that can)
+ *     PBOK;<warlock>;summon | PBERR;<warlock>;<notlearned|locked|noshard|nohelpers|fighting|here|near|dead|busy>
+ *     PBERR;;nowarlock
  *   .partybot stay [bot]                  he (no name: every party bot of your group) waits here
  *   .partybot follow [bot]                he (no name: everyone waiting) follows you again
  *     PBOK;<bot or empty>;stay|follow;<how many>   (one of them says so in party chat)
@@ -34,6 +38,7 @@
 #include "Companions/Talk/Talk.h"
 #include "Companions/Talk/Services/ServiceList.h"
 #include "Companions/Affinity/Gates.h"
+#include "Companions/Travel/SummonOffer.h"
 #include "Commander/CommanderMgr.h"
 #include "Life/Errands/CraftForPlayer.h"
 #include "Life/Requests/Phrases.h"
@@ -254,6 +259,58 @@ bool ChatHandler::HandlePartyBotCraftCommand(char* args)
     }
     BotShared::BotChat::Say(bot, SayLine(player, bot, "craft.start"));
     PSendSysMessage("PBOK;%s;craft;%u;%u", name.c_str(), spellId, count);
+    return true;
+}
+
+bool ChatHandler::HandlePartyBotSummonCommand(char* args)
+{
+    namespace Offer = Companions::SummonOffer;
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    if (!player)
+        return false;
+
+    std::vector<Player*> warlocks;
+    std::string name;
+    if (args && *args)
+    {
+        Player* bot = ExtractPartyBotTarget(&args, name);
+        if (!bot)
+            return false;
+        warlocks.push_back(bot);
+    }
+    else if (Group* group = player->GetGroup())
+        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+            if (Player* member = itr->getSource())
+                if (member != player && member->GetClass() == CLASS_WARLOCK && member->IsInWorld() &&
+                    member->AI() && dynamic_cast<PartyBotAI*>(member->AI()))
+                    warlocks.push_back(member);
+    if (warlocks.empty())
+    {
+        SendSysMessage("PBERR;;nowarlock");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // The first that can (no name: any warlock of the group); else the first one's reason.
+    Player* chosen = warlocks.front();
+    for (Player* w : warlocks)
+    {
+        std::vector<ObjectGuid> helpers;
+        if (Offer::Check(w, player, helpers) == Offer::Refusal::None)
+        {
+            chosen = w;
+            break;
+        }
+    }
+    PartyBotAI* ai = dynamic_cast<PartyBotAI*>(chosen->AI());
+    Offer::Refusal const refusal = Offer::Begin(chosen, player, ai ? ai->PersonalityTags() : std::vector<std::string>());
+    if (refusal != Offer::Refusal::None)
+    {
+        PSendSysMessage("PBERR;%s;%s", chosen->GetName(), Offer::KeyOf(refusal));
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("PBOK;%s;summon", chosen->GetName());
     return true;
 }
 

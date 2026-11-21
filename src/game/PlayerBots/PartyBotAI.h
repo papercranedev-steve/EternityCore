@@ -48,6 +48,8 @@
 #include "Life/Errands/AskProvisions.h"
 #include "Life/Errands/LessonReminder.h"
 #include "Life/Pastimes/WaitAround.h"
+#include "Companions/Travel/Departure.h"
+#include "Companions/Travel/SummonOffer.h"
 #include "Shared/Trade.h"
 #include <array>
 #include <string>
@@ -143,6 +145,24 @@ public:
     // it walks to the portal and goes through after him (else it would walk or teleport there).
     // True while it does.
     bool FollowThroughPortal(Player* pLeader);
+    // Its part in a summoning ritual of the team (Commander/Coordination/Situation/Summon.h): the
+    // warlock casts and channels on the target, a helper walks to the portal and clicks it, and
+    // both keep still. Before UpdateBody (the warlock's channel must be watched). True: busy.
+    bool UpdateSummon();
+    struct SummonHands
+    {
+        bool cast = false;          // the warlock started the ritual
+        uint32 castMs = 0;
+        uint32 sentMs = 0;          // its channel ended (the summon went out)
+    };
+    SummonHands m_summonHands;
+    // The leader leaves by hearthstone or flight path: "shall we wait here?" (one bot asks,
+    // Companions/Travel/Departure.h); a waiting warlock offers to summon him back (SummonOffer.h).
+    Companions::Departure::State m_departure;
+    Companions::SummonOffer::State m_summonOffer;
+    static constexpr uint32 PB_SUMMON_HELPERS_MS = 60 * IN_MILLISECONDS;   // nobody clicked: it gives up
+    static constexpr uint32 PB_SUMMON_ACCEPT_MS = 125 * IN_MILLISECONDS;   // the confirmation's 2 minutes
+    static constexpr float PB_SUMMON_ARRIVED_YD = 30.0f;
     static constexpr float PB_PORTAL_FOLLOW_YD = 40.0f;
 
     ObjectGuid m_leaderGuid;

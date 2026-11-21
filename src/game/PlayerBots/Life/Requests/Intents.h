@@ -27,6 +27,9 @@ namespace Requests
                         // its asks itself)
         Supply,         // "shall I make you water / a healthstone?", "can you make us water?"
                         // (Life/Errands/GiveProvisions, AskProvisions; they keep their own quiet)
+        Departure,      // "you are leaving (hearthstone, flight path): shall we wait here?"
+                        // (Companions/Travel/Departure; once per departure)
+        Summon,         // "shall I summon you back?" (Companions/Travel/SummonOffer; once per departure)
     };
 
     struct IntentDef

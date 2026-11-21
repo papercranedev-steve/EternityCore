@@ -31,6 +31,10 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.cpp
   ${COMPANIONS_DIR}/ClassQuests/ClassQuestFlow.h
   ${COMPANIONS_DIR}/ClassQuests/ClassQuestFlow.cpp
+  ${COMPANIONS_DIR}/Travel/Departure.h
+  ${COMPANIONS_DIR}/Travel/Departure.cpp
+  ${COMPANIONS_DIR}/Travel/SummonOffer.h
+  ${COMPANIONS_DIR}/Travel/SummonOffer.cpp
   ${COMPANIONS_DIR}/Talk/TalkService.h
   ${COMPANIONS_DIR}/Talk/Talk.h
   ${COMPANIONS_DIR}/Talk/Talk.cpp

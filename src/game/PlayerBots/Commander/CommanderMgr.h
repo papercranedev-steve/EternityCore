@@ -16,6 +16,7 @@
 #include "Commander/ThreatFeed.h"
 #include "Commander/Coordination/Situation/Pull/PullMethod.h"
 #include "Commander/Coordination/Situation/Pull/PullPlace.h"
+#include "Commander/Coordination/Situation/Summon.h"
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -82,6 +83,13 @@ namespace Commander
         // may be on another map than the player). False: no commander of its team yet, or
         // nothing changed (follow while not staying).
         bool SetStay(Player const* member, bool stay);
+        // A warlock's summoning ritual (Situation/Summon.h), on the warlock's team's plan. False:
+        // no commander yet, or one is under way.
+        bool StartSummon(Player const* warlock, ObjectGuid target, std::vector<ObjectGuid> const& helpers);
+        // The bot's part in a ritual under way (None: no ritual or not in it); `warlock` and
+        // `target` filled while there is one.
+        SummonRole GetSummonRole(TeamBotAI const* bot, ObjectGuid& warlock, ObjectGuid& target);
+        void EndSummon(Player const* member, bool arrived);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }
