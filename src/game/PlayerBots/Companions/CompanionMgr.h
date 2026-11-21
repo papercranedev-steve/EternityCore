@@ -51,9 +51,12 @@ namespace Companions
         // A temporary bot that acts as a companion for a dev console test scenario (MarkTemporary):
         // in memory only, nothing about it is written to the database.
         bool temporary = false;
-        // 0..MAX_AFFINITY: what the player did for it (class quests, design doc 2026-11-18 §6).
+        // 0..MAX_AFFINITY: what the player did for it (design doc 2026-11-21-companion-affinity §2).
         // Through Get/AddAffinity only (map threads change it).
         uint32 affinity = 0;
+        // Times it got affinity for money the player gave when it asked (AffinitySources). Under
+        // the affinity lock.
+        uint32 moneyGifts = 0;
         // Unix time it was last seen online (OfflineLife counts from it), 0 = never. World thread.
         uint32 lastSeen = 0;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
@@ -89,6 +92,9 @@ namespace Companions
         // returns the new value (0: not a companion).
         uint32 GetAffinity(uint32 charGuid) const;
         uint32 AddAffinity(uint32 charGuid, uint32 points, char const* reason);
+        // Any thread. Counts one money gift if it had fewer than `max` (stored at once, not for
+        // temporary companions); false: not a companion, or `max` reached.
+        bool CountMoneyGift(uint32 charGuid, uint32 max);
 
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.

@@ -1,4 +1,5 @@
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/AffinitySources.h"
 #include "Companions/ClassQuests/PastQuests.h"
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
@@ -88,6 +89,7 @@ namespace Companions
             " `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..100, what the player did for it (class quests)',"
             " `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = professions before recruiting are given (PastProfessions)',"
             " `last_seen` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'unix time last seen online (OfflineLife), 0 = never'," 
+            " `money_gifts` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'times it got affinity for money the player gave (Affinity/AffinitySources)',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
 
@@ -135,6 +137,9 @@ namespace Companions
         std::unique_ptr<QueryResult> lastSeen(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'last_seen'"));
         if (!lastSeen)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `last_seen` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `professions_decided`");
+        std::unique_ptr<QueryResult> moneyGifts(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'money_gifts'"));
+        if (!moneyGifts)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `money_gifts` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_seen`");
         return true;
     }
 
@@ -159,7 +164,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -178,6 +183,7 @@ namespace Companions
                 if (!f[7].GetUInt8())
                     m_professionsPending.push_back(info.charGuid);
                 info.lastSeen = f[8].GetUInt32();
+                info.moneyGifts = f[9].GetUInt32();
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -291,6 +297,19 @@ namespace Companions
         return info.affinity;
     }
 
+    bool CompanionMgr::CountMoneyGift(uint32 charGuid, uint32 max)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || itr->second.moneyGifts >= max)
+            return false;
+        CompanionInfo& info = itr->second;
+        ++info.moneyGifts;
+        if (!info.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `money_gifts` = %u WHERE `char_guid` = %u", info.moneyGifts, charGuid);
+        return true;
+    }
+
     void CompanionMgr::SetRewardMode(uint32 charGuid, RewardMode mode)
     {
         auto itr = m_companions.find(charGuid);
@@ -393,8 +412,9 @@ namespace Companions
         info.recruitedAt = uint32(time(nullptr));
         info.tags = tags;
         info.lastSeen = info.recruitedAt;
-        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `professions_decided`, `last_seen`)"
-            " VALUES (%u, %u, %u, %u, 1, 1, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt, info.lastSeen);
+        info.affinity = AffinitySources::StartAt(bot->GetLevel());
+        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `affinity`, `professions_decided`, `last_seen`)"
+            " VALUES (%u, %u, %u, %u, 1, %u, 1, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt, info.affinity, info.lastSeen);
         m_companions[guid] = info;
 
         // The name cache holds the temporary session's account; after a restart it is read from `characters`.

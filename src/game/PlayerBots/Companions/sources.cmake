@@ -19,6 +19,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/OfflineLife.cpp
   ${COMPANIONS_DIR}/ArtisanTrip.h
   ${COMPANIONS_DIR}/ArtisanTrip.cpp
+  ${COMPANIONS_DIR}/Affinity/AffinitySources.h
+  ${COMPANIONS_DIR}/Affinity/AffinitySources.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.cpp
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.h

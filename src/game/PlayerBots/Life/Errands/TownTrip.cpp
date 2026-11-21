@@ -400,6 +400,13 @@ namespace TownTrip
         Reset(me, state, WorldTimer::getMSTime(), tripMade);
     }
 
+    uint32 TakePaid(TownTripState& state)
+    {
+        uint32 const paid = state.paidCopper;
+        state.paidCopper = 0;
+        return paid;
+    }
+
     bool Update(Player* me, TownTripState& state, Player* leader,
                 std::vector<Trip::ITripPlanner*> const& planners, std::vector<std::string> const& tags,
                 BotShared::Trade::Hands& hands)
@@ -465,6 +472,8 @@ namespace TownTrip
             {
                 if (UpdateCollecting(me, state, leader, hands, now))
                     return true;
+                if (me->GetMoney() > state.moneyBefore)
+                    state.paidCopper += me->GetMoney() - state.moneyBefore;
                 Say(me, me->GetMoney() > state.moneyBefore ? "errand.paid" : "errand.go", tags);
                 Enter(state, Phase::Going, now);
                 return true;

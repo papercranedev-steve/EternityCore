@@ -40,6 +40,7 @@
 #include "Companions/ClassQuests/MirrorSync.h"
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Companions/ArtisanTrip.h"
+#include "Companions/Affinity/AffinitySources.h"
 #include "Life/Errands/QuestPickUp.h"
 #include "Life/Errands/QuestItemUse.h"
 #include "Life/Errands/GiveProvisions.h"
@@ -149,6 +150,8 @@ public:
     // A companion asks to be taken to an Artisan trainer (Companions/ArtisanTrip.h); near one it
     // walks over and learns (m_artisanTask through NpcVisit).
     Companions::ArtisanTrip::State m_artisanTrip;
+    // A companion's affinity from levels and money gifts (Companions/Affinity/AffinitySources.h).
+    Companions::AffinitySources::State m_affinitySources;
     Life::ArtisanTask m_artisanTask;
     Life::NpcVisitState m_artisanVisit;
     // Out of combat: takes the class quest steps the flow wants from their givers near the leader

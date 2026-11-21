@@ -91,6 +91,8 @@ namespace Life
         bool tradeBegun = false;
         uint32 tradeFailures = 0;
         uint32 moneyBefore = 0;
+        // What the leader gave in that trade, until TakePaid reads it.
+        uint32 paidCopper = 0;
     };
 
     namespace TownTrip
@@ -127,6 +129,8 @@ namespace Life
                     BotShared::Trade::Hands& hands);
         // Cancels the question or the trip (combat, a Commander plan).
         void Stop(Player* me, TownTripState& state, BotShared::Trade::Hands& hands);
+        // The money the leader gave when it asked ("pay"), once; 0 = none since the last call.
+        uint32 TakePaid(TownTripState& state);
     }
 }
 

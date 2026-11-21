@@ -739,6 +739,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // it makes what it does not buy (Life/Errands/CraftRun.h: conjured food, poison vials).
         // Before all of them, conjured supplies for others or from a mage (UpdateProvisions):
         // the player asked for them, or a bot stands waiting by the mage.
+        // (first a companion's affinity: levels gained with the player, money he gave for a trip)
+        Companions::AffinitySources::Update(me, pLeader, m_affinitySources, Life::TownTrip::TakePaid(m_townTrip));
         if (resurrectFirst || commanderOutOfCombat)
             PauseProvisions();
         else if (UpdateProvisions(pLeader))
