@@ -13,11 +13,13 @@ namespace Companions
     {
         namespace
         {
-            // Food, drink, or gear it would wear over what it has.
+            // Food, drink, a bigger bag, or gear it would wear over what it has.
             bool Basic(Player const* me, ItemPrototype const* proto)
             {
                 using BotShared::FoodAndDrink::Kind;
                 if (BotShared::FoodAndDrink::ItemSpell(proto, Kind::Food) || BotShared::FoodAndDrink::ItemSpell(proto, Kind::Drink))
+                    return true;
+                if (BotShared::GearUpgrade::IsBagUpgrade(me, proto))
                     return true;
                 return proto->InventoryType != INVTYPE_NON_EQUIP && BotShared::GearUpgrade::IsUpgrade(me, proto);
             }

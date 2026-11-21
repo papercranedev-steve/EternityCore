@@ -23,7 +23,7 @@ namespace Companions
     {
         enum class Gate : uint8
         {
-            TradeBasics,    // gold, food, drink, gear better than what it wears
+            TradeBasics,    // gold, food, drink, gear better than what it wears, a bigger bag
             TradeAnything,  // any item (a lockbox for a rogue too)
             ManageBags,
             WarlockSummon,

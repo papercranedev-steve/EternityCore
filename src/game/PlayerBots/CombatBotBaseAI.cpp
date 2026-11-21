@@ -3557,6 +3557,8 @@ void CombatBotBaseAI::EquipOrUseNewItem()
                 }
             }
         }
+        // Bigger bags over smaller ones (the loop above only fills empty bag slots).
+        BotShared::Inventory::WearBiggerBags(me, m_itemsBeforeTrade);
 
         m_itemsBeforeTrade.clear();
         m_hasTradeSnapshot = false;

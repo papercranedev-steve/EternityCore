@@ -3,7 +3,9 @@
 #include "Player.h"
 #include "Bag.h"
 #include "Item.h"
+#include "ItemPrototype.h"
 #include "WorldSession.h"
+#include <algorithm>
 
 namespace BotShared
 {
@@ -67,6 +69,100 @@ namespace Inventory
             packet.srcslot = item->GetSlot();
             player->GetSession()->HandleAutoEquipItemOpcode(packet);
             if (item->IsEquipped())
+                ++worn;
+        }
+        return worn;
+    }
+
+    namespace
+    {
+        bool IsPlainBag(ItemPrototype const* proto)
+        {
+            return proto->Class == ITEM_CLASS_CONTAINER && proto->SubClass == ITEM_SUBCLASS_CONTAINER;
+        }
+
+        // Where a plain bag of `size` slots goes: an empty bag slot, else the slot of the smallest
+        // plain bag smaller than it. NULL_SLOT: nowhere.
+        uint8 BagSlotFor(Player const* player, uint32 size)
+        {
+            uint8 best = NULL_SLOT;
+            uint32 bestSize = size;
+            for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+            {
+                Item const* bag = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+                if (!bag)
+                    return slot;
+                ItemPrototype const* proto = bag->GetProto();
+                if (IsPlainBag(proto) && proto->ContainerSlots < bestSize)
+                {
+                    best = slot;
+                    bestSize = proto->ContainerSlots;
+                }
+            }
+            return best;
+        }
+
+        // An empty slot in the backpack or a plain bag other than the one in `bagSlot`.
+        bool FreeSlotOutside(Player const* player, uint8 bagSlot, uint16& pos)
+        {
+            for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+                if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                {
+                    pos = uint16(INVENTORY_SLOT_BAG_0) << 8 | i;
+                    return true;
+                }
+            for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+            {
+                if (i == bagSlot)
+                    continue;
+                Bag const* bag = (Bag const*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
+                if (!bag || !IsPlainBag(bag->GetProto()))
+                    continue;
+                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                    if (!bag->GetItemByPos(uint8(j)))
+                    {
+                        pos = uint16(i) << 8 | j;
+                        return true;
+                    }
+            }
+            return false;
+        }
+    }
+
+    uint32 WearBiggerBags(Player* player, std::set<ObjectGuid> const& before)
+    {
+        std::vector<Item*> bags;
+        for (Item* item : BagItems(player))
+            if (before.find(item->GetObjectGuid()) == before.end() && item->IsBag()
+                && ((Bag*)item)->IsEmpty() && GearUpgrade::IsBagUpgrade(player, item->GetProto()))
+                bags.push_back(item);
+        // The biggest first, so it replaces the smallest.
+        std::sort(bags.begin(), bags.end(), [](Item const* a, Item const* b)
+        {
+            return a->GetProto()->ContainerSlots > b->GetProto()->ContainerSlots;
+        });
+
+        uint32 worn = 0;
+        for (Item* item : bags)
+        {
+            uint8 const slot = BagSlotFor(player, item->GetProto()->ContainerSlots);
+            if (slot == NULL_SLOT)
+                continue;
+            // Not into the bag it sits in: take it out of there first.
+            if (item->GetBagSlot() == slot)
+            {
+                uint16 free = 0;
+                if (!FreeSlotOutside(player, slot, free))
+                    continue;
+                player->SwapItem(item->GetPos(), free);
+                if (item->GetBagSlot() == slot)
+                    continue;
+            }
+            // Into an empty slot, or over the old bag: its items move into the new one and the
+            // old bag goes where the new one was (Player::SwapItem).
+            uint16 const dest = uint16(INVENTORY_SLOT_BAG_0) << 8 | slot;
+            player->SwapItem(item->GetPos(), dest);
+            if (item->GetPos() == dest)   // IsEquipped() is false for bag slots
                 ++worn;
         }
         return worn;

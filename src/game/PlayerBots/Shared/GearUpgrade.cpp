@@ -82,5 +82,24 @@ namespace GearUpgrade
     {
         return UpgradeGain(player, proto) > 0;
     }
+
+    bool IsBagUpgrade(Player const* player, ItemPrototype const* proto)
+    {
+        if (!player || !proto || proto->Class != ITEM_CLASS_CONTAINER || proto->SubClass != ITEM_SUBCLASS_CONTAINER)
+            return false;
+        if (player->CanUseItem(proto) != EQUIP_ERR_OK)
+            return false;
+
+        for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+        {
+            Item const* bag = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!bag)
+                return true;
+            ItemPrototype const* worn = bag->GetProto();
+            if (worn->Class == ITEM_CLASS_CONTAINER && worn->SubClass == ITEM_SUBCLASS_CONTAINER && worn->ContainerSlots < proto->ContainerSlots)
+                return true;
+        }
+        return false;
+    }
 }
 }

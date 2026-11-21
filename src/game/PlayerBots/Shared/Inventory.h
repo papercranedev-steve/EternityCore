@@ -29,6 +29,11 @@ namespace BotShared
         // goes to the bags. Returns how many were put on.
         uint32 WearUpgrades(Player* player, std::set<ObjectGuid> const& before);
 
+        // Puts on the plain bags that came in since `before` and are bigger (GearUpgrade::
+        // IsBagUpgrade): into an empty bag slot, else over the smallest plain bag, whose items
+        // move into the new one; the old bag stays in the bags. Returns how many were put on.
+        uint32 WearBiggerBags(Player* player, std::set<ObjectGuid> const& before);
+
         // Every bot wears a shirt, and only the cheap vendor ones (Common Brown / White / Gray
         // Shirt): gear is precious in this world, a plain shirt even commoners own.
         // Does nothing when the shirt slot is taken. `pick` chooses the colour (any number).

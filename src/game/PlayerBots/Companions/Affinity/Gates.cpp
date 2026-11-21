@@ -13,7 +13,7 @@ namespace Companions
 
             // Order: by affinity (the addon lists them so).
             std::vector<Info> const g_gates = {
-                { Gate::TradeBasics,   6,   0,       true,  "trade",    "和他做简单的交易" },
+                { Gate::TradeBasics,   6,   0,       true,  "trade",    "交易给他金币、吃喝、更好的装备和背包" },
                 { Gate::TradeAnything, 15,  0,       true,  "tradeany", "交易给他任何物品" },
                 { Gate::ManageBags,    22,  0,       true,  "bags",     "管理他的背包" },
                 { Gate::WarlockSummon, 25,  WARLOCK, true,  "summon",   "请他召唤你" },

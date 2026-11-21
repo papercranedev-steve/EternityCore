@@ -2,7 +2,8 @@
  * What a companion takes in a trade the player opened, by affinity (Gates TradeBasics,
  * TradeAnything; design .kiro/docs/2026-11-21-companion-affinity.md §5, workspace root):
  *   below TradeBasics    nothing (the player offers anything: the trade is cancelled)
- *   TradeBasics          gold, food, drink, and gear that is an upgrade for it (Shared/GearUpgrade);
+ *   TradeBasics          gold, food, drink, gear that is an upgrade for it, and a plain bag it
+ *                        would wear (an empty bag slot, or bigger than its smallest; Shared/GearUpgrade);
  *                        anything else in the window (worse gear, other items, the "will not be
  *                        traded" slot): the whole trade is cancelled (user 2026-11-21: simple)
  *   TradeAnything        everything

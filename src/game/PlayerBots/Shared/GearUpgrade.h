@@ -22,6 +22,10 @@ namespace BotShared
         bool IsUpgrade(Player const* player, ItemPrototype const* proto);
         // Item levels gained over what it replaces; 0 = not an upgrade (same rules as IsUpgrade).
         uint32 UpgradeGain(Player const* player, ItemPrototype const* proto);
+
+        // A plain bag (not a quiver, soul or herb bag) it would wear: a bag slot is empty, or it
+        // has more slots than the smallest plain bag it wears (Inventory::WearBiggerBags swaps it in).
+        bool IsBagUpgrade(Player const* player, ItemPrototype const* proto);
     }
 }
 
