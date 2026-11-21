@@ -36,7 +36,8 @@ namespace Companions
                 return std::find(tags.begin(), tags.end(), tag) != tags.end();
             }
 
-            // The rank of each primary profession it does not know yet (the trainer's price).
+            // The next rank of each primary profession, when it could learn it now (skill and level
+            // reach the trainer's requirement; user 2026-11-21: no saving for a rank far away).
             uint32 NextRanksCost(Player const* bot)
             {
                 uint32 cost = 0;
@@ -47,7 +48,8 @@ namespace Companions
                     for (P::Rank const& rank : P::RanksOf(skill))
                         if (!bot->HasSpell(rank.spellId))
                         {
-                            cost += rank.cost;
+                            if (bot->GetSkillValuePure(uint16(skill)) >= rank.reqSkillValue && bot->GetLevel() >= rank.reqLevel)
+                                cost += rank.cost;
                             break;
                         }
                 }

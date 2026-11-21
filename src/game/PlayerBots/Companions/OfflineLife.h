@@ -5,7 +5,8 @@
  * Crafting professions: skill points bought with its own money (Shared/SkillUpCost, times the
  * price factor), the lowest business (user 2026-11-21). First the money it keeps: the missing
  * supplies at list price, the repair, the important class lessons (Life/Errands/Trip/
- * LessonPriority) and the next rank of each primary profession. Of what is left it spends at
+ * LessonPriority) and the next rank of each primary profession it could learn now (skill and
+ * level reach the trainer's requirement). Of what is left it spends at
  * most half ("frugal" 30 %, "spendthrift" 80 %). At most 3 points an hour offline ("crafty" 4)
  * and 20 a day ("crafty" 30) for each profession, never past its rank's maximum (a new rank
  * needs the trainer). The professions take turns point by point.
