@@ -498,32 +498,28 @@ namespace Commander
         // 2. Which enemy the tank hits (the same risk, one at a time): TargetAssigner (TankTargets).
     }
 
-    // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
-    void ThreatBehavior::ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                       std::vector<Proposal>& out) const
+    bool ThreatBehavior::DamageNearAggro(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                         ObjectGuid enemy, float* avoidedOut, float* lostOut)
     {
         Player* me = bot->me;
-        Unit const* pVictim = me->GetVictim();
-        if (!pVictim)
-            return;
-
         ObjectGuid const self = me->GetObjectGuid();
         PartyMemberFacts const* myFacts = world.FindMember(self);
-        EnemyFacts const* e = world.FindEnemy(pVictim->GetObjectGuid());
+        EnemyFacts const* e = world.FindEnemy(enemy);
         if (!myFacts || !e || e->victim.IsEmpty() || e->victim == self)
-            return;
+            return false;
         // Doctrine NoHold (fodder, a trap swarm): the tank need not hold it (DamageTargets).
         if (plan.doctrine.Has(e->guid, STAMP_NO_HOLD))
-            return;
+            return false;
 
         // Only protect a holder (also a tank-like ally). If it is on a healer, another dps or an
         // ally that is not tank-like, taking it is not worse.
         if (!IsHeldByHolder(bot, world, plan, *e))
-            return;
+            return false;
 
-        if (ThreatView::Headroom(*e, self) >= NeededHeadroom(world, self, *e))
-            return;
+        // Perception/Forecast/ThreatRoom.h (shared with TargetAssigner).
         float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
+        if (ThreatView::Headroom(*e, self) >= ThreatRoom::Stop(world, self, *e, tickSec))
+            return false;
 
         // What pulling it costs: its hits on me until the tank has it back. Weak enemies on
         // plate, or enemies about to die, cost little.
@@ -531,13 +527,30 @@ namespace Commander
         // nothing but the death risk, its spells hit the holder just as hard.
         float const ttd = Value::EnemyTimeToDie(world, *e);
         float const avoided = PullLoss(world, *e, *myFacts, std::min(TANK_RECLAIM_SEC, ttd));
+        float const lost = Value::LostAction(world, *myFacts, tickSec);
+        if (avoidedOut)
+            *avoidedOut = avoided;
+        if (lostOut)
+            *lostOut = lost;
+        return avoided > lost;
+    }
+
+    // Damage dealers: stop before pulling aggro off a holder, when it is worth it.
+    void ThreatBehavior::ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                       std::vector<Proposal>& out) const
+    {
+        Unit const* pVictim = bot->me->GetVictim();
+        float avoided = 0.0f;
+        float lost = 0.0f;
+        if (!pVictim || !DamageNearAggro(bot, world, plan, pVictim->GetObjectGuid(), &avoided, &lost))
+            return;
 
         // Switching to a safe enemy instead is the brain's (TargetAssigner: its stop rule is the
         // same ThreatRoom::Stop, so the next refresh gives this bot another target if one is
         // safe); until then stop hitting.
         Proposal p = MakeProposal(ProposalTier::Assigned, BotActionType::HoldFire);
         p.reason = "near aggro, stop";
-        p.SetValue(avoided, Value::LostAction(world, *myFacts, tickSec));
+        p.SetValue(avoided, lost);
         out.push_back(p);
     }
 

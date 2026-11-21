@@ -61,6 +61,18 @@ bool ClassRotation::KeepStealth(SpellEntry const* pStealthSpell)
 void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)
 {
     Player* me = m_bot.me;
+    // A healer's wand shot would pull its victim off the holder (TeamBotAI::IsDamagePullingAggro):
+    // not started, and a running one stopped (the cast check only sees the start).
+    if (SpellEntry const* pShoot = sSpellMgr.GetSpellEntry(ClassRotations::SPELL_SHOOT_WAND))
+    {
+        if (m_bot.IsDamagePullingAggro(pVictim, pShoot))
+        {
+            if (Spell const* pRepeat = me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                if (pRepeat->m_spellInfo->Id == ClassRotations::SPELL_SHOOT_WAND)
+                    me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+            return;
+        }
+    }
     if (me->HasSpell(ClassRotations::SPELL_SHOOT_WAND) &&
        !me->IsMoving() &&
         me->GetPowerPercent(POWER_MANA) < manaPct &&

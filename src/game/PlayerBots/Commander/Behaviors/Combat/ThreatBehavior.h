@@ -36,6 +36,11 @@
  *            under tension > 1, only members below ManaBudget::HealCeilingPct. Heal ranks
  *            come from CombatBotBaseAI::ChooseHeal (HealSpells.h), the rotation's own choice.
  *            Targets below HEAL_IGNORE_THREAT_PCT are healed regardless.
+ *            Its damage (the healer damage tiers, doc .kiro/docs/2026-11-21-healer-damage-tiers.md):
+ *            the damage dealers' stop rule (DamageNearAggro), not as a HoldFire (that skips the
+ *            rotation and with it the heal step) but on every damage cast of the bot
+ *            (TeamBotAI::IsDamagePullingAggro, PassesPartyCastChecks; the wand start in
+ *            ClassRotation::ShootWandBelowMana, which also stops a running wand).
  *  Pets    - of hunter / warlock bots (threat-behavior doc 4.7). Tank in the party (alive tank
  *            bot or tank-like ally): taunt autocast (Growl, Torment, Suffering) off, else on.
  *            No tank and the pet has a taunt: it is a holder (damage dealers leave room under
@@ -121,6 +126,14 @@ namespace Commander
         // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
         static float HealPullLoss(TeamBotAI const* bot, WorldModel const& world, Unit* target,
                                   SpellEntry const* spell, float* effectiveOut = nullptr);
+
+        // Map thread. Hitting `enemy` now would pull it off its holder and that costs more than
+        // one tick of `bot`'s damage: on a holder (IsHeldByHolder), not NoHold, room below
+        // ThreatRoom::Stop, PullLoss over TANK_RECLAIM_SEC > Value::LostAction over a tick.
+        // The damage dealers' stop rule (HoldFire below), and for healers every damage cast
+        // (TeamBotAI::IsDamagePullingAggro: a HoldFire would skip their heal step too).
+        static bool DamageNearAggro(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
+                                    ObjectGuid enemy, float* avoidedOut = nullptr, float* lostOut = nullptr);
 
     private:
         void ProposeTank(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,

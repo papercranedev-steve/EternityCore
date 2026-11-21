@@ -320,6 +320,11 @@ public:
     // A cast time damage spell at an enemy the others kill before it lands, or periodic damage on
     // one that dies before it pays (Constraints::WastedCast).
     bool IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) const;
+    // A healer's damage spell at an enemy that would pull it off its holder
+    // (Commander::ThreatBehavior::DamageNearAggro, the damage dealers' stop rule). Healers only:
+    // the damage dealers stop by the threat module's HoldFire, which would skip a healer's heal
+    // step as well (healer damage tiers doc, 2026-11-21).
+    bool IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpell) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a
     // Commander stance module took over (UpdateAI, before and after the Commander hook: the
     // takeover may start in the hook's tick).

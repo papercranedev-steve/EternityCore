@@ -38,6 +38,7 @@
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
+#include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -510,6 +511,19 @@ bool TeamBotAI::IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) cons
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && Commander::Constraints::WastedCast(this, commander->GetWorld(), pTarget, pSpell,
                                                            WorldTimer::getMSTime()) != nullptr;
+}
+
+bool TeamBotAI::IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpell) const
+{
+    // Cheap tests first: only a healer's damage at a creature in combat. The damage dealers get
+    // the same rule as a HoldFire from the threat module (ThreatBehavior::ProposeDamage).
+    if (!pSpell || !pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
+        GetRole() != ROLE_HEALER || !Commander::SpellTags::DealsDamage(pSpell) ||
+        !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && Commander::ThreatBehavior::DamageNearAggro(this, commander->GetWorld(), commander->GetPlan(),
+                                                                   pTarget->GetObjectGuid());
 }
 
 void TeamBotAI::AutoAssignRole()
@@ -996,6 +1010,9 @@ bool TeamBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSp
         return false;
     // The others kill the target before this cast would land (Commander finishing forecast).
     if (IsCastWasted(pTarget, pSpellEntry))
+        return false;
+    // A healer's damage would pull the enemy off its holder (Commander threat stop rule).
+    if (IsDamagePullingAggro(pTarget, pSpellEntry))
         return false;
     // A control the brain keeps unbroken (polymorph, shackle, sap): no damage on it, its area,
     // a chained hit or a melee splash next to it. Every cast of the bot, rotations included.
