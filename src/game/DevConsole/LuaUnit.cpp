@@ -17,6 +17,7 @@
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
+#include "DBCStores.h"
 #include "SpellAuras.h"
 #include "Spell.h"
 #include "ThreatManager.h"
@@ -44,6 +45,10 @@
 #include "Shared/Inventory.h"
 #include "Companions/CompanionMgr.h"
 #include "Shared/Supplies.h"
+#include "Shared/Professions.h"
+#include "Shared/Gathering.h"
+#include "Shared/SkillUpCost.h"
+#include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
 #include "Packets/Spell.h"
@@ -56,6 +61,8 @@
 #include <cstdio>
 #include <cstring>
 #include <list>
+#include <map>
+#include <ctime>
 
 namespace DevConsole
 {
@@ -2014,6 +2021,196 @@ namespace DevConsole
         return 1;
     }
 
+    // ---- companion professions (design .kiro/docs/2026-11-21-companion-professions.md) ----
+    static char const* ProfessionKindName(BotShared::Professions::Kind kind)
+    {
+        switch (kind)
+        {
+            case BotShared::Professions::Kind::Crafting: return "crafting";
+            case BotShared::Professions::Kind::Gathering: return "gathering";
+            case BotShared::Professions::Kind::Secondary: return "secondary";
+            default: return "none";
+        }
+    }
+
+    // u:prof() -> { companion, temporary, decided, away (s since last seen, nil = never), money,
+    //   tags = {...}, list = { {skill, name, kind, value, max, today (offline points today),
+    //   nextcost (copper of the next point, crafting), tool (item, 0 = none), hastool,
+    //   recipes = {known, below (trainer recipes at or below the value), recentmissing (within 25)},
+    //   artisan = {green, state, asks}} } }
+    // Any player; the companion fields only for a companion.
+    static int U_prof(lua_State* L)
+    {
+        namespace Prof = BotShared::Professions;
+        Player* p = CheckPlayer(L, 1);
+        uint32 const guid = p->GetGUIDLow();
+        Companions::CompanionInfo const* info = sCompanionMgr.Find(guid);
+        PartyBotAI const* ai = GetPartyBotAI(p);
+        std::map<uint32, uint32> const today = info ? sCompanionMgr.SkillUpsToday(guid) : std::map<uint32, uint32>();
+
+        lua_newtable(L);
+        lua_pushboolean(L, info != nullptr);
+        lua_setfield(L, -2, "companion");
+        if (info)
+        {
+            lua_pushboolean(L, info->temporary);
+            lua_setfield(L, -2, "temporary");
+            lua_pushboolean(L, sCompanionMgr.ProfessionsDecided(guid));
+            lua_setfield(L, -2, "decided");
+            uint32 const now = uint32(time(nullptr));
+            if (info->lastSeen)
+            {
+                lua_pushinteger(L, now > info->lastSeen ? now - info->lastSeen : 0);
+                lua_setfield(L, -2, "away");
+            }
+            lua_createtable(L, int(info->tags.size()), 0);
+            int t = 0;
+            for (std::string const& tag : info->tags)
+            {
+                lua_pushstring(L, tag.c_str());
+                lua_rawseti(L, -2, ++t);
+            }
+            lua_setfield(L, -2, "tags");
+        }
+        lua_pushinteger(L, p->GetMoney());
+        lua_setfield(L, -2, "money");
+
+        std::vector<uint32> skills = Prof::Primaries();
+        skills.insert(skills.end(), Prof::Secondaries().begin(), Prof::Secondaries().end());
+        lua_newtable(L);
+        int i = 0;
+        for (uint32 skill : skills)
+        {
+            if (!p->HasSkill(uint16(skill)))
+                continue;
+            uint32 const value = p->GetSkillValuePure(uint16(skill));
+            Prof::Kind const kind = Prof::KindOf(skill);
+            lua_newtable(L);
+            lua_pushinteger(L, skill);
+            lua_setfield(L, -2, "skill");
+            SkillLineEntry const* line = sSkillLineStore.LookupEntry(skill);
+            lua_pushstring(L, line && line->name[0] ? line->name[0] : "?");
+            lua_setfield(L, -2, "name");
+            lua_pushstring(L, ProfessionKindName(kind));
+            lua_setfield(L, -2, "kind");
+            lua_pushinteger(L, value);
+            lua_setfield(L, -2, "value");
+            lua_pushinteger(L, p->GetSkillMaxPure(uint16(skill)));
+            lua_setfield(L, -2, "max");
+            auto const pts = today.find(skill);
+            lua_pushinteger(L, pts != today.end() ? pts->second : 0);
+            lua_setfield(L, -2, "today");
+            if (kind == Prof::Kind::Crafting)
+            {
+                lua_pushinteger(L, BotShared::SkillUpCost::OfPoint(skill, value));
+                lua_setfield(L, -2, "nextcost");
+            }
+            if (kind == Prof::Kind::Gathering)
+            {
+                lua_pushinteger(L, BotShared::Gathering::ToolOf(skill));
+                lua_setfield(L, -2, "tool");
+                lua_pushboolean(L, BotShared::Gathering::HasTool(p, skill));
+                lua_setfield(L, -2, "hastool");
+            }
+
+            // §2.3: the trainer recipes at or below its value, the recent ones half left out
+            uint32 known = 0, below = 0, recentMissing = 0;
+            for (Prof::TrainerRecipe const& r : Prof::TrainerRecipes(skill))
+            {
+                bool const has = p->HasSpell(r.spellId);
+                known += has ? 1 : 0;
+                if (r.reqSkillValue > value)
+                    continue;
+                ++below;
+                if (!has && r.reqSkillValue + 25 > value)
+                    ++recentMissing;
+            }
+            lua_createtable(L, 0, 3);
+            lua_pushinteger(L, known);
+            lua_setfield(L, -2, "known");
+            lua_pushinteger(L, below);
+            lua_setfield(L, -2, "below");
+            lua_pushinteger(L, recentMissing);
+            lua_setfield(L, -2, "recentmissing");
+            lua_setfield(L, -2, "recipes");
+
+            if (Prof::KindOf(skill) != Prof::Kind::Secondary)
+            {
+                lua_createtable(L, 0, 3);
+                lua_pushboolean(L, Prof::ArtisanAvailable(p, skill));
+                lua_setfield(L, -2, "green");
+                if (ai && ai->m_artisanTrip.loaded)
+                {
+                    auto const rec = ai->m_artisanTrip.records.find(skill);
+                    Companions::ClassQuestFlow::Record const r = rec != ai->m_artisanTrip.records.end() ? rec->second : Companions::ClassQuestFlow::Record();
+                    lua_pushstring(L, Companions::ClassQuestFlow::StateName(r.state));
+                    lua_setfield(L, -2, "state");
+                    lua_pushinteger(L, r.asksLeft);
+                    lua_setfield(L, -2, "asks");
+                }
+                lua_setfield(L, -2, "artisan");
+            }
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "list");
+        return 1;
+    }
+
+    // u:offline(hours) -> { gains = { {skill, points} }, spent (copper), short (bool) }
+    // A companion party bot as if it had been away `hours` (may be fractional) and came back now:
+    // OfflineLife with its party line and the day's caps, like a real arrival (writes its rows,
+    // except for a temporary companion).
+    static int U_offline(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_Number const hours = luaL_checknumber(L, 2);
+        if (hours < 0 || hours > 24 * 365)
+            return luaL_error(L, "hours out of range");
+        Companions::OfflineLife::Result result;
+        if (!sCompanionMgr.PretendAway(p, uint32(hours * HOUR), result))
+            return luaL_error(L, "%s is not an online companion party bot", p->GetName());
+        lua_newtable(L);
+        lua_createtable(L, int(result.gains.size()), 0);
+        int i = 0;
+        for (Companions::OfflineLife::Gain const& g : result.gains)
+        {
+            lua_createtable(L, 0, 2);
+            lua_pushinteger(L, g.skill);
+            lua_setfield(L, -2, "skill");
+            lua_pushinteger(L, g.points);
+            lua_setfield(L, -2, "points");
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "gains");
+        lua_pushinteger(L, result.spent);
+        lua_setfield(L, -2, "spent");
+        lua_pushboolean(L, result.shortOfMoney);
+        lua_setfield(L, -2, "short");
+        return 1;
+    }
+
+    // u:reprof() -> {first, firstvalue, second, secondvalue, recipes}
+    // A companion party bot forgets its professions and gets them again (PastProfessions).
+    static int U_reprof(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        Companions::PastProfessions::Result r;
+        if (!sCompanionMgr.RedecideProfessions(p, r))
+            return luaL_error(L, "%s is not an online companion party bot", p->GetName());
+        lua_createtable(L, 0, 5);
+        lua_pushinteger(L, r.first);
+        lua_setfield(L, -2, "first");
+        lua_pushinteger(L, r.firstValue);
+        lua_setfield(L, -2, "firstvalue");
+        lua_pushinteger(L, r.second);
+        lua_setfield(L, -2, "second");
+        lua_pushinteger(L, r.secondValue);
+        lua_setfield(L, -2, "secondvalue");
+        lua_pushinteger(L, r.recipes);
+        lua_setfield(L, -2, "recipes");
+        return 1;
+    }
+
     class CaptureChatHandler : public ChatHandler
     {
         public:
@@ -2083,6 +2280,7 @@ namespace DevConsole
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
+            { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },

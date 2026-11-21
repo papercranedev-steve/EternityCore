@@ -328,6 +328,7 @@ namespace Companions
         if (itr == m_companions.end() || !itr->second.temporary)
             return false;
         m_companions.erase(itr);
+        m_present.erase(charGuid);
         return true;
     }
 
@@ -470,16 +471,25 @@ namespace Companions
         }
     }
 
-    void CompanionMgr::Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info)
+    bool CompanionMgr::ProfessionsDecided(uint32 charGuid) const
     {
-        uint32 const now = uint32(time(nullptr));
-        uint32 const offline = info.lastSeen && now > info.lastSeen ? now - info.lastSeen : 0;
-        uint32 const today = OfflineLife::DayOf(time_t(now));
+        return IsCompanion(charGuid)
+            && std::find(m_professionsPending.begin(), m_professionsPending.end(), charGuid) == m_professionsPending.end();
+    }
 
-        // The points of today so far (rows of an earlier day count nothing).
+    std::map<uint32, uint32> CompanionMgr::SkillUpsToday(uint32 charGuid) const
+    {
         std::map<uint32, uint32> points;
+        CompanionInfo const* info = Find(charGuid);
+        if (!info)
+            return points;
+        uint32 const today = OfflineLife::DayOf(time(nullptr));
+        if (info->temporary)
+            return info->temporaryDay == today ? info->temporarySkillUps : points;
+
+        // Rows of an earlier day count nothing.
         std::unique_ptr<QueryResult> rows(CharacterDatabase.PQuery(
-            "SELECT `skill`, `points` FROM `custom_companion_skillup` WHERE `char_guid` = %u AND `day` = %u", info.charGuid, today));
+            "SELECT `skill`, `points` FROM `custom_companion_skillup` WHERE `char_guid` = %u AND `day` = %u", charGuid, today));
         if (rows)
         {
             do
@@ -488,14 +498,60 @@ namespace Companions
                 points[f[0].GetUInt32()] = f[1].GetUInt32();
             } while (rows->NextRow());
         }
+        return points;
+    }
 
+    bool CompanionMgr::PretendAway(Player* bot, uint32 secs, OfflineLife::Result& result)
+    {
+        auto itr = bot ? m_companions.find(bot->GetGUIDLow()) : m_companions.end();
+        PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+        if (itr == m_companions.end() || !ai)
+            return false;
+        uint32 const now = uint32(time(nullptr));
+        itr->second.lastSeen = secs < now ? now - secs : 1;
+        // Counts as its arrival of this session: UpdatePresence does not run it again.
+        m_arrivingSinceMs.erase(itr->first);
+        m_present.insert(itr->first);
+        result = Arrive(bot, ai, itr->second);
+        return true;
+    }
+
+    bool CompanionMgr::RedecideProfessions(Player* bot, PastProfessions::Result& result)
+    {
+        CompanionInfo const* info = bot ? Find(bot->GetGUIDLow()) : nullptr;
+        PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+        if (!info || !ai)
+            return false;
+        result = PastProfessions::Decide(bot, info->tags);
+        ai->m_resetSpellData = true;
+        uint32 const guid = info->charGuid;
+        m_professionsPending.erase(std::remove(m_professionsPending.begin(), m_professionsPending.end(), guid), m_professionsPending.end());
+        if (!info->temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `professions_decided` = 1 WHERE `char_guid` = %u", guid);
+        return true;
+    }
+
+    OfflineLife::Result CompanionMgr::Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info)
+    {
+        uint32 const now = uint32(time(nullptr));
+        uint32 const offline = info.lastSeen && now > info.lastSeen ? now - info.lastSeen : 0;
+        uint32 const today = OfflineLife::DayOf(time_t(now));
+
+        std::map<uint32, uint32> points = SkillUpsToday(info.charGuid);
         OfflineLife::Result const result = OfflineLife::Apply(bot, ai->m_lessonContext, info.tags, offline, m_skillUpPriceFactor, points);
-        for (OfflineLife::Gain const& g : result.gains)
-            CharacterDatabase.PExecute("REPLACE INTO `custom_companion_skillup` (`char_guid`, `skill`, `day`, `points`) VALUES (%u, %u, %u, %u)",
-                info.charGuid, g.skill, today, points[g.skill]);
-
         info.lastSeen = now;
-        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `last_seen` = %u WHERE `char_guid` = %u", now, info.charGuid);
+        if (info.temporary)
+        {
+            info.temporaryDay = today;
+            info.temporarySkillUps = points;
+        }
+        else
+        {
+            for (OfflineLife::Gain const& g : result.gains)
+                CharacterDatabase.PExecute("REPLACE INTO `custom_companion_skillup` (`char_guid`, `skill`, `day`, `points`) VALUES (%u, %u, %u, %u)",
+                    info.charGuid, g.skill, today, points[g.skill]);
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `last_seen` = %u WHERE `char_guid` = %u", now, info.charGuid);
+        }
 
         Player* leader = ai->GetPartyLeader();
         LocaleConstant const locale = leader && leader->GetSession() ? leader->GetSession()->GetSessionDbcLocale() : LOCALE_enUS;
@@ -505,6 +561,7 @@ namespace Companions
         if (!result.gains.empty() || result.shortOfMoney)
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' back after %u min: %u professions grew for %u copper%s.",
                 bot->GetName(), offline / MINUTE, uint32(result.gains.size()), result.spent, result.shortOfMoney ? ", short of money" : "");
+        return result;
     }
 
     void CompanionMgr::UpdatePresence()

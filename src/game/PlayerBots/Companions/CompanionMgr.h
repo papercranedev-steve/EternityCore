@@ -16,7 +16,10 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Companions/OfflineLife.h"
+#include "Companions/PastProfessions.h"
 #include <atomic>
+#include <map>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -53,6 +56,10 @@ namespace Companions
         uint32 affinity = 0;
         // Unix time it was last seen online (OfflineLife counts from it), 0 = never. World thread.
         uint32 lastSeen = 0;
+        // Temporary companions only (PretendAway): the offline skill points of the day, which a
+        // real companion keeps in custom_companion_skillup.
+        uint32 temporaryDay = 0;
+        std::map<uint32, uint32> temporarySkillUps;
     };
 
     uint32 const MAX_AFFINITY = 100;
@@ -100,6 +107,21 @@ namespace Companions
             return info && info->temporary;
         }
 
+        // World thread. Its professions are given (PastProfessions); false for one recruited before
+        // professions existed, until it is next online.
+        bool ProfessionsDecided(uint32 charGuid) const;
+        // World thread. Offline skill points it got today, skill -> points (custom_companion_skillup;
+        // in memory for a temporary companion).
+        std::map<uint32, uint32> SkillUpsToday(uint32 charGuid) const;
+
+        // Dev console (u:offline, u:reprof), world thread; `bot` an online companion party bot.
+        // As if it had been away `secs` and came back now: OfflineLife and its party line, like a
+        // real arrival. False: not one.
+        bool PretendAway(Player* bot, uint32 secs, OfflineLife::Result& result);
+        // Forgets its professions and decides them again (PastProfessions, seeded by the character:
+        // the same ones for a real companion). False: not one.
+        bool RedecideProfessions(Player* bot, PastProfessions::Result& result);
+
     private:
         CompanionMgr() = default;
 
@@ -119,7 +141,7 @@ namespace Companions
         // Who is online: a companion back for ARRIVE_SETTLE_MS (its AI has looked at itself)
         // gets what it did while away (OfflineLife); last_seen is written every LAST_SEEN_MS.
         void UpdatePresence();
-        void Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info);
+        OfflineLife::Result Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info);
 
         struct PendingLogin
         {

@@ -202,3 +202,69 @@ function healtable(u, target)
     end
     return table.concat(rows, "\n")
 end
+
+-- Copper as "1g 2s 3c".
+function gold(c)
+    c = math.floor(c or 0)
+    local g, s = c // 10000, (c // 100) % 100
+    local out = {}
+    if g > 0 then out[#out + 1] = g .. "g" end
+    if s > 0 then out[#out + 1] = s .. "s" end
+    if c % 100 > 0 or #out == 0 then out[#out + 1] = (c % 100) .. "c" end
+    return table.concat(out, " ")
+end
+
+-- A companion's professions as text rows (u:prof), e.g. proftable(player('Fa')).
+-- value/max, today = offline points today, next = price of the next point (crafting),
+-- rec = trainer recipes known / at or below the value, miss = recent ones (within 25) not known,
+-- art = Artisan rank green (*), trip record state and asks left.
+function proftable(u)
+    if type(u) == "string" then u = player(u) end
+    if not u then return "no such player" end
+    local p = u:prof()
+    local head = string.format("%s lv%d %s  money %s", u:name(), u:level(), u:class(), gold(p.money))
+    if p.companion then
+        head = head .. string.format("  %s%s  away %s  tags %s", p.temporary and "temporary " or "",
+            p.decided and "decided" or "NOT decided",
+            p.away and string.format("%.1fh", p.away / 3600) or "never",
+            #p.tags > 0 and table.concat(p.tags, ",") or "-")
+    else
+        head = head .. "  (not a companion)"
+    end
+    local rows = { head }
+    for _, s in ipairs(p.list) do
+        local extra = {}
+        if s.nextcost then extra[#extra + 1] = "next " .. gold(s.nextcost) end
+        if s.tool and s.tool > 0 then extra[#extra + 1] = "tool " .. s.tool .. (s.hastool and " ok" or " MISSING") end
+        if s.artisan then
+            local a = s.artisan
+            extra[#extra + 1] = "art " .. (a.green and "*" or "-") .. (a.state and (" " .. a.state .. "/" .. a.asks) or "")
+        end
+        rows[#rows + 1] = string.format("  %-15s %-9s %3d/%3d today %2d rec %3d/%3d miss %2d  %s", s.name, s.kind,
+            s.value, s.max, s.today, s.recipes.known, s.recipes.below, s.recipes.recentmissing, table.concat(extra, "  "))
+    end
+    return table.concat(rows, "\n")
+end
+
+-- proftable of every companion in the leader's group (default me()).
+function profs(leader)
+    leader = leader or me()
+    if not leader then return "no player online" end
+    local out = {}
+    for _, m in ipairs(leader:group()) do
+        if m:isbot() and m:prof().companion then out[#out + 1] = proftable(m) end
+    end
+    return #out > 0 and table.concat(out, "\n") or "no companion in the group"
+end
+
+-- u:offline(hours) as one text line, then the table after it.
+function offlinetest(u, hours)
+    if type(u) == "string" then u = player(u) end
+    if not u then return "no such player" end
+    local money = u:money()
+    local r = u:offline(hours)
+    local gains = map(r.gains, function(g) return g.skill .. " +" .. g.points end)
+    return string.format("away %.1fh: %s  spent %s (money %s -> %s)%s\n%s", hours,
+        #gains > 0 and table.concat(gains, ", ") or "no gain", gold(r.spent), gold(money), gold(u:money()),
+        r.short and "  SHORT OF MONEY" or "", proftable(u))
+end
