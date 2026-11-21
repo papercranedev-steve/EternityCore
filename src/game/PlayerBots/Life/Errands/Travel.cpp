@@ -34,48 +34,54 @@ namespace Travel
             return (map ? map->GetVisibilityDistance() : 100.0f) + SIGHT_MARGIN_YD;
         }
 
-        // An area's name in the language of `reader`'s client.
-        std::string AreaName(uint32 areaId, Player const* reader)
-        {
-            AreaEntry const* area = AreaEntry::GetById(areaId);
-            if (!area)
-                return "";
-            std::string name = area->Name ? area->Name : "";
-            int const idx = reader && reader->GetSession() ? reader->GetSession()->GetSessionDbLocaleIndex() : -1;
-            sObjectMgr.GetAreaLocaleString(area->Id, idx, &name);
-            return name;
-        }
-
         uint32 Clamped(float seconds)
         {
             return std::min<uint32>(MAX_SEC, std::max<uint32>(MIN_SEC, uint32(std::max(0.0f, seconds))));
         }
 
-        // On the road from now for `seconds`.
-        void SetOut(TravelState& state, uint32 nowMs, uint32 seconds, bool sails)
+        // On the road from now for `seconds`, invisible; its position follows the line to `to`
+        // when both ends are on the continent it is on.
+        void SetOut(Player* me, TravelState& state, WorldLocation const& to, uint32 nowMs, uint32 seconds, bool sails)
         {
             state.phase = TravelState::Phase::OnRoad;
             state.arriveMs = nowMs + seconds * IN_MILLISECONDS;
             state.sailMs = sails ? nowMs + seconds * IN_MILLISECONDS / 2 : 0;
             state.sailSaid = false;
+            me->SetVisibility(VISIBILITY_OFF);
+
+            WorldLocation a, b;
+            MapEntry const* here = sMapStorage.LookupEntry<MapEntry>(me->GetMapId());
+            state.hops = here && here->IsContinent() &&
+                Commander::TravelTime::OutsidePoint(Here(me), a) && Commander::TravelTime::OutsidePoint(to, b) &&
+                a.mapId == b.mapId && a.mapId == me->GetMapId();
+            state.roadFrom = a;
+            state.roadTo = b;
+            state.roadSinceMs = nowMs;
+            state.roadMs = seconds * IN_MILLISECONDS;
+            state.nextHopMs = nowMs + HOP_MS;
         }
 
-        bool NearHome(Player const* me)
+        // Its dot on the world map goes along the road (invisible; not into his sight).
+        void Hop(Player* me, TravelState& state, Player* meet, uint32 nowMs)
         {
-            WorldLocation const& home = me->GetHomeBind();
-            return me->GetMapId() == home.mapId && me->GetDistance2d(home.x, home.y) <= HOME_YD;
-        }
-
-        // It carries a hearthstone that is ready, and has a home on a continent.
-        bool HearthReady(Player const* me)
-        {
-            if (!me->HasItemCount(HEARTHSTONE, 1) || me->IsInCombat())
-                return false;
-            MapEntry const* home = sMapStorage.LookupEntry<MapEntry>(me->GetHomeBind().mapId);
-            if (!home || home->IsDungeon())
-                return false;
-            SpellEntry const* spell = BotShared::ItemUse::OnUseSpell(me, HEARTHSTONE);
-            return spell && me->IsSpellReady(spell, sObjectMgr.GetItemPrototype(HEARTHSTONE));
+            if (!state.hops || nowMs < state.nextHopMs || me->GetMapId() != state.roadFrom.mapId || me->IsBeingTeleported())
+                return;
+            state.nextHopMs = nowMs + HOP_MS;
+            float const f = std::min(0.95f, float(nowMs - state.roadSinceMs) / float(std::max<uint32>(1, state.roadMs)));
+            float const x = state.roadFrom.x + (state.roadTo.x - state.roadFrom.x) * f;
+            float const y = state.roadFrom.y + (state.roadTo.y - state.roadFrom.y) * f;
+            if (me->GetDistance2d(x, y) < HOP_MIN_YD)
+                return;
+            if (meet->GetMapId() == me->GetMapId() && meet->GetDistance2d(x, y) < SightYd(meet->GetMap()) + 50.0f)
+            {
+                state.hops = false;     // close to him now: it stays until the arrival
+                return;
+            }
+            // (the top surface: under a roof or a tree crown does not matter, nobody sees it)
+            float const z = me->GetMap()->GetHeight(x, y, 1000.0f, true, 2000.0f);
+            if (z <= INVALID_HEIGHT)
+                return;
+            me->TeleportTo(me->GetMapId(), x, y, z + 0.5f, std::atan2(state.roadTo.y - y, state.roadTo.x - x));
         }
 
         void Say(Player* me, char const* key, std::vector<std::string> const& tags, Phrases::Vars const& vars)
@@ -85,56 +91,12 @@ namespace Travel
                 BotShared::BotChat::SayToParty(me, text);
         }
 
-        bool Ok(Player const* me, Map* map, WorldLocation const& at, float x, float y, float z, float straight)
+        bool Ok(Player const* me, WorldLocation const& at, float x, float y, float z, float straight)
         {
             BotShared::WalkLength::Point const a{ x, y, z };
             BotShared::WalkLength::Point const b{ at.x, at.y, at.z };
             float const walk = BotShared::WalkLength::Between(me, a, b);
             return walk > 0.0f && walk <= straight * MAX_WALK_FACTOR;
-        }
-
-        // Beyond `meet`'s sight on his map (`me` is on it): see the header. False: none.
-        bool PickSpot(Player* me, Player* meet, WorldLocation const& from, WorldLocation& out)
-        {
-            Map* map = meet->GetMap();
-            float const sight = SightYd(map);
-            WorldLocation const at = Here(meet);
-
-            // Ground he walked lately: the newest point out of sight, not too far.
-            std::vector<Commander::TrailPoint> const trail =
-                Commander::LeaderTrail::Copy(meet->GetObjectGuid(), map->GetId(), map->GetInstanceId());
-            for (auto itr = trail.rbegin(); itr != trail.rend(); ++itr)
-            {
-                if (itr->step != Commander::TrailStep::Ground || itr->magma)
-                    continue;
-                float const d = std::hypot(itr->pos.x - at.x, itr->pos.y - at.y);
-                if (d < sight || d > 2.0f * sight)
-                    continue;
-                out = WorldLocation(map->GetId(), itr->pos.x, itr->pos.y, itr->pos.z, 0.0f);
-                return true;
-            }
-
-            // Open ground around him with a walk to him, the side it comes from first.
-            float base = frand(0.0f, 2.0f * float(M_PI));
-            if (from.mapId == at.mapId)
-                base = std::atan2(from.y - at.y, from.x - at.x);
-            for (float extra : { 0.0f, 30.0f, 60.0f })
-            {
-                float const dist = sight + extra;
-                for (uint32 i = 0; i < 12; ++i)
-                {
-                    // 0, +30, -30, +60, ... degrees from the side it comes from
-                    float const turn = float((i + 1) / 2) * float(M_PI) / 6.0f * ((i % 2) ? 1.0f : -1.0f);
-                    float const x = at.x + std::cos(base + turn) * dist;
-                    float const y = at.y + std::sin(base + turn) * dist;
-                    float const z = map->GetHeight(x, y, at.z + 30.0f, true, 80.0f);
-                    if (z <= INVALID_HEIGHT || std::fabs(z - at.z) > 40.0f || !Ok(me, map, at, x, y, z, dist))
-                        continue;
-                    out = WorldLocation(map->GetId(), x, y, z, 0.0f);
-                    return true;
-                }
-            }
-            return false;
         }
 
         void FaceAndShow(Player* me, Player* meet)
@@ -143,6 +105,88 @@ namespace Travel
             if (meet && me->IsInMap(meet))
                 me->SetFacingToObject(meet);
         }
+
+        bool Invisible(TravelState const& state)
+        {
+            return state.phase == TravelState::Phase::OnRoad || IsHidden(state);
+        }
+    }
+
+    std::string AreaName(uint32 areaId, Player const* reader)
+    {
+        AreaEntry const* area = AreaEntry::GetById(areaId);
+        if (!area)
+            return "";
+        std::string name = area->Name ? area->Name : "";
+        int const idx = reader && reader->GetSession() ? reader->GetSession()->GetSessionDbLocaleIndex() : -1;
+        sObjectMgr.GetAreaLocaleString(area->Id, idx, &name);
+        return name;
+    }
+
+    bool NearHome(Player const* me)
+    {
+        WorldLocation const& home = me->GetHomeBind();
+        return me->GetMapId() == home.mapId && me->GetDistance2d(home.x, home.y) <= HOME_YD;
+    }
+
+    bool HearthReady(Player const* me)
+    {
+        if (!me->HasItemCount(HEARTHSTONE, 1) || me->IsInCombat())
+            return false;
+        MapEntry const* home = sMapStorage.LookupEntry<MapEntry>(me->GetHomeBind().mapId);
+        if (!home || home->IsDungeon())
+            return false;
+        SpellEntry const* spell = BotShared::ItemUse::OnUseSpell(me, HEARTHSTONE);
+        return spell && me->IsSpellReady(spell, sObjectMgr.GetItemPrototype(HEARTHSTONE));
+    }
+
+    bool UseHearth(Player* me)
+    {
+        if (!me->IsStopped())
+            me->StopMoving();
+        SpellCastTargets targets;
+        targets.setUnitTarget(me);
+        return BotShared::ItemUse::UseFromBags(me, HEARTHSTONE, targets);
+    }
+
+    bool SpotOutOfSight(Player* me, Player* watcher, float angle, WorldLocation& out)
+    {
+        Map* map = watcher->GetMap();
+        float const sight = SightYd(map);
+        WorldLocation const at = Here(watcher);
+
+        // Ground he walked lately: the newest point out of sight, not too far.
+        std::vector<Commander::TrailPoint> const trail =
+            Commander::LeaderTrail::Copy(watcher->GetObjectGuid(), map->GetId(), map->GetInstanceId());
+        for (auto itr = trail.rbegin(); itr != trail.rend(); ++itr)
+        {
+            if (itr->step != Commander::TrailStep::Ground || itr->magma)
+                continue;
+            float const d = std::hypot(itr->pos.x - at.x, itr->pos.y - at.y);
+            if (d < sight || d > 2.0f * sight)
+                continue;
+            out = WorldLocation(map->GetId(), itr->pos.x, itr->pos.y, itr->pos.z, 0.0f);
+            return true;
+        }
+
+        // Open ground around him with a walk to him, `angle` first.
+        for (float extra : { 0.0f, 30.0f, 60.0f })
+        {
+            float const dist = sight + extra;
+            for (uint32 i = 0; i < 12; ++i)
+            {
+                // 0, +30, -30, +60, ... degrees from `angle`
+                float const turn = float((i + 1) / 2) * float(M_PI) / 6.0f * ((i % 2) ? 1.0f : -1.0f);
+                float const x = at.x + std::cos(angle + turn) * dist;
+                float const y = at.y + std::sin(angle + turn) * dist;
+                float const z = map->GetHeight(x, y, at.z + 30.0f, true, 80.0f);
+                if (z <= INVALID_HEIGHT || std::fabs(z - at.z) > 40.0f || !Ok(me, at, x, y, z, dist))
+                    continue;
+                out = WorldLocation(map->GetId(), x, y, z, 0.0f);
+                return true;
+            }
+        }
+        return false;
     }
 
     bool InSight(Player const* me, Player const* who)
@@ -170,26 +214,21 @@ namespace Travel
         // Home on the way: the hearthstone first, for real.
         bool hearth = false;
         Commander::TravelTime::Journey home;
-        if (HearthReady(me))
+        if (HearthReady(me) && !NearHome(me))
         {
             home = Commander::TravelTime::JourneyOf(me->GetHomeBind(), Here(meet), run);
             uint32 const viaHome = Clamped(home.seconds) + HEARTH_CAST_SEC;
-            if (viaHome + HEARTH_GAIN_SEC <= seconds && !NearHome(me))
+            if (viaHome + HEARTH_GAIN_SEC <= seconds && UseHearth(me))
             {
-                SpellCastTargets targets;
-                targets.setUnitTarget(me);
-                hearth = BotShared::ItemUse::UseFromBags(me, HEARTHSTONE, targets);
-                if (hearth)
-                {
-                    state.phase = TravelState::Phase::Hearthing;
-                    state.fromHomeSec = Clamped(home.seconds);
-                    state.fromHomeSails = home.sails;
-                    seconds = viaHome;
-                }
+                hearth = true;
+                state.phase = TravelState::Phase::Hearthing;
+                state.fromHomeSec = Clamped(home.seconds);
+                state.fromHomeSails = home.sails;
+                seconds = viaHome;
             }
         }
         if (!hearth)
-            SetOut(state, state.sinceMs, seconds, j.sails);
+            SetOut(me, state, Here(meet), state.sinceMs, seconds, j.sails);
 
         Phrases::Vars vars;
         vars["leader"] = meet->GetName();
@@ -217,7 +256,7 @@ namespace Travel
     {
         if (me && state.phase == TravelState::Phase::Hearthing && me->IsNonMeleeSpellCasted(false))
             me->InterruptNonMeleeSpells(false);
-        if (me && IsHidden(state))
+        if (me && Invisible(state))
             me->SetVisibility(VISIBILITY_ON);
         state = TravelState();
     }
@@ -241,64 +280,65 @@ namespace Travel
                 if (!busy && NearHome(me))
                 {
                     state.from = Here(me);
-                    SetOut(state, now, state.fromHomeSec, state.fromHomeSails);
+                    SetOut(me, state, Here(meet), now, state.fromHomeSec, state.fromHomeSails);
                 }
                 else if (!busy)
                 {
                     // (the cast broke: on from here)
-                    SetOut(state, now, state.fromHereSec, state.fromHereSails);
+                    SetOut(me, state, Here(meet), now, state.fromHereSec, state.fromHereSails);
                 }
                 return Step::OnRoad;
             }
 
             case TravelState::Phase::OnRoad:
             {
-                // He came by, or a warlock summoned it.
-                if (InSight(me, meet))
+                bool const sight = InSight(me, meet);
+                // Summoned, or he walked up to it: it is simply there.
+                if (sight && me->IsWithinDist(meet, CLOSE_YD))
                 {
                     Stop(me, state);
                     return Step::None;
                 }
-                if (state.sailMs && !state.sailSaid && now >= state.sailMs)
+                if (!sight)
                 {
-                    state.sailSaid = true;
-                    Phrases::Vars vars;
-                    vars["leader"] = meet->GetName();
-                    Say(me, "travel.sail", tags, vars);
+                    if (state.sailMs && !state.sailSaid && now >= state.sailMs)
+                    {
+                        state.sailSaid = true;
+                        Phrases::Vars vars;
+                        vars["leader"] = meet->GetName();
+                        Say(me, "travel.sail", tags, vars);
+                    }
+                    if (now < state.arriveMs)
+                    {
+                        Hop(me, state, meet, now);
+                        return Step::OnRoad;
+                    }
                 }
-                if (now < state.arriveMs)
-                    return Step::OnRoad;
 
                 Map const* map = meet->GetMap();
                 if (!map || map->IsBattleGround())
                     return Step::OnRoad;
                 // A dungeon: through its entrance, as a player walks in.
-                if (map->IsDungeon())
+                if (map->IsDungeon() && !me->IsInMap(meet))
                 {
                     AreaTriggerTeleport const* in = sObjectMgr.GetMapEntranceTrigger(map->GetId());
                     if (in && me->TeleportTo(in->destination))
                     {
+                        me->SetVisibility(VISIBILITY_ON);
                         state = TravelState();
                         return Step::Arrived;
                     }
                     return Step::OnRoad;
                 }
                 // His map: there it picks the spot (that map's navmesh, its thread).
-                if (!me->IsInMap(meet))
-                {
-                    me->SetVisibility(VISIBILITY_OFF);
-                    if (!me->TeleportTo(meet->GetMapId(), meet->GetPositionX(), meet->GetPositionY(), meet->GetPositionZ(), meet->GetOrientation()))
-                    {
-                        me->SetVisibility(VISIBILITY_ON);
-                        return Step::OnRoad;
-                    }
-                    state.phase = TravelState::Phase::Hidden;
-                    state.hiddenSinceMs = now;
-                    return Step::OnRoad;
-                }
-                me->SetVisibility(VISIBILITY_OFF);
                 state.phase = TravelState::Phase::Hidden;
                 state.hiddenSinceMs = now;
+                if (!me->IsInMap(meet))
+                {
+                    if (!me->TeleportTo(meet->GetMapId(), meet->GetPositionX(), meet->GetPositionY(), meet->GetPositionZ(), meet->GetOrientation()))
+                        state.phase = TravelState::Phase::OnRoad;
+                    return Step::OnRoad;
+                }
                 // (same map: picks the spot right away)
             }
             // fall through
@@ -314,15 +354,12 @@ namespace Travel
                     return Step::OnRoad;
                 }
                 WorldLocation spot;
-                if (!PickSpot(me, meet, state.from, spot))
+                float const angle = state.from.mapId == meet->GetMapId()
+                    ? std::atan2(state.from.y - meet->GetPositionY(), state.from.x - meet->GetPositionX())
+                    : frand(0.0f, 2.0f * float(M_PI));
+                if (!SpotOutOfSight(me, meet, angle, spot) || !me->TeleportTo(spot))
                 {
                     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s: no spot out of %s's sight, shows itself here.", me->GetName(), meet->GetName());
-                    FaceAndShow(me, meet);
-                    state = TravelState();
-                    return Step::Arrived;
-                }
-                if (!me->TeleportTo(spot))
-                {
                     FaceAndShow(me, meet);
                     state = TravelState();
                     return Step::Arrived;

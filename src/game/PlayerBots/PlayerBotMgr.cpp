@@ -2681,7 +2681,7 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
         Player* pBot = ExtractPartyBotTarget(&args, name);
         if (!pBot)
             return false;
-        static_cast<PartyBotAI*>(pBot->AI())->botEntry->requestRemoval = true;
+        static_cast<PartyBotAI*>(pBot->AI())->Dismiss();
         PSendSysMessage("PBOK;%s;remove", name.c_str());
         return true;
     }
@@ -2698,7 +2698,7 @@ bool ChatHandler::HandlePartyBotRemoveCommand(char* args)
     {
         if (PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI()))
         {
-            pAI->botEntry->requestRemoval = true;
+            pAI->Dismiss();
             return true;
         }
     }

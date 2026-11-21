@@ -201,6 +201,33 @@ void PartyBotAI::PauseProvisions()
     Life::AskProvisions::Pause(me, m_askProvisions, m_tradeHands);
 }
 
+bool PartyBotAI::UpdateWalkAway()
+{
+    Player* pWatcher = ObjectAccessor::FindPlayer(m_leaderGuid);
+    if (Life::WalkAway::IsActive(m_walkAway))
+        return pWatcher && Life::WalkAway::Update(me, m_walkAway, pWatcher);
+    if (m_walkAwayTried || !pWatcher || !LootsForSelf() || sCompanionMgr.IsTemporary(me->GetGUIDLow()))
+        return false;
+    m_walkAwayTried = true;
+    // (on its way to him, invisible: nobody sees it go)
+    if (Life::Travel::IsActive(m_travel))
+    {
+        Life::Travel::Stop(me, m_travel);
+        return false;
+    }
+    return Life::WalkAway::Begin(me, m_walkAway, pWatcher, PersonalityTags());
+}
+
+void PartyBotAI::Dismiss()
+{
+    // A companion is sent away like a player kicked from the party: it leaves on its own
+    // (UpdateWalkAway); other party bots log out at once.
+    if (LootsForSelf() && !sCompanionMgr.IsTemporary(me->GetGUIDLow()) && me->GetGroup())
+        me->RemoveFromGroup();
+    else
+        botEntry->requestRemoval = true;
+}
+
 bool PartyBotAI::UpdateTravel(Player* pAnchor)
 {
     uint32 const now = std::max<uint32>(WorldTimer::getMSTime(), 1);
@@ -899,6 +926,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     Player* pLeader = GetPartyLeader();
     if (!pLeader)
     {
+        // Sent away in front of him: it leaves as a person does, then logs out.
+        if (UpdateWalkAway())
+            return;
         botEntry->requestRemoval = true;
         return;
     }
@@ -930,6 +960,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // He leaves by hearthstone or flight path: shall we wait? A waiting warlock: shall I summon
     // you back? (before the taxi wait below: the question comes as he takes off)
     Companions::Departure::Update(me, pLeader, m_departure, staying, PersonalityTags());
+    // He made an inn his home: a companion with him does the same.
+    if (LootsForSelf())
+        Companions::HomeBind::Update(me, pLeader, m_homeBind, staying, PersonalityTags());
     if (me->GetClass() == CLASS_WARLOCK)
         Companions::SummonOffer::Update(me, pLeader, m_summonOffer, staying, PersonalityTags());
 

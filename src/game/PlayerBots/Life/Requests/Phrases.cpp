@@ -237,6 +237,17 @@ namespace Phrases
             { "travel.start.hearth", "chatty",  "{leader}，我在{zone}！我先炉石回{home}，再赶过去，{minutes}分钟左右！" },
             { "travel.sail",         "default", "上船了。" },
             { "travel.sail",         "chatty",  "上船了！这船晃得厉害……" },
+            // Sent away from the party in front of him (Life/Errands/WalkAway, a whisper). {leader}, {home}.
+            { "leave.bye",           "default", "那我先走了，有事再叫我。" },
+            { "leave.bye",           "quiet",   "走了。有事叫我。" },
+            { "leave.bye",           "chatty",  "好吧，那我先走啦！{leader}，想我了就叫我！" },
+            { "leave.bye.hearth",    "default", "那我先回{home}了，有事再叫我。" },
+            { "leave.bye.hearth",    "quiet",   "回{home}了。" },
+            { "leave.bye.hearth",    "homebody", "正好，回{home}歇歇。有事再叫我。" },
+            // He bound his hearthstone at an inn (Companions/Travel/HomeBind). {leader}, {home}.
+            { "home.bind",           "default", "我也把炉石绑在{home}了。" },
+            { "home.bind",           "quiet",   "我也绑这儿。" },
+            { "home.bind",           "homebody", "{home}挺好的，我也在这儿安家吧。" },
             { "travel.near",         "default", "快到了。" },
             { "travel.near",         "quiet",   "到了。" },
             // The player's words in the talk window (tag "default" only).

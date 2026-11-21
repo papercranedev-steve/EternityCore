@@ -35,6 +35,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Travel/Departure.cpp
   ${COMPANIONS_DIR}/Travel/SummonOffer.h
   ${COMPANIONS_DIR}/Travel/SummonOffer.cpp
+  ${COMPANIONS_DIR}/Travel/HomeBind.h
+  ${COMPANIONS_DIR}/Travel/HomeBind.cpp
   ${COMPANIONS_DIR}/Talk/TalkService.h
   ${COMPANIONS_DIR}/Talk/Talk.h
   ${COMPANIONS_DIR}/Talk/Talk.cpp

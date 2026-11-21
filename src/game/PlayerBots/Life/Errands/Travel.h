@@ -9,8 +9,11 @@
  *    ("我在暮色森林，坐鸟过去，大概 4 分钟。"). Home on the way (its hearthstone ready, the
  *    journey from its bind point HEARTH_GAIN_SEC shorter): it really casts the hearthstone
  *    first and goes on from home ("先用炉石回暴风城"); a broken cast: from here.
- *  - On the road: the bot stays where it is (nobody sees it there), says "上船了" halfway when
- *    it crosses the sea. Ends at once when the one it joins can see it (he came by, a summon).
+ *  - On the road: the bot is invisible (nobody meets it, no creature sees it) and moves along
+ *    the straight line between the two places every HOP_MS (its dot on the world map goes his
+ *    way; on one continent only, and never into his sight); says "上船了" halfway when it
+ *    crosses the sea. Summoned or he walked up to it (within CLOSE_YD): it shows itself and the
+ *    travel ends; he only came into sight distance: the arrival below starts at once.
  *  - Arrival: it appears out of his sight and walks the last stretch (the caller's walk,
  *    Commander/Behaviors/Movement/Arrival). Where:
  *      his map is a dungeon: its entrance inside (as a player walks in through the portal);
@@ -60,6 +63,13 @@ namespace Life
         bool fromHomeSails = false;
         uint32 fromHereSec = 0;
         bool fromHereSails = false;
+        // On the road: the line its position follows (outside points of both ends, one
+        // continent), since when and how long.
+        bool hops = false;
+        WorldLocation roadFrom, roadTo;
+        uint32 roadSinceMs = 0;
+        uint32 roadMs = 0;
+        uint32 nextHopMs = 0;
     };
 
     namespace Travel
@@ -75,6 +85,21 @@ namespace Life
         constexpr uint32 HEARTH_CAST_SEC = 15;      // the 10 s cast and the loading
         constexpr uint32 HEARTH_GAIN_SEC = 60;
         constexpr float HOME_YD = 60.0f;            // within this of its bind point: it is home
+        constexpr uint32 HOP_MS = 20 * IN_MILLISECONDS;
+        constexpr float HOP_MIN_YD = 100.0f;        // shorter steps wait for the next hop
+        constexpr float CLOSE_YD = 60.0f;           // a summon, or he came to it
+
+        // An area's name in the language of `reader`'s client.
+        std::string AreaName(uint32 areaId, Player const* reader);
+        // It carries a hearthstone that is ready, and has a home on a continent.
+        bool HearthReady(Player const* me);
+        bool NearHome(Player const* me);
+        // Casts the hearthstone as a player does (Shared/ItemUse). True: the cast started.
+        bool UseHearth(Player* me);
+        // A spot on `watcher`'s map beyond his sight with a walk from it to him (`me` on that
+        // map walks it): ground he walked lately (LeaderTrail), else open ground around him,
+        // the direction `angle` (radians, from him) first. False: none.
+        bool SpotOutOfSight(Player* me, Player* watcher, float angle, WorldLocation& out);
 
         enum class Step : uint8
         {
@@ -97,7 +122,7 @@ namespace Life
             return state.phase == TravelState::Phase::Hidden || state.phase == TravelState::Phase::Revealing;
         }
         Step Update(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags);
-        // Shows the bot again if it was hidden.
+        // Shows the bot again if it was invisible (on the road, hidden).
         void Stop(Player* me, TravelState& state);
     }
 }

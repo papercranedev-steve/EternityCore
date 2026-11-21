@@ -51,6 +51,8 @@
 #include "Companions/Travel/Departure.h"
 #include "Companions/Travel/SummonOffer.h"
 #include "Life/Errands/Travel.h"
+#include "Life/Errands/WalkAway.h"
+#include "Companions/Travel/HomeBind.h"
 #include "Shared/Trade.h"
 #include <array>
 #include <string>
@@ -131,6 +133,16 @@ public:
     // it waits, up to PB_SUMMON_WAIT_MS), else it travels there on its own (Life/Errands/Travel)
     // and walks the last stretch (Arrival). True: busy, nothing else this tick (no teleport).
     bool UpdateTravel(Player* pAnchor);
+    // Out of the party while the player who led it sees it (kicked, `.partybot remove`, he left
+    // the group): a companion says goodbye and leaves by hearthstone or on foot out of his
+    // sight (Life/Errands/WalkAway) before it logs out. True: still leaving. Tried once.
+    bool UpdateWalkAway();
+    Life::WalkAwayState m_walkAway;
+    bool m_walkAwayTried = false;
+    // `.partybot remove`: a companion leaves the group (and then walks away), others log out.
+    void Dismiss();
+    // A companion binds its hearthstone where the leader binds his (Companions/Travel/HomeBind).
+    Companions::HomeBind::State m_homeBind;
     static constexpr uint32 PB_SUMMON_WAIT_MS = 3 * MINUTE * IN_MILLISECONDS;
     Life::TravelState m_travel;
     uint32 m_farSinceMs = 0;
