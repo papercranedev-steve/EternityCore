@@ -73,7 +73,8 @@ void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)
             return;
         }
     }
-    if (me->HasSpell(ClassRotations::SPELL_SHOOT_WAND) &&
+    // Learned and a wand equipped: without one the cast failed every tick.
+    if (m_bot.CanShootWand() &&
        !me->IsMoving() &&
         me->GetPowerPercent(POWER_MANA) < manaPct &&
        !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))

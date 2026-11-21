@@ -1150,6 +1150,14 @@ bool TeamBotAI::AttackStart(Unit* pVictim)
     return false;
 }
 
+bool TeamBotAI::CanShootWand() const
+{
+    if (!me->HasSpell(ClassRotations::SPELL_SHOOT_WAND))
+        return false;
+    SpellEntry const* pShoot = sSpellMgr.GetSpellEntry(ClassRotations::SPELL_SHOOT_WAND);
+    return pShoot && me->HasItemFitToSpellReqirements(pShoot);
+}
+
 bool TeamBotAI::IsClothCaster() const
 {
     switch (me->GetClass())

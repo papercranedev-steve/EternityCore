@@ -710,6 +710,9 @@ namespace Commander
         float drinkManaPerSec = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (TeamBotAI::IsDrinking)
+        // Bots: Shoot is learned and a wand that is not broken is equipped (TeamBotAI::
+        // CanShootWand). A healer's free attack (healer damage tiers doc 2026-11-21).
+        bool canShootWand = false;
         std::vector<DebuffFacts> debuffs;           // players only
         // Harmful auras of any caster on it (players only), what Stoneform removes: a poison,
         // a disease (SpellEntry::Dispel), a bleed (MECHANIC_BLEED on the spell or an effect).

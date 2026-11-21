@@ -185,6 +185,10 @@ public:
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
 
     bool AttackStart(Unit* pVictim);
+    // Shoot (5019) is learned and an unbroken wand is equipped (the server's own item rule,
+    // Player::HasItemFitToSpellReqirements). Shoot has no global cooldown (spell_template:
+    // startRecoveryTime 0) and any other cast interrupts it.
+    bool CanShootWand() const;
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
     // A member whose body lies here unreleased (CORPSE) in range and sight of the resurrection.
