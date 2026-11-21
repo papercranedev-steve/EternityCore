@@ -19,8 +19,8 @@
  *   .partybot companions                      the companions you recruited (addon Companions panel):
  *     PBCMP;BEGIN;<count>
  *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<ready 1, 0 = not built yet>;<label>   what
- *            affinity allows (Affinity/Gates, all of them by affinity: the addon shows the goals
- *            that are not built yet as "尚未开放")
+ *            affinity allows (Affinity/Gates, all of them by affinity: the addon also shows the
+ *            ones not built yet, as goals)
  *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
  *            <affinity 0-100>;<state 0 at his place (not in the world), 1 in the world, 2 in your
  *            group (also while coming back with you)>;<zone id: where he is>;<recruited at>;

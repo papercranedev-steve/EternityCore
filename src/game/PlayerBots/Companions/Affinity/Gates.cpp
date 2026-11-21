@@ -11,9 +11,11 @@ namespace Companions
             uint32 constexpr WARLOCK = 1 << (CLASS_WARLOCK - 1);
             uint32 constexpr MAGE = 1 << (CLASS_MAGE - 1);
 
-            // Order: by affinity (the addon lists them so).
+            // Order: by affinity (the addon lists them so). Labels are what the player reads on the
+            // Companions panel's affinity ruler: keep them short and general (user 2026-11-21: the
+            // first trade gate stays "和他做简单的交易", not a list of what he accepts).
             std::vector<Info> const g_gates = {
-                { Gate::TradeBasics,   6,   0,       true,  "trade",    "交易给他金币、吃喝、更好的装备和背包" },
+                { Gate::TradeBasics,   6,   0,       true,  "trade",    "和他做简单的交易" },
                 { Gate::TradeAnything, 15,  0,       true,  "tradeany", "交易给他任何物品" },
                 { Gate::ManageBags,    22,  0,       true,  "bags",     "管理他的背包" },
                 { Gate::WarlockSummon, 25,  WARLOCK, true,  "summon",   "请他召唤你" },
