@@ -27,6 +27,7 @@
 #include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Life/Errands/CraftRun.h"
 #include "Life/Errands/LootRun.h"
+#include "Life/Errands/GatherRun.h"
 #include "Life/Errands/QuestObjectRun.h"
 #include "Life/Errands/QuestTurnIn.h"
 #include "Life/Errands/NpcVisit.h"
@@ -180,6 +181,8 @@ public:
     Commander::HumanFollow::IdleState m_humanIdle;
     // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
     Life::LootRunState m_lootRun;
+    // Out of combat: a companion skins corpses and opens herb and ore nodes (Life/Errands/GatherRun.h).
+    Life::GatherRunState m_gatherRun;
     // Out of combat: the quest objects a companion's own quests need (Life/Errands/QuestObjectRun.h).
     Life::QuestObjectRunState m_questObjectRun;
     // Out of combat: a companion turns in its finished quests at a giver near the leader

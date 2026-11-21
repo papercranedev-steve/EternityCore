@@ -1,4 +1,5 @@
 #include "Shared/GearUpgrade.h"
+#include "Shared/GearSources.h"
 #include "Player.h"
 #include "Item.h"
 #include "ItemPrototype.h"
@@ -53,6 +54,10 @@ namespace GearUpgrade
         if (!player || !proto || (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR))
             return 0;
         if (player->CanUseItem(proto) != EQUIP_ERR_OK)
+            return 0;
+        // Tools (Mining Pick, Skinning Knife) stay in the bags (Supplies counts them there), and
+        // fishing poles and the like are not worn either (GearSources::IsOddity).
+        if (GearSources::IsOddity(proto))
             return 0;
         if (proto->Class == ITEM_CLASS_ARMOR && IsBodyArmor(proto->InventoryType) && proto->SubClass != BestArmor(player))
             return 0;

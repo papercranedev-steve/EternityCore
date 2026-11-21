@@ -131,6 +131,7 @@ bool PartyBotAI::GetsFreeAbilities() const
 void PartyBotAI::StopErrands()
 {
     Life::LootRun::Stop(me, m_lootRun);
+    Life::GatherRun::Stop(me, m_gatherRun);
     Life::QuestObjectRun::Stop(me, m_questObjectRun);
     Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
     Life::QuestPickUp::Stop(me, m_questPickUp);
@@ -728,6 +729,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // A companion loots for itself after the fight (Life/Errands/LootRun.h). Not while the
         // Commander has an out-of-combat plan (a pull being set up, a retreat) or a resurrection
         // is about to be cast.
+        // Then it skins and gathers (Life/Errands/GatherRun.h: what the leader can gather is his).
         // Then the quest objects its own quests need (Life/Errands/QuestObjectRun.h), then its
         // finished quests at a giver near the leader (Life/Errands/QuestTurnIn.h).
         // Last its business at a vendor / armorer and its class trainer near the leader
@@ -751,6 +753,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // Out in the field: important lessons waiting (party chat, it keeps following).
             Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
+                Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||

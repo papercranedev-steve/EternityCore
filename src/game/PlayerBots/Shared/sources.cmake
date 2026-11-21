@@ -20,6 +20,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Crafting.cpp
   ${BOTSHARED_DIR}/FoodAndDrink.h
   ${BOTSHARED_DIR}/FoodAndDrink.cpp
+  ${BOTSHARED_DIR}/Gathering.h
+  ${BOTSHARED_DIR}/Gathering.cpp
   ${BOTSHARED_DIR}/GearSources.h
   ${BOTSHARED_DIR}/GearSources.cpp
   ${BOTSHARED_DIR}/GearUpgrade.h

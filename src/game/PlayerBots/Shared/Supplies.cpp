@@ -1,6 +1,8 @@
 #include "Shared/Supplies.h"
 #include "Shared/Crafting.h"
+#include "Shared/Gathering.h"
 #include "Shared/PetFood.h"
+#include "Shared/Professions.h"
 #include "Shared/Poisons.h"
 #include "Player.h"
 #include "Item.h"
@@ -179,6 +181,22 @@ namespace Supplies
                     out.push_back(Make(Goods::Exact(extra.itemId), extra.target, extra.priority));
         }
 
+        // ---- Gathering tools ----
+
+        // One of each its gathering skills need (Mining Pick, Skinning Knife: Shared/Gathering).
+        // Important, not critical: no trip for it alone, bought with the next supplies.
+        void ToolNeeds(Player const* player, Needs& out)
+        {
+            for (uint32 skill : Professions::Primaries())
+            {
+                if (!player->HasSkill(uint16(skill)))
+                    continue;
+                uint32 const tool = Gathering::ToolOf(skill);
+                if (tool && IsSoldByVendors(tool))
+                    out.push_back(Make(Goods::Exact(tool), 1, Priority::Important));
+            }
+        }
+
         // ---- Ammo ----
 
         uint32 RangedAmmoSubClass(Player const* player)
@@ -290,6 +308,7 @@ namespace Supplies
             &PetFoodNeeds,
             &MadeFoodAndDrinkNeeds,
             &PoisonNeeds,
+            &ToolNeeds,
         };
 
         // Every row of every source, `have` counted.

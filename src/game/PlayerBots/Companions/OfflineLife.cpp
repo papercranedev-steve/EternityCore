@@ -1,6 +1,7 @@
 #include "Companions/OfflineLife.h"
 #include "Life/Errands/Trip/LessonPriority.h"
 #include "Life/Requests/Phrases.h"
+#include "Shared/Gathering.h"
 #include "Shared/Professions.h"
 #include "Shared/SkillUpCost.h"
 #include "Shared/Supplies.h"
@@ -78,6 +79,9 @@ namespace Companions
                 for (uint32 skill : P::Primaries())
                 {
                     if (P::KindOf(skill) != kind || !bot->HasSkill(uint16(skill)))
+                        continue;
+                    // No Mining Pick, no Skinning Knife: no gathering (user 2026-11-21).
+                    if (!BotShared::Gathering::HasTool(bot, skill))
                         continue;
                     auto done = today.find(skill);
                     uint32 const usedToday = done != today.end() ? done->second : 0;

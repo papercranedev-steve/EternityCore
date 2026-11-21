@@ -10,7 +10,8 @@
  * and 20 a day ("crafty" 30) for each profession, never past its rank's maximum (a new rank
  * needs the trainer). The professions take turns point by point.
  * Gathering professions: free and slow, a point every 8 offline hours, 3 a day ("gatherer":
- * every 4 hours, 5 a day); the real practice is gathering with the player.
+ * every 4 hours, 5 a day), only with its tool (Mining Pick, Skinning Knife); the real practice
+ * is gathering with the player (Life/Errands/GatherRun).
  * "A day" is the server's local calendar day; the points of the day are the caller's to keep.
  *
  * World thread, the bot in the world.
