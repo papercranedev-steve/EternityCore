@@ -25,6 +25,7 @@ local DIR = SCRIPT_DIR .. "/tests/prof"
 local LOG_DIR = "../logs/proftest"
 local MONITOR_MS = 2000
 local AWAY_YD = 30
+local POS_MS = 10000
 local HORDE_RACES = { [2] = true, [5] = true, [6] = true, [8] = true }
 -- the capitals' middle (alliance: the Stormwind gate spot of the life tests, the trade district
 -- within 150 yd; horde: the Valley of Strength)
@@ -164,6 +165,13 @@ local function monitor(leader, c)
                     end
                     local d = b:dist(leader)
                     local away = d == nil or d > AWAY_YD
+                    -- where it really is, every POS_MS while away (to compare with the map)
+                    if away and now() - (st.posMs or 0) >= POS_MS then
+                        local p = b:pos()
+                        log(string.format("POS %s %.0f, %.0f  %s from you%s", b:name(), p.x, p.y,
+                            d and string.format("%.0f yd", d) or "other map", b:moving() and ", moving" or ", standing"))
+                        st.posMs = now()
+                    end
                     if away ~= st.away then
                         log(string.format("CHANGE %s %s (%s)", b:name(), away and "left you" or "back with you",
                             d and string.format("%.0f yd", d) or "other map"))
