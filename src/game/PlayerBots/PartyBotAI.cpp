@@ -37,6 +37,8 @@
 #include "Commander/VetoChecks.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/GatherPlanner.h"
+#include "Commander/Coordination/Situation/Summon.h"
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
 #include "Commander/Behaviors/CurrentAction.h"
@@ -197,6 +199,47 @@ void PartyBotAI::PauseProvisions()
 {
     Life::GiveProvisions::Pause(me, m_giveProvisions, m_tradeHands);
     Life::AskProvisions::Pause(me, m_askProvisions, m_tradeHands);
+}
+
+bool PartyBotAI::UpdateTravel(Player* pAnchor)
+{
+    uint32 const now = std::max<uint32>(WorldTimer::getMSTime(), 1);
+    if (!Life::Travel::IsActive(m_travel))
+    {
+        bool const farBehind = !me->IsInMap(pAnchor) || !me->IsWithinDistInMap(pAnchor, Commander::Summon::FAR_YD);
+        if (!farBehind || Life::Travel::InSight(me, pAnchor))
+        {
+            m_farSinceMs = 0;
+            return false;
+        }
+        if (!m_farSinceMs)
+            m_farSinceMs = now;
+        // A warlock will summon it once the team settles: it waits where it is, a while.
+        if (Commander::GatherPlanner::SummonComing(pAnchor, me) &&
+            WorldTimer::getMSTimeDiff(m_farSinceMs, now) < PB_SUMMON_WAIT_MS)
+        {
+            if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+            {
+                me->GetMotionMaster()->Clear(false, true);
+                me->GetMotionMaster()->MoveIdle();
+            }
+            return true;
+        }
+        Life::Travel::Begin(me, m_travel, pAnchor, PersonalityTags());
+    }
+
+    switch (Life::Travel::Update(me, m_travel, pAnchor, PersonalityTags()))
+    {
+        case Life::Travel::Step::OnRoad:
+            return true;
+        case Life::Travel::Step::Arrived:
+            m_farSinceMs = 0;
+            Commander::Arrival::Start(m_arrival, now);
+            return true;
+        default:
+            m_farSinceMs = 0;
+            return false;
+    }
 }
 
 bool PartyBotAI::CatchesUpByTeleport(Player const* pAnchor) const
@@ -1067,6 +1110,16 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // surviving bots were teleported to the player's ghost at the graveyard, fell behind on
         // its run back and were teleported again every 100 yd. They wait where they are, by
         // the corpse the ghost runs to.
+        // Companions far behind: summoned, or they travel (UpdateTravel); the teleport below is
+        // their last resort only.
+        if (!staying && !resurrectFirst && !pAnchor->IsDead() && LootsForSelf() && UpdateTravel(pAnchor))
+            return;
+        if (Life::Travel::IsActive(m_travel) && (staying || resurrectFirst || pAnchor->IsDead() || !LootsForSelf()))
+        {
+            Life::Travel::Stop(me, m_travel);
+            m_farSinceMs = 0;
+        }
+
         // Companions only when on another map: on the same map they walk (a town trip, the
         // leader at his own trainer: CatchesUpByTeleport).
         if (!staying && !resurrectFirst && !pAnchor->IsDead() && CatchesUpByTeleport(pAnchor))

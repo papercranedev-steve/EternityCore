@@ -134,5 +134,24 @@ namespace GatherPlanner
             BotSpeech::Report(bot->me, anchor, "灵魂碎片不够，还有" + std::to_string(left.size()) + "个人没拉过来。");
         }
     }
+
+    bool SummonComing(Player* anchor, Player const* member)
+    {
+        if (!anchor || !anchor->IsInWorld() || !member)
+            return false;
+        Map const* map = anchor->GetMap();
+        if (!map || map->IsDungeon() || map->IsBattleGround())
+            return false;
+        for (Player* m : Team::Members(anchor))
+        {
+            if (!m || m == member || m == anchor || !m->IsInWorld() || !m->IsAlive() || !m->IsInMap(anchor) ||
+                m->GetClass() != CLASS_WARLOCK || !m->AI() || !dynamic_cast<TeamBotAI*>(m->AI()) ||
+                !m->IsWithinDist(anchor, WITH_TEAM_YD))
+                continue;
+            if (Summon::CanCast(m, Summon::SHARDS_KEPT_FOR_TEAMMATES))
+                return true;
+        }
+        return false;
+    }
 }
 }

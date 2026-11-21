@@ -50,6 +50,7 @@
 #include "Life/Pastimes/WaitAround.h"
 #include "Companions/Travel/Departure.h"
 #include "Companions/Travel/SummonOffer.h"
+#include "Life/Errands/Travel.h"
 #include "Shared/Trade.h"
 #include <array>
 #include <string>
@@ -125,6 +126,14 @@ public:
     // apart on purpose: they walk, Life/Errands/TownTrip.h).
     bool CatchesUpByTeleport(Player const* pAnchor) const;
     static constexpr float PB_TELEPORT_TO_LEADER_YD = 100.0f;
+    // A companion far behind its anchor (another map, or beyond Summon::FAR_YD and out of his
+    // sight), out of combat: a warlock of the team will summon it (GatherPlanner::SummonComing:
+    // it waits, up to PB_SUMMON_WAIT_MS), else it travels there on its own (Life/Errands/Travel)
+    // and walks the last stretch (Arrival). True: busy, nothing else this tick (no teleport).
+    bool UpdateTravel(Player* pAnchor);
+    static constexpr uint32 PB_SUMMON_WAIT_MS = 3 * MINUTE * IN_MILLISECONDS;
+    Life::TravelState m_travel;
+    uint32 m_farSinceMs = 0;
     // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
     std::vector<std::string> const& PersonalityTags() const;
     // Follow the leader (UpdateAI): the bot's own offset and style (Commander/Behaviors/Movement/

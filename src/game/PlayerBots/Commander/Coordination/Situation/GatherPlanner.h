@@ -14,7 +14,8 @@
  *    (Companions/Travel/SummonOffer). No affinity gate: it is the bot playing well.
  *  - Shards: a warlock keeps one (Summon::SHARDS_KEPT_FOR_TEAMMATES) for a Soulstone; none to
  *    spare: one line how many are still missing, once per settle.
- *  - Nobody can: nothing; the old catch up by teleport still brings them (for now).
+ *  - Nobody can (SummonComing false): a companion travels on its own (Life/Errands/Travel,
+ *    PartyBotAI); other party bots keep the old catch up by teleport.
  *
  * Map thread of the team, from PartyCommander::Update.
  */
@@ -24,6 +25,7 @@
 
 #include "Common.h"
 
+class Player;
 class TeamBotAI;
 
 namespace Commander
@@ -38,6 +40,12 @@ namespace Commander
         uint32 constexpr RITUAL_GIVE_UP_MS = 4 * MINUTE * IN_MILLISECONDS;     // a ritual nobody ended
 
         void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs);
+
+        // Will the team summon `member` (left behind) once it settles? A bot warlock with the
+        // team (WITH_TEAM_YD of `anchor`, on his map) that knows the ritual and has a shard to
+        // spare, and `anchor` not in a dungeon or battleground. Any thread: `anchor`'s team is
+        // only read (the member asks from its own map).
+        bool SummonComing(Player* anchor, Player const* member);
     }
 }
 

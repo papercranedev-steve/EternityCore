@@ -40,5 +40,31 @@ namespace TravelTime
         float const dy = a.y - b.y;
         return std::sqrt(dx * dx + dy * dy) * DETOUR_FACTOR / speedYdPerSec;
     }
+
+    Journey JourneyOf(WorldLocation const& from, WorldLocation const& to, float runYdPerSec)
+    {
+        Journey j;
+        WorldLocation a, b;
+        if (runYdPerSec <= 0.0f || !OutsidePoint(from, a) || !OutsidePoint(to, b))
+        {
+            j.seconds = UNKNOWN_SEC;
+            return j;
+        }
+        if (a.mapId != b.mapId)
+        {
+            // (a flight to the harbour and one from the other: the overheads, the flights' length
+            // is not known)
+            j.sails = true;
+            j.flies = true;
+            j.seconds = SAILING_SEC + 2.0f * FLIGHT_OVERHEAD_SEC;
+            return j;
+        }
+        float const dx = a.x - b.x;
+        float const dy = a.y - b.y;
+        float const yards = std::sqrt(dx * dx + dy * dy) * DETOUR_FACTOR;
+        j.flies = yards > FLIGHT_FROM_YD;
+        j.seconds = j.flies ? FLIGHT_OVERHEAD_SEC + yards / FLIGHT_SPEED : yards / runYdPerSec;
+        return j;
+    }
 }
 }
