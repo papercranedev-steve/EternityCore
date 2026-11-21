@@ -168,8 +168,13 @@ local function monitor(leader, c)
                     -- where it really is, every POS_MS while away (to compare with the map)
                     if away and now() - (st.posMs or 0) >= POS_MS then
                         local p = b:pos()
-                        log(string.format("POS %s %.0f, %.0f  %s from you%s", b:name(), p.x, p.y,
-                            d and string.format("%.0f yd", d) or "other map", b:moving() and ", moving" or ", standing"))
+                        -- your client has it / it has you (server's visible lists), its visibility
+                        -- update still queued (Unit::m_needUpdateVisibility), the map's range
+                        local v = b:vis()
+                        log(string.format("POS %s %.0f, %.0f  %s from you%s  yours-has-it %s, it-has-you %s, pending %s, range %.0f",
+                            b:name(), p.x, p.y, d and string.format("%.0f yd", d) or "other map",
+                            b:moving() and ", moving" or ", standing", tostring(leader:sees(b)), tostring(b:sees(leader)),
+                            tostring(v.pending), v.range))
                         st.posMs = now()
                     end
                     if away ~= st.away then

@@ -65,6 +65,7 @@
 #include <list>
 #include <map>
 #include <ctime>
+#include <shared_mutex>
 
 namespace DevConsole
 {
@@ -2036,6 +2037,35 @@ namespace DevConsole
         return 1;
     }
 
+    // ---- visibility (what the server thinks a client has) ----
+    // u:sees(other) -> bool: `other` is in u's visible list, i.e. the server thinks u's client has
+    // it (created, not destroyed since): movement packets of `other` reach u only while in range.
+    static int U_sees(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        Unit* other = LuaUnit_Check(L, 2);
+        lua_pushboolean(L, p->IsInVisibleList(other));
+        return 1;
+    }
+    // u:vis() -> { pending (relocation visibility update queued: Unit::m_needUpdateVisibility),
+    //   visible (size of a player's visible list), range (the map's visibility distance) }
+    static int U_vis(lua_State* L)
+    {
+        Unit* u = LuaUnit_Check(L, 1);
+        lua_createtable(L, 0, 3);
+        lua_pushboolean(L, u->m_needUpdateVisibility);
+        lua_setfield(L, -2, "pending");
+        if (Player* p = u->ToPlayer())
+        {
+            std::shared_lock<std::shared_timed_mutex> lock(p->m_visibleGUIDs_lock);
+            lua_pushinteger(L, lua_Integer(p->m_visibleGUIDs.size()));
+            lua_setfield(L, -2, "visible");
+        }
+        lua_pushnumber(L, u->GetMap() ? u->GetMap()->GetVisibilityDistance() : 0.0f);
+        lua_setfield(L, -2, "range");
+        return 1;
+    }
+
     // ---- companion professions (design .kiro/docs/2026-11-21-companion-professions.md) ----
     static char const* ProfessionKindName(BotShared::Professions::Kind kind)
     {
@@ -2386,6 +2416,7 @@ namespace DevConsole
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
             { "setprof", U_setprof }, { "forgetprofs", U_forgetprofs }, { "trip", U_trip },
+            { "sees", U_sees }, { "vis", U_vis },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },
