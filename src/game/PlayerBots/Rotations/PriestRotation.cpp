@@ -10,7 +10,8 @@
  *      (both only while the Commander heal module does not decide heals).
  *   2. Healer (or no victim in caster form): shields on allies about to die (same condition),
  *      heals (the Commander heal module while the party fights).
- *   3. Damage: Shadowform, Vampiric Embrace, Mind Blast, Shadow Word: Pain, Devouring Plague,
+ *   3. A healer: its damage tier this tick (TeamBotAI::HealerDamageNow, HealerDamage below).
+ *      Others: Shadowform, Vampiric Embrace, Mind Blast, Shadow Word: Pain, Devouring Plague,
  *      Mana Burn on a mana user, Mind Flay (nothing within 10 yd or shielded), walk closer,
  *      Smite (caster form), wand below 10% mana.
  *
@@ -21,6 +22,7 @@
 
 #include "Rotations/ClassRotation.h"
 #include "Commander/Team.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "TeamBotAI.h"
 #include "Player.h"
 
@@ -99,9 +101,13 @@ namespace
                 if (bot.GetRole() == ROLE_HEALER && bot.FindAndPreHealTarget())
                     return;
 
-                if (heals && bot.DealsDamageForTeam())
-                    if (Unit* pVictim = me->GetVictim())
+                if (Unit* pVictim = me->GetVictim())
+                {
+                    if (bot.GetRole() == ROLE_HEALER)
+                        HealerDamage(pVictim, bot.HealerDamageNow());
+                    else if (heals && bot.DealsDamageForTeam())
                         Damage(pVictim);
+                }
             }
             // Alone (a team of one, Commander/Team.h): nobody else heals it, as the paladin and
             // shaman rotations heal themselves when low.
@@ -129,6 +135,28 @@ namespace
                 return true;
 
             return Buff(pTarget, pBuffSpell);
+        }
+
+        // A healer's damage step by its tier this tick (healer damage tiers doc 2026-11-21,
+        // section 6): FULL Shadow Word: Pain, Mind Blast, Smite; SPARE Shadow Word: Pain, Smite;
+        // then (FREE and up) the wand. No Shadowform (holy spells).
+        void HealerDamage(Unit* pVictim, uint8 tier)
+        {
+            if (tier == Commander::HEALER_DAMAGE_NONE)
+                return;
+            TeamBotAI& bot = m_bot;
+            auto const& s = bot.m_spells.priest;
+            if (tier >= Commander::HEALER_DAMAGE_SPARE)
+            {
+                if (Cast(pVictim, s.pShadowWordPain))
+                    return;
+                if (tier >= Commander::HEALER_DAMAGE_FULL && Cast(pVictim, s.pMindBlast))
+                    return;
+                ChaseWhenOutOfRange(pVictim);
+                if (bot.me->GetShapeshiftForm() == FORM_NONE && Cast(pVictim, s.pSmite))
+                    return;
+            }
+            ShootWand(pVictim);
         }
 
         void Damage(Unit* pVictim)

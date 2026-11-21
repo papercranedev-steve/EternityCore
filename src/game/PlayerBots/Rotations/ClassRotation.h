@@ -54,6 +54,8 @@ protected:
     bool KeepStealth(SpellEntry const* pStealthSpell);
     // Wand when out of mana (below `manaPct`), standing, not already shooting.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
+    // Wand at any mana (a healer's free attack, Commander HEALER_DAMAGE_FREE).
+    void ShootWand(Unit* pVictim) { ShootWandBelowMana(pVictim, 101.0f); }
     // A caster standing idle more than 30 yd from its victim walks closer (BeginChasing honours
     // the Commander's movement hold and stance takeover).
     void ChaseWhenOutOfRange(Unit* pVictim);

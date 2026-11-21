@@ -91,6 +91,13 @@ public:
     // its heal step first (the heal module orders a heal when one is needed) and its damage
     // step only when it cast nothing there.
     bool DealsDamageForTeam() const;
+    // A healer's damage this tick (Commander HealerDamageTier, healer damage tiers doc 2026-11-21):
+    // the plan's tier, FREE when its mana condition fails (SPARE below TIER2_MANA_PCT, FULL
+    // below HealerManaReserve unless the plan waives the reserve). Not in the plan (another role,
+    // the Commander or the module off): FULL when it deals damage for the team, else NONE.
+    uint8 HealerDamageNow() const;
+    // RESERVE_HEALS x the mana of its biggest single target direct heal.
+    float HealerManaReserve() const;
 
     // Best role from RoleCapability (class, talents, gear). The Commander "roles" assigner may
     // change it later by party composition while the role is not locked.

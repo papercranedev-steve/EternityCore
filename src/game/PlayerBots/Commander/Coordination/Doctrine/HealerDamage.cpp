@@ -54,6 +54,14 @@ namespace Commander
         }
     }
 
+    bool HealerDamageAssigner::Attacks(PartyMemberFacts const& m, TeamPlan const& plan)
+    {
+        HealerDamageDuty const* d = plan.healerDamage.Find(m.guid);
+        if (!d)
+            return false;
+        return d->tier >= HEALER_DAMAGE_SPARE || (d->tier == HEALER_DAMAGE_FREE && m.canShootWand);
+    }
+
     void HealerDamageAssigner::Clear(TeamPlan& plan) const
     {
         plan.healerDamage = HealerDamagePlan();
@@ -106,7 +114,8 @@ namespace Commander
             else if (cover && (cover->added & FUNCTION_DAMAGE))
             {
                 duty.tier = HEALER_DAMAGE_FULL;
-                duty.reason = "nobody else deals damage";
+                duty.noReserve = !m.canShootWand;
+                duty.reason = duty.noReserve ? "nobody else deals damage, no wand: no reserve" : "nobody else deals damage";
             }
             else if (world.mapKind == MapKind::Raid)
             {

@@ -1387,6 +1387,7 @@ namespace Commander
     {
         ObjectGuid bot;
         uint8 tier = HEALER_DAMAGE_NONE;    // HealerDamageTier
+        bool noReserve = false;             // FULL without the mana reserve (HealerDamage.h)
         char const* reason = "";            // static string
     };
 

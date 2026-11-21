@@ -40,6 +40,8 @@
 #include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
 #include "Commander/Behaviors/Constraints.h"
+#include "Commander/Coordination/Doctrine/HealerDamage.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
@@ -213,6 +215,49 @@ bool TeamBotAI::HealsForTeam() const
 bool TeamBotAI::DealsDamageForTeam() const
 {
     return (TeamFunctions() & Commander::FUNCTION_DAMAGE) != 0;
+}
+
+uint8 TeamBotAI::HealerDamageNow() const
+{
+    Commander::HealerDamageDuty const* duty = nullptr;
+    std::shared_ptr<Commander::PartyCommander> commander;
+    if (sCommanderMgr.IsEnabled())
+        commander = sCommanderMgr.FindCommander(me);
+    if (commander)
+        duty = commander->GetPlan().healerDamage.Find(me->GetObjectGuid());
+    if (!duty)
+        return DealsDamageForTeam() ? Commander::HEALER_DAMAGE_FULL : Commander::HEALER_DAMAGE_NONE;
+
+    using HD = Commander::HealerDamageAssigner;
+    switch (duty->tier)
+    {
+        case Commander::HEALER_DAMAGE_SPARE:
+            return me->GetPowerPercent(POWER_MANA) >= HD::TIER2_MANA_PCT ? duty->tier : uint8(Commander::HEALER_DAMAGE_FREE);
+        case Commander::HEALER_DAMAGE_FULL:
+            return duty->noReserve || float(me->GetPower(POWER_MANA)) >= HealerManaReserve() ?
+                duty->tier : uint8(Commander::HEALER_DAMAGE_FREE);
+        default:
+            return duty->tier;
+    }
+}
+
+float TeamBotAI::HealerManaReserve() const
+{
+    // The biggest heal on itself stands for "its biggest heal" (the bonuses are its own).
+    SpellEntry const* biggest = nullptr;
+    float biggestHeal = 0.0f;
+    for (SpellEntry const* pSpell : m_spellListDirectHeal)
+    {
+        if (!HealSpells::IsSingleTargetHeal(pSpell))
+            continue;
+        float const heal = HealSpells::Estimate(me, me, pSpell).direct;
+        if (heal > biggestHeal)
+        {
+            biggestHeal = heal;
+            biggest = pSpell;
+        }
+    }
+    return biggest ? Commander::HealerDamageAssigner::RESERVE_HEALS * HealSpells::ManaCost(me, biggest) : 0.0f;
 }
 
 bool TeamBotAI::UpdateFrameHands(uint32 diff)

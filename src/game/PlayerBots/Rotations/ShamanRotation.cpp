@@ -27,6 +27,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Duties/TotemAssigner.h"
+#include "Commander/Coordination/TeamPlan.h"
 
 namespace
 {
@@ -82,9 +83,13 @@ namespace
                     return;
                 if (bot.FindAndPreHealTarget())
                     return;
-                if (bot.DealsDamageForTeam())
-                    if (Unit* pVictim = me->GetVictim())
+                if (Unit* pVictim = me->GetVictim())
+                {
+                    if (bot.GetRole() == ROLE_HEALER)
+                        HealerDamage(pVictim, bot.HealerDamageNow());
+                    else if (bot.DealsDamageForTeam())
                         Damage(pVictim);
+                }
                 return;
             }
 
@@ -96,6 +101,24 @@ namespace
         }
 
     private:
+        // A healer's damage step by its tier this tick (healer damage tiers doc 2026-11-21,
+        // section 6). Its melee swings (FREE) need it next to the victim (step 5).
+        //   SPARE  Flame Shock; Lightning Bolt out of melee reach
+        //   FULL   + Frost Shock on a moving victim
+        void HealerDamage(Unit* pVictim, uint8 tier)
+        {
+            if (tier < Commander::HEALER_DAMAGE_SPARE)
+                return;
+            TeamBotAI& bot = m_bot;
+            auto const& s = bot.m_spells.shaman;
+            if (tier >= Commander::HEALER_DAMAGE_FULL && pVictim->IsMoving() && Cast(pVictim, s.pFrostShock))
+                return;
+            if (Cast(pVictim, s.pFlameShock))
+                return;
+            if (!bot.me->CanReachWithMeleeAutoAttack(pVictim))
+                Cast(pVictim, s.pLightningBolt);
+        }
+
         // The brain's totem plan, nullptr while the module (or the Commander) is off.
         std::shared_ptr<Commander::PartyCommander> PlanOwner() const
         {

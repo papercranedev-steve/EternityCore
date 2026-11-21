@@ -23,6 +23,9 @@
  * The open world forecast is made at such a change and every FORECAST_MS in between (a forecast
  * that turns hard lowers the tier at once).
  * Battlegrounds count as the open world (MapKind::World).
+ * No mana reserve (HealerDamageDuty::noReserve, doc section 5): FULL because nobody else deals
+ * damage and no free attack (no wand): kept to a reserve it would stand idle and the enemy
+ * would never die.
  */
 
 #ifndef MANGOS_COMMANDER_HEALER_DAMAGE_H
@@ -32,6 +35,8 @@
 
 namespace Commander
 {
+    struct PartyMemberFacts;
+
     class HealerDamageAssigner : public IAssigner
     {
     public:
@@ -41,6 +46,16 @@ namespace Commander
         static constexpr float LOW_PRESSURE_HEALTH_PCT = 80.0f;
         // The open world forecast between two changes of the fight.
         static constexpr uint32 FORECAST_MS = 3000;
+        // Mana conditions the bot applies each tick (TeamBotAI::HealerDamageNow; doc sections 3, 5):
+        // SPARE needs this mana percent, FULL keeps RESERVE_HEALS x its biggest heal's mana.
+        // Below them the tick is FREE.
+        static constexpr float TIER2_MANA_PCT = 80.0f;
+        static constexpr float RESERVE_HEALS = 2.0f;
+
+        // `m`, a healer in the plan, gets a damage target (TargetAssigner): a damage function
+        // (the coverage), or a tier with something to do: FREE with a free attack
+        // (PartyMemberFacts::canShootWand), SPARE and FULL always.
+        static bool Attacks(PartyMemberFacts const& m, TeamPlan const& plan);
 
         char const* GetId() const override { return "healdps"; }
         void Assign(WorldModel const& world, TeamPlan& plan) const override;

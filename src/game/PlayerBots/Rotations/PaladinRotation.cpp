@@ -37,6 +37,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/Duties/BlessingAssigner.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ValueModel.h"
 
@@ -107,7 +108,12 @@ namespace
                     return;
                 if (bot.FindAndPreHealTarget())
                     return;
-                if (bot.DealsDamageForTeam() && Damage())
+                if (bot.GetRole() == ROLE_HEALER)
+                {
+                    if (HealerDamage(bot.HealerDamageNow()))
+                        return;
+                }
+                else if (bot.DealsDamageForTeam() && Damage())
                     return;
             }
             else if (Damage())
@@ -275,6 +281,53 @@ namespace
             if (!sealUp)
                 return Cast(me, seal) ? JudgeStep::Cast : JudgeStep::None;
             return Cast(pVictim, s.pJudgement) ? JudgeStep::Cast : JudgeStep::Waiting;
+        }
+
+        // A healer's damage step by its tier this tick (healer damage tiers doc 2026-11-21,
+        // section 6). True = cast. Its melee swings (FREE) need it next to the victim (step 5).
+        //   SPARE  its seal while in melee reach (the swings use it), Exorcism on undead
+        //   FULL   + the brain's judgement seal, Judgement, Hammer of Wrath, Divine Favor +
+        //          Holy Shock (a healing cooldown spent on damage: FULL only)
+        bool HealerDamage(uint8 tier)
+        {
+            if (tier < Commander::HEALER_DAMAGE_SPARE)
+                return false;
+            TeamBotAI& bot = m_bot;
+            Player* me = bot.me;
+            auto const& s = bot.m_spells.paladin;
+            Unit* pVictim = me->GetVictim();
+            if (!pVictim)
+                return false;
+            bool const full = tier >= Commander::HEALER_DAMAGE_FULL;
+
+            bool holdSeal = false;
+            if (full)
+            {
+                JudgeStep const kept = KeepJudgement(pVictim);
+                if (kept == JudgeStep::Cast)
+                    return true;
+                holdSeal = kept == JudgeStep::Waiting;
+            }
+            bool const hasSeal = s.pSeal && me->HasAura(s.pSeal->Id);
+            if (!holdSeal && !hasSeal && s.pSeal && (full || me->CanReachWithMeleeAutoAttack(pVictim)) &&
+                Cast(me, s.pSeal))
+                return true;
+            if (full)
+            {
+                if (!holdSeal && hasSeal && Cast(pVictim, s.pJudgement))
+                    return true;
+                if (pVictim->GetHealthPercent() < 20.0f && Cast(pVictim, s.pHammerOfWrath))
+                    return true;
+                if (s.pHolyShock && bot.CanTryToCastSpell(pVictim, s.pHolyShock))
+                {
+                    if (s.pDivineFavor && bot.CanTryToCastSpell(me, s.pDivineFavor))
+                        bot.DoCastSpell(me, s.pDivineFavor);
+                    if (bot.DoCastSpell(pVictim, s.pHolyShock) == SPELL_CAST_OK)
+                        return true;
+                }
+            }
+            bool const undead = pVictim->IsCreature() && pVictim->GetCreatureType() == CREATURE_TYPE_UNDEAD;
+            return undead && Cast(pVictim, s.pExorcism);
         }
 
         // True = cast.

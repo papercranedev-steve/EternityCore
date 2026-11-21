@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Duties/TargetAssigner.h"
 #include "Commander/Coordination/Duties/TargetRules.h"
 #include "Commander/Coordination/Duties/FocusAssigner.h"
+#include "Commander/Coordination/Doctrine/HealerDamage.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/SwitchCost.h"
@@ -330,9 +331,11 @@ namespace Commander
             TargetContext const ctx(world, plan);
             for (PartyMemberFacts const& m : world.party)
             {
-                // By function, not role: a healer gets a target only when nobody else in the team
-                // deals damage (PartyMemberFacts::functions, TeamPlan::coverage).
-                if (!m.isBot || m.isPet || !m.CanAct() || !m.DealsDamage())
+                // By function, not role (PartyMemberFacts::functions, TeamPlan::coverage); a
+                // healer by its damage tier (Doctrine/HealerDamage.h: a wand, or damage spells).
+                bool const attacks = plan.healerDamage.Find(m.guid) ? HealerDamageAssigner::Attacks(m, plan)
+                                                                    : m.DealsDamage();
+                if (!m.isBot || m.isPet || !m.CanAct() || !attacks)
                     continue;
                 if (HeldOut(world, plan, m))
                     continue;

@@ -38,6 +38,7 @@
 #include "Map.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Tanks.h"
 
 namespace
@@ -138,10 +139,15 @@ namespace
                (bot.m_role != ROLE_TANK || !me->CanReachWithMeleeAutoAttack(pVictim)))
                 me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
 
-            // A healer deals damage only when nobody else in the team does (TeamBotAI::
-            // DealsDamageForTeam): from caster form, after the heal step above cast nothing.
-            if (bot.GetRole() == ROLE_HEALER && !bot.DealsDamageForTeam())
+            // A healer deals damage by its tier this tick (healer damage tiers doc 2026-11-21,
+            // section 6), from caster form, after the heal step above cast nothing: SPARE and FULL
+            // Moonfire and Wrath; no free attack (no wand, no shapeshift, no melee).
+            if (bot.GetRole() == ROLE_HEALER)
+            {
+                if (form == FORM_NONE && bot.HealerDamageNow() >= Commander::HEALER_DAMAGE_SPARE)
+                    HealerCaster(pVictim);
                 return;
+            }
 
             switch (form)
             {
@@ -312,6 +318,16 @@ namespace
             if (Cast(pVictim, s.pMoonfire))
                 return;
             if (pVictim->GetHealthPercent() > 50.0f && Cast(pVictim, s.pStarfire))
+                return;
+            Cast(pVictim, s.pWrath);
+        }
+
+        // A healer's damage (SPARE and FULL tiers): Moonfire, Wrath.
+        void HealerCaster(Unit* pVictim)
+        {
+            auto const& s = m_bot.m_spells.druid;
+            ChaseWhenOutOfRange(pVictim);
+            if (Cast(pVictim, s.pMoonfire))
                 return;
             Cast(pVictim, s.pWrath);
         }
