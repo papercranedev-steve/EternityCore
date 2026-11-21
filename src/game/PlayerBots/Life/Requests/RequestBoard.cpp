@@ -198,12 +198,16 @@ namespace Requests
     void Board::Forget(ObjectGuid bot)
     {
         Lines lines;
+        std::vector<Entry> dropped;
         {
             std::lock_guard<std::mutex> guard(m_lock);
             for (auto itr = m_open.begin(); itr != m_open.end();)
             {
                 if (itr->second.bot == bot)
+                {
+                    dropped.push_back(itr->second);
                     itr = m_open.erase(itr);
+                }
                 else
                     ++itr;
             }
@@ -215,6 +219,13 @@ namespace Requests
                     ++itr;
             }
             Advance(WorldTimer::getMSTime(), lines);
+        }
+        // The leader's popup goes too: a bot that left (a test scenario's reset) left its question
+        // on his screen, in front of the next bots' questions.
+        for (Entry& e : dropped)
+        {
+            e.answer = "cancel";
+            SendClose(e);
         }
         Send(lines);
     }

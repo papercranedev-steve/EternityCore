@@ -106,7 +106,8 @@ namespace Requests
         bool Reply(Player const* from, uint32 id, std::string const& key, std::string& error);
 
         // The bot is gone for good (a temporary bot logged out; its guid is given out again):
-        // drops its open requests (no close line) and its quiet times.
+        // drops its open requests (a close line "cancel" to the leader, so his popup goes too) and
+        // its quiet times.
         void Forget(ObjectGuid bot);
 
     private:
