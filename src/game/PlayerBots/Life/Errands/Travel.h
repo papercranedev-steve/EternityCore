@@ -6,7 +6,9 @@
  *
  *  - Begin: how long the journey takes (Commander/Perception/Spatial/TravelTime::JourneyOf: run,
  *    flight path, boat), clamped to MIN_SEC..MAX_SEC; one party line where it is and how long
- *    ("我在暮色森林，坐鸟过去，大概 4 分钟。").
+ *    ("我在暮色森林，坐鸟过去，大概 4 分钟。"). Home on the way (its hearthstone ready, the
+ *    journey from its bind point HEARTH_GAIN_SEC shorter): it really casts the hearthstone
+ *    first and goes on from home ("先用炉石回暴风城"); a broken cast: from here.
  *  - On the road: the bot stays where it is (nobody sees it there), says "上船了" halfway when
  *    it crosses the sea. Ends at once when the one it joins can see it (he came by, a summon).
  *  - Arrival: it appears out of his sight and walks the last stretch (the caller's walk,
@@ -41,6 +43,7 @@ namespace Life
         enum class Phase : uint8
         {
             None,
+            Hearthing,      // casting its hearthstone (it goes on from home)
             OnRoad,
             Hidden,         // teleported to his map invisible; the spot is picked there
             Revealing,      // moved to the spot; visible again once the move is done
@@ -52,6 +55,11 @@ namespace Life
         uint32 sailMs = 0;          // 0: no sea to cross
         bool sailSaid = false;
         uint32 hiddenSinceMs = 0;
+        // Hearthing: the journey from home, and the one from here if the cast breaks.
+        uint32 fromHomeSec = 0;
+        bool fromHomeSails = false;
+        uint32 fromHereSec = 0;
+        bool fromHereSails = false;
     };
 
     namespace Travel
@@ -61,6 +69,12 @@ namespace Life
         constexpr float SIGHT_MARGIN_YD = 25.0f;    // beyond his visibility distance
         constexpr float MAX_WALK_FACTOR = 2.5f;     // the walk in at most this times the straight way
         constexpr uint32 HIDDEN_GIVE_UP_MS = 15 * IN_MILLISECONDS;
+        // The hearthstone (presence §2.4, P4: cast for real): when home is on the way, the
+        // journey from home plus the cast saves at least HEARTH_GAIN_SEC.
+        constexpr uint32 HEARTHSTONE = 6948;
+        constexpr uint32 HEARTH_CAST_SEC = 15;      // the 10 s cast and the loading
+        constexpr uint32 HEARTH_GAIN_SEC = 60;
+        constexpr float HOME_YD = 60.0f;            // within this of its bind point: it is home
 
         enum class Step : uint8
         {

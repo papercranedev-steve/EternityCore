@@ -1812,6 +1812,7 @@ class Player final: public Unit
         bool  m_undermapPosValid;
 
         uint32 GetHomeBindMap() const { return m_homebind.mapId; }
+        WorldLocation const& GetHomeBind() const { return m_homebind; }
         uint16 GetHomeBindAreaId() const { return m_homebindAreaId; }
 
         void SendSummonRequest(ObjectGuid summonerGuid, uint32 mapId, uint32 zoneId, float x, float y, float z);

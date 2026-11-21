@@ -3,8 +3,11 @@
 #include "Commander/Perception/Spatial/TravelTime.h"
 #include "Commander/Perception/Spatial/LeaderTrail.h"
 #include "Shared/BotChat.h"
+#include "Shared/ItemUse.h"
 #include "Shared/WalkLength.h"
 #include "Player.h"
+#include "Spell.h"
+#include "SQLStorages.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
@@ -31,16 +34,48 @@ namespace Travel
             return (map ? map->GetVisibilityDistance() : 100.0f) + SIGHT_MARGIN_YD;
         }
 
-        // The zone `me` is in, in the language of `reader`'s client.
-        std::string ZoneName(Player const* me, Player const* reader)
+        // An area's name in the language of `reader`'s client.
+        std::string AreaName(uint32 areaId, Player const* reader)
         {
-            AreaEntry const* zone = AreaEntry::GetById(me->GetZoneId());
-            if (!zone)
+            AreaEntry const* area = AreaEntry::GetById(areaId);
+            if (!area)
                 return "";
-            std::string name = zone->Name ? zone->Name : "";
+            std::string name = area->Name ? area->Name : "";
             int const idx = reader && reader->GetSession() ? reader->GetSession()->GetSessionDbLocaleIndex() : -1;
-            sObjectMgr.GetAreaLocaleString(zone->Id, idx, &name);
+            sObjectMgr.GetAreaLocaleString(area->Id, idx, &name);
             return name;
+        }
+
+        uint32 Clamped(float seconds)
+        {
+            return std::min<uint32>(MAX_SEC, std::max<uint32>(MIN_SEC, uint32(std::max(0.0f, seconds))));
+        }
+
+        // On the road from now for `seconds`.
+        void SetOut(TravelState& state, uint32 nowMs, uint32 seconds, bool sails)
+        {
+            state.phase = TravelState::Phase::OnRoad;
+            state.arriveMs = nowMs + seconds * IN_MILLISECONDS;
+            state.sailMs = sails ? nowMs + seconds * IN_MILLISECONDS / 2 : 0;
+            state.sailSaid = false;
+        }
+
+        bool NearHome(Player const* me)
+        {
+            WorldLocation const& home = me->GetHomeBind();
+            return me->GetMapId() == home.mapId && me->GetDistance2d(home.x, home.y) <= HOME_YD;
+        }
+
+        // It carries a hearthstone that is ready, and has a home on a continent.
+        bool HearthReady(Player const* me)
+        {
+            if (!me->HasItemCount(HEARTHSTONE, 1) || me->IsInCombat())
+                return false;
+            MapEntry const* home = sMapStorage.LookupEntry<MapEntry>(me->GetHomeBind().mapId);
+            if (!home || home->IsDungeon())
+                return false;
+            SpellEntry const* spell = BotShared::ItemUse::OnUseSpell(me, HEARTHSTONE);
+            return spell && me->IsSpellReady(spell, sObjectMgr.GetItemPrototype(HEARTHSTONE));
         }
 
         void Say(Player* me, char const* key, std::vector<std::string> const& tags, Phrases::Vars const& vars)
@@ -118,28 +153,54 @@ namespace Travel
     void Begin(Player* me, TravelState& state, Player* meet, std::vector<std::string> const& tags)
     {
         state = TravelState();
-        state.phase = TravelState::Phase::OnRoad;
         state.from = Here(me);
         state.sinceMs = WorldTimer::getMSTime();
 
-        Commander::TravelTime::Journey const j = Commander::TravelTime::JourneyOf(state.from, Here(meet), me->GetSpeed(MOVE_RUN));
-        uint32 const seconds = std::min<uint32>(MAX_SEC, std::max<uint32>(MIN_SEC, uint32(j.seconds)));
-        state.arriveMs = state.sinceMs + seconds * IN_MILLISECONDS;
-        if (j.sails)
-            state.sailMs = state.sinceMs + seconds * IN_MILLISECONDS / 2;
+        float const run = me->GetSpeed(MOVE_RUN);
+        Commander::TravelTime::Journey const j = Commander::TravelTime::JourneyOf(state.from, Here(meet), run);
+        uint32 seconds = Clamped(j.seconds);
+        state.fromHereSec = seconds;
+        state.fromHereSails = j.sails;
 
         if (!me->IsStopped())
             me->StopMoving();
         me->GetMotionMaster()->Clear(false, true);
         me->GetMotionMaster()->MoveIdle();
 
+        // Home on the way: the hearthstone first, for real.
+        bool hearth = false;
+        Commander::TravelTime::Journey home;
+        if (HearthReady(me))
+        {
+            home = Commander::TravelTime::JourneyOf(me->GetHomeBind(), Here(meet), run);
+            uint32 const viaHome = Clamped(home.seconds) + HEARTH_CAST_SEC;
+            if (viaHome + HEARTH_GAIN_SEC <= seconds && !NearHome(me))
+            {
+                SpellCastTargets targets;
+                targets.setUnitTarget(me);
+                hearth = BotShared::ItemUse::UseFromBags(me, HEARTHSTONE, targets);
+                if (hearth)
+                {
+                    state.phase = TravelState::Phase::Hearthing;
+                    state.fromHomeSec = Clamped(home.seconds);
+                    state.fromHomeSails = home.sails;
+                    seconds = viaHome;
+                }
+            }
+        }
+        if (!hearth)
+            SetOut(state, state.sinceMs, seconds, j.sails);
+
         Phrases::Vars vars;
         vars["leader"] = meet->GetName();
-        vars["zone"] = ZoneName(me, meet);
+        vars["zone"] = AreaName(me->GetZoneId(), meet);
+        vars["home"] = AreaName(me->GetHomeBindAreaId(), meet);
         vars["minutes"] = std::to_string(std::max<uint32>(1, (seconds + MINUTE / 2) / MINUTE));
-        Say(me, j.sails ? "travel.start.sail" : j.flies ? "travel.start.fly" : "travel.start", tags, vars);
-        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s sets out to %s (map %u -> %u), %u s%s%s.", me->GetName(), meet->GetName(),
-            me->GetMapId(), meet->GetMapId(), seconds, j.flies ? ", flies" : "", j.sails ? ", sails" : "");
+        bool const sails = hearth ? home.sails : j.sails;
+        bool const flies = hearth ? home.flies : j.flies;
+        Say(me, hearth ? "travel.start.hearth" : sails ? "travel.start.sail" : flies ? "travel.start.fly" : "travel.start", tags, vars);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Travel] %s sets out to %s (map %u -> %u), %u s%s%s%s.", me->GetName(), meet->GetName(),
+            me->GetMapId(), meet->GetMapId(), seconds, hearth ? ", hearthstone first" : "", flies ? ", flies" : "", sails ? ", sails" : "");
     }
 
     void BeginHidden(Player* me, TravelState& state)
@@ -154,7 +215,9 @@ namespace Travel
 
     void Stop(Player* me, TravelState& state)
     {
-        if (me && state.phase != TravelState::Phase::None && state.phase != TravelState::Phase::OnRoad)
+        if (me && state.phase == TravelState::Phase::Hearthing && me->IsNonMeleeSpellCasted(false))
+            me->InterruptNonMeleeSpells(false);
+        if (me && IsHidden(state))
             me->SetVisibility(VISIBILITY_ON);
         state = TravelState();
     }
@@ -166,6 +229,27 @@ namespace Travel
         {
             case TravelState::Phase::None:
                 return Step::None;
+
+            case TravelState::Phase::Hearthing:
+            {
+                if (InSight(me, meet))
+                {
+                    Stop(me, state);
+                    return Step::None;
+                }
+                bool const busy = me->IsNonMeleeSpellCasted(false) || me->IsBeingTeleported();
+                if (!busy && NearHome(me))
+                {
+                    state.from = Here(me);
+                    SetOut(state, now, state.fromHomeSec, state.fromHomeSails);
+                }
+                else if (!busy)
+                {
+                    // (the cast broke: on from here)
+                    SetOut(state, now, state.fromHereSec, state.fromHereSails);
+                }
+                return Step::OnRoad;
+            }
 
             case TravelState::Phase::OnRoad:
             {

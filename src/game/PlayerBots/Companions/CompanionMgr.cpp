@@ -739,6 +739,11 @@ namespace Companions
         uint32 const offline = info.lastSeen && now > info.lastSeen ? now - info.lastSeen : 0;
         uint32 const today = OfflineLife::DayOf(time_t(now));
 
+        // Everyone has a hearthstone (a new character's starting item; a temporary bot had none):
+        // it really uses it on its way to the team (Life/Errands/Travel).
+        if (!bot->HasItemCount(Life::Travel::HEARTHSTONE, 1, true))
+            bot->StoreNewItemInBestSlots(Life::Travel::HEARTHSTONE, 1);
+
         std::map<uint32, uint32> points = SkillUpsToday(info.charGuid);
         OfflineLife::Result const result = OfflineLife::Apply(bot, ai->m_lessonContext, info.tags, offline, m_skillUpPriceFactor, points);
         info.lastSeen = now;
