@@ -35,7 +35,8 @@ namespace Companions
     enum class RewardMode : uint8
     {
         Auto = 0,       // the companion picks (default)
-        AskPlayer = 1,  // the player picks; later unlocked by affinity (soul companions doc §4.3)
+        AskPlayer = 1,  // the player picks before affinity allows it (dev: .partybot rewardmode);
+                        // from Gates PickRewards on it asks anyway (RewardChoice)
     };
 
     struct CompanionInfo

@@ -1,5 +1,6 @@
 #include "Companions/RewardChoice.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/Gates.h"
 #include "Life/Requests/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
@@ -27,15 +28,15 @@ namespace Companions
 
     bool CompanionRewardChooser::Choose(Player* me, Quest const* quest, uint32& index)
     {
-        switch (sCompanionMgr.GetRewardMode(me->GetGUIDLow()))
-        {
-            case RewardMode::AskPlayer:
-                return AskPlayer(me, quest, index);
-            case RewardMode::Auto:
-            default:
-                index = BotShared::QuestRewards::BestChoice(me, quest);
-                return true;
-        }
+        // The player picks once its affinity allows it (Affinity/Gates PickRewards); the
+        // reward mode AskPlayer (.partybot rewardmode) forces it earlier, for tests.
+        uint32 const guid = me->GetGUIDLow();
+        bool const ask = sCompanionMgr.GetRewardMode(guid) == RewardMode::AskPlayer ||
+                         (sCompanionMgr.IsCompanion(guid) && Gates::Allows(guid, Gates::Gate::PickRewards));
+        if (ask)
+            return AskPlayer(me, quest, index);
+        index = BotShared::QuestRewards::BestChoice(me, quest);
+        return true;
     }
 
     bool CompanionRewardChooser::AskPlayer(Player* me, Quest const* quest, uint32& index)

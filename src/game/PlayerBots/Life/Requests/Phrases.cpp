@@ -116,6 +116,13 @@ namespace Phrases
             { "artisan.giveup",      "default", "算了，以后我自己找机会去{trainer}那儿学吧。" },
             { "artisan.giveup",      "lazy",    "那就先不学了，反正也不急。" },
             // Affinity reached a gate (Companions/Affinity/Gates; key = the gate's key). {leader}.
+            // A trade the player opened, cancelled (Companions/Affinity/TradeGate). {leader}: the trader.
+            { "affinity.trade.early",      "default", "{leader}，不用给我东西，我自己的够用。" },
+            { "affinity.trade.early",      "frugal",  "{leader}，不用不用，我不好意思收你的东西。" },
+            { "affinity.trade.early",      "quiet",   "不用了，谢谢。" },
+            { "affinity.trade.notallowed", "default", "{leader}，钱、吃的喝的、比我身上好的装备我收，别的就算了。" },
+            { "affinity.trade.notallowed", "chatty",  "{leader}，这些我用不上啊！给我钱、吃喝或者更好的装备就行。" },
+            { "affinity.trade.notallowed", "quiet",   "只要钱、吃喝和更好的装备。" },
             { "affinity.unlock.trade",    "default", "{leader}，以后有好装备、吃的喝的，直接交易给我就行。" },
             { "affinity.unlock.trade",    "chatty",  "{leader}！以后有用得上的装备、吃的喝的，直接塞给我，我不客气啦！" },
             { "affinity.unlock.trade",    "quiet",   "装备、吃喝，可以直接给我。" },

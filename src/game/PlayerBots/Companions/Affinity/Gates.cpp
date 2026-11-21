@@ -13,14 +13,14 @@ namespace Companions
 
             // Order: by affinity (the addon lists them so).
             std::vector<Info> const g_gates = {
-                { Gate::TradeBasics,   6,   0,       false, "trade",    "交易给他金币、食物、水和更好的装备" },
-                { Gate::TradeAnything, 15,  0,       false, "tradeany", "交易给他任何物品" },
+                { Gate::TradeBasics,   6,   0,       true,  "trade",    "交易给他金币、食物、水和更好的装备" },
+                { Gate::TradeAnything, 15,  0,       true,  "tradeany", "交易给他任何物品" },
                 { Gate::ManageBags,    22,  0,       false, "bags",     "管理他的背包" },
                 { Gate::WarlockSummon, 25,  WARLOCK, false, "summon",   "请他召唤队友" },
                 { Gate::Crafting,      30,  0,       false, "craft",    "用你的材料请他代工" },
                 { Gate::MagePortal,    45,  MAGE,    false, "portal",   "请他开传送门" },
                 { Gate::TakeMoney,     50,  0,       false, "money",    "从他那里拿钱" },
-                { Gate::PickRewards,   60,  0,       false, "rewards",  "帮他挑任务奖励" },
+                { Gate::PickRewards,   60,  0,       true,  "rewards",  "帮他挑任务奖励" },
                 { Gate::JoinAccount,   100, 0,       false, "account",  "招募他进你的账号" },
             };
         }

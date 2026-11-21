@@ -45,6 +45,10 @@
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Team.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/TradeGate.h"
+#include "Life/Requests/Phrases.h"
+#include "Shared/BotChat.h"
+#include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
@@ -456,6 +460,23 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
             // Its own trade (Shared/Trade: conjured supplies) is not the default accept-all.
             if (BotShared::Trade::OnStatus(me, m_tradeHands, status))
                 return;
+            // The player accepted his side: a companion takes only what its affinity allows
+            // (Companions/Affinity/TradeGate); otherwise it cancels and says why.
+            if (status == TRADE_STATUS_TRADE_ACCEPT)
+            {
+                Companions::TradeGate::Refusal const refusal = Companions::TradeGate::Check(me);
+                if (refusal != Companions::TradeGate::Refusal::None)
+                {
+                    Player* trader = BotShared::Trade::OpenWith(me);
+                    BotShared::Trade::CloseWindow(me);
+                    Life::Phrases::Vars vars;
+                    vars["leader"] = trader ? trader->GetName() : "";
+                    std::string const text = Life::Phrases::Say(Companions::TradeGate::PhraseOf(refusal), PersonalityTags(), vars);
+                    if (!text.empty())
+                        BotShared::BotChat::SayToParty(me, text);
+                    return;
+                }
+            }
             // Someone opens a trade: maybe the leader wants water (Life/Errands/GiveProvisions).
             if (status == TRADE_STATUS_BEGIN_TRADE && packet->size() >= sizeof(uint32) + sizeof(uint64))
                 Life::GiveProvisions::OnTradeOpened(m_giveProvisions, ObjectGuid(packet->read<uint64>(sizeof(uint32))));

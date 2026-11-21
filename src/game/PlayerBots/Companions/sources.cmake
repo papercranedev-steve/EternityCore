@@ -23,6 +23,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Affinity/AffinitySources.cpp
   ${COMPANIONS_DIR}/Affinity/Gates.h
   ${COMPANIONS_DIR}/Affinity/Gates.cpp
+  ${COMPANIONS_DIR}/Affinity/TradeGate.h
+  ${COMPANIONS_DIR}/Affinity/TradeGate.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.cpp
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.h
