@@ -17,6 +17,8 @@
  *   .partybot classquests class <classId>     dev: all chains of a class (Shared/ClassQuestChains)
  *   .partybot companions                      the companions you recruited (addon Companions panel):
  *     PBCMP;BEGIN;<count>
+ *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<label>   what affinity allows (Affinity/Gates,
+ *            ready ones, by affinity)
  *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
  *            <affinity 0-100>;<state 0 offline, 1 online, 2 in your group>;<zone id>;<recruited at>;
  *            <tag,tag,...>;<name>
@@ -26,6 +28,7 @@
 #include "Chat.h"
 #include "Player.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/Gates.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
 #include "Shared/ClassQuestChains.h"
@@ -126,6 +129,9 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
     for (auto const& itr : rows)
         count += itr.second.known ? 1 : 0;
     PSendSysMessage("PBCMP;BEGIN;%u", count);
+    for (Companions::Gates::Info const& gate : Companions::Gates::All())
+        if (gate.ready)
+            PSendSysMessage("PBCMP;GATE;%u;%u;%s;%s", gate.affinity, gate.classMask, gate.key, gate.label);
 
     for (Companions::CompanionInfo const& info : companions)
     {

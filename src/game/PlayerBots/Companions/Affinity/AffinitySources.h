@@ -18,6 +18,8 @@
 
 #include "Common.h"
 #include "Shared/DungeonClears.h"
+#include <string>
+#include <vector>
 
 class Map;
 class Player;
@@ -37,12 +39,17 @@ namespace Companions
         // Per bot (a member of its AI).
         struct State
         {
-            uint32 lastLevel = 0;   // 0 = not looked yet
+            uint32 lastLevel = 0;       // 0 = not looked yet
+            // The affinity it last told the leader about (Gates opened since: one line each);
+            // UINT32_MAX = not looked yet (no lines for what it had at login).
+            uint32 lastAffinity = UINT32_MAX;
         };
 
         // Every bot tick (cheap). `paidCopper`: what the leader gave it this tick for a town trip
-        // it asked money for (Life::TownTrip::TakePaid), 0 = nothing.
-        void Update(Player* me, Player* leader, State& state, uint32 paidCopper);
+        // it asked money for (Life::TownTrip::TakePaid), 0 = nothing. `tags`: its personality.
+        // Also says a line in party chat for every ready gate (Gates) its affinity reached
+        // since the last tick, whatever the source.
+        void Update(Player* me, Player* leader, State& state, uint32 paidCopper, std::vector<std::string> const& tags);
 
         // A max-level dungeon segment or raid cleared (its last boss died). Every companion in the
         // instance whose party has a real player there gets ClearPoints. DungeonClears listener,

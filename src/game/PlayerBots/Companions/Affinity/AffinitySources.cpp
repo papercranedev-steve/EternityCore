@@ -1,5 +1,7 @@
 #include "Companions/Affinity/AffinitySources.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/Gates.h"
+#include "Life/Requests/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Group.h"
@@ -33,7 +35,7 @@ namespace Companions
             return std::min(level, START_CAP);
         }
 
-        void Update(Player* me, Player* leader, State& state, uint32 paidCopper)
+        void Update(Player* me, Player* leader, State& state, uint32 paidCopper, std::vector<std::string> const& tags)
         {
             uint32 const level = me->GetLevel();
             uint32 const before = state.lastLevel ? state.lastLevel : level;
@@ -47,6 +49,22 @@ namespace Companions
 
             if (paidCopper && sCompanionMgr.CountMoneyGift(guid, MAX_MONEY_GIFTS))
                 Gain(me, leader, MONEY_GIFT, "gift");
+
+            // What it allows now (any source: class quests, clears on the instance's thread ...).
+            uint32 const affinity = sCompanionMgr.GetAffinity(guid);
+            if (state.lastAffinity != UINT32_MAX && affinity > state.lastAffinity && leader)
+            {
+                Life::Phrases::Vars vars;
+                vars["leader"] = leader->GetName();
+                for (Gates::Info const* gate : Gates::Opened(state.lastAffinity, affinity, me->GetClass()))
+                {
+                    std::string const text = Life::Phrases::Say(std::string("affinity.unlock.") + gate->key, tags, vars);
+                    if (!text.empty())
+                        BotShared::BotChat::SayToParty(me, text);
+                    BotShared::BotChat::SystemTo(leader, "PBGATE;" + std::string(me->GetName()) + ";" + gate->key);
+                }
+            }
+            state.lastAffinity = affinity;
         }
 
         ClearPoints PointsFor(BotShared::DungeonClears::Info const& segment)
