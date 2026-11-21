@@ -6,6 +6,7 @@
 #include "SpellMgr.h"
 #include "SpellEntry.h"
 #include "DBCStores.h"
+#include "World.h"
 #include <algorithm>
 #include <map>
 #include <mutex>
@@ -166,7 +167,8 @@ namespace ArtisanTrainers
             {
                 if (!line)
                     return std::string();
-                LocaleConstant const locale = idx < 0 ? LOCALE_enUS : sObjectMgr.GetLocaleForIndex(idx);
+                // A loaded database locale need not have a dbc (ruRU = 8 is past name[]): as a session does.
+                LocaleConstant const locale = sWorld.GetAvailableDbcLocale(idx < 0 ? LOCALE_enUS : sObjectMgr.GetLocaleForIndex(idx));
                 char const* name = line->name[locale] && *line->name[locale] ? line->name[locale] : line->name[0];
                 return name ? name : "";
             };
