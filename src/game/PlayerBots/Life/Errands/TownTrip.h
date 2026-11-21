@@ -82,6 +82,9 @@ namespace Life
         uint32 nextMoveMs = 0;
         Trip::ApproachState leg;    // to the current stop
         uint32 browseMs = 0;        // how long it stands at the current stop (0: business not done yet)
+        // The current stop's give-up time, decided when the stop begins (0: not yet). Decided
+        // once: a far stop's 3 minutes must not turn into 60 s when its NPC loads on the way.
+        uint32 stopGiveUpMs = 0;
         uint32 cooldownUntilMs = 0;
         uint32 leaderMap = 0;       // the leader's map when the trip began
         // Where it waits (a town gate, or where it finished) and what it calls the place.

@@ -43,6 +43,7 @@ namespace TownTrip
             state.phaseSinceMs = now;
             state.nextMoveMs = 0;
             state.browseMs = 0;
+            state.stopGiveUpMs = 0;
             Trip::Approach::Begin(state.leg, now);
         }
 
@@ -205,10 +206,14 @@ namespace TownTrip
                 Trip::TripStop const& stop = state.stops[state.next];
                 Trip::Destination dest;
                 dest.target = stop.target;
-                float const dx = stop.x - me->GetPositionX();
-                float const dy = stop.y - me->GetPositionY();
-                bool const farStop = dx * dx + dy * dy > TRIP_YD * TRIP_YD;
-                uint32 const giveUpMs = farStop || !Trip::Approach::TargetOf(me, stop.target) ? FAR_STOP_GIVE_UP_MS : STOP_GIVE_UP_MS;
+                if (!state.stopGiveUpMs)
+                {
+                    float const dx = stop.x - me->GetPositionX();
+                    float const dy = stop.y - me->GetPositionY();
+                    bool const farStop = dx * dx + dy * dy > TRIP_YD * TRIP_YD;
+                    state.stopGiveUpMs = farStop || !Trip::Approach::TargetOf(me, stop.target) ? FAR_STOP_GIVE_UP_MS : STOP_GIVE_UP_MS;
+                }
+                uint32 const giveUpMs = state.stopGiveUpMs;
                 // An NPC whose grid is not loaded yet (a trainer across a capital): its spawn
                 // point first; on the way it appears.
                 if (!stop.target.IsEmpty() && !Trip::Approach::TargetOf(me, stop.target))
@@ -222,6 +227,8 @@ namespace TownTrip
                     if (result == Trip::ApproachResult::Walking)
                         return true;
                     // There and still nobody (dead, walked off), or the walk failed.
+                    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s skips its %s stop: %s.", me->GetName(), stop.action->Name(),
+                        result == Trip::ApproachResult::Arrived ? "nobody at the spawn point" : "could not walk to the spawn point in time");
                     ++state.next;
                     Enter(state, Phase::Going, now);
                     continue;
@@ -231,6 +238,8 @@ namespace TownTrip
                     case Trip::ApproachResult::Walking:
                         return true;
                     case Trip::ApproachResult::Failed:
+                        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s skips its %s stop: could not reach the NPC in time.",
+                            me->GetName(), stop.action->Name());
                         ++state.next;
                         Enter(state, Phase::Going, now);
                         continue;

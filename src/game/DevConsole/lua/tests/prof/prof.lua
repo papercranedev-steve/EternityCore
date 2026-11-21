@@ -141,6 +141,27 @@ local function monitor(leader, c)
                             m < st.money and "-" or "+", gold(math.abs(m - st.money))))
                         st.money = m
                     end
+                    -- the town trip: phase and stop (Life/Errands/TownTrip)
+                    local trip = b:trip()
+                    if trip then
+                        local key = trip.phase .. "#" .. trip.next
+                        if key ~= st.trip then
+                            local text = "trip " .. trip.phase
+                            if trip.phase == "asking" or (trip.phase == "going" and trip.next == 1) then
+                                text = text .. ", stops: " .. table.concat(map(trip.stops, function(s)
+                                    return string.format("%s %.0fyd%s", s.what, s.dist, s.loaded and "" or " (not loaded)")
+                                end), " | ")
+                            end
+                            local s = trip.stops[trip.next]
+                            if trip.phase == "going" and s then
+                                text = text .. string.format(", now stop %d/%d %s %.0f yd%s%s", trip.next, #trip.stops,
+                                    s.what, s.dist, s.loaded and "" or " (not loaded)",
+                                    trip.giveup > 0 and string.format(", give up after %ds", trip.giveup // 1000) or "")
+                            end
+                            log(string.format("CHANGE %s %s", b:name(), text))
+                            st.trip = key
+                        end
+                    end
                     local d = b:dist(leader)
                     local away = d == nil or d > AWAY_YD
                     if away ~= st.away then

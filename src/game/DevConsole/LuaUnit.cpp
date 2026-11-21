@@ -49,6 +49,8 @@
 #include "Shared/Gathering.h"
 #include "Shared/SkillUpCost.h"
 #include "Companions/ClassQuests/ClassQuestFlow.h"
+#include "Life/Errands/TownTrip.h"
+#include "Life/Errands/Trip/Approach.h"
 #include "DevConsole/HeadlessPlayerAI.h"
 #include "DevConsole/CombatEvents.h"
 #include "Packets/Spell.h"
@@ -2219,6 +2221,52 @@ namespace DevConsole
         return 1;
     }
 
+    // u:trip() -> { phase, since (ms in the phase or stop), next (1-based stop being done),
+    //   stops = { {what, place, x, y, dist, loaded} }, giveup (ms, current stop) } of a party bot's
+    //   town trip (Life/Errands/TownTrip); nil = not a party bot
+    static int U_trip(lua_State* L)
+    {
+        static char const* const PHASES[] = { "idle", "asking", "collecting", "going", "returning", "reporting",
+                                               "coming", "togate", "waiting" };
+        Player* p = CheckPlayer(L, 1);
+        PartyBotAI* ai = GetPartyBotAI(p);
+        if (!ai)
+            return 0;
+        Life::TownTripState const& s = ai->m_townTrip;
+        uint32 const now = WorldTimer::getMSTime();
+        lua_newtable(L);
+        uint8 const phase = uint8(s.phase);
+        lua_pushstring(L, phase < sizeof(PHASES) / sizeof(PHASES[0]) ? PHASES[phase] : "?");
+        lua_setfield(L, -2, "phase");
+        lua_pushinteger(L, s.phaseSinceMs ? WorldTimer::getMSTimeDiff(s.phaseSinceMs, now) : 0);
+        lua_setfield(L, -2, "since");
+        lua_pushinteger(L, lua_Integer(s.next) + 1);
+        lua_setfield(L, -2, "next");
+        lua_pushinteger(L, s.stopGiveUpMs);
+        lua_setfield(L, -2, "giveup");
+        lua_createtable(L, int(s.stops.size()), 0);
+        int i = 0;
+        for (Life::Trip::TripStop const& stop : s.stops)
+        {
+            lua_createtable(L, 0, 6);
+            lua_pushstring(L, stop.action ? stop.action->Name() : "?");
+            lua_setfield(L, -2, "what");
+            lua_pushstring(L, stop.placeKey.c_str());
+            lua_setfield(L, -2, "place");
+            lua_pushnumber(L, stop.x);
+            lua_setfield(L, -2, "x");
+            lua_pushnumber(L, stop.y);
+            lua_setfield(L, -2, "y");
+            lua_pushnumber(L, p->GetDistance2d(stop.x, stop.y, SizeFactor::None));
+            lua_setfield(L, -2, "dist");
+            lua_pushboolean(L, Life::Trip::Approach::TargetOf(p, stop.target) != nullptr);
+            lua_setfield(L, -2, "loaded");
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "stops");
+        return 1;
+    }
+
     // u:setprof(skill, value) -> max: the ranks of a profession up to the one that holds `value`,
     // free (Shared/Professions::Grant), no recipes; 0 = no trainer teaches it.
     static int U_setprof(lua_State* L)
@@ -2337,7 +2385,7 @@ namespace DevConsole
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
-            { "setprof", U_setprof }, { "forgetprofs", U_forgetprofs },
+            { "setprof", U_setprof }, { "forgetprofs", U_forgetprofs }, { "trip", U_trip },
             { "moveto", U_moveto }, { "attack", U_attack }, { "stop", U_stop },
             { "use", U_use }, { "lastcast", U_lastcast }, { "cancelcast", U_cancelcast },
             { "face", U_face }, { "spells", U_spells }, { "healranks", U_healranks },
