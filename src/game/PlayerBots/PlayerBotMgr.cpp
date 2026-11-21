@@ -19,6 +19,7 @@
 #include "QuestDef.h"
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/Gates.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
 #include "Shared/ArtisanTrainers.h"
@@ -1926,6 +1927,19 @@ bool ChatHandler::HandlePartyBotUnequipCommand(char* args)
 //   PBERR;<name>;<code>[;<detail>]
 // ---------------------------------------------------------------------------
 
+// A companion allows it by now (Companions/Affinity/Gates); else PBERR;<name>;locked;<needed>;<now>.
+// Plain party bots allow everything.
+bool ChatHandler::PartyBotGateAllows(Player* pBot, std::string const& name, uint8 gate)
+{
+    Companions::Gates::Gate const g = Companions::Gates::Gate(gate);
+    if (Companions::Gates::Allows(pBot->GetGUIDLow(), g))
+        return true;
+    PSendSysMessage("PBERR;%s;locked;%u;%u", name.c_str(), Companions::Gates::Of(g).affinity,
+        sCompanionMgr.GetAffinity(pBot->GetGUIDLow()));
+    SetSentErrorMessage(true);
+    return false;
+}
+
 static char const* PartyBotInventoryErrorCode(InventoryResult msg)
 {
     switch (msg)
@@ -1990,7 +2004,7 @@ bool ChatHandler::HandlePartyBotBagsCommand(char* args)
 {
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     PSendSysMessage("PBINV;%s;BEGIN", name.c_str());
@@ -2032,7 +2046,53 @@ bool ChatHandler::HandlePartyBotBagsCommand(char* args)
         SendSysMessage(ss.str().c_str());
     }
 
+    // Its money, and whether the player may take some (.partybot takemoney; Gates TakeMoney).
+    Companions::Gates::Gate const takeMoney = Companions::Gates::Gate::TakeMoney;
+    PSendSysMessage("PBINV;%s;M;%u;%u;%u", name.c_str(), pBot->GetMoney(),
+        uint32(Companions::Gates::Allows(pBot->GetGUIDLow(), takeMoney)), Companions::Gates::Of(takeMoney).affinity);
+
     PSendSysMessage("PBINV;%s;END", name.c_str());
+    return true;
+}
+
+// .partybot takemoney <name> <copper>   the command user takes that much of the bot's money
+bool ChatHandler::HandlePartyBotTakeMoneyCommand(char* args)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    if (!pPlayer)
+        return false;
+
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::TakeMoney)))
+        return false;
+
+    uint32 copper = 0;
+    if (!ExtractUInt32(&args, copper) || !copper)
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot takemoney <name> <copper>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (copper > pBot->GetMoney())
+    {
+        PSendSysMessage("PBERR;%s;nomoney;%u", name.c_str(), pBot->GetMoney());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (uint64(pPlayer->GetMoney()) + copper > pPlayer->GetMaxMoney())
+    {
+        PSendSysMessage("PBERR;%s;maxmoney", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    pBot->ModifyMoney(-int32(copper));
+    pPlayer->ModifyMoney(int32(copper));
+    pBot->SaveInventoryAndGoldToDB();
+    pPlayer->SaveInventoryAndGoldToDB();
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s took %u copper from %s.", pPlayer->GetName(), copper, name.c_str());
+    PSendSysMessage("PBOK;%s;takemoney;%u;%u", name.c_str(), copper, pBot->GetMoney());
     return true;
 }
 
@@ -2041,7 +2101,7 @@ bool ChatHandler::HandlePartyBotEquipSlotCommand(char* args)
 {
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     uint32 bagIndex = 0;
@@ -2112,7 +2172,7 @@ bool ChatHandler::HandlePartyBotUnequipSlotCommand(char* args)
 {
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     uint32 slotIndex = 0;
@@ -2193,7 +2253,7 @@ bool ChatHandler::HandlePartyBotUseSlotCommand(char* args)
 {
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     uint32 bagIndex = 0;
@@ -2298,7 +2358,7 @@ bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
 
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     uint32 bagIndex = 0;
@@ -2382,7 +2442,7 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
 
     std::string name;
     Player* pBot = ExtractPartyBotTarget(&args, name);
-    if (!pBot)
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
     uint32 bagIndex = 0;

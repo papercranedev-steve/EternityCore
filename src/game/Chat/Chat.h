@@ -304,6 +304,9 @@ class ChatHandler
         bool HandlePartyBotAccountsCommand(char * args);
         bool HandlePartyBotCharsCommand(char * args);
         Player* ExtractPartyBotTarget(char** args, std::string& name);
+        // A companion's affinity allows `gate` (Companions::Gates::Gate); else PBERR locked.
+        bool PartyBotGateAllows(Player* pBot, std::string const& name, uint8 gate);
+        bool HandlePartyBotTakeMoneyCommand(char* args);
         bool HandlePartyBotRemoveCommand(char * args);
         bool HandlePartyBotAiCommand(char * args);      // PlayerBots/Commander/Commands/CommanderCommands.cpp
         bool HandlePartyBotTalentsCommand(char * args);     // PlayerBots/Commander/Commands/TalentCommands.cpp
