@@ -8,7 +8,9 @@
  * Skill: one tier behind a player of its level: level x 5 (at most 300) minus 75, +-15, at
  * least 1, at most 225 (Expert: a level-60 recruit can go for Artisan, with the player). The
  * ranks that hold it, whatever the level; the trainer recipes up to it, half of the recent ones
- * (within 25 points) left for the player to take it training.
+ * (within 25 points) left for the player to take it training; the Apprentice basics (learned at
+ * skill 1) always known. A gathering profession comes with its basic tool (Mining Pick, Skinning
+ * Knife) when it has none.
  *
  * Decided once at recruiting (or, for a companion recruited before this, when first online),
  * seeded by the character: the same companion always gets the same past.

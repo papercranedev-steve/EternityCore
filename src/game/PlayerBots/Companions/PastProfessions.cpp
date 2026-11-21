@@ -1,7 +1,10 @@
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
 #include "Shared/Professions.h"
+#include "Shared/Gathering.h"
 #include "Player.h"
+#include "Item.h"
+#include "Log.h"
 #include <algorithm>
 
 namespace Companions
@@ -19,6 +22,7 @@ namespace Companions
             uint32 const RECRUIT_MAX = 225;     // never Artisan: the player takes it there
             uint32 const RECENT_RECIPE = 25;    // recipes this close to its skill may be missing
             float const RECENT_MISSING = 0.5f;
+            uint32 const BASIC_RECIPE = 1;      // the Apprentice basics are always known (user 2026-11-21)
             uint32 const GATHERER_FACTOR = 3;
 
             // Roll keys: the high bit (class quest chains use quest ids).
@@ -96,9 +100,25 @@ namespace Companions
                 uint32 const has = bot->GetSkillValuePure(uint16(skill));
                 recipes += P::LearnRecipes(bot, skill, [guid, has](uint32 reqSkillValue, uint32 spellId)
                 {
-                    return reqSkillValue + RECENT_RECIPE <= has || PastRoll(guid, KEY_RECIPE + spellId) >= RECENT_MISSING;
+                    return reqSkillValue <= BASIC_RECIPE || reqSkillValue + RECENT_RECIPE <= has ||
+                           PastRoll(guid, KEY_RECIPE + spellId) >= RECENT_MISSING;
                 });
                 return has;
+            }
+
+            // The basic tool of a gathering profession (Mining Pick, Skinning Knife), when it has none.
+            void GiveTool(Player* bot, uint32 skill)
+            {
+                uint32 const tool = BotShared::Gathering::ToolOf(skill);
+                if (!tool || BotShared::Gathering::HasTool(bot, skill))
+                    return;
+                ItemPosCountVec dest;
+                if (bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, tool, 1) != EQUIP_ERR_OK)
+                {
+                    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] '%s': no room for the tool %u of skill %u.", bot->GetName(), tool, skill);
+                    return;
+                }
+                bot->StoreNewItem(dest, tool, true, Item::GenerateItemRandomPropertyId(tool));
             }
         }
 
@@ -122,6 +142,9 @@ namespace Companions
             result.second = pair.second;
             result.firstValue = GiveOne(bot, pair.first, result.recipes);
             result.secondValue = GiveOne(bot, pair.second, result.recipes);
+            for (uint32 skill : { pair.first, pair.second })
+                if (P::KindOf(skill) == P::Kind::Gathering && bot->HasSkill(uint16(skill)))
+                    GiveTool(bot, skill);
             for (uint32 skill : P::Secondaries())
                 GiveOne(bot, skill, result.recipes);
             return result;

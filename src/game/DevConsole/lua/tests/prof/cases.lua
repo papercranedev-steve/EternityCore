@@ -66,7 +66,11 @@ local function checkRecruit(t, b)
     for _, s in ipairs(prim) do
         t.check(s.value >= lo and s.value <= hi, string.format("%s: %s value %d in %d..%d", name, s.name, s.value, lo, hi))
         t.check(s.max == rankMax(s.value), string.format("%s: %s max %d = lowest rank holding it (%d)", name, s.name, s.max, rankMax(s.value)))
+        if s.tool and s.tool > 0 then
+            t.check(s.hastool, string.format("%s: %s comes with its tool %d", name, s.name, s.tool))
+        end
         if s.kind == "crafting" then
+            t.check(s.recipes.known > 0, string.format("%s: %s knows the basic recipes (known %d)", name, s.name, s.recipes.known))
             local older = s.recipes.below - s.recipes.known - s.recipes.recentmissing
             t.check(older <= 0, string.format("%s: %s every older recipe known (known %d, at or below %d, recent missing %d)",
                 name, s.name, s.recipes.known, s.recipes.below, s.recipes.recentmissing))
