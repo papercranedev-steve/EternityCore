@@ -67,9 +67,21 @@ namespace Companions
             std::vector<std::pair<uint32, uint32>> items;   // item entry, count
         };
 
-        // What a benched companion sends an owner of `ownerLevel`; `benchRank` 0 = his first
-        // benched companion (bench doc §3.5; stage B5: money only, materials come with B3).
-        Parcel Pack(uint32 ownerLevel, uint32 benchRank);
+        // The profit part (bench doc §3.5.3): money, materials (what its gathering skills bring
+        // in, Shared/GatheringYield; cloth of its level without one), consumables (what its
+        // crafting, first aid or cooking recipes make). Materials and consumables at their
+        // auction house price (Shared/MarketValue; consumables else a vendor's); what a share
+        // cannot buy is money. 1 to MAX_KINDS kinds of item each.
+        float const MATERIALS_SHARE = 0.4f;
+        float const CONSUMABLES_SHARE = 0.2f;
+        uint32 const MAX_KINDS = 3;
+        // A single item a little over its share's money is fine.
+        float const OVERSHOOT = 1.5f;
+
+        // What benched companion `companionGuid` (level `companionLevel`, out of the world: read
+        // from its saved character) sends an owner of `ownerLevel`; `benchRank` 0 = his first
+        // benched companion (bench doc §3.5).
+        Parcel Pack(uint32 ownerLevel, uint32 benchRank, uint32 companionGuid, uint32 companionLevel);
 
         // Mails `parcel` from the companion to `owner` (online), arriving at once. False: not sent.
         bool Send(Player* owner, uint32 companionGuid, Parcel const& parcel, std::string const& subject, std::string const& body);

@@ -800,7 +800,7 @@ namespace Companions
                 continue;
             ++rank;
         }
-        Expedition::Parcel const parcel = Expedition::Pack(owner->GetLevel(), rank);
+        Expedition::Parcel const parcel = Expedition::Pack(owner->GetLevel(), rank, info.charGuid, benched.level);
         std::string name;
         sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, info.charGuid), name);
         Life::Phrases::Vars vars;
