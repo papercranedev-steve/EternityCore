@@ -25,6 +25,8 @@
 #include "Shared/ClassQuestChains.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
+#include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Doctrine/HealerDamage.h"
 
 #include <sstream>
 #include <cstring>
@@ -1128,6 +1130,51 @@ bool ChatHandler::HandlePartyBotSetRoleCommand(char* args)
     SendSysMessage("Target is not a party bot.");
     SetSentErrorMessage(true);
     return false;
+}
+
+// .partybot healdps <0-3|auto> [name]: the healer damage tier of a party bot (Commander
+// Coordination/Doctrine/HealerDamage.h): 0 none, 1 free attacks, 2 spells while the mana is
+// high, 3 a hybrid; auto = the Commander's choice. The selected bot without a name.
+bool ChatHandler::HandlePartyBotHealDpsCommand(char* args)
+{
+    char* tierArg = ExtractArg(&args);
+    if (!tierArg)
+    {
+        SendSysMessage("Usage: .partybot healdps <0-3|auto> [name]");
+        SetSentErrorMessage(true);
+        return false;
+    }
+    std::string const tierStr = tierArg;
+    int8 tier = -1;
+    if (tierStr != "auto")
+    {
+        if (tierStr.size() != 1 || tierStr[0] < '0' || tierStr[0] >= char('0' + Commander::HEALER_DAMAGE_TIERS))
+        {
+            SendSysMessage("Usage: .partybot healdps <0-3|auto> [name]");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        tier = int8(tierStr[0] - '0');
+    }
+
+    bool const byName = args && *args;
+    std::string name;
+    Player* pTarget = ExtractPartyBotTarget(&args, name);
+    if (!pTarget)
+        return false;
+    PartyBotAI* pAI = dynamic_cast<PartyBotAI*>(pTarget->AI());
+    if (!pAI)
+        return false;
+
+    pAI->m_healerDamageTier = tier;
+    if (byName)
+        PSendSysMessage("PBOK;%s;healdps;%s", name.c_str(), tierStr.c_str());
+    else if (tier < 0)
+        PSendSysMessage("%s: healer damage tier automatic.", pTarget->GetName());
+    else
+        PSendSysMessage("%s: healer damage tier %d (%s).", pTarget->GetName(), int32(tier),
+            Commander::HealerDamageAssigner::Name(uint8(tier)));
+    return true;
 }
 
 bool ChatHandler::HandlePartyBotAttackStartCommand(char* args)

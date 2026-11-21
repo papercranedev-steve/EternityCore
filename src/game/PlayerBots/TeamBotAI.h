@@ -371,6 +371,9 @@ public:
     bool IsAssignedToBreakControl(Unit const* pTarget) const;
 
     std::vector<RaidTargetIcon> m_marksToFocus;
+    // Healer damage tier the user set (`.partybot healdps 0-3`), -1 = automatic (Commander
+    // Coordination/Doctrine/HealerDamage.h). Not saved: the addon sends it again, like the role.
+    int8 m_healerDamageTier = -1;
     ShortTimeTracker m_updateTimer;
     bool m_resetSpellData = false;
     // The role was chosen by the user (.partybot setrole / load / add with a role, addbot with a

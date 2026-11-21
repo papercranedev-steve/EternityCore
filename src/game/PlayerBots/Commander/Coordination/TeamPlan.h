@@ -1372,6 +1372,42 @@ namespace Commander
         bool Has(ObjectGuid member, TeamFunction function) const { return (Of(member) & function) != 0; }
     };
 
+    // How much a healer bot may deal damage (Coordination/Doctrine/HealerDamage.h; doc
+    // .kiro/docs/2026-11-21-healer-damage-tiers.md section 3).
+    enum HealerDamageTier : uint8
+    {
+        HEALER_DAMAGE_NONE  = 0,    // heals only
+        HEALER_DAMAGE_FREE  = 1,    // free attacks: wand, melee swings in the open world
+        HEALER_DAMAGE_SPARE = 2,    // + damage spells while the mana is high
+        HEALER_DAMAGE_FULL  = 3,    // a hybrid: damage down to a mana reserve
+        HEALER_DAMAGE_TIERS = 4
+    };
+
+    struct HealerDamageDuty
+    {
+        ObjectGuid bot;
+        uint8 tier = HEALER_DAMAGE_NONE;    // HealerDamageTier
+        char const* reason = "";            // static string
+    };
+
+    struct HealerDamagePlan
+    {
+        std::vector<HealerDamageDuty> healers;  // healer-role bots only
+        // Raising a tier waits for a change in the fight: the acting enemies of the last
+        // refresh (count), and when the open world forecast was last made.
+        uint32 enemyCount = 0;
+        uint32 forecastMs = 0;
+        bool hard = false;                      // that forecast (FightPlace::IsHard)
+
+        HealerDamageDuty const* Find(ObjectGuid bot) const
+        {
+            for (HealerDamageDuty const& d : healers)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+    };
+
     // Paladin blessings and party auras: who gives which (BlessingAssigner.h). The paladin
     // rotation casts them out of combat.
     struct BlessingDuty
@@ -1557,6 +1593,7 @@ namespace Commander
         uint32 version = 0;
         std::vector<RoleDuty> roles;
         CoveragePlan coverage;      // RoleAssigner, with the roles
+        HealerDamagePlan healerDamage;  // HealerDamageAssigner, every refresh
         BlessingPlan blessings;
         TotemPlan totems;
         JudgementPlan judgements;

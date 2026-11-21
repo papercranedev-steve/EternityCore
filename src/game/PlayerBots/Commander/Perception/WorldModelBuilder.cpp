@@ -1894,6 +1894,7 @@ namespace WorldModelBuilder
         world.leader = Team::LeaderOf(me);
         world.humanInTeam = std::any_of(members.begin(), members.end(), [](Player* p)
             { return p && !(p->AI() && dynamic_cast<TeamBotAI const*>(p->AI())); });
+        world.mapKind = map->IsRaid() ? MapKind::Raid : map->IsDungeon() ? MapKind::Dungeon : MapKind::World;
         if (members.empty())
         {
             world.allies.clear();
@@ -1933,6 +1934,7 @@ namespace WorldModelBuilder
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
                     f.canShootWand = ai->CanShootWand();
+                    f.healerDamageSet = ai->m_healerDamageTier;
                     if (member->IsAlive())
                     {
                         FillInterrupts(ai, f);

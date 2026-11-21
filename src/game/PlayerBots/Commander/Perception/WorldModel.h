@@ -713,6 +713,9 @@ namespace Commander
         // Bots: Shoot is learned and a wand that is not broken is equipped (TeamBotAI::
         // CanShootWand). A healer's free attack (healer damage tiers doc 2026-11-21).
         bool canShootWand = false;
+        // Bots: the healer damage tier the user set (`.partybot healdps`, TeamBotAI::
+        // m_healerDamageTier), -1 = automatic (Coordination/Doctrine/HealerDamage.h).
+        int8 healerDamageSet = -1;
         std::vector<DebuffFacts> debuffs;           // players only
         // Harmful auras of any caster on it (players only), what Stoneform removes: a poison,
         // a disease (SpellEntry::Dispel), a bleed (MECHANIC_BLEED on the spell or an effect).
@@ -1136,6 +1139,9 @@ namespace Commander
         uint32 damageDealers = 0;       // members that deal damage (tanks and players included)
     };
 
+    // The kind of map (Map::IsRaid / IsDungeon). World: the open world and battlegrounds.
+    enum class MapKind : uint8 { World, Dungeon, Raid };
+
     // The leader running away from the party's fight (Perception/Spatial/LeaderRun.h).
     struct LeaderRunFacts
     {
@@ -1157,6 +1163,7 @@ namespace Commander
         // A real player is in the team, on any map (a player's party). Without one (a population
         // unit) the modules about the player (his run away from the fight, notes to him) are off.
         bool humanInTeam = false;
+        MapKind mapKind = MapKind::World;   // the map the team fights on (the refreshing bot's)
         LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
         std::vector<PartyMemberFacts> party;
         // Dead members with their body or corpse on this map (a released one's ghost is not in

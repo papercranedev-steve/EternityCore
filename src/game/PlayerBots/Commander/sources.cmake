@@ -187,6 +187,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Doctrine/RoleStamps.cpp
   ${COMMANDER_DIR}/Coordination/Doctrine/FightPlace.h
   ${COMMANDER_DIR}/Coordination/Doctrine/FightPlace.cpp
+  ${COMMANDER_DIR}/Coordination/Doctrine/HealerDamage.h
+  ${COMMANDER_DIR}/Coordination/Doctrine/HealerDamage.cpp
   ${COMMANDER_DIR}/Perception/Profiles/Tags.h
   ${COMMANDER_DIR}/Perception/Profiles/Tags.cpp
   ${COMMANDER_DIR}/Perception/Profiles/SpawnSources.h

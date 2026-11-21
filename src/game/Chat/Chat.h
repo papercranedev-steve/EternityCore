@@ -280,6 +280,7 @@ class ChatHandler
         bool HandlePartyBotCloneCommand(char * args);
         bool HandlePartyBotLoadCommand(char * args);
         bool HandlePartyBotSetRoleCommand(char * args);
+        bool HandlePartyBotHealDpsCommand(char * args);
         bool HandlePartyBotAttackStartCommand(char * args);
         bool HandlePartyBotAttackStopCommand(char * args);
         bool HandlePartyBotPullCommand(char * args);

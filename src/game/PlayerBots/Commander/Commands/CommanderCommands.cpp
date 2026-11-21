@@ -60,6 +60,7 @@
 #include "Commander/Coordination/Situation/PushPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Doctrine/TacticalDoctrine.h"
+#include "Commander/Coordination/Doctrine/HealerDamage.h"
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Commands/ProfileCommands.h"
 #include "Commander/Perception/Spatial/PositionField.h"
@@ -297,6 +298,16 @@ namespace
         }
         if (plan.coverage.noHolder)
             handler->SendSysMessage("    nobody holds: each member takes the enemies that hit it");
+
+        // Healer damage tiers (Doctrine/HealerDamage.h).
+        if (!plan.healerDamage.healers.empty())
+        {
+            handler->PSendSysMessage("Healer damage (0 none / 1 free / 2 spare / 3 full)%s:",
+                plan.healerDamage.hard ? ", forecast hard" : "");
+            for (Commander::HealerDamageDuty const& d : plan.healerDamage.healers)
+                handler->PSendSysMessage("    %s: %u %s (%s)", NameOf(map, d.bot).c_str(), uint32(d.tier),
+                    Commander::HealerDamageAssigner::Name(d.tier), d.reason);
+        }
 
         handler->SendSysMessage("Interrupters:");
         for (Commander::PartyMemberFacts const& m : world.party)
