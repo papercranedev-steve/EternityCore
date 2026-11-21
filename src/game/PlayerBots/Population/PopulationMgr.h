@@ -95,6 +95,10 @@ namespace Population
         ScenePoints& GetScenePoints() { EnsureDataLoaded(); return m_points; }
         CityDirector& GetCityDirector() { EnsureDataLoaded(); return m_city; }
         Roster const& GetRoster() { EnsureDataLoaded(); return m_roster; }
+        // A former companion's character was deleted (永别, CompanionMgr::Forget): roster member
+        // `memberId` lives on as one of the people of the world, at `level`, and never joins
+        // anyone again (Roster::ReturnFromCompanion). World thread.
+        void ReturnToRoster(uint32 memberId, uint8 level) { EnsureDataLoaded(); m_roster.ReturnFromCompanion(memberId, level); }
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         FieldDirector const& GetFieldDirector() const { return m_field; }

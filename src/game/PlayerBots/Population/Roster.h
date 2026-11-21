@@ -57,6 +57,9 @@ namespace Population
         uint8 temperament = 0;      // unused, personality is `tags`
         std::vector<std::string> tags;  // personality tag keys (Companions/Personality.h)
         uint32 charGuid = 0;        // != 0: recruited, a real character now (Companions/); never spawned from the roster
+        // A companion the player parted with for good (永别, companion slots doc §3): lives on
+        // from the roster again, stalled at the level he had, and never joins anyone again.
+        bool farewell = false;
 
         // Runtime
         bool inUse = false;         // online or queued
@@ -124,6 +127,11 @@ namespace Population
         void SetSessionGuid(uint32 memberId, uint32 guid);
         // Recruited as a companion: the member is a real character from now on.
         void SetCharGuid(uint32 memberId, uint32 charGuid);
+        // His companion character was deleted (永别): he is spawned from the roster again,
+        // stalled at `level` (0: as before), and refuses to be recruited (RosterMember::farewell).
+        void ReturnFromCompanion(uint32 memberId, uint8 level);
+        // RosterMember::farewell (false for strangers and unknown ids).
+        bool SaidFarewell(uint32 memberId) const;
         void MarkInUse(uint32 memberId);
         // Logged out (or failed to spawn): free again after the cooldown.
         void Release(uint32 memberId, uint32 nowMs);

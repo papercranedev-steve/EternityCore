@@ -48,6 +48,11 @@ namespace Population
         void PlayForReview(ReviewKind kind, uint32 id, Player* viewer);
         void EndReview();
 
+        // The manager could not recruit it (world thread, maps idle): it declines the invite
+        // soon and whispers the inviter why (companion slots doc).
+        enum class DeclineReason : uint8 { NoSlot, Farewell };
+        void DeclineRecruit(DeclineReason reason);
+
         // Field bots: fights before it moves on (logs out out of sight).
         static constexpr uint32 FIELD_FIGHTS_MIN = 5;
         static constexpr uint32 FIELD_FIGHTS_MAX = 15;
@@ -119,6 +124,8 @@ namespace Population
 
         // Pending refusals (ms countdowns, 0 = none).
         uint32 m_declineInviteInMs = 0;
+        // Said with the decline, always (DeclineRecruit); null: the usual chance of a "no thanks".
+        char const* m_declineLine = nullptr;
         uint32 m_cancelTradeInMs = 0;
     };
 }

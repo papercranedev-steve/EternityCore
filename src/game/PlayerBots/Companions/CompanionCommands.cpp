@@ -27,7 +27,14 @@
  *            <tag,tag,...>;<name>
  *     PBCMP;BLOCK;<guid>;<gate key>;<text>   after its C line, online only: an open gate's service
  *            cannot be had now (Talk services' Blockers: "缺传送门符文")
+ *     PBCMP;SLOTS;<used>;<total>;<max>;<level of the next free one, 0 = all open>;<can buy 0/1>;
+ *            <copper of the next one to buy>   (after BEGIN; companion slots doc)
  *     PBCMP;END
+ *     C lines with state 3 are former companions (故人): no slot, not called over.
+ *   .partybot farewell <guid>    道别: he becomes a former companion (leaves you if with you)
+ *   .partybot rehire <guid>      a former companion comes back (needs a free slot; comes over if he can)
+ *   .partybot forget <guid>      永别: a former companion's character is deleted, he lives on as a stranger
+ *   .partybot buyslot            buys the next companion slot (all free ones open)
  */
 
 #include "Chat.h"
@@ -35,7 +42,9 @@
 #include "Group.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
+#include "Companions/Slots/Slots.h"
 #include "Companions/Talk/TalkService.h"
+#include "Population/PopulationMgr.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
 #include "Shared/ClassQuestChains.h"
@@ -48,6 +57,7 @@
 #include "World.h"
 #include "WorldSession.h"
 #include "Database/DatabaseEnv.h"
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 #include <unordered_map>
@@ -82,7 +92,9 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         {
             offline += (offline.empty() ? "" : ",") + std::to_string(info.charGuid);
             // (his group's member, about to come back with him: CompanionMgr::OnLoginRequest)
-            if (player->GetGroup() && player->GetGroup()->IsMember(ObjectGuid(HIGHGUID_PLAYER, info.charGuid)))
+            if (info.parted)
+                row.state = 3;
+            else if (player->GetGroup() && player->GetGroup()->IsMember(ObjectGuid(HIGHGUID_PLAYER, info.charGuid)))
                 row.state = 2;
             continue;
         }
@@ -96,7 +108,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         row.nextXp = row.level >= maxLevel ? 0 : bot->GetUInt32Value(PLAYER_NEXT_LEVEL_XP);
         row.zone = bot->GetZoneId();
         row.talents = BotShared::TalentSpread::Of(bot);
-        row.state = player->GetGroup() && bot->GetGroup() == player->GetGroup() ? 2 : 1;
+        row.state = info.parted ? 3 : player->GetGroup() && bot->GetGroup() == player->GetGroup() ? 2 : 1;
         row.name = bot->GetName();
         for (std::unique_ptr<Companions::Talk::Service> const& service : Companions::Talk::Services())
             service->Blockers(bot, row.blockers);
@@ -144,6 +156,9 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
     for (auto const& itr : rows)
         count += itr.second.known ? 1 : 0;
     PSendSysMessage("PBCMP;BEGIN;%u", count);
+    Companions::CompanionMgr::SlotCount const slots = sCompanionMgr.SlotsOf(player);
+    PSendSysMessage("PBCMP;SLOTS;%u;%u;%u;%u;%u;%u", slots.used, slots.total, Companions::Slots::Max(),
+        slots.nextFreeLevel, slots.canBuy ? 1 : 0, slots.price);
     for (Companions::Gates::Info const& gate : Companions::Gates::All())
         PSendSysMessage("PBCMP;GATE;%u;%u;%s;%u;%s", gate.affinity, gate.classMask, gate.key, gate.ready ? 1u : 0u, gate.label);
 
@@ -192,6 +207,101 @@ bool ChatHandler::HandlePartyBotCallOverCommand(char* args)
         return false;
     }
     PSendSysMessage("PBOK;%s;callover", name.c_str());
+    return true;
+}
+
+// `.partybot <farewell|rehire|forget> <guid>`: the player, the companion's guid and name. False:
+// usage sent.
+bool ChatHandler::ExtractCompanionSlotTarget(char** args, char const* usage, Player*& player, uint32& guid, std::string& name)
+{
+    player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    if (!player || !ExtractUInt32(args, guid))
+    {
+        PSendSysMessage("PBERR;;usage;%s", usage);
+        SetSentErrorMessage(true);
+        return false;
+    }
+    sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, guid), name);
+    return true;
+}
+
+// .partybot farewell <guid>: PBOK;<name>;farewell | PBERR;<name>;<notcompanion|notyours|former>
+bool ChatHandler::HandlePartyBotFarewellCommand(char* args)
+{
+    Player* player = nullptr;
+    uint32 guid = 0;
+    std::string name;
+    if (!ExtractCompanionSlotTarget(&args, ".partybot farewell <guid>", player, guid, name))
+        return false;
+    std::string const error = sCompanionMgr.Part(player, guid);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("PBOK;%s;farewell", name.c_str());
+    return true;
+}
+
+// .partybot rehire <guid>: PBOK;<name>;rehire;<1 on his way, 0 on the bench (cannot come now)>
+//                          | PBERR;<name>;<notcompanion|notyours|notformer|noslot>
+bool ChatHandler::HandlePartyBotRehireCommand(char* args)
+{
+    Player* player = nullptr;
+    uint32 guid = 0;
+    std::string name;
+    if (!ExtractCompanionSlotTarget(&args, ".partybot rehire <guid>", player, guid, name))
+        return false;
+    std::string const error = sCompanionMgr.Rehire(player, guid);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    bool const coming = sCompanionMgr.CallOver(player, guid, ROLE_INVALID, true).empty();
+    PSendSysMessage("PBOK;%s;rehire;%u", name.c_str(), coming ? 1 : 0);
+    return true;
+}
+
+// .partybot forget <guid>: PBOK;<name>;forget | PBERR;<name>;<notcompanion|notyours|notformer|leaving>
+bool ChatHandler::HandlePartyBotForgetCommand(char* args)
+{
+    Player* player = nullptr;
+    uint32 guid = 0;
+    std::string name;
+    if (!ExtractCompanionSlotTarget(&args, ".partybot forget <guid>", player, guid, name))
+        return false;
+    uint32 memberId = 0, level = 0;
+    std::string const error = sCompanionMgr.Forget(player, guid, memberId, level);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (memberId)
+        sPopulationMgr.ReturnToRoster(memberId, uint8(std::min<uint32>(level, 255)));
+    PSendSysMessage("PBOK;%s;forget", name.c_str());
+    return true;
+}
+
+// .partybot buyslot: PBOK;;buyslot;<total now>;<copper paid> | PBERR;;<notyet|maxslots|nomoney>
+bool ChatHandler::HandlePartyBotBuySlotCommand(char* /*args*/)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    if (!player)
+        return false;
+    uint32 const price = sCompanionMgr.SlotsOf(player).price;
+    std::string const error = sCompanionMgr.BuySlot(player);
+    if (!error.empty())
+    {
+        PSendSysMessage("PBERR;;%s", error.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    PSendSysMessage("PBOK;;buyslot;%u;%u", sCompanionMgr.SlotsOf(player).total, price);
     return true;
 }
 

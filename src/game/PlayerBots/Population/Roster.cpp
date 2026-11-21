@@ -146,6 +146,10 @@ namespace Population
         std::unique_ptr<QueryResult> gearCap(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_popbot_cohort` LIKE 'gear_cap'"));
         if (!gearCap)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_popbot_cohort` ADD COLUMN `gear_cap` SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER `max_level`");
+        std::unique_ptr<QueryResult> farewell(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_popbot_member` LIKE 'farewell'"));
+        if (!farewell)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_popbot_member` ADD COLUMN `farewell` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = a companion the player parted with for good: never recruited again' AFTER `char_guid`");
         return true;
     }
 
@@ -203,7 +207,7 @@ namespace Population
 
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
             "SELECT `id`, `cohort_id`, `name`, `race`, `class`, `gender`, `skin`, `face`, `hair_style`, `hair_color`,"
-            " `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`, `temperament`, `char_guid`"
+            " `facial_hair`, `home_zone`, `pace`, `stall_level`, `quit_level`, `jitter`, `wealth`, `temperament`, `char_guid`, `farewell`"
             " FROM `custom_popbot_member` ORDER BY `id`"));
         if (!result)
             return;
@@ -230,6 +234,7 @@ namespace Population
             m.wealth = f[16].GetUInt8();
             m.temperament = f[17].GetUInt8();
             m.charGuid = f[18].GetUInt32();
+            m.farewell = f[19].GetUInt8() != 0;
 
             if (!Identity::IsValidCombo(m.race, m.classId))
                 continue;
@@ -240,8 +245,12 @@ namespace Population
                 m.inUse = prev->inUse;
                 m.availableAtMs = prev->availableAtMs;
                 m.sessionGuid = prev->sessionGuid;
-                if (!m.charGuid)
-                    m.charGuid = prev->charGuid;    // async update not written yet
+                // (async updates not written yet)
+                m.farewell = m.farewell || prev->farewell;
+                if (!m.charGuid && !m.farewell)
+                    m.charGuid = prev->charGuid;
+                if (prev->farewell)
+                    m.stallLevel = prev->stallLevel;
             }
             m_members.push_back(std::move(m));
         } while (result->NextRow());
@@ -767,6 +776,28 @@ namespace Population
             return;
         m->charGuid = charGuid;
         CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `char_guid` = %u WHERE `id` = %u", charGuid, memberId);
+    }
+
+    void Roster::ReturnFromCompanion(uint32 memberId, uint8 level)
+    {
+        RosterMember* m = FindMember(memberId);
+        if (!m)
+            return;
+        m->charGuid = 0;
+        m->sessionGuid = 0;     // (the deleted character's guid: a new one next time)
+        m->farewell = true;
+        if (level)
+            m->stallLevel = level;
+        CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `char_guid` = 0, `farewell` = 1, `stall_level` = %u WHERE `id` = %u",
+            m->stallLevel, memberId);
+    }
+
+    bool Roster::SaidFarewell(uint32 memberId) const
+    {
+        if (IsStranger(memberId))
+            return false;
+        auto const itr = std::find_if(m_members.begin(), m_members.end(), [memberId](RosterMember const& m) { return m.id == memberId; });
+        return itr != m_members.end() && itr->farewell;
     }
 
     void Roster::MarkInUse(uint32 memberId)

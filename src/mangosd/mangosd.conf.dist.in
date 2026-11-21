@@ -3414,6 +3414,21 @@ AHBuyer.MaxMarkup = 50
 #        Account that owns the companion characters, created automatically with a random password.
 #        Default: "COMPANIONS"
 #
+#    Companion.Slots.FreeLevels
+#        Player levels at which a free companion slot opens (companions in the party and on the
+#        bench count, former ones do not), space separated.
+#        Default: "6 10 13 16 30 40 50 60"
+#
+#    Companion.Slots.Prices
+#        Gold of the bought slots, "slot:gold" steps (from that slot number on). Slots can be
+#        bought once all free ones are open. The gold is for Rate.Drop.Money = 1 and is
+#        multiplied by it (what a max level character earns follows the money rate).
+#        Default: "9:150 13:250 20:400"
+#
+#    Companion.Slots.Max
+#        Most companion slots a character can have, free and bought.
+#        Default: 80
+#
 ###################################################################################################################
 
 RandomBot.Enable = 0
@@ -3475,6 +3490,9 @@ PopBot.Roster.ElderSharePct = 30
 PopBot.Roster.RespawnCooldownMin = 30
 Companion.Enable = 1
 Companion.Account = "COMPANIONS"
+Companion.Slots.FreeLevels = "6 10 13 16 30 40 50 60"
+Companion.Slots.Prices = "9:150 13:250 20:400"
+Companion.Slots.Max = 80
 
 ###################################################################################################################
 # MAIL FLOODING MITIGATION

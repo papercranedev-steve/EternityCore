@@ -6,6 +6,7 @@
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
 #include "Companions/OfflineLife.h"
+#include "Companions/Slots/Slots.h"
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/DungeonClears.h"
@@ -83,6 +84,7 @@ namespace Companions
     {
         m_enabled.store(sConfig.GetBoolDefault("Companion.Enable", true));
         m_skillUpPriceFactor = std::max(0.0f, sConfig.GetFloatDefault("Companion.SkillUp.PriceFactor", 1.0f));
+        Slots::LoadConfig();
         std::string account = sConfig.GetStringDefault("Companion.Account", "COMPANIONS");
         if (account.empty())
             account = "COMPANIONS";
@@ -148,6 +150,7 @@ namespace Companions
             "CREATE TABLE IF NOT EXISTS `custom_companion_owner` ("
             " `owner_guid` INT UNSIGNED NOT NULL,"
             " `xp_seen` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'his total experience at the last look (bench leveling)',"
+            " `slots_bought` SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'companion slots he bought (Slots/Slots)',"
             " PRIMARY KEY (`owner_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: their owners, as the companions keep track of them'");
 
@@ -187,6 +190,14 @@ namespace Companions
         if (!expedition)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `expedition_secs` INT UNSIGNED NOT NULL DEFAULT 0"
                 " COMMENT 'owner active time out on the bench since its last parcel' AFTER `bench_levels`");
+        std::unique_ptr<QueryResult> parted(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'parted'"));
+        if (!parted)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `parted` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = a former companion: the player said goodbye (Slots, Part)' AFTER `expedition_secs`");
+        std::unique_ptr<QueryResult> slotsBought(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion_owner` LIKE 'slots_bought'"));
+        if (!slotsBought)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion_owner` ADD COLUMN `slots_bought` SMALLINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT 'companion slots he bought (Slots/Slots)' AFTER `xp_seen`");
         return true;
     }
 
@@ -212,7 +223,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs`, c.`parted` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -235,20 +246,24 @@ namespace Companions
                 info.staying = f[10].GetUInt8() != 0;
                 info.benchLevels = f[11].GetUInt32();
                 info.expeditionSecs = f[12].GetUInt32();
+                info.parted = f[13].GetUInt8() != 0;
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
 
         m_ownerXpSeen.clear();
+        m_slotsBought.clear();
         m_benched.clear();
         Expedition::Load();
-        std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen` FROM `custom_companion_owner`"));
+        std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen`, `slots_bought` FROM `custom_companion_owner`"));
         if (owners)
         {
             do
             {
                 Field* f = owners->Fetch();
                 m_ownerXpSeen[f[0].GetUInt32()] = f[1].GetUInt32();
+                if (uint32 const bought = f[2].GetUInt32())
+                    m_slotsBought[f[0].GetUInt32()] = bought;
             } while (owners->NextRow());
         }
 
@@ -450,7 +465,7 @@ namespace Companions
             return false;
 
         uint32 const guid = bot->GetGUIDLow();
-        if (IsCompanion(guid))
+        if (IsCompanion(guid) || !HasFreeSlot(recruiter))
             return false;
 
         uint32 const account = ResolveAccount();
@@ -610,6 +625,8 @@ namespace Companions
             return "notcompanion";
         if (ownerOnly && info->recruiterGuid != leader->GetGUIDLow())
             return "notyours";
+        if (info->parted)
+            return "former";
         ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
         if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
             return "online";
@@ -633,6 +650,134 @@ namespace Companions
             return "failed";
         }
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s calls companion %u over.", leader->GetName(), charGuid);
+        return "";
+    }
+
+    CompanionMgr::SlotCount CompanionMgr::SlotsOf(Player const* owner) const
+    {
+        SlotCount count;
+        if (!owner)
+            return count;
+        uint32 const ownerGuid = owner->GetGUIDLow();
+        for (auto const& itr : m_companions)
+            if (itr.second.recruiterGuid == ownerGuid && !itr.second.temporary && !itr.second.parted)
+                ++count.used;
+        auto const bought = m_slotsBought.find(ownerGuid);
+        count.total = std::min(Slots::FreeAt(owner->GetLevel()) + (bought != m_slotsBought.end() ? bought->second : 0), Slots::Max());
+        count.nextFreeLevel = Slots::NextFreeLevel(owner->GetLevel());
+        count.canBuy = !count.nextFreeLevel && count.total < Slots::Max();
+        count.price = count.canBuy ? Slots::PriceOf(count.total + 1) : 0;
+        return count;
+    }
+
+    bool CompanionMgr::HasFreeSlot(Player const* owner) const
+    {
+        SlotCount const count = SlotsOf(owner);
+        return count.used < count.total;
+    }
+
+    std::string CompanionMgr::BuySlot(Player* owner)
+    {
+        if (!owner)
+            return "notyet";
+        SlotCount const count = SlotsOf(owner);
+        if (count.nextFreeLevel)
+            return "notyet";
+        if (!count.canBuy)
+            return "maxslots";
+        if (owner->GetMoney() < count.price)
+            return "nomoney";
+
+        uint32 const ownerGuid = owner->GetGUIDLow();
+        owner->ModifyMoney(-int32(count.price));
+        owner->SaveInventoryAndGoldToDB();
+        uint32 const bought = ++m_slotsBought[ownerGuid];
+        CharacterDatabase.PExecute("INSERT INTO `custom_companion_owner` (`owner_guid`, `slots_bought`) VALUES (%u, %u)"
+            " ON DUPLICATE KEY UPDATE `slots_bought` = VALUES(`slots_bought`)", ownerGuid, bought);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s bought companion slot %u for %u copper.",
+            owner->GetName(), count.total + 1, count.price);
+        return "";
+    }
+
+    std::string CompanionMgr::Part(Player* owner, uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (!owner || itr == m_companions.end() || itr->second.temporary)
+            return "notcompanion";
+        CompanionInfo& info = itr->second;
+        if (info.recruiterGuid != owner->GetGUIDLow())
+            return "notyours";
+        if (info.parted)
+            return "former";
+
+        info.parted = true;
+        info.staying = false;
+        info.expeditionSecs = 0;
+        m_benched.erase(charGuid);
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `parted` = 1, `staying` = 0, `expedition_secs` = 0 WHERE `char_guid` = %u", charGuid);
+
+        // With him: says goodbye and walks off (presence P5). Elsewhere: no longer in his group.
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        Player* bot = sObjectAccessor.FindPlayer(guid);
+        PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+        if (ai)
+            ai->Dismiss();
+        else if (Group* group = sObjectMgr.GetGroupByMember(guid))
+            Player::RemoveFromGroup(group, guid);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s said goodbye to companion %u.", owner->GetName(), charGuid);
+        return "";
+    }
+
+    std::string CompanionMgr::Rehire(Player* owner, uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (!owner || itr == m_companions.end() || itr->second.temporary)
+            return "notcompanion";
+        CompanionInfo& info = itr->second;
+        if (info.recruiterGuid != owner->GetGUIDLow())
+            return "notyours";
+        if (!info.parted)
+            return "notformer";
+        if (!HasFreeSlot(owner))
+            return "noslot";
+
+        info.parted = false;
+        // (the bench counts from now: no levels nor parcels for the time apart)
+        info.lastSeen = uint32(time(nullptr));
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `parted` = 0 WHERE `char_guid` = %u", charGuid);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s invited former companion %u back.", owner->GetName(), charGuid);
+        return "";
+    }
+
+    std::string CompanionMgr::Forget(Player* owner, uint32 charGuid, uint32& memberId, uint32& level)
+    {
+        memberId = 0;
+        level = 0;
+        auto itr = m_companions.find(charGuid);
+        if (!owner || itr == m_companions.end() || itr->second.temporary)
+            return "notcompanion";
+        if (itr->second.recruiterGuid != owner->GetGUIDLow())
+            return "notyours";
+        if (!itr->second.parted)
+            return "notformer";
+        ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+        // (still walking off after the goodbye)
+        if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid) || sObjectAccessor.FindPlayer(guid))
+            return "leaving";
+
+        memberId = itr->second.memberId;
+        if (PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid))
+            level = data->uiLevel;
+        {
+            std::lock_guard<std::mutex> guard(m_affinityLock);   // (OfRecruiter on other threads)
+            m_companions.erase(itr);
+        }
+        m_benched.erase(charGuid);
+        for (char const* table : { "custom_companion", "custom_companion_skillup", "custom_companion_clear", "custom_soulbot_request" })
+            CharacterDatabase.PExecute("DELETE FROM `%s` WHERE `char_guid` = %u", table, charGuid);
+        Player::DeleteFromDB(guid, m_accountId, true, true);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s parted for good with former companion %u (roster member %u): character deleted.",
+            owner->GetName(), charGuid, memberId);
         return "";
     }
 
@@ -689,7 +834,8 @@ namespace Companions
             if (seen == m_ownerXpSeen.end() || seen->second != total)
             {
                 m_ownerXpSeen[ownerGuid] = total;
-                CharacterDatabase.PExecute("REPLACE INTO `custom_companion_owner` (`owner_guid`, `xp_seen`) VALUES (%u, %u)", ownerGuid, total);
+                CharacterDatabase.PExecute("INSERT INTO `custom_companion_owner` (`owner_guid`, `xp_seen`) VALUES (%u, %u)"
+                    " ON DUPLICATE KEY UPDATE `xp_seen` = VALUES(`xp_seen`)", ownerGuid, total);
             }
             owner.player = player;
             owner.group = player->GetGroup();
@@ -703,7 +849,7 @@ namespace Companions
         {
             CompanionInfo& info = itr.second;
             auto owner = owners.find(info.recruiterGuid);
-            if (info.temporary || owner == owners.end() || !owner->second.player)
+            if (info.temporary || info.parted || owner == owners.end() || !owner->second.player)
                 continue;
             ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
             // On the bench: out of the world and not in his party. With him: no expedition.
@@ -752,9 +898,12 @@ namespace Companions
             if (!owner->second.active)
                 continue;
             uint32 const secs = std::min(info.expeditionSecs + tickSecs, Expedition::EVERY_SECS);
-            if (secs >= Expedition::EVERY_SECS && Expedition::Unopened(info.charGuid, info.recruiterGuid) < Expedition::MAX_UNOPENED)
+            // (past his first PARCEL_SENDERS benched ones: nobody else sends)
+            uint32 const rank = secs >= Expedition::EVERY_SECS ? BenchRank(owner->second.player, info) : 0;
+            if (secs >= Expedition::EVERY_SECS && rank < PARCEL_SENDERS
+                && Expedition::Unopened(info.charGuid, info.recruiterGuid) < Expedition::MAX_UNOPENED)
             {
-                SendParcel(owner->second.player, info, *benched);
+                SendParcel(owner->second.player, info, *benched, rank);
                 info.expeditionSecs = 0;
             }
             else
@@ -781,15 +930,14 @@ namespace Companions
         return &benched;
     }
 
-    void CompanionMgr::SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched)
+    uint32 CompanionMgr::BenchRank(Player const* owner, CompanionInfo const& info) const
     {
-        // Its place among his benched companions, by recruit time (the profit part diminishes).
         Group const* group = owner->GetGroup();
         uint32 rank = 0;
         for (auto const& itr : m_companions)
         {
             CompanionInfo const& other = itr.second;
-            if (other.charGuid == info.charGuid || other.temporary || other.recruiterGuid != info.recruiterGuid)
+            if (other.charGuid == info.charGuid || other.temporary || other.parted || other.recruiterGuid != info.recruiterGuid)
                 continue;
             bool const earlier = other.recruitedAt < info.recruitedAt
                 || (other.recruitedAt == info.recruitedAt && other.charGuid < info.charGuid);
@@ -800,6 +948,12 @@ namespace Companions
                 continue;
             ++rank;
         }
+        return rank;
+    }
+
+    void CompanionMgr::SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched, uint32 rank)
+    {
+        // (the profit part diminishes with `rank`, its place among his benched companions)
         Expedition::Parcel const parcel = Expedition::Pack(owner->GetLevel(), rank, info.charGuid, benched.level);
         std::string name;
         sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, info.charGuid), name);

@@ -74,6 +74,10 @@ namespace Companions
         // The owner's active time it has been out on the bench since its last parcel
         // (Bench/Expedition); 0 while it is with him. World thread.
         uint32 expeditionSecs = 0;
+        // A former companion (故人, slots doc §3): the player said goodbye. He takes no slot, is
+        // not called over, does not grow on the bench nor mail parcels, until he is invited back
+        // (Rehire). World thread.
+        bool parted = false;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
@@ -115,8 +119,37 @@ namespace Companions
         uint32 CountClear(uint32 charGuid, uint8 segment);
 
         // Saves an online temporary bot as a real character and queues its login as a party bot
-        // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.
+        // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing
+        // changed (also when the recruiter has no free slot: check HasFreeSlot first to say why).
         bool Recruit(Player* bot, Player* recruiter, uint32 memberId);
+
+        // Slots (slots doc, Slots/Slots.h): his companions in the party and on the bench count,
+        // former and temporary ones do not. World thread.
+        struct SlotCount
+        {
+            uint32 used = 0;
+            uint32 total = 0;           // free at his level + bought
+            uint32 nextFreeLevel = 0;   // the level the next free one opens at, 0: all open
+            bool canBuy = false;        // all free ones open, not at Companion.Slots.Max
+            uint32 price = 0;           // copper of the next one to buy (canBuy)
+        };
+        SlotCount SlotsOf(Player const* owner) const;
+        bool HasFreeSlot(Player const* owner) const;
+        // He buys his next slot (pays SlotCount::price). "" = bought, else an error key:
+        // notyet (free ones still to open), maxslots, nomoney.
+        std::string BuySlot(Player* owner);
+
+        // Former companions (故人, slots doc §3). World thread. "" = done, else an error key.
+        // Part (道别): he becomes a former companion; online he says goodbye and leaves (as
+        // PartyBotAI::Dismiss), offline he leaves the owner's group. notcompanion, notyours, former.
+        std::string Part(Player* owner, uint32 charGuid);
+        // A former companion is a companion again (on the bench; CallOver brings him).
+        // notcompanion, notyours, notformer, noslot.
+        std::string Rehire(Player* owner, uint32 charGuid);
+        // Farewell for good (永别): his character is deleted. `memberId` (0: none) and `level`:
+        // the roster member he was, to live on as a stranger to the owner (PopulationMgr::
+        // ReturnToRoster). notcompanion, notyours, notformer, leaving (still in the world).
+        std::string Forget(Player* owner, uint32 charGuid, uint32& memberId, uint32& level);
 
         // They come and go with the player (design doc 2026-11-21-companion-presence §2.1): a
         // companion whose leader logs out stays in his group as an offline member (PlayerBotMgr
@@ -191,6 +224,13 @@ namespace Companions
         uint32 m_benchCheckMs = 0;
         // Owner char guid -> his total experience at the last look (custom_companion_owner).
         std::unordered_map<uint32, uint32> m_ownerXpSeen;
+        // Owner char guid -> slots he bought (custom_companion_owner.slots_bought).
+        std::unordered_map<uint32, uint32> m_slotsBought;
+        // Only his first PARCEL_SENDERS benched companions (by recruit time) mail parcels (slots
+        // doc §2.3: dozens of bought slots must not flood his mailbox nor his purse).
+        static constexpr uint32 PARCEL_SENDERS = 4;
+        // `info`'s place among its owner's benched companions by recruit time, 0 = the first.
+        uint32 BenchRank(Player const* owner, CompanionInfo const& info) const;
         // A benched companion as saved in `characters`, read once and kept while it stays out
         // (forgotten once it is online).
         struct Benched
@@ -202,7 +242,7 @@ namespace Companions
         std::unordered_map<uint32, Benched> m_benched;
         // Benched::level etc. of `info`, read from `characters` the first time; null: not there.
         Benched* BenchedOf(CompanionInfo const& info);
-        void SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched);
+        void SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched, uint32 rank);
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();

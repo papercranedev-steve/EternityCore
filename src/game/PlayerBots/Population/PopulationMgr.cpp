@@ -3,6 +3,7 @@
 #include "Companions/CompanionMgr.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
+#include "Chat.h"
 #include "ObjectAccessor.h"
 #include "MapManager.h"
 #include "Config/Config.h"
@@ -270,6 +271,23 @@ namespace Population
             Player* recruiter = sObjectAccessor.FindPlayer(recruiterGuid);
             if (!bot || !recruiter)
                 continue;
+            // Someone the player parted with for good, or no room by his side (companion slots
+            // doc): he says why and declines (a stranger is not kept then).
+            if (m_roster.SaidFarewell(r.request.rosterId))
+            {
+                if (r.handle->alive && r.handle->ai)
+                    r.handle->ai->DeclineRecruit(PopulationBotAI::DeclineReason::Farewell);
+                continue;
+            }
+            if (!sCompanionMgr.HasFreeSlot(recruiter))
+            {
+                Companions::CompanionMgr::SlotCount const slots = sCompanionMgr.SlotsOf(recruiter);
+                ChatHandler(recruiter->GetSession()).PSendSysMessage("PBERR;%s;noslot;%u;%u;%u",
+                    bot->GetName(), slots.used, slots.total, slots.nextFreeLevel);
+                if (r.handle->alive && r.handle->ai)
+                    r.handle->ai->DeclineRecruit(PopulationBotAI::DeclineReason::NoSlot);
+                continue;
+            }
             // A stranger is kept from now on: he joins the recruiter's roster first.
             if (Roster::IsStranger(r.request.rosterId))
             {

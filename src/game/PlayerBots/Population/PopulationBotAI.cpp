@@ -40,6 +40,17 @@ namespace Population
             "maybe later",
         };
 
+        // Why a roster member does not join the player as a companion (DeclineRecruit).
+        char const* const g_noSlotLines[] = {
+            "你身边已经够热闹了，再多我一个怕是照顾不过来。",
+            "你的队伍人手够多了，等你那边宽松些再来找我吧。",
+            "你带的人已经不少了，下回吧。",
+        };
+        char const* const g_farewellLines[] = {
+            "我们已经道过别了。各自保重吧。",
+            "当初说好了不再同行的。祝你一路顺利。",
+        };
+
         uint32 const g_idleEmotes[] = {
             EMOTE_ONESHOT_TALK, EMOTE_ONESHOT_TALK, EMOTE_ONESHOT_TALK,
             EMOTE_ONESHOT_LAUGH, EMOTE_ONESHOT_POINT, EMOTE_ONESHOT_QUESTION,
@@ -745,15 +756,29 @@ namespace Population
         Player* pInviter = sObjectAccessor.FindPlayer(pGroup->GetLeaderGuid());
         me->GetSession()->QueuePacket(std::make_unique<NullClientPacket>(CMSG_GROUP_DECLINE));
 
-        if (pInviter && !pInviter->IsBot() && urand(0, 99) < 30)
+        char const* line = m_declineLine;
+        m_declineLine = nullptr;
+        if (!line && urand(0, 99) < 30)
+            line = g_declineLines[urand(0, uint32(sizeof(g_declineLines) / sizeof(g_declineLines[0])) - 1)];
+        if (pInviter && !pInviter->IsBot() && line)
         {
             auto msg = std::make_unique<WorldPackets::Chat::ChatMessage>();
             msg->type = CHAT_MSG_WHISPER;
             msg->lang = me->GetTeam() == HORDE ? LANG_ORCISH : LANG_COMMON;
             msg->whisperTargetOrChannel = pInviter->GetName();
-            msg->message = g_declineLines[urand(0, uint32(sizeof(g_declineLines) / sizeof(g_declineLines[0])) - 1)];
+            msg->message = line;
             me->GetSession()->QueuePacket(std::move(msg));
         }
+    }
+
+    void PopulationBotAI::DeclineRecruit(DeclineReason reason)
+    {
+        if (reason == DeclineReason::NoSlot)
+            m_declineLine = g_noSlotLines[urand(0, uint32(sizeof(g_noSlotLines) / sizeof(g_noSlotLines[0])) - 1)];
+        else
+            m_declineLine = g_farewellLines[urand(0, uint32(sizeof(g_farewellLines) / sizeof(g_farewellLines[0])) - 1)];
+        // (a moment to "think", as a person would)
+        m_declineInviteInMs = urand(1500, 3000);
     }
 
     void PopulationBotAI::OnPacketReceived(WorldPacket const* packet)
