@@ -77,6 +77,12 @@ namespace Population
         // PopBot.Prewarm.PerTick per update). False if disabled or full.
         bool QueueSpawn(SpawnRequest const& request);
 
+        // The player's first companion (Companions/Recruit/FirstCompanion, recruiting doc §3):
+        // someone of his race, of `classId`, at his level, logs in out of his sight and runs to
+        // him (BotKind::Herald). `giverName`: who gave him his first quest. World thread.
+        // False: not now (population off, no hidden spot, queue full).
+        bool SpawnHerald(Player* player, uint8 classId, std::string const& giverName);
+
         // Hooks from the character packet handlers (world thread): fill the world around the
         // character before he enters it (Observers.h).
         void OnCharacterScreen(uint32 accountId);
@@ -99,6 +105,10 @@ namespace Population
         // `memberId` lives on as one of the people of the world, at `level`, and never joins
         // anyone again (Roster::ReturnFromCompanion). World thread.
         void ReturnToRoster(uint32 memberId, uint8 level) { EnsureDataLoaded(); m_roster.ReturnFromCompanion(memberId, level); }
+        // A trial partner went his way unpromoted (搭伙 ended, CompanionMgr): member `memberId` is
+        // one of the people of the world again and can be met and asked again
+        // (Roster::ReturnFromTrial). World thread.
+        void ReturnFromTrial(uint32 memberId, uint8 level) { EnsureDataLoaded(); m_roster.ReturnFromTrial(memberId, level); }
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         FieldDirector const& GetFieldDirector() const { return m_field; }

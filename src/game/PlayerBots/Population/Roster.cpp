@@ -376,12 +376,12 @@ namespace Population
     }
 
     bool Roster::GenerateMember(std::mt19937& rng, uint32 cohortTeam, Identity const& identity,
-        std::set<std::string>& reserved, RosterMember& out) const
+        std::set<std::string>& reserved, RosterMember& out, uint8 race, uint8 classId) const
     {
-        uint32 const team = Identity::Roll(&rng, 0, 99) < m_enemyPct ? OtherTeam(cohortTeam) : cohortTeam;
-        out.race = Identity::RandomRace(team, &rng);
-        out.classId = Identity::RandomClass(out.race, &rng);
-        if (!out.classId)
+        uint32 const team = race ? cohortTeam : Identity::Roll(&rng, 0, 99) < m_enemyPct ? OtherTeam(cohortTeam) : cohortTeam;
+        out.race = race ? race : Identity::RandomRace(team, &rng);
+        out.classId = classId ? classId : Identity::RandomClass(out.race, &rng);
+        if (!out.classId || !Identity::IsValidCombo(out.race, out.classId))
             return false;
 
         out.name = identity.MakeName(out.race, reserved, &rng);
@@ -600,6 +600,8 @@ namespace Population
                 continue;
             if (uint32(Player::TeamForRace(m.race)) != query.team)
                 continue;
+            if ((query.race && m.race != query.race) || (query.classId && m.classId != query.classId))
+                continue;
             Cohort const* c = FindCohort(m.cohortId);
             if (!c || Growth::IsRetired(m, c->maxLevel))
                 continue;
@@ -656,6 +658,7 @@ namespace Population
         Cohort const* cohort = FindCohort(m.cohortId);
         out.gear = Growth::Gear(m, chosen.level, cohort ? cohort->gearCap : 0);
         out.money = Growth::Money(m, chosen.level);
+        out.tags = m.tags;
         return true;
     }
 
@@ -671,7 +674,7 @@ namespace Population
         for (uint32 tries = 0; tries < 10 && !made; ++tries)
         {
             m = RosterMember();
-            made = GenerateMember(rng, query.team, identity, reserved, m) &&
+            made = GenerateMember(rng, query.team, identity, reserved, m, query.race, query.classId) &&
                 uint32(Player::TeamForRace(m.race)) == query.team;
             if (!made)
                 reserved.erase(m.name);
@@ -789,6 +792,20 @@ namespace Population
         if (level)
             m->stallLevel = level;
         CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `char_guid` = 0, `farewell` = 1, `stall_level` = %u WHERE `id` = %u",
+            m->stallLevel, memberId);
+    }
+
+    void Roster::ReturnFromTrial(uint32 memberId, uint8 level)
+    {
+        RosterMember* m = FindMember(memberId);
+        if (!m)
+            return;
+        m->charGuid = 0;
+        m->sessionGuid = 0;     // (the deleted character's guid: a new one next time)
+        m->inUse = false;
+        if (m->stallLevel && level)
+            m->stallLevel = level;
+        CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `char_guid` = 0, `stall_level` = %u WHERE `id` = %u",
             m->stallLevel, memberId);
     }
 

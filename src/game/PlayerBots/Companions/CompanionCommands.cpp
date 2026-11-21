@@ -79,7 +79,10 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         std::vector<Companions::Talk::Blocker> blockers;   // online only
     };
 
-    std::vector<Companions::CompanionInfo> const companions = sCompanionMgr.OfRecruiter(player->GetGUIDLow());
+    std::vector<Companions::CompanionInfo> companions = sCompanionMgr.OfRecruiter(player->GetGUIDLow());
+    // (a trial partner is no companion yet: not on the panel, recruiting doc §2.2)
+    companions.erase(std::remove_if(companions.begin(), companions.end(),
+        [](Companions::CompanionInfo const& info) { return info.trial; }), companions.end());
     uint32 const maxLevel = sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL);
     std::unordered_map<uint32, Row> rows;
     std::string offline;    // guids for the database, "1,2,3"

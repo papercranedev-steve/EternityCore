@@ -22,6 +22,7 @@ namespace Population
         City,       // filled by the city director while a player is in the city
         Field,      // phase 1c
         Town,       // residents of a town, start area or camp (TownPopulation.h)
+        Herald,     // runs to a new player and asks to join him (his first companion, FirstCompanion)
     };
 
     enum class GearTier : uint8
@@ -118,6 +119,15 @@ namespace Population
         // Town bots: the settlement (Settlements.h id); sitter: the chair at (x, y, z), 0 = sit on the ground.
         uint32 settlementId = 0;
         uint32 chairEntry = 0;
+
+        // The roster member's personality tags (Companions/Personality.h): how he talks
+        // (Population/StrangerTalk). Set by PopulationMgr::SpawnNow.
+        std::vector<std::string> tags;
+
+        // BotKind::Herald (the player's first companion, Companions/Recruit/FirstCompanion): the
+        // player he runs to, and the words for him ({giver}: who gave the player his quest).
+        ObjectGuid seeks;
+        std::string giverName;
     };
 
     // A city (zone) or a town (settlement id): the bots a director counts and retires together.
@@ -144,9 +154,12 @@ namespace Population
     {
         bool alive = true;
         PopulationBotAI* ai = nullptr;
-        // Set by the AI (map thread) when a real player invited a roster member; the manager
-        // recruits it on its next update (world thread, maps idle) and clears it.
+        // Set by the AI (map thread) when a roster member agreed to join a real player (the talk,
+        // Population/StrangerTalk); the manager recruits it on its next update (world thread,
+        // maps idle) and clears it. `bonded`: as a companion at once (the player's first one,
+        // FirstCompanion), else as a trial partner (搭伙, recruiting doc §2.2).
         ObjectGuid recruiter;
+        bool bonded = false;
         // Set by the manager (world thread, maps idle): walk to this spot out of everyone's
         // sight, then log out (the AI asks PlayerBotMgr for the removal itself).
         bool leave = false;

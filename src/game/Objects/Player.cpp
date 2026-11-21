@@ -82,6 +82,7 @@
 #include "GameEventMgr.h"
 #include "world/scourge_invasion.h"
 #include "world/world_event_wareffort.h"
+#include "PlayerBots/Shared/QuestEvents.h"
 
 #include <climits>
 
@@ -12876,6 +12877,9 @@ void Player::AddQuest(Quest const* pQuest, Object* questGiver)
     if (questStatusData.uState != QUEST_NEW)
         questStatusData.uState = QUEST_CHANGED;
 
+    // companion recruiting: the player's first quest brings his first companion
+    BotShared::QuestEvents::OnAccepted(this, pQuest, questGiver);
+
     // quest accept scripts
     if (questGiver)
     {
@@ -13180,6 +13184,9 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, WorldObject* questE
 
     if (announce)
         SendQuestReward(pQuest, xp);
+
+    // companion recruiting: quests done together with a trial partner
+    BotShared::QuestEvents::OnRewarded(this, pQuest);
 
     bool handled = false;
 

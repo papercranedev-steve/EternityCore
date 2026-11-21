@@ -10,9 +10,13 @@
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/DungeonClears.h"
+#include "Shared/QuestEvents.h"
 #include "Life/Requests/Phrases.h"
 #include "Life/Errands/Travel.h"
 #include "Shared/TownGates.h"
+#include "Companions/Recruit/Trial.h"
+#include "Companions/Recruit/FirstCompanion.h"
+#include "Population/PopulationMgr.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -194,6 +198,15 @@ namespace Companions
         if (!parted)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `parted` TINYINT UNSIGNED NOT NULL DEFAULT 0"
                 " COMMENT '1 = a former companion: the player said goodbye (Slots, Part)' AFTER `expedition_secs`");
+        std::unique_ptr<QueryResult> trial(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'trial'"));
+        if (!trial)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `trial` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = a trial partner (搭伙, recruiting doc), not a companion yet', ADD COLUMN `trial_quests` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT 'quests done with the player while a trial partner' AFTER `parted`");
+        std::unique_ptr<QueryResult> firstOffered(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion_owner` LIKE 'first_offered'"));
+        if (!firstOffered)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion_owner` ADD COLUMN `first_offered` TINYINT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT '1 = his first companion came to him (Recruit/FirstCompanion)'");
         std::unique_ptr<QueryResult> slotsBought(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion_owner` LIKE 'slots_bought'"));
         if (!slotsBought)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion_owner` ADD COLUMN `slots_bought` SMALLINT UNSIGNED NOT NULL DEFAULT 0"
@@ -210,6 +223,7 @@ namespace Companions
     void CompanionMgr::Load()
     {
         m_companions.clear();
+        m_trialEnds.clear();
         m_pending.clear();
         m_returns.clear();
         m_pastQuestsPending.clear();
@@ -223,7 +237,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs`, c.`parted` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs`, c.`parted`, c.`trial`, c.`trial_quests` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -247,6 +261,11 @@ namespace Companions
                 info.benchLevels = f[11].GetUInt32();
                 info.expeditionSecs = f[12].GetUInt32();
                 info.parted = f[13].GetUInt8() != 0;
+                info.trial = f[14].GetUInt8() != 0;
+                info.trialQuests = f[15].GetUInt32();
+                // (a trial ends when he leaves the world: the server stopped under him)
+                if (info.trial)
+                    m_trialEnds.push_back(info.charGuid);
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -255,7 +274,8 @@ namespace Companions
         m_slotsBought.clear();
         m_benched.clear();
         Expedition::Load();
-        std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen`, `slots_bought` FROM `custom_companion_owner`"));
+        m_firstOffered.clear();
+        std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen`, `slots_bought`, `first_offered` FROM `custom_companion_owner`"));
         if (owners)
         {
             do
@@ -264,6 +284,8 @@ namespace Companions
                 m_ownerXpSeen[f[0].GetUInt32()] = f[1].GetUInt32();
                 if (uint32 const bought = f[2].GetUInt32())
                     m_slotsBought[f[0].GetUInt32()] = bought;
+                if (f[3].GetUInt8())
+                    m_firstOffered.insert(f[0].GetUInt32());
             } while (owners->NextRow());
         }
 
@@ -279,6 +301,10 @@ namespace Companions
             } while (clears->NextRow());
         }
         BotShared::DungeonClears::SetListener(&AffinitySources::OnClear);
+        // Recruiting (Recruit/): trial partners count quests and dungeons done with the player,
+        // a new player's first quest brings his first companion.
+        BotShared::DungeonClears::SetEndListener(&Trial::OnDungeonEnd);
+        BotShared::QuestEvents::SetListeners(&FirstCompanion::OnQuestAccepted, &Trial::OnQuestRewarded);
 
         // Personality: the roster member's tags. The roster creates its tables on first use, which can
         // come after this load: no table yet means no tags yet.
@@ -471,7 +497,147 @@ namespace Companions
         return true;
     }
 
-    bool CompanionMgr::Recruit(Player* bot, Player* recruiter, uint32 memberId)
+    uint32 CompanionMgr::CountTrialQuest(uint32 charGuid)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.trial)
+            return 0;
+        CompanionInfo& info = itr->second;
+        ++info.trialQuests;
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `trial_quests` = %u WHERE `char_guid` = %u", info.trialQuests, charGuid);
+        return info.trialQuests;
+    }
+
+    void CompanionMgr::RaiseTrialQuests(uint32 charGuid, uint32 quests)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.trial || itr->second.trialQuests >= quests)
+            return;
+        itr->second.trialQuests = quests;
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `trial_quests` = %u WHERE `char_guid` = %u", quests, charGuid);
+    }
+
+    uint32 CompanionMgr::TrialQuests(uint32 charGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        CompanionInfo const* info = Find(charGuid);
+        return info && info->trial ? info->trialQuests : 0;
+    }
+
+    void CompanionMgr::ScheduleTrialOffer(uint32 charGuid, uint32 atMs)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.trial)
+            return;
+        uint32& due = itr->second.trialOfferAtMs;
+        if (!due || atMs < due)
+            due = std::max<uint32>(atMs, 1);
+    }
+
+    bool CompanionMgr::TakeTrialOffer(uint32 charGuid, uint32 nowMs)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.trial)
+            return false;
+        uint32& due = itr->second.trialOfferAtMs;
+        if (!due || nowMs < due)
+            return false;
+        due = 0;
+        return true;
+    }
+
+    uint32 CompanionMgr::Promote(Player* bot)
+    {
+        if (!bot)
+            return 0;
+        uint32 const guid = bot->GetGUIDLow();
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(guid);
+        if (itr == m_companions.end() || !itr->second.trial)
+            return 0;
+        CompanionInfo& info = itr->second;
+        info.trial = false;
+        info.trialOfferAtMs = 0;
+        info.affinity = std::max<uint32>(AffinitySources::StartAt(bot->GetLevel()), 1);
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `trial` = 0, `affinity` = %u WHERE `char_guid` = %u", info.affinity, guid);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] Trial partner '%s' (%u) is a companion now, affinity %u.",
+            bot->GetName(), guid, info.affinity);
+        return info.affinity;
+    }
+
+    void CompanionMgr::OnTrialLeave(uint32 charGuid)
+    {
+        if (!IsTrial(charGuid))
+            return;
+        if (std::find(m_trialEnds.begin(), m_trialEnds.end(), charGuid) == m_trialEnds.end())
+            m_trialEnds.push_back(charGuid);
+    }
+
+    void CompanionMgr::UpdateTrialEnds()
+    {
+        for (auto itr = m_trialEnds.begin(); itr != m_trialEnds.end();)
+        {
+            uint32 const charGuid = *itr;
+            CompanionInfo const* info = Find(charGuid);
+            if (!info || !info->trial)
+            {
+                itr = m_trialEnds.erase(itr);
+                continue;
+            }
+            ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+            // (still logging out)
+            if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid) || sObjectAccessor.FindPlayer(guid))
+            {
+                ++itr;
+                continue;
+            }
+            uint32 const memberId = info->memberId;
+            uint32 level = 0;
+            if (PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid))
+                level = data->uiLevel;
+            if (Group* group = sObjectMgr.GetGroupByMember(guid))
+                Player::RemoveFromGroup(group, guid);
+            DeleteCharacter(charGuid);
+            if (memberId)
+                sPopulationMgr.ReturnFromTrial(memberId, uint8(std::min<uint32>(level, 255)));
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] Trial partner %u (roster member %u) went his own way: character deleted.",
+                charGuid, memberId);
+            itr = m_trialEnds.erase(itr);
+        }
+    }
+
+    void CompanionMgr::DeleteCharacter(uint32 charGuid)
+    {
+        {
+            std::lock_guard<std::mutex> guard(m_affinityLock);   // (OfRecruiter on other threads)
+            m_companions.erase(charGuid);
+        }
+        m_benched.erase(charGuid);
+        m_present.erase(charGuid);
+        m_arrivingSinceMs.erase(charGuid);
+        for (char const* table : { "custom_companion", "custom_companion_skillup", "custom_companion_clear", "custom_soulbot_request" })
+            CharacterDatabase.PExecute("DELETE FROM `%s` WHERE `char_guid` = %u", table, charGuid);
+        Player::DeleteFromDB(ObjectGuid(HIGHGUID_PLAYER, charGuid), m_accountId, true, true);
+    }
+
+    bool CompanionMgr::FirstOffered(uint32 ownerGuid) const
+    {
+        return m_firstOffered.count(ownerGuid) != 0;
+    }
+
+    void CompanionMgr::MarkFirstOffered(uint32 ownerGuid)
+    {
+        if (!m_firstOffered.insert(ownerGuid).second)
+            return;
+        CharacterDatabase.PExecute("INSERT INTO `custom_companion_owner` (`owner_guid`, `first_offered`) VALUES (%u, 1)"
+            " ON DUPLICATE KEY UPDATE `first_offered` = 1", ownerGuid);
+    }
+
+    bool CompanionMgr::Recruit(Player* bot, Player* recruiter, uint32 memberId, bool trial)
     {
         if (!IsEnabled() || !m_available || !bot || !recruiter || !bot->IsInWorld() || !recruiter->IsInWorld())
             return false;
@@ -532,10 +698,16 @@ namespace Companions
         info.recruitedAt = uint32(time(nullptr));
         info.tags = tags;
         info.lastSeen = info.recruitedAt;
-        info.affinity = AffinitySources::StartAt(bot->GetLevel());
-        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `affinity`, `professions_decided`, `last_seen`)"
-            " VALUES (%u, %u, %u, %u, 1, %u, 1, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt, info.affinity, info.lastSeen);
-        m_companions[guid] = info;
+        // (a trial partner's affinity starts when he is promoted)
+        info.trial = trial;
+        info.affinity = trial ? 0 : AffinitySources::StartAt(bot->GetLevel());
+        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `affinity`, `professions_decided`, `last_seen`, `trial`)"
+            " VALUES (%u, %u, %u, %u, 1, %u, 1, %u, %u)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt, info.affinity, info.lastSeen,
+            trial ? 1 : 0);
+        {
+            std::lock_guard<std::mutex> guard(m_affinityLock);   // (OfRecruiter on other threads)
+            m_companions[guid] = info;
+        }
 
         // The name cache holds the temporary session's account; after a restart it is read from `characters`.
         if (PlayerCacheData* data = sObjectMgr.GetPlayerDataByGUID(guid))
@@ -548,9 +720,10 @@ namespace Companions
         login.sinceMs = m_nowMs;
         m_pending.push_back(login);
 
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned (up to level %u),"
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) %s '%s', %u trainer spells learned (up to level %u),"
             " class quests: %u done, %u not done, %u abilities taken away; professions %u (%u) + %u (%u), %u recipes.",
-            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned, trainedUpTo, past.done, past.notDone, past.revoked,
+            bot->GetName(), guid, bot->GetLevel(), trial ? "joins as a trial partner of" : "recruited by", recruiter->GetName(),
+            lessons.learned, trainedUpTo, past.done, past.notDone, past.revoked,
             professions.first, professions.firstValue, professions.second, professions.secondValue, professions.recipes);
         return true;
     }
@@ -635,7 +808,7 @@ namespace Companions
     std::string CompanionMgr::CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly)
     {
         CompanionInfo const* info = Find(charGuid);
-        if (!IsEnabled() || !m_available || !leader || !leader->IsInWorld() || !info || info->temporary)
+        if (!IsEnabled() || !m_available || !leader || !leader->IsInWorld() || !info || info->temporary || info->trial)
             return "notcompanion";
         if (ownerOnly && info->recruiterGuid != leader->GetGUIDLow())
             return "notyours";
@@ -724,6 +897,19 @@ namespace Companions
         if (info.parted)
             return "former";
 
+        // A trial partner just goes his way (no former companion: OnTrialLeave deletes him).
+        if (info.trial)
+        {
+            ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
+            Player* bot = sObjectAccessor.FindPlayer(guid);
+            PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+            if (ai)
+                ai->Dismiss();
+            else
+                OnTrialLeave(charGuid);
+            return "";
+        }
+
         info.parted = true;
         info.staying = false;
         info.expeditionSecs = 0;
@@ -782,14 +968,7 @@ namespace Companions
         memberId = itr->second.memberId;
         if (PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid))
             level = data->uiLevel;
-        {
-            std::lock_guard<std::mutex> guard(m_affinityLock);   // (OfRecruiter on other threads)
-            m_companions.erase(itr);
-        }
-        m_benched.erase(charGuid);
-        for (char const* table : { "custom_companion", "custom_companion_skillup", "custom_companion_clear", "custom_soulbot_request" })
-            CharacterDatabase.PExecute("DELETE FROM `%s` WHERE `char_guid` = %u", table, charGuid);
-        Player::DeleteFromDB(guid, m_accountId, true, true);
+        DeleteCharacter(charGuid);
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %s parted for good with former companion %u (roster member %u): character deleted.",
             owner->GetName(), charGuid, memberId);
         return "";
@@ -1217,6 +1396,9 @@ namespace Companions
             m_benchCheckMs = m_nowMs;
             UpdateBench();
         }
+        if (!m_trialEnds.empty())
+            UpdateTrialEnds();
+        FirstCompanion::Update();
         if (m_pending.empty())
             return;
 
@@ -1237,9 +1419,12 @@ namespace Companions
                 continue;
             }
 
-            // The recruiter left meanwhile: the companion stays saved, .partybot load brings it back.
+            // The recruiter left meanwhile: the companion stays saved, .partybot load brings it back
+            // (a trial partner goes his way: the trial is over).
             if (Player* leader = sObjectAccessor.FindPlayer(itr->recruiter))
                 LoginAsPartyBot(itr->charGuid, leader);
+            else
+                OnTrialLeave(itr->charGuid);
             itr = m_pending.erase(itr);
         }
     }

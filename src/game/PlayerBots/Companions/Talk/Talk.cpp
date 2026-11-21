@@ -4,8 +4,11 @@
 #include "Shared/Capitals.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Chat.h"
+#include "WorldSession.h"
 #include "SharedDefines.h"
 #include "Utilities/Random.h"
+#include <sstream>
 
 namespace Companions
 {
@@ -113,6 +116,26 @@ namespace Talk
         for (std::unique_ptr<Service> const& service : Services())
             service->Offer(ctx, options);
         return options;
+    }
+
+    void SendPage(Player* to, Player* bot, Page const& page)
+    {
+        if (!to || !bot || !to->GetSession())
+            return;
+        ChatHandler handler(to->GetSession());
+        std::string const name = bot->GetName();
+        std::ostringstream begin;
+        begin << "PBTALK;" << name << ";BEGIN;" << uint32(bot->GetRace()) << ":" << uint32(bot->GetGender()) << ":"
+              << uint32(bot->GetClass()) << ";" << page.text;
+        handler.SendSysMessage(begin.str().c_str());
+        for (Option const& option : page.options)
+        {
+            std::ostringstream line;
+            line << "PBTALK;" << name << ";OPT;" << option.id << ";" << IconKey(option.icon) << ";"
+                 << option.price << ";" << option.text;
+            handler.SendSysMessage(line.str().c_str());
+        }
+        handler.PSendSysMessage("PBTALK;%s;END", name.c_str());
     }
 
     Page Open(Context const& ctx)

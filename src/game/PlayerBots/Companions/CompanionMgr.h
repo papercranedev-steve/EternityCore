@@ -82,6 +82,13 @@ namespace Companions
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
         std::map<uint32, uint32> temporarySkillUps;
+        // 搭伙 (a trial partner, recruiting doc §2.2): saved and in the party like a companion,
+        // but not one yet: no affinity, no class quest asks, town trips nor money asks. Ends with
+        // a promotion (Promote) or when he leaves the world (his character is deleted then, the
+        // roster member lives on). Under the affinity lock while online (map threads change it).
+        bool trial = false;
+        uint32 trialQuests = 0;         // quests done with the player (Recruit/Trial)
+        uint32 trialOfferAtMs = 0;      // WorldTimer ms he offers to stay, 0 = none due (runtime)
     };
 
     uint32 const MAX_AFFINITY = 100;
@@ -98,7 +105,20 @@ namespace Companions
         void Update(uint32 diff);
 
         bool IsEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
+        // Recruited: a companion or a trial partner (both saved, both loot for themselves).
         bool IsCompanion(uint32 charGuid) const { return m_companions.find(charGuid) != m_companions.end(); }
+        // A trial partner (CompanionInfo::trial).
+        bool IsTrial(uint32 charGuid) const
+        {
+            CompanionInfo const* info = Find(charGuid);
+            return info && info->trial;
+        }
+        // A companion and not a trial partner: affinity, class quests, town trips are his.
+        bool IsBonded(uint32 charGuid) const
+        {
+            CompanionInfo const* info = Find(charGuid);
+            return info && !info->trial;
+        }
         CompanionInfo const* Find(uint32 charGuid) const;
         // World thread. Copies of everyone `recruiterGuid` recruited (temporary ones too), any order.
         std::vector<CompanionInfo> OfRecruiter(uint32 recruiterGuid) const;
@@ -124,7 +144,30 @@ namespace Companions
         // Saves an online temporary bot as a real character and queues its login as a party bot
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing
         // changed (also when the recruiter has no free slot: check HasFreeSlot first to say why).
-        bool Recruit(Player* bot, Player* recruiter, uint32 memberId);
+        // `trial`: he joins as a trial partner (搭伙, no affinity yet), else as a companion.
+        bool Recruit(Player* bot, Player* recruiter, uint32 memberId, bool trial);
+
+        // Trial partners (recruiting doc §2.2, Recruit/Trial). Any thread (the player's map).
+        // One more quest done with the player: how many now (0: not a trial partner).
+        uint32 CountTrialQuest(uint32 charGuid);
+        // A dungeon cleared together counts as all the quests: at least `quests` now.
+        void RaiseTrialQuests(uint32 charGuid, uint32 quests);
+        uint32 TrialQuests(uint32 charGuid) const;
+        // He offers to stay at `atMs` (WorldTimer ms; an earlier one already due stays).
+        void ScheduleTrialOffer(uint32 charGuid, uint32 atMs);
+        // The offer is due now: true once (cleared).
+        bool TakeTrialOffer(uint32 charGuid, uint32 nowMs);
+        // He becomes a companion: affinity starts (AffinitySources::StartAt). Returns it, 0 =
+        // not a trial partner (nothing changed).
+        uint32 Promote(Player* bot);
+        // A trial partner leaves the world unpromoted (PartyBotAI::OnLeaving): his character is
+        // deleted once he is out (Update), the roster member lives on. World thread.
+        void OnTrialLeave(uint32 charGuid);
+
+        // The player's first companion came to him already (Recruit/FirstCompanion: once per
+        // character, whatever he answered). World thread.
+        bool FirstOffered(uint32 ownerGuid) const;
+        void MarkFirstOffered(uint32 ownerGuid);
 
         // Slots (slots doc, Slots/Slots.h): his companions in the party and on the bench count,
         // former and temporary ones do not. World thread.
@@ -256,6 +299,13 @@ namespace Companions
         // gets what it did while away (OfflineLife); last_seen is written every LAST_SEEN_MS.
         void UpdatePresence();
         OfflineLife::Result Arrive(Player* bot, PartyBotAI* ai, CompanionInfo& info);
+        // Trial partners that left unpromoted (OnTrialLeave, or found at startup): once out of
+        // the world, their characters are deleted and the roster members live on (UpdateTrialEnds).
+        std::vector<uint32> m_trialEnds;
+        std::unordered_set<uint32> m_firstOffered;      // owner char guids (custom_companion_owner.first_offered)
+        void UpdateTrialEnds();
+        // His character and every companion row of him go (Forget, a trial that ended).
+        void DeleteCharacter(uint32 charGuid);
 
         struct PendingLogin
         {

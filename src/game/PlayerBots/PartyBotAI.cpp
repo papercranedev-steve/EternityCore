@@ -692,6 +692,13 @@ bool PartyBotAI::OnLeaving()
 {
     if (!me || !LootsForSelf() || sCompanionMgr.IsTemporary(me->GetGUIDLow()))
         return false;
+    // A trial partner leaving (the player logged out, sent him off, ...): the trial is over, he
+    // leaves the group (recruiting doc §2.2).
+    if (sCompanionMgr.IsTrial(me->GetGUIDLow()))
+    {
+        sCompanionMgr.OnTrialLeave(me->GetGUIDLow());
+        return false;
+    }
     // (his session gone: he logged out; FindPlayerNotInWorld also finds one still loading)
     Group const* group = me->GetGroup();
     bool const withLeader = group && group->IsMember(m_leaderGuid) &&
@@ -1101,6 +1108,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // the player asked for them, or a bot stands waiting by the mage.
         // (first a companion's affinity: levels gained with the player, money he gave for a trip)
         Companions::AffinitySources::Update(me, pLeader, m_affinitySources, Life::TownTrip::TakePaid(m_townTrip), PersonalityTags());
+        // A trial partner (搭伙): the deal once, then his offer to stay when it is due.
+        if (!resurrectFirst && !commanderOutOfCombat)
+            Companions::Trial::Update(me, pLeader, m_trial, PersonalityTags());
         if (resurrectFirst || commanderOutOfCombat)
             PauseProvisions();
         else if (UpdateProvisions(pLeader))
@@ -1113,27 +1123,36 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             StopErrands();
         else
         {
-            // First the class quest question of a visit to a capital (it asks while following,
-            // and before the town trip's question: one open question per bot).
-            Companions::ClassQuestFlow::Update(me, pLeader, m_classQuestFlow, m_mirrorLink, PersonalityTags());
-            if (Companions::ClassQuestFlow::TakeSpellsChanged(m_classQuestFlow))
-                m_resetSpellData = true;
-            // An Artisan trainer far away: asks once per capital visit, then leads the leader there.
-            Companions::ArtisanTrip::Update(me, pLeader, m_artisanTrip, m_artisanTask, PersonalityTags());
-            // Out in the field: important lessons waiting (party chat, it keeps following).
-            Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
+            // A trial partner (搭伙, recruiting doc §2.2) only plays along: loot, gather and the
+            // quests; nothing a companion asks of the player (class quests, town trips and their
+            // money, lessons, crafting).
+            bool const bonded = sCompanionMgr.IsBonded(me->GetGUIDLow());
+            if (bonded)
+            {
+                // First the class quest question of a visit to a capital (it asks while following,
+                // and before the town trip's question: one open question per bot).
+                Companions::ClassQuestFlow::Update(me, pLeader, m_classQuestFlow, m_mirrorLink, PersonalityTags());
+                if (Companions::ClassQuestFlow::TakeSpellsChanged(m_classQuestFlow))
+                    m_resetSpellData = true;
+                // An Artisan trainer far away: asks once per capital visit, then leads the leader there.
+                Companions::ArtisanTrip::Update(me, pLeader, m_artisanTrip, m_artisanTask, PersonalityTags());
+                // Out in the field: important lessons waiting (party chat, it keeps following).
+                Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
+            }
+            static std::vector<uint32> const noPickUps;
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||
                 Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
-                Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
-                Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
-                Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
-                Life::NpcVisit::Update(me, m_artisanVisit, pLeader, m_artisanTask) ||
-                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner, &m_professionPlanner }, PersonalityTags(),
-                                       m_tradeHands) ||
-                Life::CraftRun::Update(me, m_craftRun, pLeader);
+                Life::QuestPickUp::Update(me, m_questPickUp, pLeader,
+                    bonded ? Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow) : noPickUps) ||
+                (bonded && (Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
+                    Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
+                    Life::NpcVisit::Update(me, m_artisanVisit, pLeader, m_artisanTask) ||
+                    Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner, &m_professionPlanner }, PersonalityTags(),
+                                           m_tradeHands) ||
+                    Life::CraftRun::Update(me, m_craftRun, pLeader)));
             if (m_trainerTask.TakeLearned())
                 m_resetSpellData = true;    // new ranks: the rotation picks them up
             if (busy)

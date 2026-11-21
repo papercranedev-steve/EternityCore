@@ -41,6 +41,8 @@
 #include "Companions/Talk/Services/ServiceList.h"
 #include "Companions/Affinity/Gates.h"
 #include "Companions/Travel/SummonOffer.h"
+#include "Population/StrangerTalk.h"
+#include "ObjectMgr.h"
 #include "Commander/CommanderMgr.h"
 #include "Life/Errands/CraftForPlayer.h"
 #include "Life/Requests/Phrases.h"
@@ -58,19 +60,7 @@ namespace
 {
     void SendPage(ChatHandler& handler, Player* bot, Companions::Talk::Page const& page)
     {
-        std::string const name = bot->GetName();
-        std::ostringstream begin;
-        begin << "PBTALK;" << name << ";BEGIN;" << uint32(bot->GetRace()) << ":" << uint32(bot->GetGender()) << ":"
-              << uint32(bot->GetClass()) << ";" << page.text;
-        handler.SendSysMessage(begin.str().c_str());
-        for (Companions::Talk::Option const& option : page.options)
-        {
-            std::ostringstream line;
-            line << "PBTALK;" << name << ";OPT;" << option.id << ";" << Companions::Talk::IconKey(option.icon) << ";"
-                 << option.price << ";" << option.text;
-            handler.SendSysMessage(line.str().c_str());
-        }
-        handler.PSendSysMessage("PBTALK;%s;END", name.c_str());
+        Companions::Talk::SendPage(handler.GetSession() ? handler.GetSession()->GetPlayer() : nullptr, bot, page);
     }
 
     // Stay or follow for one member; true if it changed.
@@ -94,6 +84,15 @@ bool ChatHandler::HandlePartyBotTalkCommand(char* args)
 
     std::string name;
     char* botArg = ExtractArg(&args);
+    // One of the people of the world (not of the party): he talks as a stranger
+    // (Population/StrangerTalk, recruiting doc §2.1).
+    if (botArg && *botArg)
+    {
+        std::string strangerName = botArg;
+        Player* stranger = normalizePlayerName(strangerName) ? sObjectMgr.GetPlayer(strangerName.c_str()) : nullptr;
+        if (stranger && stranger->IsInWorld() && Population::StrangerTalk::Is(stranger))
+            return Population::StrangerTalk::Handle(*this, player, stranger, ExtractArg(&args));
+    }
     Player* bot = ExtractPartyBotTarget(&botArg, name);
     if (!bot)
         return false;

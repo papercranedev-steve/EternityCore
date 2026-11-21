@@ -35,6 +35,8 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/Roster.cpp
   ${POPULATION_DIR}/Growth.h
   ${POPULATION_DIR}/Growth.cpp
+  ${POPULATION_DIR}/StrangerTalk.h
+  ${POPULATION_DIR}/StrangerTalk.cpp
   ${POPULATION_DIR}/PopulationCommands.cpp
 )
 

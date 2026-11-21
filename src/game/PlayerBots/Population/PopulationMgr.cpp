@@ -1,7 +1,9 @@
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationBotAI.h"
+#include "Population/HiddenSpot.h"
 #include "Companions/CompanionMgr.h"
 #include "PlayerBotMgr.h"
+#include <cmath>
 #include "Player.h"
 #include "Chat.h"
 #include "ObjectAccessor.h"
@@ -65,6 +67,7 @@ namespace Population
             case BotKind::City:  return "city";
             case BotKind::Field: return "field";
             case BotKind::Town:  return "town";
+            case BotKind::Herald: return "herald";
         }
         return "?";
     }
@@ -263,7 +266,9 @@ namespace Population
             if (r.handle->recruiter.IsEmpty())
                 continue;
             ObjectGuid const recruiterGuid = r.handle->recruiter;
-            r.handle->recruiter.Clear();    // a failed recruit can be tried again on the next invite
+            bool const bonded = r.handle->bonded;
+            r.handle->recruiter.Clear();    // a failed recruit can be tried again when asked again
+            r.handle->bonded = false;
             if (r.removing || !r.request.rosterId)
                 continue;
 
@@ -277,6 +282,13 @@ namespace Population
             {
                 if (r.handle->alive && r.handle->ai)
                     r.handle->ai->DeclineRecruit(PopulationBotAI::DeclineReason::Farewell);
+                continue;
+            }
+            // Never anyone above the player (recruiting doc §1: the player would use him).
+            if (bot->GetLevel() > recruiter->GetLevel())
+            {
+                if (r.handle->alive && r.handle->ai)
+                    r.handle->ai->DeclineRecruit(PopulationBotAI::DeclineReason::TooHigh);
                 continue;
             }
             if (!sCompanionMgr.HasFreeSlot(recruiter))
@@ -296,7 +308,8 @@ namespace Population
                     continue;
                 r.request.rosterId = memberId;
             }
-            if (!sCompanionMgr.Recruit(bot, recruiter, r.request.rosterId))
+            // A trial partner first (搭伙), unless he is the player's first companion.
+            if (!sCompanionMgr.Recruit(bot, recruiter, r.request.rosterId, !bonded))
                 continue;
 
             // A real character now: the roster never spawns it again, the temporary bot leaves
@@ -304,6 +317,42 @@ namespace Population
             m_roster.SetCharGuid(r.request.rosterId, bot->GetGUIDLow());
             RequestRemoval(r);
         }
+    }
+
+    bool PopulationMgr::SpawnHerald(Player* player, uint8 classId, std::string const& giverName)
+    {
+        if (!IsEnabled() || !player || !player->IsInWorld() || !Identity::IsValidCombo(player->GetRace(), classId))
+            return false;
+        EnsureDataLoaded();
+        if (!m_roster.IsActive())
+            return false;
+        // (he gives up on his own much sooner: PopulationBotAI::UpdateHerald)
+        uint32 constexpr HERALD_LIFETIME_MS = 20 * MINUTE * IN_MILLISECONDS;
+        Waypoint spot;
+        if (!Population::PickHiddenSpot(player->GetMap(), std::vector<Waypoint>(), player->GetPositionX(), player->GetPositionY(),
+                player->GetPositionZ(), m_observers, spot))
+            return false;
+
+        SpawnRequest r;
+        r.kind = BotKind::Herald;
+        r.team = player->GetTeam();
+        r.race = player->GetRace();
+        r.classId = classId;
+        r.level = uint8(std::min<uint32>(player->GetLevel(), 60));
+        r.minLevel = r.level;
+        r.maxLevel = r.level;
+        r.mapId = player->GetMapId();
+        r.x = spot.x;
+        r.y = spot.y;
+        r.z = spot.z;
+        r.o = std::atan2(player->GetPositionY() - spot.y, player->GetPositionX() - spot.x);
+        if (r.o < 0.0f)
+            r.o += 2.0f * float(M_PI);
+        r.prewarm = true;
+        r.lifetimeMs = HERALD_LIFETIME_MS;
+        r.seeks = player->GetObjectGuid();
+        r.giverName = giverName;
+        return QueueSpawn(r);
     }
 
     bool PopulationMgr::QueueSpawn(SpawnRequest const& request)
@@ -420,6 +469,12 @@ namespace Population
         query.team = request.team == HORDE ? HORDE : ALLIANCE;
         query.zone = request.cityZone;
         query.preferHigh = request.role == CityRole::Showcase;
+        // (the first companion is of the player's race, of the class he lacks)
+        if (request.kind == BotKind::Herald)
+        {
+            query.race = request.race;
+            query.classId = request.classId;
+        }
         if (request.minLevel)
         {
             query.minLevel = request.minLevel;
@@ -448,6 +503,7 @@ namespace Population
         request.hasGearPlan = true;
         request.gear = pick.gear;
         request.money = pick.money;
+        request.tags = pick.tags;
         // Veterans are the furthest of the roster, not phase 6 sets: gear follows the owner's team.
         if (request.tier == GearTier::Showcase)
             request.tier = GearTier::Normal;

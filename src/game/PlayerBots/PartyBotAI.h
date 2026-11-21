@@ -42,6 +42,7 @@
 #include "Companions/ClassQuests/ClassQuestFlow.h"
 #include "Companions/ArtisanTrip.h"
 #include "Companions/Affinity/AffinitySources.h"
+#include "Companions/Recruit/Trial.h"
 #include "Life/Errands/QuestPickUp.h"
 #include "Life/Errands/QuestItemUse.h"
 #include "Life/Errands/GiveProvisions.h"
@@ -230,6 +231,8 @@ public:
     Companions::ArtisanTrip::State m_artisanTrip;
     // A companion's affinity from levels and money gifts (Companions/Affinity/AffinitySources.h).
     Companions::AffinitySources::State m_affinitySources;
+    // A trial partner (搭伙, Companions/Recruit/Trial.h): says the deal, offers to stay when due.
+    Companions::Trial::State m_trial;
     Life::ArtisanTask m_artisanTask;
     Life::NpcVisitState m_artisanVisit;
     // Out of combat: takes the class quest steps the flow wants from their givers near the leader

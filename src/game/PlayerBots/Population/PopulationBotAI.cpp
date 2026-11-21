@@ -1,5 +1,6 @@
 #include "Population/PopulationBotAI.h"
 #include "Population/PopulationMgr.h"
+#include "Population/StrangerTalk.h"
 #include "Companions/CompanionMgr.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
@@ -154,6 +155,10 @@ namespace Population
     {
         UpdateSocial(diff);
 
+        // Someone is talking with him: he stands and listens.
+        if (m_talkHoldUntilMs && UpdateTalkHold())
+            return;
+
         if (m_request.kind == BotKind::Field)
         {
             UpdateField(diff);
@@ -188,6 +193,12 @@ namespace Population
             case Phase::Leaving:  UpdateLeaving(); return;
             case Phase::Gone:     return;
             case Phase::Living:   break;
+        }
+
+        if (m_request.kind == BotKind::Herald)
+        {
+            UpdateHerald();
+            return;
         }
 
         if (m_reviewUntilMs)
@@ -751,34 +762,230 @@ namespace Population
     {
         Group* pGroup = me->GetGroupInvite();
         if (!pGroup)
+        {
+            // He was asked in the talk window (no invite): he says why to the one who asked.
+            Player* pAsker = m_declineTo.IsEmpty() ? nullptr : sObjectAccessor.FindPlayer(m_declineTo);
+            if (pAsker && pAsker->IsInWorld() && !m_declineLine.empty())
+            {
+                if (pAsker->IsInMap(me) && pAsker->IsWithinDistInMap(me, StrangerTalk::MEET_YD))
+                    BotShared::BotChat::Say(me, m_declineLine);
+                else
+                    Whisper(pAsker, m_declineLine);
+            }
+            m_declineLine.clear();
+            m_declineTo.Clear();
             return;
+        }
 
         Player* pInviter = sObjectAccessor.FindPlayer(pGroup->GetLeaderGuid());
         me->GetSession()->QueuePacket(std::make_unique<NullClientPacket>(CMSG_GROUP_DECLINE));
 
-        char const* line = m_declineLine;
-        m_declineLine = nullptr;
-        if (!line && urand(0, 99) < 30)
-            line = g_declineLines[urand(0, uint32(sizeof(g_declineLines) / sizeof(g_declineLines[0])) - 1)];
-        if (pInviter && !pInviter->IsBot() && line)
+        // A real player invited him out of the blue: no line, he asks why (StrangerTalk).
+        if (!m_invitedBy.IsEmpty() && pInviter && pInviter->GetObjectGuid() == m_invitedBy)
         {
-            auto msg = std::make_unique<WorldPackets::Chat::ChatMessage>();
-            msg->type = CHAT_MSG_WHISPER;
-            msg->lang = me->GetTeam() == HORDE ? LANG_ORCISH : LANG_COMMON;
-            msg->whisperTargetOrChannel = pInviter->GetName();
-            msg->message = line;
-            me->GetSession()->QueuePacket(std::move(msg));
+            m_invitedBy.Clear();
+            StrangerTalk::OnInvite(pInviter, me);
+            return;
         }
+        m_invitedBy.Clear();
+
+        std::string line;
+        std::swap(line, m_declineLine);
+        if (line.empty() && urand(0, 99) < 30)
+            line = g_declineLines[urand(0, uint32(sizeof(g_declineLines) / sizeof(g_declineLines[0])) - 1)];
+        if (pInviter && !pInviter->IsBot() && !line.empty())
+            Whisper(pInviter, line);
+    }
+
+    void PopulationBotAI::Whisper(Player* to, std::string const& line)
+    {
+        auto msg = std::make_unique<WorldPackets::Chat::ChatMessage>();
+        msg->type = CHAT_MSG_WHISPER;
+        msg->lang = me->GetTeam() == HORDE ? LANG_ORCISH : LANG_COMMON;
+        msg->whisperTargetOrChannel = to->GetName();
+        msg->message = line;
+        me->GetSession()->QueuePacket(std::move(msg));
     }
 
     void PopulationBotAI::DeclineRecruit(DeclineReason reason)
     {
-        if (reason == DeclineReason::NoSlot)
-            m_declineLine = g_noSlotLines[urand(0, uint32(sizeof(g_noSlotLines) / sizeof(g_noSlotLines[0])) - 1)];
-        else
-            m_declineLine = g_farewellLines[urand(0, uint32(sizeof(g_farewellLines) / sizeof(g_farewellLines[0])) - 1)];
+        switch (reason)
+        {
+            case DeclineReason::NoSlot:
+                m_declineLine = g_noSlotLines[urand(0, uint32(sizeof(g_noSlotLines) / sizeof(g_noSlotLines[0])) - 1)];
+                break;
+            case DeclineReason::TooHigh:
+                m_declineLine = StrangerTalk::TooHighLine(me, m_request.tags);
+                break;
+            case DeclineReason::Farewell:
+            default:
+                m_declineLine = g_farewellLines[urand(0, uint32(sizeof(g_farewellLines) / sizeof(g_farewellLines[0])) - 1)];
+                break;
+        }
         // (a moment to "think", as a person would)
         m_declineInviteInMs = urand(1500, 3000);
+    }
+
+    void PopulationBotAI::HoldForTalk(Player* player)
+    {
+        if (!me || m_request.kind == BotKind::Herald)
+            return;
+        m_talkHoldUntilMs = std::max<uint32>(WorldTimer::getMSTime() + TALK_HOLD_MS, 1);
+        if (m_townLife.IsStarted())
+            m_townLife.Stop(me);
+        if (!me->IsStopped())
+            me->StopMoving();
+        me->GetMotionMaster()->Clear(false, true);
+        me->GetMotionMaster()->MoveIdle();
+        if (player && !me->IsSittingDown())
+            me->SetFacingToObject(player);
+    }
+
+    bool PopulationBotAI::UpdateTalkHold()
+    {
+        if (WorldTimer::getMSTime() >= m_talkHoldUntilMs || me->IsInCombat() || m_handle->leave)
+        {
+            m_talkHoldUntilMs = 0;
+            return false;
+        }
+        return true;
+    }
+
+    void PopulationBotAI::Join(Player* player, bool bonded)
+    {
+        if (!player || !CanJoin())
+            return;
+        m_handle->recruiter = player->GetObjectGuid();
+        m_handle->bonded = bonded;
+        m_declineTo = player->GetObjectGuid();
+    }
+
+    bool PopulationBotAI::IsHeraldFor(Player const* player) const
+    {
+        return player && m_request.kind == BotKind::Herald && m_request.seeks == player->GetObjectGuid() &&
+            m_heraldStep != HeraldStep::Leaving && m_heraldStep != HeraldStep::Joined;
+    }
+
+    void PopulationBotAI::HeraldAnswer(Player* player, bool yes)
+    {
+        if (!IsHeraldFor(player))
+            return;
+        if (yes)
+        {
+            m_heraldStep = HeraldStep::Joined;
+            Join(player, true);
+            return;
+        }
+        HeraldLeave();
+    }
+
+    void PopulationBotAI::HeraldLeave()
+    {
+        m_heraldStep = HeraldStep::Leaving;
+        // Back where he came from, out of everyone's sight (he logged in there).
+        m_handle->leaveX = m_homeX;
+        m_handle->leaveY = m_homeY;
+        m_handle->leaveZ = m_homeZ;
+        BeginLeaving();
+    }
+
+    void PopulationBotAI::UpdateHerald()
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        Player* pPlayer = sObjectAccessor.FindPlayer(m_request.seeks);
+        if (m_heraldStep == HeraldStep::Joined)
+            return;     // (the manager recruits him: he logs out and in again by the player)
+        if (!pPlayer || !pPlayer->IsInWorld() || !pPlayer->IsInMap(me) || pPlayer->IsBeingTeleported())
+        {
+            HeraldLeave();
+            return;
+        }
+        if (!m_heraldDeadlineMs)
+            m_heraldDeadlineMs = now + HERALD_APPROACH_MS;
+        if (me->IsInCombat())
+            return;     // (his body fights back: TeamBotAI is not his, he waits it out)
+
+        float const dist = me->GetDistance(pPlayer);
+        switch (m_heraldStep)
+        {
+            case HeraldStep::Approach:
+            {
+                if (now >= m_heraldDeadlineMs)
+                {
+                    HeraldLeave();
+                    return;
+                }
+                // Close, and the player is not fighting: he starts to talk.
+                if (dist <= HERALD_TALK_YD && !pPlayer->IsInCombat() && pPlayer->IsAlive())
+                {
+                    if (!me->IsStopped())
+                        me->StopMoving();
+                    me->GetMotionMaster()->Clear(false, true);
+                    me->GetMotionMaster()->MoveIdle();
+                    me->SetFacingToObject(pPlayer);
+                    m_heraldStep = HeraldStep::Speak;
+                    m_heraldNextMs = now;
+                    return;
+                }
+                // Runs to him (again when he moved on); keeps away from his fight.
+                if (now >= m_heraldNextMs)
+                {
+                    m_heraldNextMs = now + 1500;
+                    float const keep = pPlayer->IsInCombat() ? 12.0f : 2.0f;
+                    if (dist > keep + 1.0f)
+                    {
+                        float x, y, z;
+                        pPlayer->GetNearPoint(me, x, y, z, 0.0f, keep, pPlayer->GetAngle(me));
+                        MoveTo(x, y, z);
+                    }
+                }
+                return;
+            }
+            case HeraldStep::Speak:
+            {
+                // He walked off while being talked to: after him, then on with the words.
+                if (dist > HERALD_TALK_YD * 3.0f)
+                {
+                    m_heraldStep = HeraldStep::Approach;
+                    m_heraldNextMs = now;
+                    return;
+                }
+                if (now < m_heraldNextMs)
+                    return;
+                me->SetFacingToObject(pPlayer);
+                if (StrangerTalk::HeraldSpeaks(pPlayer, me, m_heraldLine++))
+                {
+                    m_heraldNextMs = now + HERALD_LINE_GAP_MS;
+                    return;
+                }
+                // The words are said: the offer page went to the player.
+                m_heraldStep = HeraldStep::Waiting;
+                m_heraldDeadlineMs = now + HERALD_ANSWER_MS;
+                return;
+            }
+            case HeraldStep::Waiting:
+            {
+                if (now >= m_heraldDeadlineMs)
+                {
+                    StrangerTalk::HeraldGivesUp(pPlayer, me);
+                    HeraldLeave();
+                    return;
+                }
+                // Stays by him while he thinks it over.
+                if (dist > 8.0f && now >= m_heraldNextMs)
+                {
+                    m_heraldNextMs = now + 1500;
+                    float x, y, z;
+                    pPlayer->GetNearPoint(me, x, y, z, 0.0f, 2.5f, pPlayer->GetAngle(me));
+                    MoveTo(x, y, z);
+                }
+                else if (dist <= 8.0f && !me->IsMoving())
+                    me->SetFacingToObject(pPlayer);
+                return;
+            }
+            default:
+                return;
+        }
     }
 
     void PopulationBotAI::OnPacketReceived(WorldPacket const* packet)
@@ -789,17 +996,24 @@ namespace Population
             {
                 if (!me || m_declineInviteInMs)
                     return;
-                // A roster member invited by a real player joins as a companion (Companions/CompanionMgr):
-                // the manager saves it and logs it in again as a party bot. The decline below only
-                // runs if that did not happen.
-                if (m_request.rosterId && m_handle->recruiter.IsEmpty() && sCompanionMgr.IsEnabled())
+                // Nobody joins a stranger who just invites him (recruiting doc §2.1): he declines
+                // the invite and asks the player why (StrangerTalk); joining goes through that
+                // talk. The player his first companion came for: that is his yes.
+                if (CanJoin() && m_handle->recruiter.IsEmpty() && sCompanionMgr.IsEnabled())
                 {
                     Group* pGroup = me->GetGroupInvite();
                     Player* pInviter = pGroup ? sObjectAccessor.FindPlayer(pGroup->GetLeaderGuid()) : nullptr;
                     if (pInviter && !pInviter->IsBot())
                     {
-                        m_handle->recruiter = pInviter->GetObjectGuid();
-                        m_declineInviteInMs = 15000;
+                        if (IsHeraldFor(pInviter))
+                        {
+                            StrangerTalk::HeraldAccepted(pInviter, me);
+                            HeraldAnswer(pInviter, true);
+                            m_declineInviteInMs = 15000;    // (the decline only if the recruit did not happen)
+                            return;
+                        }
+                        m_invitedBy = pInviter->GetObjectGuid();
+                        m_declineInviteInMs = urand(1000, 2000);
                         return;
                     }
                 }

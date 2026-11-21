@@ -41,7 +41,8 @@ namespace Companions
             uint32 const before = state.lastLevel ? state.lastLevel : level;
             state.lastLevel = level;
             uint32 const guid = me->GetGUIDLow();
-            if (!sCompanionMgr.IsCompanion(guid))
+            // (a trial partner has none yet: recruiting doc §2.2)
+            if (!sCompanionMgr.IsBonded(guid))
                 return;
 
             if (level > before && WithPlayer(me, leader))
@@ -82,7 +83,7 @@ namespace Companions
             for (auto itr = map->GetPlayers().getFirst(); itr != nullptr; itr = itr->next())
             {
                 Player* bot = itr->getSource();
-                if (!bot || !bot->IsInWorld() || !sCompanionMgr.IsCompanion(bot->GetGUIDLow()))
+                if (!bot || !bot->IsInWorld() || !sCompanionMgr.IsBonded(bot->GetGUIDLow()))
                     continue;
                 // A real player of its party in the instance too (the one told about it).
                 Player* player = nullptr;

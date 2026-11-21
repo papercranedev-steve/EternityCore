@@ -73,6 +73,7 @@ namespace Population
         uint32 zone = 0;            // members from this city are preferred
         uint8 minLevel = 1, maxLevel = 60;
         bool preferHigh = false;    // one of the highest levels (city veterans)
+        uint8 race = 0, classId = 0;    // only this race / class (0 = any): the first companion
     };
 
     struct RosterPick
@@ -84,6 +85,7 @@ namespace Population
         uint32 sessionGuid = 0;     // 0 = first time online this run
         GearPlan gear;
         uint32 money = 0;           // copper
+        std::vector<std::string> tags;  // personality (none for strangers)
     };
 
     struct RosterCohortStats
@@ -130,6 +132,9 @@ namespace Population
         // His companion character was deleted (永别): he is spawned from the roster again,
         // stalled at `level` (0: as before), and refuses to be recruited (RosterMember::farewell).
         void ReturnFromCompanion(uint32 memberId, uint8 level);
+        // His trial (搭伙) ended unpromoted, his character was deleted: spawned from the roster
+        // again (a stalled one at `level`), and he may be asked again.
+        void ReturnFromTrial(uint32 memberId, uint8 level);
         // RosterMember::farewell (false for strangers and unknown ids).
         bool SaidFarewell(uint32 memberId) const;
         void MarkInUse(uint32 memberId);
@@ -157,8 +162,9 @@ namespace Population
         // Generates members until the cohort has PopBot.Roster.CohortSize (also after raising it).
         void FillCohort(Cohort const& cohort, Identity const& identity);
         void UpdateAnchor(Cohort& cohort, Player* owner);
+        // `race` / `classId` != 0: that one (of the cohort's team then).
         bool GenerateMember(std::mt19937& rng, uint32 cohortTeam, Identity const& identity,
-            std::set<std::string>& reserved, RosterMember& out) const;
+            std::set<std::string>& reserved, RosterMember& out, uint8 race = 0, uint8 classId = 0) const;
 
         bool m_enabled = true;
         bool m_available = false;

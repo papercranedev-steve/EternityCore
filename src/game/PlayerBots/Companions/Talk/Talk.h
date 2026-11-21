@@ -55,6 +55,11 @@ namespace Talk
 
     // His line for `key` (Life/Requests/Phrases) with {leader} = the player; empty when missing.
     std::string Line(Context const& ctx, std::string const& key);
+
+    // The page to the player's addon (PBTALK BEGIN, OPT, END; TalkCommands.cpp): an answer, or
+    // one he opens himself (a trial partner offering to stay, a stranger asking why he was
+    // invited).
+    void SendPage(Player* to, Player* bot, Page const& page);
 }
 }
 

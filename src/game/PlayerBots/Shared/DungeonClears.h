@@ -59,6 +59,13 @@ namespace BotShared
         using Listener = void (*)(Map* map, Info const& segment);
         void SetListener(Listener listener);
 
+        // Any dungeon or raid, levelling ones too: its (or one wing's) last boss. Used by
+        // companion recruiting (a trial partner who cleared a dungeon with the player, design
+        // .kiro/docs/2026-11-21-companion-recruiting.md §2.3). Blackrock Depths counts here.
+        bool IsDungeonEnd(uint32 mapId, uint32 creatureEntry);
+        using EndListener = void (*)(Map* map);
+        void SetEndListener(EndListener listener);
+
         // Unit::Kill, a creature died in an instance.
         void OnCreatureDeath(Creature* victim);
     }
