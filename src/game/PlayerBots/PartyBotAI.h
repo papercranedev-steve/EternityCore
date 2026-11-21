@@ -26,6 +26,7 @@
 #include "Commander/Behaviors/Movement/FollowSpot.h"
 #include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Life/Errands/CraftRun.h"
+#include "Life/Errands/CraftForPlayer.h"
 #include "Life/Errands/LootRun.h"
 #include "Life/Errands/GatherRun.h"
 #include "Life/Errands/QuestObjectRun.h"
@@ -236,6 +237,9 @@ public:
     // Out of combat: a companion makes its conjured food and water, poison vials
     // (Life/Errands/CraftRun.h).
     Life::CraftRunState m_craftRun;
+    // Out of combat: making something for a player with his materials, asked in the talk window
+    // (Life/Errands/CraftForPlayer.h; any party bot, a companion from affinity 30).
+    Life::CraftForPlayerState m_craftForPlayer;
     // Conjured supplies (UpdateProvisions). One trade at a time (Shared/Trade.h): while its
     // hands trade, OnPacketReceived keeps the trade status from the default handling.
     BotShared::Trade::Hands m_tradeHands;

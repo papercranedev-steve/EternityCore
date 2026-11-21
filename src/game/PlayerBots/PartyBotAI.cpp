@@ -714,6 +714,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         m_resurrectApproach = Commander::ResurrectApproachState();
         StopErrands();
         PauseProvisions();
+        if (Life::CraftForPlayer::IsActive(m_craftForPlayer))
+            Life::CraftForPlayer::Stop(me, m_craftForPlayer, Life::CraftForPlayer::Reason::Combat);
     }
     if (!me->IsInCombat())
     {
@@ -798,6 +800,10 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         if (resurrectFirst || commanderOutOfCombat)
             PauseProvisions();
         else if (UpdateProvisions(pLeader))
+            return;
+        // What the player asked it to make with his materials (the talk window): it stands and
+        // makes it before anything else of its own.
+        if (!resurrectFirst && Life::CraftForPlayer::Update(me, m_craftForPlayer))
             return;
         if (resurrectFirst || commanderOutOfCombat || !LootsForSelf() || staying)
             StopErrands();

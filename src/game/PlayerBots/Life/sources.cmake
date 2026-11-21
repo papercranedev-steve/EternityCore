@@ -8,6 +8,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/ErrandCommon.cpp
   ${LIFE_DIR}/Errands/CraftRun.h
   ${LIFE_DIR}/Errands/CraftRun.cpp
+  ${LIFE_DIR}/Errands/CraftForPlayer.h
+  ${LIFE_DIR}/Errands/CraftForPlayer.cpp
   ${LIFE_DIR}/Errands/ProvisionDesk.h
   ${LIFE_DIR}/Errands/ProvisionDesk.cpp
   ${LIFE_DIR}/Errands/GiveProvisions.h

@@ -135,6 +135,8 @@ ChatCommand * ChatHandler::getCommandTable()
         { "companion",  SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionCommand,   "", nullptr },
         { "companions", SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCompanionsCommand,  "", nullptr },
         { "talk",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTalkCommand,        "", nullptr },
+        { "recipes",    SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotRecipesCommand,     "", nullptr },
+        { "craft",      SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCraftCommand,       "", nullptr },
         { "stay",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotStayCommand,        "", nullptr },
         { "follow",     SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotFollowCommand,      "", nullptr },
         { nullptr,      0,                      false, nullptr,                                        "", nullptr },

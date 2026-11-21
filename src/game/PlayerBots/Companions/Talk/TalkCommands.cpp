@@ -12,6 +12,17 @@
  *   .partybot talk <bot> <option id>      he answers aloud, then does it:
  *     a new page (BEGIN .. END as above), PBTALK;<bot>;CLOSE, or
  *     PBTALK;<bot>;OPEN;<window>;<arg>     the addon opens that window (bags, craft)
+ *   .partybot recipes <bot> <skill>       the craft window: what he can make for you (Gates Crafting)
+ *     PBRCP;<bot>;BEGIN;<skill>;<value>;<max>
+ *     PBRCP;<bot>;R;<recipe spell>;<item>;<per cast>;<difficulty 0 orange .. 3 grey>;<category>;<item:count,...>
+ *            (category: Shared/Crafting::CategoryOf, "potion" .. or "<item class>.<subclass>")
+ *     PBRCP;<bot>;END
+ *     PBERR;<bot>;noskill | locked;<needed>;<now>
+ *   .partybot craft <bot> <recipe spell> <count, 0 = all>   he makes it with your materials
+ *   .partybot craft <bot> stop                               (Life/Errands/CraftForPlayer)
+ *     PBOK;<bot>;craft;<spell>;<count>, then PBCRAFT;<bot>;made;<item>;<made>;<left> per item and
+ *     PBCRAFT;<bot>;stop;<done|nomats|far|combat|stopped|bagsfull|failed|cooldown|gone> at the end
+ *     PBERR;<bot>;norecipe | far | notgroup
  *   .partybot stay [bot]                  he (no name: every party bot of your group) waits here
  *   .partybot follow [bot]                he (no name: everyone waiting) follows you again
  *     PBOK;<bot or empty>;stay|follow;<how many>   (one of them says so in party chat)
@@ -21,9 +32,16 @@
 #include "Player.h"
 #include "Group.h"
 #include "Companions/Talk/Talk.h"
+#include "Companions/Talk/Services/ServiceList.h"
+#include "Companions/Affinity/Gates.h"
 #include "Commander/CommanderMgr.h"
+#include "Life/Errands/CraftForPlayer.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/BotChat.h"
+#include "Shared/Crafting.h"
+#include "SpellMgr.h"
+#include "SpellEntry.h"
+#include <cstring>
 #include "PartyBotAI.h"
 #include "WorldSession.h"
 #include "Utilities/Random.h"
@@ -135,6 +153,107 @@ bool ChatHandler::HandlePartyBotTalkCommand(char* args)
             PSendSysMessage("PBTALK;%s;CLOSE", name.c_str());
             break;
     }
+    return true;
+}
+
+bool ChatHandler::HandlePartyBotRecipesCommand(char* args)
+{
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    std::string name;
+    char* botArg = ExtractArg(&args);
+    Player* bot = player ? ExtractPartyBotTarget(&botArg, name) : nullptr;
+    if (!bot || !PartyBotGateAllows(bot, name, uint8(Companions::Gates::Gate::Crafting)))
+        return false;
+    uint32 skill = 0;
+    if (!ExtractUInt32(&args, skill) || !Companions::Talk::CraftsFor(bot, skill))
+    {
+        PSendSysMessage("PBERR;%s;noskill", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    namespace Crafting = BotShared::Crafting;
+    uint32 const value = bot->GetSkillValuePure(uint16(skill));
+    PSendSysMessage("PBRCP;%s;BEGIN;%u;%u;%u", name.c_str(), skill, value, uint32(bot->GetSkillMaxPure(uint16(skill))));
+    for (SpellEntry const* recipe : Crafting::KnownRecipesOf(bot, skill))
+    {
+        Crafting::Product const product = Crafting::ProductOf(recipe);
+        std::ostringstream line;
+        line << "PBRCP;" << name << ";R;" << recipe->Id << ";" << product.itemId << ";" << product.perCast << ";"
+             << uint32(Crafting::Difficulty(recipe, value)) << ";" << Crafting::CategoryOf(recipe) << ";";
+        bool first = true;
+        for (Crafting::Reagent const& r : Crafting::ReagentsOf(recipe))
+        {
+            line << (first ? "" : ",") << r.itemId << ":" << r.count;
+            first = false;
+        }
+        SendSysMessage(line.str().c_str());
+    }
+    PSendSysMessage("PBRCP;%s;END", name.c_str());
+    return true;
+}
+
+bool ChatHandler::HandlePartyBotCraftCommand(char* args)
+{
+    namespace Talk = Companions::Talk;
+    Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
+    std::string name;
+    char* botArg = ExtractArg(&args);
+    Player* bot = player ? ExtractPartyBotTarget(&botArg, name) : nullptr;
+    if (!bot)
+        return false;
+    PartyBotAI* ai = dynamic_cast<PartyBotAI*>(bot->AI());
+
+    if (args && strncmp(args, "stop", 4) == 0)
+    {
+        Life::CraftForPlayer::Stop(bot, ai->m_craftForPlayer, Life::CraftForPlayer::Reason::Stopped);
+        PSendSysMessage("PBOK;%s;craft;stop", name.c_str());
+        return true;
+    }
+
+    if (!PartyBotGateAllows(bot, name, uint8(Companions::Gates::Gate::Crafting)))
+        return false;
+    uint32 spellId = 0, count = 0;
+    if (!ExtractUInt32(&args, spellId) || !ExtractUInt32(&args, count))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot craft <bot> <recipe spell> <count, 0 = all> | stop", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    std::string busyLine;
+    switch (Talk::Check(player, bot, busyLine))
+    {
+        case Talk::Refusal::None:
+            break;
+        case Talk::Refusal::Busy:
+            BotShared::BotChat::Say(bot, busyLine);
+            PSendSysMessage("PBCRAFT;%s;stop;combat", name.c_str());
+            return true;
+        case Talk::Refusal::Far:
+            PSendSysMessage("PBERR;%s;far", name.c_str());
+            SetSentErrorMessage(true);
+            return false;
+        default:
+            PSendSysMessage("PBERR;%s;notgroup", name.c_str());
+            SetSentErrorMessage(true);
+            return false;
+    }
+
+    SpellEntry const* recipe = sSpellMgr.GetSpellEntry(spellId);
+    if (!recipe || !bot->HasSpell(spellId) || !Talk::CraftsFor(bot, BotShared::Crafting::SkillOf(recipe)))
+    {
+        PSendSysMessage("PBERR;%s;norecipe", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (!Life::CraftForPlayer::Start(bot, ai->m_craftForPlayer, player, spellId, count, ai->PersonalityTags()))
+    {
+        PSendSysMessage("PBCRAFT;%s;stop;nomats", name.c_str());
+        return true;
+    }
+    BotShared::BotChat::Say(bot, SayLine(player, bot, "craft.start"));
+    PSendSysMessage("PBOK;%s;craft;%u;%u", name.c_str(), spellId, count);
     return true;
 }
 
