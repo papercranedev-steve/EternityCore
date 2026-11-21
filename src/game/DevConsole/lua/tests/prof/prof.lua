@@ -197,6 +197,7 @@ local function makeT(leader, bots, c)
     -- as if away `hours`: logs the result and the table; returns { gains = {skill = n}, spent, short, before }
     function t.away(b, hours)
         local before = b:money()
+        local reserve = b:prof().reserve or { total = 0 }
         local r = b:offline(hours)
         local gains = {}
         local text = {}
@@ -204,11 +205,11 @@ local function makeT(leader, bots, c)
             gains[g.skill] = g.points
             text[#text + 1] = g.skill .. " +" .. g.points
         end
-        log(string.format("STEP %s away %gh: %s, spent %s (money %s -> %s)%s", b:name(), hours,
+        log(string.format("STEP %s away %gh: %s, spent %s (money %s -> %s, reserve %s)%s", b:name(), hours,
             #text > 0 and table.concat(text, ", ") or "no gain", gold(r.spent), gold(before), gold(b:money()),
-            r.short and ", SHORT OF MONEY" or ""))
+            gold(reserve.total), r.short and ", SHORT OF MONEY" or ""))
         log(proftable(b))
-        return { gains = gains, spent = r.spent, short = r.short, before = before }
+        return { gains = gains, spent = r.spent, short = r.short, before = before, reserve = reserve.total }
     end
     function t.give(b, entry, count)
         leader:select(b)

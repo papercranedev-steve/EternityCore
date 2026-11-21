@@ -2087,6 +2087,23 @@ namespace DevConsole
         }
         lua_pushinteger(L, p->GetMoney());
         lua_setfield(L, -2, "money");
+        // what the offline skill-ups leave untouched (OfflineLife::ReserveOf)
+        if (ai)
+        {
+            Companions::OfflineLife::Reserve const r = Companions::OfflineLife::ReserveOf(p, ai->m_lessonContext);
+            lua_createtable(L, 0, 5);
+            lua_pushinteger(L, r.supplies);
+            lua_setfield(L, -2, "supplies");
+            lua_pushinteger(L, r.repair);
+            lua_setfield(L, -2, "repair");
+            lua_pushinteger(L, r.lessons);
+            lua_setfield(L, -2, "lessons");
+            lua_pushinteger(L, r.ranks);
+            lua_setfield(L, -2, "ranks");
+            lua_pushinteger(L, r.Total());
+            lua_setfield(L, -2, "total");
+            lua_setfield(L, -2, "reserve");
+        }
 
         std::vector<uint32> skills = Prof::Primaries();
         skills.insert(skills.end(), Prof::Secondaries().begin(), Prof::Secondaries().end());

@@ -53,6 +53,17 @@ namespace Companions
             bool shortOfMoney = false;  // a crafting profession could have grown but for the money
         };
 
+        // The money it keeps before buying skill points (copper).
+        struct Reserve
+        {
+            uint32 supplies = 0;    // the missing supplies at list price
+            uint32 repair = 0;
+            uint32 lessons = 0;     // the important class lessons
+            uint32 ranks = 0;       // the next rank of each primary profession
+            uint32 Total() const { return supplies + repair + lessons + ranks; }
+        };
+        Reserve ReserveOf(Player* bot, Life::Lessons::Context const& lessons);
+
         // `today`: points each skill got today so far (skill -> points), updated.
         Result Apply(Player* bot, Life::Lessons::Context const& lessons, std::vector<std::string> const& tags,
                      uint32 offlineSecs, float priceFactor, std::map<uint32, uint32>& today);

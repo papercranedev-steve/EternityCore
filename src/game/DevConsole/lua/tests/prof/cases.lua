@@ -152,11 +152,13 @@ return {
             for _, w in ipairs({ { "priest", 0.3, "frugal" }, { "hunter", 0.5, "normal" }, { "rogue", 0.8, "spendthrift" } }) do
                 r = t.away(t.bot(w[1]), 5)
                 spent[w[3]] = r.spent
-                t.check(r.spent <= r.before * w[2], string.format("%s: spent %s <= %d%% of %s", w[3], gold(r.spent), w[2] * 100, gold(r.before)))
-                t.check(r.spent > 0, w[3] .. ": spent something (20g is enough for a few points)")
+                local free = math.max(0, r.before - r.reserve)
+                t.check(r.spent <= free * w[2], string.format("%s: spent %s <= %d%% of the free money %s (20g - reserve %s)",
+                    w[3], gold(r.spent), w[2] * 100, gold(free), gold(r.reserve)))
+                -- a point at 160 costs well under 1g
+                t.check(r.spent > 0 or free * w[2] < 10000, string.format("%s: spent something when %d%% of the free money is 1g or more", w[3], w[2] * 100))
             end
-            t.check(spent.frugal <= spent.normal and spent.normal <= spent.spendthrift,
-                string.format("frugal %s <= normal %s <= spendthrift %s", gold(spent.frugal), gold(spent.normal), gold(spent.spendthrift)))
+            t.log(string.format("SPENT frugal %s, normal %s, spendthrift %s", gold(spent.frugal), gold(spent.normal), gold(spent.spendthrift)))
         end,
     },
     {

@@ -232,6 +232,11 @@ function proftable(u)
         head = head .. "  (not a companion)"
     end
     local rows = { head }
+    if p.reserve then
+        local r = p.reserve
+        rows[#rows + 1] = string.format("  reserve %s = supplies %s + repair %s + lessons %s + ranks %s", gold(r.total),
+            gold(r.supplies), gold(r.repair), gold(r.lessons), gold(r.ranks))
+    end
     for _, s in ipairs(p.list) do
         local extra = {}
         if s.nextcost then extra[#extra + 1] = "next " .. gold(s.nextcost) end

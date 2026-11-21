@@ -54,13 +54,6 @@ namespace Companions
                 return cost;
             }
 
-            uint32 Kept(Player* bot, Life::Lessons::Context const& lessons)
-            {
-                return BotShared::Vendor::ListPrice(bot, BotShared::Supplies::Missing(bot)) +
-                       BotShared::Vendor::RepairCost(bot) +
-                       Life::Lessons::CostUpTo(Life::Lessons::Available(bot, lessons), Life::Lessons::IMPORTANT) +
-                       NextRanksCost(bot);
-            }
 
             struct Growing
             {
@@ -101,6 +94,16 @@ namespace Companions
             }
         }
 
+        Reserve ReserveOf(Player* bot, Life::Lessons::Context const& lessons)
+        {
+            Reserve r;
+            r.supplies = BotShared::Vendor::ListPrice(bot, BotShared::Supplies::Missing(bot));
+            r.repair = BotShared::Vendor::RepairCost(bot);
+            r.lessons = Life::Lessons::CostUpTo(Life::Lessons::Available(bot, lessons), Life::Lessons::IMPORTANT);
+            r.ranks = NextRanksCost(bot);
+            return r;
+        }
+
         Result Apply(Player* bot, Life::Lessons::Context const& lessons, std::vector<std::string> const& tags,
                      uint32 offlineSecs, float priceFactor, std::map<uint32, uint32>& today)
         {
@@ -117,7 +120,7 @@ namespace Companions
             if (!crafts.empty())
             {
                 float const share = Has(tags, "frugal") ? SPEND_SHARE_FRUGAL : Has(tags, "spendthrift") ? SPEND_SHARE_SPENDTHRIFT : SPEND_SHARE;
-                uint32 const kept = Kept(bot, lessons);
+                uint32 const kept = ReserveOf(bot, lessons).Total();
                 uint32 budget = bot->GetMoney() > kept ? uint32(float(bot->GetMoney() - kept) * share) : 0;
                 for (bool changed = true; changed;)
                 {
