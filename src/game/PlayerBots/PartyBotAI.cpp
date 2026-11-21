@@ -757,7 +757,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 Life::QuestPickUp::Update(me, m_questPickUp, pLeader, Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow)) ||
                 Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                 Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
-                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner }, PersonalityTags(),
+                Life::TownTrip::Update(me, m_townTrip, pLeader, { &m_shoppingPlanner, &m_trainingPlanner, &m_professionPlanner }, PersonalityTags(),
                                        m_tradeHands) ||
                 Life::CraftRun::Update(me, m_craftRun, pLeader);
             if (m_trainerTask.TakeLearned())

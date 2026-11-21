@@ -127,6 +127,9 @@ namespace RouteOrder
             {
                 int const after = plan.stops[i].after;
                 valid = after < 0 || position[after] < position[i];
+                if (plan.stops[i].last)
+                    for (size_t j = 0; j < n && valid; ++j)
+                        valid = plan.stops[j].last || position[j] < position[i];
             }
             if (!valid)
                 continue;

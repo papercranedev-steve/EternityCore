@@ -44,6 +44,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/Trip/ShoppingPlanner.cpp
   ${LIFE_DIR}/Errands/Trip/TrainingPlanner.h
   ${LIFE_DIR}/Errands/Trip/TrainingPlanner.cpp
+  ${LIFE_DIR}/Errands/Trip/ProfessionPlanner.h
+  ${LIFE_DIR}/Errands/Trip/ProfessionPlanner.cpp
   ${LIFE_DIR}/Errands/Trip/LessonPriority.h
   ${LIFE_DIR}/Errands/Trip/LessonPriority.cpp
   ${LIFE_DIR}/Errands/LessonReminder.h

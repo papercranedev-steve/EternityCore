@@ -1,5 +1,6 @@
 #include "Shared/Professions.h"
 #include "Player.h"
+#include "Creature.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 #include "World.h"
@@ -22,6 +23,7 @@ namespace Professions
         struct SkillData
         {
             std::vector<Rank> ranks;
+            std::vector<TrainerSpell> rankLessons;  // the lesson of ranks[i]
             std::vector<RecipeLesson> recipes;
         };
 
@@ -63,7 +65,14 @@ namespace Professions
                         if (SpellLearnSkillNode const* node = sSpellMgr.GetSpellLearnSkill(spellId))
                         {
                             if (IsProfession(node->skill))
-                                data[node->skill].ranks.push_back({ spellId, node->maxvalue, lesson.reqSkillValue, lesson.reqLevel, lesson.spellCost });
+                            {
+                                SkillData& d = data[node->skill];
+                                if (std::none_of(d.ranks.begin(), d.ranks.end(), [spellId](Rank const& r) { return r.spellId == spellId; }))
+                                {
+                                    d.ranks.push_back({ spellId, node->maxvalue, lesson.reqSkillValue, lesson.reqLevel, lesson.spellCost });
+                                    d.rankLessons.push_back(lesson);
+                                }
+                            }
                             continue;
                         }
                         if (lesson.reqSkill && IsProfession(lesson.reqSkill))
@@ -84,9 +93,20 @@ namespace Professions
 
             for (auto& itr : data)
             {
-                std::vector<Rank>& ranks = itr.second.ranks;
-                std::sort(ranks.begin(), ranks.end(), [](Rank const& a, Rank const& b) { return a.maxValue < b.maxValue; });
-                ranks.erase(std::unique(ranks.begin(), ranks.end(), [](Rank const& a, Rank const& b) { return a.spellId == b.spellId; }), ranks.end());
+                SkillData& d = itr.second;
+                std::vector<size_t> order(d.ranks.size());
+                for (size_t i = 0; i < order.size(); ++i)
+                    order[i] = i;
+                std::sort(order.begin(), order.end(), [&d](size_t a, size_t b) { return d.ranks[a].maxValue < d.ranks[b].maxValue; });
+                std::vector<Rank> ranks;
+                std::vector<TrainerSpell> rankLessons;
+                for (size_t i : order)
+                {
+                    ranks.push_back(d.ranks[i]);
+                    rankLessons.push_back(d.rankLessons[i]);
+                }
+                d.ranks = std::move(ranks);
+                d.rankLessons = std::move(rankLessons);
                 std::sort(itr.second.recipes.begin(), itr.second.recipes.end(), [](RecipeLesson const& a, RecipeLesson const& b)
                 {
                     return a.lesson.reqSkillValue < b.lesson.reqSkillValue;
@@ -199,6 +219,77 @@ namespace Professions
                 break;
         }
         return learned;
+    }
+
+    std::vector<Lesson> Available(Player const* player)
+    {
+        std::vector<Lesson> ranks, recipes;
+        if (!player)
+            return ranks;
+        for (auto const& itr : Data())
+        {
+            uint32 const skill = itr.first;
+            Kind const kind = KindOf(skill);
+            if ((kind != Kind::Crafting && kind != Kind::Gathering) || !player->HasSkill(uint16(skill)))
+                continue;
+            SkillData const& d = itr.second;
+            for (size_t i = 0; i < d.ranks.size(); ++i)
+                if (d.ranks[i].maxValue < ARTISAN_MAX && player->GetTrainerSpellState(&d.rankLessons[i]) == TRAINER_SPELL_GREEN)
+                    ranks.push_back({ skill, d.ranks[i].spellId, d.rankLessons[i].spellCost, true });
+            for (RecipeLesson const& r : d.recipes)
+                if (!player->HasSpell(r.spellId) && player->GetTrainerSpellState(&r.lesson) == TRAINER_SPELL_GREEN)
+                    recipes.push_back({ skill, r.spellId, r.lesson.spellCost, false });
+        }
+        std::stable_sort(recipes.begin(), recipes.end(), [](Lesson const& a, Lesson const& b) { return a.cost < b.cost; });
+        ranks.insert(ranks.end(), recipes.begin(), recipes.end());
+        return ranks;
+    }
+
+    bool Teaches(uint32 creatureEntry, uint32 spellId)
+    {
+        CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(creatureEntry);
+        if (!info || !(info->npc_flags & UNIT_NPC_FLAG_TRAINER) || info->trainer_type != TRAINER_TYPE_TRADESKILLS)
+            return false;
+        TrainerSpellData const* own = sObjectMgr.GetNpcTrainerSpells(creatureEntry);
+        TrainerSpellData const* shared = info->trainer_id ? sObjectMgr.GetNpcTrainerTemplateSpells(info->trainer_id) : nullptr;
+        for (TrainerSpellData const* spells : { own, shared })
+        {
+            if (!spells)
+                continue;
+            for (auto const& entry : spells->spellList)
+                for (uint32 taught : TaughtSpells(entry.second))
+                    if (taught == spellId)
+                        return true;
+        }
+        return false;
+    }
+
+    Paid LearnAt(Player* player, Creature const* trainer, uint32 keep)
+    {
+        Paid paid;
+        if (!player || !trainer)
+            return paid;
+        // A rank makes new recipes green: again until nothing is learned (capped: bad trainer data).
+        for (uint32 pass = 0; pass < 10; ++pass)
+        {
+            bool learnedAny = false;
+            for (Lesson const& lesson : Available(player))
+            {
+                if (!Teaches(trainer->GetEntry(), lesson.spellId))
+                    continue;
+                if (player->GetMoney() < keep + lesson.cost)
+                    continue;
+                player->LearnSpell(lesson.spellId, false);
+                if (lesson.cost)
+                    player->ModifyMoney(-int32(lesson.cost));
+                paid.cost += lesson.cost;
+                ++paid.learned;
+                learnedAny = true;
+            }
+            if (!learnedAny)
+                break;
+        }
+        return paid;
     }
 
     void ForgetAll(Player* player)

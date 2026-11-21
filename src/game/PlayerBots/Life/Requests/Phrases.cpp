@@ -32,6 +32,7 @@ namespace Phrases
             { "trip.ask",        "lazy",        "唉，又得跑一趟{places}，{why}……等我会儿？" },
             { "errand.why.shop", "default",     "补点东西" },
             { "errand.why.train", "default",    "学新技能" },
+            { "errand.why.profession", "default", "学专业" },
             { "errand.why.and",  "default",     "，顺便" },
             { "errand.go",       "default",     "好，我去去就回。" },
             { "errand.go",       "diligent",    "马上就好！" },
@@ -114,6 +115,7 @@ namespace Phrases
             { "place.vendor.reagent", "default", "材料商" },
             { "place.auction",   "default",     "拍卖行" },
             { "place.trainer",   "default",     "训练师" },
+            { "place.trainer.profession", "default", "专业训练师" },
             { "place.and",       "default",     "和" },
             { "place.comma",     "default",     "、" },
             { "errand.opt.yes",  "default",     "去吧" },
@@ -125,6 +127,8 @@ namespace Phrases
             { "errand.paid",     "default",     "谢谢！我这就去。" },
             { "errand.paid",     "frugal",      "谢啦，这钱我一定花在刀刃上。" },
             { "training.money",  "default",     "学费：重要技能{important}，全部{all}，我身上有{have}。" },
+            // Profession trainers (Trip/ProfessionPlanner): {skill}, {count}.
+            { "training.recipes", "default",    "{skill}：{count}个新配方" },
             // Out in the field (Life/Errands/LessonReminder). {lessons}: the names.
             { "lesson.remind",   "default",     "我现在能学{lessons}了，下次进主城记得带我去趟训练师。" },
             { "lesson.remind",   "chatty",      "对了对了！我能学{lessons}了，进主城的时候陪我去趟训练师好不好？" },

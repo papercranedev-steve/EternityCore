@@ -1,7 +1,8 @@
 /*
  * Shared bot facts and hands (PlayerBots/Shared): professions by the profession trainers' own
  * data. Ranks (Apprentice .. Artisan: the spells that set a skill line's maximum) and recipes
- * (the other lessons of a skill), learning them for free, and forgetting every profession.
+ * (the other lessons of a skill), learning them (free at recruiting, paid at a trainer), and
+ * forgetting every profession.
  *
  * Who gets which profession and at what skill is the caller's (Companions/PastProfessions).
  * Design: .kiro/docs/2026-11-21-companion-professions.md (workspace root).
@@ -14,6 +15,7 @@
 #include <functional>
 #include <vector>
 
+class Creature;
 class Player;
 
 namespace BotShared
@@ -67,6 +69,35 @@ namespace BotShared
         // window: skill value, level, previous rank) and `keep` agrees to, also those that become
         // available on the way. keep(reqSkillValue, taught spell). Returns the recipes learned.
         uint32 LearnRecipes(Player* player, uint32 skill, std::function<bool(uint32 reqSkillValue, uint32 spellId)> const& keep);
+
+        // Artisan's maximum: that rank is taught where the player takes the bot (design §3, stage
+        // 5), never by Available / LearnAt.
+        uint32 const ARTISAN_MAX = 300;
+
+        // A lesson a profession trainer would give the player now (green in the trainer window).
+        struct Lesson
+        {
+            uint32 skill = 0;
+            uint32 spellId = 0;     // the rank or recipe it teaches
+            uint32 cost = 0;        // copper
+            bool rank = false;
+        };
+        // Of its primary professions (no secondaries yet: design §1), Artisan left out: ranks
+        // first, then recipes cheapest first.
+        std::vector<Lesson> Available(Player const* player);
+
+        // A trainer of this creature entry teaches this rank or recipe (its own list or its
+        // template's). By entry: a far trainer's grid may not be loaded.
+        bool Teaches(uint32 creatureEntry, uint32 spellId);
+
+        struct Paid
+        {
+            uint32 learned = 0;
+            uint32 cost = 0;        // copper
+        };
+        // Paid, at `trainer`: what it teaches of Available, in that order, as long as the money
+        // stays at `keep` or above; also what becomes available on the way (recipes of a new rank).
+        Paid LearnAt(Player* player, Creature const* trainer, uint32 keep);
 
         // Forgets every profession: its spells (ranks, recipes, Find Herbs ...) and skill line,
         // and gives the primary profession slots back.

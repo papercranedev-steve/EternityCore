@@ -34,6 +34,7 @@
 #include "Life/Errands/TownTrip.h"
 #include "Life/Errands/Trip/ShoppingPlanner.h"
 #include "Life/Errands/Trip/TrainingPlanner.h"
+#include "Life/Errands/Trip/ProfessionPlanner.h"
 #include "Companions/RewardChoice.h"
 #include "Companions/ClassQuests/MirrorSync.h"
 #include "Companions/ClassQuests/ClassQuestFlow.h"
@@ -208,6 +209,8 @@ public:
     Life::TownTripState m_townTrip;
     Life::Trip::ShoppingPlanner m_shoppingPlanner;
     Life::Trip::TrainingPlanner m_trainingPlanner{ m_trainerTask };
+    // Profession trainers: the lowest business, last on the trip (Trip/ProfessionPlanner.h).
+    Life::Trip::ProfessionPlanner m_professionPlanner{ &m_lessonContext };
     // Out of combat: a companion makes its conjured food and water, poison vials
     // (Life/Errands/CraftRun.h).
     Life::CraftRunState m_craftRun;

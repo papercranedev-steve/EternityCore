@@ -73,6 +73,9 @@ namespace Trip
         // towards the spawn point and the grid loads on the way (TownTrip).
         bool farSpawn = false;
         int planner = -1;           // TownTrip: index of the planner that added it
+        // After every stop that is not `last` (Trip/RouteOrder): the lowest business (profession
+        // trainers) spends what the others left.
+        bool last = false;
     };
 
     struct TripPlanStops
