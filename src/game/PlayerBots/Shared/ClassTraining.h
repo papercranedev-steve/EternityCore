@@ -30,7 +30,13 @@ namespace BotShared
         // Learns every class trainer spell the player may learn now, also the ranks that become
         // available on the way. pay: costs are taken from the player's money and a lesson it cannot
         // afford is skipped (cheapest first, so money goes as far as it reaches).
-        Result LearnAvailable(Player* player, bool pay);
+        // maxLevel: lessons for a higher level are left (0 = the player's level decides alone);
+        // a recruit learned less than its level allows (user 2026-11-21).
+        Result LearnAvailable(Player* player, bool pay, uint32 maxLevel = 0);
+
+        // Forgets the class trainer spells it knows for a level above maxLevel (a lower rank
+        // takes over); a population bot may have learned all of its level. Returns the count.
+        uint32 ForgetAbove(Player* player, uint32 maxLevel);
 
         // What LearnAvailable(player, true) would cost now, first ranks only (no new ranks unlock).
         uint32 CostOfAvailable(Player const* player);

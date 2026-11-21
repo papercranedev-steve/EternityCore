@@ -2,6 +2,7 @@
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
+#include "DBCStores.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -63,6 +64,16 @@ namespace BotShared
             return 0;
         }
 
+        // The level the lesson needs, as Player::GetTrainerSpellState reads it.
+        uint32 LevelOf(TrainerSpell const& lesson)
+        {
+            if (lesson.reqLevel)
+                return lesson.reqLevel;
+            SpellEntry const* teach = sSpellMgr.GetSpellEntry(lesson.spell);
+            SpellEntry const* taught = teach ? sSpellMgr.GetSpellEntry(teach->EffectTriggerSpell[0]) : nullptr;
+            return taught ? taught->spellLevel : 0;
+        }
+
         // The trainer spell teaches through its trigger spells (same as the .learn all_trainer helper).
         bool Learn(Player* player, TrainerSpell const& lesson)
         {
@@ -85,7 +96,7 @@ namespace BotShared
 
     namespace ClassTraining
     {
-        Result LearnAvailable(Player* player, bool pay)
+        Result LearnAvailable(Player* player, bool pay, uint32 maxLevel)
         {
             Result result;
             if (!player)
@@ -104,6 +115,8 @@ namespace BotShared
                 for (TrainerSpell const& lesson : lessons)
                 {
                     if (player->GetTrainerSpellState(&lesson) != TRAINER_SPELL_GREEN)
+                        continue;
+                    if (maxLevel && LevelOf(lesson) > maxLevel)
                         continue;
                     if (pay && player->GetMoney() < lesson.spellCost)
                         continue;
@@ -124,6 +137,31 @@ namespace BotShared
                     if (player->GetTrainerSpellState(&lesson) == TRAINER_SPELL_GREEN)
                         ++result.tooExpensive;
             return result;
+        }
+
+        uint32 ForgetAbove(Player* player, uint32 maxLevel)
+        {
+            uint32 forgotten = 0;
+            if (!player)
+                return forgotten;
+            // Highest level first: a rank goes before the one below it, which then stays.
+            std::vector<TrainerSpell const*> lessons;
+            for (TrainerSpell const& lesson : LessonsOf(player->GetClass()))
+                if (LevelOf(lesson) > maxLevel)
+                    lessons.push_back(&lesson);
+            std::sort(lessons.begin(), lessons.end(), [](TrainerSpell const* a, TrainerSpell const* b)
+            {
+                return LevelOf(*a) > LevelOf(*b);
+            });
+            for (TrainerSpell const* lesson : lessons)
+            {
+                uint32 const spellId = TaughtSpell(player, *lesson);
+                if (!spellId || !player->HasSpell(spellId) || GetTalentSpellPos(spellId))
+                    continue;
+                player->RemoveSpell(spellId, false, true);
+                ++forgotten;
+            }
+            return forgotten;
         }
 
         bool CheapestAvailable(Player const* player, uint32& cost)

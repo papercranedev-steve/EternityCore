@@ -1,5 +1,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Companions/ClassQuests/PastQuests.h"
+#include "Companions/PastProfessions.h"
+#include "Companions/PastRoll.h"
 #include "Shared/ClassTraining.h"
 #include "Life/Requests/Phrases.h"
 #include "Shared/TownGates.h"
@@ -15,6 +17,7 @@
 #include "Database/DatabaseEnv.h"
 #include "Utilities/Random.h"
 #include "Log.h"
+#include <algorithm>
 #include <ctime>
 
 namespace Companions
@@ -25,6 +28,20 @@ namespace Companions
         uint32 const LOGIN_DELAY_MS = 2000;
         // The temporary bot did not leave (or the login never happened): give up, the character stays saved.
         uint32 const LOGIN_TIMEOUT_MS = 60000;
+
+        // A recruit's class trainer spells stop this many levels below its own (user 2026-11-21:
+        // the player takes it training, it does not come knowing everything of its level).
+        uint32 const UNTRAINED_LEVELS_MIN = 4;
+        uint32 const UNTRAINED_LEVELS_MAX = 8;
+        uint32 const KEY_UNTRAINED = 0x80000002;   // PastRoll key (PastRoll.h)
+
+        uint32 TrainedUpToLevel(Player const* bot)
+        {
+            uint32 const span = UNTRAINED_LEVELS_MAX - UNTRAINED_LEVELS_MIN + 1;
+            uint32 const behind = UNTRAINED_LEVELS_MIN +
+                std::min(span - 1, uint32(PastRoll(bot->GetGUIDLow(), KEY_UNTRAINED) * float(span)));
+            return bot->GetLevel() > behind ? bot->GetLevel() - behind : 1;
+        }
     }
 
     CompanionMgr& CompanionMgr::Instance()
@@ -58,6 +75,7 @@ namespace Companions
             " `reward_mode` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0 = picks quest rewards itself, 1 = the player picks',"
             " `past_quests_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = class quests done before recruiting are decided (ClassQuests/PastQuests)',"
             " `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0..100, what the player did for it (class quests)',"
+            " `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = professions before recruiting are given (PastProfessions)',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
 
@@ -88,6 +106,10 @@ namespace Companions
         std::unique_ptr<QueryResult> affinity(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'affinity'"));
         if (!affinity)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `affinity` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `past_quests_decided`");
+        // Tables from before professions: their companions get them when next online.
+        std::unique_ptr<QueryResult> professions(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'professions_decided'"));
+        if (!professions)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `affinity`");
         return true;
     }
 
@@ -102,6 +124,7 @@ namespace Companions
         m_companions.clear();
         m_pending.clear();
         m_pastQuestsPending.clear();
+        m_professionsPending.clear();
         m_available = EnsureTable();
         if (!m_available)
         {
@@ -111,7 +134,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -127,6 +150,8 @@ namespace Companions
                 if (!f[5].GetUInt8())
                     m_pastQuestsPending.push_back(info.charGuid);
                 info.affinity = f[6].GetUInt32();
+                if (!f[7].GetUInt8())
+                    m_professionsPending.push_back(info.charGuid);
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -315,10 +340,15 @@ namespace Companions
 
         // What it did before it met the player: its class quests (rolled by level, the abilities of
         // those it did not do are taken away), then the class trainer spells of its level, free
-        // (after the quests: a rank that needs a quest spell is learned only if it has it).
-        // From now on new ranks cost money at a trainer.
+        // (after the quests: a rank that needs a quest spell is learned only if it has it), but
+        // not those of its last few levels; then its professions. From now on new ranks cost
+        // money at a trainer.
+        std::vector<std::string> const tags = LoadTags(memberId);
         PastQuests::Result const past = PastQuests::Decide(bot);
-        BotShared::ClassTraining::Result const lessons = BotShared::ClassTraining::LearnAvailable(bot, false);
+        uint32 const trainedUpTo = TrainedUpToLevel(bot);
+        BotShared::ClassTraining::ForgetAbove(bot, trainedUpTo);    // a field bot knew all of its level
+        BotShared::ClassTraining::Result const lessons = BotShared::ClassTraining::LearnAvailable(bot, false, trainedUpTo);
+        PastProfessions::Result const professions = PastProfessions::Decide(bot, tags);
 
         bot->EnableSaving(account);
         bot->SaveToDB();
@@ -334,9 +364,9 @@ namespace Companions
         info.memberId = memberId;
         info.recruiterGuid = recruiter->GetGUIDLow();
         info.recruitedAt = uint32(time(nullptr));
-        info.tags = LoadTags(memberId);
-        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`)"
-            " VALUES (%u, %u, %u, %u, 1)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
+        info.tags = tags;
+        CharacterDatabase.PExecute("REPLACE INTO `custom_companion` (`char_guid`, `member_id`, `recruiter_guid`, `recruited_at`, `past_quests_decided`, `professions_decided`)"
+            " VALUES (%u, %u, %u, %u, 1, 1)", info.charGuid, info.memberId, info.recruiterGuid, info.recruitedAt);
         m_companions[guid] = info;
 
         // The name cache holds the temporary session's account; after a restart it is read from `characters`.
@@ -350,9 +380,10 @@ namespace Companions
         login.sinceMs = m_nowMs;
         m_pending.push_back(login);
 
-        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned,"
-            " class quests: %u done, %u not done, %u abilities taken away.",
-            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned, past.done, past.notDone, past.revoked);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) recruited by '%s', %u trainer spells learned (up to level %u),"
+            " class quests: %u done, %u not done, %u abilities taken away; professions %u (%u) + %u (%u), %u recipes.",
+            bot->GetName(), guid, bot->GetLevel(), recruiter->GetName(), lessons.learned, trainedUpTo, past.done, past.notDone, past.revoked,
+            professions.first, professions.firstValue, professions.second, professions.secondValue, professions.recipes);
         return true;
     }
 
@@ -389,11 +420,36 @@ namespace Companions
         }
     }
 
+    void CompanionMgr::DecideProfessionsOfOnline()
+    {
+        for (auto itr = m_professionsPending.begin(); itr != m_professionsPending.end();)
+        {
+            Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, *itr));
+            PartyBotAI* ai = bot && bot->IsInWorld() ? dynamic_cast<PartyBotAI*>(bot->AI()) : nullptr;
+            CompanionInfo const* info = Find(*itr);
+            if (!ai || !info)
+            {
+                ++itr;
+                continue;
+            }
+
+            PastProfessions::Result const professions = PastProfessions::Decide(bot, info->tags);
+            ai->m_resetSpellData = true;
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `professions_decided` = 1 WHERE `char_guid` = %u", *itr);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (level %u): professions before recruiting given,"
+                " %u (%u) + %u (%u), %u recipes.", bot->GetName(), bot->GetLevel(),
+                professions.first, professions.firstValue, professions.second, professions.secondValue, professions.recipes);
+            itr = m_professionsPending.erase(itr);
+        }
+    }
+
     void CompanionMgr::Update(uint32 diff)
     {
         m_nowMs += diff;
         if (!m_pastQuestsPending.empty())
             DecidePastQuestsOfOnline();
+        if (!m_professionsPending.empty())
+            DecideProfessionsOfOnline();
         if (m_pending.empty())
             return;
 

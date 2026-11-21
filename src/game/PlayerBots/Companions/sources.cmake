@@ -12,6 +12,9 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/RewardChoice.cpp
   ${COMPANIONS_DIR}/Personality.h
   ${COMPANIONS_DIR}/Personality.cpp
+  ${COMPANIONS_DIR}/PastRoll.h
+  ${COMPANIONS_DIR}/PastProfessions.h
+  ${COMPANIONS_DIR}/PastProfessions.cpp
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.h
   ${COMPANIONS_DIR}/ClassQuests/PastQuests.cpp
   ${COMPANIONS_DIR}/ClassQuests/MirrorSync.h

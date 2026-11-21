@@ -1,4 +1,5 @@
 #include "Companions/ClassQuests/PastQuests.h"
+#include "Companions/PastRoll.h"
 #include "Shared/ClassQuestAbilities.h"
 #include "Shared/ClassQuestChains.h"
 #include "Shared/QuestGrant.h"
@@ -15,17 +16,6 @@ namespace Companions
         int32 const ALWAYS_DONE_ABOVE = 10;
         float const CHANCE_PER_LEVEL = 0.05f;    // up to 5 levels
         float const CHANCE_PER_LOST_XP = 0.5f;   // times the share of the quest's XP no longer given
-
-        // 0..1, the same for the same character and ability (splitmix64).
-        float Roll(uint32 charGuid, uint32 abilityKey)
-        {
-            uint64 x = (uint64(charGuid) << 32) | abilityKey;
-            x += 0x9E3779B97F4A7C15ULL;
-            x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
-            x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
-            x ^= x >> 31;
-            return float(x >> 40) / float(1ULL << 24);
-        }
 
         // XPValue's falloff as a share, for quests without XP too.
         float XpShare(uint32 level, Quest const* quest, int32 above)
@@ -99,7 +89,7 @@ namespace Companions
                     if (before.size() > 1 && !bot->GetQuestRewardStatus(before[before.size() - 2]->GetQuestId()))
                         continue;
                 }
-                if (Roll(bot->GetGUIDLow(), chain->id) >= ChanceDone(bot->GetLevel(), first))
+                if (PastRoll(bot->GetGUIDLow(), chain->id) >= ChanceDone(bot->GetLevel(), first))
                 {
                     ++result.notDone;
                     continue;

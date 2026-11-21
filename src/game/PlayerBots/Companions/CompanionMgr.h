@@ -109,6 +109,9 @@ namespace Companions
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();
+        // Companions recruited before professions existed: given theirs once each is online as a
+        // party bot (PastProfessions).
+        void DecideProfessionsOfOnline();
 
         struct PendingLogin
         {
@@ -127,6 +130,7 @@ namespace Companions
         std::unordered_map<uint32, CompanionInfo> m_companions;
         std::vector<PendingLogin> m_pending;
         std::vector<uint32> m_pastQuestsPending;    // char guids, see DecidePastQuestsOfOnline
+        std::vector<uint32> m_professionsPending;   // char guids, see DecideProfessionsOfOnline
         mutable std::mutex m_affinityLock;
     };
 }

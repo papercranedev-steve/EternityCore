@@ -40,6 +40,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/ObjectUse.cpp
   ${BOTSHARED_DIR}/PetFood.h
   ${BOTSHARED_DIR}/PetFood.cpp
+  ${BOTSHARED_DIR}/Professions.h
+  ${BOTSHARED_DIR}/Professions.cpp
   ${BOTSHARED_DIR}/Provisions.h
   ${BOTSHARED_DIR}/Provisions.cpp
   ${BOTSHARED_DIR}/Poisons.h
