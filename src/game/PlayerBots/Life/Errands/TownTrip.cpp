@@ -49,7 +49,7 @@ namespace TownTrip
 
         bool Walking(Phase phase)
         {
-            return phase == Phase::Going || phase == Phase::Returning || phase == Phase::ToGate;
+            return phase == Phase::Going || phase == Phase::Returning || phase == Phase::Coming || phase == Phase::ToGate;
         }
 
         void Reset(Player* me, TownTripState& state, uint32 now, bool cooldown)
@@ -516,15 +516,23 @@ namespace TownTrip
                 return UpdateReporting(me, state, leader, tags, now);
             case Phase::Coming:
             {
-                // The follow walks it to him (no teleport for companions on the same map).
+                // It walks back to him itself (pathfinding, repathed as he moves). Left to the
+                // follow it was "far behind" across a capital (beyond Summon::FAR_YD) and the
+                // far travel took it: invisible, 100 yd hops on a straight line (over the canals).
+                // That travel stays the fallback once it gives up.
                 if (me->IsWithinDist(leader, BACK_YD, false))
                 {
                     Say(me, "errand.back", tags);
                     Reset(me, state, now, true);
+                    return false;
                 }
-                else if (WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > COME_GIVE_UP_MS)
+                if (WorldTimer::getMSTimeDiff(state.phaseSinceMs, now) > COME_GIVE_UP_MS)
+                {
                     Reset(me, state, now, true);
-                return false;
+                    return false;
+                }
+                MoveTo(me, state, leader->GetPositionX(), leader->GetPositionY(), leader->GetPositionZ(), now);
+                return true;
             }
             case Phase::ToGate:
             {

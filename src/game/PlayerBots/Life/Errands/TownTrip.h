@@ -32,7 +32,9 @@
  * Rendezvous, "meet.ask"): "come" (to him: the follow walks it there), "gate" (the nearest
  * recorded town gate, Shared/TownGates; "here" when the town has none). No answer: "come".
  *   Reporting the question is open; the bot stands where it is.
- *   Coming    it follows again (not busy) until within BACK_YD of him, then says it is back.
+ *   Coming    walks to him itself (pathfinding, repathed as he moves) until within BACK_YD,
+ *             then says it is back; after COME_GIVE_UP_MS the far travel may take over
+ *             (Life/Errands/Travel, via PartyBotAI::UpdateTravel).
  *   ToGate    walks to the gate,
  *   Waiting   stands there (whispers once it arrived) until the leader comes within MEET_YD.
  * After a trip: COOLDOWN_MS before the next. Ends at once (request cancelled) when the bot may
