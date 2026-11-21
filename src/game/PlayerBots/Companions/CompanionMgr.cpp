@@ -389,6 +389,20 @@ namespace Companions
         return info.affinity;
     }
 
+    uint32 CompanionMgr::SetAffinity(uint32 charGuid, uint32 value)
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end())
+            return 0;
+        CompanionInfo& info = itr->second;
+        info.affinity = std::min<uint32>(MAX_AFFINITY, value);
+        if (!info.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `affinity` = %u WHERE `char_guid` = %u", info.affinity, charGuid);
+        sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u: affinity set to %u.", charGuid, info.affinity);
+        return info.affinity;
+    }
+
     bool CompanionMgr::CountMoneyGift(uint32 charGuid, uint32 max)
     {
         std::lock_guard<std::mutex> guard(m_affinityLock);

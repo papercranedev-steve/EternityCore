@@ -44,6 +44,7 @@
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Shared/Inventory.h"
 #include "Companions/CompanionMgr.h"
+#include "Companions/Affinity/Gates.h"
 #include "Shared/Supplies.h"
 #include "Shared/Professions.h"
 #include "Shared/Gathering.h"
@@ -2030,6 +2031,57 @@ namespace DevConsole
         lua_pushboolean(L, sCompanionMgr.MarkTemporary(p, recruiter, std::move(tags)));
         return 1;
     }
+    // ---- companion affinity (design .kiro/docs/2026-11-21-companion-affinity.md, lua/tests/affinity) ----
+    // u:affinity() -> { value, companion, temporary, gates = { {key, affinity, ready, forclass, allowed, label}, ... } }
+    // Gates in table order (Companions/Affinity/Gates); forclass: the gate applies to its class.
+    static int U_affinity(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        uint32 const guid = p->GetGUIDLow();
+        uint32 const mask = 1u << (p->GetClass() - 1);
+        lua_createtable(L, 0, 4);
+        lua_pushinteger(L, sCompanionMgr.GetAffinity(guid));
+        lua_setfield(L, -2, "value");
+        lua_pushboolean(L, sCompanionMgr.IsCompanion(guid));
+        lua_setfield(L, -2, "companion");
+        lua_pushboolean(L, sCompanionMgr.IsTemporary(guid));
+        lua_setfield(L, -2, "temporary");
+        std::vector<Companions::Gates::Info> const& gates = Companions::Gates::All();
+        lua_createtable(L, int(gates.size()), 0);
+        int i = 0;
+        for (Companions::Gates::Info const& g : gates)
+        {
+            lua_createtable(L, 0, 6);
+            lua_pushstring(L, g.key);
+            lua_setfield(L, -2, "key");
+            lua_pushinteger(L, g.affinity);
+            lua_setfield(L, -2, "affinity");
+            lua_pushboolean(L, g.ready);
+            lua_setfield(L, -2, "ready");
+            lua_pushboolean(L, !g.classMask || (g.classMask & mask));
+            lua_setfield(L, -2, "forclass");
+            lua_pushboolean(L, Companions::Gates::Allows(guid, g.gate));
+            lua_setfield(L, -2, "allowed");
+            lua_pushstring(L, g.label);
+            lua_setfield(L, -2, "label");
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "gates");
+        return 1;
+    }
+    // u:setaffinity(n) -> the new value (capped at 100). Temporary companions only (setcompanion):
+    // the tests never touch the player's real companions.
+    static int U_setaffinity(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_Integer const value = luaL_checkinteger(L, 2);
+        if (value < 0)
+            return luaL_error(L, "affinity must be 0 or more");
+        if (!sCompanionMgr.IsTemporary(p->GetGUIDLow()))
+            return luaL_error(L, "%s is not a temporary companion (setcompanion first)", p->GetName());
+        lua_pushinteger(L, sCompanionMgr.SetAffinity(p->GetGUIDLow(), uint32(value)));
+        return 1;
+    }
     // u:resting() -> bool: in a rest area (inn, city); the town trips wait for a resting leader
     static int U_resting(lua_State* L)
     {
@@ -2414,6 +2466,7 @@ namespace DevConsole
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
+            { "affinity", U_affinity }, { "setaffinity", U_setaffinity },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
             { "setprof", U_setprof }, { "forgetprofs", U_forgetprofs }, { "trip", U_trip },
             { "sees", U_sees }, { "vis", U_vis },

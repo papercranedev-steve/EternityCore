@@ -111,6 +111,9 @@ namespace Companions
         // returns the new value (0: not a companion).
         uint32 GetAffinity(uint32 charGuid) const;
         uint32 AddAffinity(uint32 charGuid, uint32 points, char const* reason);
+        // Any thread (dev console affinity tests). Sets it, capped at MAX_AFFINITY, stored at once
+        // (not for temporary companions); returns the new value (0: not a companion).
+        uint32 SetAffinity(uint32 charGuid, uint32 value);
         // Any thread. Counts one money gift if it had fewer than `max` (stored at once, not for
         // temporary companions); false: not a companion, or `max` reached.
         bool CountMoneyGift(uint32 charGuid, uint32 max);
