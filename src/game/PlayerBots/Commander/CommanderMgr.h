@@ -89,7 +89,14 @@ namespace Commander
         // The bot's part in a ritual under way (None: no ritual or not in it); `warlock` and
         // `target` filled while there is one.
         SummonRole GetSummonRole(TeamBotAI const* bot, ObjectGuid& warlock, ObjectGuid& target);
-        void EndSummon(Player const* member, bool arrived);
+        // The warlock's ritual is over (`leaderBack`: its target was the player the team waited
+        // for and he came: the stays end).
+        void EndSummon(Player const* warlock, bool leaderBack);
+        // Its summon went out to `target` (not summoned again while it may accept).
+        void MarkSummonSent(Player const* warlock, ObjectGuid target);
+        // "把掉队的都拉过来": the team gathers its members left behind now (GatherPlanner), on the
+        // leader's map. False: no commander there.
+        bool GatherNow(Player const* leader);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

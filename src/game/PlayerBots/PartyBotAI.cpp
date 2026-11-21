@@ -421,11 +421,12 @@ bool PartyBotAI::UpdateSummon()
 {
     ObjectGuid warlockGuid, targetGuid;
     Commander::SummonRole const role = sCommanderMgr.GetSummonRole(this, warlockGuid, targetGuid);
-    if (role == Commander::SummonRole::None)
-    {
+    // (a new ritual, maybe right after the last: the hands start over)
+    if (role == Commander::SummonRole::None || m_summonHands.target != targetGuid)
         m_summonHands = SummonHands();
+    if (role == Commander::SummonRole::None)
         return false;
-    }
+    m_summonHands.target = targetGuid;
     auto say = [this, targetGuid](char const* key)
     {
         Player* pTarget = sObjectAccessor.FindPlayer(targetGuid);
@@ -491,8 +492,18 @@ bool PartyBotAI::UpdateSummon()
         }
         // The channel is over: the summon went out; he comes, or the confirmation runs out.
         if (!m_summonHands.sentMs)
+        {
             m_summonHands.sentMs = now;
-        if (pTarget && pTarget->IsInMap(me) && me->IsWithinDist(pTarget, PB_SUMMON_ARRIVED_YD))
+            sCommanderMgr.MarkSummonSent(me, targetGuid);
+        }
+        bool const forLeader = pTarget && pTarget == GetPartyLeader();
+        // A teammate (a bot) accepts at once by itself: the warlock goes on with the next one.
+        if (!forLeader)
+        {
+            sCommanderMgr.EndSummon(me, false);
+            return false;
+        }
+        if (pTarget->IsInMap(me) && me->IsWithinDist(pTarget, PB_SUMMON_ARRIVED_YD))
         {
             sCommanderMgr.EndSummon(me, true);
             say("summon.arrived");
@@ -611,6 +622,13 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
         {
             if (m_initialized)
                 m_resetSpellData = true;
+            return;
+        }
+        case SMSG_SUMMON_REQUEST:
+        {
+            // A warlock of the team summons it (the team gathers, Commander/Coordination/
+            // Situation/GatherPlanner.h): accepted in UpdateAI, out of combat.
+            m_summonOffered = true;
             return;
         }
         case SMSG_TRADE_STATUS:
@@ -834,6 +852,14 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             me->GetMotionMaster()->Clear(false, true);
             me->GetMotionMaster()->MoveIdle();
         }
+        return;
+    }
+
+    // Summoned by a warlock: it goes (the core drops an answer after the 2 minutes by itself).
+    if (m_summonOffered && me->IsAlive() && !me->IsInCombat())
+    {
+        m_summonOffered = false;
+        me->SummonIfPossible(true);
         return;
     }
 

@@ -1622,13 +1622,36 @@ namespace Commander
 
     // A warlock's Ritual of Summoning for a member far away (Situation/Summon.h): who casts, who
     // clicks the portal, who is summoned.
-    struct SummonPlan
+    struct SummonRitual
     {
-        bool active = false;
         ObjectGuid warlock;
         ObjectGuid target;
         std::vector<ObjectGuid> helpers;    // two members who click the portal
         uint32 sinceMs = 0;
+    };
+
+    // Every ritual under way (one per warlock, several at once in a raid), and the gathering of
+    // members left behind (Situation/GatherPlanner.h).
+    struct SummonPlan
+    {
+        std::vector<SummonRitual> rituals;
+        // Targets whose summon went out lately (not asked again while they may still accept).
+        std::vector<std::pair<ObjectGuid, uint32>> sent;    // target, ms
+        // The team stands still (the leader settled) since; the leader's last place.
+        uint32 settledSinceMs = 0;
+        uint32 settledMap = 0;
+        float settledX = 0.0f, settledY = 0.0f;
+        bool gatherNow = false;             // the player asked ("把掉队的都拉过来"): no settle wait
+        bool shortNoted = false;            // "not enough shards" said this settle
+
+        SummonRitual const* RitualOf(ObjectGuid member) const
+        {
+            for (SummonRitual const& r : rituals)
+                if (r.warlock == member || r.target == member ||
+                    std::find(r.helpers.begin(), r.helpers.end(), member) != r.helpers.end())
+                    return &r;
+            return nullptr;
+        }
     };
 
     struct TeamPlan

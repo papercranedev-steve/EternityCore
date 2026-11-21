@@ -10,34 +10,65 @@ namespace Summon
 {
     bool Start(TeamPlan& plan, Player const* warlock, ObjectGuid target, std::vector<ObjectGuid> const& helpers)
     {
-        if (plan.summon.active || !warlock)
+        SummonPlan& s = plan.summon;
+        if (!warlock || s.RitualOf(warlock->GetObjectGuid()) || s.RitualOf(target))
             return false;
-        plan.summon = SummonPlan();
-        plan.summon.active = true;
-        plan.summon.warlock = warlock->GetObjectGuid();
-        plan.summon.target = target;
-        plan.summon.helpers = helpers;
-        plan.summon.sinceMs = WorldTimer::getMSTime();
+        for (ObjectGuid h : helpers)
+            if (s.RitualOf(h))
+                return false;
+        SummonRitual r;
+        r.warlock = warlock->GetObjectGuid();
+        r.target = target;
+        r.helpers = helpers;
+        r.sinceMs = WorldTimer::getMSTime();
+        s.rituals.push_back(r);
         return true;
     }
 
-    void End(TeamPlan& plan, bool arrived)
+    void End(TeamPlan& plan, ObjectGuid warlock, bool leaderBack)
     {
-        plan.summon = SummonPlan();
+        std::vector<SummonRitual>& rituals = plan.summon.rituals;
+        rituals.erase(std::remove_if(rituals.begin(), rituals.end(),
+                                     [warlock](SummonRitual const& r) { return r.warlock == warlock; }),
+                      rituals.end());
         // He is back with the team: nobody waits for him any more.
-        if (arrived)
+        if (leaderBack)
             plan.stay.members.clear();
+    }
+
+    void MarkSent(TeamPlan& plan, ObjectGuid target, uint32 nowMs)
+    {
+        auto& sent = plan.summon.sent;
+        sent.erase(std::remove_if(sent.begin(), sent.end(), [&](std::pair<ObjectGuid, uint32> const& p)
+        {
+            return p.first == target || WorldTimer::getMSTimeDiff(p.second, nowMs) > SENT_HOLD_MS;
+        }), sent.end());
+        sent.emplace_back(target, nowMs);
+    }
+
+    bool RecentlySent(TeamPlan const& plan, ObjectGuid target, uint32 nowMs)
+    {
+        for (auto const& p : plan.summon.sent)
+            if (p.first == target && WorldTimer::getMSTimeDiff(p.second, nowMs) <= SENT_HOLD_MS)
+                return true;
+        return false;
     }
 
     SummonRole RoleOf(TeamPlan const& plan, ObjectGuid member)
     {
-        if (!plan.summon.active)
-            return SummonRole::None;
-        if (plan.summon.warlock == member)
-            return SummonRole::Caster;
-        if (std::find(plan.summon.helpers.begin(), plan.summon.helpers.end(), member) != plan.summon.helpers.end())
-            return SummonRole::Helper;
+        for (SummonRitual const& r : plan.summon.rituals)
+        {
+            if (r.warlock == member)
+                return SummonRole::Caster;
+            if (std::find(r.helpers.begin(), r.helpers.end(), member) != r.helpers.end())
+                return SummonRole::Helper;
+        }
         return SummonRole::None;
+    }
+
+    bool CanCast(Player const* warlock, uint32 keep)
+    {
+        return warlock && warlock->HasSpell(RITUAL_OF_SUMMONING) && warlock->GetItemCount(SOUL_SHARD) > keep;
     }
 }
 }

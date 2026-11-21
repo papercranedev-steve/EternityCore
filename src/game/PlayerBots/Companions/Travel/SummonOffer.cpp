@@ -80,10 +80,13 @@ namespace SummonOffer
             for (GroupReference* itr = group->GetFirstMember(); itr && helpers.size() < 2; itr = itr->next())
             {
                 Player* member = itr->getSource();
-                if (!member || member == warlock || member == target || !member->IsInWorld() || !member->IsAlive() ||
-                    member->IsInCombat() || !member->AI() || !dynamic_cast<PartyBotAI*>(member->AI()) ||
-                    !member->IsInMap(warlock) || !member->IsWithinDist(warlock, HELPER_YD))
+                PartyBotAI* helperAi = member && member->AI() ? dynamic_cast<PartyBotAI*>(member->AI()) : nullptr;
+                if (!helperAi || member == warlock || member == target || !member->IsInWorld() || !member->IsAlive() ||
+                    member->IsInCombat() || !member->IsInMap(warlock) || !member->IsWithinDist(warlock, HELPER_YD))
                     continue;
+                ObjectGuid hw, ht;
+                if (sCommanderMgr.GetSummonRole(helperAi, hw, ht) != Commander::SummonRole::None)
+                    continue;   // (in another ritual: a raid gathering its members)
                 helpers.push_back(member->GetObjectGuid());
             }
         if (helpers.size() < 2)

@@ -217,21 +217,42 @@ namespace Commander
         if (!commander)
             return SummonRole::None;
         TeamPlan const& plan = commander->GetPlan();
-        SummonRole const role = Summon::RoleOf(plan, bot->me->GetObjectGuid());
+        ObjectGuid const me = bot->me->GetObjectGuid();
+        SummonRole const role = Summon::RoleOf(plan, me);
         if (role != SummonRole::None)
-        {
-            warlock = plan.summon.warlock;
-            target = plan.summon.target;
-        }
+            if (SummonRitual const* r = plan.summon.RitualOf(me))
+            {
+                warlock = r->warlock;
+                target = r->target;
+            }
         return role;
     }
 
-    void CommanderMgr::EndSummon(Player const* member, bool arrived)
+    void CommanderMgr::EndSummon(Player const* warlock, bool leaderBack)
     {
-        if (!member)
+        if (!warlock)
             return;
-        if (std::shared_ptr<PartyCommander> commander = FindCommander(member))
-            Summon::End(commander->GetPlanMutable(), arrived);
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(warlock))
+            Summon::End(commander->GetPlanMutable(), warlock->GetObjectGuid(), leaderBack);
+    }
+
+    void CommanderMgr::MarkSummonSent(Player const* warlock, ObjectGuid target)
+    {
+        if (!warlock)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(warlock))
+            Summon::MarkSent(commander->GetPlanMutable(), target, WorldTimer::getMSTime());
+    }
+
+    bool CommanderMgr::GatherNow(Player const* leader)
+    {
+        if (!IsEnabled() || !leader)
+            return false;
+        std::shared_ptr<PartyCommander> commander = FindCommander(leader);
+        if (!commander)
+            return false;
+        commander->GetPlanMutable().summon.gatherNow = true;
+        return true;
     }
 
     bool CommanderMgr::IsModuleEnabled(std::string const& id) const

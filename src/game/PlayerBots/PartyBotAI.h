@@ -151,11 +151,14 @@ public:
     bool UpdateSummon();
     struct SummonHands
     {
+        ObjectGuid target;          // the ritual these hands are for
         bool cast = false;          // the warlock started the ritual
         uint32 castMs = 0;
         uint32 sentMs = 0;          // its channel ended (the summon went out)
     };
     SummonHands m_summonHands;
+    // A summon confirmation came (SMSG_SUMMON_REQUEST): accepted at the next update out of combat.
+    bool m_summonOffered = false;
     // The leader leaves by hearthstone or flight path: "shall we wait here?" (one bot asks,
     // Companions/Travel/Departure.h); a waiting warlock offers to summon him back (SummonOffer.h).
     Companions::Departure::State m_departure;

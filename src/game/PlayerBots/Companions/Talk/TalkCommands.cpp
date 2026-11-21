@@ -25,6 +25,8 @@
  *     PBERR;<bot>;norecipe | far | notgroup
  *   .partybot summon [warlock]            a warlock of the team summons you (Companions/Travel/SummonOffer;
  *                                         no name: the first warlock party bot that can)
+ *   .partybot summon all                  the warlocks summon the bots left behind now (GatherPlanner)
+ *     PBOK;;gather (they say who they summon) | PBERR;;nowarlock (no team on your map yet)
  *     PBOK;<warlock>;summon | PBERR;<warlock>;<notlearned|locked|noshard|nohelpers|fighting|here|near|dead|busy>
  *     PBERR;;nowarlock
  *   .partybot stay [bot]                  he (no name: every party bot of your group) waits here
@@ -268,6 +270,19 @@ bool ChatHandler::HandlePartyBotSummonCommand(char* args)
     Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
     if (!player)
         return false;
+
+    // all: the team's warlocks summon everyone left behind now (Commander GatherPlanner)
+    if (args && strncmp(args, "all", 3) == 0)
+    {
+        if (!sCommanderMgr.GatherNow(player))
+        {
+            SendSysMessage("PBERR;;nowarlock");
+            SetSentErrorMessage(true);
+            return false;
+        }
+        SendSysMessage("PBOK;;gather");
+        return true;
+    }
 
     std::vector<Player*> warlocks;
     std::string name;

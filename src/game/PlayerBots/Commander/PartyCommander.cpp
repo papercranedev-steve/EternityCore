@@ -4,6 +4,7 @@
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/PushPlanner.h"
+#include "Commander/Coordination/Situation/GatherPlanner.h"
 #include "Commander/Coordination/Situation/RetreatPlanner.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolPlanner.h"
 #include "Commander/Coordination/Situation/Los/CasterLurePlanner.h"
@@ -69,6 +70,8 @@ namespace Commander
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
         PushPlanner::Step(bot, *this, nowMs);   // no-op unless `.partybot ai push` is running (after the clear: reads its end)
+        GatherPlanner::Step(bot, *this, nowMs); // members left behind: the warlocks summon them
+
         FlushNotes(bot);
         m_threatFeed.Push(bot, m_world, nowMs);
         WakeBots(bot, behaviors);
