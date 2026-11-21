@@ -17,6 +17,8 @@ namespace Talk
     std::unique_ptr<Service> MakeBagsService();
     // "能帮我配点药水吗？" per crafting profession: his craft window (Gates Crafting).
     std::unique_ptr<Service> MakeCraftService();
+    // "能帮我开个传送门吗？": a mage's portals, a page of cities (Gates MagePortal).
+    std::unique_ptr<Service> MakePortalService();
     // `skill` is one of the professions he makes things of for the player (the craft window's).
     bool CraftsFor(Player const* bot, uint32 skill);
 }

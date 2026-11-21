@@ -7,8 +7,9 @@
  * A new service = one class (Offer + Choose) in Talk/Services/ and one line in Services.cpp.
  * Offer gives nothing when the service cannot be had now (class, profession, affinity gate,
  * combat, materials ...): the window never shows grey options, like a real NPC's gossip.
- * Choose runs only for an option Offer gives at that moment (Talk::Choose checks), so it does
- * not check the gate again.
+ * Choose runs only while the service offers something at that moment (Talk::Choose checks), so
+ * it does not check the gate again; the arguments of its own later pages (the portal's cities)
+ * it checks itself.
  *
  * Map thread of the bot (chat commands).
  */
@@ -75,6 +76,14 @@ namespace Talk
         std::string arg;
     };
 
+    // Why a service whose affinity gate is open cannot be had now, for the affinity page's 信任
+    // list (user 2026-11-21: "没有传送门符文"), next to the gate (Affinity/Gates key).
+    struct Blocker
+    {
+        std::string gateKey;
+        std::string text;       // short: it stands in the gate row's right column
+    };
+
     class Service
     {
     public:
@@ -83,8 +92,12 @@ namespace Talk
         virtual char const* Key() const = 0;
         // Its options now, appended to `out` (none: not offered).
         virtual void Offer(Context const& ctx, std::vector<Option>& out) const = 0;
-        // `arg`: the part of the option id after "<key>:" (empty without one).
+        // `arg`: the part of the option id after "<key>:" (empty without one). Runs while the
+        // service offers something; an argument of one of its own later pages (not in Offer)
+        // is the service's to check.
         virtual Outcome Choose(Context const& ctx, std::string const& arg) const = 0;
+        // What keeps it from being offered although its gate is open (appended to `out`).
+        virtual void Blockers(Player* /*bot*/, std::vector<Blocker>& /*out*/) const {}
     };
 
     // Every service, in the order the window lists them (Services.cpp).

@@ -268,8 +268,9 @@ namespace Trip
 
     bool ShoppingPlanner::Worth(Player* me)
     {
+        // (a need that wants a trip of its own: portal runes running low, Supplies::Need::tripBelow)
         for (Need const& need : BotShared::Supplies::Missing(me))
-            if (need.priority == Priority::Critical)
+            if (need.priority == Priority::Critical || need.WantsTrip())
                 return true;
         if (LowestDurabilityPct(me) <= TRIP_DURABILITY_PCT)
             return true;

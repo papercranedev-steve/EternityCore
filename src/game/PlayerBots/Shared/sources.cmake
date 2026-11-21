@@ -22,6 +22,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Crafting.cpp
   ${BOTSHARED_DIR}/Handover.h
   ${BOTSHARED_DIR}/Handover.cpp
+  ${BOTSHARED_DIR}/Portals.h
+  ${BOTSHARED_DIR}/Portals.cpp
   ${BOTSHARED_DIR}/FoodAndDrink.h
   ${BOTSHARED_DIR}/FoodAndDrink.cpp
   ${BOTSHARED_DIR}/Gathering.h

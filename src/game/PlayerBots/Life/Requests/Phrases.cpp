@@ -175,6 +175,13 @@ namespace Phrases
             { "talk.stay.team",      "default", "好，我们在这儿等你。" },
             { "talk.follow.team",    "default", "来了！" },
             { "talk.bags.ok",        "default", "看吧。" },
+            // A mage's portals (Companions/Talk/Services/PortalService).
+            { "talk.portal.where",   "default", "去哪儿？" },
+            { "talk.portal.where",   "chatty",  "想去哪座城？我都熟！" },
+            { "talk.portal.ok",      "default", "好，稍等，门马上开。" },
+            { "talk.portal.ok",      "quiet",   "稍等。" },
+            { "talk.portal.cannot",  "default", "这里开不了门。" },
+            { "talk.block.portal",   "default", "缺传送门符文" },
             { "talk.bags.ok",        "frugal",  "看可以，别乱动我的东西啊。" },
             // Making things for the player with his materials (Life/Errands/CraftForPlayer). {leader}.
             { "talk.craft.ok",       "default", "你看看要什么，材料你出。" },
@@ -203,6 +210,13 @@ namespace Phrases
             { "talk.opt.stay",       "default", "在这儿等我。" },
             { "talk.opt.follow",     "default", "跟我走吧。" },
             { "talk.opt.bags",       "default", "让我看看你的包。" },
+            { "talk.opt.portal",     "default", "能帮我开个传送门吗？" },
+            { "talk.opt.portal.10059", "default", "去暴风城。" },
+            { "talk.opt.portal.11416", "default", "去铁炉堡。" },
+            { "talk.opt.portal.11419", "default", "去达纳苏斯。" },
+            { "talk.opt.portal.11417", "default", "去奥格瑞玛。" },
+            { "talk.opt.portal.11418", "default", "去幽暗城。" },
+            { "talk.opt.portal.11420", "default", "去雷霆崖。" },
             // Words and button labels (tag "default" only).
             { "place.vendor",    "default",     "商人" },
             { "place.vendor.repair",  "default", "护甲商" },

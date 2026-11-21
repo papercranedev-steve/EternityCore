@@ -51,6 +51,8 @@
 #include "Shared/BotChat.h"
 #include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
+#include "Shared/Portals.h"
+#include "GameObject.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
 
@@ -411,6 +413,28 @@ void PartyBotAI::StandAsGuide()
     m_followChecked = false;
     // (HumanFollow's sit while the leader stood: the guide gets up)
     m_humanIdle.sat = false;
+}
+
+bool PartyBotAI::FollowThroughPortal(Player* pLeader)
+{
+    GameObject* pPortal = BotShared::Portals::LeaderWentThrough(me, pLeader, PB_PORTAL_FOLLOW_YD);
+    if (!pPortal)
+        return false;
+    if (me->IsMounted())
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+    if (!me->IsWithinDistInMap(pPortal, INTERACTION_DISTANCE))
+    {
+        if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != POINT_MOTION_TYPE)
+            me->GetMotionMaster()->MovePoint(0, pPortal->GetPositionX(), pPortal->GetPositionY(), pPortal->GetPositionZ(),
+                                             MOVE_PATHFINDING | MOVE_RUN_MODE);
+        return true;
+    }
+    if (!me->IsStopped())
+        me->StopMoving();
+    me->GetMotionMaster()->Clear(false, true);
+    me->GetMotionMaster()->MoveIdle();
+    pPortal->Use(me);
+    return true;
 }
 
 void PartyBotAI::HoldStay(Commander::StaySpot const& spot, bool free)
@@ -841,6 +865,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         // Not to a dead leader (WaitForDeadLeader).
         // (to the guide the party follows, Commander/Coordination/Situation/Guide.h; the guide
         // itself to the leader)
+        // The leader went through a mage's portal: after him through it, before walking or
+        // being teleported to him (not a bot told to wait).
+        if (!staying && !resurrectFirst && FollowThroughPortal(pLeader))
+            return;
+
         // (a bot told to wait: neither, HoldStay)
         Player* pAnchor = FollowAnchor(pLeader);
         if (!staying && !resurrectFirst && !pAnchor->IsDead() && Commander::Arrival::Update(this, m_arrival, pAnchor))

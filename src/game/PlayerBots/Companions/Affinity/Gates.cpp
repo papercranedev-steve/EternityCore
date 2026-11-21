@@ -18,7 +18,7 @@ namespace Companions
                 { Gate::ManageBags,    22,  0,       true,  "bags",     "管理他的背包" },
                 { Gate::WarlockSummon, 25,  WARLOCK, false, "summon",   "请他召唤队友" },
                 { Gate::Crafting,      30,  0,       true,  "craft",    "用你的材料请他代工" },
-                { Gate::MagePortal,    45,  MAGE,    false, "portal",   "请他开传送门" },
+                { Gate::MagePortal,    45,  MAGE,    true,  "portal",   "请他开传送门" },
                 { Gate::TakeMoney,     50,  0,       true,  "money",    "从他那里拿钱" },
                 { Gate::PickRewards,   60,  0,       true,  "rewards",  "帮他挑任务奖励" },
                 { Gate::JoinAccount,   100, 0,       false, "account",  "招募他进你的账号" },

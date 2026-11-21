@@ -4,6 +4,7 @@
 #include "Shared/PetFood.h"
 #include "Shared/Professions.h"
 #include "Shared/Poisons.h"
+#include "Shared/Portals.h"
 #include "Player.h"
 #include "Item.h"
 #include "ObjectMgr.h"
@@ -115,16 +116,18 @@ namespace Supplies
         {
             // Two spells wanting the same reagent: the bigger target and the higher priority.
             std::map<uint32, Need> byItem;
-            auto add = [&byItem](uint32 itemId, uint32 target, Priority priority)
+            auto add = [&byItem](uint32 itemId, uint32 target, Priority priority, uint32 tripBelow)
             {
                 auto itr = byItem.find(itemId);
                 if (itr == byItem.end())
                 {
                     byItem[itemId] = Make(Goods::Exact(itemId), target, priority);
+                    byItem[itemId].tripBelow = tripBelow;
                     return;
                 }
                 itr->second.target = std::max(itr->second.target, target);
                 itr->second.priority = std::min(itr->second.priority, priority);
+                itr->second.tripBelow = std::max(itr->second.tripBelow, tripBelow);
             };
 
             // Lower ranks the player has a higher rank of are skipped (Wild Berries once Thornroot is due).
@@ -144,6 +147,9 @@ namespace Supplies
                 if (!spell || spell->IsPassiveSpell() || CreatesOrEnchantsItems(spell))
                     continue;
                 Priority const priority = PriorityOf(spell);
+                // Portals are what the party travels by (the talk window's "open a portal"):
+                // below half the stock, a trip of its own.
+                bool const portal = Portals::IsPortalSpell(spell);
                 for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
                 {
                     if (spell->Reagent[r] <= 0 || !IsSoldByVendors(uint32(spell->Reagent[r])))
@@ -153,7 +159,7 @@ namespace Supplies
                         continue;
                     uint32 const perCast = std::max<uint32>(spell->ReagentCount[r], 1);
                     uint32 const target = std::min<uint32>(perCast * CastsFor(priority), std::max<uint32>(proto->GetMaxStackSize(), 1));
-                    add(proto->ItemId, target, priority);
+                    add(proto->ItemId, target, priority, portal ? (target + 1) / 2 : 0);
                 }
             }
 

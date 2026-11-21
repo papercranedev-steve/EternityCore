@@ -40,6 +40,7 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Talk/Services/StayService.cpp
   ${COMPANIONS_DIR}/Talk/Services/BagsService.cpp
   ${COMPANIONS_DIR}/Talk/Services/CraftService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/PortalService.cpp
 )
 
 target_sources(game PRIVATE ${COMPANIONS_SRCS})

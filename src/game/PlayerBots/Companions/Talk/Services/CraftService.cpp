@@ -6,6 +6,7 @@
 #include "Shared/Professions.h"
 #include "Player.h"
 #include "SpellEntry.h"
+#include <cstdlib>
 #include <set>
 
 namespace Companions
@@ -54,6 +55,11 @@ namespace Talk
             Outcome Choose(Context const& ctx, std::string const& arg) const override
             {
                 Outcome outcome;
+                if (!CraftSkills(ctx.bot).count(uint32(std::strtoul(arg.c_str(), nullptr, 10))))
+                {
+                    outcome.reply = Line(ctx, "talk.gone");
+                    return outcome;
+                }
                 outcome.kind = Outcome::Kind::Open;
                 outcome.window = "craft";
                 outcome.arg = arg;

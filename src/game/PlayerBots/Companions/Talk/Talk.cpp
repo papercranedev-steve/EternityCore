@@ -130,10 +130,11 @@ namespace Talk
 
     bool Choose(Context const& ctx, std::string const& optionId, Outcome& out)
     {
+        // (the option itself, or its service still offers something: a later page's option)
+        std::pair<std::string, std::string> const parts = Split(optionId);
         bool offered = false;
         for (Option const& option : Offers(ctx))
-            offered = offered || option.id == optionId;
-        std::pair<std::string, std::string> const parts = Split(optionId);
+            offered = offered || option.id == optionId || Split(option.id).first == parts.first;
         if (offered)
             for (std::unique_ptr<Service> const& service : Services())
                 if (parts.first == service->Key())

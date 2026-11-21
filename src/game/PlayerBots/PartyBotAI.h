@@ -139,6 +139,11 @@ public:
     // nothing else has the bot now (no fight, no rest, no Commander plan or hold).
     void HoldStay(Commander::StaySpot const& spot, bool free);
     static constexpr float PB_STAY_BACK_YD = 4.0f;    // farther from its spot: walks back
+    // The leader went through a party portal (a mage's, Shared/Portals) within PB_PORTAL_FOLLOW_YD:
+    // it walks to the portal and goes through after him (else it would walk or teleport there).
+    // True while it does.
+    bool FollowThroughPortal(Player* pLeader);
+    static constexpr float PB_PORTAL_FOLLOW_YD = 40.0f;
 
     ObjectGuid m_leaderGuid;
     ObjectGuid m_cloneGuid;

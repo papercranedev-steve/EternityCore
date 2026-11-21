@@ -22,6 +22,8 @@
  *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
  *            <affinity 0-100>;<state 0 offline, 1 online, 2 in your group>;<zone id>;<recruited at>;
  *            <tag,tag,...>;<name>
+ *     PBCMP;BLOCK;<guid>;<gate key>;<text>   after its C line, online only: an open gate's service
+ *            cannot be had now (Talk services' Blockers: "缺传送门符文")
  *     PBCMP;END
  */
 
@@ -29,6 +31,7 @@
 #include "Player.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
+#include "Companions/Talk/TalkService.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
 #include "Shared/ClassQuestChains.h"
@@ -58,6 +61,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         BotShared::TalentSpread::Points talents = { 0, 0, 0 };
         std::string name;
         bool known = false;
+        std::vector<Companions::Talk::Blocker> blockers;   // online only
     };
 
     std::vector<Companions::CompanionInfo> const companions = sCompanionMgr.OfRecruiter(player->GetGUIDLow());
@@ -85,6 +89,8 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         row.talents = BotShared::TalentSpread::Of(bot);
         row.state = player->GetGroup() && bot->GetGroup() == player->GetGroup() ? 2 : 1;
         row.name = bot->GetName();
+        for (std::unique_ptr<Companions::Talk::Service> const& service : Companions::Talk::Services())
+            service->Blockers(bot, row.blockers);
     }
 
     if (!offline.empty())
@@ -148,6 +154,8 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
            << info.affinity << ";" << row.state << ";" << row.zone << ";" << info.recruitedAt << ";"
            << tags << ";" << row.name;
         SendSysMessage(ss.str().c_str());
+        for (Companions::Talk::Blocker const& b : row.blockers)
+            PSendSysMessage("PBCMP;BLOCK;%u;%s;%s", info.charGuid, b.gateKey.c_str(), b.text.c_str());
     }
 
     SendSysMessage("PBCMP;END");

@@ -59,7 +59,12 @@ namespace BotShared
             Priority priority = Priority::Important;
             // Made with this recipe (Shared/Crafting), not bought; null = bought.
             SpellEntry const* recipe = nullptr;
+            // Fewer than this in the bags: worth a town trip of its own, whatever its priority
+            // (user 2026-11-21: a mage who knows a portal spell and runs low on Rune of Portals
+            // asks to go buy them in town). 0 = only with other business.
+            uint32 tripBelow = 0;
             uint32 Missing() const { return target > have ? target - have : 0; }
+            bool WantsTrip() const { return tripBelow && have < tripBelow; }
         };
 
         // What to buy. Sorted by priority (most important first); only needs with something
