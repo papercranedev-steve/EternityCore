@@ -158,7 +158,8 @@ public:
     bool UsesSafeFollow() const;
     Commander::FollowSpot::Offset ChooseFollowOffset(Unit* pLeader, float heading);
     void IssueFollow(Unit* pLeader, float heading, char const* why);
-    // Every update with a leader: HumanFollow::Tick (drift, idle look / step / sit).
+    // Every update with a leader: HumanFollow::Tick (a new place at a stop, drift, idle look /
+    // step / sit).
     void UpdateHumanFollow(Unit* pLeader, bool follows);
     // A dead leader (a body, or a ghost on its corpse run): stops the follow and the trail walk
     // and returns true, so the bot waits where it is (by the corpse) instead of going after him.

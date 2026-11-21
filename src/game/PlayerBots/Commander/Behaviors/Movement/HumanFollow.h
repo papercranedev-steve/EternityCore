@@ -15,10 +15,16 @@
  *   - attentive (turns to the leader once it leaves ATTENTIVE_ARC) or lazy (only when the
  *     leader is behind, LAZY_ARC), after a turn delay.
  * The offset is measured from the leader's direction of travel (FollowStyle.h, generator side).
+ * Place (user 2026-11-21: the spacing after a stop was the same every time, the place came only
+ * from the guid): the personality's offset is only the bot's preferred part of the zone behind
+ * the leader. Each start of the follow and each stop of the leader after REROLL_MOVE_YD picks a
+ * new place in it (Reroll), at least MIN_GAP from where the team's other members follow to or
+ * stand: dart throwing, PLACE_TRIES candidates (a Poisson disk built one bot at a time), else
+ * the candidate farthest from the others. The zone grows with the followers (AREA_PER_FOLLOWER).
  * Tick: while walking the bot's place drifts a little; once the leader has stood a while the
  * bot looks around, takes a step or sits down (out of combat only).
- * FollowSpot still decides whether the offset is safe: TeamBotAI asks it with Heading() and
- * starts from PreferredOffset(); the first move of each MoveFollow is never held back.
+ * FollowSpot still decides whether the offset is safe: TeamBotAI asks it with Heading() after
+ * Reroll() / Tick(); the first move of each MoveFollow is never held back.
  *
  * Map thread of the bot.
  */
@@ -54,12 +60,24 @@ namespace HumanFollow
     constexpr uint32 TURN_DELAY_MIN_MS = 300;
     constexpr uint32 TURN_DELAY_MAX_MS = 1500;
 
-    // Drift (leader walking): every DRIFT_EVERY_MIN..MAX_MS a new offset DRIFT_DIST / DRIFT_ANGLE
-    // around the preferred one (not a random walk: it stays near the bot's place, and a place
-    // FollowSpot moved for safety goes back to it).
+    // Place: the zone is ZONE_ARC wide behind the leader, DIST_MIN deep to DIST_MAX or deeper
+    // with more followers (AREA_PER_FOLLOWER each). Depth is a share 0..1 of the zone's area.
+    // Reroll: the personality's share +-PLACE_SPREAD and angle +-PLACE_ANGLE.
+    constexpr float MIN_GAP = 1.5f;
+    constexpr uint32 PLACE_TRIES = 12;
+    constexpr float ZONE_ARC = 3.0f;              // radians, total width
+    constexpr float AREA_PER_FOLLOWER = 3.5f;     // square yards
+    constexpr float PLACE_SPREAD = 0.35f;
+    constexpr float PLACE_ANGLE = 0.5f;
+    // A new place once the leader stops this far from where it stood before (not for a step).
+    constexpr float REROLL_MOVE_YD = 4.0f;
+
+    // Drift (leader walking): every DRIFT_EVERY_MIN..MAX_MS a new place DRIFT_SPREAD /
+    // DRIFT_ANGLE around the current one (MIN_GAP kept; the next stop rerolls near the bot's
+    // preferred part again, also after FollowSpot moved it for safety).
     constexpr uint32 DRIFT_EVERY_MIN_MS = 6000;
     constexpr uint32 DRIFT_EVERY_MAX_MS = 15000;
-    constexpr float DRIFT_DIST = 0.8f;
+    constexpr float DRIFT_SPREAD = 0.12f;
     constexpr float DRIFT_ANGLE = 0.4f;
     // Idle (leader standing IDLE_AFTER_MIN..MAX_MS, per bot): every IDLE_EVERY_MIN..MAX_MS one
     // of: look around (LOOK_TURN either way), a step (a drift), sit down after SIT_AFTER_MS
@@ -95,9 +113,16 @@ namespace HumanFollow
         float stillX = 0.0f;
         float stillY = 0.0f;
         bool sat = false;           // sat down by Tick (stood up again on combat)
+        bool stopKnown = false;     // where the leader last stood (REROLL_MOVE_YD)
+        float stopX = 0.0f;
+        float stopY = 0.0f;
     };
 
     Personality Of(Player const* bot);
+
+    // A new place in the bot's preferred part of the zone behind `leader`, MIN_GAP from the
+    // team's other members where possible (FollowSpot not asked: the caller does).
+    FollowSpot::Offset Reroll(Player const* bot, Unit const* leader, float heading);
 
     // The direction the follow offset is measured from: the heading of the bot's styled follow
     // of `leader`, else the leader's facing (a new follow starts from it).
@@ -105,11 +130,12 @@ namespace HumanFollow
 
     FollowStyle StyleOf(Player const* bot, float heading);
 
-    // Every bot update with a leader; `following`: it follows `leader` with a style (after the
-    // follow spot check). Looks around and sits by itself; true: follow at `next` instead (a
-    // drift or a step; the caller checks it with FollowSpot). Not following or in combat:
-    // nothing, and a bot it sat down stands up.
-    bool Tick(Player* bot, Unit const* leader, IdleState& state, bool following, FollowSpot::Offset& next);
+    // Every bot update with a leader; `following`: it follows `leader` with a style at `current`
+    // (after the follow spot check). Looks around and sits by itself; true: follow at `next`
+    // instead (a reroll at a stop, a drift or a step; the caller checks it with FollowSpot).
+    // Not following or in combat: nothing, and a bot it sat down stands up.
+    bool Tick(Player* bot, Unit const* leader, IdleState& state, bool following,
+              FollowSpot::Offset const& current, FollowSpot::Offset& next);
 }
 }
 

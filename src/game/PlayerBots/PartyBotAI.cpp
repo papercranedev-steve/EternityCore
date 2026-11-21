@@ -368,7 +368,9 @@ void PartyBotAI::StartFollowing(Unit* pLeader, char const* why)
     {
         // Fix: a random 3-6 yd at a random angle all around the leader (also in front of him)
         // and the same start, stop and turn for every bot: the bot's own place behind him.
-        m_followOffset = Commander::HumanFollow::Of(me).offset;
+        // Fix: that place was the same at every start (from the guid): a new one in its part of
+        // the zone, spaced from the team (HumanFollow::Reroll).
+        m_followOffset = Commander::HumanFollow::Reroll(me, pLeader, heading);
         m_followOffset = ChooseFollowOffset(pLeader, heading);
         m_followCheckX = pLeader->GetPositionX();
         m_followCheckY = pLeader->GetPositionY();
@@ -426,7 +428,7 @@ void PartyBotAI::UpdateHumanFollow(Unit* pLeader, bool follows)
     follows = follows && UsesSafeFollow() &&
               me->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE;
     Commander::FollowSpot::Offset next;
-    if (!Commander::HumanFollow::Tick(me, pLeader, m_humanIdle, follows, next))
+    if (!Commander::HumanFollow::Tick(me, pLeader, m_humanIdle, follows, m_followOffset, next))
         return;
 
     // The new place only where FollowSpot allows it (else its choice).
