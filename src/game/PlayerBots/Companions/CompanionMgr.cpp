@@ -12,6 +12,7 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Group.h"
 #include "Map.h"
 #include "ObjectMgr.h"
 #include "ObjectAccessor.h"
@@ -46,6 +47,10 @@ namespace Companions
         uint32 const PRESENCE_CHECK_MS = 5 * IN_MILLISECONDS;
         uint32 const ARRIVE_SETTLE_MS = 15 * IN_MILLISECONDS;
         uint32 const LAST_SEEN_MS = 60 * IN_MILLISECONDS;
+
+        // A player asked to enter the world: his group's companions are logged in for this long
+        // (one still logging out from his last session is tried again until then).
+        uint32 const RETURN_WINDOW_MS = 60 * IN_MILLISECONDS;
 
         uint32 TrainedUpToLevel(Player const* bot)
         {
@@ -91,6 +96,7 @@ namespace Companions
             " `professions_decided` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = professions before recruiting are given (PastProfessions)',"
             " `last_seen` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'unix time last seen online (OfflineLife), 0 = never'," 
             " `money_gifts` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'times it got affinity for money the player gave (Affinity/AffinitySources)',"
+            " `staying` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '1 = logged out with its leader while told to wait there',"
             " PRIMARY KEY (`char_guid`)"
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='companions: recruited roster members (real characters)'");
 
@@ -150,6 +156,9 @@ namespace Companions
         std::unique_ptr<QueryResult> moneyGifts(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'money_gifts'"));
         if (!moneyGifts)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `money_gifts` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `last_seen`");
+        std::unique_ptr<QueryResult> staying(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'staying'"));
+        if (!staying)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `staying` TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER `money_gifts`");
         return true;
     }
 
@@ -163,6 +172,7 @@ namespace Companions
     {
         m_companions.clear();
         m_pending.clear();
+        m_returns.clear();
         m_pastQuestsPending.clear();
         m_professionsPending.clear();
         m_available = EnsureTable();
@@ -174,7 +184,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -194,6 +204,7 @@ namespace Companions
                     m_professionsPending.push_back(info.charGuid);
                 info.lastSeen = f[8].GetUInt32();
                 info.moneyGifts = f[9].GetUInt32();
+                info.staying = f[10].GetUInt8() != 0;
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
@@ -484,6 +495,82 @@ namespace Companions
         }
     }
 
+    void CompanionMgr::OnLoginRequest(uint32 charGuid)
+    {
+        if (!IsEnabled() || !m_available || !charGuid)
+            return;
+        ObjectGuid const leader(HIGHGUID_PLAYER, charGuid);
+        for (Return const& r : m_returns)
+            if (r.leader == leader)
+                return;
+        Return r;
+        r.leader = leader;
+        r.sinceMs = m_nowMs;
+        m_returns.push_back(std::move(r));
+    }
+
+    void CompanionMgr::UpdateReturns()
+    {
+        for (auto itr = m_returns.begin(); itr != m_returns.end();)
+        {
+            if (m_nowMs - itr->sinceMs >= RETURN_WINDOW_MS)
+            {
+                itr = m_returns.erase(itr);
+                continue;
+            }
+            // (groups are loaded at startup, offline members included)
+            Group* group = sObjectMgr.GetGroupByMember(itr->leader);
+            if (!group)
+            {
+                itr = m_returns.erase(itr);
+                continue;
+            }
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                uint32 const guid = slot.guid.GetCounter();
+                CompanionInfo const* info = Find(guid);
+                if (slot.guid == itr->leader || !info || info->temporary || itr->sent.count(guid))
+                    continue;
+                // (still leaving from his last session: next time)
+                if (sPlayerBotMgr.HasBot(guid) || sObjectAccessor.FindPlayerNotInWorld(slot.guid))
+                    continue;
+                itr->sent.insert(guid);
+                PartyBotAI* ai = new PartyBotAI(itr->leader);
+                if (!sPlayerBotMgr.AddBot(guid, false, ai, true))
+                {
+                    delete ai;
+                    sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[Companion] Could not log in companion %u with its leader %u.", guid, itr->leader.GetCounter());
+                    continue;
+                }
+                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u comes back with its leader %u.", guid, itr->leader.GetCounter());
+            }
+            ++itr;
+        }
+    }
+
+    void CompanionMgr::OnLeave(uint32 charGuid, bool withLeader, bool staying)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || itr->second.temporary)
+            return;
+        bool const value = withLeader && staying;
+        if (itr->second.staying == value)
+            return;
+        itr->second.staying = value;
+        CharacterDatabase.PExecute("UPDATE `custom_companion` SET `staying` = %u WHERE `char_guid` = %u", value ? 1 : 0, charGuid);
+    }
+
+    bool CompanionMgr::TakeStay(uint32 charGuid)
+    {
+        auto itr = m_companions.find(charGuid);
+        if (itr == m_companions.end() || !itr->second.staying)
+            return false;
+        itr->second.staying = false;
+        if (!itr->second.temporary)
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `staying` = 0 WHERE `char_guid` = %u", charGuid);
+        return true;
+    }
+
     void CompanionMgr::DecidePastQuestsOfOnline()
     {
         for (auto itr = m_pastQuestsPending.begin(); itr != m_pastQuestsPending.end();)
@@ -675,6 +762,8 @@ namespace Companions
             m_presenceCheckMs = m_nowMs;
             UpdatePresence();
         }
+        if (!m_returns.empty())
+            UpdateReturns();
         if (m_pending.empty())
             return;
 

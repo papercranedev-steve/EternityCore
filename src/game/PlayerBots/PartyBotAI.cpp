@@ -609,6 +609,25 @@ void PartyBotAI::AddToPlayerGroup()
 
         group->AddMember(me->GetObjectGuid(), me->GetName());
     }
+
+    // Back with him into the group they kept (a companion, OnLeaving): if the lead passed to
+    // this bot while he was away, it goes back to him (GetPartyLeader wants him leading).
+    if (group->GetLeaderGuid() == me->GetObjectGuid())
+        group->ChangeLeader(pPlayer->GetObjectGuid());
+}
+
+bool PartyBotAI::OnLeaving()
+{
+    if (!me || !LootsForSelf() || sCompanionMgr.IsTemporary(me->GetGUIDLow()))
+        return false;
+    // (his session gone: he logged out; FindPlayerNotInWorld also finds one still loading)
+    Group const* group = me->GetGroup();
+    bool const withLeader = group && group->IsMember(m_leaderGuid) &&
+        !ObjectAccessor::FindPlayerNotInWorld(m_leaderGuid);
+    Commander::StaySpot spot;
+    bool const staying = m_restoreStay || sCommanderMgr.GetStay(this, spot);
+    sCompanionMgr.OnLeave(me->GetGUIDLow(), withLeader, staying);
+    return withLeader;
 }
 
 void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
@@ -735,6 +754,20 @@ void PartyBotAI::UpdateAI(uint32 const diff)
 
     if (!m_initialized)
     {
+        // Back with its leader before he is in the world: it stands where it logged out (still
+        // spawning, nothing else runs) until he is, or leaves again (still his group's member).
+        if (m_atSavedPosition && !ObjectAccessor::FindPlayer(m_leaderGuid))
+        {
+            uint32 const now = std::max<uint32>(WorldTimer::getMSTime(), 1);
+            if (!m_waitLeaderSinceMs)
+                m_waitLeaderSinceMs = now;
+            else if (WorldTimer::getMSTimeDiff(m_waitLeaderSinceMs, now) >= PB_WAIT_LEADER_MS)
+                botEntry->requestRemoval = true;
+            return;
+        }
+        if (m_atSavedPosition)
+            m_restoreStay = sCompanionMgr.TakeStay(me->GetGUIDLow());
+
         AddToPlayerGroup();
 
         if (m_race && m_class) // temporary character
@@ -778,7 +811,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             if (me->IsGameMaster())
                 me->SetGameMaster(false);
 
-            me->TeleportTo(m_mapId, m_x, m_y, m_z, m_o);
+            // (back with its leader: where it logged out)
+            if (!m_atSavedPosition)
+                me->TeleportTo(m_mapId, m_x, m_y, m_z, m_o);
         }
 
         ResetSpellData();
@@ -830,6 +865,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     }
 
     sCommanderMgr.OnBotUpdate(this);
+
+    // It logged out with the leader while waiting: it waits where it is again (once its team
+    // has a commander).
+    if (m_restoreStay && sCommanderMgr.SetStay(me, true))
+        m_restoreStay = false;
 
     // Told to wait here (Commander/Coordination/Situation/Stay.h): it follows nobody, is not
     // teleported to the leader and runs no errands away from its spot (HoldStay below).

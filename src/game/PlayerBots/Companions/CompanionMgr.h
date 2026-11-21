@@ -63,6 +63,9 @@ namespace Companions
         std::map<uint8, uint32> clears;
         // Unix time it was last seen online (OfflineLife counts from it), 0 = never. World thread.
         uint32 lastSeen = 0;
+        // It logged out with its leader while told to wait (Commander Situation/Stay): it waits
+        // there again when it comes back with him (TakeStay). World thread.
+        bool staying = false;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
@@ -107,6 +110,18 @@ namespace Companions
         // of the recruiter. The caller logs the temporary bot out afterwards. False: nothing changed.
         bool Recruit(Player* bot, Player* recruiter, uint32 memberId);
 
+        // They come and go with the player (design doc 2026-11-21-companion-presence §2.1): a
+        // companion whose leader logs out stays in his group as an offline member (PlayerBotMgr
+        // keeps it there, PartyBotAI::OnLeaving); when he asks to enter the world again, the
+        // companions of his group log in where they logged out and wait for him (PartyBotAI's
+        // returning constructor). World thread (the login packet handler).
+        void OnLoginRequest(uint32 charGuid);
+        // A companion leaves the world: with its leader (he logged out; `staying`: it was told to
+        // wait) or for good (kicked, removed). World thread.
+        void OnLeave(uint32 charGuid, bool withLeader, bool staying);
+        // It came back with its leader: was it waiting? Cleared once taken. World thread.
+        bool TakeStay(uint32 charGuid);
+
         // Dev console test scenarios (lua/tests/life): a temporary bot (saving disabled) counts as a
         // companion of `recruiter` until it logs out (PlayerBotMgr calls ForgetTemporary). Never
         // saved, no rows written; it cannot be recruited while marked. World thread, maps idle.
@@ -145,6 +160,8 @@ namespace Companions
         // Account id of Companion.Account; creates the account the first time (async, so 0 until it exists).
         uint32 ResolveAccount();
         void LoginAsPartyBot(uint32 charGuid, Player* leader);
+        // OnLoginRequest's companions: logged in at their own position, until RETURN_WINDOW_MS.
+        void UpdateReturns();
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();
@@ -163,7 +180,16 @@ namespace Companions
             uint32 sinceMs = 0;
         };
 
+        // A player entering the world (OnLoginRequest): the offline companions of his group follow.
+        struct Return
+        {
+            ObjectGuid leader;
+            uint32 sinceMs = 0;
+            std::unordered_set<uint32> sent;    // char guids logged in for him already
+        };
+
         std::atomic<bool> m_enabled{ true };
+        std::vector<Return> m_returns;
         std::string m_accountName = "COMPANIONS";
         uint32 m_accountId = 0;
         bool m_accountRequested = false;

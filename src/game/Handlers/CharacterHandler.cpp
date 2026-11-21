@@ -42,6 +42,7 @@
 #include "PlayerBroadcaster.h"
 #include "PlayerBotMgr.h"
 #include "Population/PopulationMgr.h"
+#include "Companions/CompanionMgr.h"
 #include "MapManager.h"
 #include "AccountMgr.h"
 
@@ -394,7 +395,11 @@ void WorldSession::HandlePlayerLoginOpcode(WorldPackets::Character::PlayerLogin 
 
     // Population bots: the crowd around the logout position is placed during the loading screen.
     if (!GetBot())
+    {
         sPopulationMgr.OnLoginRequest(GetAccountId(), packet.guid.GetCounter());
+        // Companions of his group come back with him, where they logged out.
+        sCompanionMgr.OnLoginRequest(packet.guid.GetCounter());
+    }
 }
 
 void WorldSession::LoginPlayer(ObjectGuid loginPlayerGuid)

@@ -20,7 +20,8 @@
  *     PBCMP;GATE;<affinity>;<class mask, 0 = any>;<key>;<label>   what affinity allows (Affinity/Gates,
  *            ready ones, by affinity)
  *     PBCMP;C;<guid>;<race>;<class>;<gender>;<level>;<xp>;<next level xp, 0 = max>;<talents a/b/c>;
- *            <affinity 0-100>;<state 0 offline, 1 online, 2 in your group>;<zone id>;<recruited at>;
+ *            <affinity 0-100>;<state 0 at his place (not in the world), 1 in the world, 2 in your
+ *            group (also while coming back with you)>;<zone id: where he is>;<recruited at>;
  *            <tag,tag,...>;<name>
  *     PBCMP;BLOCK;<guid>;<gate key>;<text>   after its C line, online only: an open gate's service
  *            cannot be had now (Talk services' Blockers: "缺传送门符文")
@@ -29,6 +30,7 @@
 
 #include "Chat.h"
 #include "Player.h"
+#include "Group.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
 #include "Companions/Talk/TalkService.h"
@@ -61,6 +63,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         BotShared::TalentSpread::Points talents = { 0, 0, 0 };
         std::string name;
         bool known = false;
+        bool online = false;
         std::vector<Companions::Talk::Blocker> blockers;   // online only
     };
 
@@ -76,9 +79,13 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         if (!bot || !bot->IsInWorld())
         {
             offline += (offline.empty() ? "" : ",") + std::to_string(info.charGuid);
+            // (his group's member, about to come back with him: CompanionMgr::OnLoginRequest)
+            if (player->GetGroup() && player->GetGroup()->IsMember(ObjectGuid(HIGHGUID_PLAYER, info.charGuid)))
+                row.state = 2;
             continue;
         }
         row.known = true;
+        row.online = true;
         row.race = bot->GetRace();
         row.cls = bot->GetClass();
         row.gender = bot->GetGender();
@@ -127,7 +134,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
             } while (learned->NextRow());
         }
         for (auto& itr : rows)
-            if (itr.second.state == 0 && itr.second.known)
+            if (!itr.second.online && itr.second.known)
                 itr.second.talents = BotShared::TalentSpread::Of(uint8(itr.second.cls), spells[itr.first]);
     }
 

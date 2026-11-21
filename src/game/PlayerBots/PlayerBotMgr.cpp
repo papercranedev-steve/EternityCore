@@ -283,7 +283,11 @@ void PlayerBotMgr::Update(uint32 diff)
                         iter->second->ai->me->ResurrectPlayer(1.0f);
                         iter->second->ai->me->SpawnCorpseBones();
                     }
-                    iter->second->ai->me->RemoveFromGroup();
+                    // A companion leaving with its leader stays in his group as an offline
+                    // member and comes back with him (CompanionMgr::OnLoginRequest).
+                    PartyBotAI* partyAI = dynamic_cast<PartyBotAI*>(iter->second->ai.get());
+                    if (!partyAI || !partyAI->OnLeaving())
+                        iter->second->ai->me->RemoveFromGroup();
                 }
 
                 DeleteBot(iter);

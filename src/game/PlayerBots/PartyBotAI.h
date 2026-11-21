@@ -74,6 +74,15 @@ public:
         m_role = ROLE_INVALID;
         m_leaderGuid = pLeader->GetObjectGuid();
     }
+    // A companion coming back with its leader (Companions/CompanionMgr::OnLoginRequest): it
+    // logs in where it logged out, still a member of his group, and waits up to
+    // PB_WAIT_LEADER_MS for him to enter the world.
+    explicit PartyBotAI(ObjectGuid leader)
+        : TeamBotAI(), m_atSavedPosition(true)
+    {
+        m_role = ROLE_INVALID;
+        m_leaderGuid = leader;
+    }
 
     bool OnSessionLoaded(PlayerBotEntry* entry, WorldSession* sess) final;
     void OnPlayerLogin() final;
@@ -82,6 +91,11 @@ public:
 
     void CloneFromPlayer(Player const* pPlayer);
     void AddToPlayerGroup();
+    // It is about to log out (PlayerBotMgr's removal). True: a companion whose leader logged out,
+    // it stays in his group and comes back with him (whether it was waiting somewhere is kept,
+    // CompanionMgr::OnLeave); false: it leaves the group.
+    bool OnLeaving();
+    static constexpr uint32 PB_WAIT_LEADER_MS = 90 * IN_MILLISECONDS;
 
     // The player who spawned the bot, while bot and player are in the same group and the bot
     // does not lead it.
@@ -170,6 +184,11 @@ public:
 
     ObjectGuid m_leaderGuid;
     ObjectGuid m_cloneGuid;
+    // Came back with its leader (the returning constructor): not teleported to him at login;
+    // waits for him since m_waitLeaderSinceMs; m_restoreStay: it waits where it logged out again.
+    bool m_atSavedPosition = false;
+    uint32 m_waitLeaderSinceMs = 0;
+    bool m_restoreStay = false;
     uint8 m_race = 0;
     uint8 m_class = 0;
     uint8 m_level = 0;
