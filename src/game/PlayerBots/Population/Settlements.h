@@ -52,6 +52,7 @@ namespace Population
         bool alliance = false;          // a gathering place of this side
         bool horde = false;
         uint32 cityZone = 0;            // capitals: the city zone (CityDef::zone)
+        uint32 raceMask = 0;            // start areas: the races beginning here (Coldridge: dwarf + gnome)
         std::string label;              // source NPC name, city title or "point #id"
         uint32 sources = 1;             // merged sources (inns, flight masters, ...)
 
@@ -75,6 +76,11 @@ namespace Population
         // weight * e^(-edge / (falloff * falloffScale)), edge = distance beyond its core (0
         // inside). Negative exponential like a city's population density (Clark).
         float Pull(uint32 mapId, float x, float y, uint32 team, float falloffScale) const;
+
+        // x/y is in a race's start area (within START_AREA_YD of its start spot and not in the
+        // core of another settlement such as Goldshire or Dolanaar): its races (race mask), else
+        // 0. Only those races are met there (user 2026-11-21: other races in Northshire felt off).
+        uint32 StartRacesAt(uint32 mapId, float x, float y) const;
 
         // Sub-zone name at the settlement (terrain lookup, for commands and logs).
         static std::string AreaName(Settlement const& s);

@@ -17,6 +17,9 @@ namespace Population
     {
         // Sources this close to a settlement (or inside its core) belong to it.
         float const MERGE_YD = 200.0f;
+        // How far from its start spot a start area reaches: the valley (Northshire, Coldridge,
+        // Valley of Trials ...), short of the next town (Goldshire ~545 yd, Dolanaar ~475 yd).
+        float const START_AREA_YD = 450.0f;
         // Player faction templates of each side (Human, Orc) to test NPC factions against.
         uint32 const ALLIANCE_PLAYER_FACTION = 1;
         uint32 const HORDE_PLAYER_FACTION = 2;
@@ -85,6 +88,7 @@ namespace Population
                 if (d >= 0.0f && d <= std::max(s.coreYd, MERGE_YD))
                 {
                     ++s.sources;
+                    s.raceMask |= source.raceMask;
                     return;
                 }
             }
@@ -137,6 +141,7 @@ namespace Population
                 uint32 const team = Player::TeamForRace(uint8(race));
                 s.alliance = team == ALLIANCE;
                 s.horde = team == HORDE;
+                s.raceMask = 1u << (race - 1);
                 Add(all, std::move(s));
                 break;
             }
@@ -247,6 +252,25 @@ namespace Population
             best = std::max(best, s.weight * std::exp(-edge / falloff));
         }
         return best;
+    }
+
+    uint32 Settlements::StartRacesAt(uint32 mapId, float x, float y) const
+    {
+        uint32 races = 0;
+        for (Settlement const& s : m_all)
+        {
+            float const d = Dist2d(s, mapId, x, y);
+            if (d < 0.0f)
+                continue;
+            if (s.kind == SettlementKind::StartArea)
+            {
+                if (d <= START_AREA_YD)
+                    races = s.raceMask;
+            }
+            else if (d <= s.coreYd)
+                return 0;   // a town at the valley's mouth: everybody
+        }
+        return races;
     }
 
     std::string Settlements::AreaName(Settlement const& s)

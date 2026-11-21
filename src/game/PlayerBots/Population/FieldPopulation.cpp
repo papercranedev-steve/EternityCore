@@ -191,6 +191,8 @@ namespace Population
                 out.o += 2.0f * float(M_PI);
             out.minLevel = uint8(ClampU(lo, 1, 60));
             out.maxLevel = uint8(ClampU(hi, 1, 60));
+            // In a start area: only its races (an orc player in Northshire meets nobody there).
+            out.raceMask = settlements.StartRacesAt(o.mapId, x, y);
             out.prewarm = o.arriving;
             return true;
         }

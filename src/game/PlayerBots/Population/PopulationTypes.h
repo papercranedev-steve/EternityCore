@@ -106,6 +106,9 @@ namespace Population
         // unit (Commander/Team.h, a team of one).
         uint8 minLevel = 0, maxLevel = 0;
         uint32 unitId = 0;
+        // Only these races (race mask, 0 = any): a race's start area has only that race
+        // (user 2026-11-21, Settlements::StartRacesAt).
+        uint32 raceMask = 0;
 
         // City bots
         uint32 cityZone = 0;

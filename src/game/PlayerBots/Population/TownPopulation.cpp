@@ -365,6 +365,8 @@ namespace Population
         }
         else
             out.team = s.horde ? HORDE : ALLIANCE;
+        // A start area: only the races beginning there.
+        out.raceMask = s.raceMask;
 
         auto hasRoom = [&](size_t i)
         {

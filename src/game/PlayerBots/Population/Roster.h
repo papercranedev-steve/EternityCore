@@ -74,6 +74,7 @@ namespace Population
         uint8 minLevel = 1, maxLevel = 60;
         bool preferHigh = false;    // one of the highest levels (city veterans)
         uint8 race = 0, classId = 0;    // only this race / class (0 = any): the first companion
+        uint32 raceMask = 0;            // only these races (0 = any): start areas
     };
 
     struct RosterPick

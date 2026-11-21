@@ -602,6 +602,8 @@ namespace Population
                 continue;
             if ((query.race && m.race != query.race) || (query.classId && m.classId != query.classId))
                 continue;
+            if (query.raceMask && !((1u << (m.race - 1)) & query.raceMask))
+                continue;
             Cohort const* c = FindCohort(m.cohortId);
             if (!c || Growth::IsRetired(m, c->maxLevel))
                 continue;
@@ -669,12 +671,26 @@ namespace Population
 
         std::random_device device;
         std::mt19937 rng(device());
+
+        // A start area: one of its races, of the asked side.
+        std::vector<uint8> maskRaces;
+        if (!query.race && query.raceMask)
+        {
+            for (uint8 race = 1; race < MAX_RACES; ++race)
+                if (((1u << (race - 1)) & query.raceMask) && uint32(Player::TeamForRace(race)) == query.team)
+                    maskRaces.push_back(race);
+            if (maskRaces.empty())
+                return false;
+        }
+
         RosterMember m;
         bool made = false;
         for (uint32 tries = 0; tries < 10 && !made; ++tries)
         {
             m = RosterMember();
-            made = GenerateMember(rng, query.team, identity, reserved, m, query.race, query.classId) &&
+            uint8 const race = !maskRaces.empty()
+                ? maskRaces[Identity::Roll(&rng, 0, uint32(maskRaces.size()) - 1)] : query.race;
+            made = GenerateMember(rng, query.team, identity, reserved, m, race, query.classId) &&
                 uint32(Player::TeamForRace(m.race)) == query.team;
             if (!made)
                 reserved.erase(m.name);

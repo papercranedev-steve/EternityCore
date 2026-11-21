@@ -372,6 +372,15 @@ namespace Population
     {
         SpawnRequest r = request;
 
+        if (!r.race && r.raceMask)
+        {
+            std::vector<uint8> races;
+            for (uint8 race = 1; race < MAX_RACES; ++race)
+                if ((1u << (race - 1)) & r.raceMask)
+                    races.push_back(race);
+            if (!races.empty())
+                r.race = races[urand(0, uint32(races.size()) - 1)];
+        }
         if (!r.race)
             r.race = Identity::RandomRace(r.team == HORDE ? HORDE : ALLIANCE);
         if (!r.classId || !Identity::IsValidCombo(r.race, r.classId))
@@ -475,6 +484,7 @@ namespace Population
             query.race = request.race;
             query.classId = request.classId;
         }
+        query.raceMask = request.raceMask;
         if (request.minLevel)
         {
             query.minLevel = request.minLevel;
