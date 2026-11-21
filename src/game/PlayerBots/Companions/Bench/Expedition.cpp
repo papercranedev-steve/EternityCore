@@ -4,6 +4,7 @@
 #include "Mail.h"
 #include "ObjectMgr.h"
 #include "Player.h"
+#include "World.h"
 #include "Database/DatabaseEnv.h"
 #include "Utilities/Random.h"
 #include "Log.h"
@@ -44,11 +45,24 @@ namespace Companions
             }
         }
 
-        Parcel Pack(uint32 level)
+        Parcel Pack(uint32 ownerLevel, uint32 benchRank)
         {
+            Worth const* worth = &WORTH[0];
+            for (Worth const& w : WORTH)
+                if (ownerLevel >= w.fromLevel)
+                    worth = &w;
+
+            float const xpRate = (sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL) + sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST)) / 2.0f;
+            float const moneyRate = sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY);
+            uint32 const shares = sizeof(BENCH_SHARE) / sizeof(BENCH_SHARE[0]);
+            float const share = BENCH_SHARE[std::min(benchRank, shares - 1)];
+
+            float const training = float(worth->training) * std::max(0.0f, xpRate);
+            float const profit = float(worth->profit) * std::max(0.0f, moneyRate + 4.0f) / 6.0f * share
+                * frand(1.0f - PROFIT_SPREAD, 1.0f + PROFIT_SPREAD);
+
             Parcel parcel;
-            float const base = MOBS_WORTH * MONEY_PER_LEVEL_SQ * float(level * level);
-            parcel.money = std::max<uint32>(1, uint32(base * frand(1.0f - MONEY_SPREAD, 1.0f + MONEY_SPREAD) + 0.5f));
+            parcel.money = std::max<uint32>(1, uint32(training + profit + 0.5f));
             return parcel;
         }
 

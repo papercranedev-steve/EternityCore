@@ -34,12 +34,32 @@ namespace Companions
         uint32 const EVERY_SECS = 2 * HOUR;
         uint32 const MAX_UNOPENED = 2;
 
-        // Money: what MOBS_WORTH normal mobs of its level drop, give or take MONEY_SPREAD. A
-        // normal mob of level L drops about MONEY_PER_LEVEL_SQ * L² copper (world database
-        // average of creature_template gold: 12c at 10, 108c at 30, 381c at 58).
-        float const MOBS_WORTH = 40.0f;
-        float const MONEY_PER_LEVEL_SQ = 0.11f;
-        float const MONEY_SPREAD = 0.3f;
+        // What a parcel is worth (bench doc §3.5), by the owner's level when it is sent, at rate 1:
+        //  - training: the companion's own class training for the levels it grows on the bench
+        //    in that time (it levels with 40% of the owner's experience; simulated over a
+        //    leveling run), so the owner pays its trainer without losing money. Times the
+        //    experience rate (faster levels: fewer parcels per level). Not diminished.
+        //  - profit: 10% of the owner's income over EVERY_SECS (5% at the max level), times
+        //    (money rate + 4) / 6 (the money rate scales mob coin and quest money, about a
+        //    third of what a player makes), give or take PROFIT_SPREAD, times BENCH_SHARE of
+        //    the companion's place among the owner's benched ones (by recruit time).
+        struct Worth
+        {
+            uint32 fromLevel;
+            uint32 training;    // copper
+            uint32 profit;      // copper
+        };
+        Worth const WORTH[] = {
+            {  1,     0,  1000 },
+            { 10,   500,  2500 },
+            { 20,  2700,  6700 },
+            { 30,  7200, 10000 },
+            { 40,  7500, 16700 },
+            { 50, 10500, 26700 },
+            { 60,     0, 25000 },
+        };
+        float const BENCH_SHARE[] = { 1.0f, 0.8f, 0.6f, 0.4f };    // the last one for the rest
+        float const PROFIT_SPREAD = 0.2f;
 
         struct Parcel
         {
@@ -47,8 +67,9 @@ namespace Companions
             std::vector<std::pair<uint32, uint32>> items;   // item entry, count
         };
 
-        // What a companion of `level` brings back (bench doc §3.3; stage B2: money only).
-        Parcel Pack(uint32 level);
+        // What a benched companion sends an owner of `ownerLevel`; `benchRank` 0 = his first
+        // benched companion (bench doc §3.5; stage B5: money only, materials come with B3).
+        Parcel Pack(uint32 ownerLevel, uint32 benchRank);
 
         // Mails `parcel` from the companion to `owner` (online), arriving at once. False: not sent.
         bool Send(Player* owner, uint32 companionGuid, Parcel const& parcel, std::string const& subject, std::string const& body);

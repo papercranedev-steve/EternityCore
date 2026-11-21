@@ -783,7 +783,24 @@ namespace Companions
 
     void CompanionMgr::SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched)
     {
-        Expedition::Parcel const parcel = Expedition::Pack(benched.level);
+        // Its place among his benched companions, by recruit time (the profit part diminishes).
+        Group const* group = owner->GetGroup();
+        uint32 rank = 0;
+        for (auto const& itr : m_companions)
+        {
+            CompanionInfo const& other = itr.second;
+            if (other.charGuid == info.charGuid || other.temporary || other.recruiterGuid != info.recruiterGuid)
+                continue;
+            bool const earlier = other.recruitedAt < info.recruitedAt
+                || (other.recruitedAt == info.recruitedAt && other.charGuid < info.charGuid);
+            if (!earlier)
+                continue;
+            ObjectGuid const guid(HIGHGUID_PLAYER, other.charGuid);
+            if (sPlayerBotMgr.HasBot(other.charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid) || (group && group->IsMember(guid)))
+                continue;
+            ++rank;
+        }
+        Expedition::Parcel const parcel = Expedition::Pack(owner->GetLevel(), rank);
         std::string name;
         sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, info.charGuid), name);
         Life::Phrases::Vars vars;
@@ -793,8 +810,8 @@ namespace Companions
         std::string const subject = Life::Phrases::Say("parcel.subject", info.tags, vars);
         std::string const body = Life::Phrases::Say(benched.zone ? "parcel.body" : "parcel.body.nozone", info.tags, vars);
         if (Expedition::Send(owner, info.charGuid, parcel, subject, body))
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items).",
-                name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()));
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items, bench place %u).",
+                name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()), rank + 1);
     }
 
     bool CompanionMgr::TakeStay(uint32 charGuid)
