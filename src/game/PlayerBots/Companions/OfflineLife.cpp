@@ -1,6 +1,6 @@
 #include "Companions/OfflineLife.h"
 #include "Life/Errands/Trip/LessonPriority.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Gathering.h"
 #include "Shared/Professions.h"
 #include "Shared/SkillUpCost.h"
@@ -178,14 +178,14 @@ namespace Companions
             return local ? uint32(local->tm_year + 1900) * 1000 + uint32(local->tm_yday) : uint32(t / DAY);
         }
 
-        std::string Line(Result const& result, std::vector<std::string> const& tags, LocaleConstant locale)
+        std::string Line(Result const& result, std::vector<std::string> const& tags, LocaleConstant locale, BotShared::I18n::Lang lang)
         {
-            Life::Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             if (result.gains.empty())
-                return result.shortOfMoney ? Life::Phrases::Say("offline.broke", tags, vars) : std::string();
+                return result.shortOfMoney ? BotShared::Phrases::Say(lang, "offline.broke", tags, vars) : std::string();
 
             std::string gains;
-            std::string const comma = Life::Phrases::Word("place.comma", ", ");
+            std::string const comma = BotShared::Phrases::Word(lang, "place.comma");
             for (Gain const& g : result.gains)
             {
                 if (!gains.empty())
@@ -194,9 +194,9 @@ namespace Companions
             }
             vars["gains"] = gains;
             if (!result.spent)
-                return Life::Phrases::Say("offline.skillup.free", tags, vars);
-            vars["gold"] = Life::Phrases::Money(result.spent);
-            return Life::Phrases::Say("offline.skillup", tags, vars);
+                return BotShared::Phrases::Say(lang, "offline.skillup.free", tags, vars);
+            vars["gold"] = BotShared::Phrases::Money(lang, result.spent);
+            return BotShared::Phrases::Say(lang, "offline.skillup", tags, vars);
         }
     }
 }

@@ -1,7 +1,7 @@
 #include "Companions/RewardChoice.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "Shared/QuestRewards.h"
@@ -74,7 +74,7 @@ namespace Companions
 
             CompanionInfo const* info = sCompanionMgr.Find(me->GetGUIDLow());
             std::vector<std::string> const noTags;
-            ask.text = Life::Phrases::Say("reward.ask", info ? info->tags : noTags, { { "quest", quest->GetTitle() } });
+            ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "reward.ask", info ? info->tags : noTags, { { "quest", quest->GetTitle() } });
 
             m_requestId = sRequestBoard.Open(me, leader, ask);
             if (!m_requestId)

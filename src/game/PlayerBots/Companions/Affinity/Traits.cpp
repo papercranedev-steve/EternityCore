@@ -1,5 +1,6 @@
 #include "Companions/Affinity/Traits.h"
 #include "Companions/PastRoll.h"
+#include "Shared/Phrases.h"
 #include "SharedDefines.h"
 #include <algorithm>
 
@@ -28,55 +29,55 @@ namespace Companions
             // 顺手 / 眼尖 (per-looter loot rolls), 老练 (needs bench surprise gifts, B4),
             // 皮厚 / 后发 (the damage hook does not know crits), 警惕 (dodge), 会照顾自己 (potions, bandages).
             std::vector<Info> const g_traits = {
-                { Trait::Diligent,     L, N, "diligent",     "diligent", 0, true,  "勤快",       "仗打得越久，歇下来恢复得越快。" },
-                { Trait::NightOwl,     L, N, "nightowl",     "nightowl", 0, true,  "夜猫子",     "夜里休息得更快。" },
-                { Trait::EarlyBird,    L, N, "earlybird",    nullptr,    0, true,  "早鸟",       "白天休息得更快。" },
-                { Trait::RainLover,    L, N, "rainlover",    nullptr,    0, true,  "爱下雨",     "下雨下雪的时候休息得更快。" },
-                { Trait::Appetite,     L, N, "appetite",     nullptr,    0, true,  "好胃口",     "吃饱以后的劲头持续得更久。" },
-                { Trait::Frugal,       L, N, "frugal",       "frugal",   0, true,  "节俭",       "修理便宜一点，灰色杂物能多卖几个铜板。" },
-                { Trait::Thrifty,      L, N, "thrifty",      "frugal",   0, true,  "会过日子",   "买吃喝、弹药和施法材料便宜一点。" },
-                { Trait::Careful,      L, N, "careful",      "frugal",   0, true,  "惜物",       "装备磨损得慢。" },
-                { Trait::HardWorker,   L, N, "hardworker",   "diligent", 0, false, "勤工",       "不在你身边时攒的钱多一点。" },
-                { Trait::Light,        L, N, "light",        nullptr,    0, true,  "身轻",       "摔下来伤得轻。" },
-                { Trait::Swimmer,      L, N, "swimmer",      nullptr,    0, true,  "水性好",     "憋气更久，游得更快。" },
-                { Trait::QuickHands,   L, N, "quickhands",   "crafty",   0, true,  "手快",       "采集和制作的动作更快。" },
-                { Trait::Crafty,       L, R, "crafty",       "crafty",   0, true,  "手巧",       "做一次能出好几个的东西时，偶尔多做出一个。" },
-                { Trait::Saver,        L, R, "saver",        "crafty",   0, true,  "省料",       "做东西时偶尔省下一份最便宜的材料。" },
-                { Trait::Gatherer,     L, R, "gatherer",     "gatherer", 0, true,  "爱采集",     "采集时偶尔多采一份。" },
-                { Trait::Pickup,       L, R, "pickup",       "gatherer", 0, false, "顺手",       "摸尸体时偶尔多捡到点杂物。" },
-                { Trait::Scrounger,    L, R, "scrounger",    "frugal",   0, true,  "捡漏",       "分到的金币多一点。" },
-                { Trait::Likeable,     L, R, "likeable",     "chatty",   0, true,  "人缘",       "声望涨得快一点。" },
-                { Trait::Pathfinder,   L, R, "pathfinder",   "homebody", 0, true,  "熟路",       "被你叫过来时到得更快。" },
-                { Trait::Wanderer,     L, R, "wanderer",     "diligent", 0, true,  "远行",       "不在队里时，远征包裹寄得更勤。" },
-                { Trait::Quiet,        L, E, "quiet",        "quiet",    0, true,  "安静",       "野外的怪不容易注意到他。" },
-                { Trait::SharpEye,     L, E, "sharpeye",     "gatherer", 0, false, "眼尖",       "采集时更容易找到宝石之类的稀罕东西。" },
-                { Trait::Swift,        L, E, "swift",        "homebody", 0, true,  "神行",       "被你叫过来时快得多，过海也不用等船。" },
-                { Trait::Veteran,      L, E, "veteran",      "diligent", 0, false, "老练",       "远征包裹里偶尔有一件合用的装备。" },
+                { Trait::Diligent,     L, N, "diligent",     "diligent", 0, true },
+                { Trait::NightOwl,     L, N, "nightowl",     "nightowl", 0, true },
+                { Trait::EarlyBird,    L, N, "earlybird",    nullptr,    0, true },
+                { Trait::RainLover,    L, N, "rainlover",    nullptr,    0, true },
+                { Trait::Appetite,     L, N, "appetite",     nullptr,    0, true },
+                { Trait::Frugal,       L, N, "frugal",       "frugal",   0, true },
+                { Trait::Thrifty,      L, N, "thrifty",      "frugal",   0, true },
+                { Trait::Careful,      L, N, "careful",      "frugal",   0, true },
+                { Trait::HardWorker,   L, N, "hardworker",   "diligent", 0, false },
+                { Trait::Light,        L, N, "light",        nullptr,    0, true },
+                { Trait::Swimmer,      L, N, "swimmer",      nullptr,    0, true },
+                { Trait::QuickHands,   L, N, "quickhands",   "crafty",   0, true },
+                { Trait::Crafty,       L, R, "crafty",       "crafty",   0, true },
+                { Trait::Saver,        L, R, "saver",        "crafty",   0, true },
+                { Trait::Gatherer,     L, R, "gatherer",     "gatherer", 0, true },
+                { Trait::Pickup,       L, R, "pickup",       "gatherer", 0, false },
+                { Trait::Scrounger,    L, R, "scrounger",    "frugal",   0, true },
+                { Trait::Likeable,     L, R, "likeable",     "chatty",   0, true },
+                { Trait::Pathfinder,   L, R, "pathfinder",   "homebody", 0, true },
+                { Trait::Wanderer,     L, R, "wanderer",     "diligent", 0, true },
+                { Trait::Quiet,        L, E, "quiet",        "quiet",    0, true },
+                { Trait::SharpEye,     L, E, "sharpeye",     "gatherer", 0, false },
+                { Trait::Swift,        L, E, "swift",        "homebody", 0, true },
+                { Trait::Veteran,      L, E, "veteran",      "diligent", 0, false },
 
-                { Trait::ThickSkin,    C, N, "thickskin",    nullptr, 0,       false, "皮厚",       "被暴击时伤得轻一点。" },
-                { Trait::Constitution, C, N, "constitution", nullptr, 0,       true,  "体质",       "对一系法术的抵抗更强。" },
-                { Trait::Revive,       C, N, "revive",       nullptr, 0,       true,  "回神",       "被复活时起身的状态好一些。" },
-                { Trait::PoisonResist, C, N, "poisonres",    nullptr, 0,       true,  "耐毒",       "中毒和疾病持续得短一点。" },
-                { Trait::Sturdy,       C, N, "sturdy",       nullptr, 0,       true,  "壮实",       "血更厚一点。" },
-                { Trait::Steady,       C, N, "steady",       nullptr, CASTERS, true,  "稳手",       "读条被打时推迟得少一点。" },
-                { Trait::Brave,        C, N, "brave",        nullptr, 0,       true,  "胆大",       "被恐惧的时间短一点。" },
-                { Trait::Hardhead,     C, N, "hardhead",     nullptr, 0,       true,  "硬骨头",     "被击晕的时间短一点。" },
-                { Trait::SureFoot,     C, N, "surefoot",     nullptr, 0,       true,  "脚稳",       "被减速和定身的时间短一点。" },
-                { Trait::LastStand,    C, N, "laststand",    nullptr, 0,       true,  "舍命",       "快倒下时偶尔能硬撑一下。" },
-                { Trait::Breather,     C, N, "breather",     nullptr, 0,       true,  "喘口气",     "刚打完的那几秒恢复得特别快。" },
-                { Trait::SelfCare,     C, N, "selfcare",     nullptr, 0,       false, "会照顾自己", "药水和绷带对他更管用。" },
-                { Trait::Tough,        C, R, "tough",        nullptr, 0,       true,  "皮实",       "各系法术的抵抗都更强。" },
-                { Trait::Composed,     C, R, "composed",     nullptr, 0,       true,  "心定",       "被控制的时间短一点。" },
-                { Trait::Desperate,    C, R, "desperate",    nullptr, 0,       true,  "临危",       "血少的时候更扛打。" },
-                { Trait::BackToWall,   C, R, "backtowall",   nullptr, 0,       true,  "背水",       "队友倒下后，他会咬牙顶住一阵。" },
-                { Trait::Wary,         C, R, "wary",         nullptr, 0,       false, "警惕",       "被几个怪围着时更会躲。" },
-                { Trait::Rooted,       C, R, "rooted",       nullptr, 0,       true,  "铁脚",       "站稳以后更扛打。" },
-                { Trait::Dodgy,        C, R, "dodgy",        nullptr, 0,       true,  "闪身",       "范围伤害打在他身上轻一点。" },
-                { Trait::Alert,        C, R, "alert",        nullptr, 0,       true,  "警觉",       "更容易发现潜行的敌人。" },
-                { Trait::Focus,        C, E, "focus",        nullptr, CASTERS, true,  "专注",       "被打断后能更快重新施法。" },
-                { Trait::Guard,        C, E, "guard",        nullptr, 0,       true,  "护身",       "挨大招时偶尔能卸掉一部分力。" },
-                { Trait::Counter,      C, E, "counter",      nullptr, 0,       false, "后发",       "被暴击后会马上护住自己一阵。" },
-                { Trait::Grit,         C, E, "grit",         nullptr, 0,       true,  "余勇",       "血少的时候，治疗对他更管用。" },
+                { Trait::ThickSkin,    C, N, "thickskin",    nullptr, 0,       false },
+                { Trait::Constitution, C, N, "constitution", nullptr, 0,       true },
+                { Trait::Revive,       C, N, "revive",       nullptr, 0,       true },
+                { Trait::PoisonResist, C, N, "poisonres",    nullptr, 0,       true },
+                { Trait::Sturdy,       C, N, "sturdy",       nullptr, 0,       true },
+                { Trait::Steady,       C, N, "steady",       nullptr, CASTERS, true },
+                { Trait::Brave,        C, N, "brave",        nullptr, 0,       true },
+                { Trait::Hardhead,     C, N, "hardhead",     nullptr, 0,       true },
+                { Trait::SureFoot,     C, N, "surefoot",     nullptr, 0,       true },
+                { Trait::LastStand,    C, N, "laststand",    nullptr, 0,       true },
+                { Trait::Breather,     C, N, "breather",     nullptr, 0,       true },
+                { Trait::SelfCare,     C, N, "selfcare",     nullptr, 0,       false },
+                { Trait::Tough,        C, R, "tough",        nullptr, 0,       true },
+                { Trait::Composed,     C, R, "composed",     nullptr, 0,       true },
+                { Trait::Desperate,    C, R, "desperate",    nullptr, 0,       true },
+                { Trait::BackToWall,   C, R, "backtowall",   nullptr, 0,       true },
+                { Trait::Wary,         C, R, "wary",         nullptr, 0,       false },
+                { Trait::Rooted,       C, R, "rooted",       nullptr, 0,       true },
+                { Trait::Dodgy,        C, R, "dodgy",        nullptr, 0,       true },
+                { Trait::Alert,        C, R, "alert",        nullptr, 0,       true },
+                { Trait::Focus,        C, E, "focus",        nullptr, CASTERS, true },
+                { Trait::Guard,        C, E, "guard",        nullptr, 0,       true },
+                { Trait::Counter,      C, E, "counter",      nullptr, 0,       false },
+                { Trait::Grit,         C, E, "grit",         nullptr, 0,       true },
             };
 
             uint32 const RARITY_WEIGHT[] = { 60, 30, 10 };
@@ -86,17 +87,7 @@ namespace Companions
                 return info.ready && info.tier == tier && (!info.classMask || (info.classMask & classBit));
             }
 
-            char const* SchoolName(uint32 school)
-            {
-                switch (school)
-                {
-                    case SPELL_SCHOOL_FIRE:   return "火焰";
-                    case SPELL_SCHOOL_NATURE: return "自然";
-                    case SPELL_SCHOOL_FROST:  return "冰霜";
-                    case SPELL_SCHOOL_SHADOW: return "暗影";
-                    default:                  return "奥术";
-                }
-            }
+
         }
 
         std::vector<Info> const& All()
@@ -180,11 +171,18 @@ namespace Companions
             return schools[i];
         }
 
-        std::string TextFor(Info const& info, uint32 charGuid)
+        std::string Label(Info const& info, BotShared::I18n::Lang lang)
         {
+            return BotShared::Phrases::Word(lang, std::string("trait.") + info.key);
+        }
+
+        std::string TextFor(Info const& info, uint32 charGuid, BotShared::I18n::Lang lang)
+        {
+            std::string const key = std::string("trait.") + info.key + ".text";
             if (info.trait == Trait::Constitution)
-                return std::string("对") + SchoolName(ConstitutionSchool(charGuid)) + "法术的抵抗更强。";
-            return info.text;
+                return BotShared::Phrases::Text(lang, key,
+                    { { "school", BotShared::Phrases::Word(lang, "school." + std::to_string(ConstitutionSchool(charGuid))) } });
+            return BotShared::Phrases::Word(lang, key);
         }
     }
 }

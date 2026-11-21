@@ -148,8 +148,10 @@ namespace Population
 
         // Pending refusals (ms countdowns, 0 = none).
         uint32 m_declineInviteInMs = 0;
-        // Said with the decline, always (DeclineRecruit); empty: the usual chance of a "no thanks".
-        std::string m_declineLine;
+        // The i18n key of what he says with the decline, always (DeclineRecruit); empty: the usual
+        // chance of a "no thanks". Said in the reader's language (DeclineLine).
+        std::string m_declineKey;
+        std::string DeclineLine(Player* reader, std::string const& key = std::string()) const;
         // Who the decline line goes to when no invite is pending (he asked in the talk window).
         ObjectGuid m_declineTo;
         // A real player invited him: once the invite is declined, he asks why (StrangerTalk).

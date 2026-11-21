@@ -42,6 +42,11 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Goods.cpp
   ${BOTSHARED_DIR}/Inventory.h
   ${BOTSHARED_DIR}/Inventory.cpp
+  ${BOTSHARED_DIR}/I18n.h
+  ${BOTSHARED_DIR}/I18n.cpp
+  ${BOTSHARED_DIR}/I18nCommands.cpp
+  ${BOTSHARED_DIR}/Phrases.h
+  ${BOTSHARED_DIR}/Phrases.cpp
   ${BOTSHARED_DIR}/ItemUse.h
   ${BOTSHARED_DIR}/ItemUse.cpp
   ${BOTSHARED_DIR}/LootFacts.h
@@ -92,3 +97,6 @@ set(BOTSHARED_SRCS
 
 target_sources(game PRIVATE ${BOTSHARED_SRCS})
 source_group(TREE ${BOTSHARED_DIR} PREFIX "PlayerBots\\Shared" FILES ${BOTSHARED_SRCS})
+
+# The bots' text, one JSON per language (Shared/Phrases.h), next to mangosd: PartyBot.I18nDir.
+install(DIRECTORY ${BOTSHARED_DIR}/../i18n/ DESTINATION ${BIN_DIR}/i18n FILES_MATCHING PATTERN "*.json")

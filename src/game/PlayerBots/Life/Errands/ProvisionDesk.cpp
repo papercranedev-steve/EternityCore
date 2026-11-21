@@ -1,5 +1,5 @@
 #include "Life/Errands/ProvisionDesk.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "ObjectAccessor.h"
@@ -22,13 +22,13 @@ namespace Provision
     }
 
     // "水和面包", "面包", "水": what the bots ask for.
-    std::string WhatOf(Kinds const& kinds)
+    std::string WhatOf(Kinds const& kinds, BotShared::I18n::Lang lang)
     {
         bool const drink = Has(kinds, Kind::Drink);
         bool const food = Has(kinds, Kind::Food);
         if (drink && food)
-            return Phrases::Word("supply.what.both", "water and bread");
-        return drink ? Phrases::Word("supply.what.drink", "water") : Phrases::Word("supply.what.food", "bread");
+            return BotShared::Phrases::Word(lang, "supply.what.both");
+        return drink ? BotShared::Phrases::Word(lang, "supply.what.drink") : BotShared::Phrases::Word(lang, "supply.what.food");
     }
 
     Desk& Desk::Instance()
@@ -170,21 +170,21 @@ namespace Provision
             if (q.bots.front() != botGuid || WorldTimer::getMSTimeDiff(q.firstMs, now) < GATHER_MS)
                 return LeaderStep::Wait;
 
-            Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["leader"] = leader->GetName();
-            vars["what"] = WhatOf(kinds);
+            vars["what"] = WhatOf(kinds, BotShared::I18n::OfParty(bot));
             std::string names;
             for (ObjectGuid const& guid : q.bots)
                 if (Player* member = sObjectAccessor.FindPlayer(guid))
-                    names += (names.empty() ? "" : Phrases::Word("place.comma", ",")) + member->GetName();
+                    names += (names.empty() ? "" : BotShared::Phrases::Word(BotShared::I18n::OfParty(bot), "place.comma")) + member->GetName();
             vars["names"] = names;
 
             Requests::Ask ask;
             ask.intent = Requests::Intent::Supply;
-            ask.text = Phrases::Say(q.bots.size() > 1 ? "supply.askmage.many" : "supply.askmage", tags, vars);
+            ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(bot), q.bots.size() > 1 ? "supply.askmage.many" : "supply.askmage", tags, vars);
             ask.options = {
-                { "yes", Phrases::Word("supply.opt.make", "yes") },
-                { "no", Phrases::Word("supply.opt.later", "no") },
+                { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(bot), "supply.opt.make") },
+                { "no", BotShared::Phrases::Word(BotShared::I18n::OfParty(bot), "supply.opt.later") },
             };
             ask.fallback = "no";
             q.requestId = sRequestBoard.Open(bot, leader, ask);

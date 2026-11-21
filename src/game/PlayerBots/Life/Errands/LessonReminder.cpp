@@ -1,6 +1,6 @@
 #include "Life/Errands/LessonReminder.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Capitals.h"
 #include "Shared/NpcDirectory.h"
@@ -33,12 +33,12 @@ namespace LessonReminder
             return false;
         }
 
-        std::string NamesOf(std::vector<uint32> const& spells, LocaleConstant locale)
+        std::string NamesOf(std::vector<uint32> const& spells, LocaleConstant locale, BotShared::I18n::Lang lang)
         {
-            std::string const comma = Phrases::Word("place.comma", ", ");
+            std::string const comma = BotShared::Phrases::Word(lang, "place.comma");
             std::string names;
             for (uint32 spellId : spells)
-                names += (names.empty() ? "" : comma) + Lessons::NameOf(spellId, locale);
+                names += (names.empty() ? "" : comma) + Lessons::NameOf(spellId, locale, lang);
             return names;
         }
     }
@@ -72,13 +72,13 @@ namespace LessonReminder
         LocaleConstant const locale = leader->GetSession()->GetSessionDbcLocale();
         if (!fresh.empty())
         {
-            BotShared::BotChat::SayToParty(me, Phrases::Say("lesson.remind", tags, { { "lessons", NamesOf(fresh, locale) } }));
+            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "lesson.remind", tags, { { "lessons", NamesOf(fresh, locale, BotShared::I18n::OfParty(me)) } }));
             state.told.insert(fresh.begin(), fresh.end());
             state.lastSaidMs = now;
         }
         else if (WorldTimer::getMSTimeDiff(state.lastSaidMs, now) > AGAIN_MS)
         {
-            BotShared::BotChat::SayToParty(me, Phrases::Say("lesson.remind.again", tags, { { "lessons", NamesOf(pending, locale) } }));
+            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "lesson.remind.again", tags, { { "lessons", NamesOf(pending, locale, BotShared::I18n::OfParty(me)) } }));
             state.lastSaidMs = now;
         }
     }

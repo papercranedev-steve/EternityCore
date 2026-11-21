@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/GatherPlanner.h"
+#include "Shared/Phrases.h"
 #include "Commander/Coordination/Situation/Summon.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/LeftBehind.h"
@@ -79,7 +80,7 @@ namespace GatherPlanner
         if (left.empty())
         {
             if (asked && s.rituals.empty())
-                BotSpeech::Report(bot->me, anchor, "人都齐了，没有掉队的。");
+                BotSpeech::Report(bot->me, anchor, BotShared::Phrases::Word(BotShared::I18n::OfParty(bot->me), "gather.all_here"));
             return;
         }
 
@@ -123,7 +124,7 @@ namespace GatherPlanner
             for (Player* h : helpers)
                 if (std::find(pair.begin(), pair.end(), h->GetObjectGuid()) != pair.end())
                     used.insert(h);
-            BotSpeech::Report(warlock, anchor, std::string("我去把") + target->GetName() + "拉过来。");
+            BotSpeech::Report(warlock, anchor, BotShared::Phrases::Text(BotShared::I18n::OfParty(warlock), "gather.summoning", { { "name", target->GetName() } }));
         }
 
         // Left behind and nobody to summon them: say so once (no warlock at all: the old
@@ -131,7 +132,7 @@ namespace GatherPlanner
         if (s.rituals.empty() && anyWarlock && warlocks.empty() && !s.shortNoted)
         {
             s.shortNoted = true;
-            BotSpeech::Report(bot->me, anchor, "灵魂碎片不够，还有" + std::to_string(left.size()) + "个人没拉过来。");
+            BotSpeech::Report(bot->me, anchor, BotShared::Phrases::Text(BotShared::I18n::OfParty(bot->me), "gather.no_shards", { { "count", std::to_string(left.size()) } }));
         }
     }
 

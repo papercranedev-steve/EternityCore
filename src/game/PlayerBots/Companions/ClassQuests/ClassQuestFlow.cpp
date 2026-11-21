@@ -4,7 +4,7 @@
 #include "Shared/QuestMirror.h"
 #include "Shared/BotChat.h"
 #include "Life/Requests/RequestBoard.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
@@ -42,9 +42,9 @@ namespace Companions
                     uint32(r.declined), uint32(r.helped));
             }
 
-            void Say(Player* me, char const* key, std::vector<std::string> const& tags, Life::Phrases::Vars const& vars = {})
+            void Say(Player* me, char const* key, std::vector<std::string> const& tags, BotShared::Phrases::Vars const& vars = {})
             {
-                std::string const text = Life::Phrases::Say(key, tags, vars);
+                std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars);
                 if (!text.empty())
                     BotShared::BotChat::SayToParty(me, text);
             }
@@ -86,7 +86,7 @@ namespace Companions
                 Chains::Chain const* chain = Chains::Find(chainId);
                 uint32 const points = chain ? chain->affinity : 0;
                 uint32 const now = sCompanionMgr.AddAffinity(me->GetGUIDLow(), points, "class quest");
-                Life::Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["affinity"] = std::to_string(now);
                 Say(me, "classquest.thanks", tags, vars);
                 if (leader)
@@ -164,7 +164,7 @@ namespace Companions
                         state.spellsChanged = true;
                         if (!told)
                         {
-                            Life::Phrases::Vars vars;
+                            BotShared::Phrases::Vars vars;
                             vars["quest"] = TitleFor(leader, *chain);
                             Say(me, "classquest.selfdone", tags, vars);
                             told = true;
@@ -217,15 +217,15 @@ namespace Companions
 
             void Ask(Player* me, Player* leader, State& state, Chains::Chain const& chain, std::vector<std::string> const& tags)
             {
-                Life::Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["quest"] = TitleFor(leader, chain);
                 vars["leader"] = leader->GetName();
                 Requests::Ask ask;
                 ask.intent = Requests::Intent::ClassQuest;
-                ask.text = Life::Phrases::Say(chain.kind == Chains::Kind::Ability ? "classquest.ask" : "classquest.askgear", tags, vars);
+                ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), chain.kind == Chains::Kind::Ability ? "classquest.ask" : "classquest.askgear", tags, vars);
                 ask.options = {
-                    { "yes", Life::Phrases::Word("classquest.opt.yes", "yes") },
-                    { "no",  Life::Phrases::Word("classquest.opt.no", "no") },
+                    { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "classquest.opt.yes") },
+                    { "no",  BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "classquest.opt.no") },
                 };
                 ask.fallback = "no";    // (an Expired request is told apart from a "no" by its state)
                 state.requestId = sRequestBoard.Open(me, leader, ask);

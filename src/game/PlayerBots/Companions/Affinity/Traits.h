@@ -13,6 +13,7 @@
 #define MANGOS_COMPANIONS_AFFINITY_TRAITS_H
 
 #include "Common.h"
+#include "Shared/I18n.h"
 #include <string>
 #include <vector>
 
@@ -50,8 +51,8 @@ namespace Companions
             char const* tag;        // personality tag (Personality.h) that makes it 3x likelier, null = none
             uint32 classMask;       // 0 = any, else 1 << (class - 1)
             bool ready;             // its effect is wired (TraitEffects)
-            char const* label;      // what the player reads (addon 好感 page)
-            char const* text;       // its line there: what it does, no numbers (user's rule)
+            // What the player reads (addon 好感 page): phrases "trait.<key>" (its name) and
+            // "trait.<key>.text" (what it does, no numbers: user's rule), Label / TextFor.
         };
 
         std::vector<Info> const& All();
@@ -66,8 +67,10 @@ namespace Companions
 
         // Constitution's school (SpellSchools, fire .. arcane), the same for the same character.
         uint32 ConstitutionSchool(uint32 charGuid);
-        // Its line for this character (Constitution names its school).
-        std::string TextFor(Info const& info, uint32 charGuid);
+        // Its name in `lang`.
+        std::string Label(Info const& info, BotShared::I18n::Lang lang);
+        // Its line for this character in `lang` (Constitution names its school).
+        std::string TextFor(Info const& info, uint32 charGuid, BotShared::I18n::Lang lang);
     }
 }
 

@@ -1,7 +1,7 @@
 #include "Companions/Talk/Services/ServiceList.h"
 #include "Companions/Talk/Talk.h"
 #include "Companions/Recruit/Trial.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Player.h"
 
 namespace Companions
@@ -25,7 +25,7 @@ namespace Talk
                 Option option;
                 option.id = Key();
                 option.icon = Icon::Chat;
-                option.text = Life::Phrases::Word("talk.opt.bond", "以后跟我一起走吧？");
+                option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.bond");
                 out.push_back(option);
             }
 
@@ -54,13 +54,13 @@ namespace Talk
                 }
                 // He introduces himself: the page has only the player's goodbye.
                 static std::vector<std::string> const none;
-                Life::Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["leader"] = ctx.player ? ctx.player->GetName() : "";
                 vars["name"] = ctx.bot->GetName();
-                vars["class"] = Life::Phrases::Word("class." + std::to_string(uint32(ctx.bot->GetClass())), "冒险者");
+                vars["class"] = BotShared::Phrases::Word(ctx.lang, "class." + std::to_string(uint32(ctx.bot->GetClass())));
                 outcome.kind = Outcome::Kind::Page;
                 outcome.reply = Line(ctx, "trial.bond.yes");
-                outcome.text = Life::Phrases::Say("trial.intro", ctx.tags ? *ctx.tags : none, vars);
+                outcome.text = BotShared::Phrases::Say(ctx.lang, "trial.intro", ctx.tags ? *ctx.tags : none, vars);
                 return outcome;
             }
         };

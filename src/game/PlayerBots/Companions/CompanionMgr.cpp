@@ -11,7 +11,7 @@
 #include "Shared/ClassTraining.h"
 #include "Shared/DungeonClears.h"
 #include "Shared/QuestEvents.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Errands/Travel.h"
 #include "Shared/TownGates.h"
 #include "Companions/Recruit/Trial.h"
@@ -352,7 +352,6 @@ namespace Companions
             } while (tags->NextRow());
         }
 
-        Life::Phrases::Load();
         BotShared::TownGates::Load();
 
         ResolveAccount();
@@ -1406,12 +1405,12 @@ namespace Companions
         Expedition::Parcel const parcel = Expedition::Pack(owner->GetLevel(), rank, info.charGuid, benched.level);
         std::string name;
         sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, info.charGuid), name);
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = owner->GetName();
         vars["name"] = name;
         vars["zone"] = benched.zone ? Life::Travel::AreaName(benched.zone, owner) : std::string();
-        std::string const subject = Life::Phrases::Say("parcel.subject", info.tags, vars);
-        std::string const body = Life::Phrases::Say(benched.zone ? "parcel.body" : "parcel.body.nozone", info.tags, vars);
+        std::string const subject = BotShared::Phrases::Say(BotShared::I18n::Of(owner), "parcel.subject", info.tags, vars);
+        std::string const body = BotShared::Phrases::Say(BotShared::I18n::Of(owner), benched.zone ? "parcel.body" : "parcel.body.nozone", info.tags, vars);
         if (Expedition::Send(owner, info.charGuid, parcel, subject, body))
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items, surprise %u, bench place %u).",
                 name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()), parcel.surprise, rank + 1);
@@ -1561,16 +1560,16 @@ namespace Companions
 
         Player* leader = ai->GetPartyLeader();
         LocaleConstant const locale = leader && leader->GetSession() ? leader->GetSession()->GetSessionDbcLocale() : LOCALE_enUS;
-        std::string const line = OfflineLife::Line(result, info.tags, locale);
+        std::string const line = OfflineLife::Line(result, info.tags, locale, BotShared::I18n::OfParty(bot));
         if (!line.empty())
             BotShared::BotChat::SayToParty(bot, line);
 
         // It grew on the bench meanwhile (UpdateBench): one line about it.
         if (info.benchLevels)
         {
-            Life::Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["level"] = std::to_string(bot->GetLevel());
-            std::string const leveled = Life::Phrases::Say("bench.leveled", info.tags, vars);
+            std::string const leveled = BotShared::Phrases::Say(BotShared::I18n::OfParty(bot), "bench.leveled", info.tags, vars);
             if (!leveled.empty())
                 BotShared::BotChat::SayToParty(bot, leveled);
             info.benchLevels = 0;

@@ -1,7 +1,7 @@
 #include "Companions/ArtisanTrip.h"
 #include "Companions/CompanionMgr.h"
 #include "Life/Errands/MerchantTasks.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/ArtisanTrainers.h"
 #include "Shared/BotChat.h"
@@ -45,9 +45,9 @@ namespace Companions
                     uint32(r.declined), uint32(r.helped));
             }
 
-            void Say(Player* me, char const* key, std::vector<std::string> const& tags, Life::Phrases::Vars const& vars)
+            void Say(Player* me, char const* key, std::vector<std::string> const& tags, BotShared::Phrases::Vars const& vars)
             {
-                std::string const text = Life::Phrases::Say(key, tags, vars);
+                std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars);
                 if (!text.empty())
                     BotShared::BotChat::SayToParty(me, text);
             }
@@ -68,12 +68,12 @@ namespace Companions
             }
 
             // skill, trainer (the nearest one for the leader), gold.
-            Life::Phrases::Vars VarsFor(Player* me, Player const* leader, uint32 skill)
+            BotShared::Phrases::Vars VarsFor(Player* me, Player const* leader, uint32 skill)
             {
-                Life::Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["skill"] = SkillName(skill, leader);
                 vars["leader"] = leader ? leader->GetName() : "";
-                vars["gold"] = Life::Phrases::Money(Trainers::RankCost(skill));
+                vars["gold"] = BotShared::Phrases::Money(BotShared::I18n::OfParty(me), Trainers::RankCost(skill));
                 Player const* where = leader ? leader : me;
                 std::vector<Trainers::Spawn> const spawns = Trainers::For(me, skill, where->GetMapId(), where->GetPositionX(), where->GetPositionY());
                 vars["trainer"] = spawns.empty() ? std::string() : Trainers::NameOf(spawns.front().entry, LocaleIdx(leader));
@@ -190,10 +190,10 @@ namespace Companions
             {
                 Requests::Ask ask;
                 ask.intent = Requests::Intent::Artisan;
-                ask.text = Life::Phrases::Say("artisan.ask", tags, VarsFor(me, leader, skill));
+                ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "artisan.ask", tags, VarsFor(me, leader, skill));
                 ask.options = {
-                    { "yes", Life::Phrases::Word("artisan.opt.yes", "yes") },
-                    { "no",  Life::Phrases::Word("artisan.opt.no", "no") },
+                    { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "artisan.opt.yes") },
+                    { "no",  BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "artisan.opt.no") },
                 };
                 ask.fallback = "no";    // (an Expired request is told apart from a "no" by its state)
                 state.requestId = sRequestBoard.Open(me, leader, ask);

@@ -1,4 +1,5 @@
 #include "Shared/QuestMirror.h"
+#include "Shared/Phrases.h"
 #include "Player.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
@@ -20,49 +21,37 @@ namespace BotShared
             int32 const STAND_IN_CREATURES[QUEST_OBJECTIVES_COUNT] = { 1, 2, 13056, 11179 };
             uint32 const MAX_COUNT = 63;
 
-            // Texts of a mirror, Chinese for zhCN / zhTW clients, else English.
+            // Texts of a mirror in the language of a database locale (i18n "mirror.*": Chinese for
+            // zhCN / zhTW, else English). Quest texts go to the client by its locale, not by the
+            // account's language.
             struct Texts
             {
-                char const* prefix;
-                char const* mirrorIntro;
-                char const* placeholderIntro;   // %s: the giver
-                char const* placeholderGoal;    // %s: the giver
-                char const* done;
-                char const* someGiver;
-            };
-            Texts const ENGLISH = {
-                "[Companion] ",
-                "Your companion's quest: only what your companion kills and collects counts. Take them along.$B$B",
-                "Your companion has not taken this quest yet. Bring them to %s; once they take it, this turns into the quest itself.$B$B",
-                "Bring your companion to %s",
-                "Objective complete",
-                "the quest giver",
-            };
-            Texts const CHINESE = {
-                "[队友] ",
-                "这是队友的任务：他杀的怪、他拿到的东西才算。带着他就行。$B$B",
-                "队友还没接这个任务。带他去找%s，他接了以后，这里会换成任务本身。$B$B",
-                "带队友去找%s",
-                "完成任务目标",
-                "接任务的人",
+                std::string prefix;
+                std::string mirrorIntro;
+                std::string placeholderIntro;   // {giver}
+                std::string placeholderGoal;    // {giver}
+                std::string done;
+                std::string someGiver;
             };
 
             // -1: the base (enUS) strings.
-            Texts const& TextsFor(int localeIdx)
+            Texts TextsFor(int localeIdx)
             {
-                LocaleConstant const locale = sObjectMgr.GetLocaleForIndex(localeIdx);
-                return locale == LOCALE_zhCN || locale == LOCALE_zhTW ? CHINESE : ENGLISH;
+                I18n::Lang const lang = localeIdx < 0 ? I18n::Lang::En : I18n::OfLocale(sObjectMgr.GetLocaleForIndex(localeIdx));
+                Texts t;
+                t.prefix = Phrases::Word(lang, "mirror.prefix");
+                t.mirrorIntro = Phrases::Word(lang, "mirror.intro");
+                t.placeholderIntro = Phrases::Word(lang, "mirror.placeholder.intro");
+                t.placeholderGoal = Phrases::Word(lang, "mirror.placeholder.goal");
+                t.done = Phrases::Word(lang, "mirror.done");
+                t.someGiver = Phrases::Word(lang, "mirror.somegiver");
+                return t;
             }
 
-            std::string Format(char const* pattern, std::string const& value)
+            std::string Format(std::string const& pattern, std::string const& giver)
             {
-                std::string out = pattern;
-                size_t const at = out.find("%s");
-                if (at != std::string::npos)
-                    out.replace(at, 2, value);
-                return out;
+                return Phrases::Format(pattern, { { "giver", giver } });
             }
-
             std::string const& Localized(std::vector<std::string> const* strings, int idx, std::string const& base)
             {
                 if (strings && idx >= 0 && idx < int(strings->size()) && !(*strings)[idx].empty())

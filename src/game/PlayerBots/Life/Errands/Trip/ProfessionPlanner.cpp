@@ -1,7 +1,7 @@
 #include "Life/Errands/Trip/ProfessionPlanner.h"
 #include "Life/Errands/TownTrip.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Capitals.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/NpcDirectory.h"
@@ -172,16 +172,16 @@ namespace Trip
             if (!m_planned.count(lesson.skill))
                 continue;
             if (lesson.rank)
-                out.push_back({ 0, Lessons::NameOf(lesson.spellId, locale) });
+                out.push_back({ 0, Lessons::NameOf(lesson.spellId, locale, BotShared::I18n::Of(reader)) });
             else
                 ++recipes[lesson.skill];
         }
         for (auto const& itr : recipes)
         {
-            Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["skill"] = SkillName(itr.first, locale);
             vars["count"] = std::to_string(itr.second);
-            out.push_back({ 0, Phrases::Say("training.recipes", {}, vars) });
+            out.push_back({ 0, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "training.recipes", {}, vars) });
         }
     }
 }

@@ -19,6 +19,7 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "Shared/BotChat.h"
+#include "Shared/Phrases.h"
 #include "Utilities/Random.h"
 #include "MotionMaster.h"
 #include "GridMap.h"
@@ -32,25 +33,9 @@ namespace Population
 {
     namespace
     {
-        char const* const g_declineLines[] = {
-            "no thanks",
-            "no ty",
-            "sorry, busy atm",
-            "nah im good, thx",
-            "soloing this one, ty",
-            "maybe later",
-        };
-
-        // Why a roster member does not join the player as a companion (DeclineRecruit).
-        char const* const g_noSlotLines[] = {
-            "你身边已经够热闹了，再多我一个怕是照顾不过来。",
-            "你的队伍人手够多了，等你那边宽松些再来找我吧。",
-            "你带的人已经不少了，下回吧。",
-        };
-        char const* const g_farewellLines[] = {
-            "我们已经道过别了。各自保重吧。",
-            "当初说好了不再同行的。祝你一路顺利。",
-        };
+        // What he says turning down a plain group invite now and then (i18n "popbot.decline"),
+        // and why a roster member does not join the player as a companion (DeclineRecruit):
+        // "popbot.noslot", "meet.join.toohigh", "popbot.farewell".
 
         uint32 const g_idleEmotes[] = {
             EMOTE_ONESHOT_TALK, EMOTE_ONESHOT_TALK, EMOTE_ONESHOT_TALK,
@@ -765,14 +750,15 @@ namespace Population
         {
             // He was asked in the talk window (no invite): he says why to the one who asked.
             Player* pAsker = m_declineTo.IsEmpty() ? nullptr : sObjectAccessor.FindPlayer(m_declineTo);
-            if (pAsker && pAsker->IsInWorld() && !m_declineLine.empty())
+            if (pAsker && pAsker->IsInWorld() && !m_declineKey.empty())
             {
+                std::string const line = DeclineLine(pAsker);
                 if (pAsker->IsInMap(me) && pAsker->IsWithinDistInMap(me, StrangerTalk::MEET_YD))
-                    BotShared::BotChat::Say(me, m_declineLine);
+                    BotShared::BotChat::Say(me, line);
                 else
-                    Whisper(pAsker, m_declineLine);
+                    Whisper(pAsker, line);
             }
-            m_declineLine.clear();
+            m_declineKey.clear();
             m_declineTo.Clear();
             return;
         }
@@ -789,12 +775,21 @@ namespace Population
         }
         m_invitedBy.Clear();
 
-        std::string line;
-        std::swap(line, m_declineLine);
-        if (line.empty() && urand(0, 99) < 30)
-            line = g_declineLines[urand(0, uint32(sizeof(g_declineLines) / sizeof(g_declineLines[0])) - 1)];
+        std::string key;
+        std::swap(key, m_declineKey);
+        if (key.empty() && urand(0, 99) < 30)
+            key = "popbot.decline";
+        std::string const line = key.empty() || !pInviter ? std::string() : DeclineLine(pInviter, key);
         if (pInviter && !pInviter->IsBot() && !line.empty())
             Whisper(pInviter, line);
+    }
+
+    std::string PopulationBotAI::DeclineLine(Player* reader, std::string const& key) const
+    {
+        std::string const& which = key.empty() ? m_declineKey : key;
+        if (which == "meet.join.toohigh")
+            return StrangerTalk::TooHighLine(reader, me, m_request.tags);
+        return BotShared::Phrases::Say(BotShared::I18n::Of(reader), which, m_request.tags, {});
     }
 
     void PopulationBotAI::Whisper(Player* to, std::string const& line)
@@ -812,14 +807,14 @@ namespace Population
         switch (reason)
         {
             case DeclineReason::NoSlot:
-                m_declineLine = g_noSlotLines[urand(0, uint32(sizeof(g_noSlotLines) / sizeof(g_noSlotLines[0])) - 1)];
+                m_declineKey = "popbot.noslot";
                 break;
             case DeclineReason::TooHigh:
-                m_declineLine = StrangerTalk::TooHighLine(me, m_request.tags);
+                m_declineKey = "meet.join.toohigh";
                 break;
             case DeclineReason::Farewell:
             default:
-                m_declineLine = g_farewellLines[urand(0, uint32(sizeof(g_farewellLines) / sizeof(g_farewellLines[0])) - 1)];
+                m_declineKey = "popbot.farewell";
                 break;
         }
         // (a moment to "think", as a person would)

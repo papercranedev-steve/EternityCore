@@ -29,6 +29,7 @@
  * Still the rotation's own (doc 2026-11-14-hands-cleanup.md 3): Death Coil.
  */
 
+#include "Shared/Phrases.h"
 #include "Rotations/ClassRotation.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/Team.h"
@@ -191,24 +192,25 @@ namespace
             if (note == m_soulstoneNote)
                 return;
             m_soulstoneNote = note;
-            std::string text;
+            BotShared::Phrases::Vars vars;
+            vars["name"] = pHealer->GetName();
+            char const* key = nullptr;
             switch (note)
             {
                 case SoulstoneNote::NotLearned:
-                    text = "我还没学会制造灵魂石，" + std::string(pHealer->GetName()) + "身上没有灵魂石。";
+                    key = "soulstone.unlearned";
                     break;
                 case SoulstoneNote::NoShard:
-                    text = "我没有灵魂碎片了，做不了灵魂石给" + std::string(pHealer->GetName()) + "。";
+                    key = "soulstone.noshard";
                     break;
                 case SoulstoneNote::Cooldown:
-                    text = cooldownMs > 0 ?
-                        "灵魂石还在冷却，大约还要" + std::to_string((cooldownMs + MINUTE * IN_MILLISECONDS - 1) / (MINUTE * IN_MILLISECONDS)) +
-                            "分钟才能给" + pHealer->GetName() + "。" :
-                        "灵魂石还在冷却，暂时给不了" + std::string(pHealer->GetName()) + "。";
+                    key = cooldownMs > 0 ? "soulstone.cooldown" : "soulstone.cooldown.unknown";
+                    vars["minutes"] = std::to_string((cooldownMs + MINUTE * IN_MILLISECONDS - 1) / (MINUTE * IN_MILLISECONDS));
                     break;
                 case SoulstoneNote::None:
                     return;
             }
+            std::string const text = BotShared::Phrases::Text(BotShared::I18n::OfParty(m_bot.me), key, vars);
             Commander::BotSpeech::Report(m_bot.me, m_bot.GetPartyLeader(), text);
         }
 

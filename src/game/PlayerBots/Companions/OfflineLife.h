@@ -22,6 +22,7 @@
 #define MANGOS_COMPANIONS_OFFLINE_LIFE_H
 
 #include "Common.h"
+#include "Shared/I18n.h"
 #include "SharedDefines.h"
 #include <map>
 #include <string>
@@ -74,7 +75,7 @@ namespace Companions
 
         // What it tells the party when it is back ("我不在的时候练了练专业：裁缝 +12，花了 3金"),
         // empty when there is nothing to tell. Skill names in `locale`.
-        std::string Line(Result const& result, std::vector<std::string> const& tags, LocaleConstant locale);
+        std::string Line(Result const& result, std::vector<std::string> const& tags, LocaleConstant locale, BotShared::I18n::Lang lang);
     }
 }
 

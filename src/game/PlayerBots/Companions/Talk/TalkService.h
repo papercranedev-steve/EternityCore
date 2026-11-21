@@ -18,6 +18,7 @@
 #define MANGOS_COMPANIONS_TALK_SERVICE_H
 
 #include "Common.h"
+#include "Shared/I18n.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -49,6 +50,7 @@ namespace Talk
         std::vector<std::string> const* tags = nullptr;   // its personality (Phrases)
         uint32 affinity = 0;                              // 0..100 (any party bot: 0)
         bool companion = false;                           // recruited (not a plain party bot)
+        BotShared::I18n::Lang lang = BotShared::I18n::Lang::En;   // the player's (all the words)
     };
 
     struct Option
@@ -96,8 +98,8 @@ namespace Talk
         // service offers something; an argument of one of its own later pages (not in Offer)
         // is the service's to check.
         virtual Outcome Choose(Context const& ctx, std::string const& arg) const = 0;
-        // What keeps it from being offered although its gate is open (appended to `out`).
-        virtual void Blockers(Player* /*bot*/, std::vector<Blocker>& /*out*/) const {}
+        // What keeps it from being offered although its gate is open (appended to `out`), in `lang`.
+        virtual void Blockers(Player* /*bot*/, BotShared::I18n::Lang /*lang*/, std::vector<Blocker>& /*out*/) const {}
     };
 
     // Every service, in the order the window lists them (Services.cpp).

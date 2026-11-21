@@ -4,7 +4,7 @@
 #include "Life/Errands/ErrandCommon.h"
 #include "Life/Errands/MerchantTasks.h"
 #include "Life/Errands/NpcVisit.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Capitals.h"
 #include "Shared/NpcDirectory.h"
 #include "Player.h"
@@ -105,14 +105,14 @@ namespace Trip
         std::vector<Lessons::Listed> const lessons = Lessons::Available(me, ContextOf(m_task));
         LocaleConstant const locale = reader && reader->GetSession() ? reader->GetSession()->GetSessionDbcLocale() : LOCALE_enUS;
         for (Lessons::Listed const& lesson : lessons)
-            out.push_back({ uint8(lesson.tier), Lessons::NameOf(lesson.spellId, locale) });
+            out.push_back({ uint8(lesson.tier), Lessons::NameOf(lesson.spellId, locale, BotShared::I18n::Of(reader)) });
         if (Shortfall(me))
         {
-            Phrases::Vars vars;
-            vars["important"] = Phrases::Money(Lessons::CostUpTo(lessons, Lessons::IMPORTANT));
-            vars["all"] = Phrases::Money(Lessons::CostUpTo(lessons, Lessons::Tier::Junk));
-            vars["have"] = Phrases::Money(me->GetMoney());
-            out.push_back({ 0, Phrases::Say("training.money", {}, vars) });
+            BotShared::Phrases::Vars vars;
+            vars["important"] = BotShared::Phrases::Money(BotShared::I18n::OfParty(me), Lessons::CostUpTo(lessons, Lessons::IMPORTANT));
+            vars["all"] = BotShared::Phrases::Money(BotShared::I18n::OfParty(me), Lessons::CostUpTo(lessons, Lessons::Tier::Junk));
+            vars["have"] = BotShared::Phrases::Money(BotShared::I18n::OfParty(me), me->GetMoney());
+            out.push_back({ 0, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "training.money", {}, vars) });
         }
     }
 

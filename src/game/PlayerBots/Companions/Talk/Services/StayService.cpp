@@ -2,7 +2,7 @@
 #include "Companions/Talk/Talk.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "PartyBotAI.h"
 #include "Player.h"
 
@@ -31,12 +31,12 @@ namespace Talk
                 if (staying)
                 {
                     option.id = std::string(Key()) + ":" + FOLLOW_ARG;
-                    option.text = Life::Phrases::Word("talk.opt.follow", "跟我走吧。");
+                    option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.follow");
                 }
                 else
                 {
                     option.id = Key();
-                    option.text = Life::Phrases::Word("talk.opt.stay", "在这儿等我。");
+                    option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.stay");
                 }
                 out.push_back(option);
             }

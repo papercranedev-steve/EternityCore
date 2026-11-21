@@ -64,8 +64,6 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Requests/Intents.cpp
   ${LIFE_DIR}/Requests/RequestBoard.h
   ${LIFE_DIR}/Requests/RequestBoard.cpp
-  ${LIFE_DIR}/Requests/Phrases.h
-  ${LIFE_DIR}/Requests/Phrases.cpp
 )
 
 target_sources(game PRIVATE ${LIFE_SRCS})

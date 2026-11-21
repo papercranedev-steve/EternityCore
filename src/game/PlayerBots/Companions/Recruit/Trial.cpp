@@ -1,6 +1,6 @@
 #include "Companions/Recruit/Trial.h"
 #include "Companions/CompanionMgr.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Group.h"

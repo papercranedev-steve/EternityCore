@@ -1,6 +1,6 @@
 #include "Companions/Travel/HomeBind.h"
 #include "Life/Errands/Travel.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Log.h"
@@ -30,10 +30,10 @@ namespace HomeBind
             leader->GetName(), uint32(leader->GetHomeBindAreaId()));
         if (!changed || !me->IsInMap(leader) || !me->IsWithinDist(leader, WITH_YD))
             return;
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = leader->GetName();
         vars["home"] = Life::Travel::AreaName(leader->GetHomeBindAreaId(), leader);
-        std::string const text = Life::Phrases::Say("home.bind", tags, vars);
+        std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "home.bind", tags, vars);
         if (!text.empty())
             BotShared::BotChat::SayToParty(me, text);
     }

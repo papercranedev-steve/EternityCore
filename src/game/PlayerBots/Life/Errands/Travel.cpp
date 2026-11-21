@@ -1,5 +1,5 @@
 #include "Life/Errands/Travel.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Commander/Perception/Spatial/TravelTime.h"
 #include "Commander/Perception/Spatial/LeaderTrail.h"
 #include "Shared/BotChat.h"
@@ -106,9 +106,9 @@ namespace Travel
             me->TeleportTo(me->GetMapId(), x, y, z + 0.5f, std::atan2(state.roadTo.y - y, state.roadTo.x - x));
         }
 
-        void Say(Player* me, char const* key, std::vector<std::string> const& tags, Phrases::Vars const& vars)
+        void Say(Player* me, char const* key, std::vector<std::string> const& tags, BotShared::Phrases::Vars const& vars)
         {
-            std::string const text = Phrases::Say(key, tags, vars);
+            std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars);
             if (!text.empty())
                 BotShared::BotChat::SayToParty(me, text);
         }
@@ -254,7 +254,7 @@ namespace Travel
         if (!hearth)
             SetOut(me, state, Here(meet), state.sinceMs, seconds, j.sails);
 
-        Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = meet->GetName();
         vars["zone"] = AreaName(me->GetZoneId(), meet);
         vars["home"] = AreaName(me->GetHomeBindAreaId(), meet);
@@ -328,7 +328,7 @@ namespace Travel
                     if (state.sailMs && !state.sailSaid && now >= state.sailMs)
                     {
                         state.sailSaid = true;
-                        Phrases::Vars vars;
+                        BotShared::Phrases::Vars vars;
                         vars["leader"] = meet->GetName();
                         Say(me, "travel.sail", tags, vars);
                     }
@@ -406,7 +406,7 @@ namespace Travel
                 // (the caller skips its update while the move is under way)
                 FaceAndShow(me, meet);
                 state = TravelState();
-                Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["leader"] = meet->GetName();
                 Say(me, "travel.near", tags, vars);
                 return Step::Arrived;

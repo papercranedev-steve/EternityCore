@@ -1,6 +1,6 @@
 #include "Life/Errands/CraftForPlayer.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Crafting.h"
 #include "Shared/Handover.h"
@@ -22,7 +22,11 @@ namespace CraftForPlayer
 {
     namespace
     {
-        char const* const MAIL_SUBJECT = "代工";
+        // The subject of a mail of what he made, when the player's bags are full.
+        std::string MailSubject(Player const* player)
+        {
+            return BotShared::Phrases::Word(BotShared::I18n::Of(player), "craft.mail.subject");
+        }
 
         bool CastsOwnRecipe(Player* me, uint32 spellId)
         {
@@ -33,9 +37,9 @@ namespace CraftForPlayer
 
         void Say(Player* me, Player* player, std::vector<std::string> const& tags, std::string const& key)
         {
-            Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["leader"] = player ? player->GetName() : "";
-            BotShared::BotChat::Say(me, Phrases::Say(key, tags, vars));
+            BotShared::BotChat::Say(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars));
         }
 
         // Materials the last cast did not use, back to the player.
@@ -46,7 +50,7 @@ namespace CraftForPlayer
                 {
                     uint32 const now = me->GetItemCount(itr.first);
                     if (now > itr.second)
-                        BotShared::Handover::MoveCount(me, itr.first, now - itr.second, player, MAIL_SUBJECT);
+                        BotShared::Handover::MoveCount(me, itr.first, now - itr.second, player, MailSubject(player));
                 }
             state.reagentsBefore.clear();
         }
@@ -65,11 +69,11 @@ namespace CraftForPlayer
                 if (item->GetEntry() != itemId || state.bagsBefore.count(item->GetObjectGuid()) || item->GetCount() > left)
                     continue;
                 uint32 const count = item->GetCount();
-                if (BotShared::Handover::MoveItem(me, item, player, MAIL_SUBJECT) != BotShared::Handover::Result::Failed)
+                if (BotShared::Handover::MoveItem(me, item, player, MailSubject(player)) != BotShared::Handover::Result::Failed)
                     left -= count;
             }
             if (left)
-                BotShared::Handover::MoveCount(me, itemId, left, player, MAIL_SUBJECT);
+                BotShared::Handover::MoveCount(me, itemId, left, player, MailSubject(player));
             return made;
         }
 

@@ -142,7 +142,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         row.state = info.parted ? 3 : player->GetGroup() && bot->GetGroup() == player->GetGroup() ? 2 : 1;
         row.name = bot->GetName();
         for (std::unique_ptr<Companions::Talk::Service> const& service : Companions::Talk::Services())
-            service->Blockers(bot, row.blockers);
+            service->Blockers(bot, BotShared::I18n::Of(player), row.blockers);
     }
 
     if (!offline.empty())
@@ -193,8 +193,10 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         freeLevels += (freeLevels.empty() ? "" : ",") + std::to_string(level);
     PSendSysMessage("PBCMP;SLOTS;%u;%u;%u;%u;%u;%u;%s", slots.used, slots.total, Companions::Slots::Max(),
         slots.nextFreeLevel, slots.canBuy ? 1 : 0, slots.price, freeLevels.c_str());
+    BotShared::I18n::Lang const lang = BotShared::I18n::Of(player);
     for (Companions::Gates::Info const& gate : Companions::Gates::All())
-        PSendSysMessage("PBCMP;GATE;%u;%u;%s;%u;%s", gate.affinity, gate.classMask, gate.key, gate.ready ? 1u : 0u, gate.label);
+        PSendSysMessage("PBCMP;GATE;%u;%u;%s;%u;%s", gate.affinity, gate.classMask, gate.key, gate.ready ? 1u : 0u,
+            Companions::Gates::Label(gate, lang).c_str());
 
     for (Companions::CompanionInfo const& info : companions)
     {
@@ -220,7 +222,7 @@ bool ChatHandler::HandlePartyBotCompanionsCommand(char* /*args*/)
         for (Companions::Traits::Trait trait : { traits.life, traits.combat })
             if (Companions::Traits::Info const* t = Companions::Traits::Of(trait))
                 PSendSysMessage("PBCMP;TRAIT;%u;%u;%s;%u;%s;%s", info.charGuid, Companions::Traits::TierAt(t->tier), t->key,
-                    uint32(t->rarity), t->label, Companions::Traits::TextFor(*t, info.charGuid).c_str());
+                    uint32(t->rarity), Companions::Traits::Label(*t, lang).c_str(), Companions::Traits::TextFor(*t, info.charGuid, lang).c_str());
     }
 
     SendSysMessage("PBCMP;END");

@@ -1,6 +1,6 @@
 #include "Life/Errands/WalkAway.h"
 #include "Life/Errands/Travel.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "MotionMaster.h"
@@ -42,10 +42,10 @@ namespace WalkAway
         else if (!StartWalk(me, state, watcher))
             return false;
 
-        Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = watcher->GetName();
         vars["home"] = Travel::AreaName(me->GetHomeBindAreaId(), watcher);
-        std::string const text = Phrases::Say(hearth ? "leave.bye.hearth" : "leave.bye", tags, vars);
+        std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), hearth ? "leave.bye.hearth" : "leave.bye", tags, vars);
         if (!text.empty())
             BotShared::BotChat::WhisperTo(me, watcher, text);
         return true;

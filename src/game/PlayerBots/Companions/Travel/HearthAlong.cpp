@@ -1,7 +1,7 @@
 #include "Companions/Travel/HearthAlong.h"
 #include "Companions/Travel/HomeBind.h"
 #include "Life/Errands/Travel.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Spell.h"
@@ -53,10 +53,10 @@ namespace HearthAlong
             return;
         state.casting = true;
 
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = leader->GetName();
         vars["home"] = Life::Travel::AreaName(me->GetHomeBindAreaId(), leader);
-        std::string const text = Life::Phrases::Say("hearth.along", tags, vars);
+        std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "hearth.along", tags, vars);
         if (!text.empty())
             BotShared::BotChat::SayToParty(me, text);
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s hearths home with %s (area %u).", me->GetName(),

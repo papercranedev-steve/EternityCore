@@ -24,6 +24,7 @@
 #define MANGOS_LIFE_TRIP_LESSON_PRIORITY_H
 
 #include "Common.h"
+#include "Shared/I18n.h"
 #include "SharedDefines.h"
 #include <set>
 #include <string>
@@ -72,8 +73,9 @@ namespace Lessons
     // Their cost up to `upTo` (inclusive).
     uint32 CostUpTo(std::vector<Listed> const& lessons, Tier upTo);
 
-    // "造水术（等级 3）" in the reader's client language (English when missing).
-    std::string NameOf(uint32 spellId, LocaleConstant locale);
+    // "造水术（等级 3）": the spell in the reader's client language (English when missing), the
+    // rank's brackets in his own language (i18n "lesson.rank").
+    std::string NameOf(uint32 spellId, LocaleConstant locale, BotShared::I18n::Lang lang);
 }
 }
 

@@ -1,4 +1,5 @@
 #include "Life/Errands/Trip/LessonPriority.h"
+#include "Shared/Phrases.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/Crafting.h"
@@ -153,7 +154,7 @@ namespace Lessons
         return cost;
     }
 
-    std::string NameOf(uint32 spellId, LocaleConstant locale)
+    std::string NameOf(uint32 spellId, LocaleConstant locale, BotShared::I18n::Lang lang)
     {
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
         if (!spell)
@@ -162,7 +163,7 @@ namespace Lessons
         std::string name = spell->SpellName[loc].empty() ? spell->SpellName[0] : spell->SpellName[loc];
         std::string const& rank = spell->Rank[loc].empty() ? spell->Rank[0] : spell->Rank[loc];
         if (!rank.empty())
-            name += "（" + rank + "）";
+            name = BotShared::Phrases::Text(lang, "lesson.rank", { { "name", name }, { "rank", rank } });
         return name;
     }
 }

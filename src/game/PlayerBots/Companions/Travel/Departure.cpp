@@ -2,7 +2,7 @@
 #include "Companions/Travel/HearthAlong.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "PartyBotAI.h"
@@ -90,9 +90,9 @@ namespace Departure
 
         void Say(Player* me, Player* leader, std::vector<std::string> const& tags, char const* key)
         {
-            Life::Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["leader"] = leader->GetName();
-            BotShared::BotChat::SayToParty(me, Life::Phrases::Say(key, tags, vars));
+            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars));
         }
     }
 
@@ -135,14 +135,14 @@ namespace Departure
         if (AnyStays(leader) || AnyHearthsAlong(leader) || !sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Departure))
             return;
 
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = leader->GetName();
         Requests::Ask ask;
         ask.intent = Requests::Intent::Departure;
-        ask.text = Life::Phrases::Say("leave.ask", tags, vars);
+        ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "leave.ask", tags, vars);
         ask.options = {
-            { "yes", Life::Phrases::Word("leave.opt.yes", "在这等我") },
-            { "no", Life::Phrases::Word("leave.opt.no", "跟上来") },
+            { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "leave.opt.yes") },
+            { "no", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "leave.opt.no") },
         };
         ask.fallback = "yes";
         state.requestId = sRequestBoard.Open(me, leader, ask);

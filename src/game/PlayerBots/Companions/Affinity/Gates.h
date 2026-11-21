@@ -15,6 +15,8 @@
 #define MANGOS_COMPANIONS_AFFINITY_GATES_H
 
 #include "Common.h"
+#include "Shared/I18n.h"
+#include <string>
 #include <vector>
 
 namespace Companions
@@ -40,11 +42,12 @@ namespace Companions
             uint32 affinity;    // allowed from this affinity on
             uint32 classMask;   // 0 = any class, else 1 << (class - 1)
             bool ready;         // its feature asks Allows (see above)
-            char const* key;    // phrase "affinity.unlock.<key>", addon id
-            char const* label;  // what the player may do now (addon)
+            char const* key;    // phrase "affinity.unlock.<key>", addon id; its label: phrase "gate.<key>"
         };
 
         std::vector<Info> const& All();
+        // What the player may do now, in `lang` (addon).
+        std::string Label(Info const& info, BotShared::I18n::Lang lang);
         Info const& Of(Gate gate);
 
         // The companion allows it now (affinity >= the gate's); true for anyone not a companion.

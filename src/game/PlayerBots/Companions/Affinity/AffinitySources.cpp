@@ -2,7 +2,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
 #include "Companions/Affinity/Traits.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Player.h"
 #include "Group.h"
@@ -54,12 +54,15 @@ namespace Companions
                     bool const crossed = state.lastAffinity != UINT32_MAX && state.lastAffinity < at;
                     if (crossed)
                     {
-                        Life::Phrases::Vars vars;
+                        namespace Phrases = BotShared::Phrases;
+                        Phrases::Lang const lang = BotShared::I18n::OfParty(me);
+                        Phrases::Vars vars;
                         vars["leader"] = leader->GetName();
-                        vars["trait"] = info->label;
-                        std::string text = Life::Phrases::Say(std::string("affinity.trait.") + info->key, tags, vars);
+                        vars["trait"] = Traits::Label(*info, lang);
+                        // (a line of its own for some traits, else the tier's)
+                        std::string text = Phrases::Format(Phrases::Pick(lang, std::string("affinity.trait.") + info->key, tags), vars);
                         if (text.empty())
-                            text = Life::Phrases::Say(tier == Traits::Tier::Life ? "affinity.trait.life" : "affinity.trait.combat", tags, vars);
+                            text = Phrases::Say(lang, tier == Traits::Tier::Life ? "affinity.trait.life" : "affinity.trait.combat", tags, vars);
                         if (!text.empty())
                             BotShared::BotChat::SayToParty(me, text);
                     }
@@ -93,11 +96,14 @@ namespace Companions
             uint32 const affinity = sCompanionMgr.GetAffinity(guid);
             if (state.lastAffinity != UINT32_MAX && affinity > state.lastAffinity && leader)
             {
-                Life::Phrases::Vars vars;
+                namespace Phrases = BotShared::Phrases;
+                Phrases::Lang const lang = BotShared::I18n::OfParty(me);
+                Phrases::Vars vars;
                 vars["leader"] = leader->GetName();
                 for (Gates::Info const* gate : Gates::Opened(state.lastAffinity, affinity, me->GetClass()))
                 {
-                    std::string const text = Life::Phrases::Say(std::string("affinity.unlock.") + gate->key, tags, vars);
+                    // (a gate without a line opens quietly)
+                    std::string const text = Phrases::Format(Phrases::Pick(lang, std::string("affinity.unlock.") + gate->key, tags), vars);
                     if (!text.empty())
                         BotShared::BotChat::SayToParty(me, text);
                     BotShared::BotChat::SystemTo(leader, "PBGATE;" + std::string(me->GetName()) + ";" + gate->key);

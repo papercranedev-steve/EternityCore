@@ -1,7 +1,7 @@
 #include "Companions/Talk/Services/ServiceList.h"
 #include "Companions/Talk/Talk.h"
 #include "Companions/Account/JoinOffer.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Player.h"
 
 namespace Companions
@@ -25,7 +25,7 @@ namespace Talk
                 Option option;
                 option.id = Key();
                 option.icon = Icon::Chat;
-                option.text = Life::Phrases::Word("talk.opt.account", "到我的账号里来吧？");
+                option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.account");
                 out.push_back(option);
             }
 

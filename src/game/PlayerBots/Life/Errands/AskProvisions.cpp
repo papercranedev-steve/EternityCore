@@ -1,6 +1,6 @@
 #include "Life/Errands/AskProvisions.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Provisions.h"
 #include "Shared/Supplies.h"
@@ -105,7 +105,7 @@ namespace AskProvisions
             {
                 DropOrder(state, false, now);
                 state.nextAskMs = now + AFTER_GIFT_MS;
-                BotShared::BotChat::Say(me, Phrases::Say("supply.thanks", tags, {}));
+                BotShared::BotChat::Say(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "supply.thanks", tags, {}));
                 return false;
             }
             if (orderState == Provision::OrderState::Failed || orderState == Provision::OrderState::None ||
@@ -118,10 +118,10 @@ namespace AskProvisions
             {
                 if (!WalkUpTo(me, state, giver, now))
                     return true;
-                Phrases::Vars vars;
+                BotShared::Phrases::Vars vars;
                 vars["giver"] = giver->GetName();
-                vars["what"] = Provision::WhatOf(state.orderKinds);
-                BotShared::BotChat::Say(me, Phrases::Say("supply.botask", tags, vars));
+                vars["what"] = Provision::WhatOf(state.orderKinds, BotShared::I18n::OfParty(me));
+                BotShared::BotChat::Say(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "supply.botask", tags, vars));
                 sProvisionDesk.MarkAsked(state.orderId);
                 state.asked = true;
             }
@@ -157,7 +157,7 @@ namespace AskProvisions
                         if (given)
                         {
                             state.nextAskMs = now + AFTER_GIFT_MS;
-                            BotShared::BotChat::SayToParty(me, Phrases::Say("supply.thanks", tags, {}));
+                            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "supply.thanks", tags, {}));
                         }
                         else
                             state.leaderRefused = true;
@@ -173,7 +173,7 @@ namespace AskProvisions
                         {
                             EndLeaderTurn(me, state, leader, true, true);
                             state.leaderQuietUntilMs = now + GIVER_QUIET_MS;
-                            BotShared::BotChat::SayToParty(me, Phrases::Say("supply.failed", tags, {}));
+                            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "supply.failed", tags, {}));
                             return false;
                         }
                         state.pauseUntilMs = now + RETRY_MS;

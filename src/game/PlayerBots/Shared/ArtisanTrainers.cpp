@@ -1,4 +1,5 @@
 #include "Shared/ArtisanTrainers.h"
+#include "Shared/Phrases.h"
 #include "Shared/Professions.h"
 #include "Shared/QuestMirror.h"
 #include "Player.h"
@@ -174,24 +175,13 @@ namespace ArtisanTrainers
             };
             auto text = [&skillName](int idx) -> QuestMirror::TripText
             {
-                LocaleConstant const locale = idx < 0 ? LOCALE_enUS : sObjectMgr.GetLocaleForIndex(idx);
-                std::string const name = skillName(idx);
+                // (quest texts go by the client's locale: i18n "artisan.quest.*" in its language)
+                I18n::Lang const lang = idx < 0 ? I18n::Lang::En : I18n::OfLocale(sObjectMgr.GetLocaleForIndex(idx));
+                Phrases::Vars const vars = { { "skill", skillName(idx) } };
                 QuestMirror::TripText t;
-                if (locale == LOCALE_zhCN || locale == LOCALE_zhTW)
-                {
-                    t.title = "大师级" + name;
-                    t.objective = "带队友去找大师级" + name + "训练师";
-                    t.details = "队友的" + name + "已经可以学大师级了，可大师级训练师不在主城里。$B$B带他去找训练师"
-                        "（同一张大地图上会有红旗），到了附近他自己会过去，学费他自己出。";
-                }
-                else
-                {
-                    t.title = "Artisan " + name;
-                    t.objective = "Bring your companion to an Artisan " + name + " trainer";
-                    t.details = "Your companion is ready for Artisan " + name + ", but no capital trainer teaches it.$B$B"
-                        "Take them to the trainer (a red flag on your map when you are on the same continent); "
-                        "near it they walk over and pay the fee themselves.";
-                }
+                t.title = Phrases::Text(lang, "artisan.quest.title", vars);
+                t.objective = Phrases::Text(lang, "artisan.quest.objective", vars);
+                t.details = Phrases::Text(lang, "artisan.quest.details", vars);
                 return t;
             };
             if (QuestMirror::Builder::BuildTrip(QuestOf(skill), 35, text))

@@ -1,6 +1,6 @@
 #include "Companions/Talk/Talk.h"
 #include "Companions/CompanionMgr.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Capitals.h"
 #include "PartyBotAI.h"
 #include "Player.h"
@@ -77,9 +77,10 @@ namespace Talk
     std::string Line(Context const& ctx, std::string const& key)
     {
         static std::vector<std::string> const none;
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = ctx.player ? ctx.player->GetName() : "";
-        return Life::Phrases::Say(key, ctx.tags ? *ctx.tags : none, vars);
+        // (empty, not logged, for a key with no line: some are optional, Greeting)
+        return BotShared::Phrases::Format(BotShared::Phrases::Pick(ctx.lang, key, ctx.tags ? *ctx.tags : none), vars);
     }
 
     Refusal Check(Player* player, Player* bot, std::string& line)
@@ -107,6 +108,7 @@ namespace Talk
         ctx.tags = ctx.ai ? &ctx.ai->PersonalityTags() : nullptr;
         ctx.companion = bot && sCompanionMgr.IsCompanion(bot->GetGUIDLow());
         ctx.affinity = ctx.companion ? sCompanionMgr.GetAffinity(bot->GetGUIDLow()) : 0;
+        ctx.lang = BotShared::I18n::Of(player);
         return ctx;
     }
 

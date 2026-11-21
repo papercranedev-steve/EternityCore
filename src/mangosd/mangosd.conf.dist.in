@@ -3245,6 +3245,19 @@ AHBuyer.MaxMarkup = 50
 #        A lower number equals to gear being more close to the bot level.
 #        Default: 10 (bots will equip gear down to a minimum of 10 item level difference)
 #
+#    PartyBot.Language
+#        Language of the bots' words when nobody in particular reads them (a lone population bot).
+#        A player reads them in his account's language (the PartyBot addon's switch), else in his
+#        client's (zhCN / zhTW: Chinese, others: English).
+#        Default: "en" - English
+#                 "zh" - Chinese
+#
+#    PartyBot.I18nDir
+#        Folder with the bots' text, one JSON file per language (zh.json, en.json; the source is
+#        src/game/PlayerBots/i18n, installed next to mangosd). Read at startup and by
+#        .partybot language reload.
+#        Default: "i18n"
+#
 #    PartyBot.Commander.Enable
 #        Team AI layered on top of the party bot rotations (src/game/PlayerBots/Commander).
 #        Can be toggled in game with .partybot ai on|off
@@ -3446,6 +3459,8 @@ PartyBot.SkipChecks = 0
 PartyBot.TalentDebug = 0
 PartyBot.AutoEquip = 1
 PartyBot.RandomGearLevelDifference = 10
+PartyBot.Language = "en"
+PartyBot.I18nDir = "i18n"
 PartyBot.Commander.Enable = 1
 PartyBot.Commander.BotUpdateMs = 200
 PartyBot.Commander.PerceptionMs = 200

@@ -25,6 +25,8 @@
 #include "Shared/ArtisanTrainers.h"
 #include "Shared/QuestPlaces.h"
 #include "Shared/ClassQuestChains.h"
+#include "Shared/I18n.h"
+#include "Shared/Phrases.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -72,6 +74,8 @@ void PlayerBotMgr::LoadConfig()
     m_confDebug = sConfig.GetBoolDefault("PlayerBot.Debug", false);
     m_confUpdateDiff = sConfig.GetIntDefault("PlayerBot.UpdateMs", 10000);
 
+    BotShared::I18n::LoadConfig();  // PlayerBots/Shared/: languages and the bots' text
+    BotShared::Phrases::LoadConfig();
     sPopulationMgr.LoadConfig();    // PlayerBots/Population/
     sCompanionMgr.LoadConfig();     // PlayerBots/Companions/
 
@@ -154,6 +158,9 @@ void PlayerBotMgr::Load()
 
     // 2- Configuration
     LoadConfig();
+    // The bots' text and the accounts' languages, before anything says or builds text.
+    BotShared::I18n::Load();
+    BotShared::Phrases::Load();
     // Mirror quests of class quests (companions' quests in the player's log), before anyone logs in.
     static bool mirrorsBuilt = false;
     if (!mirrorsBuilt)

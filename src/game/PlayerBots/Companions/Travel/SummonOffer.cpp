@@ -2,7 +2,7 @@
 #include "Companions/Affinity/Gates.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/Situation/Summon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "PartyBotAI.h"
@@ -24,10 +24,10 @@ namespace SummonOffer
         float constexpr BACK_YD = 50.0f;
 
         void Say(Player* me, Player* target, std::vector<std::string> const& tags, std::string const& key,
-                 Life::Phrases::Vars vars = {})
+                 BotShared::Phrases::Vars vars = {})
         {
             vars["leader"] = target ? target->GetName() : "";
-            BotShared::BotChat::SayToParty(me, Life::Phrases::Say(key, tags, vars));
+            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars));
         }
 
         bool Near(Player* warlock, Player* target)
@@ -108,7 +108,7 @@ namespace SummonOffer
         std::string names;
         for (ObjectGuid guid : helpers)
             if (Player* helper = warlock->GetMap()->GetPlayer(guid))
-                names += (names.empty() ? "" : Life::Phrases::Word("place.and", "和")) + helper->GetName();
+                names += (names.empty() ? "" : BotShared::Phrases::Word(BotShared::I18n::OfParty(warlock), "place.and")) + helper->GetName();
         Say(warlock, target, tags, "summon.start", { { "helpers", names } });
         return Refusal::None;
     }
@@ -162,14 +162,14 @@ namespace SummonOffer
         if (Check(me, leader, helpers) != Refusal::None || !sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Summon))
             return;
         state.asked = true;
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = leader->GetName();
         Requests::Ask ask;
         ask.intent = Requests::Intent::Summon;
-        ask.text = Life::Phrases::Say("summon.ask", tags, vars);
+        ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "summon.ask", tags, vars);
         ask.options = {
-            { "yes", Life::Phrases::Word("summon.opt.yes", "拉我回去") },
-            { "no", Life::Phrases::Word("summon.opt.no", "先不用") },
+            { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "summon.opt.yes") },
+            { "no", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "summon.opt.no") },
         };
         ask.fallback = "no";
         state.requestId = sRequestBoard.Open(me, leader, ask);

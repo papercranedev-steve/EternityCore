@@ -2062,7 +2062,7 @@ namespace DevConsole
             lua_setfield(L, -2, "forclass");
             lua_pushboolean(L, Companions::Gates::Allows(guid, g.gate));
             lua_setfield(L, -2, "allowed");
-            lua_pushstring(L, g.label);
+            lua_pushstring(L, Companions::Gates::Label(g, BotShared::I18n::Default()).c_str());
             lua_setfield(L, -2, "label");
             lua_rawseti(L, -2, ++i);
         }

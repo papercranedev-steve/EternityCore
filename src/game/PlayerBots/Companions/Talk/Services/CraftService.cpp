@@ -1,7 +1,7 @@
 #include "Companions/Talk/Services/ServiceList.h"
 #include "Companions/Talk/Talk.h"
 #include "Companions/Affinity/Gates.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Crafting.h"
 #include "Shared/Professions.h"
 #include "Player.h"
@@ -41,13 +41,13 @@ namespace Talk
             {
                 if (!Gates::Allows(ctx.bot->GetGUIDLow(), Gates::Gate::Crafting))
                     return;
-                std::string const anything = Life::Phrases::Word("talk.opt.craft", "能帮我做点东西吗？");
+                std::string const anything = BotShared::Phrases::Word(ctx.lang, "talk.opt.craft");
                 for (uint32 skill : CraftSkills(ctx.bot))
                 {
                     Option option;
                     option.id = std::string(Key()) + ":" + std::to_string(skill);
                     option.icon = Icon::Trainer;
-                    option.text = Life::Phrases::Word("talk.opt.craft." + std::to_string(skill), anything);
+                    option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.craft." + std::to_string(skill), anything);
                     out.push_back(option);
                 }
             }

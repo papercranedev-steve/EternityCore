@@ -1,5 +1,6 @@
 #include "Companions/Affinity/Gates.h"
 #include "Companions/CompanionMgr.h"
+#include "Shared/Phrases.h"
 #include "SharedDefines.h"
 
 namespace Companions
@@ -11,25 +12,30 @@ namespace Companions
             uint32 constexpr WARLOCK = 1 << (CLASS_WARLOCK - 1);
             uint32 constexpr MAGE = 1 << (CLASS_MAGE - 1);
 
-            // Order: by affinity (the addon lists them so). Labels are what the player reads on the
+            // Order: by affinity (the addon lists them so). Labels (i18n "gate.<key>") are what the player reads on the
             // Companions panel's affinity ruler: keep them short and general (user 2026-11-21: the
             // first trade gate stays "和他做简单的交易", not a list of what he accepts).
             std::vector<Info> const g_gates = {
-                { Gate::TradeBasics,   6,   0,       true,  "trade",    "和他做简单的交易" },
-                { Gate::TradeAnything, 15,  0,       true,  "tradeany", "交易给他任何物品" },
-                { Gate::ManageBags,    22,  0,       true,  "bags",     "管理他的背包" },
-                { Gate::WarlockSummon, 25,  WARLOCK, true,  "summon",   "请他召唤你" },
-                { Gate::Crafting,      30,  0,       true,  "craft",    "用你的材料请他代工" },
-                { Gate::MagePortal,    45,  MAGE,    true,  "portal",   "请他开传送门" },
-                { Gate::TakeMoney,     50,  0,       true,  "money",    "从他那里拿钱" },
-                { Gate::PickRewards,   60,  0,       true,  "rewards",  "帮他挑任务奖励" },
-                { Gate::JoinAccount,   100, 0,       true,  "account",  "招募他进你的账号" },
+                { Gate::TradeBasics,   6,   0,       true,  "trade" },
+                { Gate::TradeAnything, 15,  0,       true,  "tradeany" },
+                { Gate::ManageBags,    22,  0,       true,  "bags" },
+                { Gate::WarlockSummon, 25,  WARLOCK, true,  "summon" },
+                { Gate::Crafting,      30,  0,       true,  "craft" },
+                { Gate::MagePortal,    45,  MAGE,    true,  "portal" },
+                { Gate::TakeMoney,     50,  0,       true,  "money" },
+                { Gate::PickRewards,   60,  0,       true,  "rewards" },
+                { Gate::JoinAccount,   100, 0,       true,  "account" },
             };
         }
 
         std::vector<Info> const& All()
         {
             return g_gates;
+        }
+
+        std::string Label(Info const& info, BotShared::I18n::Lang lang)
+        {
+            return BotShared::Phrases::Word(lang, std::string("gate.") + info.key);
         }
 
         Info const& Of(Gate gate)

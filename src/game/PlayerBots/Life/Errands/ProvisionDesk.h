@@ -21,6 +21,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Shared/I18n.h"
 #include "Shared/Provisions.h"
 #include <deque>
 #include <map>
@@ -37,7 +38,7 @@ namespace Provision
     using Kinds = std::vector<BotShared::Provisions::Kind>;
 
     // What is asked for, in words (Phrases supply.what.*: "水和面包", "面包", "水").
-    std::string WhatOf(Kinds const& kinds);
+    std::string WhatOf(Kinds const& kinds, BotShared::I18n::Lang lang);
 
     enum class OrderState : uint8
     {

@@ -2,7 +2,7 @@
 #include "Life/Errands/ErrandCommon.h"
 #include "Shared/ItemUse.h"
 #include "Shared/BotChat.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Player.h"
 #include "Creature.h"
 #include "Map.h"
@@ -213,7 +213,7 @@ namespace QuestItemUse
             }
             else if (spell && spell->HasAttribute(SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG))
                 // (the party does not hit it meanwhile: doctrine HoldFire on a beast being tamed)
-                BotShared::BotChat::SayToParty(me, Phrases::Say("questitem.tame", {}, {}));
+                BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "questitem.tame", {}, {}));
             Clear(state);
             return true;
         }

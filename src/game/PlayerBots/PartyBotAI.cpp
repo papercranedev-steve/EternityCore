@@ -49,7 +49,7 @@
 #include "Commander/Team.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/TradeGate.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
@@ -541,9 +541,9 @@ bool PartyBotAI::UpdateSummon()
     auto say = [this, targetGuid](char const* key)
     {
         Player* pTarget = sObjectAccessor.FindPlayer(targetGuid);
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["leader"] = pTarget ? pTarget->GetName() : "";
-        BotShared::BotChat::SayToParty(me, Life::Phrases::Say(key, PersonalityTags(), vars));
+        BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, PersonalityTags(), vars));
     };
     if (!me->IsAlive() || me->IsInCombat())
     {
@@ -785,9 +785,9 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
                 {
                     Player* trader = BotShared::Trade::OpenWith(me);
                     BotShared::Trade::CloseWindow(me);
-                    Life::Phrases::Vars vars;
+                    BotShared::Phrases::Vars vars;
                     vars["leader"] = trader ? trader->GetName() : "";
-                    std::string const text = Life::Phrases::Say(Companions::TradeGate::PhraseOf(refusal), PersonalityTags(), vars);
+                    std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), Companions::TradeGate::PhraseOf(refusal), PersonalityTags(), vars);
                     if (!text.empty())
                         BotShared::BotChat::SayToParty(me, text);
                     return;

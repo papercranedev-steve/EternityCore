@@ -1,6 +1,6 @@
 #include "Life/Errands/GiveProvisions.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "Shared/Crafting.h"
@@ -51,9 +51,9 @@ namespace GiveProvisions
 
         // To a bot that asked: aloud (white /say, as it asked); to the leader: party chat.
         void Tell(Player* me, GiveProvisionsState const& state, char const* key, std::vector<std::string> const& tags,
-                  Phrases::Vars const& vars = {})
+                  BotShared::Phrases::Vars const& vars = {})
         {
-            std::string const text = Phrases::Say(key, tags, vars);
+            std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars);
             if (state.orderId)
                 BotShared::BotChat::Say(me, text);
             else
@@ -81,16 +81,16 @@ namespace GiveProvisions
                 if (kind != Kind::Healthstone)
                     food.push_back(kind);
 
-            Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["leader"] = leader->GetName();
-            vars["what"] = Provision::WhatOf(food);
+            vars["what"] = Provision::WhatOf(food, BotShared::I18n::OfParty(me));
 
             Requests::Ask ask;
             ask.intent = Requests::Intent::Supply;
-            ask.text = Phrases::Say(food.empty() ? "supply.offer.stone" : "supply.offer", tags, vars);
+            ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), food.empty() ? "supply.offer.stone" : "supply.offer", tags, vars);
             ask.options = {
-                { "yes", Phrases::Word("supply.opt.yes", "yes") },
-                { "no", Phrases::Word("supply.opt.no", "no") },
+                { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "supply.opt.yes") },
+                { "no", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "supply.opt.no") },
             };
             ask.fallback = "no";
             state.requestId = sRequestBoard.Open(me, leader, ask);
@@ -154,7 +154,7 @@ namespace GiveProvisions
             {
                 sRequestBoard.Close(id, Requests::Outcome::Declined);
                 state.declined = true;
-                BotShared::BotChat::SayToParty(me, Phrases::Say("supply.declined", tags, {}));
+                BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "supply.declined", tags, {}));
             }
             else
             {

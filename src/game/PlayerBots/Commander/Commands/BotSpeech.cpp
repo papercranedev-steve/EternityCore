@@ -2,6 +2,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/CommanderTypes.h"
 #include "Commander/Commands/PlayerChat.h"
+#include "Shared/Phrases.h"
 #include "TeamBotAI.h"
 #include "Chat.h"
 #include "Map.h"
@@ -17,41 +18,29 @@ namespace Commander
 {
     namespace
     {
-        // Module id (Proposal::source) -> what the line starts with. moves: its walks and holds
-        // are decisions too (a patrol dodge, waiting for the tank's threat), not walking every tick.
-        struct SourceText
+        // Module id (Proposal::source): what the line starts with is i18n "speech.source.<id>".
+        // moves: its walks and holds are decisions too (a patrol dodge, waiting for the tank's
+        // threat), not walking every tick.
+        struct SourceInfo
         {
             char const* source;
-            char const* label;
             bool moves;
         };
 
-        SourceText const SOURCES[] = {
-            { "interrupt",   "打断",   false },
-            { "cc",          "控制",   true  },
-            { "rescue",      "救人",   false },
-            { "dispel",      "驱散",   false },
-            { "fleestop",    "拦逃跑", false },
-            { "aoe",         "范围",   true  },
-            { "escape",      "脱身",   true  },
-            { "threat",      "仇恨",   true  },
-            { "pull",        "开怪",   true  },
-            { "lure",        "卡视野", true  },
-            { "position",    "走位",   true  },
-            { "retreat",     "撤退",   true  },
-            { "mana",        "回蓝",   false },
-            { "target",      "换目标", false },
-            { "encounter",   "首领",   true  },
+        SourceInfo const SOURCES[] = {
+            { "interrupt", false }, { "cc", true }, { "rescue", false }, { "dispel", false },
+            { "fleestop", false }, { "aoe", true }, { "escape", true }, { "threat", true },
+            { "pull", true }, { "lure", true }, { "position", true }, { "retreat", true },
+            { "mana", false }, { "target", false }, { "encounter", true },
         };
 
-        SourceText const* FindSource(char const* source)
+        SourceInfo const* FindSource(char const* source)
         {
-            for (SourceText const& s : SOURCES)
+            for (SourceInfo const& s : SOURCES)
                 if (!strcmp(s.source, source))
                     return &s;
             return nullptr;
         }
-
         struct BotState
         {
             uint32 lastMs = 0;
@@ -81,23 +70,23 @@ namespace Commander
             return true;
         }
 
-        char const* MoveText(BotActionType type)
+        // i18n "speech.act.<kind>" of a move, null: not one.
+        char const* MoveKind(BotActionType type)
         {
             switch (type)
             {
                 case BotActionType::MoveTo:
-                case BotActionType::Backpedal:  return "走位";
-                case BotActionType::Chase:      return "追上去";
+                case BotActionType::Backpedal:  return "move";
+                case BotActionType::Chase:      return "chase";
                 case BotActionType::StopMove:
-                case BotActionType::StopChase:  return "停下";
-                case BotActionType::HoldFire:   return "停手";
-                case BotActionType::Retreat:    return "撤退";
-                case BotActionType::UseObject:  return "使用物体";
+                case BotActionType::StopChase:  return "stop";
+                case BotActionType::HoldFire:   return "holdfire";
+                case BotActionType::Retreat:    return "retreat";
+                case BotActionType::UseObject:  return "useobject";
                 default:                        return nullptr;
             }
         }
     }
-
     void BotSpeech::OnExecuted(TeamBotAI const* bot, Proposal const& p, uint32 nowMs)
     {
         if (!sCommanderMgr.IsSpeechEnabled() || p.kind != ProposalKind::Replace || p.tier == ProposalTier::Routine)
@@ -106,8 +95,10 @@ namespace Commander
         if (!me->GetGroup())
             return;
 
-        SourceText const* src = FindSource(p.source);
-        char const* label = src ? src->label : p.source;
+        namespace Phrases = BotShared::Phrases;
+        Phrases::Lang const lang = BotShared::I18n::OfParty(me);
+        SourceInfo const* src = FindSource(p.source);
+        std::string const label = src ? Phrases::Word(lang, std::string("speech.source.") + src->source) : std::string(p.source);
         BotAction const& a = p.action;
         std::string target;
         if (!a.target.IsEmpty())
@@ -117,32 +108,32 @@ namespace Commander
         }
 
         std::string key = p.source;
-        std::string text = std::string(label) + "：";
+        std::string action;
         if (a.type == BotActionType::Cast && a.spell)
         {
             key += ":spell" + std::to_string(a.spell->Id);
-            text += a.spell->SpellName[0];
-            text += " → " + (target.empty() ? std::string("自己") : target);
+            action = Phrases::Text(lang, "speech.cast", { { "spell", a.spell->SpellName[0] },
+                { "target", target.empty() ? Phrases::Word(lang, "speech.self") : target } });
         }
         else if (a.type == BotActionType::Attack)
         {
             key += ":attack" + std::to_string(a.target.GetRawValue());
-            text += "打 " + target;
+            action = Phrases::Text(lang, "speech.attack", { { "target", target } });
         }
-        else if (char const* move = MoveText(a.type))
+        else if (char const* kind = MoveKind(a.type))
         {
             if (!src || !src->moves)
                 return;
-            key += ":" + std::string(move);
-            text += move;
-            if (!target.empty())
-                text += " " + target;
+            key += ":" + std::string(kind);
+            std::string const move = Phrases::Word(lang, std::string("speech.act.") + kind);
+            action = target.empty() ? move : Phrases::Text(lang, "speech.move.target", { { "move", move }, { "target", target } });
         }
         else
             return;     // Hold ("keep walking" / "wait" every tick), rest, pet actions
 
+        std::string text = Phrases::Text(lang, "speech.line", { { "label", label }, { "action", action } });
         if (p.reason && *p.reason)
-            text += std::string("（") + p.reason + "）";
+            text = Phrases::Text(lang, "speech.reason", { { "line", text }, { "reason", p.reason } });
 
         if (Allow(me->GetObjectGuid(), key, nowMs))
             PlayerChat::SayToParty(me, text);

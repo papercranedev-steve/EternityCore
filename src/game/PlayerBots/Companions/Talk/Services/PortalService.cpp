@@ -2,7 +2,7 @@
 #include "Companions/Talk/Talk.h"
 #include "Companions/Affinity/Gates.h"
 #include "Life/Errands/ErrandCommon.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/Portals.h"
 #include "Log.h"
 #include "Player.h"
@@ -43,7 +43,7 @@ namespace Talk
                 Option option;
                 option.id = Key();
                 option.icon = Icon::Taxi;
-                option.text = Life::Phrases::Word("talk.opt.portal", "能帮我开个传送门吗？");
+                option.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.portal");
                 out.push_back(option);
             }
 
@@ -60,7 +60,7 @@ namespace Talk
                             Option city;
                             city.id = std::string(Key()) + ":" + std::to_string(spell->Id);
                             city.icon = Icon::Taxi;
-                            city.text = Life::Phrases::Word("talk.opt.portal." + std::to_string(spell->Id), spell->SpellName[0]);
+                            city.text = BotShared::Phrases::Word(ctx.lang, "talk.opt.portal." + std::to_string(spell->Id), spell->SpellName[0]);
                             outcome.options.push_back(city);
                         }
                     return outcome;
@@ -91,11 +91,11 @@ namespace Talk
                 return outcome;
             }
 
-            void Blockers(Player* bot, std::vector<Blocker>& out) const override
+            void Blockers(Player* bot, BotShared::I18n::Lang lang, std::vector<Blocker>& out) const override
             {
                 if (Unlocked(bot) && !BotShared::Portals::CastsFromBags(bot))
                     out.push_back({ Gates::Of(Gates::Gate::MagePortal).key,
-                                    Life::Phrases::Word("talk.block.portal", "缺传送门符文") });
+                                    BotShared::Phrases::Word(lang, "talk.block.portal") });
             }
         };
     }

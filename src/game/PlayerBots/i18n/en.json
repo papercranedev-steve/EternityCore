@@ -1,0 +1,23 @@
+{
+  "//0": "PartyBot server text, English. Same keys and {variables} as zh.json; a key missing here is said in Chinese. Check with contrib/i18n/i18n.mjs.",
+  "//1": "Texts that were in English in the code already. Every other key: not translated yet (shown in Chinese). A population bot turning down a group invite, as players type it (Population/PopulationBotAI).",
+  "popbot.decline": [
+    "no thanks",
+    "no ty",
+    "sorry, busy atm",
+    "nah im good, thx",
+    "soloing this one, ty",
+    "maybe later"
+  ],
+  "//2": "Companion quests in the player's quest log (Shared/QuestMirror). mirror.prefix ends with a space; {giver}: who gives the quest; $B: a line break.",
+  "mirror.prefix": "[Companion] ",
+  "mirror.intro": "Your companion's quest: only what your companion kills and collects counts. Take them along.$B$B",
+  "mirror.placeholder.intro": "Your companion has not taken this quest yet. Bring them to {giver}; once they take it, this turns into the quest itself.$B$B",
+  "mirror.placeholder.goal": "Bring your companion to {giver}",
+  "mirror.done": "Objective complete",
+  "mirror.somegiver": "the quest giver",
+  "//3": "Artisan trainer trips in the quest log (Shared/ArtisanTrainers). {skill}: the profession.",
+  "artisan.quest.title": "Artisan {skill}",
+  "artisan.quest.objective": "Bring your companion to an Artisan {skill} trainer",
+  "artisan.quest.details": "Your companion is ready for Artisan {skill}, but no capital trainer teaches it.$B$BTake them to the trainer (a red flag on your map when you are on the same continent); near it they walk over and pay the fee themselves."
+}

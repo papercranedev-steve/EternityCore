@@ -1,7 +1,7 @@
 #include "Population/StrangerTalk.h"
 #include "Population/PopulationBotAI.h"
 #include "Companions/Talk/Talk.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Capitals.h"
 #include "Chat.h"
@@ -28,34 +28,34 @@ namespace StrangerTalk
             return bot && bot->AI() ? dynamic_cast<PopulationBotAI*>(bot->AI()) : nullptr;
         }
 
-        std::string Say(PopulationBotAI* ai, Player* player, std::string const& key, Life::Phrases::Vars vars = {})
+        std::string Say(PopulationBotAI* ai, Player* player, std::string const& key, BotShared::Phrases::Vars vars = {})
         {
             vars["leader"] = player ? player->GetName() : "";
-            return Life::Phrases::Say(key, ai->Tags(), vars);
+            return BotShared::Phrases::Say(BotShared::I18n::Of(player), key, ai->Tags(), vars);
         }
 
-        Talk::Option OptionOf(char const* id, char const* wordKey, char const* fallback)
+        Talk::Option OptionOf(BotShared::I18n::Lang lang, char const* id, char const* wordKey)
         {
             Talk::Option option;
             option.id = id;
             option.icon = Talk::Icon::Chat;
-            option.text = Life::Phrases::Word(wordKey, fallback);
+            option.text = BotShared::Phrases::Word(lang, wordKey);
             return option;
         }
 
-        std::vector<Talk::Option> MeetOptions(PopulationBotAI* ai, bool chat)
+        std::vector<Talk::Option> MeetOptions(PopulationBotAI* ai, Player* player, bool chat)
         {
             std::vector<Talk::Option> options;
             if (ai->CanJoin())
-                options.push_back(OptionOf("meet:join", "meet.opt.join", "一起打一会儿怎么样？"));
+                options.push_back(OptionOf(BotShared::I18n::Of(player), "meet:join", "meet.opt.join"));
             if (chat)
-                options.push_back(OptionOf("meet:chat", "meet.opt.chat", "你在忙什么呢？"));
+                options.push_back(OptionOf(BotShared::I18n::Of(player), "meet:chat", "meet.opt.chat"));
             return options;
         }
 
-        std::string ClassWord(Player* bot)
+        std::string ClassWord(BotShared::I18n::Lang lang, Player* bot)
         {
-            return Life::Phrases::Word("class." + std::to_string(uint32(bot->GetClass())), "冒险者");
+            return BotShared::Phrases::Word(lang, "class." + std::to_string(uint32(bot->GetClass())));
         }
 
         bool Heals(uint8 classId)
@@ -91,7 +91,7 @@ namespace StrangerTalk
                 return Say(ai, player, "meet.join.cannot");
             // (recruiting doc §1: never anyone above the player)
             if (bot->GetLevel() > player->GetLevel())
-                return TooHighLine(bot, ai->Tags());
+                return TooHighLine(player, bot, ai->Tags());
             if (player->GetGroup() && player->GetGroup()->IsFull())
                 return Say(ai, player, "meet.join.full");
 
@@ -118,15 +118,15 @@ namespace StrangerTalk
 
         void FirstOfferPage(Player* player, Player* bot, PopulationBotAI* ai)
         {
-            Life::Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["name"] = bot->GetName();
-            vars["class"] = ClassWord(bot);
-            vars["help"] = Life::Phrases::Word(Heals(bot->GetClass()) ? "first.help.heal" : "first.help.tank",
-                Heals(bot->GetClass()) ? "帮你治伤" : "帮你顶在前面");
+            vars["class"] = ClassWord(BotShared::I18n::Of(player), bot);
+            vars["help"] = BotShared::Phrases::Word(BotShared::I18n::Of(player), Heals(bot->GetClass()) ? "first.help.heal" : "first.help.tank");
+
             Talk::Page page;
             page.text = Say(ai, player, "first.offer", vars);
-            page.options.push_back(OptionOf("first:yes", "first.opt.yes", "好啊，一起走吧。"));
-            page.options.push_back(OptionOf("first:no", "first.opt.no", "我想先一个人走走。"));
+            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:yes", "first.opt.yes"));
+            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:no", "first.opt.no"));
             Talk::SendPage(player, bot, page);
         }
     }
@@ -136,11 +136,11 @@ namespace StrangerTalk
         return AiOf(bot) != nullptr;
     }
 
-    std::string TooHighLine(Player* bot, std::vector<std::string> const& tags)
+    std::string TooHighLine(Player* reader, Player* bot, std::vector<std::string> const& tags)
     {
-        Life::Phrases::Vars vars;
+        BotShared::Phrases::Vars vars;
         vars["level"] = std::to_string(bot->GetLevel());
-        return Life::Phrases::Say("meet.join.toohigh", tags, vars);
+        return BotShared::Phrases::Say(BotShared::I18n::Of(reader), "meet.join.toohigh", tags, vars);
     }
 
     bool Handle(ChatHandler& handler, Player* player, Player* bot, char const* option)
@@ -209,12 +209,12 @@ namespace StrangerTalk
         if (opt == "meet:chat")
         {
             page.text = Say(ai, player, ChatKey(ai));
-            page.options = MeetOptions(ai, false);
+            page.options = MeetOptions(ai, player, false);
         }
         else
         {
             page.text = Say(ai, player, "meet.hello");
-            page.options = MeetOptions(ai, true);
+            page.options = MeetOptions(ai, player, true);
         }
         Talk::SendPage(player, bot, page);
         return true;
@@ -235,7 +235,7 @@ namespace StrangerTalk
         bot->HandleEmoteCommand(EMOTE_ONESHOT_QUESTION);
         Talk::Page page;
         page.text = Say(ai, player, "meet.invited");
-        page.options = MeetOptions(ai, true);
+        page.options = MeetOptions(ai, player, true);
         Talk::SendPage(player, bot, page);
     }
 
@@ -252,8 +252,8 @@ namespace StrangerTalk
                 return true;
             case 1:
             {
-                Life::Phrases::Vars vars;
-                vars["giver"] = ai->GetRequest().giverName.empty() ? Life::Phrases::Word("first.giver", "营地的长官")
+                BotShared::Phrases::Vars vars;
+                vars["giver"] = ai->GetRequest().giverName.empty() ? BotShared::Phrases::Word(BotShared::I18n::Of(player), "first.giver")
                                                                    : ai->GetRequest().giverName;
                 bot->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
                 BotShared::BotChat::Say(bot, Say(ai, player, "first.why", vars));

@@ -45,7 +45,7 @@
 #include "ObjectMgr.h"
 #include "Commander/CommanderMgr.h"
 #include "Life/Errands/CraftForPlayer.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Crafting.h"
 #include "SpellMgr.h"

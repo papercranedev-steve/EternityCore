@@ -1,7 +1,7 @@
 #include "Life/Errands/TownTrip.h"
 #include "Life/Errands/ErrandCommon.h"
 #include "Life/Errands/NpcVisit.h"
-#include "Life/Requests/Phrases.h"
+#include "Shared/Phrases.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/BotChat.h"
 #include "Shared/ClassTraining.h"
@@ -26,15 +26,15 @@ namespace TownTrip
     {
         using Phase = TownTripState::Phase;
 
-        void Say(Player* me, std::string const& key, std::vector<std::string> const& tags, Phrases::Vars const& vars = {})
+        void Say(Player* me, std::string const& key, std::vector<std::string> const& tags, BotShared::Phrases::Vars const& vars = {})
         {
-            BotShared::BotChat::SayToParty(me, Phrases::Say(key, tags, vars));
+            BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars));
         }
 
         void Whisper(Player* me, Player* leader, std::string const& key, std::vector<std::string> const& tags,
-                     Phrases::Vars const& vars = {})
+                     BotShared::Phrases::Vars const& vars = {})
         {
-            BotShared::BotChat::WhisperTo(me, leader, Phrases::Say(key, tags, vars));
+            BotShared::BotChat::WhisperTo(me, leader, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), key, tags, vars));
         }
 
         void Enter(TownTripState& state, Phase phase, uint32 now)
@@ -92,19 +92,19 @@ namespace TownTrip
         }
 
         // "拍卖行、护甲商和训练师": the named stops in route order, each word once.
-        std::string PlacesOf(std::vector<Trip::TripStop> const& stops)
+        std::string PlacesOf(std::vector<Trip::TripStop> const& stops, BotShared::I18n::Lang lang)
         {
             std::vector<std::string> words;
             for (Trip::TripStop const& s : stops)
             {
                 if (s.placeKey.empty())
                     continue;
-                std::string const word = Phrases::Word(s.placeKey, Phrases::Word("place.vendor", s.action->Name()));
+                std::string const word = BotShared::Phrases::Word(lang, s.placeKey, BotShared::Phrases::Word(lang, "place.vendor", s.action->Name()));
                 if (std::find(words.begin(), words.end(), word) == words.end())
                     words.push_back(word);
             }
-            std::string const comma = Phrases::Word("place.comma", ", ");
-            std::string const last = Phrases::Word("place.and", " / ");
+            std::string const comma = BotShared::Phrases::Word(lang, "place.comma");
+            std::string const last = BotShared::Phrases::Word(lang, "place.and");
             std::string places;
             for (size_t i = 0; i < words.size(); ++i)
             {
@@ -116,7 +116,7 @@ namespace TownTrip
         }
 
         // What the trip is for ("补点东西，顺便学新技能"), from the planners on it.
-        std::string PurposesOf(std::vector<Trip::ITripPlanner*> const& going)
+        std::string PurposesOf(std::vector<Trip::ITripPlanner*> const& going, BotShared::I18n::Lang lang)
         {
             std::string why;
             for (Trip::ITripPlanner const* planner : going)
@@ -125,8 +125,8 @@ namespace TownTrip
                 if (!key)
                     continue;
                 if (!why.empty())
-                    why += Phrases::Word("errand.why.and", ", and ");
-                why += Phrases::Word(key, planner->Name());
+                    why += BotShared::Phrases::Word(lang, "errand.why.and");
+                why += BotShared::Phrases::Word(lang, key, planner->Name());
             }
             return why;
         }
@@ -159,16 +159,16 @@ namespace TownTrip
                 if (std::any_of(state.stops.begin(), state.stops.end(), [i](Trip::TripStop const& s) { return s.planner == int(i); }))
                     going.push_back(planners[i]);
 
-            Phrases::Vars vars;
-            vars["places"] = PlacesOf(state.stops);
-            vars["why"] = PurposesOf(going);
+            BotShared::Phrases::Vars vars;
+            vars["places"] = PlacesOf(state.stops, BotShared::I18n::OfParty(me));
+            vars["why"] = PurposesOf(going, BotShared::I18n::OfParty(me));
             vars["leader"] = leader->GetName();
             uint32 const trainerCost = BotShared::ClassTraining::CostOfAvailable(me);
-            vars["gold"] = trainerCost ? Phrases::Money(trainerCost) : std::string();
+            vars["gold"] = trainerCost ? BotShared::Phrases::Money(BotShared::I18n::OfParty(me), trainerCost) : std::string();
 
             Requests::Ask ask;
             ask.intent = Requests::Intent::Errand;
-            ask.text = Phrases::Say("trip.ask", tags, vars);
+            ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "trip.ask", tags, vars);
             uint32 shortfall = 0;
             for (Trip::ITripPlanner* planner : going)
             {
@@ -177,14 +177,14 @@ namespace TownTrip
             }
             if (shortfall && !state.paysOwnWay)
                 ask.options = {
-                    { "pay", Phrases::Word("errand.opt.pay", "pay") },
-                    { "yes", Phrases::Word("errand.opt.nopay", "yes") },
-                    { "no",  Phrases::Word("errand.opt.no", "no") },
+                    { "pay", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "errand.opt.pay") },
+                    { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "errand.opt.nopay") },
+                    { "no",  BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "errand.opt.no") },
                 };
             else
                 ask.options = {
-                    { "yes", Phrases::Word("errand.opt.yes", "yes") },
-                    { "no",  Phrases::Word("errand.opt.no", "no") },
+                    { "yes", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "errand.opt.yes") },
+                    { "no",  BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "errand.opt.no") },
                 };
             ask.fallback = "yes";   // nobody minds: it goes (without his money)
             state.requestId = sRequestBoard.Open(me, leader, ask);
@@ -280,7 +280,7 @@ namespace TownTrip
                 state.waitX = gate.x;
                 state.waitY = gate.y;
                 state.waitZ = gate.z;
-                state.waitName = gate.name.empty() ? Phrases::Word("place.gate", "gate") : gate.name;
+                state.waitName = gate.name.empty() ? BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "place.gate") : gate.name;
             }
             else
             {
@@ -290,16 +290,16 @@ namespace TownTrip
                 state.waitName.clear();
             }
 
-            Phrases::Vars vars;
-            vars["gate"] = state.hasGate ? state.waitName : Phrases::Word("place.here", "here");
+            BotShared::Phrases::Vars vars;
+            vars["gate"] = state.hasGate ? state.waitName : BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "place.here");
             Requests::Ask ask;
             ask.intent = Requests::Intent::Rendezvous;
-            ask.text = Phrases::Say("meet.ask", tags, vars);
-            ask.options.push_back({ "come", Phrases::Format(Phrases::Word("meet.opt.come", "come"), vars) });
+            ask.text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "meet.ask", tags, vars);
+            ask.options.push_back({ "come", BotShared::Phrases::Format(BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "meet.opt.come"), vars) });
             if (state.hasGate)
-                ask.options.push_back({ "gate", Phrases::Format(Phrases::Word("meet.opt.gate", "gate"), vars) });
+                ask.options.push_back({ "gate", BotShared::Phrases::Format(BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "meet.opt.gate"), vars) });
             else
-                ask.options.push_back({ "here", Phrases::Word("meet.opt.here", "here") });
+                ask.options.push_back({ "here", BotShared::Phrases::Word(BotShared::I18n::OfParty(me), "meet.opt.here") });
             ask.fallback = "come";
             state.requestId = sRequestBoard.Open(me, leader, ask);
             if (!state.requestId)
@@ -330,7 +330,7 @@ namespace TownTrip
                                 Requests::Outcome::Accepted : Requests::Outcome::Expired);
             state.requestId = 0;
 
-            Phrases::Vars vars;
+            BotShared::Phrases::Vars vars;
             vars["gate"] = state.waitName;
             if (status.answer == "gate" && state.hasGate)
             {

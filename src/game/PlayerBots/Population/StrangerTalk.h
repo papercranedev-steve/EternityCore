@@ -41,7 +41,7 @@ namespace StrangerTalk
     void OnInvite(Player* player, Player* bot);
 
     // "等你到 N 级再来找我吧": he is above the player's level.
-    std::string TooHighLine(Player* bot, std::vector<std::string> const& tags);
+    std::string TooHighLine(Player* reader, Player* bot, std::vector<std::string> const& tags);
 
     // The herald's words, one per call (`index` from 0); after the last one the offer page goes
     // to the player and it returns false.
