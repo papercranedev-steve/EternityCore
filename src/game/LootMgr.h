@@ -446,4 +446,13 @@ inline void LoadLootTables(LootIdSet& ids_set)
 
 bool ExistsRefLootTemplate(uint32 refLootId);
 
+// Code that fills an opened item's loot itself, instead of `item_loot_template` (custom:
+// companions' expedition parcels, PlayerBots/Companions/Bench). Called on a map thread when
+// a lootable item without loot yet is opened (Player::SendLoot); true = it filled `loot`.
+// Add at startup only (world thread, before players log in).
+class Item;
+typedef bool (*ItemLootFiller)(Item* item, Player* opener, Loot& loot);
+void AddItemLootFiller(ItemLootFiller filler);
+bool FillItemLootByCode(Item* item, Player* opener, Loot& loot);
+
 #endif

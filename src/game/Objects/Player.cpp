@@ -7744,8 +7744,12 @@ void Player::SendLoot(ObjectGuid guid, LootType lootType, Player const* pVictim)
                         item->SetLootState(ITEM_LOOT_TEMPORARY);
                         break;
                     default:
-                        loot->FillLoot(item->GetEntry(), LootTemplates_Item, this, true, item->GetProto()->MaxMoneyLoot == 0);
-                        loot->GenerateMoneyLoot(item->GetProto()->MinMoneyLoot, item->GetProto()->MaxMoneyLoot);
+                        // (custom: code may fill it, LootMgr.h AddItemLootFiller)
+                        if (!FillItemLootByCode(item, this, *loot))
+                        {
+                            loot->FillLoot(item->GetEntry(), LootTemplates_Item, this, true, item->GetProto()->MaxMoneyLoot == 0);
+                            loot->GenerateMoneyLoot(item->GetProto()->MinMoneyLoot, item->GetProto()->MaxMoneyLoot);
+                        }
                         item->SetLootState(ITEM_LOOT_CHANGED);
                         item->SetGeneratedLoot(true);
                         break;

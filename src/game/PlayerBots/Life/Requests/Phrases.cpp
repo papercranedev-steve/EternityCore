@@ -306,6 +306,16 @@ namespace Phrases
             { "bench.leveled",        "default",     "这阵子我自己也出去练了练，现在{level}级了。" },
             { "bench.leveled",        "chatty",      "你不在的时候我可没闲着！自己出去打了好多怪，现在{level}级啦！" },
             { "bench.leveled",        "quiet",       "自己练到{level}级了。" },
+            // Expedition parcel mail (Companions/Bench/Expedition). {leader}, {name}: the companion,
+            // {zone}: where it is (".nozone": not known).
+            { "parcel.subject",       "default",     "给你带了点东西" },
+            { "parcel.subject",       "chatty",      "快打开看看！" },
+            { "parcel.subject",       "quiet",       "东西" },
+            { "parcel.body",          "default",     "{leader}：\n\n这阵子我在{zone}转了转，顺手攒了点东西，给你寄过去。用得上就拿着。\n\n——{name}" },
+            { "parcel.body",          "chatty",      "{leader}！\n\n我在{zone}跑了好几天，打了好多怪，捡了不少好东西，一股脑都寄给你啦！下次见面记得跟我说说你那边的事。\n\n——{name}" },
+            { "parcel.body",          "frugal",      "{leader}：\n\n在{zone}攒下的，一个铜板都没乱花。你拿去用吧。\n\n——{name}" },
+            { "parcel.body",          "quiet",       "{leader}：\n\n{zone}带回来的。\n\n——{name}" },
+            { "parcel.body.nozone",   "default",     "{leader}：\n\n这阵子我出去转了转，顺手攒了点东西，给你寄过去。用得上就拿着。\n\n——{name}" },
             // Profession trainers (Trip/ProfessionPlanner): {skill}, {count}.
             { "training.recipes", "default",    "{skill}：{count}个新配方" },
             // Out in the field (Life/Errands/LessonReminder). {lessons}: the names.

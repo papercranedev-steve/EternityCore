@@ -1561,3 +1561,23 @@ bool ExistsRefLootTemplate(uint32 refLootId)
 {
     return LootTemplates_Reference.HaveLootFor(refLootId);
 }
+
+static std::vector<ItemLootFiller>& ItemLootFillers()
+{
+    static std::vector<ItemLootFiller> fillers;
+    return fillers;
+}
+
+void AddItemLootFiller(ItemLootFiller filler)
+{
+    if (filler)
+        ItemLootFillers().push_back(filler);
+}
+
+bool FillItemLootByCode(Item* item, Player* opener, Loot& loot)
+{
+    for (ItemLootFiller filler : ItemLootFillers())
+        if (filler(item, opener, loot))
+            return true;
+    return false;
+}

@@ -71,6 +71,9 @@ namespace Companions
         // Levels it grew on the bench since it was last online (UpdateBench); said and cleared
         // when it arrives. World thread.
         uint32 benchLevels = 0;
+        // The owner's active time it has been out on the bench since its last parcel
+        // (Bench/Expedition); 0 while it is with him. World thread.
+        uint32 expeditionSecs = 0;
         // Temporary companions only (PretendAway): the offline skill points of the day, which a
         // real companion keeps in custom_companion_skillup.
         uint32 temporaryDay = 0;
@@ -180,16 +183,26 @@ namespace Companions
         // if they had gone back there (presence §2.2). Every HOME_CHECK_MS.
         void SendHome();
         uint32 m_homeCheckMs = 0;
-        // Companions on the bench (out of the world, not in their owner's group) grow with the
-        // experience their online owner gains (Bench/BenchLeveling, bench doc §2): written
-        // straight into their saved character. Every BENCH_CHECK_MS.
+        // Companions on the bench (out of the world, not in their owner's group), while their
+        // owner is online (bench doc): they grow with the experience he gains (Bench/
+        // BenchLeveling, written straight into their saved character) and mail him a parcel
+        // every so often of his active time (Bench/Expedition). Every BENCH_CHECK_MS.
         void UpdateBench();
         uint32 m_benchCheckMs = 0;
         // Owner char guid -> his total experience at the last look (custom_companion_owner).
         std::unordered_map<uint32, uint32> m_ownerXpSeen;
-        // Benched companion char guid -> its saved level and experience, read once from
-        // `characters` and kept while it stays out (forgotten once it is online).
-        std::unordered_map<uint32, std::pair<uint32, uint32>> m_benchProgress;
+        // A benched companion as saved in `characters`, read once and kept while it stays out
+        // (forgotten once it is online).
+        struct Benched
+        {
+            uint32 level = 1;
+            uint32 xp = 0;
+            uint32 zone = 0;
+        };
+        std::unordered_map<uint32, Benched> m_benched;
+        // Benched::level etc. of `info`, read from `characters` the first time; null: not there.
+        Benched* BenchedOf(CompanionInfo const& info);
+        void SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched);
         // Companions recruited before class quest abilities existed: decided once each is online
         // as a party bot (ClassQuests/PastQuests).
         void DecidePastQuestsOfOnline();

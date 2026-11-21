@@ -21,6 +21,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/ArtisanTrip.cpp
   ${COMPANIONS_DIR}/Bench/BenchLeveling.h
   ${COMPANIONS_DIR}/Bench/BenchLeveling.cpp
+  ${COMPANIONS_DIR}/Bench/Expedition.h
+  ${COMPANIONS_DIR}/Bench/Expedition.cpp
   ${COMPANIONS_DIR}/Affinity/AffinitySources.h
   ${COMPANIONS_DIR}/Affinity/AffinitySources.cpp
   ${COMPANIONS_DIR}/Affinity/Gates.h

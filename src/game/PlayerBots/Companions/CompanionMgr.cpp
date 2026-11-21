@@ -1,6 +1,7 @@
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/AffinitySources.h"
 #include "Companions/Bench/BenchLeveling.h"
+#include "Companions/Bench/Expedition.h"
 #include "Companions/ClassQuests/PastQuests.h"
 #include "Companions/PastProfessions.h"
 #include "Companions/PastRoll.h"
@@ -9,6 +10,7 @@
 #include "Shared/ClassTraining.h"
 #include "Shared/DungeonClears.h"
 #include "Life/Requests/Phrases.h"
+#include "Life/Errands/Travel.h"
 #include "Shared/TownGates.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
@@ -181,6 +183,10 @@ namespace Companions
         if (!benchLevels)
             CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `bench_levels` TINYINT UNSIGNED NOT NULL DEFAULT 0"
                 " COMMENT 'levels grown on the bench since last online, said when it arrives' AFTER `staying`");
+        std::unique_ptr<QueryResult> expedition(CharacterDatabase.Query("SHOW COLUMNS FROM `custom_companion` LIKE 'expedition_secs'"));
+        if (!expedition)
+            CharacterDatabase.DirectExecute("ALTER TABLE `custom_companion` ADD COLUMN `expedition_secs` INT UNSIGNED NOT NULL DEFAULT 0"
+                " COMMENT 'owner active time out on the bench since its last parcel' AFTER `bench_levels`");
         return true;
     }
 
@@ -206,7 +212,7 @@ namespace Companions
 
         // Rows whose character was deleted are left alone: the guid is never in the world again.
         std::unique_ptr<QueryResult> result(CharacterDatabase.Query(
-            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels` FROM `custom_companion` c"
+            "SELECT c.`char_guid`, c.`member_id`, c.`recruiter_guid`, c.`recruited_at`, c.`reward_mode`, c.`past_quests_decided`, c.`affinity`, c.`professions_decided`, c.`last_seen`, c.`money_gifts`, c.`staying`, c.`bench_levels`, c.`expedition_secs` FROM `custom_companion` c"
             " JOIN `characters` ch ON ch.`guid` = c.`char_guid`"));
         if (result)
         {
@@ -228,12 +234,14 @@ namespace Companions
                 info.moneyGifts = f[9].GetUInt32();
                 info.staying = f[10].GetUInt8() != 0;
                 info.benchLevels = f[11].GetUInt32();
+                info.expeditionSecs = f[12].GetUInt32();
                 m_companions[info.charGuid] = info;
             } while (result->NextRow());
         }
 
         m_ownerXpSeen.clear();
-        m_benchProgress.clear();
+        m_benched.clear();
+        Expedition::Load();
         std::unique_ptr<QueryResult> owners(CharacterDatabase.Query("SELECT `owner_guid`, `xp_seen` FROM `custom_companion_owner`"));
         if (owners)
         {
@@ -653,9 +661,11 @@ namespace Companions
     {
         struct Owner
         {
+            Player* player = nullptr;       // null: not online
             Group const* group = nullptr;
             uint32 gained = 0;
             uint32 cap = 0;
+            bool active = false;            // playing (not away): expeditions go on
         };
         if (!IsEnabled() || !m_available)
             return;
@@ -681,59 +691,110 @@ namespace Companions
                 m_ownerXpSeen[ownerGuid] = total;
                 CharacterDatabase.PExecute("REPLACE INTO `custom_companion_owner` (`owner_guid`, `xp_seen`) VALUES (%u, %u)", ownerGuid, total);
             }
+            owner.player = player;
             owner.group = player->GetGroup();
             owner.cap = BenchLeveling::CapFor(player->GetLevel());
+            owner.active = !player->IsAFK();
         }
 
         uint32 const now = uint32(time(nullptr));
+        uint32 const tickSecs = BENCH_CHECK_MS / IN_MILLISECONDS;
         for (auto& itr : m_companions)
         {
             CompanionInfo& info = itr.second;
             auto owner = owners.find(info.recruiterGuid);
-            if (info.temporary || owner == owners.end() || !owner->second.gained)
+            if (info.temporary || owner == owners.end() || !owner->second.player)
                 continue;
             ObjectGuid const guid(HIGHGUID_PLAYER, info.charGuid);
-            // On the bench: out of the world and not in his party.
-            if (sPlayerBotMgr.HasBot(info.charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
+            // On the bench: out of the world and not in his party. With him: no expedition.
+            bool const online = sPlayerBotMgr.HasBot(info.charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid);
+            if (online)
+                m_benched.erase(info.charGuid);
+            if (online || (owner->second.group && owner->second.group->IsMember(guid)))
             {
-                m_benchProgress.erase(info.charGuid);
+                if (info.expeditionSecs)
+                {
+                    info.expeditionSecs = 0;
+                    CharacterDatabase.PExecute("UPDATE `custom_companion` SET `expedition_secs` = 0 WHERE `char_guid` = %u", info.charGuid);
+                }
                 continue;
             }
-            if (owner->second.group && owner->second.group->IsMember(guid))
-                continue;
             if (info.lastSeen && now < info.lastSeen + BENCH_SETTLE_SEC)
                 continue;
+            Benched* benched = BenchedOf(info);
+            if (!benched)
+                continue;
 
-            auto progress = m_benchProgress.find(info.charGuid);
-            if (progress == m_benchProgress.end())
+            // Experience (bench doc §2).
+            BenchLeveling::Progress const before{ benched->level, benched->xp };
+            BenchLeveling::Progress const after = owner->second.gained
+                ? BenchLeveling::Grow(before, BenchLeveling::ShareOf(owner->second.gained), owner->second.cap)
+                : before;
+            if (after.level != before.level || after.xp != before.xp)
             {
-                std::unique_ptr<QueryResult> row(CharacterDatabase.PQuery(
-                    "SELECT `level`, `xp` FROM `characters` WHERE `guid` = %u AND `online` = 0", info.charGuid));
-                if (!row)
-                    continue;
-                Field* f = row->Fetch();
-                progress = m_benchProgress.emplace(info.charGuid, std::make_pair(f[0].GetUInt32(), f[1].GetUInt32())).first;
+                benched->level = after.level;
+                benched->xp = after.xp;
+                CharacterDatabase.PExecute("UPDATE `characters` SET `level` = %u, `xp` = %u WHERE `guid` = %u AND `online` = 0",
+                    after.level, after.xp, info.charGuid);
+            }
+            if (after.level != before.level)
+            {
+                info.benchLevels += after.level - before.level;
+                CharacterDatabase.PExecute("UPDATE `custom_companion` SET `bench_levels` = %u WHERE `char_guid` = %u",
+                    std::min<uint32>(info.benchLevels, 255), info.charGuid);
+                if (PlayerCacheData* data = sObjectMgr.GetPlayerDataByGUID(info.charGuid))
+                    data->uiLevel = after.level;
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %u grew on the bench to level %u (owner %u).",
+                    info.charGuid, after.level, info.recruiterGuid);
             }
 
-            BenchLeveling::Progress const before{ progress->second.first, progress->second.second };
-            BenchLeveling::Progress const after = BenchLeveling::Grow(before,
-                BenchLeveling::ShareOf(owner->second.gained), owner->second.cap);
-            if (after.level == before.level && after.xp == before.xp)
+            // Expedition (bench doc §3): his active time only; stops while he has MAX_UNOPENED of its parcels.
+            if (!owner->second.active)
                 continue;
-            progress->second = std::make_pair(after.level, after.xp);
-            CharacterDatabase.PExecute("UPDATE `characters` SET `level` = %u, `xp` = %u WHERE `guid` = %u AND `online` = 0",
-                after.level, after.xp, info.charGuid);
-            if (after.level == before.level)
-                continue;
-
-            info.benchLevels += after.level - before.level;
-            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `bench_levels` = %u WHERE `char_guid` = %u",
-                std::min<uint32>(info.benchLevels, 255), info.charGuid);
-            if (PlayerCacheData* data = sObjectMgr.GetPlayerDataByGUID(info.charGuid))
-                data->uiLevel = after.level;
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] %u grew on the bench to level %u (owner %u).",
-                info.charGuid, after.level, info.recruiterGuid);
+            uint32 const secs = std::min(info.expeditionSecs + tickSecs, Expedition::EVERY_SECS);
+            if (secs >= Expedition::EVERY_SECS && Expedition::Unopened(info.charGuid, info.recruiterGuid) < Expedition::MAX_UNOPENED)
+            {
+                SendParcel(owner->second.player, info, *benched);
+                info.expeditionSecs = 0;
+            }
+            else
+                info.expeditionSecs = secs;
+            CharacterDatabase.PExecute("UPDATE `custom_companion` SET `expedition_secs` = %u WHERE `char_guid` = %u",
+                info.expeditionSecs, info.charGuid);
         }
+    }
+
+    CompanionMgr::Benched* CompanionMgr::BenchedOf(CompanionInfo const& info)
+    {
+        auto itr = m_benched.find(info.charGuid);
+        if (itr != m_benched.end())
+            return &itr->second;
+        std::unique_ptr<QueryResult> row(CharacterDatabase.PQuery(
+            "SELECT `level`, `xp`, `zone` FROM `characters` WHERE `guid` = %u AND `online` = 0", info.charGuid));
+        if (!row)
+            return nullptr;
+        Field* f = row->Fetch();
+        Benched& benched = m_benched[info.charGuid];
+        benched.level = f[0].GetUInt32();
+        benched.xp = f[1].GetUInt32();
+        benched.zone = f[2].GetUInt32();
+        return &benched;
+    }
+
+    void CompanionMgr::SendParcel(Player* owner, CompanionInfo const& info, Benched const& benched)
+    {
+        Expedition::Parcel const parcel = Expedition::Pack(benched.level);
+        std::string name;
+        sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, info.charGuid), name);
+        Life::Phrases::Vars vars;
+        vars["leader"] = owner->GetName();
+        vars["name"] = name;
+        vars["zone"] = benched.zone ? Life::Travel::AreaName(benched.zone, owner) : std::string();
+        std::string const subject = Life::Phrases::Say("parcel.subject", info.tags, vars);
+        std::string const body = Life::Phrases::Say(benched.zone ? "parcel.body" : "parcel.body.nozone", info.tags, vars);
+        if (Expedition::Send(owner, info.charGuid, parcel, subject, body))
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' mailed %s a parcel (%u copper, %u items).",
+                name.c_str(), owner->GetName(), parcel.money, uint32(parcel.items.size()));
     }
 
     bool CompanionMgr::TakeStay(uint32 charGuid)
@@ -925,7 +986,7 @@ namespace Companions
                 continue;
             }
             info.home = false;      // (out again later: away from home)
-            m_benchProgress.erase(info.charGuid);   // (its saved level changes while it plays)
+            m_benched.erase(info.charGuid);   // (its saved level changes while it plays)
             if (m_present.count(info.charGuid))
             {
                 if (writeLastSeen)
