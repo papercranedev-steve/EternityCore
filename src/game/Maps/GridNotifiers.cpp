@@ -97,11 +97,15 @@ void VisibleNotifier::Notify()
 
     if (i_data.HasData())
     {
+        // (a copy: Send moves the out-of-range set into the packet and clears it; read after
+        // Send it was always empty, so a player who stood still kept seeing a player that had
+        // walked out of his range, and got none of its movement since)
+        ObjectGuidSet const oor = i_data.GetOutOfRangeGUIDs();
+
         // send create/outofrange packet to player (except player create updates that already sent using SendUpdateToPlayer)
         i_data.Send(player.GetSession());
 
         // send out of range to other players if need
-        ObjectGuidSet const& oor = i_data.GetOutOfRangeGUIDs();
         for (const auto& iter : oor)
         {
             if (!iter.IsPlayer())
