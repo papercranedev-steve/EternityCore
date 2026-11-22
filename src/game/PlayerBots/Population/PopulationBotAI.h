@@ -100,6 +100,10 @@ namespace Population
         static constexpr uint32 TRAVELLER_RUN_PCT = 90;
         // Mount casts failing in a row (indoors, ...) before it goes on foot.
         static constexpr uint32 MOUNT_TRIES = 3;
+        // Two travellers together: the follower keeps this close at his side while the leader
+        // is within PARTY_KEEP_YD (farther: the follower goes on along the road alone).
+        static constexpr float PAIR_FOLLOW_YD = 2.0f;
+        static constexpr float PARTY_KEEP_YD = 60.0f;
         // Acting out a quest: hunting this long at most, back to the area's middle after this
         // long without a fight, by the giver this long.
         static constexpr uint32 HUNT_GIVE_UP_MS = 12 * 60 * IN_MILLISECONDS;

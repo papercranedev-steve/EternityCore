@@ -36,7 +36,31 @@ namespace Population
         m_started = true;
         m_places = request.places;
         m_recent.clear();
+        m_lastType.clear();
+        m_staysLeft = urand(STAYS_MIN, STAYS_MAX);
+        m_wantsLeave = false;
         Life::Pastimes::Notice::Init(m_notice, me->GetObjectGuid().GetRawValue());
+
+        if (request.circle && request.circleSlot < request.circle->size)
+        {
+            // A gatherer: its slot in the talking group, facing the middle.
+            m_circle = request.circle;
+            m_seat = Life::Pastimes::ChatSeat();
+            m_seat.slot = request.circleSlot;
+            m_current = -1;
+            m_dest = Life::Trip::Destination();
+            Life::Pastimes::ChatCircles::SlotPosition(*m_circle, m_seat.slot, m_dest.x, m_dest.y);
+            m_dest.z = request.z;
+            m_dest.reachYd = 0.8f;
+            m_dest.hasFace = true;
+            m_dest.faceX = m_circle->x;
+            m_dest.faceY = m_circle->y;
+            m_dest.run = false;
+            m_toCircle = true;
+            Life::Trip::Approach::Begin(m_leg, now);
+            m_step = Step::Walking;
+            return;
+        }
 
         if (m_places && request.anchorIndex >= 0 && size_t(request.anchorIndex) < m_places->size())
         {
@@ -60,6 +84,12 @@ namespace Population
             Life::Errands::StopWalk(me);
         else if (m_step == Step::Staying)
             Life::Pastimes::PlaceActs::End(me, m_act);
+        if (m_circle)
+        {
+            Life::Pastimes::ChatCircles::Leave(me, *m_circle, m_seat);
+            m_circle.reset();
+            m_toCircle = false;
+        }
         Life::Pastimes::Notice::Stop(m_notice);
         m_wasLooking = false;
         m_step = Step::Choosing;
@@ -91,6 +121,21 @@ namespace Population
                 Life::Pastimes::PlaceActs::End(me, m_act);
                 m_step = Step::Choosing;
                 m_nextPickMs = now + urand(1, 4) * IN_MILLISECONDS;
+                CountStay();
+                return;
+            }
+            case Step::Gathering:
+            {
+                if (m_circle && Life::Pastimes::ChatCircles::Update(me, *m_circle, m_seat, now))
+                    return;
+                // The talk is over: each his own way.
+                if (m_circle)
+                    Life::Pastimes::ChatCircles::Leave(me, *m_circle, m_seat);
+                m_circle.reset();
+                m_lastType = "circle";
+                m_step = Step::Choosing;
+                m_nextPickMs = now + urand(1, 6) * IN_MILLISECONDS;
+                CountStay();
                 return;
             }
             case Step::Walking:
@@ -101,10 +146,23 @@ namespace Population
                         return;
                     case Life::Trip::ApproachResult::Failed:
                         Life::Errands::StopWalk(me);
+                        if (m_toCircle && m_circle)
+                        {
+                            // Could not get to its slot: not in this talk.
+                            m_circle.reset();
+                            m_toCircle = false;
+                        }
                         m_step = Step::Choosing;
                         m_nextPickMs = now + 2 * IN_MILLISECONDS;
                         return;
                     case Life::Trip::ApproachResult::Arrived:
+                        if (m_toCircle && m_circle)
+                        {
+                            m_toCircle = false;
+                            Life::Pastimes::ChatCircles::Join(me, *m_circle, m_seat, now);
+                            m_step = Step::Gathering;
+                            return;
+                        }
                         StartStay(me, now);
                         return;
                 }
@@ -112,7 +170,7 @@ namespace Population
             }
             case Step::Choosing:
             {
-                if (now < m_nextPickMs || me->IsMoving())
+                if (m_wantsLeave || now < m_nextPickMs || me->IsMoving())
                     return;
                 if (!PickNext(me, now))
                     m_nextPickMs = now + RETRY_MS;
@@ -138,7 +196,9 @@ namespace Population
                 float const d = me->GetDistance2d(p.x, p.y, SizeFactor::None);
                 if (d > MAX_VISIT_YD)
                     continue;
-                float const score = float(p.visitWeight) * NEAR_YD / (NEAR_YD + d);
+                float const score = float(p.visitWeight) * NEAR_YD / (NEAR_YD + d) * NextWeight(m_lastType, p.type);
+                if (score <= 0.0f)
+                    continue;
                 candidates.emplace_back(index, score);
                 total += score;
             }
@@ -241,9 +301,48 @@ namespace Population
         return false;
     }
 
+    void TownLife::CountStay()
+    {
+        if (m_staysLeft && --m_staysLeft == 0)
+            m_wantsLeave = true;
+    }
+
+    float TownLife::NextWeight(std::string const& from, std::string const& to)
+    {
+        struct Link
+        {
+            char const* from;
+            char const* to;
+            float weight;
+        };
+        // What people do next (a person's errands in town); missing pairs count 1.
+        static Link const links[] =
+        {
+            { "mail", "bank", 2.5f },   { "mail", "ah", 2.5f },     { "mail", "mail", 0.2f },
+            { "ah", "bank", 2.0f },     { "ah", "mail", 2.0f },     { "ah", "ah", 0.3f },
+            { "bank", "ah", 2.0f },     { "bank", "mail", 1.5f },   { "bank", "bank", 0.2f },
+            { "smith", "vendor", 2.0f }, { "smith", "trainer", 1.5f }, { "smith", "smith", 0.4f },
+            { "vendor", "smith", 1.5f }, { "vendor", "inn", 1.5f },  { "vendor", "trainer", 1.3f }, { "vendor", "vendor", 0.6f },
+            { "trainer", "vendor", 1.8f }, { "trainer", "smith", 1.3f }, { "trainer", "trainer", 0.3f },
+            { "quest", "quest", 0.7f },  { "quest", "vendor", 1.5f }, { "quest", "smith", 1.3f }, { "quest", "inn", 1.2f },
+            { "inn", "chair", 3.0f },    { "inn", "fire", 2.0f },    { "inn", "inn", 0.2f },
+            { "chair", "inn", 1.5f },    { "chair", "chair", 0.2f }, { "chair", "fire", 0.5f },
+            { "fire", "inn", 1.5f },     { "fire", "fire", 0.2f },   { "fire", "chair", 0.5f },
+            { "flight", "inn", 2.0f },   { "flight", "vendor", 1.3f }, { "flight", "flight", 0.1f },
+            { "circle", "inn", 1.5f },   { "circle", "vendor", 1.3f }, { "circle", "quest", 1.3f },
+        };
+        if (from.empty())
+            return 1.0f;
+        for (Link const& l : links)
+            if (from == l.from && to == l.to)
+                return l.weight;
+        return 1.0f;
+    }
+
     void TownLife::StartStay(Player* me, uint32 now)
     {
         PlaceAnchor const& place = (*m_places)[m_current];
+        m_lastType = place.type;
         m_recent.push_back(m_current);
         while (m_recent.size() > RECENT_KEEP)
             m_recent.pop_front();

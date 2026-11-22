@@ -24,6 +24,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -203,6 +204,7 @@ namespace Population
         TravellerDirector m_travel;
         Roster m_roster;
         uint32 m_nextUnitId = 0;        // Commander team units of field bots and travellers
+        std::map<uint32, uint32> m_partyUnits;  // traveller partyKey -> unit, until the second one spawns
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

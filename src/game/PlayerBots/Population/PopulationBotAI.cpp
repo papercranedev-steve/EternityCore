@@ -201,6 +201,9 @@ namespace Population
             if (!m_townLife.IsStarted())
                 m_townLife.Begin(me, m_request, now);
             m_townLife.Update(me, now);
+            // Done what it came for: the manager walks it out of sight (Retire).
+            if (m_townLife.WantsToLeave())
+                m_handle->done = true;
             return;
         }
 
@@ -217,7 +220,8 @@ namespace Population
             return false;
         if (!m_request.places || m_request.places->empty())
             return false;
-        return m_request.role == CityRole::Stand || m_request.role == CityRole::Mover || m_request.role == CityRole::Sitter;
+        return m_request.role == CityRole::Stand || m_request.role == CityRole::Mover || m_request.role == CityRole::Sitter ||
+               m_request.role == CityRole::Gatherer;
     }
 
     void PopulationBotAI::InitializeField()
@@ -254,8 +258,11 @@ namespace Population
             std::vector<Commander::Roads::RoadPoint> line;
             for (Waypoint const& w : m_request.route)
                 line.push_back({ w.x, w.y, w.z });
-            // Players run; a few walk.
-            bool const run = m_mountSpell || urand(0, 99) < TRAVELLER_RUN_PCT;
+            // Walking with someone: the leader lets the follower find him.
+            if (m_request.party && m_request.partyLeader)
+                m_request.party->leader = me->GetObjectGuid();
+            // Players run; a few walk (two together always run: the follower keeps up).
+            bool const run = m_mountSpell || m_request.party || urand(0, 99) < TRAVELLER_RUN_PCT;
             Life::Trip::RoadWalk::Begin(m_road, std::move(line), run, WorldTimer::getMSTime());
         }
     }
@@ -265,6 +272,18 @@ namespace Population
         if (m_roadDone)
             return;
         uint32 const now = WorldTimer::getMSTime();
+
+        // Walking with someone: by his side while he is here (else on along the road alone).
+        if (m_request.party && !m_request.partyLeader && !m_request.party->leader.IsEmpty())
+        {
+            Player* leader = me->GetMap()->GetPlayer(m_request.party->leader);
+            if (leader && leader->IsInWorld() && leader->IsAlive() && me->IsWithinDistInMap(leader, PARTY_KEEP_YD))
+            {
+                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
+                    me->GetMotionMaster()->MoveFollow(leader, PAIR_FOLLOW_YD, float(M_PI) / 2.0f);
+                return;
+            }
+        }
 
         // Back on the mount after a fight or a meal (a real cast: it stands still for it).
         if (m_mountSpell && !me->IsMounted() && m_mountTries < MOUNT_TRIES)

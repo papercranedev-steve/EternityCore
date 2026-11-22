@@ -9,8 +9,14 @@
  * preferred, never the one it just left or the two before. It walks a few steps, runs farther
  * (Life/Errands/Trip/Approach.h). A stand spot somebody already takes, or a taken chair, is
  * skipped. The role of the spawn only decides where the day starts: a stander or a sitter at
- * its anchor, a mover on its way to the first place. Some bots notice a real player who walks
- * by (Life/Pastimes/Notice.h).
+ * its anchor, a mover on its way to the first place, a gatherer in its talking group
+ * (Life/Pastimes/ChatCircle.h). Some bots notice a real player who walks by
+ * (Life/Pastimes/Notice.h).
+ *
+ * The day has a course (ambient flow doc §5, a small Markov chain): the next place also depends
+ * on the last one (from the mailbox to the bank or the auction house, from the innkeeper to a
+ * chair, from the trainer to a vendor...), and after STAYS_MIN..MAX places it has done what it
+ * came for and leaves (WantsToLeave).
  *
  * Map thread of the bot.
  */
@@ -23,7 +29,10 @@
 #include "Life/Errands/Trip/Approach.h"
 #include "Life/Pastimes/Notice.h"
 #include "Life/Pastimes/PlaceActs.h"
+#include "Life/Pastimes/ChatCircle.h"
 #include <deque>
+#include <memory>
+#include <string>
 
 class Player;
 
@@ -51,13 +60,24 @@ namespace Population
         void Stop(Player* me);
 
         bool IsStarted() const { return m_started; }
+        // Its errands here are done (STAYS_MIN..MAX places): it would leave the town now (the
+        // manager walks it out of sight, the director sends someone else in).
+        bool WantsToLeave() const { return m_wantsLeave; }
+
+        static constexpr uint32 STAYS_MIN = 4;
+        static constexpr uint32 STAYS_MAX = 9;
 
     private:
-        enum class Step : uint8 { Choosing, Walking, Staying };
+        enum class Step : uint8 { Choosing, Walking, Staying, Gathering };
 
         bool PickNext(Player* me, uint32 now);
         bool PickSpot(Player* me, PlaceAnchor const& place, Life::Trip::Destination& out) const;
         void StartStay(Player* me, uint32 now);
+        // One place done: the last one, it wants to leave.
+        void CountStay();
+        // How likely `to` is the next place after one of type `from` ("": the first place,
+        // "circle": a talking group), times its visit weight.
+        static float NextWeight(std::string const& from, std::string const& to);
 
         bool m_started = false;
         PlaceMenu m_places;
@@ -70,6 +90,15 @@ namespace Population
         Life::Pastimes::ActState m_act;
         Life::Pastimes::NoticeState m_notice;
         bool m_wasLooking = false;
+        // The day's course: the place type it was at last (the next one follows from it,
+        // NextWeight), how many stays are left before it leaves.
+        std::string m_lastType;
+        uint32 m_staysLeft = 0;
+        bool m_wantsLeave = false;
+        // A talking group (Gatherer): walking to its slot, then Gathering until the talk ends.
+        std::shared_ptr<Life::Pastimes::ChatCircle> m_circle;
+        Life::Pastimes::ChatSeat m_seat;
+        bool m_toCircle = false;
     };
 }
 

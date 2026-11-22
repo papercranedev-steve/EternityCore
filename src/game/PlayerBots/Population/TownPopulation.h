@@ -54,7 +54,7 @@ namespace Population
 
     struct TownTargets
     {
-        uint32 total = 0, sitter = 0, mover = 0;
+        uint32 total = 0, sitter = 0, mover = 0, gatherer = 0;
     };
 
     class TownDirector
@@ -80,7 +80,12 @@ namespace Population
 
     private:
         void TickTown(PopulationMgr& mgr, TownState& town, float hourFactor, uint32 nowMs);
+        // A resident of `town` in `role` (side, levels, races, its places); the spot is the caller's.
+        void FillResident(TownState const& town, CityRole role, SpawnRequest& out) const;
         bool BuildRequest(TownState const& town, CityRole role, CityCounts const& counts, SpawnRequest& out) const;
+        // A talking group of `size` (CityRole::Gatherer, one shared ChatCircle): every slot on
+        // flat ground in sight of the middle.
+        bool BuildCircle(TownState const& town, uint32 size, std::vector<SpawnRequest>& out) const;
 
         bool m_enabled = true;
         float m_scale = 1.0f;

@@ -94,6 +94,7 @@ namespace Population
             case CityRole::Showcase: return "showcase";
             case CityRole::Crafter:  return "crafter";
             case CityRole::Sitter:   return "sitter";
+            case CityRole::Gatherer: return "gatherer";
         }
         return "?";
     }
@@ -205,6 +206,10 @@ namespace Population
             // (field bots and travellers leave only out of sight: RetireFieldBots, RetireTravellers)
             if (!r.removing && r.expireMs && m_nowMs >= r.expireMs && r.request.kind != BotKind::Field &&
                 r.request.kind != BotKind::Traveller)
+                Retire(r);
+            // A city or town bot done with its errands (TownLife::WantsToLeave): out of the place;
+            // the director sends someone else in.
+            else if (!r.removing && r.handle->done && (r.request.kind == BotKind::City || r.request.kind == BotKind::Town))
                 Retire(r);
             // Walking out of sight took too long (stuck): log out where he is.
             else if (r.leaveByMs && m_nowMs >= r.leaveByMs)
@@ -417,9 +422,23 @@ namespace Population
         if (commanded && m_observers.CanSeeSoon(r.mapId, r.x, r.y, r.z, FieldDirector::LOGIN_LEAD_SEC))
             return;
 
-        // A team of one for the Commander (Commander/Team.h unit).
+        // A team of one for the Commander (Commander/Team.h unit); two travellers walking
+        // together (one partyKey) are one team.
         if (commanded)
-            r.unitId = ++m_nextUnitId;
+        {
+            auto const party = r.partyKey ? m_partyUnits.find(r.partyKey) : m_partyUnits.end();
+            if (party != m_partyUnits.end())
+            {
+                r.unitId = party->second;
+                m_partyUnits.erase(party);
+            }
+            else
+            {
+                r.unitId = ++m_nextUnitId;
+                if (r.partyKey)
+                    m_partyUnits[r.partyKey] = r.unitId;
+            }
+        }
 
         std::string name;
         uint32 guid = 0;    // 0 = new guid
@@ -614,6 +633,7 @@ namespace Population
                 case CityRole::Mover:    ++counts.mover; break;
                 case CityRole::Crafter:  ++counts.crafter; break;
                 case CityRole::Sitter:   ++counts.sitter; break;
+                case CityRole::Gatherer: ++counts.gatherer; break;
                 default:                 ++counts.stand; break;
             }
             if (r.anchorIndex >= 0 && size_t(r.anchorIndex) < counts.anchorUse.size())
@@ -651,7 +671,7 @@ namespace Population
             }
         }
 
-        for (CityRole role : { CityRole::Stand, CityRole::Sitter, CityRole::Crafter, CityRole::Mover, CityRole::Showcase })
+        for (CityRole role : { CityRole::Stand, CityRole::Sitter, CityRole::Gatherer, CityRole::Crafter, CityRole::Mover, CityRole::Showcase })
         {
             Record* oldest = nullptr;
             for (Record& r : m_bots)

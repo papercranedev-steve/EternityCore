@@ -8,6 +8,7 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "PlayerBotAI.h"    // PlayerBotAppearance
+#include "Life/Pastimes/ChatCircle.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +16,13 @@
 namespace Population
 {
     class PopulationBotAI;
+
+    // Two travellers walking together (TravellerPopulation.h): the follower keeps by the
+    // leader; without him (not in yet, gone) it walks the road on its own. Map thread.
+    struct TravelParty
+    {
+        ObjectGuid leader;      // set by the leader's AI once it is in the world
+    };
 
     enum class BotKind : uint8
     {
@@ -42,6 +50,7 @@ namespace Population
         Showcase,   // geared veteran standing in view near the auction house / bank
         Crafter,    // stands near the auction house / bank / mailbox crafting in batches
         Sitter,     // sits on a chair (SpawnRequest::chairEntry) or on the ground by a fire
+        Gatherer,   // stands in a talking group (SpawnRequest::circle), then lives its day there
     };
 
     char const* BotKindName(BotKind kind);
@@ -150,6 +159,15 @@ namespace Population
         // Stand, mover, sitter: the places of the city or town for their day there (TownLife.h);
         // the role only decides where the day starts.
         PlaceMenu places;
+
+        // Gatherer: the talking group it stands in and its slot (Life/Pastimes/ChatCircle.h).
+        std::shared_ptr<Life::Pastimes::ChatCircle> circle;
+        uint32 circleSlot = 0;
+        // Traveller walking with someone (both requests share the key: one Commander team unit);
+        // the follower's `party` holds the leader once he is in the world.
+        uint32 partyKey = 0;
+        std::shared_ptr<TravelParty> party;
+        bool partyLeader = false;
 
         // Town bots: the settlement (Settlements.h id); sitter: the chair at (x, y, z), 0 = sit on the ground.
         uint32 settlementId = 0;

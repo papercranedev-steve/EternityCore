@@ -36,6 +36,9 @@ namespace Population
         float const SEARCH_LAST_YD = 600.0f;
         float const SEARCH_STEP_YD = 10.0f;
         uint32 const PLACE_ANYWHERE_TRIES = 12;
+        // Travellers walking in twos (percent of them), side by side this far.
+        uint32 const PAIR_PCT = 25;
+        float const PAIR_GAP_YD = 2.0f;
 
         bool IsCityZone(uint32 zone)
         {
@@ -325,6 +328,30 @@ namespace Population
         return false;
     }
 
+    bool TravellerDirector::MakeFollower(SpawnRequest const& leader, SpawnRequest& out)
+    {
+        Map* map = sMapMgr.FindMap(leader.mapId, 0);
+        if (!map || leader.route.size() < 2)
+            return false;
+        // A step to the side of the leader, the same way ahead.
+        float const side = leader.o + (urand(0, 1) ? 1.0f : -1.0f) * float(M_PI) / 2.0f;
+        float const x = leader.x + std::cos(side) * PAIR_GAP_YD;
+        float const y = leader.y + std::sin(side) * PAIR_GAP_YD;
+        float const z = map->GetHeight(x, y, leader.z + 3.0f);
+        if (z <= INVALID_HEIGHT || std::fabs(z - leader.z) > 2.0f)
+            return false;
+        out = leader;
+        out.x = x;
+        out.y = y;
+        out.z = z;
+        out.route[0] = { x, y, z };
+        out.rides = false;
+        out.partyKey = ++m_nextPartyKey;
+        out.party = std::make_shared<TravelParty>();
+        out.partyLeader = false;
+        return true;
+    }
+
     void TravellerDirector::Update(PopulationMgr& mgr, Observers const& observers, uint32 nowMs)
     {
         // One road per update until the network is built (each loads its navmesh tiles).
@@ -382,12 +409,32 @@ namespace Population
             else if (frand(0.0f, 1.0f) < 1.0f - std::exp(-rate * float(TICK_MS) / 1000.0f))
                 want = 1;
 
-            for (uint32 i = 0; i < want; ++i)
+            uint32 queued = nearNow;
+            for (uint32 i = 0; i < want && queued < m_maxNear; ++i)
             {
                 RoadEdge const* edge = PickByRate(roads, *this);
                 SpawnRequest request;
-                if (!edge || !BuildRequest(mgr, o, observers, *edge, o.arriving, request) || !mgr.QueueSpawn(request))
+                if (!edge || !BuildRequest(mgr, o, observers, *edge, o.arriving, request))
                     break;
+
+                // Now and then two walk together (on foot: one may be too young to ride).
+                bool const pair = queued + 2 <= m_maxNear && urand(0, 99) < PAIR_PCT;
+                SpawnRequest follower;
+                if (pair && MakeFollower(request, follower))
+                {
+                    request.rides = false;
+                    request.partyKey = follower.partyKey;
+                    request.party = follower.party;
+                    request.partyLeader = true;
+                }
+                else
+                    follower = SpawnRequest();
+
+                if (!mgr.QueueSpawn(request))
+                    break;
+                ++queued;
+                if (follower.partyKey && mgr.QueueSpawn(follower))
+                    ++queued;
             }
         }
     }

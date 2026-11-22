@@ -81,6 +81,8 @@ namespace Population
         bool BuildRequest(PopulationMgr& mgr, Observer const& o, Observers const& observers,
                           Commander::Roads::RoadEdge const& edge, bool placeAnywhere, SpawnRequest& out) const;
         void LevelsOf(PopulationMgr& mgr, Commander::Roads::RoadEdge const& edge, uint8& lo, uint8& hi) const;
+        // Someone walking with `leader` (a step beside him, same road, one Commander team).
+        bool MakeFollower(SpawnRequest const& leader, SpawnRequest& out);
 
         bool m_enabled = true;
         float m_perHour = 20.0f;
@@ -92,6 +94,7 @@ namespace Population
         bool m_patrolLoaded = false;
         std::map<uint32, float> m_nodeSize;     // settlement id -> gravity size
         std::set<uint32> m_prewarmed;           // arriving observers given their travellers
+        uint32 m_nextPartyKey = 0;
         uint32 m_nextTickMs = 0;
     };
 }

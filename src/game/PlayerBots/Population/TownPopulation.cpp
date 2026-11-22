@@ -12,11 +12,13 @@
 #include "MapManager.h"
 #include "ObjectMgr.h"
 #include "SharedDefines.h"
+#include "Timer.h"
 #include "UnitDefines.h"
 #include "Utilities/Random.h"
 #include "World.h"
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <sstream>
 
 namespace Population
@@ -30,6 +32,29 @@ namespace Population
         float const MOVER_SHARE = 0.15f;
         // Neutral towns: residents of the observer's side this often (percent).
         uint32 const OWN_SIDE_PCT = 75;
+        // Of the residents (a town of at least CIRCLE_TOWN_MIN): in talking groups of 2-4
+        // (Life/Pastimes/ChatCircle.h, ambient flow doc §5) by a fire, the inn, the flight master.
+        float const GATHER_SHARE = 0.3f;
+        uint32 const CIRCLE_TOWN_MIN = 4;
+        uint32 const CIRCLE_SIZE_MIN = 2, CIRCLE_SIZE_MAX = 4;
+        uint32 const CIRCLE_TRIES = 6;
+        // In front of the NPC / object; around a fire this far out.
+        float const CIRCLE_MIN_YD = 5.0f, CIRCLE_MAX_YD = 9.0f;
+        float const FIRE_CIRCLE_YD = 2.2f;
+        // How long the talk lasts.
+        uint32 const CIRCLE_MIN_MS = 90 * IN_MILLISECONDS, CIRCLE_MAX_MS = 240 * IN_MILLISECONDS;
+
+        // Where groups stand (weight per anchor type).
+        uint32 CircleWeight(std::string const& type, bool object)
+        {
+            if (type == "fire")
+                return 3;
+            if (type == "inn" || type == "flight" || type == "quest")
+                return 2;
+            if ((type == "smith" && !object) || type == "vendor" || type == "mail")
+                return 1;
+            return 0;
+        }
 
         // Residents at full hour factor and PopBot.Town.Scale 1 (user 2026-11-19: Goldshire
         // 10-15 in town, about 15-20 seen at its edge with the hunters around it).
@@ -320,6 +345,8 @@ namespace Population
         t.total = std::min(room, uint32(std::lround(float(ResidentsOf(town.settlement->kind)) * m_scale * hourFactor)));
         t.sitter = std::min(seats, uint32(std::lround(float(t.total) * SitterShareOf(town.settlement->kind))));
         t.mover = std::min(t.total - t.sitter, uint32(std::lround(float(t.total) * MOVER_SHARE)));
+        if (t.total >= CIRCLE_TOWN_MIN)
+            t.gatherer = std::min(t.total - t.sitter - t.mover, uint32(std::lround(float(t.total) * GATHER_SHARE)));
         return t;
     }
 
@@ -342,13 +369,9 @@ namespace Population
         return Population::PickHiddenSpot(map, known, x, y, z, observers, out);
     }
 
-    bool TownDirector::BuildRequest(TownState const& town, CityRole role, CityCounts const& counts, SpawnRequest& out) const
+    void TownDirector::FillResident(TownState const& town, CityRole role, SpawnRequest& out) const
     {
         Settlement const& s = *town.settlement;
-        Map* map = sMapMgr.FindMap(s.mapId, 0);
-        if (!map)
-            return false;
-
         out = SpawnRequest();
         out.kind = BotKind::Town;
         out.settlementId = s.id;
@@ -367,6 +390,92 @@ namespace Population
             out.team = s.horde ? HORDE : ALLIANCE;
         // A start area: only the races beginning there.
         out.raceMask = s.raceMask;
+    }
+
+    bool TownDirector::BuildCircle(TownState const& town, uint32 size, std::vector<SpawnRequest>& out) const
+    {
+        Settlement const& s = *town.settlement;
+        Map* map = sMapMgr.FindMap(s.mapId, 0);
+        if (!map || size < 2)
+            return false;
+
+        // Where people stand together: by a fire, the inn, the flight master, a quest giver.
+        std::vector<TownAnchor const*> spots;
+        for (TownAnchor const& a : town.anchors)
+        {
+            uint32 const weight = CircleWeight(a.spot.type, a.object);
+            for (uint32 w = 0; w < weight; ++w)
+                spots.push_back(&a);
+        }
+        Shuffle(spots);
+
+        uint32 tries = 0;
+        for (TownAnchor const* a : spots)
+        {
+            if (++tries > CIRCLE_TRIES)
+                break;
+            auto circle = std::make_shared<Life::Pastimes::ChatCircle>();
+            circle->size = size;
+            circle->radiusYd = Life::Pastimes::ChatCircles::RadiusFor(size);
+            if (a->spot.type == "fire")
+            {
+                // Around the fire itself.
+                circle->x = a->spot.x;
+                circle->y = a->spot.y;
+                circle->z = a->spot.z;
+                circle->radiusYd = std::max(circle->radiusYd, FIRE_CIRCLE_YD);
+            }
+            else
+            {
+                // A few steps in front of the NPC or object, in the open.
+                Waypoint w;
+                if (!CityDirector::PickStandSpot(map, a->spot, CIRCLE_MIN_YD, CIRCLE_MAX_YD, 1.0f, w))
+                    continue;
+                circle->x = w.x;
+                circle->y = w.y;
+                circle->z = w.z;
+            }
+            circle->startAngle = frand(0.0f, 2.0f * float(M_PI));
+            circle->untilMs = WorldTimer::getMSTime() + urand(CIRCLE_MIN_MS, CIRCLE_MAX_MS);
+
+            std::vector<SpawnRequest> requests;
+            for (uint32 slot = 0; slot < size; ++slot)
+            {
+                float x, y;
+                Life::Pastimes::ChatCircles::SlotPosition(*circle, slot, x, y);
+                float const z = map->GetHeight(x, y, circle->z + 2.0f);
+                if (z <= INVALID_HEIGHT || std::fabs(z - circle->z) > 1.0f ||
+                    !map->isInLineOfSight(circle->x, circle->y, circle->z + 1.5f, x, y, z + 1.5f))
+                    break;
+                SpawnRequest r;
+                FillResident(town, CityRole::Gatherer, r);
+                r.x = x;
+                r.y = y;
+                r.z = z;
+                r.hasFacePoint = true;
+                r.faceX = circle->x;
+                r.faceY = circle->y;
+                r.o = FacingTo(x, y, circle->x, circle->y);
+                r.circle = circle;
+                r.circleSlot = slot;
+                requests.push_back(std::move(r));
+            }
+            if (requests.size() != size)
+                continue;
+            out = std::move(requests);
+            return true;
+        }
+        return false;
+    }
+
+    bool TownDirector::BuildRequest(TownState const& town, CityRole role, CityCounts const& counts, SpawnRequest& out) const
+    {
+        Settlement const& s = *town.settlement;
+        Map* map = sMapMgr.FindMap(s.mapId, 0);
+        if (!map)
+            return false;
+
+        FillResident(town, role, out);
 
         auto hasRoom = [&](size_t i)
         {
@@ -477,6 +586,28 @@ namespace Population
 
         // Someone is about to log in here: everybody at once. Otherwise a few at a time.
         uint32 const maxQueued = town.arriving ? targets.total : 3;
+
+        // A talking group (all its members at once).
+        if (counts.gatherer + CIRCLE_SIZE_MIN <= targets.gatherer && counts.total + CIRCLE_SIZE_MIN <= targets.total)
+        {
+            uint32 const room = std::min(targets.gatherer - counts.gatherer, targets.total - counts.total);
+            uint32 const size = std::min(room, urand(CIRCLE_SIZE_MIN, CIRCLE_SIZE_MAX));
+            std::vector<SpawnRequest> group;
+            if (BuildCircle(town, size, group))
+            {
+                for (SpawnRequest& r : group)
+                {
+                    r.prewarm = town.arriving;
+                    if (!mgr.QueueSpawn(r))
+                        break;
+                    ++counts.total;
+                    ++counts.gatherer;
+                }
+                if (!town.arriving)
+                    return;
+            }
+        }
+
         for (uint32 queued = 0; queued < maxQueued && counts.total < targets.total; ++queued)
         {
             CityRole role = CityRole::Stand;

@@ -50,14 +50,14 @@ namespace RoadWalk
         }
 
         // The bot's arc length on the line near its progress, -1: not near the line.
-        float Locate(RoadWalkState const& state, float x, float y)
+        float Locate(RoadWalkState const& state, float x, float y, float progress)
         {
             float best = -1.0f, bestDist = ON_LINE_YD;
             for (size_t i = 1; i < state.line.size(); ++i)
             {
-                if (state.along[i] < state.progress - BACK_WINDOW_YD)
+                if (state.along[i] < progress - BACK_WINDOW_YD)
                     continue;
-                if (state.along[i - 1] > state.progress + AHEAD_WINDOW_YD)
+                if (state.along[i - 1] > progress + AHEAD_WINDOW_YD)
                     break;
                 RoadPoint const& a = state.line[i - 1];
                 RoadPoint const& b = state.line[i];
@@ -109,7 +109,10 @@ namespace RoadWalk
             state.heading = false;
         state.lastUpdateMs = now;
 
-        float const s = Locate(state, me->GetPositionX(), me->GetPositionY());
+        float s = Locate(state, me->GetPositionX(), me->GetPositionY(), state.progress);
+        // Not near its progress (it went along with someone else, a long chase): wherever ahead it is now.
+        for (float from = state.progress + AHEAD_WINDOW_YD; s < 0.0f && from - AHEAD_WINDOW_YD < state.along.back(); from += AHEAD_WINDOW_YD)
+            s = Locate(state, me->GetPositionX(), me->GetPositionY(), from);
         if (s > state.progress)
             state.progress = s;
 
