@@ -415,6 +415,24 @@ namespace Companions
         return list;
     }
 
+    uint32 CompanionMgr::BondedCountOf(uint32 recruiterGuid) const
+    {
+        std::lock_guard<std::mutex> guard(m_affinityLock);
+        uint32 count = 0;
+        for (auto const& itr : m_companions)
+            if (itr.second.recruiterGuid == recruiterGuid && !itr.second.trial && !itr.second.temporary)
+                ++count;
+        return count;
+    }
+
+    void CompanionMgr::TellBond(Player* player, Player* bot) const
+    {
+        if (!player || !bot)
+            return;
+        bool const first = BondedCountOf(player->GetGUIDLow()) == 1;
+        BotShared::BotChat::SystemTo(player, "PBTRIAL;" + std::string(bot->GetName()) + ";bond;" + (first ? "1" : "0"));
+    }
+
     RewardMode CompanionMgr::GetRewardMode(uint32 charGuid) const
     {
         CompanionInfo const* info = Find(charGuid);
@@ -774,6 +792,9 @@ namespace Companions
         login.recruiter = recruiter->GetObjectGuid();
         login.sinceMs = m_nowMs;
         m_pending.push_back(login);
+        // (a trial partner is told when he is promoted: Trial::Bond)
+        if (!trial)
+            TellBond(recruiter, bot);
 
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[Companion] '%s' (%u, level %u) %s '%s', %u trainer spells learned (up to level %u),"
             " class quests: %u done, %u not done, %u abilities taken away; professions %u (%u) + %u (%u), %u recipes.",

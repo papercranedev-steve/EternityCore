@@ -148,7 +148,7 @@ namespace Trial
             return false;
         if (player)
         {
-            Tell(player, bot, "bond");
+            sCompanionMgr.TellBond(player, bot);
             BotShared::BotChat::SystemTo(player, "PBAFF;" + std::string(bot->GetName()) + ";" + std::to_string(affinity) +
                 ";" + std::to_string(affinity) + ";bond");
         }

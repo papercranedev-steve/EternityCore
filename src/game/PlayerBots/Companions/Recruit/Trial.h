@@ -7,7 +7,8 @@
  * he offers to stay: the player's yes promotes him (CompanionMgr::Promote). If he leaves the
  * world unpromoted, the trial is over (CompanionMgr::OnTrialLeave).
  *
- * Addon lines (Recruit.lua): PBTRIAL;<bot>;start | quest;<n>;<needed> | bond.
+ * Addon lines (Recruit.lua): PBTRIAL;<bot>;start | quest;<n>;<needed> | bond;<first 1/0>
+ * (CompanionMgr::TellBond, also sent for the first companion who joins without a trial).
  */
 
 #ifndef MANGOS_COMPANIONS_RECRUIT_TRIAL_H

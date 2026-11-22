@@ -141,6 +141,13 @@ namespace Companions
         CompanionInfo const* Find(uint32 charGuid) const;
         // World thread. Copies of everyone `recruiterGuid` recruited (temporary ones too), any order.
         std::vector<CompanionInfo> OfRecruiter(uint32 recruiterGuid) const;
+        // Any thread. His companions (not trial partners nor temporary ones; former and account
+        // ones too: everyone he ever bonded with and did not forget).
+        uint32 BondedCountOf(uint32 recruiterGuid) const;
+        // Any thread. Tells `player`'s addon that `bot` became his companion (trial promotion or
+        // the first companion's yes): PBTRIAL;<bot>;bond;<first 1/0>, first = his only companion
+        // (Recruit.lua note, Guide.lua welcome).
+        void TellBond(Player* player, Player* bot) const;
         // Auto for anyone that is not a companion.
         RewardMode GetRewardMode(uint32 charGuid) const;
         // World thread (a command, later the affinity system); stored at once.
