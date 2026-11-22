@@ -4,11 +4,17 @@
  *
  * The server knows where his character faces, not his camera: turning with the right mouse
  * button, the keys or running sends it, only dragging the camera with the left button does not.
- * So "looks at it" is: he has it targeted, or it stands within SEE_YD in front of him (within
- * SEE_ARC around his facing) in line of sight. Dragging the camera onto it is missed (the bot
- * then skips its gesture, it never gestures at someone looking away).
+ * The PartyBot addon (PartyBot/Gaze.lua) fills that gap: it reports the players on his screen
+ * (their nameplates shown) and under his mouse, through Shared/AddonChannel (prefix PBSEE: when
+ * the set changes, and every few seconds while it is not empty). A report older than
+ * SCREEN_FRESH_MS counts for nothing (the addon gone, the client closed).
  *
- * Map thread of `target`.
+ * So "looks at it", within SEE_YD: he has it targeted; or, in line of sight, his addon reports it
+ * on his screen or it stands in front of his character (within SEE_ARC around his facing).
+ * Without the addon, dragging the camera onto it is missed (the bot then skips its gesture, it
+ * never gestures at someone looking away).
+ *
+ * Sees: map thread of `target`. Reports: world thread (guarded).
  */
 
 #ifndef MANGOS_BOTSHARED_GAZE_H
@@ -26,6 +32,13 @@ namespace BotShared
         constexpr float SEE_YD = 40.0f;
         // The whole arc in front of him (about 50 degrees to either side).
         constexpr float SEE_ARC = float(M_PI) * 5.0f / 9.0f;
+        constexpr char const* REPORT_PREFIX = "PBSEE";
+        // The addon resends every 3 s while something is on screen.
+        constexpr uint32 SCREEN_FRESH_MS = 5000;
+        constexpr size_t MAX_REPORTED = 32;
+
+        // At startup: takes the addon's reports (AddonChannel).
+        void Load();
 
         bool Sees(Player const* viewer, WorldObject const* target);
     }

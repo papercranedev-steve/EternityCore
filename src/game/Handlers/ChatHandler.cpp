@@ -40,6 +40,7 @@
 #include "CellImpl.h"
 #include "Anticheat.h"
 #include "AccountMgr.h"
+#include "PlayerBots/Shared/AddonChannel.h"
 #include "PlayerAI.h"
 
 bool WorldSession::SanitizeChatMessage(std::string& msg, uint32 lang, uint32 msgType)
@@ -156,6 +157,12 @@ void WorldSession::HandleChatMessageOpcode(WorldPackets::Chat::ChatMessage const
         sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "CHAT: Wrong message type received: %u", packet.type);
         return;
     }
+
+    // PlayerBots: the PartyBot addon's message to the server, an addon whisper to oneself
+    // (PlayerBots/Shared/AddonChannel.h). Neither delivered nor chat.
+    if (packet.lang == LANG_ADDON && packet.type == CHAT_MSG_WHISPER && _player &&
+        BotShared::AddonChannel::Receive(_player, packet.whisperTargetOrChannel, packet.message))
+        return;
 
     if (!IsLanguageAllowedForChatType(packet.lang, packet.type))
     {
