@@ -153,6 +153,8 @@ public:
     uint32 m_farSinceMs = 0;
     // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
     std::vector<std::string> const& PersonalityTags() const;
+    // His joining the account (the talk window's naming page kneels him: JoinOffer::Choose).
+    Companions::JoinOffer::State& JoinOfferState() { return m_joinOffer; }
 
     // A companion's friend traits (Companions/Affinity/TraitEffects.h): the PlayerAI hooks core
     // code asks while this AI plays the character. Others have no traits (no change).

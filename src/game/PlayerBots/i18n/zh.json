@@ -194,9 +194,9 @@
   "account.name.new": "我来为你起个名字。",
   "account.name.keep": "你就是{me}，不必改。",
   "account.name.listen": {
-    "default": "（他站直了身子，静静等你开口。）",
-    "chatty": "来吧，我准备好了！",
-    "quiet": "……嗯，我听着。"
+    "default": "（他单膝跪下，低着头，静静等你开口。）",
+    "chatty": "（他扑通一声单膝跪下，抬头冲你笑。）来吧，我准备好了！",
+    "quiet": "（他单膝跪下。）……我听着。"
   },
   "account.join.named": {
     "default": "{me}……{me}。从今往后，{old}留在过去的路上，跟着你的人，叫{me}。",

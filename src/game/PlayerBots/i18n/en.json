@@ -186,9 +186,9 @@
   "account.name.new": "Let me give you a name.",
   "account.name.keep": "You're {me}. No need to change.",
   "account.name.listen": {
-    "default": "(He straightens up and waits for you to speak.)",
-    "chatty": "Go on, I'm ready!",
-    "quiet": "...I'm listening."
+    "default": "(He goes down on one knee, head bowed, and waits for you to speak.)",
+    "chatty": "(He drops to one knee and grins up at you.) Go on, I'm ready!",
+    "quiet": "(He kneels.) ...I'm listening."
   },
   "account.join.named": {
     "default": "{me}... {me}. From today {old} stays on the road behind us. The one at your side is {me}.",

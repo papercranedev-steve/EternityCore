@@ -1174,7 +1174,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         {
             Companions::Trial::Update(me, pLeader, m_trial, PersonalityTags());
             // At affinity 100: once, may he join the player's account?
-            Companions::JoinOffer::Update(me, pLeader, m_joinOffer);
+            // (kneeling while the player names him: he holds still)
+            if (Companions::JoinOffer::Update(me, pLeader, m_joinOffer))
+                return;
         }
         if (resurrectFirst || commanderOutOfCombat)
             PauseProvisions();

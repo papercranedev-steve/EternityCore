@@ -27,17 +27,24 @@ namespace JoinOffer
     // After the gate's line ("我想一直跟着你", AffinitySources) a moment, as a person would take.
     uint32 constexpr OFFER_DELAY_MS = 6 * IN_MILLISECONDS;
 
+    // The player chose to name him: he goes down on one knee in front of him while the name box
+    // is open (user 2026-11-22), and rises once he joined, at the box's 取消 (account:later),
+    // when either fights, the player walks off (Talk::TALK_YD) or after this long.
+    uint32 constexpr KNEEL_MAX_MS = 2 * MINUTE * IN_MILLISECONDS;
+
     // Per party bot AI.
     struct State
     {
         uint32 dueMs = 0;       // WorldTimer ms he asks at, 0 = not due yet
+        uint32 kneelUntilMs = 0;    // kneeling for his name until then, 0 = not
     };
 
     // A companion `player` may ask in now (affinity 100, not in an account, his own one).
     bool MayJoin(Player const* player, Player const* bot);
 
-    // PartyBotAI, out of combat: a companion at affinity 100 who never asked asks once.
-    void Update(Player* me, Player* leader, State& state);
+    // PartyBotAI, out of combat: a companion at affinity 100 who never asked asks once. True
+    // while he kneels for his name: he holds still (no stand-up, no following).
+    bool Update(Player* me, Player* leader, State& state);
 
     // His words and the two answers (account:yes, account:later).
     Talk::Page OfferPage(Talk::Context const& ctx);
