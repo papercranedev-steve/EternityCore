@@ -16,6 +16,7 @@
 #include "Commander/Perception/Spatial/LeaderRun.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
+#include "Commander/Commands/Voice/PartyVoice.h"
 #include "Commander/Encounters/IEncounter.h"
 #include "Commander/Trace/Trace.h"
 #include <deque>
@@ -90,14 +91,18 @@ namespace Commander
         // (u:trace) in the world thread while maps are idle.
         Trace::Sink& GetTrace() { return m_trace; }
 
+        // What the bots say to the players (Commands/Voice/PartyVoice.h). Map thread only:
+        // planners (GatherPlanner) and rotations (the warlock's Soulstone) queue lines here.
+        PartyVoice& GetVoice() { return m_voice; }
+
     private:
         void Refresh(TeamBotAI* bot, uint32 nowMs);
         void RunAssigners(AssignerList const& assigners);
         // Picks the matching boss module (OnReset on the one that stops matching), then its
         // Refresh and AddFacts. Before the assigners.
         void UpdateEncounter(TeamBotAI* bot);
-        // TeamPlan::notes: said in party chat by the main tank bot (BotSpeech::Report), or system
-        // messages to the leader with speech off; then into the note log.
+        // TeamPlan::notes: said in party chat by the main tank bot while debug speech is on
+        // (BotSpeech::Report); always into the note log.
         void FlushNotes(TeamBotAI* bot);
         // After the assigners: when the retreat ended since the last refresh, releases the
         // movement hold of every bot of the party on this map.
@@ -126,6 +131,7 @@ namespace Commander
         FleePredictor m_fleePredictor;
         LeaderRun m_leaderRun;
         ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
+        PartyVoice m_voice;             // what the bots say to the players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh
 
         // Own instances (per-party state), only the modules listed for this map.

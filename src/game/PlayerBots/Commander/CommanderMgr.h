@@ -17,6 +17,7 @@
 #include "Commander/Coordination/Situation/Pull/PullMethod.h"
 #include "Commander/Coordination/Situation/Pull/PullPlace.h"
 #include "Commander/Coordination/Situation/Summon.h"
+#include "Commander/Commands/Voice/VoiceSettings.h"
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -32,6 +33,7 @@ namespace Commander
 {
     class PartyCommander;
     struct StaySpot;
+    struct VoiceEvent;
 
     struct TickStats
     {
@@ -52,11 +54,12 @@ namespace Commander
         bool IsEnabled() const { return m_enabled.load(std::memory_order_relaxed); }
         void SetEnabled(bool on) { m_enabled.store(on, std::memory_order_relaxed); }
 
-        // Bots say their decisions, the brain's notes and review anomalies in party chat
-        // (BotSpeech.h; `.partybot ai say on|off`, PartyBot.Commander.Speech). Off: notes go to
-        // the leader as system messages, decisions are not told. Any thread.
-        bool IsSpeechEnabled() const { return m_speech.load(std::memory_order_relaxed); }
-        void SetSpeechEnabled(bool on) { m_speech.store(on, std::memory_order_relaxed); }
+        // Debug speech: bots say their decisions, the brain's notes and review anomalies in party
+        // chat (BotSpeech.h; `.partybot ai debugsay on|off`, PartyBot.Commander.DebugSpeech,
+        // default off). For testing, not for players: what players hear is the party voice
+        // (Commands/Voice/PartyVoice.h). Off: notes are only kept in the note log. Any thread.
+        bool IsDebugSpeechEnabled() const { return m_debugSpeech.load(std::memory_order_relaxed); }
+        void SetDebugSpeechEnabled(bool on) { m_debugSpeech.store(on, std::memory_order_relaxed); }
 
         // Replaces PB_UPDATE_INTERVAL in PartyBotAI::UpdateAI.
         uint32 GetBotUpdateInterval() const { return m_botUpdateMs.load(std::memory_order_relaxed); }
@@ -97,6 +100,9 @@ namespace Commander
         // "把掉队的都拉过来": the team gathers its members left behind now (GatherPlanner), on the
         // leader's map. False: no commander there.
         bool GatherNow(Player const* leader);
+        // A line for the players from `member`'s party voice (Commands/Voice/PartyVoice.h), e.g.
+        // a rotation's. Map thread of the member only. Nothing without a commander there.
+        void QueueVoice(Player const* member, VoiceEvent event);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }
@@ -131,6 +137,10 @@ namespace Commander
         // fight place button). Runtime only, any thread (same lock as the pull method).
         void SetPullPlace(ObjectGuid player, PullPlace place);
         PullPlace GetPullPlace(ObjectGuid player) const;
+        // What this player wants to hear from his party (`.partybot voice`, the addon's
+        // settings; VoiceSettings.h). Runtime only, any thread.
+        void SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings);
+        VoiceSettings GetVoiceSettings(ObjectGuid player) const;
 
         // Cost of PartyBotAI::UpdateAI ticks (step 0b measurements).
         void RecordBotTick(uint64 micros);
@@ -142,7 +152,7 @@ namespace Commander
         std::shared_ptr<PartyCommander> GetCommander(TeamBotAI* bot);
 
         std::atomic<bool> m_enabled{ true };
-        std::atomic<bool> m_speech{ true };
+        std::atomic<bool> m_debugSpeech{ false };
         std::atomic<uint32> m_botUpdateMs{ 1000 };
         std::atomic<uint32> m_perceptionMs{ 200 };
 
@@ -168,6 +178,9 @@ namespace Commander
         mutable std::mutex m_pullMethodLock;
         std::map<uint64, PullMethod> m_pullMethods;     // player guid -> method, Auto not stored
         std::map<uint64, PullPlace> m_pullPlaces;       // player guid -> place, Auto not stored
+
+        mutable std::mutex m_voiceLock;
+        std::map<uint64, VoiceSettings> m_voiceSettings;    // player guid -> settings, defaults not stored
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

@@ -152,7 +152,7 @@ public:
     Life::TravelState m_travel;
     uint32 m_farSinceMs = 0;
     // A companion's personality tag keys (what it says, Life/Requests/Phrases.h); empty otherwise.
-    std::vector<std::string> const& PersonalityTags() const;
+    std::vector<std::string> const& PersonalityTags() const override;
     // His joining the account (the talk window's naming page kneels him: JoinOffer::Choose).
     Companions::JoinOffer::State& JoinOfferState() { return m_joinOffer; }
 

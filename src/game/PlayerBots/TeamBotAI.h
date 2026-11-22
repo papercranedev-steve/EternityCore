@@ -64,6 +64,14 @@ public:
     // The creature its own fights are best against (a population bot acting out a quest: its
     // creature, HuntAssigner goes for its packs first). 0: any.
     virtual uint32 PreferredPrey() const { return 0; }
+    // Personality tag keys (Companions/Personality.cpp: "chatty", "quiet" ...): how it talks
+    // (Shared/Phrases.h picks lines by them; the party voice, Commander/Commands/Voice). None
+    // by default.
+    virtual std::vector<std::string> const& PersonalityTags() const
+    {
+        static std::vector<std::string> const none;
+        return none;
+    }
 
     // Every frame, before the bot update's throttle (the subclass's UpdateAI): the Commander's
     // mid-cast checks (CastWatch, area channel, CastBreak), the movement hands (Backpedal,

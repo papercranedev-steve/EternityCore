@@ -3278,6 +3278,14 @@ AHBuyer.MaxMarkup = 50
 #        Comma separated behavior module ids to disable. See .partybot ai modules
 #        Default: "" (all enabled)
 #
+#    PartyBot.Commander.DebugSpeech
+#        Debug speech: bots say their AI decisions and the planner's notes in party chat
+#        (Commander/Commands/BotSpeech.h). Data, frequent, for testing only. What players hear
+#        is the party voice (talkativeness: .partybot voice, the PartyBot addon's settings).
+#        Can be toggled in game with .partybot ai debugsay on|off
+#        Default: 0 - off
+#                 1 - on
+#
 #    PopBot.Enable
 #        World population bots (src/game/PlayerBots/Population): temporary characters that are
 #        never saved, refuse groups / trades / duels and only make the world look busier.
@@ -3511,6 +3519,7 @@ PartyBot.Commander.Enable = 1
 PartyBot.Commander.BotUpdateMs = 200
 PartyBot.Commander.PerceptionMs = 200
 PartyBot.Commander.DisabledModules = ""
+PartyBot.Commander.DebugSpeech = 0
 PopBot.Enable = 0
 PopBot.UpdateMs = 1000
 PopBot.MaxBots = 100

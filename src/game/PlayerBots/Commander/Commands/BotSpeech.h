@@ -1,6 +1,8 @@
 /*
- * PartyBot Commander: bots say what they decided, in party chat, so the player sees it in game
- * (user 2026-11-09). `.partybot ai say on|off`, config PartyBot.Commander.Speech (default on).
+ * PartyBot Commander: debug speech. Bots say what they decided, in party chat, so the developer
+ * sees it in game (user 2026-11-09). `.partybot ai debugsay on|off` (PartyBot_Dev's diagnostics
+ * window), config PartyBot.Commander.DebugSpeech (default off since 2026-11-22: it is data and
+ * frequent, not for players; what players hear is Commands/Voice/PartyVoice.h).
  *
  * What is said:
  *  - decisions: an action the arbiter executed (Arbiter::Run) above the Routine tier. Casts and
@@ -9,8 +11,8 @@
  *  - the brain's notes (TeamPlan::notes, PartyCommander::FlushNotes), said by the main tank bot,
  *    and a healer's low mana warning (ManaBudgetBehavior), said by the healer: Report().
  *  - review anomalies of a recorded fight (DevConsole review.lua, u:partysay): Say().
- * Off: notes and warnings go to the leader as "[PartyBot] ..." system messages as before;
- * decisions and anomalies are not said.
+ * Off: nothing is said; the notes stay in the party's note log (PartyCommander::GetNoteLog,
+ * `.partybot ai plan`, the combat recorder).
  *
  * Limits against spam, per bot: one line per MIN_GAP_MS; the same module + spell (or module +
  * enemy for attacks, module + action for moves) once per REPEAT_MS. Lines over the limit are
@@ -41,11 +43,10 @@ namespace Commander
         // Arbiter::Run, after `p` executed (map thread of the bot).
         static void OnExecuted(TeamBotAI const* bot, Proposal const& p, uint32 nowMs);
 
-        // Speech on: `speaker` says `text` in party chat. Off (or no group): `leader` gets
-        // "[PartyBot] text" as a system message when on the speaker's map.
-        static void Report(Player* speaker, Player* leader, std::string const& text);
+        // A note or warning (debug data): said in party chat while debug speech is on.
+        static void Report(Player* speaker, std::string const& text);
 
-        // Speech on: `speaker` says `text` in party chat. False when off or not in a group.
+        // Debug speech on: `speaker` says `text` in party chat. False when off or not in a group.
         static bool Say(Player* speaker, std::string const& text);
     };
 }

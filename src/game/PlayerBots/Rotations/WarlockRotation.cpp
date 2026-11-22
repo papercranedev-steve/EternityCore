@@ -31,7 +31,8 @@
 
 #include "Shared/Phrases.h"
 #include "Rotations/ClassRotation.h"
-#include "Commander/Commands/BotSpeech.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "DamageSpells.h"
@@ -185,8 +186,8 @@ namespace
             return Cast(me, pCreate);
         }
 
-        // Why the healer has no Soulstone, in party chat (BotSpeech::Report; speech off: a
-        // system message to the leader). Said again only for another reason.
+        // Why the healer has no Soulstone, in party chat (the party voice). Said again only for
+        // another reason.
         void Note(SoulstoneNote note, Player const* pHealer, int32 cooldownMs = 0)
         {
             if (note == m_soulstoneNote)
@@ -210,8 +211,14 @@ namespace
                 case SoulstoneNote::None:
                     return;
             }
-            std::string const text = BotShared::Phrases::Text(BotShared::I18n::OfParty(m_bot.me), key, vars);
-            Commander::BotSpeech::Report(m_bot.me, m_bot.GetPartyLeader(), text);
+            Commander::VoiceEvent e;
+            e.key = key;
+            e.speaker = m_bot.me->GetObjectGuid();
+            e.vars.assign(vars.begin(), vars.end());
+            e.tier = Commander::VoiceTier::Essential;
+            e.onceMs = 10 * IN_MILLISECONDS;    // (said again only for another reason: m_soulstoneNote)
+            e.once = std::string(key) + ":" + pHealer->GetName();
+            sCommanderMgr.QueueVoice(m_bot.me, std::move(e));
         }
 
         // A healer of the party (a healer bot; a player whose best role is healing,

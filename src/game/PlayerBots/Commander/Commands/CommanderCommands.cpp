@@ -3,7 +3,7 @@
  *
  *   .partybot ai                     status
  *   .partybot ai on | off            enable / disable the whole Commander
- *   .partybot ai say [on|off]        bots say decisions and notes in party chat (BotSpeech.h), runtime only
+ *   .partybot ai debugsay [on|off]   debug speech: bots say decisions and notes in party chat (BotSpeech.h), runtime only
  *   .partybot ai interval <ms>       bot AI update interval (100-5000), runtime only
  *   .partybot ai stats [reset]       cost of PartyBotAI::UpdateAI ticks
  *   .partybot ai modules             list behavior modules
@@ -1143,20 +1143,20 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return true;
     }
 
-    // .partybot ai say [on|off]: bots say decisions in party chat (BotSpeech.h). Replies
-    // PBOK;;say;on|off for the addon.
-    if (!strcmp(sub, "say"))
+    // .partybot ai debugsay [on|off]: debug speech, bots say decisions and notes in party chat
+    // (BotSpeech.h). Replies PBOK;;debugsay;on|off for PartyBot_Dev's diagnostics window.
+    if (!strcmp(sub, "debugsay"))
     {
         char* state = ExtractLiteralArg(&args);
         if (state && strcmp(state, "on") && strcmp(state, "off"))
         {
-            SendSysMessage("Usage: .partybot ai say [on|off]");
+            SendSysMessage("Usage: .partybot ai debugsay [on|off]");
             SetSentErrorMessage(true);
             return false;
         }
         if (state)
-            sCommanderMgr.SetSpeechEnabled(!strcmp(state, "on"));
-        PSendSysMessage("PBOK;;say;%s", sCommanderMgr.IsSpeechEnabled() ? "on" : "off");
+            sCommanderMgr.SetDebugSpeechEnabled(!strcmp(state, "on"));
+        PSendSysMessage("PBOK;;debugsay;%s", sCommanderMgr.IsDebugSpeechEnabled() ? "on" : "off");
         return true;
     }
 
@@ -1377,7 +1377,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|say [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|debugsay [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

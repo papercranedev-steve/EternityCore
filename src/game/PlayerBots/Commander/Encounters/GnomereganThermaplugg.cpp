@@ -272,12 +272,16 @@ namespace Commander
             m_phase = Phase::PhaseOne;
 
         if (m_phase == Phase::PhaseTwo && previous != Phase::PhaseTwo)
+        {
             m_pendingNotes.push_back("Thermaplugg below 50%: area Knock Away every 12 s, faces light up faster.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.phase2", VoiceTier::Urgent));
+        }
         if (m_phase == Phase::BossDead && wasAlive && m_bombCount)
         {
             char buf[160];
             snprintf(buf, sizeof(buf), "Thermaplugg dead, %u walking bomb(s) left: ranged kill them, melee stay off.", m_bombCount);
             m_pendingNotes.push_back(buf);
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.bombs", VoiceTier::Urgent));
         }
 
         FindObjects(bot, now);
@@ -294,6 +298,7 @@ namespace Commander
                 snprintf(buf, sizeof(buf), "Thermaplugg: %s presses the buttons of lit gnome faces.",
                     presser ? presser->GetName() : "a damage dealer");
                 m_pendingNotes.push_back(buf);
+                m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.presser", VoiceTier::Essential, m_presser));
             }
         }
         else
@@ -375,6 +380,9 @@ namespace Commander
         for (std::string& note : m_pendingNotes)
             plan.notes.push_back(std::move(note));
         m_pendingNotes.clear();
+        for (VoiceEvent& line : m_pendingVoice)
+            plan.voice.push_back(std::move(line));
+        m_pendingVoice.clear();
 
         AddBombIntercepts(world, plan);
     }

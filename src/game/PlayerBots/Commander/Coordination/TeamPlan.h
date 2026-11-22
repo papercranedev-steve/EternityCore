@@ -1661,6 +1661,28 @@ namespace Commander
         }
     };
 
+    // How much a line matters to the players (Commands/Voice/PartyVoice.h). The player's
+    // talkativeness setting and the speaker's personality decide which tiers are said.
+    enum class VoiceTier : uint8
+    {
+        Urgent,     // act now (retreat, a healer attacked, out of mana): cuts in
+        Essential,  // what the party does next (waiting, pulling, a control)
+        Social,     // thanks, congratulations
+        Flavor,     // atmosphere (a close call, entering a dungeon, idle talk)
+    };
+
+    // One line asked for by a brain module (TeamPlan::voice). The voice says it at most once per
+    // `onceMs` for `once` (empty: the key), by `speaker` (a bot; empty: the main tank bot).
+    struct VoiceEvent
+    {
+        std::string key;            // PlayerBots/i18n key, "voice.<moment>"
+        ObjectGuid speaker;
+        std::vector<std::pair<std::string, std::string>> vars;
+        VoiceTier tier = VoiceTier::Essential;
+        std::string once;
+        uint32 onceMs = 60 * 1000;
+    };
+
     struct TeamPlan
     {
         uint32 version = 0;
@@ -1725,7 +1747,10 @@ namespace Commander
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
         // by PartyCommander every refresh). Read through ForbidsRest.
         bool noRest = false;
-        std::vector<std::string> notes;     // messages for the leader, flushed by PartyCommander
+        std::vector<std::string> notes;     // debug data for the note log, flushed by PartyCommander
+        // Lines for the players (a boss module's mechanic): taken by the party voice
+        // (Commands/Voice/PartyVoice.h) on the same refresh.
+        std::vector<VoiceEvent> voice;
 
         InterruptDuty const* FindInterruptDuty(ObjectGuid enemy) const
         {

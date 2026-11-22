@@ -277,8 +277,8 @@ local function emit(rs, kind, a)
             if #a.links > 0 then
                 text = text .. "（← #" .. table.concat(map(a.links, tostring), " #") .. "）"
             end
-            -- said in party chat by the bot it happened to (else the tank bot) when bot speech
-            -- is on (`.partybot ai say`), else a system line to the leader
+            -- said in party chat by the bot it happened to (else the tank bot) when debug speech
+            -- is on (`.partybot ai debugsay`), else a system line to the leader
             local speaker = speakerFor(leader, whoG)
             if not (speaker and speaker.partysay and speaker:partysay(text)) then
                 leader:tell("|cffff8800" .. text:gsub("^%[复盘%]", "[复盘]|r"))

@@ -21,6 +21,13 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Commands/PlayerChat.cpp
   ${COMMANDER_DIR}/Commands/BotSpeech.h
   ${COMMANDER_DIR}/Commands/BotSpeech.cpp
+  ${COMMANDER_DIR}/Commands/Voice/VoiceSettings.h
+  ${COMMANDER_DIR}/Commands/Voice/VoiceCommands.cpp
+  ${COMMANDER_DIR}/Commands/Voice/ControlMarks.h
+  ${COMMANDER_DIR}/Commands/Voice/ControlMarks.cpp
+  ${COMMANDER_DIR}/Commands/Voice/PartyVoice.h
+  ${COMMANDER_DIR}/Commands/Voice/PartyVoice.cpp
+  ${COMMANDER_DIR}/Commands/Voice/VoiceMoments.cpp
   ${COMMANDER_DIR}/Perception/WorldModel.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.cpp

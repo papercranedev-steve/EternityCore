@@ -226,6 +226,7 @@ namespace Commander
             m_pendingNotes.push_back("Pyramid: wave 3 (two elite bosses) waits at the bottom of the stairs; "
                                      "the prisoners walk down 5 s after it spawns. Go down with them, the bots follow you. "
                                      "Healers drink until the fight starts.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.zf.wave3", VoiceTier::Essential));
         }
     }
 
@@ -243,6 +244,9 @@ namespace Commander
         for (std::string& note : m_pendingNotes)
             plan.notes.push_back(std::move(note));
         m_pendingNotes.clear();
+        for (VoiceEvent& line : m_pendingVoice)
+            plan.voice.push_back(std::move(line));
+        m_pendingVoice.clear();
 
         if (!HoldsTheStairs())
             return;     // wave 3: FocusAssigner (the Shadowpriest's heals are scored there)

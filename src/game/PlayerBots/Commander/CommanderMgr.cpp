@@ -55,7 +55,7 @@ namespace Commander
     void CommanderMgr::LoadConfig()
     {
         m_enabled.store(sConfig.GetBoolDefault("PartyBot.Commander.Enable", true));
-        m_speech.store(sConfig.GetBoolDefault("PartyBot.Commander.Speech", true));
+        m_debugSpeech.store(sConfig.GetBoolDefault("PartyBot.Commander.DebugSpeech", false));
         SetBotUpdateInterval(Clamp(sConfig.GetIntDefault("PartyBot.Commander.BotUpdateMs", 200), MIN_BOT_UPDATE_MS, MAX_BOT_UPDATE_MS));
         m_perceptionMs.store(Clamp(sConfig.GetIntDefault("PartyBot.Commander.PerceptionMs", 200), 50, 2000));
 
@@ -375,6 +375,30 @@ namespace Commander
         std::lock_guard<std::mutex> guard(m_pullMethodLock);
         auto itr = m_pullPlaces.find(player.GetRawValue());
         return itr != m_pullPlaces.end() ? itr->second : PullPlace::Auto;
+    }
+
+    void CommanderMgr::QueueVoice(Player const* member, VoiceEvent event)
+    {
+        if (!IsEnabled() || !member)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(member))
+            commander->GetVoice().Queue(std::move(event), WorldTimer::getMSTime());
+    }
+
+    void CommanderMgr::SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings)
+    {
+        std::lock_guard<std::mutex> guard(m_voiceLock);
+        if (settings.IsDefault())
+            m_voiceSettings.erase(player.GetRawValue());
+        else
+            m_voiceSettings[player.GetRawValue()] = settings;
+    }
+
+    VoiceSettings CommanderMgr::GetVoiceSettings(ObjectGuid player) const
+    {
+        std::lock_guard<std::mutex> guard(m_voiceLock);
+        auto itr = m_voiceSettings.find(player.GetRawValue());
+        return itr != m_voiceSettings.end() ? itr->second : VoiceSettings();
     }
 
     void CommanderMgr::RecordBotTick(uint64 micros)

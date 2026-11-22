@@ -14,9 +14,14 @@ namespace Commander
     struct TeamPlan;
     struct EnemyFacts;
     struct PartyMemberFacts;
+    struct VoiceEvent;
+    enum class VoiceTier : uint8;
 
     namespace EncounterHelpers
     {
+        // A line for the players (TeamPlan::voice, Commands/Voice/PartyVoice.h): `key` a
+        // PlayerBots/i18n "voice.boss.*" key, `speaker` empty: the main tank bot.
+        VoiceEvent Line(char const* key, VoiceTier tier, ObjectGuid speaker = ObjectGuid());
         // First enemy with this entry (alive enemies only are in the snapshot).
         EnemyFacts const* FindEnemyByEntry(WorldModel const& world, uint32 entry);
         bool HasEnemyEntry(WorldModel const& world, uint32 entry);

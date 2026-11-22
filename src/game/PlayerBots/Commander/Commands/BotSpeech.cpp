@@ -89,7 +89,7 @@ namespace Commander
     }
     void BotSpeech::OnExecuted(TeamBotAI const* bot, Proposal const& p, uint32 nowMs)
     {
-        if (!sCommanderMgr.IsSpeechEnabled() || p.kind != ProposalKind::Replace || p.tier == ProposalTier::Routine)
+        if (!sCommanderMgr.IsDebugSpeechEnabled() || p.kind != ProposalKind::Replace || p.tier == ProposalTier::Routine)
             return;
         Player* me = bot->me;
         if (!me->GetGroup())
@@ -139,17 +139,14 @@ namespace Commander
             PlayerChat::SayToParty(me, text);
     }
 
-    void BotSpeech::Report(Player* speaker, Player* leader, std::string const& text)
+    void BotSpeech::Report(Player* speaker, std::string const& text)
     {
-        if (Say(speaker, text))
-            return;
-        if (leader && leader->IsInWorld() && (!speaker || leader->GetMap() == speaker->GetMap()))
-            ChatHandler(leader).PSendSysMessage("[PartyBot] %s", text.c_str());
+        Say(speaker, text);
     }
 
     bool BotSpeech::Say(Player* speaker, std::string const& text)
     {
-        if (!sCommanderMgr.IsSpeechEnabled() || !speaker)
+        if (!sCommanderMgr.IsDebugSpeechEnabled() || !speaker)
             return false;
         return PlayerChat::SayToParty(speaker, text);
     }

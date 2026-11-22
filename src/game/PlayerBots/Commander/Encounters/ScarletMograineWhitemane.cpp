@@ -99,11 +99,15 @@ namespace Commander
         m_stage = stage;
         m_stageSinceMs = nowMs;
         if (stage == STAGE_DIED_ONCE)
+        {
             m_pendingNotes.push_back("Mograine is down (not dead): focus Whitemane when she comes in.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.mograine.down", VoiceTier::Urgent));
+        }
         else if (stage == STAGE_REVIVED)
         {
             m_revivedAtMs = nowMs;
             m_pendingNotes.push_back("Mograine revived: tank taunts him, focus stays on Whitemane.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.mograine.revived", VoiceTier::Urgent));
         }
     }
 
@@ -184,6 +188,9 @@ namespace Commander
         for (std::string& note : m_pendingNotes)
             plan.notes.push_back(std::move(note));
         m_pendingNotes.clear();
+        for (VoiceEvent& line : m_pendingVoice)
+            plan.voice.push_back(std::move(line));
+        m_pendingVoice.clear();
 
         if (m_stage != STAGE_DIED_ONCE && m_stage != STAGE_REVIVED)
             return;

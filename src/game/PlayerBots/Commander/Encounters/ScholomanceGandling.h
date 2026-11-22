@@ -44,6 +44,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_SCHOLOMANCE_GANDLING_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "ObjectGuid.h"
 #include <string>
@@ -127,6 +128,8 @@ namespace Commander
         std::vector<Guardian> m_guardians;      // alive, this refresh
 
         std::vector<std::string> m_pendingNotes;    // flushed into plan.notes by AdjustPlan
+
+        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

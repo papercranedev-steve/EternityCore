@@ -1,9 +1,7 @@
 #include "Commander/Coordination/Situation/GatherPlanner.h"
-#include "Shared/Phrases.h"
 #include "Commander/Coordination/Situation/Summon.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/LeftBehind.h"
-#include "Commander/Commands/BotSpeech.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
@@ -35,6 +33,21 @@ namespace GatherPlanner
                 Player* w = map->GetPlayer(r.warlock);
                 return !w || !w->IsAlive() || WorldTimer::getMSTimeDiff(r.sinceMs, nowMs) > RITUAL_GIVE_UP_MS;
             }), s.rituals.end());
+        }
+
+        // Said to the players by `speaker` (the party voice, Commands/Voice/PartyVoice.h).
+        void Tell(PartyCommander& commander, Player* speaker, char const* key,
+                  std::vector<std::pair<std::string, std::string>> vars, uint32 nowMs)
+        {
+            VoiceEvent e;
+            e.key = key;
+            e.speaker = speaker->GetObjectGuid();
+            e.vars = std::move(vars);
+            e.tier = VoiceTier::Essential;
+            e.once = std::string(key) + ":" + std::to_string(speaker->GetObjectGuid().GetRawValue()) +
+                     (e.vars.empty() ? std::string() : ":" + e.vars.front().second);
+            e.onceMs = 10 * IN_MILLISECONDS;
+            commander.GetVoice().Queue(std::move(e), nowMs);
         }
     }
 
@@ -80,7 +93,7 @@ namespace GatherPlanner
         if (left.empty())
         {
             if (asked && s.rituals.empty())
-                BotSpeech::Report(bot->me, anchor, BotShared::Phrases::Word(BotShared::I18n::OfParty(bot->me), "gather.all_here"));
+                Tell(commander, bot->me, "gather.all_here", {}, nowMs);
             return;
         }
 
@@ -124,7 +137,7 @@ namespace GatherPlanner
             for (Player* h : helpers)
                 if (std::find(pair.begin(), pair.end(), h->GetObjectGuid()) != pair.end())
                     used.insert(h);
-            BotSpeech::Report(warlock, anchor, BotShared::Phrases::Text(BotShared::I18n::OfParty(warlock), "gather.summoning", { { "name", target->GetName() } }));
+            Tell(commander, warlock, "gather.summoning", { { "name", target->GetName() } }, nowMs);
         }
 
         // Left behind and nobody to summon them: say so once (no warlock at all: the old
@@ -132,7 +145,7 @@ namespace GatherPlanner
         if (s.rituals.empty() && anyWarlock && warlocks.empty() && !s.shortNoted)
         {
             s.shortNoted = true;
-            BotSpeech::Report(bot->me, anchor, BotShared::Phrases::Text(BotShared::I18n::OfParty(bot->me), "gather.no_shards", { { "count", std::to_string(left.size()) } }));
+            Tell(commander, bot->me, "gather.no_shards", { { "count", std::to_string(left.size()) } }, nowMs);
         }
     }
 

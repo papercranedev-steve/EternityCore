@@ -41,6 +41,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_SCARLET_MOGRAINE_WHITEMANE_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "ObjectGuid.h"
 #include <string>
 
@@ -116,6 +117,8 @@ namespace Commander
         ObjectGuid m_tank;
 
         std::vector<std::string> m_pendingNotes;
+
+        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

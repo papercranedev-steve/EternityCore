@@ -13,6 +13,16 @@ namespace Commander
 {
 namespace EncounterHelpers
 {
+    VoiceEvent Line(char const* key, VoiceTier tier, ObjectGuid speaker)
+    {
+        VoiceEvent e;
+        e.key = key;
+        e.tier = tier;
+        e.speaker = speaker;
+        e.onceMs = 30 * IN_MILLISECONDS;
+        return e;
+    }
+
     EnemyFacts const* FindEnemyByEntry(WorldModel const& world, uint32 entry)
     {
         for (EnemyFacts const& e : world.enemies)

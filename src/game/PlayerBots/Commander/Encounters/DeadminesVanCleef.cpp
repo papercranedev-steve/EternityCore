@@ -150,6 +150,7 @@ namespace Commander
             m_summonAtMs = firstSummonSeen;
             m_holdDamage = false;
             m_pendingNotes.push_back("VanCleef summoned his guards: tank area threat, healer waits a moment.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.vancleef.guards", VoiceTier::Urgent));
         }
 
         if (!m_bossAlive)
@@ -183,18 +184,23 @@ namespace Commander
             snprintf(buf, sizeof(buf), "VanCleef at %.0f%%: damage held before the 50%% summon (%s%s%s).",
                 m_bossPct, guardsUp ? "guards alive " : "", tankLow ? "tank low " : "", manaLow ? "healer mana low" : "");
             m_pendingNotes.push_back(buf);
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.vancleef.hold", VoiceTier::Essential));
         }
         else if (!wantHold && m_holdDamage)
         {
             m_holdDamage = false;
             if (inBand)
+            {
                 m_pendingNotes.push_back("VanCleef: ready, pushing past 50%.");
+                m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.vancleef.push", VoiceTier::Essential));
+            }
         }
         if (m_holdDamage && WorldTimer::getMSTimeDiff(m_holdSinceMs, now) >= MAX_HOLD_MS)
         {
             m_holdDamage = false;
             m_holdGivenUp = true;
             m_pendingNotes.push_back("VanCleef: waited too long, pushing past 50% anyway.");
+            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.vancleef.push", VoiceTier::Essential));
         }
 
         m_holdRisk = guardsUp ? 1.0f : std::max(Ramp(TANK_READY_PCT, m_tankPct, RISK_RAMP_PCT),
@@ -208,6 +214,9 @@ namespace Commander
         for (std::string& note : m_pendingNotes)
             plan.notes.push_back(std::move(note));
         m_pendingNotes.clear();
+        for (VoiceEvent& line : m_pendingVoice)
+            plan.voice.push_back(std::move(line));
+        m_pendingVoice.clear();
 
         // While damage on the boss is held, the original guards are what the damage dealers
         // should be doing anyway: point the focus at the weakest one.

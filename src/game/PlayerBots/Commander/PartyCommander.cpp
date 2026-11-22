@@ -73,6 +73,7 @@ namespace Commander
         GatherPlanner::Step(bot, *this, nowMs); // members left behind: the warlocks summon them
 
         FlushNotes(bot);
+        m_voice.Step(bot, m_world, m_plan, nowMs);
         m_threatFeed.Push(bot, m_world, nowMs);
         WakeBots(bot, behaviors);
     }
@@ -225,16 +226,15 @@ namespace Commander
         std::vector<std::string>& notes = m_plan.notes;
         if (notes.empty())
             return;
-        // Said by the main tank bot (it leads the pulls), else by the bot running this refresh.
+        // Debug speech: said by the main tank bot (it leads the pulls), else by the bot running
+        // this refresh. Nobody to tell in a team of bots (Commander/Team.h): the note log only.
         Player* speaker = bot->me;
         if (PartyMemberFacts const* tank = Tanks::Main(m_world, true))
             if (Player* p = bot->me->GetMap()->GetPlayer(tank->guid))
                 speaker = p;
-        // Nobody to tell in a team of bots (Commander/Team.h): the note log only.
-        Player* leader = bot->GetPartyLeader();
-        if (leader || m_world.humanInTeam)
+        if (m_world.humanInTeam)
             for (std::string const& note : notes)
-                BotSpeech::Report(speaker, leader, note);
+                BotSpeech::Report(speaker, note);
         uint32 const now = WorldTimer::getMSTime();
         for (std::string& note : notes)
         {

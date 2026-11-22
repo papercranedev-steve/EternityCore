@@ -42,6 +42,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_GNOMEREGAN_THERMAPLUGG_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "ObjectGuid.h"
 #include <string>
@@ -147,6 +148,8 @@ namespace Commander
         bool m_presserNoted = false;
 
         std::vector<std::string> m_pendingNotes;    // flushed into plan.notes by AdjustPlan
+
+        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

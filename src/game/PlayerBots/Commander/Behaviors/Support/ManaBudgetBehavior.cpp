@@ -150,7 +150,7 @@ namespace Commander
         char text[200];
         snprintf(text, sizeof(text), "%s is low on mana (%.0f%%): about %.0f s of fight left, mana for about %.0f s of it.",
                  bot->me->GetName(), budget.manaPct, budget.fightSec, budget.fightSec / budget.tension);
-        BotSpeech::Report(bot->me, leader, text);
+        BotSpeech::Report(bot->me, text);
     }
 
     bool ManaBudgetBehavior::AppliesTo(TeamBotAI const* bot) const

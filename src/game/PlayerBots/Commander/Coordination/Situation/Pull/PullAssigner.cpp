@@ -239,7 +239,13 @@ namespace Commander
                         (botIssue ? "." : ". (Your own state does not time out.)"));
                 }
                 if (pull.botWaitMs > WAIT_READY_TIMEOUT_MS)
+                {
+                    VoiceEvent e;
+                    e.key = "voice.pull.cancel";
+                    e.speaker = pull.tank;
+                    plan.voice.push_back(std::move(e));
                     cancel("bots not ready after 90 seconds (.partybot ai ready shows why).");
+                }
                 return;
             }
             case PullPhase::Approach:
