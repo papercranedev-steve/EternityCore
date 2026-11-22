@@ -32,6 +32,7 @@
 #include "Utilities/Random.h"
 #include "SocialMgr.h"
 #include "Util.h"
+#include "Companions/CompanionMgr.h"
 
 /* differeces from off:
     -you can uninvite yourself - is is useful
@@ -69,6 +70,9 @@ void WorldSession::HandleGroupInviteOpcode(WorldPackets::Group::GroupInvite cons
     // No player
     if (!player)
     {
+        // PartyBot: one of his companions is somewhere in the world, it comes (CompanionMgr).
+        if (sCompanionMgr.OnInviteOffline(GetPlayer(), packet.memberName))
+            return;
         SendPartyResult(PARTY_OP_INVITE, packet.memberName, ERR_BAD_PLAYER_NAME_S);
         return;
     }

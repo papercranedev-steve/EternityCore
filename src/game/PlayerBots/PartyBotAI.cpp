@@ -727,6 +727,22 @@ void PartyBotAI::AddToPlayerGroup()
         group->ChangeLeader(pPlayer->GetObjectGuid());
 }
 
+void PartyBotAI::HandBackLead()
+{
+    Group* group = me->GetGroup();
+    if (!group || group->GetLeaderGuid() != me->GetObjectGuid())
+        return;
+    Player* pOwner = ObjectAccessor::FindPlayer(m_leaderGuid);
+    if (!pOwner || pOwner->GetGroup() != group)
+        return;
+    group->ChangeLeader(pOwner->GetObjectGuid());
+    BotShared::Phrases::Vars vars;
+    vars["leader"] = pOwner->GetName();
+    std::string const text = BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "lead.back", PersonalityTags(), vars);
+    if (!text.empty())
+        BotShared::BotChat::SayToParty(me, text);
+}
+
 bool PartyBotAI::OnLeaving()
 {
     if (!me || !LootsForSelf() || sCompanionMgr.IsTemporary(me->GetGUIDLow()))
@@ -974,6 +990,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         WorldTimer::getMSTimeDiff(m_lessonContextMs, WorldTimer::getMSTime()) >= PB_LESSON_CONTEXT_MS)
         RefreshLessonContext();
 
+    HandBackLead();
     Player* pLeader = GetPartyLeader();
     if (!pLeader)
     {

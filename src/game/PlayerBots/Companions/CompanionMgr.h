@@ -247,6 +247,11 @@ namespace Companions
         // own companions. World thread. "" = on its way, else an error key: notcompanion,
         // notyours, online, full, failed.
         std::string CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly);
+        // A group invite by name to a character that is not online (WorldSession::
+        // HandleGroupInviteOpcode): one of his own companions is called over (CallOver) and
+        // the addon told as from the panel (PBOK;<name>;callover, or PBERR;<name>;<full|failed|
+        // online>). False: not one of his companions, the invite fails as usual. World thread.
+        bool OnInviteOffline(Player* inviter, std::string const& name);
 
         // Account characters (account doc): the characters of the player's own account, a
         // companion who joined it at affinity 100 and the player's own ones. Any other character

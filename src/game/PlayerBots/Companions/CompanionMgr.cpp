@@ -20,6 +20,7 @@
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
 #include "Player.h"
+#include "Chat.h"
 #include "Group.h"
 #include "Map.h"
 #include "ObjectMgr.h"
@@ -928,6 +929,24 @@ namespace Companions
         }
         sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s calls companion %u over.", leader->GetName(), charGuid);
         return "";
+    }
+
+    bool CompanionMgr::OnInviteOffline(Player* inviter, std::string const& name)
+    {
+        if (!inviter || inviter->IsBot())
+            return false;
+        uint32 const charGuid = sObjectMgr.GetPlayerGuidByName(name).GetCounter();
+        if (!charGuid)
+            return false;
+        std::string const error = CallOver(inviter, charGuid, uint8(ROLE_INVALID), true);
+        if (error == "notcompanion" || error == "notyours" || error == "former")
+            return false;
+        ChatHandler handler(inviter);
+        if (error.empty())
+            handler.PSendSysMessage("PBOK;%s;callover", name.c_str());
+        else
+            handler.PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        return true;
     }
 
     bool CompanionMgr::IsOfAccount(Player const* owner, uint32 charGuid)

@@ -98,6 +98,9 @@ public:
 
     void CloneFromPlayer(Player const* pPlayer);
     void AddToPlayerGroup();
+    // Made the group's leader by the player (it leads nobody, GetPartyLeader would send it
+    // away): the lead goes back to him, with a word.
+    void HandBackLead();
     // It is about to log out (PlayerBotMgr's removal). True: a companion whose leader logged out,
     // it stays in his group and comes back with him (whether it was waiting somewhere is kept,
     // CompanionMgr::OnLeave); false: it leaves the group.

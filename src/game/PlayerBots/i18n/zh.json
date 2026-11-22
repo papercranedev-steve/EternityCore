@@ -354,6 +354,12 @@
     "default": "上船了。",
     "chatty": "上船了！这船晃得厉害……"
   },
+  "//15b": "The player made a party bot the leader: it hands the lead back (PartyBotAI::HandBackLead, party chat). {leader}: the player.",
+  "lead.back": {
+    "default": "还是你来带队吧，我跟着你就行。",
+    "quiet": "你带吧。",
+    "chatty": "哎别别，我可带不了队！{leader}，还是你来！"
+  },
   "//15": "Sent away from the party in front of him (Life/Errands/WalkAway, a whisper). {leader}, {home}.",
   "leave.bye": {
     "default": "那我先走了，有事再叫我。",
