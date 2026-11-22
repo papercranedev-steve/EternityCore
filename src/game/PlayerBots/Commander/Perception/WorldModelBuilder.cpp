@@ -1991,7 +1991,7 @@ namespace WorldModelBuilder
                         f.healRates = HealCapacity::Rates(ai);
                         f.healThreat = HealThreat(member, f.healRates);
                     }
-                    else if (member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
+                    else if (member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_SIDE_HEAL)
                         f.spareHealRates = HealCapacity::Rates(ai);
                     else if (!member->IsAlive() && f.selfRes && f.HealsTeam())
                         f.spareHealRates = HealCapacity::Rates(ai);     // its heals once it rises
@@ -2015,7 +2015,7 @@ namespace WorldModelBuilder
             }
             if (!f.isBot && member->IsAlive())
                 f.soloDps = SoloDps(member, nullptr);
-            if (!f.isBot && member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_HEAL)
+            if (!f.isBot && member->IsAlive() && f.cap.heal >= RoleCapabilities::MIN_SIDE_HEAL)
                 f.spareHealRates = HealCapacity::PlayerRates(member);
             world.party.push_back(f);
             partyUnits.push_back(member);

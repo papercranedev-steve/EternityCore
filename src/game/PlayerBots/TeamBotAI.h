@@ -101,11 +101,13 @@ public:
     bool DealsDamageForTeam() const;
     // A healer's damage this tick (Commander HealerDamageTier, healer damage tiers doc 2026-11-21):
     // the plan's tier, FREE when its mana condition fails (SPARE below TIER2_MANA_PCT, FULL
-    // below HealerManaReserve unless the plan waives the reserve). Not in the plan (another role,
-    // the Commander or the module off): FULL when it deals damage for the team, else NONE.
+    // below RESERVE_HEALS x BiggestHealMana unless the plan waives the reserve). After a fail
+    // the condition is the higher resume line until it is met (HealerDamageAssigner constants).
+    // Not in the plan (another role, the Commander or the module off): FULL when it deals damage
+    // for the team, else NONE.
     uint8 HealerDamageNow() const;
-    // RESERVE_HEALS x the mana of its biggest single target direct heal.
-    float HealerManaReserve() const;
+    // The mana of its biggest single target direct heal (0 without one).
+    float BiggestHealMana() const;
     // A healer the plan sends into melee (Commander HealerDamageDuty::melee: a paladin or shaman
     // in the open world): the melee stance module places it, it chases and swings like a melee
     // damage dealer, and stops swinging near aggro (FightVictim).
@@ -425,6 +427,8 @@ public:
     // The last OrderChase (Commander melee stance): victim and angle. Cleared by an original
     // chase (BeginChasing, const).
     mutable ObjectGuid m_chaseVictim;
+    // HealerDamageNow: its mana condition failed and the resume line was not reached since.
+    mutable bool m_healerDamageManaLow = false;
     float m_chaseAngle = 0.0f;
     // Commander mid-cast heal check (Commander/Behaviors/Combat/CastWatch.h), every frame in UpdateAI.
     Commander::CastWatchState m_castWatch;

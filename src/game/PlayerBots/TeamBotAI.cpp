@@ -241,16 +241,28 @@ uint8 TeamBotAI::HealerDamageNow() const
         return DealsDamageForTeam() ? Commander::HEALER_DAMAGE_FULL : Commander::HEALER_DAMAGE_NONE;
 
     using HD = Commander::HealerDamageAssigner;
+    bool enough;
     switch (duty->tier)
     {
         case Commander::HEALER_DAMAGE_SPARE:
-            return me->GetPowerPercent(POWER_MANA) >= HD::TIER2_MANA_PCT ? duty->tier : uint8(Commander::HEALER_DAMAGE_FREE);
+            enough = me->GetPowerPercent(POWER_MANA) >= (m_healerDamageManaLow ? HD::TIER2_RESUME_MANA_PCT : HD::TIER2_MANA_PCT);
+            break;
         case Commander::HEALER_DAMAGE_FULL:
-            return duty->noReserve || float(me->GetPower(POWER_MANA)) >= HealerManaReserve() ?
-                duty->tier : uint8(Commander::HEALER_DAMAGE_FREE);
+        {
+            if (duty->noReserve)
+                return duty->tier;
+            float const heal = BiggestHealMana();
+            float const reserve = HD::RESERVE_HEALS * heal;
+            float const line = m_healerDamageManaLow ?
+                std::min(reserve + HD::RESUME_HEALS * heal, float(me->GetMaxPower(POWER_MANA))) : reserve;
+            enough = float(me->GetPower(POWER_MANA)) >= line;
+            break;
+        }
         default:
             return duty->tier;
     }
+    m_healerDamageManaLow = !enough;
+    return enough ? duty->tier : uint8(Commander::HEALER_DAMAGE_FREE);
 }
 
 bool TeamBotAI::IsMeleeHealer() const
@@ -261,7 +273,7 @@ bool TeamBotAI::IsMeleeHealer() const
     return commander && commander->GetPlan().healerDamage.Melee(me->GetObjectGuid());
 }
 
-float TeamBotAI::HealerManaReserve() const
+float TeamBotAI::BiggestHealMana() const
 {
     // The biggest heal on itself stands for "its biggest heal" (the bonuses are its own).
     SpellEntry const* biggest = nullptr;
@@ -277,7 +289,7 @@ float TeamBotAI::HealerManaReserve() const
             biggest = pSpell;
         }
     }
-    return biggest ? Commander::HealerDamageAssigner::RESERVE_HEALS * HealSpells::ManaCost(me, biggest) : 0.0f;
+    return biggest ? HealSpells::ManaCost(me, biggest) : 0.0f;
 }
 
 bool TeamBotAI::UpdateFrameHands(uint32 diff)

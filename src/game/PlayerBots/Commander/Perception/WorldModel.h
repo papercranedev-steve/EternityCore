@@ -737,7 +737,7 @@ namespace Commander
         // talents, crit), valued on themselves (Perception/Forecast/HealCapacity.h). Empty otherwise.
         std::vector<HealRate> healRates;
         // The same for members that can heal but are not healer bots (RoleCapability::heal at
-        // least MIN_HEAL): hybrid bots in another role, players (their known spells). What they
+        // least MIN_SIDE_HEAL): hybrid bots in another role, players (their known spells). What they
         // could heal if they had to (FightLoad::Lineup, the contingency check). Kept apart so
         // nothing that counts the healers counts them.
         std::vector<HealRate> spareHealRates;

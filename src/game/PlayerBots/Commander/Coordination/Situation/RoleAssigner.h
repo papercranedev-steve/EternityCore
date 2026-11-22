@@ -54,7 +54,7 @@ namespace Commander
         static void ChooseRoles(WorldModel const& world, TeamPlan& plan);
         // TeamPlan::coverage from the roles just chosen (doc 2026-11-19-any-size-team.md
         // section 3): each member's role functions, then a function nobody has goes to the bots
-        // that can do it (damage to the healers, heal to bots with MIN_HEAL); no tank = noHolder.
+        // that can do it (damage to the healers, heal to bots with MIN_SIDE_HEAL); no tank = noHolder.
         static void BuildCoverage(WorldModel const& world, TeamPlan& plan);
     };
 }

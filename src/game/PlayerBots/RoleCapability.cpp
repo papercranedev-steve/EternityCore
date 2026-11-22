@@ -84,6 +84,8 @@ namespace RoleCapabilities
         TalentPoints(player, points);
         float const total = points[0] + points[1] + points[2];
         auto share = [&](uint32 tab) { return total > 0.0f ? points[tab] / total : 0.0f; };
+        // A hybrid without talents heals on the side only (header).
+        float const hybridHeal = total > 0.0f ? 0.50f : NO_TALENT_HYBRID_HEAL;
 
         switch (player->GetClass())
         {
@@ -94,7 +96,7 @@ namespace RoleCapabilities
             case CLASS_PALADIN:
                 c.tank = 0.25f + 0.45f * share(1) + (WearsShield(player) ? 0.15f : 0.0f) +
                          (player->HasSpell(SPELL_RIGHTEOUS_FURY) ? 0.15f : 0.0f) + DefenseBonus(player);
-                c.heal = 0.50f + 0.50f * share(0);
+                c.heal = hybridHeal + 0.50f * share(0);
                 c.melee = 0.40f + 0.50f * share(2);
                 break;
             case CLASS_DRUID:
@@ -102,7 +104,7 @@ namespace RoleCapabilities
                     c.tank = 0.35f + 0.60f * share(1) + DefenseBonus(player);
                 if (player->HasSpell(SPELL_CAT_FORM))
                     c.melee = 0.30f + 0.60f * share(1);
-                c.heal = 0.50f + 0.50f * share(2);
+                c.heal = hybridHeal + 0.50f * share(2);
                 c.ranged = 0.30f + 0.60f * share(0);
                 break;
             case CLASS_PRIEST:
@@ -110,7 +112,7 @@ namespace RoleCapabilities
                 c.ranged = 0.30f + 0.70f * share(2);
                 break;
             case CLASS_SHAMAN:
-                c.heal = 0.50f + 0.50f * share(2);
+                c.heal = hybridHeal + 0.50f * share(2);
                 c.ranged = 0.35f + 0.60f * share(0);
                 c.melee = 0.35f + 0.60f * share(1);
                 break;

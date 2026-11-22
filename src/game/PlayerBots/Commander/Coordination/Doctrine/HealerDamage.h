@@ -52,9 +52,14 @@ namespace Commander
         static constexpr uint32 FORECAST_MS = 3000;
         // Mana conditions the bot applies each tick (TeamBotAI::HealerDamageNow; doc sections 3, 5):
         // SPARE needs this mana percent, FULL keeps RESERVE_HEALS x its biggest heal's mana.
-        // Below them the tick is FREE.
+        // Below them the tick is FREE. Once below, the damage comes back only at the resume line
+        // (TIER2_RESUME_MANA_PCT; the reserve + RESUME_HEALS x the biggest heal, at most full
+        // mana): without it a small mana pool flipped damage on and off with every cast and tick
+        // of regen (user 2026-11-22).
         static constexpr float TIER2_MANA_PCT = 80.0f;
+        static constexpr float TIER2_RESUME_MANA_PCT = 90.0f;
         static constexpr float RESERVE_HEALS = 2.0f;
+        static constexpr float RESUME_HEALS = 1.0f;
 
         // `m`, a healer in the plan, gets a damage target (TargetAssigner): a damage function
         // (the coverage), or a tier with something to do: FREE with a free attack

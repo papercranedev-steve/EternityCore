@@ -142,9 +142,10 @@ namespace Commander
         // Nobody kills: every healer bot deals damage too (a lone healer, two healers).
         add(FUNCTION_DAMAGE, "nobody else deals damage",
             [](PartyMemberFacts const&, MemberCover const& c) { return (c.functions & FUNCTION_HEAL) != 0; });
-        // Nobody heals: the bots that can (a retribution paladin next to a warrior).
+        // Nobody heals: the bots that can (a retribution paladin next to a warrior, a shaman
+        // without talents in melee).
         add(FUNCTION_HEAL, "nobody else heals",
-            [](PartyMemberFacts const& m, MemberCover const&) { return m.cap.heal >= RoleCapabilities::MIN_HEAL; });
+            [](PartyMemberFacts const& m, MemberCover const&) { return m.cap.heal >= RoleCapabilities::MIN_SIDE_HEAL; });
         // Nobody holds: not given to anyone, each member takes the enemies that hit it.
         cover.noHolder = !cover.members.empty() && !(covered & FUNCTION_HOLD);
     }
