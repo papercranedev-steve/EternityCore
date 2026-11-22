@@ -112,6 +112,11 @@ namespace Population
         // one of the people of the world again and can be met and asked again
         // (Roster::ReturnFromTrial). World thread.
         void ReturnFromTrial(uint32 memberId, uint8 level) { EnsureDataLoaded(); m_roster.ReturnFromTrial(memberId, level); }
+        // A recruited member's character was renamed (Companions/Account/Naming). World thread.
+        void RenameMember(uint32 memberId, std::string const& name) { EnsureDataLoaded(); m_roster.Rename(memberId, name); }
+        // The name belongs to someone of the world: a roster member, a stranger or a population
+        // bot in the world (they are not all in `characters`). World thread.
+        bool IsNameInUse(std::string const& name);
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         FieldDirector const& GetFieldDirector() const { return m_field; }

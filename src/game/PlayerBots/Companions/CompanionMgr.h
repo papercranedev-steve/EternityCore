@@ -306,8 +306,14 @@ namespace Companions
         // character moves to it, nothing else changes (online he stays in the party). "" = done,
         // else an error key: notcompanion (also a trial partner), notyours, enemy, inaccount, locked
         // (affinity below MAX_AFFINITY), accountfull (CharactersPerRealm characters already).
+        // `newName` (empty: he keeps his): the name the player gave him for it (Account/Naming),
+        // checked before he moves; a refused one is the error (Naming::Check's keys) and
+        // nothing changes. `newName` comes back normalized.
         // World thread (the command, the talk window).
-        std::string JoinAccount(Player* owner, uint32 charGuid);
+        std::string JoinAccount(Player* owner, uint32 charGuid, std::string& newName);
+        std::string JoinAccount(Player* owner, uint32 charGuid) { std::string keep; return JoinAccount(owner, charGuid, keep); }
+        // `owner`'s account can take one more character (CharactersPerRealm).
+        bool AccountHasRoom(Player const* owner) const;
         // He asked once (Account/JoinOffer, the answer or the window closed): not again.
         void MarkJoinAsked(uint32 charGuid);
         // Sends an account companion back to the companions account, as a companion of `owner`

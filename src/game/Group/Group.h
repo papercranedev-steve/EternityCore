@@ -291,6 +291,10 @@ class Group
         void ChangeMembersGroup(ObjectGuid guid, uint8 group);
         void ChangeMembersGroup(Player* player, uint8 group);
 
+        // A member was renamed while in the group (PlayerBots: a companion named as he joins
+        // the player's account): the slot (and leader) name, then the members' group list.
+        void ChangeMemberName(ObjectGuid guid, std::string const& name);
+
         void SwapMembersGroup(ObjectGuid guid, ObjectGuid swapGuid);
         void SwapMembersGroup(Player* player, Player* swapPlayer);
 

@@ -11,8 +11,9 @@ namespace Talk
     namespace
     {
         // A companion at affinity 100, not in the player's account yet (Account/JoinOffer):
-        // "到我的账号里来吧？" opens his offer page, whose answers are this service's
-        // (account:yes, account:later). Any time, also after he asked once (account doc §2).
+        // "到我的账号里来吧？" opens his offer page, whose answers (and those of the naming page
+        // after the yes) are this service's: JoinOffer::Choose. Any time, also after he asked
+        // once (account doc §2).
         class AccountService : public Service
         {
         public:
@@ -31,19 +32,7 @@ namespace Talk
 
             Outcome Choose(Context const& ctx, std::string const& arg) const override
             {
-                Outcome outcome;
-                if (arg.empty())
-                {
-                    Page const page = JoinOffer::OfferPage(ctx);
-                    outcome.kind = Outcome::Kind::Page;
-                    outcome.text = page.text;
-                    outcome.options = page.options;
-                    return outcome;
-                }
-                bool joined = false;
-                outcome.kind = Outcome::Kind::Close;
-                outcome.reply = JoinOffer::Answer(ctx, arg == "yes", joined);
-                return outcome;
+                return JoinOffer::Choose(ctx, arg);
             }
         };
     }

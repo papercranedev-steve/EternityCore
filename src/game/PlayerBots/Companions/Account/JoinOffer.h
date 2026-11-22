@@ -1,11 +1,14 @@
 /*
  * Companions, joining the player's account (account doc .kiro/docs/2026-11-21-companion-account.md
  * §2, workspace root): at affinity 100 a companion asks his player once, in party chat and with a
- * talk page, whether he may join his account. Yes: CompanionMgr::JoinAccount (the account full:
- * he says so, make room and call him). Later / the window closed: he says it can be done any time
+ * talk page, whether he may join his account. Yes: he asks for a name, as a rite (§2.1, Account/
+ * Naming): keep his own (CompanionMgr::JoinAccount now) or the addon's name box (the window
+ * "name", whose `.partybot joinaccount <guid> <name>` joins him). The account full: he says so at
+ * the yes, make room and call him. Later / the window closed: he says it can be done any time
  * (the companions panel, the talk window: AccountService), and does not ask again.
  *
- * Addon line after a join: PBOK;<bot>;joinaccount (the panel lists him among the account's).
+ * Addon line after a join: PBOK;<old name>;joinaccount[;<new name>] (the panel lists him among
+ * the account's).
  */
 
 #ifndef MANGOS_COMPANIONS_ACCOUNT_JOIN_OFFER_H
@@ -39,8 +42,14 @@ namespace JoinOffer
     // His words and the two answers (account:yes, account:later).
     Talk::Page OfferPage(Talk::Context const& ctx);
 
-    // The player's answer (the talk page): his reply line; `joined` when he moved.
-    std::string Answer(Talk::Context const& ctx, bool yes, bool& joined);
+    // The answers of his pages (AccountService, `arg` after "account:"): "" his offer page,
+    // yes the naming page (or the account is full), keep he joins with his name, name the
+    // addon's name box, later not now.
+    Talk::Outcome Choose(Talk::Context const& ctx, std::string const& arg);
+
+    // He joined by `.partybot joinaccount` (the menu, the name box): his line to the party,
+    // `oldName` his name before (the same: he kept it; empty: no name was asked).
+    std::string JoinedLine(Talk::Context const& ctx, std::string const& oldName);
 }
 }
 

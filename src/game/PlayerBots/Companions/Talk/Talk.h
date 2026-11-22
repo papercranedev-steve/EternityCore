@@ -53,7 +53,8 @@ namespace Talk
     // then holds his words why ("talk.gone").
     bool Choose(Context const& ctx, std::string const& optionId, Outcome& out);
 
-    // His line for `key` (Life/Requests/Phrases) with {leader} = the player; empty when missing.
+    // His line for `key` (Life/Requests/Phrases) with {leader} = the player, {me} = his own
+    // name; other variables stay for the caller to fill (Phrases::Format); empty when missing.
     std::string Line(Context const& ctx, std::string const& key);
 
     // The page to the player's addon (PBTALK BEGIN, OPT, END; TalkCommands.cpp): an answer, or

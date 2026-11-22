@@ -185,6 +185,29 @@
     "chatty": "太好了！往后我也是你名册里的一员了，多关照！",
     "quiet": "嗯。以后都在。"
   },
+  "//7a": "After the yes he asks for a name, as a rite (Companions/Account/Naming). {leader}; {me}: his name now; {old} (account.join.named): his name before, {me} the new one.",
+  "account.name.page": {
+    "default": "{leader}，从今往后，我就不只是跟在你身后的人了。你可以亲自披上我的铠甲、用我的眼睛去看这片大陆，我就是你的另一个自己。\n\n我的家乡有个老规矩：一个人决定把往后的日子交给谁，就请那人亲口为他唤一个名字。旧名字留给从前一个人走过的路，新名字只属于往后与你同行的路。\n\n你愿意为我起个名字吗？还是……就这样叫我{me}？",
+    "chatty": "{leader}！往后我就是你名册上的人了，这可是大事，得有点仪式感才行！\n\n我们那儿的规矩：把余生托付给谁，就让谁亲口给你起个名字。从前的{me}是我自己走过来的，往后的我是跟着你的。\n\n来吧，给我起个名字！不想改的话，{me}我也挺喜欢的。",
+    "quiet": "往后，我就是你的另一个自己了。\n\n我们那儿，把命交给谁，就由谁来起名。\n\n你给我起一个吧。或者，还叫{me}。"
+  },
+  "account.name.new": "我来为你起个名字。",
+  "account.name.keep": "你就是{me}，不必改。",
+  "account.name.listen": {
+    "default": "（他站直了身子，静静等你开口。）",
+    "chatty": "来吧，我准备好了！",
+    "quiet": "……嗯，我听着。"
+  },
+  "account.join.named": {
+    "default": "{me}……{me}。从今往后，{old}留在过去的路上，跟着你的人，叫{me}。",
+    "chatty": "{me}！好名字，我喜欢！{old}就留在过去吧，往后叫我{me}！",
+    "quiet": "{me}。记住了。"
+  },
+  "account.join.kept": {
+    "default": "那就还叫{me}。名字没变，可从今天起，它是记在你名册上的名字了。",
+    "chatty": "还是{me}！嘿嘿，看来你早就叫顺口了。往后我就是你名册上的{me}啦！",
+    "quiet": "{me}。往后都在。"
+  },
   "account.join.full": "你的名册已经满员了……腾出一个位置再叫我吧，我等你。",
   "account.later": {
     "default": "没关系，想好了就在伙伴名单里叫我一声。",

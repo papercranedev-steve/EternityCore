@@ -698,6 +698,17 @@ namespace Population
         return false;
     }
 
+    bool PopulationMgr::IsNameInUse(std::string const& name)
+    {
+        EnsureDataLoaded();
+        for (Record const& rec : m_bots)
+            if (rec.name == name)
+                return true;
+        std::set<std::string> names;
+        m_roster.AddNamesTo(names);
+        return names.count(name) != 0;
+    }
+
     uint32 PopulationMgr::GetBotCount() const
     {
         return uint32(std::count_if(m_bots.begin(), m_bots.end(), [](Record const& r) { return !r.removing; }));

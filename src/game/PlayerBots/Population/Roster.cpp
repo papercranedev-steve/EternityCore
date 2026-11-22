@@ -809,6 +809,17 @@ namespace Population
             m->stallLevel, memberId);
     }
 
+    void Roster::Rename(uint32 memberId, std::string const& name)
+    {
+        RosterMember* m = FindMember(memberId);
+        if (!m)
+            return;
+        m->name = name;
+        std::string escaped = name;
+        CharacterDatabase.escape_string(escaped);
+        CharacterDatabase.PExecute("UPDATE `custom_popbot_member` SET `name` = '%s' WHERE `id` = %u", escaped.c_str(), memberId);
+    }
+
     bool Roster::SaidFarewell(uint32 memberId) const
     {
         if (IsStranger(memberId))

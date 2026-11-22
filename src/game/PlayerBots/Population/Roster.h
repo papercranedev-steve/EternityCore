@@ -135,6 +135,9 @@ namespace Population
         // His trial (搭伙) ended unpromoted, his character was deleted: spawned from the roster
         // again (a stalled one at `level`), and he may be asked again.
         void ReturnFromTrial(uint32 memberId, uint8 level);
+        // His companion character was renamed (named as he joined the player's account): the
+        // member keeps the new name, so a stranger he turns into later (永别) is still him.
+        void Rename(uint32 memberId, std::string const& name);
         // RosterMember::farewell (false for strangers and unknown ids).
         bool SaidFarewell(uint32 memberId) const;
         void MarkInUse(uint32 memberId);

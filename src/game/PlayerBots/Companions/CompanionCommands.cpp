@@ -41,7 +41,8 @@
  *   .partybot rehire <guid>      a former companion comes back (needs a free slot; comes over if he can)
  *   .partybot forget <guid>      永别: a former companion's character is deleted, he lives on as a stranger
  *   .partybot buyslot            buys the next companion slot (all free ones open)
- *   .partybot joinaccount <guid> a companion at affinity 100 joins your account (companion account doc)
+ *   .partybot joinaccount <guid> [name]  a companion at affinity 100 joins your account (companion
+ *                                account doc), under the name you gave him
  *   .partybot sendback <guid>    one who joined your account goes back to being your companion
  *                                (a former one without a free slot)
  */
@@ -54,6 +55,7 @@
 #include "Companions/Slots/Slots.h"
 #include "Companions/Talk/TalkService.h"
 #include "Companions/Talk/Talk.h"
+#include "Companions/Account/JoinOffer.h"
 #include "Population/PopulationMgr.h"
 #include "Life/Requests/RequestBoard.h"
 #include "Shared/QuestMirror.h"
@@ -340,31 +342,45 @@ bool ChatHandler::HandlePartyBotForgetCommand(char* args)
     return true;
 }
 
-// .partybot joinaccount <guid>: PBOK;<name>;joinaccount
-//                               | PBERR;<name>;<notcompanion|notyours|inaccount|locked|accountfull>
+// .partybot joinaccount <guid> [<name>]: PBOK;<name>;joinaccount[;<new name>]
+//     | PBERR;<name>;<notcompanion|notyours|inaccount|locked|accountfull|name_...>
+// <name>: the one the player gave him for it (Companions/Account/Naming; his own = he keeps it);
+// a refused one changes nothing (PBERR;<name>;name_<why>;<the name asked>).
 // (online and in your group he says his line, as after the talk window's yes)
 bool ChatHandler::HandlePartyBotJoinAccountCommand(char* args)
 {
     Player* player = nullptr;
     uint32 guid = 0;
     std::string name;
-    if (!ExtractCompanionSlotTarget(&args, ".partybot joinaccount <guid>", player, guid, name))
+    if (!ExtractCompanionSlotTarget(&args, ".partybot joinaccount <guid> [name]", player, guid, name))
         return false;
-    std::string const error = sCompanionMgr.JoinAccount(player, guid);
+    // (all the rest: "A B" is refused as such, not cut to "A")
+    std::string newName = args ? args : "";
+    newName.erase(0, newName.find_first_not_of(' '));
+    newName.erase(newName.find_last_not_of(' ') + 1);
+    std::string const asked = newName;
+    std::string const error = sCompanionMgr.JoinAccount(player, guid, newName);
     if (!error.empty())
     {
-        PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
+        if (error.compare(0, 5, "name_") == 0)
+            PSendSysMessage("PBERR;%s;%s;%s", name.c_str(), error.c_str(), asked.c_str());
+        else
+            PSendSysMessage("PBERR;%s;%s", name.c_str(), error.c_str());
         SetSentErrorMessage(true);
         return false;
     }
     Player* bot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, guid));
     if (bot && bot->IsInWorld() && bot->GetGroup() && bot->GetGroup() == player->GetGroup())
     {
-        std::string const line = Companions::Talk::Line(Companions::Talk::ContextOf(player, bot), "account.join.done");
+        std::string const line = Companions::JoinOffer::JoinedLine(Companions::Talk::ContextOf(player, bot),
+            asked.empty() ? std::string() : name);
         if (!line.empty())
             BotShared::BotChat::SayToParty(bot, line);
     }
-    PSendSysMessage("PBOK;%s;joinaccount", name.c_str());
+    if (!newName.empty() && newName != name)
+        PSendSysMessage("PBOK;%s;joinaccount;%s", name.c_str(), newName.c_str());
+    else
+        PSendSysMessage("PBOK;%s;joinaccount", name.c_str());
     return true;
 }
 

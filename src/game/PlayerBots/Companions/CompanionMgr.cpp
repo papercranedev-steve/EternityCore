@@ -16,6 +16,7 @@
 #include "Shared/TownGates.h"
 #include "Companions/Recruit/Trial.h"
 #include "Companions/Recruit/FirstCompanion.h"
+#include "Companions/Account/Naming.h"
 #include "Population/PopulationMgr.h"
 #include "PlayerBotMgr.h"
 #include "PartyBotAI.h"
@@ -1064,7 +1065,16 @@ namespace Companions
         sWorld.UpdateRealmCharCount(toAccount);
     }
 
-    std::string CompanionMgr::JoinAccount(Player* owner, uint32 charGuid)
+    bool CompanionMgr::AccountHasRoom(Player const* owner) const
+    {
+        if (!owner || !owner->GetSession())
+            return false;
+        std::vector<PlayerCacheData const*> chars;
+        sObjectMgr.GetPlayerDataForAccount(owner->GetSession()->GetAccountId(), chars);
+        return chars.size() < sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM);
+    }
+
+    std::string CompanionMgr::JoinAccount(Player* owner, uint32 charGuid, std::string& newName)
     {
         auto itr = m_companions.find(charGuid);
         if (!owner || owner->IsBot() || !owner->GetSession() || itr == m_companions.end() || itr->second.temporary || itr->second.trial)
@@ -1078,13 +1088,21 @@ namespace Companions
             return "enemy";
         if (GetAffinity(charGuid) < MAX_AFFINITY)
             return "locked";
-        uint32 const account = owner->GetSession()->GetAccountId();
-        std::vector<PlayerCacheData const*> chars;
-        sObjectMgr.GetPlayerDataForAccount(account, chars);
-        if (chars.size() >= sWorld.getConfig(CONFIG_UINT32_CHARACTERS_PER_REALM))
+        if (!AccountHasRoom(owner))
             return "accountfull";
+        std::string oldName;
+        sObjectMgr.GetPlayerNameByGUID(ObjectGuid(HIGHGUID_PLAYER, charGuid), oldName);
+        if (!newName.empty())
+        {
+            std::string const refused = Naming::Check(charGuid, newName);
+            if (!refused.empty())
+                return refused;
+        }
 
+        uint32 const account = owner->GetSession()->GetAccountId();
         MoveToAccount(charGuid, ResolveAccount(), account);
+        if (!newName.empty() && newName != oldName)
+            Naming::Rename(owner, charGuid, info.memberId, oldName, newName);
         info.inAccount = true;
         info.joinAsked = true;
         info.staying = false;

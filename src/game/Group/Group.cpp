@@ -1949,6 +1949,17 @@ bool Group::SameSubGroup(Player const* member1, Player const* member2) const
         return member1->GetSubGroup() == member2->GetSubGroup();
 }
 
+void Group::ChangeMemberName(ObjectGuid guid, std::string const& name)
+{
+    member_witerator slot = _getMemberWSlot(guid);
+    if (slot == m_memberSlots.end())
+        return;
+    slot->name = name;
+    if (m_leaderGuid == guid)
+        m_leaderName = name;
+    SendUpdate();
+}
+
 // allows setting subgroup for offline members
 void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
 {

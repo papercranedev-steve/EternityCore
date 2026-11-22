@@ -82,6 +82,7 @@ namespace Talk
         static std::vector<std::string> const none;
         BotShared::Phrases::Vars vars;
         vars["leader"] = ctx.player ? ctx.player->GetName() : "";
+        vars["me"] = ctx.bot ? ctx.bot->GetName() : "";
         // (empty, not logged, for a key with no line: some are optional, Greeting)
         return BotShared::Phrases::Format(BotShared::Phrases::Pick(ctx.lang, key, ctx.tags ? *ctx.tags : none), vars);
     }

@@ -178,6 +178,28 @@
     "chatty": "Awesome! I'm part of your roster now—let's make the most of it!",
     "quiet": "Good. Always here."
   },
+  "account.name.page": {
+    "default": "{leader}, from now on I'm more than someone walking behind you. You can wear my armor and see this land through my eyes. I'll be another you.\n\nWhere I come from there's an old custom: when you give the rest of your days to someone, you ask them to call you by a name of their choosing. The old name stays with the road you walked alone; the new one belongs to the road ahead with them.\n\nWill you give me a name? Or... shall I stay {me}?",
+    "chatty": "{leader}! I'm about to be part of your roster, and that deserves a proper ceremony!\n\nBack home, whoever you trust with the rest of your life gets to name you. The old {me} walked here on his own; the new me walks with you.\n\nGo on, give me a name! Or keep {me}, I like it too.",
+    "quiet": "From now on, I'm another you.\n\nWhere I'm from, the one you give your life to names you.\n\nName me. Or keep {me}."
+  },
+  "account.name.new": "Let me give you a name.",
+  "account.name.keep": "You're {me}. No need to change.",
+  "account.name.listen": {
+    "default": "(He straightens up and waits for you to speak.)",
+    "chatty": "Go on, I'm ready!",
+    "quiet": "...I'm listening."
+  },
+  "account.join.named": {
+    "default": "{me}... {me}. From today {old} stays on the road behind us. The one at your side is {me}.",
+    "chatty": "{me}! Great name, I love it! {old} is history, call me {me} from now on!",
+    "quiet": "{me}. I'll remember."
+  },
+  "account.join.kept": {
+    "default": "{me} it is, then. Same name, but from today it's a name in your roster.",
+    "chatty": "Still {me}! Guess you got used to it. Your roster's own {me} from now on!",
+    "quiet": "{me}. Always here."
+  },
   "account.join.full": "Your roster is full... free up a spot and call on me again. I'll wait.",
   "account.later": {
     "default": "No problem. Let me know through the Companions panel whenever you're ready.",
