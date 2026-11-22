@@ -148,6 +148,7 @@ void PartyBotAI::StopErrands()
     Life::QuestObjectRun::Stop(me, m_questObjectRun);
     Life::QuestTurnIn::Stop(me, m_questTurnIn, m_rewardChooser);
     Life::QuestPickUp::Stop(me, m_questPickUp);
+    Life::QuestOffer::Stop(me, m_questOffer);
     Life::QuestItemUse::Stop(me, m_questItemUse);
     Life::NpcVisit::Stop(me, m_vendorVisit);
     Life::NpcVisit::Stop(me, m_trainerVisit);
@@ -195,6 +196,15 @@ std::vector<Life::WantedQuest> PartyBotAI::WantedPickUps(Player* pLeader, bool b
         }
     }
     Life::QuestPickUp::AddLeaderQuests(me, pLeader, wanted);
+    for (uint32 questId : Life::QuestOffer::Approved(me, m_questOffer))
+    {
+        if (std::any_of(wanted.begin(), wanted.end(), [questId](Life::WantedQuest const& w) { return w.questId == questId; }))
+            continue;
+        Life::WantedQuest w;
+        w.questId = questId;
+        w.withLeader = true;    // at the giver with him, without its accept scripts
+        wanted.push_back(w);
+    }
     return wanted;
 }
 
@@ -911,6 +921,8 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
 
 void PartyBotAI::OnPlayerLogin()
 {
+    // A new session: the quests the leader said no to may be asked about again.
+    Life::QuestOffer::Reset(m_questOffer);
     if (!m_initialized)
         me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
     // Called over, it logs in at its place, which he may see: it must not pop up there (hidden
@@ -1258,6 +1270,9 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // Out in the field: important lessons waiting (party chat, it keeps following).
             if (errands)
                 Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
+            // A quest at the giver the leader cannot take: ask him (it only asks; the pick-up
+            // below takes what he allowed).
+            Life::QuestOffer::Update(me, m_questOffer, pLeader, PersonalityTags());
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||

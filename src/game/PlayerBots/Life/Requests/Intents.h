@@ -30,6 +30,8 @@ namespace Requests
         Departure,      // "you are leaving (hearthstone, flight path): shall we wait here?"
                         // (Companions/Travel/Departure; once per departure)
         Summon,         // "shall I summon you back?" (Companions/Travel/SummonOffer; once per departure)
+        QuestOffer,     // "you can't take this quest here: shall I?" (Life/Errands/QuestOffer; keeps
+                        // its own quiet per quest)
     };
 
     struct IntentDef

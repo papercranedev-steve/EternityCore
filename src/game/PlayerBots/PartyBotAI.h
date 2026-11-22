@@ -46,6 +46,7 @@
 #include "Companions/Recruit/Trial.h"
 #include "Companions/Account/JoinOffer.h"
 #include "Life/Errands/QuestPickUp.h"
+#include "Life/Errands/QuestOffer.h"
 #include "Life/Errands/QuestItemUse.h"
 #include "Life/Errands/GiveProvisions.h"
 #include "Life/Errands/AskProvisions.h"
@@ -128,7 +129,8 @@ public:
     // food, asks a mage of the party first (AskProvisions). True: busy, the bot stays put.
     bool UpdateProvisions(Player* pLeader);
     // The quests to take from their givers (Life/Errands/QuestPickUp.h): a bonded companion's
-    // class quest steps, then the leader's quests it does not have yet.
+    // class quest steps, then the leader's quests it does not have yet, then those he allowed it
+    // to take without him (Life/Errands/QuestOffer.h).
     std::vector<Life::WantedQuest> WantedPickUps(Player* pLeader, bool bonded) const;
     // The turn-in errand (Life/Errands/QuestTurnIn.h); what it handed in goes to the party voice
     // (Commander/Commands/Voice/PartyVoice.h). True: busy.
@@ -280,6 +282,9 @@ public:
     // Out of combat: takes the class quest steps the flow wants from their givers near the leader,
     // and the leader's quests it lacks at a giver he stands by (Life/Errands/QuestPickUp.h).
     Life::QuestPickUpState m_questPickUp;
+    // At a giver the leader stands by: asks him about quests he cannot take; what he allows goes
+    // to the pick-up (Life/Errands/QuestOffer.h).
+    Life::QuestOffer::QuestOfferState m_questOffer;
     // Out of combat: a quest item used on the creature it is for (taming rods; Life/Errands/QuestItemUse.h).
     Life::QuestItemUseState m_questItemUse;
     // Resurrection before eating/drinking (UpdateAI): the last corpse tried, and since when the

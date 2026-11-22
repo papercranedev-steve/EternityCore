@@ -87,6 +87,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/QuestMirror.cpp
   ${BOTSHARED_DIR}/QuestPlaces.h
   ${BOTSHARED_DIR}/QuestPlaces.cpp
+  ${BOTSHARED_DIR}/QuestRules.h
+  ${BOTSHARED_DIR}/QuestRules.cpp
   ${BOTSHARED_DIR}/Purchasing.h
   ${BOTSHARED_DIR}/Purchasing.cpp
   ${BOTSHARED_DIR}/TalentSpread.h

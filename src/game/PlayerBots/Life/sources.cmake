@@ -31,6 +31,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/QuestTurnIn.cpp
   ${LIFE_DIR}/Errands/QuestPickUp.h
   ${LIFE_DIR}/Errands/QuestPickUp.cpp
+  ${LIFE_DIR}/Errands/QuestOffer.h
+  ${LIFE_DIR}/Errands/QuestOffer.cpp
   ${LIFE_DIR}/Errands/QuestItemUse.h
   ${LIFE_DIR}/Errands/QuestItemUse.cpp
   ${LIFE_DIR}/Errands/NpcVisit.h

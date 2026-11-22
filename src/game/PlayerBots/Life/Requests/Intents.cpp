@@ -20,6 +20,7 @@ namespace Requests
             { Intent::Supply,       "supply",    30 * SEC,  0,          0 },
             { Intent::Departure,    "leave",     20 * SEC,  0,          0 },
             { Intent::Summon,       "summon",    60 * SEC,  0,          0 },
+            { Intent::QuestOffer,   "questoffer", 30 * SEC, 0,          0 },
         };
     }
 
