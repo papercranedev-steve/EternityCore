@@ -57,6 +57,9 @@ public:
     // Out of combat, about to be put next to its team at once (a party bot far behind the
     // leader is teleported there): StartResting fills it up at once instead of sitting down.
     virtual bool FillsUpAtOnce() { return false; }
+    // A team of bots looks for its own fights (Commander HuntAssigner) unless a member does
+    // not: a road traveller only fights what attacks it (ambient flow doc §3.2).
+    virtual bool SeeksFights() const { return true; }
 
     // Every frame, before the bot update's throttle (the subclass's UpdateAI): the Commander's
     // mid-cast checks (CastWatch, area channel, CastBreak), the movement hands (Backpedal,

@@ -111,7 +111,8 @@ namespace StrangerTalk
             switch (ai->GetRequest().kind)
             {
                 case BotKind::City:  return "meet.chat.city";
-                case BotKind::Field: return "meet.chat.field";
+                case BotKind::Field:
+                case BotKind::Traveller: return "meet.chat.field";
                 default:             return "meet.chat.town";
             }
         }

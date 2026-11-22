@@ -23,6 +23,7 @@ namespace Population
         Field,      // phase 1c
         Town,       // residents of a town, start area or camp (TownPopulation.h)
         Herald,     // runs to a new player and asks to join him (his first companion, FirstCompanion)
+        Traveller,  // walks a road past a player (TravellerPopulation.h, ambient flow doc §3.2)
     };
 
     enum class GearTier : uint8
@@ -114,7 +115,11 @@ namespace Population
         uint32 cityZone = 0;
         CityRole role = CityRole::None;
         int32 anchorIndex = -1;         // stand / showcase / sitter: which anchor of the city or town
-        std::vector<Waypoint> route;    // mover: its first spot is where it starts
+        // Mover: its first spot is where it starts. Traveller: the road ahead of it, from (x, y, z).
+        std::vector<Waypoint> route;
+        // Traveller: the road (RoadNetwork edge id); `rides`: on its race's mount from level 40.
+        uint32 roadEdge = 0;
+        bool rides = false;
         // Stand, mover, sitter: the places of the city or town for their day there (TownLife.h);
         // the role only decides where the day starts.
         PlaceMenu places;

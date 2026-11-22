@@ -1164,6 +1164,9 @@ namespace Commander
         // A real player is in the team, on any map (a player's party). Without one (a population
         // unit) the modules about the player (his run away from the fight, notes to him) are off.
         bool humanInTeam = false;
+        // Every bot of the team looks for fights of its own (TeamBotAI::SeeksFights; a road
+        // traveller does not): HuntAssigner only for such a team.
+        bool seeksFights = true;
         MapKind mapKind = MapKind::World;   // the map the team fights on (the refreshing bot's)
         LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
         std::vector<PartyMemberFacts> party;

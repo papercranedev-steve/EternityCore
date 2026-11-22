@@ -86,7 +86,7 @@ namespace Commander
     void HuntAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
     {
         HuntPlan& h = plan.hunt;
-        if (world.humanInTeam || world.party.empty())
+        if (world.humanInTeam || world.party.empty() || !world.seeksFights)
         {
             h = HuntPlan();
             return;

@@ -53,6 +53,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/LootFacts.cpp
   ${BOTSHARED_DIR}/Mailbox.h
   ${BOTSHARED_DIR}/Mailbox.cpp
+  ${BOTSHARED_DIR}/Mounts.h
+  ${BOTSHARED_DIR}/Mounts.cpp
   ${BOTSHARED_DIR}/NpcDirectory.h
   ${BOTSHARED_DIR}/NpcDirectory.cpp
   ${BOTSHARED_DIR}/ObjectUse.h

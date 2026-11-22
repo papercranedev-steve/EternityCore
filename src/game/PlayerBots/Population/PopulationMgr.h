@@ -18,6 +18,7 @@
 #include "Population/CityPopulation.h"
 #include "Population/FieldPopulation.h"
 #include "Population/TownPopulation.h"
+#include "Population/TravellerPopulation.h"
 #include "Population/Observers.h"
 #include "Population/Roster.h"
 #include <atomic>
@@ -112,6 +113,7 @@ namespace Population
         Settlements const& GetSettlements() { EnsureDataLoaded(); return m_settlements; }
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         FieldDirector const& GetFieldDirector() const { return m_field; }
+        TravellerDirector const& GetTravellerDirector() { EnsureDataLoaded(); return m_travel; }
         // After scene points were added or deleted.
         void ReloadAnchors();
 
@@ -133,6 +135,16 @@ namespace Population
         // are done here (BotHandle::done).
         void RetireFieldBots(Observers const& observers, float keepYd, float behindYd);
 
+        // Traveller director helpers (TravellerPopulation.h). Travellers within `radius` (2d)
+        // of the observer, queued requests included.
+        uint32 CountTravellers(Observer const& o, float radius) const;
+        // Every traveller leaves, queued requests are dropped (roads off).
+        void DespawnTravellers();
+        // Travellers leave out of everyone's sight once they passed by (seen, now beyond
+        // everyone's sight), met nobody for TravellerDirector::UNMET_MS, or are done (at the
+        // road's end, lifetime over); done in someone's sight: they walk on out of it first.
+        void RetireTravellers(Observers const& observers);
+
         // Cost of PopulationBotAI::UpdateAI ticks.
         void RecordBotTick(uint64 micros);
         TickStats GetStats() const;
@@ -150,6 +162,8 @@ namespace Population
             uint32 expireMs = 0;
             bool removing = false;      // logging out, or walking out of sight to log out
             uint32 leaveByMs = 0;       // != 0: walking out (BotHandle::leave), forced out at this time
+            bool seen = false;          // travellers: someone saw him (RetireTravellers)
+            uint32 seenMs = 0;          // the last time
         };
 
         void EnsureDataLoaded();
@@ -186,8 +200,9 @@ namespace Population
         CityDirector m_city;
         TownDirector m_town;
         FieldDirector m_field;
+        TravellerDirector m_travel;
         Roster m_roster;
-        uint32 m_nextUnitId = 0;        // Commander team units of field bots
+        uint32 m_nextUnitId = 0;        // Commander team units of field bots and travellers
 
         std::atomic<uint64> m_statTicks{ 0 };
         std::atomic<uint64> m_statTotalMicros{ 0 };

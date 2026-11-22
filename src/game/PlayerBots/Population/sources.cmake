@@ -27,6 +27,8 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/HiddenSpot.cpp
   ${POPULATION_DIR}/TownPopulation.h
   ${POPULATION_DIR}/TownPopulation.cpp
+  ${POPULATION_DIR}/TravellerPopulation.h
+  ${POPULATION_DIR}/TravellerPopulation.cpp
   ${POPULATION_DIR}/PlaceAnchors.h
   ${POPULATION_DIR}/PlaceAnchors.cpp
   ${POPULATION_DIR}/TownLife.h

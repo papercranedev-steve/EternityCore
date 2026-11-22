@@ -205,7 +205,8 @@ namespace
         if (!bot || !bot->IsInWorld() || !bot->IsAlive() || !bot->AI())
             return nullptr;
         Population::PopulationBotAI* ai = dynamic_cast<Population::PopulationBotAI*>(bot->AI());
-        if (!ai || !ai->IsInitialized() || ai->GetRequest().kind == Population::BotKind::Field)
+        if (!ai || !ai->IsInitialized() || ai->GetRequest().kind == Population::BotKind::Field ||
+            ai->GetRequest().kind == Population::BotKind::Traveller)
             return nullptr;
         return ai;
     }
@@ -384,9 +385,10 @@ namespace
                 Population::ScenePoints::CityList(), Population::ScenePoints::TypeList());
             return false;
         }
-        if ((p.city == "world") != (p.type == "hub"))
+        bool const worldType = p.type == "hub" || p.type == "road";
+        if ((p.city == "world") != worldType)
         {
-            handler->SendSysMessage("A gathering place is recorded as: .popbot point add world hub. City points cannot be hubs.");
+            handler->SendSysMessage("Outside the cities: .popbot point add world hub (a gathering place) or world road (a point a road passes). City points cannot be either.");
             return false;
         }
 
@@ -556,6 +558,55 @@ namespace
         }
     }
 
+    // Roads (TravellerPopulation.h): the network's build, the roads near your position and how
+    // often a traveller comes by.
+    void ShowRoads(ChatHandler* handler, Player* player)
+    {
+        Population::TravellerDirector const& travel = sPopulationMgr.GetTravellerDirector();
+        Commander::Roads::RoadNetwork const& roads = travel.Roads();
+        handler->PSendSysMessage("Roads: %s, %u built of %u planned (%u done, %u failed%s), %u hint points, %u ms building. At most %u travellers near a player.",
+            travel.IsEnabled() ? "on" : "off", uint32(roads.Edges().size()), roads.Planned(), roads.Done(), roads.Failed(),
+            roads.IsBuilding() ? ", building" : "", roads.HintCount(), roads.BuildMs(), travel.GetMaxNear());
+        if (!player)
+            return;
+
+        Population::Settlements const& hubs = sPopulationMgr.GetSettlements();
+        auto nameOf = [&hubs](uint32 id) -> std::string
+        {
+            Population::Settlement const* s = hubs.Find(id);
+            if (!s)
+                return "?";
+            return s->kind == Population::SettlementKind::Capital ? s->label : Population::Settlements::AreaName(*s);
+        };
+
+        float const RANGE = 600.0f;
+        uint32 shown = 0;
+        for (Commander::Roads::RoadEdge const* e : roads.Near(player->GetMapId(), player->GetPositionX(), player->GetPositionY(), RANGE))
+        {
+            if (++shown > 10)
+                break;
+            float dist = 0.0f;
+            float const along = Commander::Roads::RoadNetwork::Project(*e, player->GetPositionX(), player->GetPositionY(), dist);
+            handler->PSendSysMessage("#%u %s - %s: %.0f yd, %u points (%u via patrols/road points), %.1f an hour; you are %.0f yd off it, %.0f yd along",
+                e->id, nameOf(e->nodeA).c_str(), nameOf(e->nodeB).c_str(), e->length, uint32(e->points.size()), e->hints,
+                travel.PerHour(*e), dist, along);
+        }
+
+        Population::Observer o;
+        o.mapId = player->GetMapId();
+        o.x = player->GetPositionX();
+        o.y = player->GetPositionY();
+        o.team = player->GetTeam();
+        float const rate = travel.RateFor(o, hubs, sPopulationMgr.GetCityDirector().HourFactor());
+        uint32 const nearCount = sPopulationMgr.CountTravellers(o, Population::TravellerDirector::NEAR_COUNT_YD);
+        if (rate > 0.0f)
+            handler->PSendSysMessage("Here: a traveller every %.0f s on average (roads within %.0f yd, hour factor applied), %u travellers within %.0f yd.",
+                1.0f / rate, Population::TravellerDirector::NEAR_ROAD_YD, nearCount, Population::TravellerDirector::NEAR_COUNT_YD);
+        else
+            handler->PSendSysMessage("Here: no road of your side within %.0f yd, %u travellers within %.0f yd.",
+                Population::TravellerDirector::NEAR_ROAD_YD, nearCount, Population::TravellerDirector::NEAR_COUNT_YD);
+    }
+
     // Towns (TownPopulation.h): those with a player near, and the ones near your position.
     void ShowTowns(ChatHandler* handler, Player* player)
     {
@@ -693,6 +744,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "roads"))
+    {
+        ShowRoads(this, player);
+        return true;
+    }
+
     if (!strcmp(sub, "town"))
     {
         ShowTowns(this, player);
@@ -796,6 +853,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|roads|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

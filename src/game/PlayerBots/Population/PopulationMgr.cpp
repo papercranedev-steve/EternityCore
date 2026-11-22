@@ -68,6 +68,7 @@ namespace Population
             case BotKind::Field: return "field";
             case BotKind::Town:  return "town";
             case BotKind::Herald: return "herald";
+            case BotKind::Traveller: return "traveller";
         }
         return "?";
     }
@@ -126,6 +127,7 @@ namespace Population
         m_city.LoadConfig();
         m_town.LoadConfig();
         m_field.LoadConfig();
+        m_travel.LoadConfig();
         m_roster.LoadConfig();
         m_observers.LoadConfig();
 
@@ -156,6 +158,8 @@ namespace Population
         // their settlement id (ids follow the same world data, stable between reloads).
         m_settlements.Load(m_points);
         m_town.LoadAnchors(m_settlements);
+        // Roads between the settlements, built in the background (TravellerDirector::Update).
+        m_travel.BeginRoads(m_settlements, m_city, m_points);
     }
 
     void PopulationMgr::EnsureDataLoaded()
@@ -197,8 +201,9 @@ namespace Population
 
         for (Record& r : m_bots)
         {
-            // (field bots leave only out of sight: FieldDirector, RetireFieldBots)
-            if (!r.removing && r.expireMs && m_nowMs >= r.expireMs && r.request.kind != BotKind::Field)
+            // (field bots and travellers leave only out of sight: RetireFieldBots, RetireTravellers)
+            if (!r.removing && r.expireMs && m_nowMs >= r.expireMs && r.request.kind != BotKind::Field &&
+                r.request.kind != BotKind::Traveller)
                 Retire(r);
             // Walking out of sight took too long (stuck): log out where he is.
             else if (r.leaveByMs && m_nowMs >= r.leaveByMs)
@@ -224,6 +229,7 @@ namespace Population
         m_city.Update(*this, m_observers, m_nowMs);
         m_town.Update(*this, m_observers, m_nowMs);
         m_field.Update(*this, m_observers, m_nowMs);
+        m_travel.Update(*this, m_observers, m_nowMs);
 
         // Prewarm requests (at the front) go out several per tick, the others one per PopBot.SpawnGapMs.
         uint32 burst = 0;
@@ -406,10 +412,12 @@ namespace Population
 
         // A field spot picked a few seconds ago (the queue waits PopBot.SpawnGapMs): the player
         // walked on, he may see it now. Skip, the director picks another one.
-        if (r.kind == BotKind::Field && m_observers.CanSeeSoon(r.mapId, r.x, r.y, r.z, FieldDirector::LOGIN_LEAD_SEC))
+        bool const commanded = r.kind == BotKind::Field || r.kind == BotKind::Traveller;
+        if (commanded && m_observers.CanSeeSoon(r.mapId, r.x, r.y, r.z, FieldDirector::LOGIN_LEAD_SEC))
             return;
 
-        if (r.kind == BotKind::Field)
+        // A team of one for the Commander (Commander/Team.h unit).
+        if (commanded)
             r.unitId = ++m_nextUnitId;
 
         std::string name;
@@ -469,6 +477,14 @@ namespace Population
     {
         if (request.kind == BotKind::Town)
             return m_town.PickHiddenSpot(request.settlementId, x, y, z, m_observers, out);
+        if (request.kind == BotKind::Traveller)
+        {
+            // The town or capital at the road's end it walked to.
+            if (m_town.FindState(request.settlementId))
+                return m_town.PickHiddenSpot(request.settlementId, x, y, z, m_observers, out);
+            Settlement const* s = m_settlements.Find(request.settlementId);
+            return s && s->cityZone && m_city.PickHiddenSpot(s->cityZone, x, y, z, m_observers, out);
+        }
         return m_city.PickHiddenSpot(request.cityZone, x, y, z, m_observers, out);
     }
 
@@ -751,6 +767,93 @@ namespace Population
             if (observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
                 continue;
             RequestRemoval(r);
+        }
+    }
+
+    uint32 PopulationMgr::CountTravellers(Observer const& o, float radius) const
+    {
+        float const radiusSq = radius * radius;
+        auto isNear = [&](uint32 m, float px, float py)
+        {
+            float const dx = px - o.x, dy = py - o.y;
+            return m == o.mapId && dx * dx + dy * dy <= radiusSq;
+        };
+        uint32 count = 0;
+        for (Record const& r : m_bots)
+        {
+            if (r.removing || r.request.kind != BotKind::Traveller)
+                continue;
+            if (Player* me = OnlinePlayer(*r.handle))
+                count += isNear(me->GetMapId(), me->GetPositionX(), me->GetPositionY()) ? 1 : 0;
+            else
+                count += isNear(r.request.mapId, r.request.x, r.request.y) ? 1 : 0;
+        }
+        for (SpawnRequest const& q : m_queue)
+            if (q.kind == BotKind::Traveller && isNear(q.mapId, q.x, q.y))
+                ++count;
+        return count;
+    }
+
+    void PopulationMgr::DespawnTravellers()
+    {
+        m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(),
+            [](SpawnRequest const& q) { return q.kind == BotKind::Traveller; }), m_queue.end());
+        for (Record& r : m_bots)
+            if ((!r.removing || r.leaveByMs) && r.request.kind == BotKind::Traveller)
+                RequestRemoval(r);
+    }
+
+    void PopulationMgr::RetireTravellers(Observers const& observers)
+    {
+        for (Record& r : m_bots)
+        {
+            if (r.removing || r.request.kind != BotKind::Traveller)
+                continue;
+            Player* me = OnlinePlayer(*r.handle);
+            if (!me)
+                continue;
+            float const x = me->GetPositionX(), y = me->GetPositionY(), z = me->GetPositionZ();
+            bool const seenNow = observers.CanSee(me->GetMapId(), x, y, z);
+            if (seenNow)
+            {
+                r.seen = true;
+                r.seenMs = m_nowMs;
+            }
+            bool const done = r.handle->done || (r.expireMs && m_nowMs >= r.expireMs);
+
+            if (!seenNow)
+            {
+                bool gone = done;
+                if (!gone && r.seen && m_nowMs - r.seenMs >= TravellerDirector::GONE_UNSEEN_MS)
+                {
+                    // Passed by: farther than anyone's sight now.
+                    float const farYd = me->GetMap()->GetVisibilityDistance() + TravellerDirector::GONE_BEYOND_YD;
+                    gone = true;
+                    for (Observer const& o : observers.All())
+                        if (o.mapId == me->GetMapId() && (o.x - x) * (o.x - x) + (o.y - y) * (o.y - y) <= farYd * farYd)
+                            gone = false;
+                }
+                if (!gone && !r.seen && m_nowMs - r.bornMs >= TravellerDirector::UNMET_MS)
+                    gone = true;    // nobody came his way
+                if (gone)
+                    RequestRemoval(r);
+                continue;
+            }
+
+            // At the road's end in someone's sight: on into the town, out of sight, then gone
+            // (no hidden spot there: he stands about until nobody looks).
+            if (done && !r.handle->leave)
+            {
+                Waypoint spot;
+                if (!PickHiddenSpot(r.request, x, y, z, spot))
+                    continue;
+                r.removing = true;
+                r.leaveByMs = m_nowMs + LEAVE_TIMEOUT_MS;
+                r.handle->leaveX = spot.x;
+                r.handle->leaveY = spot.y;
+                r.handle->leaveZ = spot.z;
+                r.handle->leave = true;
+            }
         }
     }
 

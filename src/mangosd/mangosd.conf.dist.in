@@ -3353,6 +3353,24 @@ AHBuyer.MaxMarkup = 50
 #        Seconds between two checks around a player (one new field bot per check).
 #        Default: 15 / 45
 #
+#    PopBot.Road.Enable
+#        People travelling the roads between the settlements past players (roads are built
+#        from the navmesh and patrol waypoints after each load, .popbot roads).
+#        Default: 1
+#
+#    PopBot.Road.PerHour
+#        Travellers an hour on a road between two towns 1000 yards apart (gravity model:
+#        times the sizes of both ends, capital 3, town 1, camp 0.5; times the hour curve).
+#        Default: 20
+#
+#    PopBot.Road.MaxNear
+#        At most this many travellers within 400 yards of a player.
+#        Default: 4
+#
+#    PopBot.Road.MountPct
+#        Travellers of level 40 or more riding their race's mount (percent).
+#        Default: 60
+#
 #    PopBot.LifetimeMinMinutes
 #    PopBot.LifetimeMaxMinutes
 #        Each bot logs out after a random time in this range, so faces keep changing.
@@ -3484,6 +3502,10 @@ PopBot.Field.SpawnMaxYd = 240
 PopBot.Field.KeepYd = 320
 PopBot.Field.CheckMinSec = 15
 PopBot.Field.CheckMaxSec = 45
+PopBot.Road.Enable = 1
+PopBot.Road.PerHour = 20
+PopBot.Road.MaxNear = 4
+PopBot.Road.MountPct = 60
 PopBot.LifetimeMinMinutes = 10
 PopBot.LifetimeMaxMinutes = 40
 PopBot.City.Enable = 1

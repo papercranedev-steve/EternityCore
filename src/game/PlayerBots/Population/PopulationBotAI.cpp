@@ -7,6 +7,7 @@
 #include "Commander/Team.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/Inventory.h"
+#include "Shared/Mounts.h"
 #include "RoleCapability.h"
 #include "PlayerBotMgr.h"
 #include "Player.h"
@@ -144,7 +145,7 @@ namespace Population
         if (m_talkHoldUntilMs && UpdateTalkHold())
             return;
 
-        if (m_request.kind == BotKind::Field)
+        if (m_request.kind == BotKind::Field || m_request.kind == BotKind::Traveller)
         {
             UpdateField(diff);
             return;
@@ -237,6 +238,58 @@ namespace Population
         // A team of one for the Commander.
         m_teamGuid = me->GetObjectGuid();
         Commander::Team::JoinUnit(m_teamGuid, m_request.unitId);
+
+        if (m_request.kind == BotKind::Traveller)
+        {
+            // On its race's mount from level 40 (most of them), already riding: it logged in out of sight.
+            if (m_request.rides && me->GetLevel() >= BotShared::Mounts::FIRST_MOUNT_LEVEL)
+                m_mountSpell = BotShared::Mounts::RacialMountSpell(me->GetRace(), me->GetGUIDLow());
+            if (m_mountSpell)
+                BotShared::Mounts::Mount(me, m_mountSpell, true);
+            std::vector<Commander::Roads::RoadPoint> line;
+            for (Waypoint const& w : m_request.route)
+                line.push_back({ w.x, w.y, w.z });
+            // Players run; a few walk.
+            bool const run = m_mountSpell || urand(0, 99) < TRAVELLER_RUN_PCT;
+            Life::Trip::RoadWalk::Begin(m_road, std::move(line), run, WorldTimer::getMSTime());
+        }
+    }
+
+    void PopulationBotAI::UpdateRoad()
+    {
+        if (m_roadDone)
+            return;
+        uint32 const now = WorldTimer::getMSTime();
+
+        // Back on the mount after a fight or a meal (a real cast: it stands still for it).
+        if (m_mountSpell && !me->IsMounted() && m_mountTries < MOUNT_TRIES)
+        {
+            if (me->IsNonMeleeSpellCasted(false))
+                return;
+            Life::Trip::RoadWalk::Pause(me, m_road);
+            if (me->IsMoving())
+                return;
+            if (BotShared::Mounts::Mount(me, m_mountSpell, false))
+                m_mountTries = 0;
+            else
+                ++m_mountTries;
+            return;
+        }
+
+        switch (Life::Trip::RoadWalk::Update(me, m_road, now))
+        {
+            case Life::Trip::RoadWalkResult::Walking:
+                return;
+            case Life::Trip::RoadWalkResult::Arrived:
+            case Life::Trip::RoadWalkResult::Stuck:
+                // At the road's end (in town), or no way on: done here, the manager lets it go
+                // once nobody sees it (walking into the town out of sight first if someone does).
+                m_roadDone = true;
+                m_handle->done = true;
+                if (me->IsMounted())
+                    me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+                return;
+        }
     }
 
     void PopulationBotAI::UpdateField(uint32 diff)
@@ -276,10 +329,22 @@ namespace Population
 
         // A fight over: one more done; enough of them, or nothing left to hunt here: moving on.
         bool const inCombat = me->IsInCombat();
+        bool const traveller = m_request.kind == BotKind::Traveller;
         if (m_wasInCombat && !inCombat)
             ++m_fights;
         m_wasInCombat = inCombat;
-        if (!inCombat && !m_handle->done)
+
+        // A traveller at the road's end in someone's sight: on into the town, out of sight.
+        if (traveller && !inCombat && m_handle->leave && m_phase != Phase::Gone)
+        {
+            if (m_phase != Phase::Leaving)
+                BeginLeaving();
+            else
+                UpdateLeaving();
+            return;
+        }
+
+        if (!traveller && !inCombat && !m_handle->done)
         {
             std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
             uint32 const idleSince = commander ? commander->GetPlan().hunt.idleSinceMs : 0;
@@ -310,11 +375,16 @@ namespace Population
         if (inCombat)
             Life::LootRun::Stop(me, m_lootRun);
 
-        // The Commander picks the next fight (HuntAssigner) and fights it.
+        // The Commander picks the next fight (HuntAssigner; not for a traveller) and fights it.
         if (RunCommanderHook(commanderOutOfCombat, needsRest, resting))
             return;
 
         StopTakenOverMovement();
+        if (traveller && !inCombat && !resting && !me->GetVictim())
+        {
+            UpdateRoad();
+            return;
+        }
         FightVictim(me->GetVictim());
     }
 
@@ -490,7 +560,7 @@ namespace Population
 
         ResetSpellData();
         PopulateSpellData();
-        if (m_request.kind == BotKind::Field)
+        if (m_request.kind == BotKind::Field || m_request.kind == BotKind::Traveller)
             InitializeField();
 
         me->SetHealthPercent(100.0f);

@@ -14,6 +14,7 @@
 #include "TeamBotAI.h"
 #include "Population/PopulationTypes.h"
 #include "Life/Errands/LootRun.h"
+#include "Life/Errands/Trip/RoadWalk.h"
 #include "Population/TownLife.h"
 #include "Timer.h"
 #include <memory>
@@ -38,6 +39,8 @@ namespace Population
 
         // No player leads it.
         Player* GetPartyLeader() const override { return nullptr; }
+        // A road traveller fights only what attacks it (no HuntAssigner fights).
+        bool SeeksFights() const override { return m_request.kind != BotKind::Traveller; }
 
         SpawnRequest const& GetRequest() const { return m_request; }
         std::string const& GetBotName() const { return m_name; }
@@ -81,12 +84,19 @@ namespace Population
         static constexpr uint32 FIELD_FIGHTS_MAX = 15;
         // Nothing to hunt for this long: moves on.
         static constexpr uint32 FIELD_IDLE_LEAVE_MS = 60 * 1000;
+        // Travellers on foot who run (the others walk).
+        static constexpr uint32 TRAVELLER_RUN_PCT = 90;
+        // Mount casts failing in a row (indoors, ...) before it goes on foot.
+        static constexpr uint32 MOUNT_TRIES = 3;
 
     private:
         // Field bot tick: the Commander's body steps (TeamBotAI) around its own life: looting
         // after a fight (Life/Errands/LootRun.h), counting fights, moving on.
+        // Travellers too (BotKind::Traveller): instead of hunting, walking the road (UpdateRoad).
         void UpdateField(uint32 diff);
         void InitializeField();
+        // Traveller out of combat: on its mount again, along the road; at its end done.
+        void UpdateRoad();
         void Initialize();
         void EquipForTier();
         void HideFromNearbyPlayers();
@@ -125,6 +135,12 @@ namespace Population
         bool m_wasInCombat = false;
         uint32 m_fights = 0;
         uint32 m_fightsToLeave = 0;
+
+        // Traveller
+        Life::Trip::RoadWalkState m_road;
+        uint32 m_mountSpell = 0;        // rides this (0: on foot)
+        uint32 m_mountTries = 0;        // failed mount casts in a row (indoors, ...): on foot after a few
+        bool m_roadDone = false;
 
         // Coming in from out of sight, living at the spot, going out of sight to log out.
         enum class Phase : uint8 { Entering, Living, Leaving, Gone };
