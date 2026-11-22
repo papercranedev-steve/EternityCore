@@ -59,6 +59,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/Mounts.cpp
   ${BOTSHARED_DIR}/PlayerClaims.h
   ${BOTSHARED_DIR}/PlayerClaims.cpp
+  ${BOTSHARED_DIR}/Gaze.h
+  ${BOTSHARED_DIR}/Gaze.cpp
   ${BOTSHARED_DIR}/ShowyGear.h
   ${BOTSHARED_DIR}/ShowyGear.cpp
   ${BOTSHARED_DIR}/NpcDirectory.h

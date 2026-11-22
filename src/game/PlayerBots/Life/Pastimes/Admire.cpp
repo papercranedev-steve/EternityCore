@@ -1,5 +1,6 @@
 #include "Life/Pastimes/Admire.h"
 #include "Shared/BotChat.h"
+#include "Shared/Gaze.h"
 #include "Shared/I18n.h"
 #include "Shared/Phrases.h"
 #include "Map.h"
@@ -155,14 +156,18 @@ namespace Admire
                 return false;
             }
             me->SetFacingToObject(p);
-            if (state.actAtMs && now >= state.actAtMs)
+            // The emote once he looks (not behind his back); the line, if any, after it.
+            if (state.actAtMs && now >= state.actAtMs && BotShared::Gaze::Sees(p, me))
             {
                 state.actAtMs = 0;
                 uint32 const emote = state.stance == AdmireStance::Novice ? Pick(g_novice)
                     : state.stance == AdmireStance::Senior ? Pick(g_senior) : Pick(g_peer);
                 BotShared::BotChat::TextEmote(me, emote, p);
+                if (state.sayAtMs)
+                    state.sayAtMs = now + urand(SAY_AFTER_MIN_MS, SAY_AFTER_MAX_MS);
+                state.untilMs = std::max(state.untilMs, (state.sayAtMs ? state.sayAtMs : now) + HOLD_AFTER_MS);
             }
-            if (state.sayAtMs && now >= state.sayAtMs)
+            if (!state.actAtMs && state.sayAtMs && now >= state.sayAtMs)
             {
                 state.sayAtMs = 0;
                 BotShared::I18n::Lang const lang = BotShared::I18n::Of(p);
@@ -200,7 +205,7 @@ namespace Admire
         state.untilMs = now + urand(LOOK_MIN_MS, LOOK_MAX_MS);
         state.actAtMs = now + urand(ACT_MIN_MS, ACT_MAX_MS);
         uint32 const sayPct = Has(tags, "chatty") ? SAY_CHATTY_PCT : Has(tags, "quiet") ? SAY_QUIET_PCT : SAY_PCT;
-        state.sayAtMs = urand(0, 99) < sayPct ? state.actAtMs + urand(1200, 2000) : 0;
+        state.sayAtMs = urand(0, 99) < sayPct ? state.actAtMs + urand(SAY_AFTER_MIN_MS, SAY_AFTER_MAX_MS) : 0;
         me->SetFacingToObject(p);
         return true;
     }

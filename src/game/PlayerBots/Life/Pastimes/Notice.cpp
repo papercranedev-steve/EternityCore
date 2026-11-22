@@ -1,9 +1,11 @@
 #include "Life/Pastimes/Notice.h"
 #include "Shared/BotChat.h"
+#include "Shared/Gaze.h"
 #include "Map.h"
 #include "Player.h"
 #include "SharedDefines.h"
 #include "Utilities/Random.h"
+#include <algorithm>
 #include <mutex>
 #include <unordered_map>
 
@@ -17,6 +19,8 @@ namespace Notice
     {
         // Bots only greet after turning to him.
         uint32 const GREET_DELAY_MIN_MS = 600, GREET_DELAY_MAX_MS = 1200;
+        // Still looking at him a moment after the greeting (he looked late in the look).
+        uint32 const GREET_HOLD_MS = 1500;
         size_t const NOTICED_KEEP = 8;
 
         uint32 const g_gestures[] = { EMOTE_ONESHOT_WAVE, EMOTE_ONESHOT_WAVE, EMOTE_ONESHOT_WAVE, EMOTE_ONESHOT_BOW, EMOTE_ONESHOT_SALUTE };
@@ -106,13 +110,18 @@ namespace Notice
                 return false;
             }
             me->SetFacingToObject(p);
-            if (state.greetAtMs && now >= state.greetAtMs)
+            // Greets him once he looks (not behind his back), if no other bot just did.
+            if (state.greetAtMs && now >= state.greetAtMs && BotShared::Gaze::Sees(p, me))
             {
                 state.greetAtMs = 0;
-                if (urand(0, 99) < GREET_TEXT_PCT)
-                    BotShared::BotChat::TextEmote(me, Pick(g_textGreetings), p);
-                else
-                    me->HandleEmoteCommand(Pick(g_gestures));
+                if (ClaimGreeting(p->GetObjectGuid(), now))
+                {
+                    if (urand(0, 99) < GREET_TEXT_PCT)
+                        BotShared::BotChat::TextEmote(me, Pick(g_textGreetings), p);
+                    else
+                        me->HandleEmoteCommand(Pick(g_gestures));
+                    state.lookUntilMs = std::max(state.lookUntilMs, now + GREET_HOLD_MS);
+                }
             }
             return true;
         }
@@ -130,8 +139,7 @@ namespace Notice
             state.noticed.pop_front();
         state.looking = p->GetObjectGuid();
         state.lookUntilMs = now + urand(LOOK_MIN_MS, LOOK_MAX_MS);
-        state.greetAtMs = urand(0, 99) < GREET_PCT && ClaimGreeting(p->GetObjectGuid(), now)
-            ? now + urand(GREET_DELAY_MIN_MS, GREET_DELAY_MAX_MS) : 0;
+        state.greetAtMs = urand(0, 99) < GREET_PCT ? now + urand(GREET_DELAY_MIN_MS, GREET_DELAY_MAX_MS) : 0;
         me->SetFacingToObject(p);
         return true;
     }

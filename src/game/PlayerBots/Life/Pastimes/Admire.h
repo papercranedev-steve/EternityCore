@@ -16,6 +16,8 @@
  *   - above him: a nod, a clap.
  * Now and then (SAY_PCT; chatty ones more, quiet ones less) it says a line about the piece
  * (admire.say.* in PlayerBots/i18n). A talking group turns to him together (ChatCircle watch).
+ * The emote, and the line after it, only once he looks at it (Shared/Gaze); he never does
+ * while it watches him: neither.
  *
  * Map thread of the bot (the attention budget is shared by all bots: guarded).
  */
@@ -56,7 +58,9 @@ namespace Pastimes
         constexpr float ADMIRE_YD = 20.0f;
         constexpr uint32 CHECK_MS = 2000;
         constexpr uint32 LOOK_MIN_MS = 4000, LOOK_MAX_MS = 7000;
-        constexpr uint32 ACT_MIN_MS = 800, ACT_MAX_MS = 1800;
+        constexpr uint32 ACT_MIN_MS = 800, ACT_MAX_MS = 1800;   // the emote, once he looks
+        constexpr uint32 SAY_AFTER_MIN_MS = 1200, SAY_AFTER_MAX_MS = 2000;
+        constexpr uint32 HOLD_AFTER_MS = 1500;                  // still looking after the last of it
         constexpr uint32 SAY_PCT = 15, SAY_CHATTY_PCT = 30, SAY_QUIET_PCT = 5;
         constexpr uint32 SAME_PLAYER_MS = 15 * MINUTE * IN_MILLISECONDS;
         constexpr uint32 TOKEN_REFILL_MS = 4 * MINUTE * IN_MILLISECONDS;

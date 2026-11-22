@@ -229,22 +229,6 @@ namespace Population
     bool PopulationBotAI::UpdatePassingBuff()
     {
         uint32 const now = WorldTimer::getMSTime();
-
-        // A moment after the buff: a wave, a blown kiss ... at him.
-        if (!m_buffEmoteTo.IsEmpty() && now >= m_buffEmoteAtMs)
-        {
-            Player* p = me->GetMap()->GetPlayer(m_buffEmoteTo);
-            m_buffEmoteTo.Clear();
-            if (p && p->IsInWorld() && me->IsWithinDist(p, REACT_YD, false))
-            {
-                static uint32 const emotes[] = { TEXTEMOTE_WAVE, TEXTEMOTE_WAVE, TEXTEMOTE_KISS, TEXTEMOTE_SMILE,
-                                                 TEXTEMOTE_SALUTE, TEXTEMOTE_BOW, TEXTEMOTE_NOD, TEXTEMOTE_CHEER };
-                if (!me->IsMoving())
-                    me->SetFacingToObject(p);
-                BotShared::BotChat::TextEmote(me, emotes[urand(0, uint32(sizeof(emotes) / sizeof(emotes[0])) - 1)], p);
-            }
-        }
-
         if (now < m_nextBuffCheckMs)
             return false;
         m_nextBuffCheckMs = now + BUFF_CHECK_MS;
@@ -291,10 +275,13 @@ namespace Population
             m_buffed.emplace_back(p->GetObjectGuid(), now);
             if (urand(0, 99) < BUFF_SAY_PCT)
                 SayTo(me, p, "buff.say", m_request.tags);
+            // A wave, a blown kiss ... at him once he looks.
             if (urand(0, 99) < BUFF_EMOTE_PCT)
             {
-                m_buffEmoteTo = p->GetObjectGuid();
-                m_buffEmoteAtMs = now + urand(BUFF_EMOTE_MIN_MS, BUFF_EMOTE_MAX_MS);
+                static uint32 const emotes[] = { TEXTEMOTE_WAVE, TEXTEMOTE_WAVE, TEXTEMOTE_KISS, TEXTEMOTE_SMILE,
+                                                 TEXTEMOTE_SALUTE, TEXTEMOTE_BOW, TEXTEMOTE_NOD, TEXTEMOTE_CHEER };
+                Life::Pastimes::Gesture::Want(m_gesture, p->GetObjectGuid(),
+                    emotes[urand(0, uint32(sizeof(emotes) / sizeof(emotes[0])) - 1)], now);
             }
             return true;
         }
@@ -328,7 +315,22 @@ namespace Population
         if (urand(0, 99) < YIELD_SAY_PCT)
             SayTo(me, p, "prey.yield", m_request.tags);
         else
-            BotShared::BotChat::TextEmote(me, urand(0, 1) ? TEXTEMOTE_NOD : TEXTEMOTE_BOW, p);
+            Life::Pastimes::Gesture::Want(m_gesture, p->GetObjectGuid(), urand(0, 1) ? TEXTEMOTE_NOD : TEXTEMOTE_BOW, now);
+    }
+
+    bool PopulationBotAI::UpdateGesture(bool inCombat)
+    {
+        if (inCombat)
+        {
+            Life::Pastimes::Gesture::Drop(m_gesture);
+            return false;
+        }
+        if (!Life::Pastimes::Gesture::Update(me, m_gesture, WorldTimer::getMSTime()))
+            return false;
+        // Its walk was ended: the prowl and the road send a new one afterwards.
+        Life::Prowl::Stop(me, m_prowl, false);
+        Life::Trip::RoadWalk::Pause(me, m_road);
+        return true;
     }
 
     void PopulationBotAI::WatchSharedPrey()
@@ -362,10 +364,8 @@ namespace Population
         if (!p || !p->IsInWorld() || !p->IsAlive() || !me->IsWithinDist(p, REACT_YD, false))
             return;
         m_nextApologyMs = now + APOLOGY_GAP_MS;
-        if (!me->IsMoving())
-            me->SetFacingToObject(p);
         if (urand(0, 99) < APOLOGY_EMOTE_PCT)
-            BotShared::BotChat::TextEmote(me, TEXTEMOTE_APOLOGIZE, p);
+            Life::Pastimes::Gesture::Want(m_gesture, p->GetObjectGuid(), TEXTEMOTE_APOLOGIZE, now);
         else
             SayTo(me, p, "prey.sorry", m_request.tags);
     }

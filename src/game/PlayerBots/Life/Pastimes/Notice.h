@@ -6,7 +6,8 @@
  * bot, standing at a place and free to look around (PlaceActs::CanLookAround), turns to a real
  * player who comes within NOTICE_YD in line of sight, looks at him for a few seconds and then
  * back. Sometimes it also greets him: a wave, a bow or a salute, now and then as a text emote
- * aimed at him ("X waves at you."). The same bot notices the same player once per
+ * aimed at him ("X waves at you."), only once he looks at it (Shared/Gaze; he never does
+ * during the look: no greeting). The same bot notices the same player once per
  * SAME_PLAYER_MS; whatever bot greets him, the next greeting for him waits GREET_GAP_MS
  * (several bots may look, one greets). Bots, ghosts and invisible players are not noticed.
  *

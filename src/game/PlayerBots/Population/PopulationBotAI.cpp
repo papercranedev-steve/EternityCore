@@ -412,9 +412,13 @@ namespace Population
 
         // Real players around it: answers to their emotes, the dead raised, buffs for passers-by,
         // a nod for the creature left to one of them.
-        if (!inCombat)
+        if (inCombat)
+            UpdateGesture(true);
+        else
         {
             if (UpdateEmoteReply(!resting && !me->IsMoving()))
+                return;
+            if (!resting && !me->GetVictim() && UpdateGesture(false))
                 return;
             if (!resting && !me->GetVictim())
             {
