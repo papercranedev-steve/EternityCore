@@ -75,27 +75,24 @@ namespace RestTopUp
                 continue;
 
             // (the gap's clock runs for every member, also one not chosen this tick)
-            if (!unit->IsInCombat())
-            {
-                HealChoice choice;
-                bot->ChooseHeal(unit, choice);
-                float const maxHealth = float(unit->GetMaxHealth());
-                float const missing = maxHealth - float(unit->GetHealth());
-                float const efficient = EfficientHeal(choice);
-                if (efficient <= 0.0f || missing < Deficit(maxHealth, efficient) ||
-                    HealthRegen::SecondsToFull(unit) < WAIT_SEC)
-                    continue;
+            HealChoice choice;
+            bot->ChooseHeal(unit, choice);
+            float const maxHealth = float(unit->GetMaxHealth());
+            float const missing = maxHealth - float(unit->GetHealth());
+            float const efficient = EfficientHeal(choice);
+            if (efficient <= 0.0f || missing < Deficit(maxHealth, efficient) ||
+                HealthRegen::SecondsToFull(unit) < WAIT_SEC)
+                continue;
 
-                RestTopUpState::Gap gap;
-                gap.maxHealth = unit->GetMaxHealth();
-                gap.sinceMs = now;
-                auto const seen = state.gaps.find(unit->GetObjectGuid());
-                if (seen != state.gaps.end() && seen->second.maxHealth == gap.maxHealth)
-                    gap.sinceMs = seen->second.sinceMs;
-                gaps[unit->GetObjectGuid()] = gap;
-                if (WorldTimer::getMSTimeDiff(gap.sinceMs, now) < STABLE_MS)
-                    continue;
-            }
+            RestTopUpState::Gap gap;
+            gap.maxHealth = unit->GetMaxHealth();
+            gap.sinceMs = now;
+            auto const seen = state.gaps.find(unit->GetObjectGuid());
+            if (seen != state.gaps.end() && seen->second.maxHealth == gap.maxHealth)
+                gap.sinceMs = seen->second.sinceMs;
+            gaps[unit->GetObjectGuid()] = gap;
+            if (WorldTimer::getMSTimeDiff(gap.sinceMs, now) < STABLE_MS)
+                continue;
 
             if (target && unit != me && !TeamBotAI::IsTankClass(unit->GetClass()) &&
                 bot->AreOthersOnSameTarget(unit->GetObjectGuid(), false, true))

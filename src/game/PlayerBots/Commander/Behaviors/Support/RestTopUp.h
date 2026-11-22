@@ -5,7 +5,7 @@
  * the Wild, Blood Pact raise max health), on every step in and out of the imp's Blood Pact,
  * and at levels 1-5 for a scratch that natural regeneration fills in seconds.
  *
- * A member not in combat is healed only when all three hold:
+ * A member is healed only when all three hold:
  *   deficit  missing >= min(the most mana-efficient heal x (1 - HealPlan::OVERHEAL_MAX),
  *            max health x MAX_DEFICIT_PCT): one heal not more than a fifth wasted, capped so a
  *            low level member (one heal ~ its whole health) need not sink to nothing
@@ -13,8 +13,12 @@
  *            spirit regeneration, sitting, food it is eating)
  *   stable   the gap has stood STABLE_MS with the same max health: a max health that just
  *            changed (a buff landing or fading, stepping in or out of an aura) waits
- * A member in combat (the party fights nothing the Commander sees, e.g. a player pulled alone)
- * is healed as before, below the caller's percent. Of the members to heal: the lowest percent,
+ * Also a member in combat: the healer is out of combat and the Commander's heal module has not
+ * taken over (it sees every creature with one of us on its threat list, at any distance), so
+ * this is the first perception tick of a pull, the combat flag lingering after the fight, or a
+ * player enemy. Until 2026-11-22 such a member was healed below the caller's 100% (a level 3
+ * mage missing 1 point the moment he pulled). In combat it regenerates nothing (HealthRegen),
+ * so only deficit and stable apply. Of the members to heal: the lowest percent,
  * a non-tank another healer already casts on left out (as CombatBotBaseAI::SelectHealTarget).
  *
  * Map thread of the bot.
