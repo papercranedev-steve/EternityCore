@@ -208,6 +208,44 @@ std::vector<Life::WantedQuest> PartyBotAI::WantedPickUps(Player* pLeader, bool b
     return wanted;
 }
 
+void PartyBotAI::TellBlockedQuests(Player* pLeader)
+{
+    std::vector<Life::QuestOffer::BlockedQuest> const blocked = Life::QuestOffer::TakeBlocked(m_questOffer);
+    if (blocked.empty())
+        return;
+    // One line per reason, its quests together ("《A》、《B》").
+    BotShared::I18n::Lang const lang = BotShared::I18n::OfParty(me);
+    for (Life::QuestOffer::Block block : { Life::QuestOffer::Block::Level, Life::QuestOffer::Block::LogFull,
+                                           Life::QuestOffer::Block::BagsFull })
+    {
+        std::string quests;
+        uint32 level = 0;
+        ObjectGuid giver;
+        for (Life::QuestOffer::BlockedQuest const& b : blocked)
+        {
+            if (b.block != block)
+                continue;
+            std::string const title = BotShared::Phrases::Text(lang, "questoffer.title",
+                { { "title", BotShared::GameNames::QuestTitle(b.questId, pLeader) } });
+            quests += (quests.empty() ? "" : BotShared::Phrases::Word(lang, "place.comma")) + title;
+            level = std::max(level, b.level);
+            giver = b.giver;
+        }
+        if (quests.empty())
+            continue;
+        Commander::VoiceEvent e;
+        e.speaker = me->GetObjectGuid();
+        e.tier = Commander::VoiceTier::Social;
+        e.key = block == Life::QuestOffer::Block::Level ? "voice.quest.blocked.level" :
+                block == Life::QuestOffer::Block::LogFull ? "voice.quest.blocked.logfull" : "voice.quest.blocked.bagsfull";
+        e.vars.emplace_back("quests", quests);
+        e.vars.emplace_back("level", std::to_string(level));
+        e.once = e.key + ":" + std::to_string(me->GetGUIDLow()) + ":" + std::to_string(giver.GetRawValue());
+        e.onceMs = Life::QuestOffer::TOLD_MS;
+        sCommanderMgr.QueueVoice(me, std::move(e));
+    }
+}
+
 bool PartyBotAI::UpdateQuestTurnIn(Player* pLeader)
 {
     bool const busy = Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser);
@@ -1273,6 +1311,7 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // A quest at the giver the leader cannot take: ask him (it only asks; the pick-up
             // below takes what he allowed).
             Life::QuestOffer::Update(me, m_questOffer, pLeader, PersonalityTags());
+            TellBlockedQuests(pLeader);
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||

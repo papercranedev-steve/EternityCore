@@ -86,10 +86,46 @@ namespace QuestOffer
             Player const* m_leader;
         };
 
-        // The giver the leader stands by that has quests to ask about, the nearest to him (every
-        // bot of the party finds the same one). `quests`: those quests.
-        WorldObject* FindGiver(Player* me, Player const* leader, QuestOfferState const& state, uint32 now,
-                               std::vector<uint32>& quests)
+        // The quests of `giver` the leader has or handed in that the bot has not done and cannot
+        // take yet for a reason it would see (not told within TOLD_MS).
+        void FindBlocked(Player const* me, Player const* leader, QuestOfferState& state, WorldObject const* giver, uint32 now)
+        {
+            for (uint32 questId : QuestsOf(giver))
+            {
+                Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+                if (!quest || me->GetQuestStatus(questId) != QUEST_STATUS_NONE)
+                    continue;
+                auto const told = state.toldUntilMs.find(questId);
+                if (told != state.toldUntilMs.end() && now < told->second)
+                    continue;
+                // His quest (followed whatever it is), or one he handed in that it could do with him.
+                if (!leader->IsCurrentQuest(questId) && !(leader->GetQuestRewardStatus(questId) && Offerable(quest)))
+                    continue;
+                char const* why = BotShared::QuestRules::WhyNot(me, quest);
+                BlockedQuest b;
+                b.questId = questId;
+                b.giver = giver->GetObjectGuid();
+                if (!why)
+                    continue;
+                if (std::strcmp(why, "level") == 0 && me->GetLevel() < quest->GetMinLevel())
+                {
+                    b.block = Block::Level;
+                    b.level = quest->GetMinLevel();
+                }
+                else if (std::strcmp(why, "logfull") == 0)
+                    b.block = Block::LogFull;
+                else if (std::strcmp(why, "bagsfull") == 0)
+                    b.block = Block::BagsFull;
+                else
+                    continue;   // class, race, chain ...: it would not see the quest
+                state.toldUntilMs[questId] = now + TOLD_MS;
+                state.blocked.push_back(b);
+            }
+        }
+
+        // The givers the leader stands by, the nearest to him first (every bot of the party
+        // finds the same order).
+        std::vector<WorldObject*> GiversByLeader(Player* me, Player const* leader)
         {
             GiverCheck check(me, leader);
             std::list<Creature*> creatures;
@@ -105,14 +141,7 @@ namespace QuestOffer
             {
                 return leader->GetDistance(a) < leader->GetDistance(b);
             });
-            for (WorldObject* g : givers)
-            {
-                quests = Candidates(me, leader, state, g, now);
-                if (!quests.empty())
-                    return g;
-            }
-            quests.clear();
-            return nullptr;
+            return givers;
         }
 
         std::string Joined(I18n::Lang lang, std::vector<std::string> const& words)
@@ -333,6 +362,13 @@ namespace QuestOffer
         return quests;
     }
 
+    std::vector<BlockedQuest> TakeBlocked(QuestOfferState& state)
+    {
+        std::vector<BlockedQuest> out;
+        out.swap(state.blocked);
+        return out;
+    }
+
     void Update(Player* me, QuestOfferState& state, Player* leader, std::vector<std::string> const& tags)
     {
         if (!leader || leader == me || leader->IsBot())
@@ -357,8 +393,21 @@ namespace QuestOffer
             return;
         state.nextLookMs = now + LOOK_MS;
 
+        // The first giver with quests to ask about (the nearest to the leader); what it cannot
+        // take yet at any of them.
         std::vector<uint32> quests;
-        WorldObject* giver = me->SatisfyQuestLog(false) ? FindGiver(me, leader, state, now, quests) : nullptr;
+        WorldObject* giver = nullptr;
+        bool const logRoom = me->SatisfyQuestLog(false);
+        for (WorldObject* g : GiversByLeader(me, leader))
+        {
+            FindBlocked(me, leader, state, g, now);
+            if (!giver && logRoom)
+            {
+                quests = Candidates(me, leader, state, g, now);
+                if (!quests.empty())
+                    giver = g;
+            }
+        }
         if (!giver)
         {
             Stop(me, state);

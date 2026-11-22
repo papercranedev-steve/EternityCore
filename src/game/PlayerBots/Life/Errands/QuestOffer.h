@@ -6,6 +6,9 @@
  *    race, chain, skill, reputation): the bot asks him whether it should take it;
  *  - he could take it (nothing, or only a full log / full bags): nothing; the bot takes it when
  *    he does (PlayerBotMgr::OnPlayerAcceptedQuest, QuestPickUp::AddLeaderQuests).
+ * And the other way round (user 2026-11-22): a quest of that giver the leader has or handed in
+ * that the bot has not done and cannot take yet for a reason it would see in game (too low, log
+ * full, bags full) is told to the leader once per TOLD_MS (TakeBlocked; the caller says it).
  * Not offered: quests a bot cannot do along with the player (event or exploration objectives such
  * as escorts, timed quests, spell objectives) and mirror quests.
  *
@@ -100,9 +103,28 @@ namespace QuestOffer
         std::map<ObjectGuid, LeaderQueue> m_leaders;
     };
 
+    // A quest the leader has or handed in that the bot cannot take yet for a reason it would see
+    // in game (not class, race, chain: those quests it would not even see).
+    enum class Block : uint8
+    {
+        Level,      // too low (`level`: the quest's minimum)
+        LogFull,
+        BagsFull,   // no room for the item the quest gives
+    };
+
+    struct BlockedQuest
+    {
+        uint32 questId = 0;
+        Block block = Block::Level;
+        uint32 level = 0;
+        ObjectGuid giver;
+    };
+
     // Per bot (a member of its AI). Plain data.
     struct QuestOfferState
     {
+        std::vector<BlockedQuest> blocked;      // found this look, for the caller to tell (TakeBlocked)
+        std::map<uint32, uint32> toldUntilMs;   // told: not again before
         ObjectGuid leader;              // whose answers these are (another leader: forgotten)
         ObjectGuid queuedAt;            // the leader whose queue it is in
         std::set<uint32> approved;      // he said yes: QuestPickUp takes them with him
@@ -114,6 +136,7 @@ namespace QuestOffer
     constexpr float SEARCH_YD = 30.0f;
     constexpr uint32 LOOK_MS = 2000;
     constexpr uint32 QUIET_MS = 10 * MINUTE * IN_MILLISECONDS;
+    constexpr uint32 TOLD_MS = 10 * MINUTE * IN_MILLISECONDS;
 
     // A quest a bot may do along with the player (see above).
     bool Offerable(Quest const* quest);
@@ -126,6 +149,8 @@ namespace QuestOffer
     void Reset(QuestOfferState& state);
     // The approved quests it does not have yet (for QuestPickUp, as the leader's).
     std::vector<uint32> Approved(Player const* me, QuestOfferState const& state);
+    // The quests it found it cannot take yet (each once per TOLD_MS), for the caller to say.
+    std::vector<BlockedQuest> TakeBlocked(QuestOfferState& state);
 }
 }
 

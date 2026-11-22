@@ -132,6 +132,9 @@ public:
     // class quest steps, then the leader's quests it does not have yet, then those he allowed it
     // to take without him (Life/Errands/QuestOffer.h).
     std::vector<Life::WantedQuest> WantedPickUps(Player* pLeader, bool bonded) const;
+    // Quests at the leader's giver it cannot take yet (Life/Errands/QuestOffer.h): said in the
+    // party voice, one line per reason.
+    void TellBlockedQuests(Player* pLeader);
     // The turn-in errand (Life/Errands/QuestTurnIn.h); what it handed in goes to the party voice
     // (Commander/Commands/Voice/PartyVoice.h). True: busy.
     bool UpdateQuestTurnIn(Player* pLeader);
