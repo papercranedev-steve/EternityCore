@@ -39,9 +39,12 @@ namespace Commander
         // Another alive tank bot that can act is nearer to `pos` than `distance` - `margin`:
         // with several tank bots the nearest one takes a loose enemy.
         bool CloserBot(WorldModel const& world, ObjectGuid self, Position3 const& pos, float distance, float margin);
-        // Holds enemies it is hit by, so damage dealers leave room under its threat: a player
-        // (whatever his role) or a tank (bot or player). Pets: no (ThreatBehavior judges pets live).
-        inline bool IsHolder(PartyMemberFacts const& m) { return !m.isPet && (!m.isBot || IsTank(m)); }
+        // Holds enemies it is hit by, so damage dealers leave room under its threat: a tank (bot
+        // or player). A player who is not a tank (a mage, a leveling warrior) is not one: an enemy
+        // on him is on a damage dealer, and a bot taking it is not worse (user 2026-11-22,
+        // fight-20261122-214425: the healer waited two Fireballs for threat room on the mage).
+        // Pets: no (ThreatBehavior judges pets live).
+        inline bool IsHolder(PartyMemberFacts const& m) { return IsTank(m); }
         // Meant to be hit in melee: a tank, a hunter's pet, or a pet that taunts (Voidwalker,
         // a bot pet that can off-tank). Damage shields (Thorns) go only to them: on a damage
         // dealer or a healer the reflected damage is threat the tank must pull back

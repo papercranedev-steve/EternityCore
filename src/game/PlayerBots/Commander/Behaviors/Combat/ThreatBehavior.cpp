@@ -46,8 +46,8 @@ namespace Commander
             return p;
         }
 
-        // Somebody whose job is holding enemies: a tank (Tanks.h), or the player (whatever his
-        // role, damage dealers do not pull an enemy off him onto themselves). Pets: see IsHeldByHolder.
+        // Somebody whose job is holding enemies: a tank bot or player (Tanks::IsHolder). Pets: see
+        // IsHeldByHolder.
         bool IsHolder(PartyMemberFacts const& m)
         {
             return Tanks::IsHolder(m);
