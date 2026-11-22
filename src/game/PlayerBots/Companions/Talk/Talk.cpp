@@ -69,6 +69,9 @@ namespace Talk
             case Icon::Trainer: return "trainer";
             case Icon::Binder:  return "binder";
             case Icon::Banker:  return "banker";
+            case Icon::Folder:  return "folder";
+            case Icon::Yes:     return "yes";
+            case Icon::No:      return "no";
             case Icon::Chat:
             default:            return "chat";
         }

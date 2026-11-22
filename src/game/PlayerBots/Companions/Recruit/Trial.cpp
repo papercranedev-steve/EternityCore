@@ -101,9 +101,11 @@ namespace Trial
         page.text = Talk::Line(ctx, "trial.offer.page");
         Talk::Option yes;
         yes.id = "bond:yes";
+        yes.icon = Talk::Icon::Yes;
         yes.text = Talk::Line(ctx, "trial.offer.yes");
         Talk::Option later;
         later.id = "bond:later";
+        later.icon = Talk::Icon::No;
         later.text = Talk::Line(ctx, "trial.offer.later");
         page.options = { yes, later };
         return page;

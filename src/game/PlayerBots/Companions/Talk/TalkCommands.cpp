@@ -356,20 +356,13 @@ bool ChatHandler::HandlePartyBotStayHelper(char* args, bool stay)
         SetSentErrorMessage(true);
         return false;
     }
-    uint32 changed = 0;
-    Player* speaker = nullptr;
-    for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+    std::vector<Player*> const changed = Companions::Talk::OrderTeam(player, stay);
+    if (!changed.empty())
     {
-        Player* member = itr->getSource();
-        if (!member || member == player || !Order(member, stay))
-            continue;
-        ++changed;
-        if (!speaker || urand(0, changed - 1) == 0)
-            speaker = member;
-    }
-    if (speaker)
+        Player* speaker = changed[urand(0, uint32(changed.size()) - 1)];
         BotShared::BotChat::SayToParty(speaker, SayLine(player, speaker, stay ? "talk.stay.team" : "talk.follow.team"));
-    PSendSysMessage("PBOK;;%s;%u", what, changed);
+    }
+    PSendSysMessage("PBOK;;%s;%u", what, uint32(changed.size()));
     return true;
 }
 

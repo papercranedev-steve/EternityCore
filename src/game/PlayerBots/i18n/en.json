@@ -252,6 +252,15 @@
     "chatty": "Let's go, let's go—my boots were starting to take root!"
   },
   "talk.stay.cannot": "Can't right now.",
+  "talk.interact.page": {
+    "default": "What would you like to see?",
+    "chatty": "Sure, have a look! What do you want to see?"
+  },
+  "talk.party.page": {
+    "default": "What do you want us to do?",
+    "quiet": "...Orders?"
+  },
+  "talk.back.page": "Anything else?",
   "talk.stay.team": "Alright, we'll wait here for you.",
   "talk.follow.team": "On our way!",
   "talk.bags.ok": {
@@ -381,6 +390,15 @@
   "talk.opt.stay": "Wait right here for me.",
   "talk.opt.follow": "Come with me.",
   "talk.opt.bags": "Let me see your packs.",
+  "talk.opt.interact": "Let me have a look at you.",
+  "talk.opt.party": "About the group...",
+  "talk.opt.back": "Something else.",
+  "talk.opt.sheet": "Let me see your gear.",
+  "talk.opt.talents": "Show me your talents.",
+  "talk.opt.quests": "What quests are you on?",
+  "talk.opt.team.stay": "Everyone wait here for me.",
+  "talk.opt.team.follow": "Everyone come with me.",
+  "talk.opt.team.summon": "Summon the ones left behind.",
   "talk.opt.portal": "Can you open a portal for me?",
   "talk.opt.portal.10059": "To Stormwind.",
   "talk.opt.portal.11416": "To Ironforge.",

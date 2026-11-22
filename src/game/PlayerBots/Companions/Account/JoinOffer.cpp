@@ -74,9 +74,11 @@ namespace JoinOffer
         page.text = Talk::Line(ctx, "account.offer.page");
         Talk::Option yes;
         yes.id = "account:yes";
+        yes.icon = Talk::Icon::Yes;
         yes.text = Talk::Line(ctx, "account.offer.yes");
         Talk::Option later;
         later.id = "account:later";
+        later.icon = Talk::Icon::No;
         later.text = Talk::Line(ctx, "account.offer.later");
         page.options = { yes, later };
         return page;

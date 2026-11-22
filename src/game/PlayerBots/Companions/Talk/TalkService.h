@@ -30,7 +30,9 @@ namespace Companions
 {
 namespace Talk
 {
-    // The native gossip icons (the addon draws Interface\GossipFrame\<Name>GossipIcon).
+    // The native gossip icons (the addon draws Interface\GossipFrame\<Name>GossipIcon), plus
+    // Folder (a sub-page of options, FolderService) and Yes / No (the answers of a yes-or-no
+    // question: green tick, red cross, as the request dialog's).
     enum class Icon : uint8
     {
         Chat,
@@ -39,6 +41,9 @@ namespace Talk
         Trainer,
         Binder,
         Banker,
+        Folder,
+        Yes,
+        No,
     };
     char const* IconKey(Icon icon);
 

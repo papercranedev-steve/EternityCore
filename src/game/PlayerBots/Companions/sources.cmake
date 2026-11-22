@@ -62,6 +62,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Talk/Services/PortalService.cpp
   ${COMPANIONS_DIR}/Talk/Services/BondService.cpp
   ${COMPANIONS_DIR}/Talk/Services/AccountService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/FolderService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/LookService.cpp
   ${COMPANIONS_DIR}/Account/JoinOffer.h
   ${COMPANIONS_DIR}/Account/JoinOffer.cpp
   ${COMPANIONS_DIR}/Recruit/Trial.h

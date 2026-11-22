@@ -261,6 +261,15 @@
     "chatty": "走吧走吧，再歇下去骨头都要锈了！"
   },
   "talk.stay.cannot": "现在不行。",
+  "talk.interact.page": {
+    "default": "想看什么？",
+    "chatty": "看吧看吧！想看哪个？"
+  },
+  "talk.party.page": {
+    "default": "大家怎么安排？",
+    "quiet": "……怎么安排？"
+  },
+  "talk.back.page": "还有什么事？",
   "talk.stay.team": "好，我们在这儿等你。",
   "talk.follow.team": "来了！",
   "talk.bags.ok": {
@@ -400,6 +409,15 @@
   "talk.opt.stay": "在这儿等我。",
   "talk.opt.follow": "跟我走吧。",
   "talk.opt.bags": "让我看看你的包。",
+  "talk.opt.interact": "让我看看你的情况。",
+  "talk.opt.party": "说说队伍的事……",
+  "talk.opt.back": "说点别的吧。",
+  "talk.opt.sheet": "让我看看你的装备。",
+  "talk.opt.talents": "让我看看你的天赋。",
+  "talk.opt.quests": "你手上有哪些任务？",
+  "talk.opt.team.stay": "让大家都在这儿等我。",
+  "talk.opt.team.follow": "让大家都跟我走。",
+  "talk.opt.team.summon": "把掉队的人召唤过来吧。",
   "talk.opt.portal": "能帮我开个传送门吗？",
   "talk.opt.portal.10059": "去暴风城。",
   "talk.opt.portal.11416": "去铁炉堡。",

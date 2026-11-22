@@ -35,11 +35,12 @@ namespace StrangerTalk
             return BotShared::Phrases::Say(BotShared::I18n::Of(player), key, ai->Tags(), vars);
         }
 
-        Talk::Option OptionOf(BotShared::I18n::Lang lang, char const* id, char const* wordKey)
+        Talk::Option OptionOf(BotShared::I18n::Lang lang, char const* id, char const* wordKey,
+                              Talk::Icon icon = Talk::Icon::Chat)
         {
             Talk::Option option;
             option.id = id;
-            option.icon = Talk::Icon::Chat;
+            option.icon = icon;
             option.text = BotShared::Phrases::Word(lang, wordKey);
             return option;
         }
@@ -134,8 +135,8 @@ namespace StrangerTalk
 
             Talk::Page page;
             page.text = Say(ai, player, "first.offer", vars);
-            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:yes", "first.opt.yes"));
-            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:no", "first.opt.no"));
+            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:yes", "first.opt.yes", Talk::Icon::Yes));
+            page.options.push_back(OptionOf(BotShared::I18n::Of(player), "first:no", "first.opt.no", Talk::Icon::No));
             Talk::SendPage(player, bot, page);
         }
     }
