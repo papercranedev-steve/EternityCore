@@ -329,6 +329,7 @@ class ChatHandler
         bool HandlePartyBotSendBackCommand(char * args);
         bool ExtractCompanionSlotTarget(char** args, char const* usage, Player*& player, uint32& guid, std::string& name);
         bool HandlePartyBotCompanionCommand(char * args);   // PlayerBots/Companions/CompanionSheet.cpp
+        bool HandlePartyBotQuestLogCommand(char * args);    // PlayerBots/Companions/CompanionQuestLog.cpp
         bool HandlePartyBotTalkCommand(char * args);        // PlayerBots/Companions/Talk/TalkCommands.cpp
         bool HandlePartyBotLanguageCommand(char * args);    // PlayerBots/Shared/I18nCommands.cpp
         bool HandlePartyBotRecipesCommand(char * args);
