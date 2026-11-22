@@ -108,6 +108,10 @@ namespace Population
             o.z = p->GetPositionZ();
             o.factionTemplate = p->GetFactionTemplateId();
             o.travelling = p->IsTaxiFlying();
+            o.inCombat = p->IsInCombat();
+            o.dead = !p->IsAlive();
+            o.hpPct = p->GetMaxHealth() ? float(p->GetHealth()) / float(p->GetMaxHealth()) : 1.0f;
+            o.attackers = uint32(p->GetAttackers().size());
             TrackMotion(o, nowMs);
             m_observers.push_back(o);
         }

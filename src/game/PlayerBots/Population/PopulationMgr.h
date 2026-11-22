@@ -19,6 +19,7 @@
 #include "Population/FieldPopulation.h"
 #include "Population/TownPopulation.h"
 #include "Population/TravellerPopulation.h"
+#include "Population/PacingDirector.h"
 #include "Population/Observers.h"
 #include "Population/Roster.h"
 #include <atomic>
@@ -115,6 +116,8 @@ namespace Population
         TownDirector& GetTownDirector() { EnsureDataLoaded(); return m_town; }
         FieldDirector const& GetFieldDirector() const { return m_field; }
         TravellerDirector const& GetTravellerDirector() { EnsureDataLoaded(); return m_travel; }
+        PacingDirector& GetPacing() { return m_pacing; }
+        PacingDirector const& GetPacing() const { return m_pacing; }
         // After scene points were added or deleted.
         void ReloadAnchors();
 
@@ -145,6 +148,10 @@ namespace Population
         // everyone's sight), met nobody for TravellerDirector::UNMET_MS, or are done (at the
         // road's end, lifetime over); done in someone's sight: they walk on out of it first.
         void RetireTravellers(Observers const& observers);
+
+        // Pacing (PacingDirector.h): a population bot in the world within the observer's sight
+        // (the map's visibility distance, 2d).
+        bool AnyoneInSight(Observer const& o) const;
 
         // Cost of PopulationBotAI::UpdateAI ticks.
         void RecordBotTick(uint64 micros);
@@ -202,6 +209,7 @@ namespace Population
         TownDirector m_town;
         FieldDirector m_field;
         TravellerDirector m_travel;
+        PacingDirector m_pacing;
         Roster m_roster;
         uint32 m_nextUnitId = 0;        // Commander team units of field bots and travellers
         std::map<uint32, uint32> m_partyUnits;  // traveller partyKey -> unit, until the second one spawns

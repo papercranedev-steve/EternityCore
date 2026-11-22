@@ -23,6 +23,7 @@
 
 #include "Common.h"
 #include "Commander/Perception/Spatial/NavPather.h"
+#include <string>
 #include <vector>
 
 namespace Commander
@@ -36,6 +37,16 @@ namespace Commander
             uint32 mapId = 0;
             float x = 0.0f, y = 0.0f, z = 0.0f;
             float coreYd = 0.0f;    // patrol points this close (+ margin) are the place's own, not a road's
+            std::string name;       // for the log
+        };
+
+        // A planned road that could not be built.
+        struct FailedRoad
+        {
+            uint32 mapId = 0;
+            uint32 nodeA = 0, nodeB = 0;        // RoadNode ids
+            float ax = 0.0f, ay = 0.0f, bx = 0.0f, by = 0.0f;
+            PathFail why = PathFail::None;
         };
 
         // A point some road passes (patrol waypoint, manual road point).
@@ -72,13 +83,14 @@ namespace Commander
             bool IsBuilding() const { return m_next < m_planned.size(); }
 
             std::vector<RoadEdge> const& Edges() const { return m_edges; }
+            std::vector<FailedRoad> const& Failures() const { return m_failures; }
             RoadNode const* FindNode(uint32 id) const;
             // Edges passing within `radius` (2d) of the point.
             std::vector<RoadEdge const*> Near(uint32 mapId, float x, float y, float radius) const;
 
             uint32 Planned() const { return uint32(m_planned.size()); }
             uint32 Done() const { return uint32(m_next); }
-            uint32 Failed() const { return m_failed; }
+            uint32 Failed() const { return uint32(m_failures.size()); }
             uint32 HintCount() const { return uint32(m_hints.size()); }
             uint32 BuildMs() const { return m_buildMs; }
 
@@ -91,8 +103,10 @@ namespace Commander
             // The point at arc length `s` (clamped), z interpolated.
             static RoadPoint PointAt(RoadEdge const& edge, float s);
 
-            // Longest edge planned (yards, straight line).
-            static constexpr float MAX_EDGE_YD = 2200.0f;
+            // Longest edge planned (yards, straight line). 2200 left out Goldshire - Lakeshire
+            // (2186 between the inns, the edge of the cap) and many like it (user 2026-11-22: no
+            // one on the main roads).
+            static constexpr float MAX_EDGE_YD = 2700.0f;
 
         private:
             struct Plan
@@ -108,7 +122,7 @@ namespace Commander
             size_t m_next = 0;
             std::vector<RoadEdge> m_edges;
             NavPather m_pather;
-            uint32 m_failed = 0;
+            std::vector<FailedRoad> m_failures;
             uint32 m_buildMs = 0;
         };
     }

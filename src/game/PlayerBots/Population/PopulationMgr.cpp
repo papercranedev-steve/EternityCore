@@ -129,6 +129,7 @@ namespace Population
         m_town.LoadConfig();
         m_field.LoadConfig();
         m_travel.LoadConfig();
+        m_pacing.LoadConfig();
         m_roster.LoadConfig();
         m_observers.LoadConfig();
 
@@ -234,6 +235,7 @@ namespace Population
         m_roster.Update(m_nowMs, m_identity, m_observers);
         m_city.Update(*this, m_observers, m_nowMs);
         m_town.Update(*this, m_observers, m_nowMs);
+        m_pacing.Update(*this, m_observers, m_nowMs);
         m_field.Update(*this, m_observers, m_nowMs);
         m_travel.Update(*this, m_observers, m_nowMs);
 
@@ -876,6 +878,22 @@ namespace Population
                 r.handle->leave = true;
             }
         }
+    }
+
+    bool PopulationMgr::AnyoneInSight(Observer const& o) const
+    {
+        Map const* map = sMapMgr.FindMap(o.mapId, 0);
+        float const visible = map ? map->GetVisibilityDistance() : 100.0f;
+        for (Record const& r : m_bots)
+        {
+            Player* me = OnlinePlayer(*r.handle);
+            if (!me || me->GetMapId() != o.mapId)
+                continue;
+            float const dx = me->GetPositionX() - o.x, dy = me->GetPositionY() - o.y;
+            if (dx * dx + dy * dy <= visible * visible)
+                return true;
+        }
+        return false;
     }
 
     void PopulationMgr::RecordBotTick(uint64 micros)

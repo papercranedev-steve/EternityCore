@@ -132,14 +132,20 @@ namespace Roads
         m_mapId = mapId;
         int32 const x0 = std::max(0, GridX(maxY)), x1 = std::min(MAX_NUMBER_OF_GRIDS - 1, GridX(minY));
         int32 const y0 = std::max(0, GridY(maxX)), y1 = std::min(MAX_NUMBER_OF_GRIDS - 1, GridY(minX));
+        m_lastFail = PathFail::None;
         if (x1 < x0 || y1 < y0 || uint32((x1 - x0 + 1) * (y1 - y0 + 1)) > MAX_TILES)
+        {
+            m_lastFail = PathFail::TooManyTiles;
             return false;
+        }
         MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
         for (int32 x = x0; x <= x1; ++x)
             for (int32 y = y0; y <= y1; ++y)
                 if (mmap->loadMap(mapId, x, y))
                     m_loaded.emplace_back(x, y);
         m_query = QueryFor(mapId);
+        if (!m_query)
+            m_lastFail = PathFail::NoNavMesh;
         return m_query != nullptr;
     }
 
@@ -171,43 +177,116 @@ namespace Roads
 
     bool NavPather::Path(RoadPoint const& from, RoadPoint const& to, std::vector<RoadPoint>& out) const
     {
+        m_lastFail = PathFail::None;
         if (!m_query)
+        {
+            m_lastFail = PathFail::NoNavMesh;
             return false;
+        }
         dtQueryFilter const filter = WalkFilter();
         // Detour: (y, z, x).
         float const start[3] = { from.y, from.z, from.x };
         float const end[3] = { to.y, to.z, to.x };
         float startPt[3], endPt[3];
         dtPolyRef startRef = 0, endRef = 0;
-        if (dtStatusFailed(m_query->findNearestPoly(start, END_EXTENTS, &filter, &startRef, startPt)) || !startRef ||
-            dtStatusFailed(m_query->findNearestPoly(end, END_EXTENTS, &filter, &endRef, endPt)) || !endRef)
+        if (dtStatusFailed(m_query->findNearestPoly(start, END_EXTENTS, &filter, &startRef, startPt)) || !startRef)
+        {
+            m_lastFail = PathFail::NoStart;
             return false;
+        }
+        if (dtStatusFailed(m_query->findNearestPoly(end, END_EXTENTS, &filter, &endRef, endPt)) || !endRef)
+        {
+            m_lastFail = PathFail::NoEnd;
+            return false;
+        }
 
         static thread_local std::vector<dtPolyRef> polys(MAX_POLYS);
-        int polyCount = 0;
-        if (dtStatusFailed(m_query->findPath(startRef, endRef, startPt, endPt, &filter, polys.data(), &polyCount, MAX_POLYS)) ||
-            polyCount <= 0 || polys[polyCount - 1] != endRef)
-            return false;
-
         static thread_local std::vector<float> corners(MAX_CORNERS * 3);
-        int cornerCount = 0;
-        if (dtStatusFailed(m_query->findStraightPath(startPt, endPt, polys.data(), polyCount, corners.data(), nullptr, nullptr,
-                &cornerCount, MAX_CORNERS)) || cornerCount < 2)
-            return false;
-
-        RoadPoint const last = { corners[(cornerCount - 1) * 3 + 2], corners[(cornerCount - 1) * 3], corners[(cornerCount - 1) * 3 + 1] };
+        static thread_local std::vector<dtPolyRef> cornerRefs(MAX_CORNERS);
         RoadPoint const wanted = { endPt[2], endPt[0], endPt[1] };
-        if (Distance2d(last, wanted) > END_SLACK_YD)
-            return false;   // ran out of corners
+        auto toPoint = [](float const* v) { return RoadPoint{ v[2], v[0], v[1] }; };
 
-        for (int i = 0; i < cornerCount; ++i)
+        // A long way may need several searches: each one that stops short (out of search nodes,
+        // polygons or corners) is followed by another from the last point it reached.
+        std::vector<RoadPoint> line;
+        float legStart[3] = { startPt[0], startPt[1], startPt[2] };
+        dtPolyRef legRef = startRef;
+        for (uint32 leg = 0; leg < MAX_LEGS; ++leg)
         {
-            RoadPoint const p = { corners[i * 3 + 2], corners[i * 3], corners[i * 3 + 1] };
-            if (!out.empty() && Distance2d(out.back(), p) < 0.5f)
-                continue;
-            out.push_back(p);
+            int polyCount = 0;
+            if (dtStatusFailed(m_query->findPath(legRef, endRef, legStart, endPt, &filter, polys.data(), &polyCount, MAX_POLYS)) ||
+                polyCount <= 0)
+            {
+                m_lastFail = PathFail::NoRoute;
+                return false;
+            }
+            dtPolyRef const lastPoly = polys[polyCount - 1];
+            bool const reaches = lastPoly == endRef;
+            float legEnd[3] = { endPt[0], endPt[1], endPt[2] };
+            if (!reaches && dtStatusFailed(m_query->closestPointOnPoly(lastPoly, endPt, legEnd, nullptr)))
+            {
+                m_lastFail = PathFail::NoRoute;
+                return false;
+            }
+
+            int cornerCount = 0;
+            if (dtStatusFailed(m_query->findStraightPath(legStart, legEnd, polys.data(), polyCount, corners.data(), nullptr,
+                    cornerRefs.data(), &cornerCount, MAX_CORNERS)) || cornerCount < 1)
+            {
+                m_lastFail = PathFail::NoRoute;
+                return false;
+            }
+            for (int i = 0; i < cornerCount; ++i)
+            {
+                RoadPoint const p = toPoint(&corners[i * 3]);
+                if (!line.empty() && Distance2d(line.back(), p) < 0.5f)
+                    continue;
+                line.push_back(p);
+            }
+
+            RoadPoint const last = toPoint(&corners[(cornerCount - 1) * 3]);
+            if (reaches && Distance2d(last, wanted) <= END_SLACK_YD)
+            {
+                if (line.size() < 2)
+                {
+                    m_lastFail = PathFail::NoRoute;
+                    return false;
+                }
+                out.insert(out.end(), line.begin(), line.end());
+                return true;
+            }
+
+            // Stopped short: on from its last point (the corner list ran out: that corner's
+            // polygon; else the polygon the search got to).
+            dtPolyRef const nextRef = Distance2d(last, toPoint(legEnd)) <= END_SLACK_YD ? lastPoly : cornerRefs[cornerCount - 1];
+            float const gain = Distance2d(toPoint(legStart), wanted) - Distance2d(last, wanted);
+            if (!nextRef || gain < MIN_LEG_GAIN_YD)
+            {
+                m_lastFail = PathFail::NoRoute;
+                return false;
+            }
+            legRef = nextRef;
+            legStart[0] = corners[(cornerCount - 1) * 3];
+            legStart[1] = corners[(cornerCount - 1) * 3 + 1];
+            legStart[2] = corners[(cornerCount - 1) * 3 + 2];
         }
-        return out.size() >= 2;
+        m_lastFail = PathFail::TooLong;
+        return false;
+    }
+
+    char const* PathFailName(PathFail fail)
+    {
+        switch (fail)
+        {
+            case PathFail::None:         return "none";
+            case PathFail::TooManyTiles: return "too many navmesh tiles";
+            case PathFail::NoNavMesh:    return "no navmesh";
+            case PathFail::NoStart:      return "start not on the navmesh";
+            case PathFail::NoEnd:        return "end not on the navmesh";
+            case PathFail::NoRoute:      return "no way through";
+            case PathFail::TooLong:      return "too long";
+        }
+        return "?";
     }
 }
 }

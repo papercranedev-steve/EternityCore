@@ -3377,6 +3377,28 @@ AHBuyer.MaxMarkup = 50
 #        Travellers of level 40 or more riding their race's mount (percent).
 #        Default: 60
 #
+#    PopBot.Pacing.Enable
+#        Pacing director: field bots and travellers come by how each player is doing
+#        (nobody new mid-fight, more people after a long quiet). .popbot pacing shows yours.
+#        Default: 1
+#
+#    PopBot.Pacing.QuietSec
+#        Seconds with no population bot in sight after which a traveller is sent at once
+#        (walking near a road). From a third of this the rates rise.
+#        Default: 180
+#
+#    PopBot.Pacing.MinGapSec
+#        Travellers sent for one player are at least this far apart (seconds).
+#        Default: 40
+#
+#    PopBot.Pacing.RelaxSec
+#        Nobody new for this long after a fight (or low health) ends (seconds).
+#        Default: 30
+#
+#    PopBot.Pacing.MaxBoost
+#        After the full quiet time travellers come this many times as often.
+#        Default: 4
+#
 #    PopBot.LifetimeMinMinutes
 #    PopBot.LifetimeMaxMinutes
 #        Each bot logs out after a random time in this range, so faces keep changing.
@@ -3513,6 +3535,11 @@ PopBot.Road.Enable = 1
 PopBot.Road.PerHour = 20
 PopBot.Road.MaxNear = 4
 PopBot.Road.MountPct = 60
+PopBot.Pacing.Enable = 1
+PopBot.Pacing.QuietSec = 180
+PopBot.Pacing.MinGapSec = 40
+PopBot.Pacing.RelaxSec = 30
+PopBot.Pacing.MaxBoost = 4
 PopBot.LifetimeMinMinutes = 10
 PopBot.LifetimeMaxMinutes = 40
 PopBot.City.Enable = 1

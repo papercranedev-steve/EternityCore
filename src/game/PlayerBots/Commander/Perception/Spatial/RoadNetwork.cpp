@@ -69,7 +69,7 @@ namespace Roads
         m_edges.clear();
         m_planned.clear();
         m_next = 0;
-        m_failed = 0;
+        m_failures.clear();
         m_buildMs = 0;
         PlanEdges();
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads: %u nodes, %u hint points, %u roads to build.",
@@ -212,6 +212,7 @@ namespace Roads
         RoadNode const& b = m_nodes[plan.b];
 
         bool built = false;
+        PathFail why = PathFail::None;
         if (m_pather.BeginArea(a.mapId, std::min(a.x, b.x) - TILE_MARGIN_YD, std::min(a.y, b.y) - TILE_MARGIN_YD,
                 std::max(a.x, b.x) + TILE_MARGIN_YD, std::max(a.y, b.y) + TILE_MARGIN_YD))
         {
@@ -226,9 +227,24 @@ namespace Roads
                 built = true;
             }
         }
+        if (!built)
+            why = m_pather.LastFail();
         m_pather.EndArea();
         if (!built)
-            ++m_failed;
+        {
+            FailedRoad f;
+            f.mapId = a.mapId;
+            f.nodeA = a.id;
+            f.nodeB = b.id;
+            f.ax = a.x;
+            f.ay = a.y;
+            f.bx = b.x;
+            f.by = b.y;
+            f.why = why;
+            m_failures.push_back(f);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Road %s - %s (map %u, %.0f yd straight) failed: %s.",
+                a.name.c_str(), b.name.c_str(), a.mapId, Dist2d(a.x, a.y, b.x, b.y), PathFailName(why));
+        }
 
         m_buildMs += uint32(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
         if (m_next >= m_planned.size())
@@ -237,7 +253,7 @@ namespace Roads
             for (RoadEdge const& e : m_edges)
                 hinted += e.hints ? 1 : 0;
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads built: %u of %u (%u through patrol or road points, %u failed), %u ms.",
-                uint32(m_edges.size()), uint32(m_planned.size()), hinted, m_failed, m_buildMs);
+                uint32(m_edges.size()), uint32(m_planned.size()), hinted, uint32(m_failures.size()), m_buildMs);
         }
         return m_next < m_planned.size();
     }

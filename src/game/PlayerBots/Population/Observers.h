@@ -36,6 +36,11 @@ namespace Population
         // Ground speed over the last TRACK_WINDOW_MS (yards per second, 2d); 0 when standing,
         // arriving, or just teleported.
         float vx = 0.0f, vy = 0.0f;
+        // How he is doing (online only; the pacing director's tension, PacingDirector.h).
+        bool inCombat = false;
+        bool dead = false;
+        float hpPct = 1.0f;         // 0..1
+        uint32 attackers = 0;       // units attacking him
 
         float Speed() const;
         bool IsMoving() const { return Speed() >= MOVING_SPEED; }

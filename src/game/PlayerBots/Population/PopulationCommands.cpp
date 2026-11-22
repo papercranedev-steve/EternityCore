@@ -594,6 +594,24 @@ namespace
                 travel.PerHour(*e), dist, along);
         }
 
+        // Roads that were planned here but could not be built (the straight line near you).
+        for (Commander::Roads::FailedRoad const& f : roads.Failures())
+        {
+            if (f.mapId != player->GetMapId())
+                continue;
+            float const px = player->GetPositionX(), py = player->GetPositionY();
+            float const dx = f.bx - f.ax, dy = f.by - f.ay;
+            float const len2 = dx * dx + dy * dy;
+            float t = len2 > 0.0f ? ((px - f.ax) * dx + (py - f.ay) * dy) / len2 : 0.0f;
+            t = std::min(1.0f, std::max(0.0f, t));
+            float const ex = f.ax + dx * t - px, ey = f.ay + dy * t - py;
+            float const off = std::sqrt(ex * ex + ey * ey);
+            if (off > RANGE)
+                continue;
+            handler->PSendSysMessage("Not built: %s - %s, %.0f yd straight, %s; the line passes %.0f yd from you",
+                nameOf(f.nodeA).c_str(), nameOf(f.nodeB).c_str(), std::sqrt(len2), Commander::Roads::PathFailName(f.why), off);
+        }
+
         Population::Observer o;
         o.mapId = player->GetMapId();
         o.x = player->GetPositionX();
@@ -607,6 +625,32 @@ namespace
         else
             handler->PSendSysMessage("Here: no road of your side within %.0f yd, %u travellers within %.0f yd.",
                 Population::TravellerDirector::NEAR_ROAD_YD, nearCount, Population::TravellerDirector::NEAR_COUNT_YD);
+    }
+
+    // Pacing (PacingDirector.h): your tension, quiet time and what the directors do for you now.
+    void ShowPacing(ChatHandler* handler, Player* player)
+    {
+        Population::PacingDirector const& pacing = sPopulationMgr.GetPacing();
+        handler->PSendSysMessage("Pacing: %s. Someone due after %u s of quiet while walking, travellers at least %u s apart, %u s calm after a fight, up to %.0fx the rate.",
+            pacing.IsEnabled() ? "on" : "off", pacing.GetQuietMs() / IN_MILLISECONDS, pacing.GetMinGapMs() / IN_MILLISECONDS,
+            pacing.GetRelaxMs() / IN_MILLISECONDS, pacing.GetMaxBoost());
+        if (!player)
+            return;
+        Population::Observer const* me = nullptr;
+        for (Population::Observer const& o : sPopulationMgr.GetObservers().All())
+            if (o.guid == player->GetGUIDLow() && !o.arriving)
+                me = &o;
+        Population::PacingDirector::State const* s = me ? pacing.Find(me->guid) : nullptr;
+        if (!me || !s)
+        {
+            handler->SendSysMessage("You: not paced yet (population off, or you are not counted as an observer).");
+            return;
+        }
+        Population::Pace const pace = pacing.For(*me);
+        handler->PSendSysMessage("You: tension %.2f, quiet %u s%s, rate x%.1f, field budget x%.1f%s%s%s.",
+            s->tension, pacing.QuietMs(*s) / IN_MILLISECONDS, s->inSight ? " (someone in sight)" : "",
+            pace.rate, pace.density, pace.relax ? ", relax: nobody new" : "", pace.spaced ? ", spaced: next traveller waits" : "",
+            pace.due ? ", due: a traveller now" : "");
     }
 
     // Quest areas (Commander/Perception/Spatial/QuestAreas.h) near your position, acted out by
@@ -788,6 +832,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "pacing"))
+    {
+        ShowPacing(this, player);
+        return true;
+    }
+
     if (!strcmp(sub, "town"))
     {
         ShowTowns(this, player);
@@ -891,6 +941,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|roads|quests|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|roads|quests|pacing|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

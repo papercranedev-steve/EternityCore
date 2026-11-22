@@ -2,6 +2,7 @@
 #include "Population/CityPopulation.h"
 #include "Population/FieldPopulation.h"
 #include "Population/Observers.h"
+#include "Population/PacingDirector.h"
 #include "Population/PopulationMgr.h"
 #include "Population/ScenePoints.h"
 #include "Population/Settlements.h"
@@ -144,6 +145,7 @@ namespace Population
             n.y = s.y;
             n.z = s.z;
             n.coreYd = s.coreYd;
+            n.name = s.kind == SettlementKind::Capital ? s.label : Settlements::AreaName(s);
             if (s.kind == SettlementKind::Capital)
             {
                 // A capital's centre has no height (CityDef): the anchor nearest to it (inside
@@ -393,11 +395,15 @@ namespace Population
             uint32 const nearNow = mgr.CountTravellers(o, NEAR_COUNT_YD);
             if (nearNow >= m_maxNear)
                 continue;
+            // Not mid-fight, not right after the last one (PacingDirector).
+            Pace const pace = mgr.GetPacing().For(o);
+            if (pace.relax || pace.spaced)
+                continue;
 
             float perHour = 0.0f;
             for (RoadEdge const* e : roads)
                 perHour += PerHour(*e);
-            float const rate = perHour * hourFactor / 3600.0f;
+            float const rate = perHour * hourFactor * pace.rate / 3600.0f;
 
             uint32 want = 0;
             if (o.arriving)
@@ -406,7 +412,7 @@ namespace Population
                 m_prewarmed.insert(o.guid);
                 want = std::min(m_maxNear - nearNow, Poisson(rate * 2.0f * NEAR_COUNT_YD / PASS_SPEED));
             }
-            else if (frand(0.0f, 1.0f) < 1.0f - std::exp(-rate * float(TICK_MS) / 1000.0f))
+            else if (pace.due || frand(0.0f, 1.0f) < 1.0f - std::exp(-rate * float(TICK_MS) / 1000.0f))
                 want = 1;
 
             uint32 queued = nearNow;
@@ -432,6 +438,8 @@ namespace Population
 
                 if (!mgr.QueueSpawn(request))
                     break;
+                if (!o.arriving)
+                    mgr.GetPacing().NoteSent(o.guid);
                 ++queued;
                 if (follower.partyKey && mgr.QueueSpawn(follower))
                     ++queued;

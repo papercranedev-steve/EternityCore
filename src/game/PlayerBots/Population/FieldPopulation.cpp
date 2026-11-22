@@ -375,12 +375,18 @@ namespace Population
             uint32& next = m_nextCheckMs[o.guid];
             if (!o.arriving && nowMs < next)
                 continue;
-            next = nowMs + (o.IsMoving() ? urand(MOVING_CHECK_MIN_MS, MOVING_CHECK_MAX_MS)
-                                         : urand(m_checkMinMs, m_checkMaxMs));
+            // Pacing (PacingDirector): nobody new mid-fight; a long quiet checks sooner and
+            // wants more people around.
+            Pace const pace = mgr.GetPacing().For(o);
+            uint32 const interval = o.IsMoving() ? urand(MOVING_CHECK_MIN_MS, MOVING_CHECK_MAX_MS)
+                                                 : urand(m_checkMinMs, m_checkMaxMs);
+            next = nowMs + uint32(float(interval) / pace.rate);
+            if (pace.relax)
+                continue;
 
             // As many as the place is busy (fewer than there are: the extra ones leave in their
             // own time, out of sight). One more per check; an arriving observer gets them all.
-            uint32 const budget = BudgetAt(settlements, o.mapId, o.x, o.y, o.team);
+            uint32 const budget = uint32(std::lround(float(BudgetAt(settlements, o.mapId, o.x, o.y, o.team)) * pace.density));
             uint32 const want = o.arriving ? budget : 1;
             for (uint32 i = 0; i < want; ++i)
             {
