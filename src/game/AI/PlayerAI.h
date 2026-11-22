@@ -41,6 +41,8 @@ class PlayerAI
         // Called at World update tick
         virtual void UpdateAI(uint32 const /*diff*/);
         virtual void MovementInform(uint32 MovementType, uint32 Data = 0) {}
+        // `from` did a text emote (TEXTEMOTE_*) aimed at this player (as CreatureAI::ReceiveEmote).
+        virtual void ReceiveEmote(Player* /*from*/, uint32 /*textEmote*/) {}
 
         // == Small changes to the controlled player's own numbers ==========
         // Core code asks these for a player that has an AI (a human playing the character has

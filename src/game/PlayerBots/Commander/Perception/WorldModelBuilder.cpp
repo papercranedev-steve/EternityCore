@@ -47,6 +47,7 @@
 #include "CellImpl.h"
 #include "Timer.h"
 #include "Commander/BotDirectives.h"
+#include "Shared/PlayerClaims.h"
 #include "MoveSpline.h"
 #include <algorithm>
 #include <limits>
@@ -2187,6 +2188,14 @@ namespace WorldModelBuilder
         MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(units, check);
         Cell::VisitAllObjects(center, searcher, scanRadius);
 
+        // Creatures players outside the party are about to fight (targeted, not hit yet).
+        std::vector<BotShared::PlayerClaims::Claim> claims;
+        BotShared::PlayerClaims::Collect(me, center, scanRadius, claims);
+        claims.erase(std::remove_if(claims.begin(), claims.end(), [&world](BotShared::PlayerClaims::Claim const& c)
+        {
+            return world.FindMember(c.player) != nullptr;
+        }), claims.end());
+
         std::vector<PackCreature> creatures;
         world.patrols.clear();
         // Aggro range against the main tank while fighting: the fight is where the tank stands.
@@ -2229,6 +2238,8 @@ namespace WorldModelBuilder
             c.stealthed = creature->HasAuraType(SPELL_AURA_MOD_STEALTH);
             c.patrol = patrol;
             c.tappedByOther = creature->HasLootRecipient() && (!leader || !creature->IsTappedBy(leader));
+            if (!claims.empty() && !creature->HasLootRecipient())
+                c.claimedBy = BotShared::PlayerClaims::ClaimantOf(claims, creature);
             c.noAggro = creature->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO);
             c.creatureTypeMask = creature->GetCreatureTypeMask();
             c.reach = creature->GetAttackDistance(reachAgainst);

@@ -5,7 +5,7 @@
  * Update (bot update, out of combat, while the caller's hunt has found nothing):
  *   - the nearest creature it could fight (ProwlRules: alive, attackable, not fighting, nobody
  *     else's loot, not elite, a critter or a pet, in the level band, the quest's creature when
- *     one is given) beyond `nearYd` (nearer ones are the hunt's to judge) and within SEARCH_YD
+ *     one is given, no player about to fight it: Shared/PlayerClaims.h) beyond `nearYd` (nearer ones are the hunt's to judge) and within SEARCH_YD
  *     (of the area's middle when an area is given): it runs to a point STOP_SHORT_YD short of
  *     it, with a safe walk (Commander/Perception/Spatial/SafeRoute: no other idle pack on the
  *     way). One it reached, could not reach in GIVE_UP_MS or had no safe walk to is not tried
@@ -48,6 +48,10 @@ namespace Life
         uint32 nextSearchMs = 0;
         uint32 nextWanderMs = 0;
         Errands::DoneList done;
+        // On its way, a player claimed the creature (Shared/PlayerClaims.h): left to him at
+        // yieldedAtMs (the caller may react to a new one).
+        ObjectGuid yieldedTo;
+        uint32 yieldedAtMs = 0;
     };
 
     namespace Prowl

@@ -523,6 +523,45 @@
   },
   "meet.join.full": "Looks like your hands are already full with that group.",
   "meet.join.cannot": "Just passing through—not looking to group up.",
+  "raise.say": {
+    "default": ["Up you get, friend.", "Lucky I was passing by.", "Careful, it's not safe around here."],
+    "chatty": ["Ouch, that looked bad. Up you go, and don't take them all on alone next time!", "Just passing by. Your lucky day."],
+    "quiet": ["Get up."]
+  },
+  "buff.say": {
+    "default": ["Safe travels.", "Here, this will help.", "Good luck out there."],
+    "chatty": ["Have one on me, no need to thank me!", "You look like you've come a long way. Take a blessing."],
+    "quiet": ["Here."]
+  },
+  "prey.yield": {
+    "default": ["After you.", "That one's yours.", "Go ahead, I'll find another."],
+    "quiet": ["After you."]
+  },
+  "prey.sorry": {
+    "default": ["Sorry, I tagged it first.", "Apologies, that one was already mine."],
+    "chatty": ["Oops, stole your kill, sorry! The next one's yours."],
+    "quiet": ["Sorry."]
+  },
+  "admire.say.novice": {
+    "default": ["{thing}... I'd love to touch it.", "Wow, {thing}!", "When will I ever get {thing}?"],
+    "chatty": ["By the Light, {thing}! Where did you get it?", "When I grow up I want {thing} too!"],
+    "quiet": ["...Impressive."]
+  },
+  "admire.say.peer": {
+    "default": ["Nice, {thing}.", "Tsk, {thing}. I'm jealous.", "Where'd you get {thing}?"],
+    "chatty": ["{thing} looks amazing! Carry me some time?"],
+    "quiet": ["Not bad."]
+  },
+  "admire.say.senior": {
+    "default": ["{thing}, not bad. You're coming along.", "{thing} suits you, youngster."],
+    "quiet": ["Hm. Not bad."]
+  },
+  "admire.thing.weapon": "that weapon",
+  "admire.thing.head": "that helm",
+  "admire.thing.shoulders": "those shoulders",
+  "admire.thing.chest": "that armor",
+  "admire.thing.back": "that cloak",
+  "admire.thing.mount": "that mount",
   "trial.start": {
     "default": "Just so we're clear, I'm only tagging along for a bit to see how we work together.",
     "chatty": "Deal! Let's see how we mesh—if it goes well, I might just stick around!",

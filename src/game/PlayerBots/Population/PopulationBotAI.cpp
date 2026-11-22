@@ -196,6 +196,10 @@ namespace Population
             EndReview();
         }
 
+        // A real player's emote at him: answered (a dance along holds him still).
+        if (UpdateEmoteReply(!me->IsMoving()))
+            return;
+
         if (LivesTownLife())
         {
             uint32 const now = WorldTimer::getMSTime();
@@ -358,8 +362,13 @@ namespace Population
         bool const quester = m_questStep != QuestStep::None;
         if (quester)
             CountQuestKills(inCombat);
+        if (inCombat)
+            WatchSharedPrey();
         if (m_wasInCombat && !inCombat)
+        {
             ++m_fights;
+            ApologizeForPrey();
+        }
         m_wasInCombat = inCombat;
         if (quester && !inCombat)
             AdvanceQuest();
@@ -399,6 +408,22 @@ namespace Population
             UpdateOutOfCombatAI();      // buffs, pet
             if (m_isBuffing || me->IsNonMeleeSpellCasted())
                 return;
+        }
+
+        // Real players around it: answers to their emotes, the dead raised, buffs for passers-by,
+        // a nod for the creature left to one of them.
+        if (!inCombat)
+        {
+            if (UpdateEmoteReply(!resting && !me->IsMoving()))
+                return;
+            if (!resting && !me->GetVictim())
+            {
+                if (UpdateRaiseStranger())
+                    return;
+                if (UpdatePassingBuff())
+                    return;
+            }
+            UpdateYield();
         }
 
         // After a fight: its loot, as a player (not with a new victim chosen already).
@@ -851,6 +876,8 @@ namespace Population
 
     void PopulationBotAI::BeginLeaving()
     {
+        Life::Pastimes::EmoteReply::Stop(me, m_emoteReply);
+        m_raising.Clear();     // (its claim runs out by itself)
         if (m_townLife.IsStarted())
             m_townLife.Stop(me);
         m_phase = Phase::Leaving;

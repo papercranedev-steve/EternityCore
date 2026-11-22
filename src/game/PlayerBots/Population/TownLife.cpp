@@ -40,6 +40,8 @@ namespace Population
         m_staysLeft = urand(STAYS_MIN, STAYS_MAX);
         m_wantsLeave = false;
         Life::Pastimes::Notice::Init(m_notice, me->GetObjectGuid().GetRawValue());
+        Life::Pastimes::Admire::Stop(m_admire);
+        m_tags = request.tags;
 
         if (request.circle && request.circleSlot < request.circle->size)
         {
@@ -91,6 +93,7 @@ namespace Population
             m_toCircle = false;
         }
         Life::Pastimes::Notice::Stop(m_notice);
+        Life::Pastimes::Admire::Stop(m_admire);
         m_wasLooking = false;
         m_step = Step::Choosing;
         m_nextPickMs = 0;
@@ -106,7 +109,8 @@ namespace Population
             case Step::Staying:
             {
                 bool const free = Life::Pastimes::PlaceActs::CanLookAround(m_act);
-                if (Life::Pastimes::Notice::Update(me, m_notice, free, now))
+                if (Life::Pastimes::Admire::Update(me, m_admire, free, now, m_tags) ||
+                    Life::Pastimes::Notice::Update(me, m_notice, free, now))
                 {
                     m_wasLooking = true;
                     return;
@@ -126,6 +130,20 @@ namespace Population
             }
             case Step::Gathering:
             {
+                if (m_circle && now < m_circle->untilMs)
+                {
+                    // Admiring a passing player (not while another of them does): the others turn to him too.
+                    bool const wasAdmiring = !Life::Pastimes::Admire::Watching(m_admire).IsEmpty();
+                    if (Life::Pastimes::Admire::Update(me, m_admire, m_circle->watched.IsEmpty(), now, m_tags))
+                    {
+                        if (!wasAdmiring)
+                            Life::Pastimes::ChatCircles::Watch(*m_circle, m_seat, Life::Pastimes::Admire::Watching(m_admire),
+                                m_admire.untilMs);
+                        return;
+                    }
+                    if (wasAdmiring)
+                        Life::Pastimes::ChatCircles::FaceTalkAgain(m_seat);
+                }
                 if (m_circle && Life::Pastimes::ChatCircles::Update(me, *m_circle, m_seat, now))
                     return;
                 // The talk is over: each his own way.

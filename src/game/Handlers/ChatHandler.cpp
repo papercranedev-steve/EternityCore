@@ -40,6 +40,7 @@
 #include "CellImpl.h"
 #include "Anticheat.h"
 #include "AccountMgr.h"
+#include "PlayerAI.h"
 
 bool WorldSession::SanitizeChatMessage(std::string& msg, uint32 lang, uint32 msgType)
 {
@@ -750,6 +751,9 @@ void WorldSession::HandleTextEmoteOpcode(WorldPackets::Misc::TextEmote const& pa
     //Send scripted event call
     if (unit && unit->IsCreature() && ((Creature*)unit)->AI())
         ((Creature*)unit)->AI()->ReceiveEmote(GetPlayer(), packet.textEmote);
+    // A player with an AI (a bot): the same event.
+    else if (unit && unit->IsPlayer() && unit != GetPlayer() && ((Player*)unit)->AI())
+        ((Player*)unit)->AI()->ReceiveEmote(GetPlayer(), packet.textEmote);
 }
 
 void WorldSession::HandleChatIgnoredOpcode(WorldPackets::Misc::ChatIgnored const& packet)

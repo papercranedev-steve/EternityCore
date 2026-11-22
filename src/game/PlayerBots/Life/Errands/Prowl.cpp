@@ -1,5 +1,6 @@
 #include "Life/Errands/Prowl.h"
 #include "Life/Errands/ErrandCommon.h"
+#include "Shared/PlayerClaims.h"
 #include "Player.h"
 #include "Creature.h"
 #include "Map.h"
@@ -24,11 +25,14 @@ namespace Prowl
         class PreyCheck
         {
         public:
-            PreyCheck(Player* me, ProwlRules const& rules) : m_me(me), m_rules(rules) {}
+            PreyCheck(Player* me, ProwlRules const& rules, std::vector<BotShared::PlayerClaims::Claim> const& claims)
+                : m_me(me), m_rules(rules), m_claims(claims) {}
             bool operator()(Creature* c)
             {
                 if (!c->IsAlive() || c->IsInCombat() || c->HasLootRecipient() || !c->GetOwnerGuid().IsEmpty() ||
                     c->IsElite() || c->GetCreatureType() == CREATURE_TYPE_CRITTER)
+                    return false;
+                if (!m_claims.empty() && !BotShared::PlayerClaims::ClaimantOf(m_claims, c).IsEmpty())
                     return false;
                 if (m_rules.preyEntry && c->GetEntry() != m_rules.preyEntry)
                     return false;
@@ -44,6 +48,7 @@ namespace Prowl
         private:
             Player* m_me;
             ProwlRules const& m_rules;
+            std::vector<BotShared::PlayerClaims::Claim> const& m_claims;
         };
 
         // Where it stops: STOP_SHORT_YD before the creature, on the line from the bot.
@@ -64,9 +69,11 @@ namespace Prowl
         Creature* Pick(Player* me, ProwlState& state, ProwlRules const& rules)
         {
             std::list<Creature*> found;
-            PreyCheck check(me, rules);
-            MaNGOS::CreatureListSearcher<PreyCheck> searcher(found, check);
             float const reach = SEARCH_YD + me->GetDistance2d(rules.areaX, rules.areaY, SizeFactor::None);
+            std::vector<BotShared::PlayerClaims::Claim> claims;
+            BotShared::PlayerClaims::Collect(me, me, reach, claims);
+            PreyCheck check(me, rules, claims);
+            MaNGOS::CreatureListSearcher<PreyCheck> searcher(found, check);
             Cell::VisitGridObjects(me, searcher, reach);
 
             std::vector<Creature*> prey;
@@ -139,7 +146,21 @@ namespace Prowl
         if (!state.prey.IsEmpty())
         {
             Creature* c = me->GetMap()->GetCreature(state.prey);
-            PreyCheck check(me, rules);
+            std::vector<BotShared::PlayerClaims::Claim> claims;
+            if (c)
+                BotShared::PlayerClaims::Collect(me, c, 0.0f, claims);
+            // A player is about to fight it: his (another one next search).
+            ObjectGuid const claimant = c && !c->HasLootRecipient() ? BotShared::PlayerClaims::ClaimantOf(claims, c) : ObjectGuid();
+            if (!claimant.IsEmpty())
+            {
+                state.yieldedTo = claimant;
+                state.yieldedAtMs = now ? now : 1;
+                Errands::MarkDone(state.done, state.prey, DONE_KEEP);
+                Stop(me, state, true);
+                state.nextSearchMs = now + SEARCH_MS;
+                return false;
+            }
+            PreyCheck check(me, rules, claims);
             bool const arrived = c && me->IsWithinDist(c, rules.nearYd * 0.8f, false);
             if (!c || arrived || WorldTimer::getMSTimeDiff(state.startedMs, now) > GIVE_UP_MS ||
                 (!check(c) && !me->IsWithinDist(c, rules.nearYd, false)) || WalkEnded(me))

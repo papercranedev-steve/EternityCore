@@ -97,6 +97,10 @@ namespace Commander
         uint32 sinceMs = 0;         // WorldModel::refreshedAtMs of the choice
         uint32 idleSinceMs = 0;     // nothing to hunt nearby since (0 = something was found)
         char const* why = "";       // static text
+        // The chosen creature was claimed by a player before we hit it (PackCreature::claimedBy):
+        // given up to him at yieldedAtMs (WorldModel::refreshedAtMs; the bot's life reacts to a new one).
+        ObjectGuid yieldedTo;
+        uint32 yieldedAtMs = 0;
         bool Active() const { return !target.IsEmpty(); }
     };
 

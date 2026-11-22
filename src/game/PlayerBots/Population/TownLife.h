@@ -11,7 +11,8 @@
  * skipped. The role of the spawn only decides where the day starts: a stander or a sitter at
  * its anchor, a mover on its way to the first place, a gatherer in its talking group
  * (Life/Pastimes/ChatCircle.h). Some bots notice a real player who walks by
- * (Life/Pastimes/Notice.h).
+ * (Life/Pastimes/Notice.h), or admire his gear (Life/Pastimes/Admire.h: a talking group turns
+ * to him together).
  *
  * The day has a course (ambient flow doc §5, a small Markov chain): the next place also depends
  * on the last one (from the mailbox to the bank or the auction house, from the innkeeper to a
@@ -27,12 +28,14 @@
 #include "Common.h"
 #include "Population/PopulationTypes.h"
 #include "Life/Errands/Trip/Approach.h"
+#include "Life/Pastimes/Admire.h"
 #include "Life/Pastimes/Notice.h"
 #include "Life/Pastimes/PlaceActs.h"
 #include "Life/Pastimes/ChatCircle.h"
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -89,6 +92,9 @@ namespace Population
         Life::Trip::ApproachState m_leg;
         Life::Pastimes::ActState m_act;
         Life::Pastimes::NoticeState m_notice;
+        // Admiring a passing player's gear (Life/Pastimes/Admire.h; in a talking group too).
+        Life::Pastimes::AdmireState m_admire;
+        std::vector<std::string> m_tags;    // its personality (SpawnRequest::tags)
         bool m_wasLooking = false;
         // The day's course: the place type it was at last (the next one follows from it,
         // NextWeight), how many stays are left before it leaves.

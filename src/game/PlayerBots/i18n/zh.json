@@ -551,6 +551,46 @@
   },
   "meet.join.full": "你们人已经够多了吧，我就不挤了。",
   "meet.join.cannot": "我就是路过，不跟谁一起走。",
+  "//41": "Population bots and real players (Population/PopulationBotPlayers, Life/Pastimes/Admire): raise.say after resurrecting a stranger, buff.say after buffing a passer-by, prey.yield leaving him the creature he targeted, prey.sorry after a fight on a creature the bot hit first. admire.say.*: about his gear by level (novice: far below him, peer, senior: above him); {thing}: admire.thing.*.",
+  "raise.say": {
+    "default": ["起来吧，朋友。", "还好我路过。", "小心点，这一带不太平。"],
+    "chatty": ["哎呀，伤得不轻啊。起来吧，下次可别一个人硬撑！", "正好路过，算你运气好。"],
+    "quiet": ["起来吧。"]
+  },
+  "buff.say": {
+    "default": ["路上小心。", "拿着，用得上。", "一路顺风。"],
+    "chatty": ["顺手给你加一个，不用谢！", "看你风尘仆仆的，加个祝福吧。"],
+    "quiet": ["拿着。"]
+  },
+  "prey.yield": {
+    "default": ["你先请。", "这只归你了。", "你来吧，我去找别的。"],
+    "quiet": ["你先。"]
+  },
+  "prey.sorry": {
+    "default": ["不好意思，我先摸到的。", "抱歉，这只我先打上了。"],
+    "chatty": ["哎呀，抢了你的怪，真不好意思！下一只让给你。"],
+    "quiet": ["抱歉。"]
+  },
+  "admire.say.novice": {
+    "default": ["{thing}……真想摸一下。", "哇，{thing}！", "我什么时候才能有{thing}啊。"],
+    "chatty": ["天哪，{thing}！你是从哪儿弄来的？", "等我长大了也要{thing}！"],
+    "quiet": ["……好厉害。"]
+  },
+  "admire.say.peer": {
+    "default": ["{thing}不错嘛。", "啧，{thing}，眼红了。", "{thing}哪儿弄的？"],
+    "chatty": ["{thing}太帅了吧！改天带带我？"],
+    "quiet": ["不错。"]
+  },
+  "admire.say.senior": {
+    "default": ["{thing}不错，有长进。", "年轻人，{thing}挺像样。"],
+    "quiet": ["嗯，不错。"]
+  },
+  "admire.thing.weapon": "那把武器",
+  "admire.thing.head": "那顶头盔",
+  "admire.thing.shoulders": "那副肩甲",
+  "admire.thing.chest": "那身护甲",
+  "admire.thing.back": "那件披风",
+  "admire.thing.mount": "那匹坐骑",
   "//28": "A trial partner (搭伙, Companions/Recruit/Trial).",
   "trial.start": {
     "default": "先说好，我就跟你打一阵子，合得来再说。",

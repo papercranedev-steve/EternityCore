@@ -1015,6 +1015,9 @@ namespace Commander
         bool stealthed = false;     // the tank cannot target it now (still joins the fight)
         bool patrol = false;        // walks a waypoint path; its pack membership changes as it moves
         bool tappedByOther = false; // somebody outside the party has loot rights
+        // A player outside the party (or his group's bot) has it targeted close by and nobody
+        // hit it yet: his to take (Shared/PlayerClaims.h). Bot teams with no player leave it.
+        ObjectGuid claimedBy;
         bool boss = false;          // CreatureProfile::boss: pull and clear leave it to the player
         bool noAggro = false;       // CREATURE_FLAG_EXTRA_NO_AGGRO: never starts a fight
         uint32 creatureTypeMask = 0;    // 1 << (CreatureType - 1)

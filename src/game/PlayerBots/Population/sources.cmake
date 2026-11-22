@@ -9,6 +9,7 @@ set(POPULATION_SRCS
   ${POPULATION_DIR}/PopulationMgr.cpp
   ${POPULATION_DIR}/PopulationBotAI.h
   ${POPULATION_DIR}/PopulationBotAI.cpp
+  ${POPULATION_DIR}/PopulationBotPlayers.cpp
   ${POPULATION_DIR}/PopulationIdentity.h
   ${POPULATION_DIR}/PopulationIdentity.cpp
   ${POPULATION_DIR}/ScenePoints.h

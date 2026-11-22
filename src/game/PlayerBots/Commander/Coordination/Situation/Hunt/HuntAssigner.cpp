@@ -77,6 +77,9 @@ namespace Commander
         {
             if (c.elite || c.boss || c.stealthed || c.tappedByOther || (c.creatureTypeMask & CRITTER_MASK))
                 return false;
+            // A player is about to fight it (nobody hit it yet): his.
+            if (!c.claimedBy.IsEmpty())
+                return false;
             if (!c.level || c.level > level + LEVEL_ABOVE || c.level + LEVEL_BELOW < level)
                 return false;
         }
@@ -107,6 +110,18 @@ namespace Commander
             h.idleSinceMs = 0;
             return;
         }
+
+        // On our way to it and a player claimed it first: left to him (a new choice below).
+        if (h.Active())
+            if (PackFacts const* pack = FindPackOf(world, h.target))
+                for (PackCreature const& c : pack->members)
+                    if (!c.claimedBy.IsEmpty())
+                    {
+                        h.yieldedTo = c.claimedBy;
+                        h.yieldedAtMs = world.refreshedAtMs ? world.refreshedAtMs : 1;
+                        h.target.Clear();
+                        break;
+                    }
 
         if (h.Active() && WorldTimer::getMSTimeDiff(h.sinceMs, world.refreshedAtMs) < KEEP_MS)
             if (PackFacts const* pack = FindPackOf(world, h.target))

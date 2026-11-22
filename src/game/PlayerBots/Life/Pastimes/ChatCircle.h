@@ -35,6 +35,11 @@ namespace Pastimes
         std::vector<ObjectGuid> present;         // per slot: who stands there now (empty: nobody yet / gone)
         int32 speaker = -1;                      // slot that has the word, -1: nobody yet
         uint32 turnEndMs = 0;
+        // One of them admires a passing player (Admire.h): the others look at him too until
+        // watchUntilMs, a gesture or two.
+        ObjectGuid watched;
+        int32 watcher = -1;
+        uint32 watchUntilMs = 0;
     };
 
     struct ChatSeat
@@ -42,7 +47,8 @@ namespace Pastimes
         uint32 slot = 0;
         bool joined = false;
         uint32 nextBeatMs = 0;
-        int32 facing = -2;          // slot it looks at (-1: the middle), -2: not set yet
+        int32 facing = -2;          // slot it looks at (-1: the middle), -2: not set yet, -3: the watched player
+        uint32 watchReactAtMs = 0;  // != 0: its gesture at the watched player then
     };
 
     namespace ChatCircles
@@ -58,6 +64,11 @@ namespace Pastimes
         bool Update(Player* me, ChatCircle& circle, ChatSeat& seat, uint32 now);
         // Gone from the circle (the talk is over, it leaves the town, a review).
         void Leave(Player* me, ChatCircle& circle, ChatSeat& seat);
+        // The member at `seat` admires `player` until `untilMs` (it does that itself): the
+        // others turn to him too.
+        void Watch(ChatCircle& circle, ChatSeat const& seat, ObjectGuid player, uint32 untilMs);
+        // Back to the talk (the watcher's admiring is over, or it was stopped).
+        void FaceTalkAgain(ChatSeat& seat);
     }
 }
 }

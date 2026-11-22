@@ -17,7 +17,9 @@
 #include "Life/Errands/Prowl.h"
 #include "Life/Errands/Trip/RoadWalk.h"
 #include "Population/TownLife.h"
+#include "Life/Pastimes/EmoteReply.h"
 #include "Timer.h"
+#include <deque>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -37,6 +39,8 @@ namespace Population
         void OnPlayerLogin() override;
         void UpdateAI(uint32 const diff) override;
         void OnPacketReceived(WorldPacket const* packet) override;
+        // A real player's /wave, /rude ... at him (Life/Pastimes/EmoteReply.h).
+        void ReceiveEmote(Player* from, uint32 textEmote) override;
 
         // No player leads it.
         Player* GetPartyLeader() const override { return nullptr; }
@@ -239,6 +243,58 @@ namespace Population
         uint32 m_heraldDeadlineMs = 0;
         void UpdateHerald();
         void HeraldLeave();
+
+        // == Real players around him (Population/PopulationBotPlayers.cpp; user 2026-11-22) ==
+        // Answers to emotes at him. True: it dances along (keep still). `canStand`: it may.
+        bool UpdateEmoteReply(bool canStand);
+        // Field bots and travellers, out of combat. A dead player of its faction within
+        // RAISE_SEE_YD: a bot with a resurrection walks over and raises him (one bot per death:
+        // a claim shared by all), the others mourn him once. True: walking there or casting.
+        bool UpdateRaiseStranger();
+        // A passing real player of its faction without its buff (Arcane Intellect, Fortitude,
+        // Mark of the Wild, a blessing): it gives it (once per player per BUFFED_AGAIN_MS; the
+        // next bot's buff for him waits BUFF_GAP_MS). True: casting.
+        bool UpdatePassingBuff();
+        // The hunt or the prowl left a creature to a player who was about to fight it: a nod,
+        // a bow, or "after you" (once per YIELD_REACT_GAP_MS).
+        void UpdateYield();
+        // In a fight on a creature it hit first, a player hit it too (he gets nothing): it
+        // says sorry after the fight.
+        void WatchSharedPrey();
+        void ApologizeForPrey();
+
+        static constexpr float RAISE_SEE_YD = 35.0f;
+        static constexpr float RAISE_CAST_YD = 25.0f;
+        static constexpr float MOURN_YD = 20.0f;
+        static constexpr uint32 MOURN_PCT = 50;
+        static constexpr uint32 RAISE_GIVE_UP_MS = 30 * IN_MILLISECONDS;
+        static constexpr uint32 RAISE_CHECK_MS = 2000;
+        static constexpr uint32 RAISE_SAY_PCT = 50;
+        static constexpr float BUFF_YD = 25.0f;
+        static constexpr uint32 BUFF_CHECK_MS = 3000;
+        static constexpr uint32 BUFFED_AGAIN_MS = 20 * MINUTE * IN_MILLISECONDS;
+        static constexpr uint32 BUFF_GAP_MS = 45 * IN_MILLISECONDS;
+        static constexpr uint32 BUFF_MIN_MANA_PCT = 50;
+        static constexpr uint32 BUFF_SAY_PCT = 20;
+        static constexpr uint32 YIELD_REACT_GAP_MS = 60 * IN_MILLISECONDS;
+        static constexpr uint32 YIELD_SAY_PCT = 35;
+        static constexpr float REACT_YD = 40.0f;
+        static constexpr uint32 APOLOGY_GAP_MS = 3 * MINUTE * IN_MILLISECONDS;
+        static constexpr uint32 APOLOGY_EMOTE_PCT = 60;
+
+        Life::Pastimes::EmoteReplyState m_emoteReply;
+        bool m_emoteReplyInit = false;
+        ObjectGuid m_raising;               // walking to raise him
+        uint32 m_raiseDeadlineMs = 0;
+        uint32 m_nextRaiseCheckMs = 0;
+        std::deque<std::pair<ObjectGuid, uint32>> m_mourned;    // dead players it mourned, when
+        uint32 m_nextBuffCheckMs = 0;
+        std::deque<std::pair<ObjectGuid, uint32>> m_buffed;     // players it buffed, when
+        uint32 m_huntYieldSeenMs = 0;       // HuntPlan::yieldedAtMs reacted to
+        uint32 m_prowlYieldSeenMs = 0;      // ProwlState::yieldedAtMs reacted to
+        uint32 m_nextYieldReactMs = 0;
+        ObjectGuid m_sharedPreyWith;        // a player who hit the creature it tapped
+        uint32 m_nextApologyMs = 0;
     };
 }
 

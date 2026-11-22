@@ -19,6 +19,9 @@ namespace ChatCircles
         // Listeners: a reaction now and then.
         uint32 const REACT_MIN_MS = 4000, REACT_MAX_MS = 9000;
         uint32 const REACT_PCT = 30;
+        // Watching a player one of them admires: a gesture (pointing him out, surprise).
+        uint32 const WATCH_REACT_PCT = 60;
+        uint32 const WATCH_REACT_MIN_MS = 600, WATCH_REACT_MAX_MS = 2000;
 
         bool Present(ChatCircle const& c, int32 slot)
         {
@@ -98,6 +101,35 @@ namespace ChatCircles
         if (now >= circle.untilMs)
             return false;
 
+        // Someone of them admires a passing player: the others look at him too.
+        if (!circle.watched.IsEmpty())
+        {
+            Player* watched = now < circle.watchUntilMs ? me->GetMap()->GetPlayer(circle.watched) : nullptr;
+            if (!watched)
+            {
+                circle.watched.Clear();
+                circle.watcher = -1;
+                circle.watchUntilMs = 0;
+            }
+            else if (circle.watcher != int32(seat.slot))
+            {
+                if (seat.facing != -3)
+                {
+                    seat.facing = -3;
+                    me->SetFacingToObject(watched);
+                    seat.watchReactAtMs = urand(0, 99) < WATCH_REACT_PCT ? now + urand(WATCH_REACT_MIN_MS, WATCH_REACT_MAX_MS) : 0;
+                }
+                if (seat.watchReactAtMs && now >= seat.watchReactAtMs)
+                {
+                    seat.watchReactAtMs = 0;
+                    me->HandleEmoteCommand(urand(0, 1) ? EMOTE_ONESHOT_POINT : EMOTE_ONESHOT_EXCLAMATION);
+                }
+                return true;
+            }
+        }
+        if (seat.facing == -3)
+            FaceTalkAgain(seat);
+
         // The word goes round (whoever notices first: they all run on one thread).
         if (!Present(circle, circle.speaker) || now >= circle.turnEndMs)
         {
@@ -139,6 +171,26 @@ namespace ChatCircles
             circle.present[seat.slot].Clear();
         if (circle.speaker == int32(seat.slot))
             circle.speaker = -1;
+        if (circle.watcher == int32(seat.slot))
+        {
+            circle.watched.Clear();
+            circle.watcher = -1;
+            circle.watchUntilMs = 0;
+        }
+    }
+
+    void Watch(ChatCircle& circle, ChatSeat const& seat, ObjectGuid player, uint32 untilMs)
+    {
+        circle.watched = player;
+        circle.watcher = int32(seat.slot);
+        circle.watchUntilMs = untilMs;
+    }
+
+    void FaceTalkAgain(ChatSeat& seat)
+    {
+        // (Face() turns it to the speaker or the middle on the next update)
+        seat.facing = -2;
+        seat.watchReactAtMs = 0;
     }
 }
 }
