@@ -1,6 +1,7 @@
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationBotAI.h"
 #include "Population/HiddenSpot.h"
+#include "Population/LocalRaces.h"
 #include "Companions/CompanionMgr.h"
 #include "PlayerBotMgr.h"
 #include <cmath>
@@ -386,6 +387,9 @@ namespace Population
     {
         SpawnRequest r = request;
 
+        // Mostly locals: humans in Elwynn and Stormwind, fewer the higher the levels (LocalRaces.h).
+        if (uint32 const local = LocalRaces::Roll(r))
+            r.raceMask = local;
         if (!r.race && r.raceMask)
         {
             std::vector<uint8> races;
@@ -517,7 +521,6 @@ namespace Population
     {
         RosterQuery query;
         query.team = request.team == HORDE ? HORDE : ALLIANCE;
-        query.zone = request.cityZone;
         query.preferHigh = request.role == CityRole::Showcase;
         // (the first companion is of the player's race, of the class he lacks)
         if (request.kind == BotKind::Herald)

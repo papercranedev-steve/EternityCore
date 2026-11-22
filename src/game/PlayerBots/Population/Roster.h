@@ -70,11 +70,10 @@ namespace Population
     struct RosterQuery
     {
         uint32 team = 0;
-        uint32 zone = 0;            // members from this city are preferred
         uint8 minLevel = 1, maxLevel = 60;
         bool preferHigh = false;    // one of the highest levels (city veterans)
         uint8 race = 0, classId = 0;    // only this race / class (0 = any): the first companion
-        uint32 raceMask = 0;            // only these races (0 = any): start areas
+        uint32 raceMask = 0;            // only these races (0 = any): start areas, locals (LocalRaces)
     };
 
     struct RosterPick

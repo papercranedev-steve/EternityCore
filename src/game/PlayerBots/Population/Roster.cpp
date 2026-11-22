@@ -23,7 +23,6 @@ namespace Population
     namespace
     {
         uint32 const UPDATE_EVERY_MS = 5 * IN_MILLISECONDS;
-        uint32 const HOME_CITY_WEIGHT = 6;
 
         uint32 ClampPct(int32 value)
         {
@@ -630,23 +629,8 @@ namespace Population
             chosen = pool[urand(0, std::min<uint32>(uint32(pool.size()), 5) - 1)];
         }
         else
-        {
-            // Mostly locals: Stormwind is mostly humans living there.
-            uint32 total = 0;
-            for (Candidate const& c : pool)
-                total += c.member->homeZone == query.zone ? HOME_CITY_WEIGHT : 1;
-            uint32 roll = urand(1, total);
-            for (Candidate const& c : pool)
-            {
-                uint32 const weight = c.member->homeZone == query.zone ? HOME_CITY_WEIGHT : 1;
-                if (roll <= weight)
-                {
-                    chosen = c;
-                    break;
-                }
-                roll -= weight;
-            }
-        }
+            // Who is local here is the asked race mask (LocalRaces), not the member's home city.
+            chosen = pool[urand(0, uint32(pool.size()) - 1)];
 
         RosterMember& m = *chosen.member;
         m.inUse = true;

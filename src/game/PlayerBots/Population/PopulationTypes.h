@@ -142,7 +142,8 @@ namespace Population
         uint8 minLevel = 0, maxLevel = 0;
         uint32 unitId = 0;
         // Only these races (race mask, 0 = any): a race's start area has only that race
-        // (user 2026-11-21, Settlements::StartRacesAt).
+        // (user 2026-11-21, Settlements::StartRacesAt). Elsewhere PopulationMgr::SpawnNow rolls
+        // locals or newcomers into it (LocalRaces.h).
         uint32 raceMask = 0;
 
         // City bots
