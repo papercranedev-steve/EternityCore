@@ -1085,5 +1085,12 @@
   "questoffer.ask.many": "{leader}，{quests}你现在接不了，{names}可以接，要我们接上吗？",
   "questoffer.ask.done.many": "{leader}，{quests}你已经做过了，{names}还没做，要我们接上吗？",
   "questoffer.opt.yes": "接吧",
-  "questoffer.opt.no": "不用了"
+  "questoffer.opt.no": "不用了",
+  "//45": "At the player's giver, a quest he has or handed in that the bot cannot take yet (PartyBotAI::TellBlockedQuests). {quests}: questoffer.title pieces joined by place.comma; {level}: the level it needs.",
+  "voice.quest.blocked.level": {
+    "default": ["{quests}我还接不了，得{level}级才行。", "我等级不够，{quests}要{level}级，等我升上去再来接。"],
+    "quiet": "{quests}要{level}级，我还不够。"
+  },
+  "voice.quest.blocked.logfull": "我的任务日志满了，接不了{quests}。",
+  "voice.quest.blocked.bagsfull": "我包满了，{quests}给的东西放不下，接不了。"
 }

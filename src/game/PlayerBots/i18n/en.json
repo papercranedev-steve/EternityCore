@@ -1038,5 +1038,11 @@
   "questoffer.ask.many": "{leader}, you can't take {quests} yet, but {names} can. Shall we pick it up?",
   "questoffer.ask.done.many": "{leader}, you've already done {quests}, but {names} haven't. Shall we pick it up?",
   "questoffer.opt.yes": "Take it",
-  "questoffer.opt.no": "No need"
+  "questoffer.opt.no": "No need",
+  "voice.quest.blocked.level": {
+    "default": ["I can't take {quests} yet. Need to be level {level}.", "Too low for {quests}, it needs level {level}. I'll come back once I level up."],
+    "quiet": "{quests} needs level {level}. Not there yet."
+  },
+  "voice.quest.blocked.logfull": "My quest log is full, so I can't take {quests}.",
+  "voice.quest.blocked.bagsfull": "My bags are full. No room for what {quests} hands out, so I can't take it."
 }
