@@ -298,6 +298,7 @@ class ChatHandler
         bool HandlePartyBotBagsCommand(char * args);
         bool HandlePartyBotEquipSlotCommand(char * args);
         bool HandlePartyBotUnequipSlotCommand(char * args);
+        bool HandlePartyBotMoveSlotCommand(char * args);
         bool HandlePartyBotUseSlotCommand(char * args);
         bool HandlePartyBotGiveSlotCommand(char * args);
         bool HandlePartyBotTakeSlotCommand(char * args);

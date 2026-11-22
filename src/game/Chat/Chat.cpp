@@ -115,6 +115,7 @@ ChatCommand * ChatHandler::getCommandTable()
         { "bags",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotBagsCommand,        "", nullptr },
         { "equipslot",  SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotEquipSlotCommand,   "", nullptr },
         { "unequipslot",SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotUnequipSlotCommand, "", nullptr },
+        { "moveslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotMoveSlotCommand,    "", nullptr },
         { "useslot",    SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotUseSlotCommand,     "", nullptr },
         { "giveslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotGiveSlotCommand,    "", nullptr },
         { "takeslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTakeSlotCommand,    "", nullptr },

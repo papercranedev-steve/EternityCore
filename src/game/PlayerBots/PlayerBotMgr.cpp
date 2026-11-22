@@ -2351,6 +2351,98 @@ static bool ResolvePartyBotItemPos(uint32 bagIndex, uint32 slotIndex, uint8& bag
     return false;
 }
 
+static bool IsPartyBotEquipmentPos(uint8 bag, uint8 slot)
+{
+    return bag == INVENTORY_SLOT_BAG_0 && slot < EQUIPMENT_SLOT_END;
+}
+
+// .partybot moveslot <name> <src bag 0-5> <src slot> <dst bag 0-5> <dst slot>
+// The addon's drag and drop inside the bot's own inventory: the bot does what the client does when
+// you drag an item (CMSG_SWAP_ITEM): equip into that slot, unequip into that bag slot, swap, merge stacks.
+bool ChatHandler::HandlePartyBotMoveSlotCommand(char* args)
+{
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
+        return false;
+
+    uint32 srcBagIndex = 0, srcSlotIndex = 0, dstBagIndex = 0, dstSlotIndex = 0;
+    uint8 srcBag = 0, srcSlot = 0, dstBag = 0, dstSlot = 0;
+    if (!ExtractUInt32(&args, srcBagIndex) || !ExtractUInt32(&args, srcSlotIndex) ||
+        !ExtractUInt32(&args, dstBagIndex) || !ExtractUInt32(&args, dstSlotIndex) ||
+        !ResolvePartyBotItemPos(srcBagIndex, srcSlotIndex, srcBag, srcSlot) ||
+        !ResolvePartyBotItemPos(dstBagIndex, dstSlotIndex, dstBag, dstSlot))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot moveslot <name> <bag 0-5> <slot> <bag 0-5> <slot>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Item* pSrc = pBot->GetItemByPos(srcBag, srcSlot);
+    if (!pSrc)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint16 const srcPos = (uint16(srcBag) << 8) | srcSlot;
+    uint16 const dstPos = (uint16(dstBag) << 8) | dstSlot;
+    if (srcPos == dstPos)
+        return true;
+
+    if (pSrc->IsInTrade())
+    {
+        PSendSysMessage("PBERR;%s;other", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // The same checks SwapItem makes, done first so the addon gets the reason
+    // (SwapItem only tells the bot's own client, which does not exist).
+    Item* pDst = pBot->GetItemByPos(dstBag, dstSlot);
+    InventoryResult msg = EQUIP_ERR_OK;
+    uint16 dest = 0;
+    if (IsPartyBotEquipmentPos(dstBag, dstSlot))
+        msg = pBot->CanEquipItem(dstSlot, dest, pSrc, pDst != nullptr);
+    if (msg == EQUIP_ERR_OK && IsPartyBotEquipmentPos(srcBag, srcSlot))
+    {
+        msg = pBot->CanUnequipItem(srcPos, pDst != nullptr);
+        if (msg == EQUIP_ERR_OK && pDst)
+            msg = pBot->CanEquipItem(srcSlot, dest, pDst, true);
+    }
+    if (msg != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;%s;%u", name.c_str(), PartyBotInventoryErrorCode(msg), uint32(msg));
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    ObjectGuid const srcGuid = pSrc->GetObjectGuid();
+    uint32 const itemId = pSrc->GetEntry();
+    uint32 const srcCount = pSrc->GetCount();
+
+    WorldPackets::Item::SwapItem packet;
+    packet.srcbag = srcBag;
+    packet.srcslot = srcSlot;
+    packet.dstbag = dstBag;
+    packet.dstslot = dstSlot;
+    pBot->GetSession()->HandleSwapItem(packet);
+
+    // moved, or merged into the stack there (then it may be gone)
+    Item* pAfter = pBot->GetItemByGuid(srcGuid);
+    if (pAfter && pAfter->GetPos() == srcPos && pAfter->GetCount() == srcCount)
+    {
+        PSendSysMessage("PBERR;%s;other", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    pBot->SaveInventoryAndGoldToDB();
+    PSendSysMessage("PBOK;%s;move;%u", name.c_str(), itemId);
+    return true;
+}
+
 // .partybot useslot <name> <bag 0-4> <slot>   bot uses the item on itself (potion, food, scroll...)
 bool ChatHandler::HandlePartyBotUseSlotCommand(char* args)
 {
