@@ -14,6 +14,7 @@
 #include "TeamBotAI.h"
 #include "Population/PopulationTypes.h"
 #include "Life/Errands/LootRun.h"
+#include "Life/Errands/Prowl.h"
 #include "Life/Errands/Trip/RoadWalk.h"
 #include "Population/TownLife.h"
 #include "Timer.h"
@@ -96,6 +97,11 @@ namespace Population
         static constexpr uint32 FIELD_FIGHTS_MAX = 15;
         // Nothing to hunt for this long: moves on.
         static constexpr uint32 FIELD_IDLE_LEAVE_MS = 60 * 1000;
+        // Nothing to hunt for this long: goes looking (Life/Errands/Prowl.h), around its spawn
+        // spot within FIELD_WANDER_YD (a quest's area when acting one out).
+        static constexpr uint32 PROWL_AFTER_MS = 4 * IN_MILLISECONDS;
+        static constexpr float FIELD_WANDER_YD = 40.0f;
+        static constexpr float QUEST_WANDER_MIN_YD = 20.0f;
         // Travellers on foot who run (the others walk).
         static constexpr uint32 TRAVELLER_RUN_PCT = 90;
         // Mount casts failing in a row (indoors, ...) before it goes on foot.
@@ -104,10 +110,8 @@ namespace Population
         // is within PARTY_KEEP_YD (farther: the follower goes on along the road alone).
         static constexpr float PAIR_FOLLOW_YD = 2.0f;
         static constexpr float PARTY_KEEP_YD = 60.0f;
-        // Acting out a quest: hunting this long at most, back to the area's middle after this
-        // long without a fight, by the giver this long.
+        // Acting out a quest: hunting this long at most, by the giver this long.
         static constexpr uint32 HUNT_GIVE_UP_MS = 12 * 60 * IN_MILLISECONDS;
-        static constexpr uint32 HUNT_IDLE_WALK_MS = 40 * IN_MILLISECONDS;
         static constexpr uint32 AT_GIVER_MIN_MS = 8 * IN_MILLISECONDS;
         static constexpr uint32 AT_GIVER_MAX_MS = 20 * IN_MILLISECONDS;
 
@@ -125,6 +129,10 @@ namespace Population
         void CountQuestKills(bool inCombat);
         void AdvanceQuest();
         void UpdateQuestWalk();
+        // The Commander's hunt has found nothing for PROWL_AFTER_MS: it goes looking (true: it
+        // walks this tick). HuntIdle: nothing found that long.
+        bool HuntIdle() const;
+        bool UpdateProwl();
         // From where it stands along the quest's way from `from` (yards from the giver), to the
         // area or back to the giver.
         std::vector<Commander::Roads::RoadPoint> QuestLine(bool towardsArea, float from) const;
@@ -163,6 +171,7 @@ namespace Population
         // Field
         ObjectGuid m_teamGuid;          // joined Commander::Team unit with this guid
         Life::LootRunState m_lootRun;
+        Life::ProwlState m_prowl;
         bool m_wasInCombat = false;
         uint32 m_fights = 0;
         uint32 m_fightsToLeave = 0;
@@ -177,7 +186,6 @@ namespace Population
         QuestStep m_questStep = QuestStep::None;
         uint32 m_questStepSinceMs = 0;
         uint32 m_questKills = 0;
-        uint32 m_questIdleSinceMs = 0;      // Hunt: no fight since
         uint32 m_questDoneAtMs = 0;         // AtGiver: handed in at
         std::vector<ObjectGuid> m_preyFought;
 
@@ -185,6 +193,7 @@ namespace Population
         enum class Phase : uint8 { Entering, Living, Leaving, Gone };
         Phase m_phase = Phase::Living;
         uint32 m_walkRetries = 0;
+        static constexpr uint32 LEAVE_WALK_RETRIES = 4;
         // m_initialized comes from CombatBotBaseAI.
 
         // Movement target of the current MovePoint (walking in or out).

@@ -5,6 +5,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Team.h"
+#include "Commander/Coordination/Situation/Hunt/HuntAssigner.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/Inventory.h"
 #include "Shared/Mounts.h"
@@ -363,9 +364,11 @@ namespace Population
         if (quester && !inCombat)
             AdvanceQuest();
 
-        // A traveller at the road's end in someone's sight: on into the town, out of sight.
-        if (traveller && !inCombat && m_handle->leave && m_phase != Phase::Gone)
+        // Done (a traveller at the road's end, a field bot moving on) in someone's sight: out of
+        // sight first (the manager picked the spot: PopulationMgr::RetireTravellers / RetireFieldBots).
+        if (!inCombat && m_handle->leave && m_phase != Phase::Gone)
         {
+            Life::Prowl::Stop(me, m_prowl, false);
             if (m_phase != Phase::Leaving)
                 BeginLeaving();
             else
@@ -402,7 +405,12 @@ namespace Population
         if (!inCombat && !resting && !me->GetVictim() && Life::LootRun::Update(me, m_lootRun, nullptr))
             return;
         if (inCombat)
+        {
             Life::LootRun::Stop(me, m_lootRun);
+            Life::Prowl::Stop(me, m_prowl, false);
+        }
+        else if (!HuntIdle())
+            Life::Prowl::Stop(me, m_prowl, false);     // the hunt found a fight: the Commander walks it there
 
         // The Commander picks the next fight (HuntAssigner; not for a traveller) and fights it.
         if (RunCommanderHook(commanderOutOfCombat, needsRest, resting))
@@ -414,6 +422,8 @@ namespace Population
             UpdateRoad();
             return;
         }
+        if (!inCombat && !resting && !me->GetVictim() && UpdateProwl())
+            return;
         if (quester && !inCombat && !resting && !me->GetVictim())
         {
             UpdateQuestWalk();
@@ -473,7 +483,6 @@ namespace Population
                 Life::Trip::RoadWalk::Begin(m_road, QuestLine(false, from), true, now);
                 break;
             case QuestStep::Hunt:
-                m_questIdleSinceMs = 0;
                 break;
             case QuestStep::AtGiver:
             {
@@ -494,7 +503,6 @@ namespace Population
         {
             // Its quest's creatures it fights now (counted once the fight is over and they are dead).
             Unit* victim = me->GetVictim();
-            m_questIdleSinceMs = 0;
             if (victim && victim->GetTypeId() == TYPEID_UNIT && victim->GetEntry() == m_request.quest.preyEntry &&
                 std::find(m_preyFought.begin(), m_preyFought.end(), victim->GetObjectGuid()) == m_preyFought.end())
                 m_preyFought.push_back(victim->GetObjectGuid());
@@ -546,24 +554,55 @@ namespace Population
                 }
                 return;
             }
-            case QuestStep::Hunt:
-            {
-                // Nothing to hunt here (HuntAssigner found no fight): back to the middle of the
-                // area, once in a while.
-                if (!m_questIdleSinceMs)
-                    m_questIdleSinceMs = now;
-                if (WorldTimer::getMSTimeDiff(m_questIdleSinceMs, now) < HUNT_IDLE_WALK_MS || me->IsMoving())
-                    return;
-                m_questIdleSinceMs = now;
-                QuestPlan const& q = m_request.quest;
-                if (me->GetDistance2d(q.areaX, q.areaY, SizeFactor::None) > q.areaRadius * 0.5f + 10.0f)
-                    me->GetMotionMaster()->MovePoint(0, q.areaX, q.areaY, q.areaZ, MOVE_PATHFINDING | MOVE_RUN_MODE | MOVE_EXCLUDE_STEEP_SLOPES);
-                return;
-            }
+            case QuestStep::Hunt:       // nothing to hunt: UpdateProwl walks it about the area
             case QuestStep::AtGiver:
             case QuestStep::None:
                 return;
         }
+    }
+
+    bool PopulationBotAI::HuntIdle() const
+    {
+        std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+        if (!commander)
+            return false;
+        Commander::HuntPlan const& hunt = commander->GetPlan().hunt;
+        return !hunt.Active() && hunt.idleSinceMs &&
+               WorldTimer::getMSTimeDiff(hunt.idleSinceMs, WorldTimer::getMSTime()) >= PROWL_AFTER_MS;
+    }
+
+    bool PopulationBotAI::UpdateProwl()
+    {
+        // Field bots hunting (on their own, or a quest's creatures); not on a walk of the quest.
+        if (m_request.kind != BotKind::Field || (m_questStep != QuestStep::None && m_questStep != QuestStep::Hunt) ||
+            !HuntIdle())
+        {
+            Life::Prowl::Stop(me, m_prowl, false);
+            return false;
+        }
+
+        uint32 const level = me->GetLevel();
+        Life::ProwlRules rules;
+        rules.minLevel = level > Commander::HuntAssigner::LEVEL_BELOW ? level - Commander::HuntAssigner::LEVEL_BELOW : 1;
+        rules.maxLevel = level + Commander::HuntAssigner::LEVEL_ABOVE;
+        rules.nearYd = Commander::HuntAssigner::MAX_APPROACH_YD;
+        if (m_questStep == QuestStep::Hunt)
+        {
+            QuestPlan const& q = m_request.quest;
+            rules.preyEntry = q.preyEntry;
+            rules.areaX = q.areaX;
+            rules.areaY = q.areaY;
+            rules.areaZ = q.areaZ;
+            rules.areaRadius = std::max(q.areaRadius, QUEST_WANDER_MIN_YD);
+        }
+        else
+        {
+            rules.areaX = m_homeX;
+            rules.areaY = m_homeY;
+            rules.areaZ = m_homeZ;
+            rules.areaRadius = FIELD_WANDER_YD;
+        }
+        return Life::Prowl::Update(me, m_prowl, rules);
     }
 
     void PopulationBotAI::SetupProfession()
@@ -825,6 +864,13 @@ namespace Population
     {
         if (!ReachedTarget() && WorldTimer::getMSTime() < m_moveDeadlineMs)
             return;
+        // Not there (a fight on the way ended the walk, pushed off): on again, a few times.
+        if (me->GetDistance2d(m_handle->leaveX, m_handle->leaveY, SizeFactor::None) > 3.0f &&
+            m_walkRetries++ < LEAVE_WALK_RETRIES && WorldTimer::getMSTime() < m_moveDeadlineMs)
+        {
+            MoveTo(m_handle->leaveX, m_handle->leaveY, m_handle->leaveZ);
+            return;
+        }
         // There, or no way there: log out (the manager also forces it after a while).
         LogOut();
     }

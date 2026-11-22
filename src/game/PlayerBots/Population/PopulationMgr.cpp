@@ -499,6 +499,9 @@ namespace Population
     {
         if (request.kind == BotKind::Town)
             return m_town.PickHiddenSpot(request.settlementId, x, y, z, m_observers, out);
+        // Out in the field: open ground around it.
+        if (request.kind == BotKind::Field)
+            return Population::PickHiddenSpot(sMapMgr.FindMap(request.mapId, 0), std::vector<Waypoint>(), x, y, z, m_observers, out);
         if (request.kind == BotKind::Traveller)
         {
             // The town or capital at the road's end it walked to.
@@ -786,10 +789,26 @@ namespace Population
             }
             if (needed && !expired && !r.handle->done)
                 continue;
-            // Logs out only where nobody sees it (else it goes on until it is out of sight).
-            if (observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+            // Logs out only where nobody sees it.
+            if (!observers.CanSee(me->GetMapId(), me->GetPositionX(), me->GetPositionY(), me->GetPositionZ()))
+            {
+                RequestRemoval(r);
                 continue;
-            RequestRemoval(r);
+            }
+            // In sight: it walks somewhere nobody looks first, out of a fight (PopulationBotAI::
+            // UpdateField). Without one it goes on hunting until it is out of sight: it stood
+            // where its last fight ended while the player watched (Shathas, 2026-11-22).
+            if (me->IsInCombat() || r.handle->leave)
+                continue;
+            Waypoint spot;
+            if (!PickHiddenSpot(r.request, me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), spot))
+                continue;
+            r.removing = true;      // a replacement may come in already
+            r.leaveByMs = m_nowMs + LEAVE_TIMEOUT_MS;
+            r.handle->leaveX = spot.x;
+            r.handle->leaveY = spot.y;
+            r.handle->leaveZ = spot.z;
+            r.handle->leave = true;
         }
     }
 

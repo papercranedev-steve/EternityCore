@@ -18,6 +18,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/AskProvisions.cpp
   ${LIFE_DIR}/Errands/LootRun.h
   ${LIFE_DIR}/Errands/LootRun.cpp
+  ${LIFE_DIR}/Errands/Prowl.h
+  ${LIFE_DIR}/Errands/Prowl.cpp
   ${LIFE_DIR}/Errands/GatherRun.h
   ${LIFE_DIR}/Errands/GatherRun.cpp
   ${LIFE_DIR}/Errands/QuestObjectRun.h
