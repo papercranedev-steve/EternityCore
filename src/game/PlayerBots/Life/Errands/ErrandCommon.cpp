@@ -66,6 +66,17 @@ namespace Errands
             done.pop_front();
     }
 
+    bool CloseEnoughToUse(Player const* me, WorldObject const* target, float nearYd, bool walked)
+    {
+        float constexpr SLACK_YD = 1.0f;
+        float const dx = me->GetPositionX() - target->GetPositionX();
+        float const dy = me->GetPositionY() - target->GetPositionY();
+        float const closeYd = nearYd + SLACK_YD;
+        if (dx * dx + dy * dy <= closeYd * closeYd)
+            return true;
+        return walked && me->IsStopped();
+    }
+
     void StopWalk(Player* me)
     {
         if (!me->IsStopped())

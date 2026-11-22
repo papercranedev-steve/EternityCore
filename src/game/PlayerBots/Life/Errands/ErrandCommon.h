@@ -11,6 +11,7 @@
 #include <deque>
 
 class Player;
+class WorldObject;
 
 namespace Life
 {
@@ -42,6 +43,13 @@ namespace Life
         // bot stood is not unreachable for good.
         bool IsDone(DoneList const& done, ObjectGuid guid, uint32 forgetAfterMs = 0);
         void MarkDone(DoneList& done, ObjectGuid guid, size_t keep);
+
+        // The bot, already in reach of `target` (an object, a corpse), is close enough to use it
+        // as a player would: a player walks up to what he clicks, reach alone would leave the bot
+        // at its edge (5 yd past an object's model). Within `nearYd` of its centre (2D, plus a
+        // little slack), or `walked` (the errand sent it towards the spot) and it stopped: the
+        // spot is blocked (a wall, a slope), this is as close as it gets.
+        bool CloseEnoughToUse(Player const* me, WorldObject const* target, float nearYd, bool walked);
 
         // Ends a walk the errand started (idle; the bot's follow starts again next tick).
         void StopWalk(Player* me);

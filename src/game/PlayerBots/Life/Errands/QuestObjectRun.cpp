@@ -168,7 +168,8 @@ namespace QuestObjectRun
             state.nextMoveMs = 0;
         }
 
-        if (go->IsAtInteractDistance(me))
+        // Walks up to it like a player, not just into reach (nextMoveMs: it was sent towards it).
+        if (go->IsAtInteractDistance(me) && Errands::CloseEnoughToUse(me, go, APPROACH_YD, state.nextMoveMs != 0))
         {
             if (!me->IsStopped())
                 me->StopMoving();

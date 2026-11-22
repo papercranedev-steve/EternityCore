@@ -84,6 +84,12 @@ namespace GatherRun
             float m_range;
         };
 
+        // How far from the target's centre the bot stands to gather it.
+        float ApproachYd(WorldObject const* target)
+        {
+            return target->ToGameObject() ? APPROACH_YD : SKIN_REACH_YD * 0.5f;
+        }
+
         void ApproachPoint(Player const* me, WorldObject const* target, float reach, float& x, float& y, float& z)
         {
             float const angle = target->GetAngle(me);
@@ -131,7 +137,7 @@ namespace GatherRun
             for (WorldObject* t : targets)
             {
                 float x, y, z;
-                ApproachPoint(me, t, t->ToGameObject() ? APPROACH_YD : SKIN_REACH_YD * 0.5f, x, y, z);
+                ApproachPoint(me, t, ApproachYd(t), x, y, z);
                 if (InReach(me, t) || Errands::WalkIsSafe(me, x, y, z, MAX_PATH_DETOUR))
                     return t;
                 Errands::MarkDone(state.done, t->GetObjectGuid(), DONE_KEEP);
@@ -235,7 +241,8 @@ namespace GatherRun
             state.nextMoveMs = 0;
         }
 
-        if (InReach(me, target))
+        // Walks up to it like a player, not just into reach (nextMoveMs: it was sent towards it).
+        if (InReach(me, target) && Errands::CloseEnoughToUse(me, target, ApproachYd(target), state.nextMoveMs != 0))
         {
             if (!me->IsStopped())
                 me->StopMoving();
@@ -256,7 +263,7 @@ namespace GatherRun
         {
             state.nextMoveMs = now + REPATH_MS;
             float x, y, z;
-            ApproachPoint(me, target, target->ToGameObject() ? APPROACH_YD : SKIN_REACH_YD * 0.5f, x, y, z);
+            ApproachPoint(me, target, ApproachYd(target), x, y, z);
             me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE);
         }
         return true;
