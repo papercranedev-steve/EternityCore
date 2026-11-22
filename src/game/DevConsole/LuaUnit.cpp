@@ -184,6 +184,15 @@ namespace DevConsole
         return p->AI() ? dynamic_cast<PartyBotAI*>(p->AI()) : nullptr;
     }
 
+    // Any bot the Commander drives (party bot, population bot, ...): TeamBotAI.
+    TeamBotAI* GetTeamBotAI(Unit* u)
+    {
+        if (!u || !u->IsPlayer())
+            return nullptr;
+        Player* p = static_cast<Player*>(u);
+        return p->AI() ? dynamic_cast<TeamBotAI*>(p->AI()) : nullptr;
+    }
+
     char const* RoleName(CombatBotRoles role)
     {
         switch (role)
@@ -613,24 +622,35 @@ namespace DevConsole
     static int U_ai(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
-        PartyBotAI* ai = GetPartyBotAI(u);
-        if (!ai)
+        TeamBotAI* team = GetTeamBotAI(u);
+        if (!team)
         {
             lua_pushnil(L);
             return 1;
         }
         uint32 now = WorldTimer::getMSTime();
         lua_createtable(L, 0, 10);
-        SetFieldS(L, "role", RoleName(ai->GetRole()));
-        SetFieldB(L, "initialized", ai->m_initialized);
-        SetFieldB(L, "temporary", ai->m_race && ai->m_class);
-        SetFieldB(L, "preventCasting", ai->m_preventCasting);
-        SetFieldU(L, "leader", ai->GetPartyLeader());
+        SetFieldS(L, "role", RoleName(team->GetRole()));
+        SetFieldB(L, "initialized", team->m_initialized);
+        SetFieldB(L, "preventCasting", team->m_preventCasting);
+        SetFieldU(L, "leader", team->GetPartyLeader());
         lua_newtable(L);
-        for (size_t i = 0; i < ai->m_marksToFocus.size(); ++i) { lua_pushinteger(L, ai->m_marksToFocus[i]); lua_rawseti(L, -2, lua_Integer(i + 1)); }
+        for (size_t i = 0; i < team->m_marksToFocus.size(); ++i) { lua_pushinteger(L, team->m_marksToFocus[i]); lua_rawseti(L, -2, lua_Integer(i + 1)); }
         lua_setfield(L, -2, "focusMarks");
-        Commander::BotDirectives const& d = ai->Directives();
+        Commander::BotDirectives const& d = team->Directives();
         SetField(L, "movementHoldMs", d.GetMovementHoldRemaining(now));
+        SetField(L, "motion", u->GetMotionMaster()->GetCurrentMovementGeneratorType());
+        if (!d.GetLastDecision().empty())
+        {
+            SetFieldS(L, "lastDecision", d.GetLastDecision().c_str());
+            SetField(L, "lastDecisionAgoMs", WorldTimer::getMSTimeDiff(d.GetLastDecisionMs(), now));
+        }
+        // The rest is a party bot's (its leader's follower): not for population bots.
+        PartyBotAI* ai = GetPartyBotAI(u);
+        SetFieldB(L, "partybot", ai != nullptr);
+        if (!ai)
+            return 1;
+        SetFieldB(L, "temporary", ai->m_race && ai->m_class);
         // follow offset given to MoveFollow (FollowSpot) and whether its safety check is current
         lua_createtable(L, 0, 4);
         SetFieldN(L, "dist", Round2(ai->m_followOffset.dist));
@@ -672,11 +692,6 @@ namespace DevConsole
         }
         lua_setfield(L, -2, "events");
         lua_setfield(L, -2, "follow");
-        if (!d.GetLastDecision().empty())
-        {
-            SetFieldS(L, "lastDecision", d.GetLastDecision().c_str());
-            SetField(L, "lastDecisionAgoMs", WorldTimer::getMSTimeDiff(d.GetLastDecisionMs(), now));
-        }
         return 1;
     }
 
@@ -699,16 +714,16 @@ namespace DevConsole
         return "?";
     }
 
-    // u:decisions([sinceMs]): the Commander arbiter's decision log of a party bot (last
-    // BotDirectives::LOG_SIZE ticks with proposals, and an empty cands for the first tick
-    // without one), newer than sinceMs (server ms, now()).
+    // u:decisions([sinceMs]): the Commander arbiter's decision log of a bot it drives (party or
+    // population bot, TeamBotAI; last BotDirectives::LOG_SIZE ticks with proposals, and an
+    // empty cands for the first tick without one), newer than sinceMs (server ms, now()).
     // [{t, cands=[{src, what, tier, score, b, c, valued, reason, res}]}]; nil if not a bot.
     // Second value: true when records newer than sinceMs were already pushed out of the log
     // (the caller polled too slowly; the combat recorder writes a `gap` line).
     static int U_decisions(lua_State* L)
     {
         Unit* u = LuaUnit_Check(L, 1);
-        PartyBotAI* ai = GetPartyBotAI(u);
+        TeamBotAI* ai = GetTeamBotAI(u);
         if (!ai)
         {
             lua_pushnil(L);
