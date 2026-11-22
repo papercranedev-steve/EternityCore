@@ -24,10 +24,12 @@
 #include "Shared/QuestMirror.h"
 #include "Shared/ArtisanTrainers.h"
 #include "Shared/QuestPlaces.h"
+#include "Shared/QuestOverrides.h"
 #include "Shared/QuestRules.h"
 #include "Shared/ClassQuestChains.h"
 #include "Shared/I18n.h"
 #include "Shared/Phrases.h"
+#include "Shared/Gaze.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -162,6 +164,9 @@ void PlayerBotMgr::Load()
     // The bots' text and the accounts' languages, before anything says or builds text.
     BotShared::I18n::Load();
     BotShared::Phrases::Load();
+    // The addon's messages (Shared/AddonChannel): what is on the player's screen.
+    BotShared::Gaze::Load();
+    BotShared::QuestOverrides::Load();
     // Mirror quests of class quests (companions' quests in the player's log), before anyone logs in.
     static bool mirrorsBuilt = false;
     if (!mirrorsBuilt)

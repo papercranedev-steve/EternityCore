@@ -61,6 +61,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/PlayerClaims.cpp
   ${BOTSHARED_DIR}/Gaze.h
   ${BOTSHARED_DIR}/Gaze.cpp
+  ${BOTSHARED_DIR}/AddonChannel.h
+  ${BOTSHARED_DIR}/AddonChannel.cpp
   ${BOTSHARED_DIR}/ShowyGear.h
   ${BOTSHARED_DIR}/ShowyGear.cpp
   ${BOTSHARED_DIR}/NpcDirectory.h
@@ -87,6 +89,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/QuestEvents.cpp
   ${BOTSHARED_DIR}/QuestMirror.h
   ${BOTSHARED_DIR}/QuestMirror.cpp
+  ${BOTSHARED_DIR}/QuestOverrides.h
+  ${BOTSHARED_DIR}/QuestOverrides.cpp
   ${BOTSHARED_DIR}/QuestPlaces.h
   ${BOTSHARED_DIR}/QuestPlaces.cpp
   ${BOTSHARED_DIR}/QuestRules.h

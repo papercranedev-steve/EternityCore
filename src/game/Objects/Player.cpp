@@ -84,6 +84,7 @@
 #include "world/scourge_invasion.h"
 #include "world/world_event_wareffort.h"
 #include "PlayerBots/Shared/QuestEvents.h"
+#include "PlayerBots/Shared/QuestOverrides.h"
 
 #include <climits>
 
@@ -14117,6 +14118,9 @@ void Player::KilledMonsterCredit(uint32 entry, ObjectGuid guid)
             }
         }
     }
+
+    // party bots: quests whose credit they take from the player (custom_bot_quest.follow_credit)
+    BotShared::QuestOverrides::OnCredit(this);
 }
 
 void Player::CastedCreatureOrGO(uint32 entry, ObjectGuid guid, uint32 spellId, bool originalCaster)
@@ -14190,6 +14194,9 @@ void Player::CastedCreatureOrGO(uint32 entry, ObjectGuid guid, uint32 spellId, b
             break;
         }
     }
+
+    // party bots: quests whose credit they take from the player (custom_bot_quest.follow_credit)
+    BotShared::QuestOverrides::OnCredit(this);
 }
 
 void Player::TalkedToCreature(uint32 entry, ObjectGuid guid)
