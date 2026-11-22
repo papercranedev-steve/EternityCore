@@ -832,9 +832,16 @@ namespace Companions
             return;
         LeaveAltsParty(charGuid);
         ObjectGuid const leader(HIGHGUID_PLAYER, charGuid);
-        for (Return const& r : m_returns)
+        // Logged in again within the window (a quick relog): the companions that came with the
+        // last login left with him, they come back again (`sent` was that login's). A companion
+        // still leaving is skipped by UpdateReturns until it is gone.
+        for (Return& r : m_returns)
             if (r.leader == leader)
+            {
+                r.sinceMs = m_nowMs;
+                r.sent.clear();
                 return;
+            }
         Return r;
         r.leader = leader;
         r.sinceMs = m_nowMs;
