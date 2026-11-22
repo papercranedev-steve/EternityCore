@@ -291,6 +291,9 @@ namespace Population
             Player* recruiter = sObjectAccessor.FindPlayer(recruiterGuid);
             if (!bot || !recruiter)
                 continue;
+            // (StrangerTalk offers no join to the other faction: companions keep to their side)
+            if (!Companions::CompanionMgr::SameSide(recruiter, bot))
+                continue;
             // Someone the player parted with for good, or no room by his side (companion slots
             // doc): he says why and declines (a stranger is not kept then).
             if (m_roster.SaidFarewell(r.request.rosterId))

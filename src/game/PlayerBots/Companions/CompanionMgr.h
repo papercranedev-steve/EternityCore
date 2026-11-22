@@ -245,7 +245,7 @@ namespace Companions
         // home), joins his group and comes to him (summoned or on its own, PartyBotAI::
         // UpdateTravel). `role`: CombatBotRoles, ROLE_INVALID = its own. `ownerOnly`: only his
         // own companions. World thread. "" = on its way, else an error key: notcompanion,
-        // notyours, online, full, failed.
+        // notyours, enemy (the other faction, SameSide), online, full, failed.
         std::string CallOver(Player* leader, uint32 charGuid, uint8 role, bool ownerOnly);
         // A group invite by name to a character that is not online (WorldSession::
         // HandleGroupInviteOpcode): one of his own companions is called over (CallOver) and
@@ -261,6 +261,13 @@ namespace Companions
         // `charGuid` is another character of `owner`'s account (owner a real player). Any thread
         // (the name cache).
         static bool IsOfAccount(Player const* owner, uint32 charGuid);
+        // `charGuid` is of `leader`'s faction (race from the name cache, offline too). Companions and
+        // account characters only ever come to their own side, whatever AllowTwoSide.Interaction.
+        // Group says (that one is for real players); a game master in GM mode is let through.
+        // Unknown character: false. Any thread.
+        static bool SameSide(Player const* leader, uint32 charGuid);
+        // The same for a bot in the world (a population bot asked to join, not in the name cache).
+        static bool SameSide(Player const* leader, Player const* bot);
         // `owner` may do what a companion's owner does with him: his recruiter (a companion not in
         // an account), or any character of the account he is in (account characters). Any thread.
         bool MayManage(Player const* owner, uint32 charGuid) const;
@@ -281,8 +288,8 @@ namespace Companions
         // player's own one): pays its own way, never asks the player for money. Any thread.
         bool PaysOwnWay(uint32 charGuid) const { return IsInAccount(charGuid) || IsAccountBot(charGuid); }
 
-        // The other characters of `owner`'s account (not him), by kind (the companions panel). World
-        // thread.
+        // The other characters of `owner`'s account (not him) on his side (SameSide), by kind (the
+        // companions panel). World thread.
         enum class AccountKind : uint8
         {
             Companion = 1,      // joined at affinity 100 (has a companion record)
@@ -297,7 +304,7 @@ namespace Companions
 
         // At affinity MAX_AFFINITY a companion joins `owner`'s account (account doc §2): the
         // character moves to it, nothing else changes (online he stays in the party). "" = done,
-        // else an error key: notcompanion (also a trial partner), notyours, inaccount, locked
+        // else an error key: notcompanion (also a trial partner), notyours, enemy, inaccount, locked
         // (affinity below MAX_AFFINITY), accountfull (CharactersPerRealm characters already).
         // World thread (the command, the talk window).
         std::string JoinAccount(Player* owner, uint32 charGuid);
@@ -307,7 +314,7 @@ namespace Companions
         // (account doc §4): with a free slot he is one again (on the bench or with him), else
         // a former companion (故人; online he says goodbye). `parted`: which one. "" = done, else:
         // notcompanion (the player's own character: those are deleted at character select only),
-        // notyours, notinaccount, self (the character he plays).
+        // notyours, enemy (an alt of the other faction), notinaccount, self (the character he plays).
         std::string SendBack(Player* owner, uint32 charGuid, bool& parted);
 
         // Dev console test scenarios (lua/tests/life): a temporary bot (saving disabled) counts as a

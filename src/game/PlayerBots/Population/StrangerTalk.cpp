@@ -1,5 +1,6 @@
 #include "Population/StrangerTalk.h"
 #include "Population/PopulationBotAI.h"
+#include "Companions/CompanionMgr.h"
 #include "Companions/Talk/Talk.h"
 #include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
@@ -43,10 +44,17 @@ namespace StrangerTalk
             return option;
         }
 
-        std::vector<Talk::Option> MeetOptions(PopulationBotAI* ai, Player* player, bool chat)
+        // He can come along with `player`: a roster member of his faction (companions keep to
+        // their side, CompanionMgr::SameSide).
+        bool MayJoin(PopulationBotAI* ai, Player* player, Player* bot)
+        {
+            return ai->CanJoin() && Companions::CompanionMgr::SameSide(player, bot);
+        }
+
+        std::vector<Talk::Option> MeetOptions(PopulationBotAI* ai, Player* player, Player* bot, bool chat)
         {
             std::vector<Talk::Option> options;
-            if (ai->CanJoin())
+            if (MayJoin(ai, player, bot))
                 options.push_back(OptionOf(BotShared::I18n::Of(player), "meet:join", "meet.opt.join"));
             if (chat)
                 options.push_back(OptionOf(BotShared::I18n::Of(player), "meet:chat", "meet.opt.chat"));
@@ -87,7 +95,7 @@ namespace StrangerTalk
         std::string DecideJoin(PopulationBotAI* ai, Player* player, Player* bot, bool& joins)
         {
             joins = false;
-            if (!ai->CanJoin())
+            if (!MayJoin(ai, player, bot))
                 return Say(ai, player, "meet.join.cannot");
             // (recruiting doc §1: never anyone above the player)
             if (bot->GetLevel() > player->GetLevel())
@@ -210,12 +218,12 @@ namespace StrangerTalk
         if (opt == "meet:chat")
         {
             page.text = Say(ai, player, ChatKey(ai));
-            page.options = MeetOptions(ai, player, false);
+            page.options = MeetOptions(ai, player, bot, false);
         }
         else
         {
             page.text = Say(ai, player, "meet.hello");
-            page.options = MeetOptions(ai, player, true);
+            page.options = MeetOptions(ai, player, bot, true);
         }
         Talk::SendPage(player, bot, page);
         return true;
@@ -236,7 +244,7 @@ namespace StrangerTalk
         bot->HandleEmoteCommand(EMOTE_ONESHOT_QUESTION);
         Talk::Page page;
         page.text = Say(ai, player, "meet.invited");
-        page.options = MeetOptions(ai, player, true);
+        page.options = MeetOptions(ai, player, bot, true);
         Talk::SendPage(player, bot, page);
     }
 

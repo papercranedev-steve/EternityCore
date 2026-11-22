@@ -27,6 +27,7 @@
 #include "ObjectAccessor.h"
 #include "AccountMgr.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "Config/Config.h"
 #include "Database/DatabaseEnv.h"
 #include "Utilities/Random.h"
@@ -76,6 +77,13 @@ namespace Companions
         {
             PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid);
             return data ? data->uiAccount : 0;
+        }
+
+        // The character's faction from its race (the name cache, offline too), 0 = unknown.
+        uint32 SavedTeamOf(uint32 charGuid)
+        {
+            PlayerCacheData const* data = sObjectMgr.GetPlayerDataByGUID(charGuid);
+            return data ? uint32(Player::TeamForRace(uint8(data->uiRace))) : 0;
         }
 
         uint32 TrainedUpToLevel(Player const* bot)
@@ -849,6 +857,8 @@ namespace Companions
                 continue;
             }
             uint32 const leaderAccount = SavedAccountOf(itr->leader.GetCounter());
+            uint32 const leaderTeam = SavedTeamOf(itr->leader.GetCounter());
+            std::vector<ObjectGuid> enemies;
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
             {
                 uint32 const guid = slot.guid.GetCounter();
@@ -857,6 +867,13 @@ namespace Companions
                 bool const accountChar = !info && leaderAccount && SavedAccountOf(guid) == leaderAccount;
                 if (slot.guid == itr->leader || (!info && !accountChar) || (info && info->temporary) || itr->sent.count(guid))
                     continue;
+                // (of the other faction, from before bots kept to their side: he leaves the group)
+                if (leaderTeam && SavedTeamOf(guid) != leaderTeam)
+                {
+                    if (!sPlayerBotMgr.HasBot(guid) && !sObjectAccessor.FindPlayerNotInWorld(slot.guid))
+                        enemies.push_back(slot.guid);
+                    continue;
+                }
                 // (still leaving from his last session: next time)
                 if (sPlayerBotMgr.HasBot(guid) || sObjectAccessor.FindPlayerNotInWorld(slot.guid))
                     continue;
@@ -872,6 +889,12 @@ namespace Companions
                     continue;
                 }
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u comes back with its leader %u.", guid, itr->leader.GetCounter());
+            }
+            // (after the loop: removing changes the member slots, and may disband the group)
+            for (ObjectGuid const& enemy : enemies)
+            {
+                Player::RemoveFromGroup(group, enemy);
+                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %u leaves the group of %u: the other faction.", enemy.GetCounter(), itr->leader.GetCounter());
             }
             ++itr;
         }
@@ -902,6 +925,8 @@ namespace Companions
             return "notyours";
         if (info && info->parted)
             return "former";
+        if (!SameSide(leader, charGuid))
+            return "enemy";
         ObjectGuid const guid(HIGHGUID_PLAYER, charGuid);
         if (sPlayerBotMgr.HasBot(charGuid) || sObjectAccessor.FindPlayerNotInWorld(guid))
             return "online";
@@ -941,6 +966,12 @@ namespace Companions
         std::string const error = CallOver(inviter, charGuid, uint8(ROLE_INVALID), true);
         if (error == "notcompanion" || error == "notyours" || error == "former")
             return false;
+        // (the client's own "wrong faction" message, as for a player of the other side)
+        if (error == "enemy")
+        {
+            inviter->GetSession()->SendPartyResult(PARTY_OP_INVITE, name, ERR_PLAYER_WRONG_FACTION);
+            return true;
+        }
         ChatHandler handler(inviter);
         if (error.empty())
             handler.PSendSysMessage("PBOK;%s;callover", name.c_str());
@@ -955,6 +986,20 @@ namespace Companions
             return false;
         uint32 const account = owner->GetSession()->GetAccountId();
         return account && SavedAccountOf(charGuid) == account;
+    }
+
+    bool CompanionMgr::SameSide(Player const* leader, uint32 charGuid)
+    {
+        if (!leader)
+            return false;
+        if (leader->IsGameMaster())
+            return true;
+        return SavedTeamOf(charGuid) == uint32(leader->GetTeam());
+    }
+
+    bool CompanionMgr::SameSide(Player const* leader, Player const* bot)
+    {
+        return leader && bot && (leader->IsGameMaster() || bot->GetTeam() == leader->GetTeam());
     }
 
     bool CompanionMgr::MayManage(Player const* owner, uint32 charGuid) const
@@ -994,7 +1039,8 @@ namespace Companions
         sObjectMgr.GetPlayerDataForAccount(owner->GetSession()->GetAccountId(), chars);
         for (PlayerCacheData const* data : chars)
         {
-            if (data->uiGuid == owner->GetGUIDLow())
+            // (an alt of the other faction does not know those of this side, nor they him)
+            if (data->uiGuid == owner->GetGUIDLow() || !SameSide(owner, data->uiGuid))
                 continue;
             AccountCharacter entry;
             entry.charGuid = data->uiGuid;
@@ -1028,6 +1074,8 @@ namespace Companions
             return "inaccount";
         if (info.recruiterGuid != owner->GetGUIDLow())
             return "notyours";
+        if (!SameSide(owner, charGuid))
+            return "enemy";
         if (GetAffinity(charGuid) < MAX_AFFINITY)
             return "locked";
         uint32 const account = owner->GetSession()->GetAccountId();
@@ -1073,6 +1121,9 @@ namespace Companions
             return "notinaccount";
         if (!IsOfAccount(owner, charGuid))
             return "notyours";
+        // (he would become the companion of an alt of the other faction)
+        if (!SameSide(owner, charGuid))
+            return "enemy";
         uint32 const account = ResolveAccount();
         if (!account)
             return "failed";

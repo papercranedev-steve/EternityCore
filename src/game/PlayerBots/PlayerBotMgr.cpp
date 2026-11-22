@@ -1118,6 +1118,14 @@ bool ChatHandler::HandlePartyBotLoadCommand(char* args)
         return true;
     }
 
+    // (bots keep to their side, as companions do: CompanionMgr::SameSide)
+    if (!Companions::CompanionMgr::SameSide(pPlayer, guid.GetCounter()))
+    {
+        SendSysMessage("Cannot load enemy faction characters.");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
     float x, y, z;
     pPlayer->GetNearPoint(pPlayer, x, y, z, 0, 5.0f, frand(0.0f, 6.0f));
 
