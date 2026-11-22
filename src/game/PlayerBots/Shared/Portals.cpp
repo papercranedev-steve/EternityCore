@@ -6,6 +6,7 @@
 #include "SpellMgr.h"
 #include "SpellEntry.h"
 #include <algorithm>
+#include <list>
 
 namespace BotShared
 {
@@ -31,6 +32,30 @@ namespace Portals
 
         // Within this of a portal's destination: the leader went through it.
         float const ARRIVED_YD = 60.0f;
+
+        // The gameobject entries every party portal spell puts up (spells are loaded once at
+        // startup, before any bot).
+        std::vector<uint32> const& PortalObjects()
+        {
+            static std::vector<uint32> const entries = []()
+            {
+                std::vector<uint32> out;
+                for (uint32 id = 1; id < sSpellMgr.GetMaxSpellId(); ++id)
+                {
+                    SpellEntry const* spell = sSpellMgr.GetSpellEntry(id);
+                    if (!IsPortalSpell(spell))
+                        continue;
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    {
+                        uint32 const entry = uint32(spell->EffectMiscValue[i]);
+                        if (spell->Effect[i] == SPELL_EFFECT_TRANS_DOOR && std::find(out.begin(), out.end(), entry) == out.end())
+                            out.push_back(entry);
+                    }
+                }
+                return out;
+            }();
+            return entries;
+        }
     }
 
     bool IsPortalSpell(SpellEntry const* spell)
@@ -75,17 +100,21 @@ namespace Portals
         Group* group = bot->GetGroup();
         if (!group || !leader)
             return nullptr;
-        for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+        // Still here with the bot: he did not go anywhere (and no grid search every tick).
+        if (leader->IsInMap(bot) && bot->IsWithinDist(leader, range))
+            return nullptr;
+        // Found by its entry around the bot, not by the caster: the core does not put a portal
+        // in its caster's gameobject list (Spell::EffectTransmitted), so GetGameObject(spell)
+        // never finds it, and the mage may have gone through already (another map).
+        for (uint32 entry : PortalObjects())
         {
-            Player const* member = itr->getSource();
-            if (!member || !member->IsInWorld() || member->GetMap() != bot->GetMap())
-                continue;
-            for (SpellEntry const* spell : Known(member))
+            std::list<GameObject*> found;
+            bot->GetGameObjectListWithEntryInGrid(found, entry, range);
+            for (GameObject* portal : found)
             {
-                GameObject* portal = member->GetGameObject(spell->Id);
-                if (!portal || !portal->IsInWorld() || !portal->isSpawned() || !bot->IsWithinDistInMap(portal, range))
+                if (!portal->IsInWorld() || !portal->isSpawned() || !group->IsMember(portal->GetOwnerGuid()))
                     continue;
-                SpellTargetPosition const* to = sSpellMgr.GetSpellTargetPosition(TeleportOf(spell));
+                SpellTargetPosition const* to = sSpellMgr.GetSpellTargetPosition(portal->GetGOInfo()->spellcaster.spellId);
                 if (to && leader->GetMapId() == to->mapId &&
                     leader->GetDistance(to->x, to->y, to->z, SizeFactor::None) <= ARRIVED_YD)
                     return portal;
