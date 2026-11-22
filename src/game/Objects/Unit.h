@@ -352,9 +352,11 @@ class Unit : public SpellCaster
         void SetStat(Stats stat, int32 val) { SetStatInt32Value(UNIT_FIELD_STAT0 + stat, val); }
         void SetResistance(SpellSchools school, int32 val) { SetInt32Value(UNIT_FIELD_RESISTANCES + school, val); }
         float GetAttackPowerFromStrengthAndAgility(bool ranged, float strength, float agility) const;
-        float GetRegenHPPerSpirit() const;
         float GetRegenMPPerSpirit() const;
     public:
+        // Health per regen tick (2 s) from spirit, before rates and auras (Player::RegenerateHealth).
+        // Public for PlayerBots (Commander/Perception/Values/HealthRegen).
+        float GetRegenHPPerSpirit() const;
         // Data
         float m_modSpellHitChance;
         float m_modSpellCritChance[MAX_SPELL_SCHOOL];

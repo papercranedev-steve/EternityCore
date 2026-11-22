@@ -40,6 +40,7 @@
 #include "Commander/Behaviors/Support/CorpseRun.h"
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include "Commander/Behaviors/Movement/RestCatchUp.h"
+#include "Commander/Behaviors/Support/RestTopUp.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
 
@@ -374,6 +375,7 @@ public:
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
     // While the Commander heal module controls healing, casts its heal order instead (none: no heal).
+    // Out of combat the target is Commander::RestTopUp::Select (only a gap worth a heal).
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
     // Hides CombatBotBaseAI::FindAndPreHealTarget: off while the heal module controls healing.
     bool FindAndPreHealTarget();
@@ -449,6 +451,8 @@ public:
     // Out of combat: the leader walked away from its rest, it catches up before sitting again
     // (Commander/Behaviors/Movement/RestCatchUp.h; updated by the subclass that follows a leader).
     Commander::RestCatchUpState m_restCatchUp;
+    // Out of combat: the members' gaps a heal waits on (Commander/Behaviors/Support/RestTopUp.h).
+    Commander::RestTopUpState m_restTopUp;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

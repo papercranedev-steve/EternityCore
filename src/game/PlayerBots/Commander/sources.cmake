@@ -275,6 +275,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Support/PetCareBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.h
   ${COMMANDER_DIR}/Behaviors/Support/HealPlan.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/RestTopUp.h
+  ${COMMANDER_DIR}/Behaviors/Support/RestTopUp.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/HealPlanBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/HotPlan.h
@@ -299,6 +301,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Trace/FightLoadJson.cpp
   ${COMMANDER_DIR}/Perception/Values/ManaWorth.h
   ${COMMANDER_DIR}/Perception/Values/ManaWorth.cpp
+  ${COMMANDER_DIR}/Perception/Values/HealthRegen.h
+  ${COMMANDER_DIR}/Perception/Values/HealthRegen.cpp
   ${COMMANDER_DIR}/Perception/Values/RestValue.h
   ${COMMANDER_DIR}/Perception/Values/RestValue.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FearRisk.h

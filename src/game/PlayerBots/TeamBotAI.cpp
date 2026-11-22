@@ -47,6 +47,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
+#include "Commander/Behaviors/Support/RestTopUp.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
 
@@ -740,7 +741,10 @@ bool TeamBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPer
     if (IsHealingControlled())
         return me->IsInCombat() && CastHealOrder();
 
-    Unit* pTarget = SelectHealTarget(selfHealPercent, groupHealPercent);
+    // Out of combat only a gap worth a heal (Commander/Behaviors/Support/RestTopUp.h, user
+    // 2026-11-22: not every scratch natural regeneration fills, nor a max health that changed).
+    Unit* pTarget = me->IsInCombat() ? SelectHealTarget(selfHealPercent, groupHealPercent)
+                                     : Commander::RestTopUp::Select(this, m_restTopUp, selfHealPercent, groupHealPercent);
     if (!pTarget)
         return false;
 
