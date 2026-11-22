@@ -1,6 +1,689 @@
 {
-  "//0": "PartyBot server text, English. Same keys and {variables} as zh.json; a key missing here is said in Chinese. Check with contrib/i18n/i18n.mjs.",
-  "//1": "Texts that were in English in the code already. Every other key: not translated yet (shown in Chinese). A population bot turning down a group invite, as players type it (Population/PopulationBotAI).",
+  "//0": "PartyBot server text, English. Same keys and {variables} as zh.json; check with contrib/i18n/i18n.mjs.",
+  "trip.ask": {
+    "default": [
+      "I need to head over to {places} to {why}. Mind waiting a moment?",
+      "{leader}, I'm swinging by {places} to {why}—I'll be right back, alright?"
+    ],
+    "frugal": "I'm heading to {places} to {why}. Already budgeted for it—mind waiting?",
+    "spendthrift": "Coin pouch is looking thin again... heading to {places} to {why}. Wait up?",
+    "chatty": "Oh, by the way, I need to run over to {places} to {why}. Mind waiting a sec?",
+    "quiet": "Heading to {places} to {why}. Back soon.",
+    "lazy": "Ugh, another trip to {places} to {why}... mind waiting a bit?"
+  },
+  "errand.why.shop": "pick up supplies",
+  "errand.why.train": "learn new skills",
+  "errand.why.profession": "train my profession",
+  "errand.why.and": " and ",
+  "errand.go": {
+    "default": "Alright, back in a bit.",
+    "diligent": "I'll be quick!",
+    "quiet": "Mm."
+  },
+  "errand.declined": {
+    "default": "Alright, another time then.",
+    "lazy": "Works for me—saves me the walk."
+  },
+  "errand.back": {
+    "default": "I'm back.",
+    "chatty": "Back! Got everything I needed."
+  },
+  "meet.ask": {
+    "default": "Finished up here. Where are you? Should I come find you or wait by {gate}?",
+    "chatty": "All done! Still busy? Want me to come to you, or should I wait at {gate}?",
+    "quiet": "Done. Come to you, or wait at {gate}?"
+  },
+  "meet.come": "Alright, on my way.",
+  "meet.gate": "Alright, I'll wait by {gate}.",
+  "meet.here": "Alright, I'll wait right here.",
+  "meet.arrived": {
+    "default": "I'm at {gate}. Come find me whenever you're ready.",
+    "lazy": "Taking a breather at {gate}. No rush."
+  },
+  "meet.opt.come": "Come find me",
+  "meet.opt.gate": "Wait for me at {gate}",
+  "meet.opt.here": "Wait right there",
+  "place.gate": "the city gates",
+  "place.here": "right here",
+  "reward.ask": {
+    "default": "Which reward should I take for {quest}?",
+    "frugal": "For {quest}, should I just take whatever sells best? Have a look."
+  },
+  "classquest.ask": {
+    "default": "{leader}, I'm ready for my class trial, \"{quest}\". Could you come with me?",
+    "chatty": "{leader}, I heard \"{quest}\" teaches some real tricks! Mind coming along with me?",
+    "quiet": "\"{quest}\". Can you take me?",
+    "lazy": "That \"{quest}\" trial... looks rough alone. Mind lending a hand?"
+  },
+  "classquest.askgear": "{leader}, there's a class quest, \"{quest}\", that awards a nice piece of gear. Have time to help?",
+  "classquest.accepted": {
+    "default": "Great! I've jotted the details down for you—just lead the way.",
+    "quiet": "Thanks."
+  },
+  "classquest.declined": "Alright, maybe next time we're in town.",
+  "classquest.giveup": {
+    "default": "Fair enough, I'll figure something out later.",
+    "lazy": "Guess it can wait. No hurry anyway."
+  },
+  "classquest.dropped": "I'll set that aside for now then.",
+  "classquest.step": "That part's done—check your quest log for what's next.",
+  "classquest.thanks": {
+    "default": "All done! Couldn't have managed without you—thanks!",
+    "chatty": "We did it! No way I'd have pulled that off alone—thank you!",
+    "quiet": "Done. Thanks."
+  },
+  "classquest.selfdone": {
+    "default": "By the way, I finished \"{quest}\" on my own.",
+    "lazy": "Finally dragged myself through \"{quest}\" on my own."
+  },
+  "questitem.tame": "I'm taming it—hold your fire!",
+  "supply.offer": {
+    "default": "{leader}, you're running low on {what}. Want me to conjure some?",
+    "chatty": "{leader}, looks like you're nearly out of {what}! Want me to whip up a batch?",
+    "quiet": "Need {what}?"
+  },
+  "supply.offer.stone": {
+    "default": "{leader}, you don't have a Healthstone. Want me to make one for you?",
+    "quiet": "Healthstone?"
+  },
+  "supply.declined": "Alright, just say the word if you need any.",
+  "supply.make": "Hold on, conjuring some now.",
+  "supply.give": {
+    "default": "Here you go.",
+    "chatty": "Freshly conjured—take it!"
+  },
+  "supply.noroom": "Your packs are full—make a little room and I'll hand it over.",
+  "supply.failed": "Trade didn't go through. We can try again in a bit.",
+  "supply.askmage": {
+    "default": "{leader}, I'm running low on {what}. Could you conjure some?",
+    "lazy": "{leader}, out of {what}... mind conjuring a bit?"
+  },
+  "supply.askmage.many": "{leader}, {names} are running low on {what}. Could you conjure some for us?",
+  "supply.botask": {
+    "default": "{giver}, could you spare some {what}?",
+    "quiet": "{giver}, {what}?"
+  },
+  "supply.botack": "Sure, one moment.",
+  "supply.thanks": {
+    "default": "Thanks!",
+    "quiet": "Thanks."
+  },
+  "supply.what.both": "food and water",
+  "supply.what.food": "food",
+  "supply.what.drink": "water",
+  "supply.opt.yes": "Yes, please",
+  "supply.opt.no": "No thanks",
+  "supply.opt.make": "Conjure for you",
+  "supply.opt.later": "Not right now",
+  "artisan.ask": {
+    "default": "{leader}, I'm ready for Artisan {skill}, but no one in the city teaches it. We'll need to visit {trainer}. Mind taking me? I'll cover the {gold} fee myself.",
+    "chatty": "{leader}, my {skill} has hit a wall! I heard {trainer} teaches Artisan rank—mind taking a trip out there? I've got the {gold} covered!",
+    "quiet": "Artisan {skill} requires {trainer}. {gold} fee. Can we go?",
+    "frugal": "{leader}, Artisan {skill} costs {gold}. I've saved up the coin—just need you to guide me to {trainer}."
+  },
+  "artisan.accepted": {
+    "default": "Great! I marked the directions in your quest log—once we're close, I'll head over myself.",
+    "quiet": "Thanks."
+  },
+  "artisan.declined": "Alright, next time we're in town then.",
+  "artisan.giveup": {
+    "default": "Alright, I'll find my way to {trainer} on my own sometime.",
+    "lazy": "Guess it can wait. No rush anyway."
+  },
+  "affinity.trade.early": {
+    "default": "{leader}, no need to give me that—I can manage on my own.",
+    "frugal": "{leader}, really, I couldn't take your things.",
+    "quiet": "No thanks."
+  },
+  "affinity.trade.notallowed": {
+    "default": "{leader}, I'll take coin, food and drink, gear upgrades, or bigger bags—nothing else for now.",
+    "chatty": "{leader}, I don't really have a use for that! Coin, provisions, better gear, or bigger bags are plenty.",
+    "quiet": "Only coin, provisions, gear upgrades, or bags."
+  },
+  "affinity.unlock.trade": {
+    "default": "{leader}, if you find better gear, provisions, or bigger bags for me, feel free to trade them over.",
+    "chatty": "{leader}, from now on if you've got spare gear upgrades, food, or bigger bags, just hand them over!",
+    "quiet": "You can trade me gear, provisions, and bags now."
+  },
+  "affinity.unlock.tradeany": {
+    "default": "{leader}, you can trade me anything you like—I'll hold onto it.",
+    "quiet": "You can hand me anything now."
+  },
+  "affinity.unlock.bags": {
+    "default": "{leader}, feel free to manage my packs however you see fit.",
+    "lazy": "{leader}, you can sort my packs for me—I can't be bothered."
+  },
+  "affinity.unlock.summon": "{leader}, just say the word whenever you need a summon.",
+  "affinity.unlock.craft": "{leader}, bring me the reagents and I'll craft whatever you need.",
+  "affinity.unlock.portal": "{leader}, let me know whenever you need a portal back to a city.",
+  "affinity.unlock.money": {
+    "default": "{leader}, if you're ever short on coin, take what you need from me.",
+    "frugal": "{leader}, you can dip into my coin if you need it—just spend it wisely."
+  },
+  "affinity.unlock.rewards": "{leader}, you've got a better eye for quest rewards than I do—pick for me from now on.",
+  "affinity.unlock.account": "{leader}, I want to stay by your side for good.",
+  "account.offer": {
+    "default": "{leader}, there's something I wanted to talk to you about.",
+    "quiet": "{leader}, a word."
+  },
+  "account.offer.page": {
+    "default": "After everything we've been through together, I want to put my name in your roster for good. Whether you want to step into my boots yourself or call me to your side anytime, I'm yours to command. What do you say?",
+    "chatty": "{leader}, I've been thinking about this for a while! Put me in your roster—whether you want to play as me yourself or summon me to fight alongside you, I'm in. What do you think?",
+    "quiet": "...Put my name in your roster. Will you?"
+  },
+  "account.offer.yes": "Welcome aboard.",
+  "account.offer.later": "Not right now.",
+  "account.join.done": {
+    "default": "Glad to hear it! I'm officially part of your roster now.",
+    "chatty": "Awesome! I'm part of your roster now—let's make the most of it!",
+    "quiet": "Good. Always here."
+  },
+  "account.join.full": "Your roster is full... free up a spot and call on me again. I'll wait.",
+  "account.later": {
+    "default": "No problem. Let me know through the Companions panel whenever you're ready.",
+    "quiet": "Alright. I'll wait."
+  },
+  "talk.opt.account": "Join my roster for good.",
+  "affinity.trait.life": {
+    "default": "{leader}, traveling with you has taught me a few tricks of my own. ({trait})",
+    "chatty": "{leader}, spending all this time with you has really rubbed off on me—notice anything? ({trait})",
+    "quiet": "Picked up a habit traveling with you. ({trait})",
+    "homebody": "{leader}, being out on the road with you so much made me less homesick. ({trait})"
+  },
+  "affinity.trait.combat": {
+    "default": "{leader}, after all the fights we've survived, I've sharpened up quite a bit. ({trait})",
+    "chatty": "{leader}, after all those scrap-ups, I'm not the greenhorn I used to be! ({trait})",
+    "quiet": "All those battles sharpened me up. ({trait})",
+    "lazy": "{leader}, you've dragged me into so many fights I couldn't slack off if I tried. ({trait})"
+  },
+  "affinity.trait.gatherer": "{leader}, after all this time together, I've got a much better knack for gathering.",
+  "affinity.trait.nightowl": "{leader}, I'm at my sharpest at night—barely need a breather.",
+  "affinity.trait.laststand": "{leader}, don't worry—I'm not going down that easily.",
+  "artisan.thanks": {
+    "default": "Learned Artisan {skill}! Thanks for bringing me out here!",
+    "chatty": "Artisan {skill} learned! Never would've found this place without you—thanks!",
+    "quiet": "Learned it. Thanks."
+  },
+  "artisan.selfdone": "By the way, I went and learned Artisan {skill} on my own.",
+  "artisan.opt.yes": "I'll take you",
+  "artisan.opt.no": "Not right now",
+  "classquest.opt.yes": "I'll take you",
+  "classquest.opt.no": "Not right now",
+  "talk.hello.new": {
+    "default": "Hello, {leader}. Need something?",
+    "chatty": "Ah, {leader}! Need something? Just say the word!",
+    "quiet": "...Need something?"
+  },
+  "talk.hello.friend": {
+    "default": "{leader}, what's up?",
+    "chatty": "What's on your mind, {leader}? Ready when you are!",
+    "lazy": "Mm... what is it?"
+  },
+  "talk.hello.trusted": {
+    "default": "{leader}, go ahead.",
+    "diligent": "{leader}, what do you need done?"
+  },
+  "talk.hello.close": {
+    "default": "Old friend, what's the plan?",
+    "chatty": "{leader}! Was just thinking about our next move—what's up?",
+    "lazy": "You again... go on."
+  },
+  "talk.hello.drink": {
+    "default": "Let me finish this drink... alright, what's up?",
+    "quiet": "(takes a sip) Mm?"
+  },
+  "talk.hello.town": {
+    "default": "Good to be back in town. What do you need?",
+    "chatty": "Lively in the city today! What's the plan?",
+    "homebody": "Nothing beats being back inside city walls. {leader}, what's up?"
+  },
+  "talk.busy": {
+    "default": "Hands are full right now!",
+    "quiet": "Hold on!"
+  },
+  "talk.gone": "Hm? What were you saying?",
+  "talk.stay.ok": {
+    "default": "Alright, I'll wait right here.",
+    "lazy": "Good, could use a breather.",
+    "quiet": "Mm. Waiting."
+  },
+  "talk.follow.ok": {
+    "default": "Let's move.",
+    "chatty": "Let's go, let's go—my boots were starting to take root!"
+  },
+  "talk.stay.cannot": "Can't right now.",
+  "talk.stay.team": "Alright, we'll wait here for you.",
+  "talk.follow.team": "On our way!",
+  "talk.bags.ok": {
+    "default": "Go ahead.",
+    "frugal": "Look all you want, just don't misplace anything."
+  },
+  "talk.portal.where": {
+    "default": "Where to?",
+    "chatty": "Which city are we headed to? Name it!"
+  },
+  "talk.portal.ok": {
+    "default": "Hold on, opening the portal now.",
+    "quiet": "One moment."
+  },
+  "talk.portal.cannot": "Can't open a portal here.",
+  "talk.block.portal": "Missing Rune of Portals",
+  "talk.craft.ok": {
+    "default": "See what you need—just bring the reagents.",
+    "crafty": "Always itching to craft something—pick whatever you need!"
+  },
+  "craft.start": {
+    "default": "Alright, getting to work.",
+    "quiet": "Mm."
+  },
+  "craft.done": {
+    "default": "All done—here you go.",
+    "chatty": "Finished! Not bad work, right?"
+  },
+  "craft.stop.nomats": "Out of reagents—that's all I can make.",
+  "craft.stop.far": "You walked too far away, so I stopped.",
+  "craft.stop.combat": "Fight first—we'll finish crafting later!",
+  "craft.stop.stopped": "Alright, stopping here.",
+  "craft.stop.bagsfull": "My packs are full—make some room first.",
+  "craft.stop.failed": "Can't seem to make that—probably missing a tool, or I need an anvil or forge.",
+  "craft.stop.cooldown": "Can't rush that recipe—needs a little time before the next one.",
+  "leave.ask": {
+    "default": "{leader}, heading out? Should we wait here for you?",
+    "chatty": "Where are you off to, {leader}? Want us to wait right here until you're back?",
+    "quiet": "Wait here?"
+  },
+  "leave.follow": "Alright, we'll follow.",
+  "leave.opt.yes": "Wait here for me",
+  "leave.opt.no": "Follow along",
+  "summon.ask": {
+    "default": "{leader}, all done over there? Want a summon back?",
+    "quiet": "Summon you back?"
+  },
+  "summon.opt.yes": "Summon me back",
+  "summon.opt.no": "Not yet",
+  "summon.start": "Opening the portal—{helpers}, give me a hand!",
+  "summon.arrived": {
+    "default": "Welcome back!",
+    "chatty": "You're back! We were waiting on you!"
+  },
+  "summon.nohelp": "Nobody came to click the portal... maybe next time.",
+  "summon.broken": "The ritual was interrupted.",
+  "summon.no.notlearned": "I haven't learned Ritual of Summoning yet.",
+  "summon.no.locked": "Well... we're not quite that close yet.",
+  "summon.no.noshard": "I'm out of Soul Shards—can't summon you.",
+  "summon.no.nohelpers": "I need two party members beside me to complete the ritual.",
+  "summon.no.fighting": "In the middle of a fight here—hold on!",
+  "summon.no.here": "Can't open a summoning portal in here.",
+  "summon.no.near": "You're right beside me—just walk over.",
+  "summon.no.dead": "Can't summon right now.",
+  "summon.no.busy": "Already channeling a summon.",
+  "travel.start": {
+    "default": "I'm in {zone}—heading your way, about {minutes} min.",
+    "quiet": "In {zone}. On my way.",
+    "chatty": "{leader}! I'm over in {zone}, give me about {minutes} min and I'll be right there!"
+  },
+  "travel.start.fly": {
+    "default": "I'm in {zone}—taking a gryphon over, about {minutes} min.",
+    "quiet": "In {zone}. Flying over.",
+    "lazy": "In {zone}... I'll catch a flight path, around {minutes} min."
+  },
+  "travel.start.sail": {
+    "default": "I'm in {zone}—have to catch a boat over, about {minutes} min.",
+    "quiet": "In {zone}. Taking a boat."
+  },
+  "travel.start.hearth": {
+    "default": "I'm in {zone}—hearthing to {home} first, then heading over. About {minutes} min.",
+    "quiet": "Hearthing to {home}, then coming.",
+    "chatty": "{leader}, I'm in {zone}! Hearthing back to {home} first, then I'll hurry over—about {minutes} min!"
+  },
+  "travel.sail": {
+    "default": "Boarded the ship.",
+    "chatty": "On the ship! Waves are pretty rough out here..."
+  },
+  "lead.back": {
+    "default": "You lead the party—I'll follow your lead.",
+    "quiet": "You lead.",
+    "chatty": "Whoa, don't put me in charge! {leader}, you're the one leading this outfit!"
+  },
+  "leave.bye": {
+    "default": "I'll head off then. Call on me anytime.",
+    "quiet": "Leaving. Call if needed.",
+    "chatty": "Off I go then! {leader}, holler whenever you've got trouble to stir up!"
+  },
+  "leave.bye.hearth": {
+    "default": "Heading back to {home}. Call on me whenever you need.",
+    "quiet": "Back to {home}.",
+    "homebody": "Good timing—heading back to {home} to put my feet up. Call if you need me."
+  },
+  "home.bind": {
+    "default": "Bound my hearthstone to {home} as well.",
+    "quiet": "Bound here too.",
+    "homebody": "{home} seems cozy enough—I'll make it my home too."
+  },
+  "hearth.along": {
+    "default": "Heading back to {home} too.",
+    "quiet": "Coming too.",
+    "chatty": "Hearthing to {home}? Wait up, I'm coming with!"
+  },
+  "travel.near": {
+    "default": "Almost there.",
+    "quiet": "Here."
+  },
+  "talk.opt.craft": "Can you craft something for me?",
+  "talk.opt.craft.171": "Can you brew some potions for me?",
+  "talk.opt.craft.164": "Can you forge something for me?",
+  "talk.opt.craft.165": "Can you craft some leatherwork for me?",
+  "talk.opt.craft.197": "Can you stitch something for me?",
+  "talk.opt.craft.202": "Can you tinker something for me?",
+  "talk.opt.craft.333": "Can you make something for enchanting?",
+  "talk.opt.craft.129": "Can you wrap some bandages for me?",
+  "talk.opt.craft.185": "Can you cook something for me?",
+  "talk.opt.stay": "Wait right here for me.",
+  "talk.opt.follow": "Come with me.",
+  "talk.opt.bags": "Let me see your packs.",
+  "talk.opt.portal": "Can you open a portal for me?",
+  "talk.opt.portal.10059": "To Stormwind.",
+  "talk.opt.portal.11416": "To Ironforge.",
+  "talk.opt.portal.11419": "To Darnassus.",
+  "talk.opt.portal.11417": "To Orgrimmar.",
+  "talk.opt.portal.11418": "To Undercity.",
+  "talk.opt.portal.11420": "To Thunder Bluff.",
+  "place.vendor": "a vendor",
+  "place.vendor.repair": "the armorer",
+  "place.vendor.ammo": "the ammo vendor",
+  "place.vendor.food": "the food vendor",
+  "place.vendor.reagent": "the reagent vendor",
+  "place.auction": "the Auction House",
+  "place.trainer": "my trainer",
+  "place.trainer.profession": "the profession trainer",
+  "place.and": " and ",
+  "place.comma": ", ",
+  "errand.opt.yes": "Go ahead",
+  "errand.opt.no": "Hold off for now",
+  "errand.opt.pay": "Cover the training fee",
+  "errand.opt.nopay": "Skip the paid training",
+  "errand.paid": {
+    "default": "Thanks! I'll go train right now.",
+    "frugal": "Much obliged—I'll make every copper count."
+  },
+  "training.money": "Fee: key skills {important}, all {all}; I have {have}.",
+  "offline.skillup": {
+    "default": "Practiced my trade while we were apart: {gains} (spent {gold} on materials).",
+    "crafty": "Kept my hands busy while you were away: {gains} ({gold} in materials).",
+    "frugal": "Worked on my craft a bit: {gains}. Spent {gold}—counted every copper.",
+    "spendthrift": "Bought a few too many supplies... {gains}, spent {gold}.",
+    "quiet": "{gains}. Spent {gold}."
+  },
+  "offline.skillup.free": {
+    "default": "Did a little roaming while we were apart: {gains}.",
+    "gatherer": "Spent the last few days gathering out in the wilds: {gains}."
+  },
+  "offline.broke": {
+    "default": "Coin's been tight lately—couldn't afford to train my craft.",
+    "spendthrift": "Coin's... all gone. Didn't get any crafting done.",
+    "quiet": "Broke. Couldn't train."
+  },
+  "bench.leveled": {
+    "default": "Did some adventuring on my own while we were apart—I'm level {level} now.",
+    "chatty": "Didn't just sit around while you were away! Cleared plenty of camps and hit level {level}!",
+    "quiet": "Reached level {level}."
+  },
+  "parcel.subject": {
+    "default": "Brought you a little something",
+    "chatty": "Open this up when you get a chance!",
+    "quiet": "Supplies"
+  },
+  "parcel.body": {
+    "default": "{leader},\n\nI've been roaming around {zone} and gathered a few things along the way. Figured you might put them to good use.\n\n- {name}",
+    "chatty": "{leader}!\n\nSpent days running around {zone}, fighting everything in sight, and stuffed a bunch of loot into this parcel for you! Tell me what you've been up to next time we meet.\n\n- {name}",
+    "frugal": "{leader},\n\nPut this together in {zone} without wasting a single copper. Use it well.\n\n- {name}",
+    "quiet": "{leader},\n\nFrom {zone}.\n\n- {name}"
+  },
+  "parcel.body.nozone": "{leader},\n\nI've been out roaming and gathered a few things along the way. Figured you might put them to good use.\n\n- {name}",
+  "training.recipes": "{skill}: {count} new",
+  "lesson.remind": {
+    "default": "I can learn {lessons} now—remember to take me to a trainer next time we're in a city.",
+    "chatty": "Oh! I can learn {lessons} now—take me to a trainer next time we hit a city!",
+    "quiet": "Can learn {lessons}. Visit a trainer in town."
+  },
+  "lesson.remind.again": "Still haven't learned {lessons}—don't forget to swing by a trainer in town.",
+  "money.gold": "g",
+  "money.silver": "s",
+  "money.copper": "c",
+  "class.1": "Warrior",
+  "class.2": "Paladin",
+  "class.3": "Hunter",
+  "class.4": "Rogue",
+  "class.5": "Priest",
+  "class.7": "Shaman",
+  "class.8": "Mage",
+  "class.9": "Warlock",
+  "class.11": "Druid",
+  "meet.hello": {
+    "default": "Hm? Something you need?",
+    "chatty": "Hey there, traveler! What brings you over?",
+    "quiet": "...Need something?",
+    "lazy": "Mm... what is it?"
+  },
+  "meet.invited": {
+    "default": "Hold on—why the sudden invite? Do I know you?",
+    "chatty": "Whoa, what's the invite for? Say hello first!",
+    "quiet": "...Why the invite?"
+  },
+  "meet.invite.far": "Do I know you? Walk over and talk if you need something.",
+  "meet.opt.join": "Care to group up for a bit?",
+  "meet.opt.chat": "What are you up to?",
+  "meet.chat.city": {
+    "default": "Just restocking supplies and catching my breath in town.",
+    "homebody": "I prefer staying inside city walls—it's dangerous out there.",
+    "chatty": "Just wandering around! The Auction House is packed today."
+  },
+  "meet.chat.town": {
+    "default": "Took a few jobs nearby—taking a breather before heading back out.",
+    "lazy": "Nothing much. Just soaking up the sun."
+  },
+  "meet.chat.field": {
+    "default": "Hunting out here to scrape together some coin.",
+    "diligent": "Almost done clearing this area—moving on after a few more kills."
+  },
+  "meet.join.yes": {
+    "default": "Sure, soloing's slow going anyway. Let's go.",
+    "chatty": "Sounds great! Hunting alone was getting dull—lead the way!",
+    "quiet": "...Alright. Let's go."
+  },
+  "meet.join.no": {
+    "default": "Thanks, but I've got my own business to tend to.",
+    "lazy": "Not really feeling up to it today. Maybe another time.",
+    "homebody": "Think I'll stay in town for now.",
+    "quiet": "No."
+  },
+  "meet.join.again": "Like I said, not today.",
+  "meet.join.toohigh": {
+    "default": "You're still a bit green for where I'm headed. Come back at level {level}.",
+    "chatty": "Haha, you'd never keep up! Come find me once you hit level {level}.",
+    "quiet": "Come back at {level}."
+  },
+  "meet.join.full": "Looks like your hands are already full with that group.",
+  "meet.join.cannot": "Just passing through—not looking to group up.",
+  "trial.start": {
+    "default": "Just so we're clear, I'm only tagging along for a bit to see how we work together.",
+    "chatty": "Deal! Let's see how we mesh—if it goes well, I might just stick around!",
+    "quiet": "We'll see how this goes."
+  },
+  "trial.offer": {
+    "default": "{leader}, we make a pretty good team.",
+    "chatty": "{leader}! Fighting alongside you has been a blast!"
+  },
+  "trial.offer.page": {
+    "default": "We've worked well together. What do you say... mind if I stick with you for good?",
+    "chatty": "I've been thinking—adventuring alone isn't half as good as running with you. Keep me around?",
+    "quiet": "...Mind if I stay with you from now on?"
+  },
+  "trial.offer.yes": "Glad to have you.",
+  "trial.offer.later": "Maybe later.",
+  "talk.opt.bond": "Stay with me for good?",
+  "trial.bond.yes": "Then it's settled!",
+  "trial.bond.later": "Alright, just let me know whenever you decide.",
+  "trial.intro": {
+    "default": "Properly then: I'm {name}, a {class}. Looking forward to traveling with you, {leader}.",
+    "chatty": "Proper introductions! I'm {name}, {class}—hit hard, eat plenty, talk a bit too much. Good to be with you, {leader}!",
+    "quiet": "{name}. {class}. Good to be here.",
+    "frugal": "I'm {name}, a {class}. I'll manage my own coin and won't be a burden. Glad to travel with you, {leader}."
+  },
+  "first.hello": "Hey! Hold up—you just reporting in too?",
+  "first.why": "{giver} says the roads have been rough lately, and newcomers shouldn't travel alone. I've been asking around, but no one's taken me up yet...",
+  "first.offer": "I'm {name}, a {class}. How about we watch each other's backs? You take the lead, and I'll {help}.",
+  "first.help.heal": "keep you patched up",
+  "first.help.tank": "hold the front line",
+  "first.giver": "the camp commander",
+  "first.opt.yes": "Sure, let's travel together.",
+  "first.opt.no": "I'd rather go it alone for now.",
+  "first.yes": "Awesome! Good to have a partner out here!",
+  "first.no": "Alright... I'll be around here if you change your mind.",
+  "trait.diligent": "Diligent",
+  "trait.diligent.text": "Recovers faster after long battles.",
+  "trait.nightowl": "Night Owl",
+  "trait.nightowl.text": "Rests and recovers faster at night.",
+  "trait.earlybird": "Early Bird",
+  "trait.earlybird.text": "Rests and recovers faster during the day.",
+  "trait.rainlover": "Rain-Lover",
+  "trait.rainlover.text": "Recovers faster in rain or snow.",
+  "trait.appetite": "Hearty Appetite",
+  "trait.appetite.text": "Well Fed buffs last longer.",
+  "trait.frugal": "Frugal",
+  "trait.frugal.text": "Pays less for repairs and squeezes a few extra copper from junk.",
+  "trait.thrifty": "Thrifty",
+  "trait.thrifty.text": "Gets better prices on food, ammo, and reagents.",
+  "trait.careful": "Careful",
+  "trait.careful.text": "Gear wears down more slowly.",
+  "trait.hardworker": "Hard Worker",
+  "trait.hardworker.text": "Earns more coin while away from you.",
+  "trait.light": "Light-Footed",
+  "trait.light.text": "Takes less damage from falls.",
+  "trait.swimmer": "Strong Swimmer",
+  "trait.swimmer.text": "Holds breath longer and swims faster.",
+  "trait.quickhands": "Quick Hands",
+  "trait.quickhands.text": "Gathers and crafts more quickly.",
+  "trait.crafty": "Crafty",
+  "trait.crafty.text": "Sometimes crafts an extra item on multi-item recipes.",
+  "trait.saver": "Resourceful",
+  "trait.saver.text": "Sometimes saves the cheapest reagent when crafting.",
+  "trait.gatherer": "Gatherer",
+  "trait.gatherer.text": "Sometimes yields extra herbs, ore, or leather.",
+  "trait.pickup": "Sticky Fingers",
+  "trait.pickup.text": "Sometimes finds extra odds and ends when looting.",
+  "trait.scrounger": "Scrounger",
+  "trait.scrounger.text": "Gets a slightly larger share of looted coin.",
+  "trait.likeable": "Likeable",
+  "trait.likeable.text": "Gains reputation a bit faster.",
+  "trait.pathfinder": "Pathfinder",
+  "trait.pathfinder.text": "Arrives faster when called over.",
+  "trait.wanderer": "Wanderer",
+  "trait.wanderer.text": "Sends expedition parcels more often when away.",
+  "trait.quiet": "Quiet",
+  "trait.quiet.text": "Wild creatures are less likely to notice them.",
+  "trait.sharpeye": "Sharp-Eyed",
+  "trait.sharpeye.text": "More likely to spot rare gems while gathering.",
+  "trait.swift": "Fleet-Footed",
+  "trait.swift.text": "Arrives much faster when called, and crosses water without waiting for a ship.",
+  "trait.veteran": "Veteran",
+  "trait.veteran.text": "Sometimes sends usable gear in expedition parcels.",
+  "trait.thickskin": "Thick-Skinned",
+  "trait.thickskin.text": "Takes slightly less damage from critical hits.",
+  "trait.constitution": "Resilient",
+  "trait.constitution.text": "Higher resistance to {school} magic.",
+  "trait.revive": "Quick Recovery",
+  "trait.revive.text": "Rises in better shape after being resurrected.",
+  "trait.poisonres": "Hearty",
+  "trait.poisonres.text": "Poisons and diseases wear off sooner.",
+  "trait.sturdy": "Sturdy",
+  "trait.sturdy.text": "A bit tougher with more health.",
+  "trait.steady": "Steady Hands",
+  "trait.steady.text": "Less spell pushback when hit while casting.",
+  "trait.brave": "Brave",
+  "trait.brave.text": "Recovers faster from fear.",
+  "trait.hardhead": "Hard-Headed",
+  "trait.hardhead.text": "Recovers faster from stuns.",
+  "trait.surefoot": "Sure-Footed",
+  "trait.surefoot.text": "Shrugs off slows and roots sooner.",
+  "trait.laststand": "Last Stand",
+  "trait.laststand.text": "Sometimes clings on when brought to the brink.",
+  "trait.breather": "Second Wind",
+  "trait.breather.text": "Recovers rapidly right after combat ends.",
+  "trait.selfcare": "Self-Reliant",
+  "trait.selfcare.text": "Potions and bandages work better on them.",
+  "trait.tough": "Tough",
+  "trait.tough.text": "Higher resistance across all magic schools.",
+  "trait.composed": "Composed",
+  "trait.composed.text": "Breaks free from crowd control sooner.",
+  "trait.desperate": "Desperate Grit",
+  "trait.desperate.text": "Takes less damage when low on health.",
+  "trait.backtowall": "Back to the Wall",
+  "trait.backtowall.text": "Holds the line harder when an ally falls.",
+  "trait.wary": "Wary",
+  "trait.wary.text": "Better at avoiding blows when surrounded.",
+  "trait.rooted": "Planted",
+  "trait.rooted.text": "Harder to bring down while standing ground.",
+  "trait.dodgy": "Nimble",
+  "trait.dodgy.text": "Takes less damage from area attacks.",
+  "trait.alert": "Alert",
+  "trait.alert.text": "Better at spotting stealthed enemies.",
+  "trait.focus": "Focused",
+  "trait.focus.text": "Recovers faster after being interrupted.",
+  "trait.guard": "Guarded",
+  "trait.guard.text": "Occasionally deflects part of a heavy blow.",
+  "trait.counter": "Counter-Guard",
+  "trait.counter.text": "Raises guard briefly after taking a critical hit.",
+  "trait.grit": "Grit",
+  "trait.grit.text": "Receives stronger healing when low on health.",
+  "gate.trade": "Trade basic supplies and gear",
+  "gate.tradeany": "Trade any items",
+  "gate.bags": "Manage their packs",
+  "gate.summon": "Ask for a summon",
+  "gate.craft": "Craft using your reagents",
+  "gate.portal": "Ask for a portal",
+  "gate.money": "Take coin from them",
+  "gate.rewards": "Pick their quest rewards",
+  "gate.account": "Add them to your roster",
+  "school.2": "Fire",
+  "school.3": "Nature",
+  "school.4": "Frost",
+  "school.5": "Shadow",
+  "school.6": "Arcane",
+  "speech.source.interrupt": "Interrupt",
+  "speech.source.cc": "CC",
+  "speech.source.rescue": "Save",
+  "speech.source.dispel": "Dispel",
+  "speech.source.fleestop": "Snare",
+  "speech.source.aoe": "AoE",
+  "speech.source.escape": "Escape",
+  "speech.source.threat": "Threat",
+  "speech.source.pull": "Pull",
+  "speech.source.lure": "LOS",
+  "speech.source.position": "Move",
+  "speech.source.retreat": "Retreat",
+  "speech.source.mana": "Mana",
+  "speech.source.target": "Target",
+  "speech.source.encounter": "Boss",
+  "speech.act.move": "Moving",
+  "speech.act.chase": "Chasing",
+  "speech.act.stop": "Stopping",
+  "speech.act.holdfire": "Holding fire",
+  "speech.act.retreat": "Retreating",
+  "speech.act.useobject": "Using",
+  "speech.line": "{label}: {action}",
+  "speech.cast": "{spell} -> {target}",
+  "speech.self": "self",
+  "speech.attack": "Attack {target}",
+  "speech.move.target": "{move} {target}",
+  "speech.reason": "{line} ({reason})",
+  "gather.all_here": "Everyone's here—no stragglers.",
+  "gather.summoning": "Summoning {name} over.",
+  "gather.no_shards": "Out of Soul Shards—{count} still left behind.",
+  "soulstone.unlearned": "I haven't learned Create Soulstone yet—{name} doesn't have one.",
+  "soulstone.noshard": "Out of Soul Shards—can't make a Soulstone for {name}.",
+  "soulstone.cooldown": "Soulstone isn't ready yet—about {minutes} min left for {name}.",
+  "soulstone.cooldown.unknown": "Soulstone isn't ready yet—can't give one to {name} right now.",
   "popbot.decline": [
     "no thanks",
     "no ty",
@@ -9,15 +692,24 @@
     "soloing this one, ty",
     "maybe later"
   ],
-  "//2": "Companion quests in the player's quest log (Shared/QuestMirror). mirror.prefix ends with a space; {giver}: who gives the quest; $B: a line break.",
+  "popbot.noslot": [
+    "Your group's looking pretty crowded already—I'll pass.",
+    "You've got plenty of hands already; maybe another time.",
+    "Too many in your company right now—next time."
+  ],
+  "popbot.farewell": [
+    "We've already said our goodbyes. Safe travels.",
+    "We agreed to walk separate paths. Wish you well."
+  ],
+  "lesson.rank": "{name} ({rank})",
+  "craft.mail.subject": "Crafted Goods",
   "mirror.prefix": "[Companion] ",
-  "mirror.intro": "Your companion's quest: only what your companion kills and collects counts. Take them along.$B$B",
-  "mirror.placeholder.intro": "Your companion has not taken this quest yet. Bring them to {giver}; once they take it, this turns into the quest itself.$B$B",
+  "mirror.intro": "Your companion's task: only their own kills and pickups count. Bring them along.$B$B",
+  "mirror.placeholder.intro": "Your companion hasn't picked up this quest yet. Bring them to {giver}; once they accept it, the full details will appear here.$B$B",
   "mirror.placeholder.goal": "Bring your companion to {giver}",
   "mirror.done": "Objective complete",
   "mirror.somegiver": "the quest giver",
-  "//3": "Artisan trainer trips in the quest log (Shared/ArtisanTrainers). {skill}: the profession.",
   "artisan.quest.title": "Artisan {skill}",
   "artisan.quest.objective": "Bring your companion to an Artisan {skill} trainer",
-  "artisan.quest.details": "Your companion is ready for Artisan {skill}, but no capital trainer teaches it.$B$BTake them to the trainer (a red flag on your map when you are on the same continent); near it they walk over and pay the fee themselves."
+  "artisan.quest.details": "Your companion is ready for Artisan {skill}, but no capital trainer teaches it.$B$BTake them to the trainer (marked on your continent map); once nearby, they'll walk over and pay the fee themselves."
 }

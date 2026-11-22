@@ -3,12 +3,12 @@
   "//1": "Town trip question (Life/Errands/TownTrip): {places} (\"食物商人和训练师\"), {why} (errand.why.* of the business on the trip, joined: \"补点东西，顺便学新技能\"), {gold} (what the trainer costs, may be empty), {leader}. Reward: {quest}.",
   "trip.ask": {
     "default": [
-      "我想去{places}那里一趟，{why}，能等我一下吗？",
-      "{leader}，我去趟{places}，{why}，很快回来，行吗？"
+      "我得去趟{places}，{why}，能等我一会儿吗？",
+      "{leader}，我去{places}{why}，去去就回，行吗？"
     ],
-    "frugal": "我去趟{places}，{why}，钱我都算好了，能等我一下吗？",
-    "spendthrift": "钱又快花光了……我去{places}那边{why}，等我？",
-    "chatty": "对了对了，我得去{places}那里一趟，{why}，等我一下好不好？",
+    "frugal": "我去趟{places}，{why}，盘缠我都算好了，能等我片刻吗？",
+    "spendthrift": "钱袋又快见底了……我去{places}那边{why}，等我？",
+    "chatty": "说起来，我得去{places}一趟，{why}，能等我片刻吗？",
     "quiet": "去{places}，{why}，马上回。",
     "lazy": "唉，又得跑一趟{places}，{why}……等我会儿？"
   },
@@ -27,7 +27,7 @@
   },
   "errand.back": {
     "default": "我回来了。",
-    "chatty": "回来啦，东西都买齐了！"
+    "chatty": "回来啦，该备的都备齐了！"
   },
   "//2": "After the trip, the leader out of sight (whispered). {gate}: the gate's name.",
   "meet.ask": {
@@ -53,10 +53,10 @@
   },
   "//3": "Class quests (Companions/ClassQuests/ClassQuestFlow). {quest}: the chain's last quest, {leader}; thanks: {affinity} (now, of 100).",
   "classquest.ask": {
-    "default": "{leader}，我到等级了，能带我去做职业任务「{quest}」吗？",
-    "chatty": "{leader}{leader}！我听说「{quest}」能学到新本事，你陪我去一趟好不好？",
+    "default": "{leader}，我到火候了，能带我去做职业试炼「{quest}」吗？",
+    "chatty": "{leader}，我听说「{quest}」能学到真本事，有空陪我走一趟吗？",
     "quiet": "「{quest}」，能带我去吗？",
-    "lazy": "那个「{quest}」……一个人去太累了，你带带我？"
+    "lazy": "那个「{quest}」……一个人去太折腾，你带带我？"
   },
   "classquest.askgear": "{leader}，有个职业任务「{quest}」能拿件装备，有空陪我去吗？",
   "classquest.accepted": {
@@ -71,9 +71,9 @@
   "classquest.dropped": "那这个任务我先放着了。",
   "classquest.step": "这一步完成了，下一步看任务日志。",
   "classquest.thanks": {
-    "default": "做完了！多亏有你，谢谢！",
-    "chatty": "成啦成啦！没有你我肯定搞不定，太谢谢了！",
-    "quiet": "成了。谢谢。"
+    "default": "做完了！多亏有你，谢了！",
+    "chatty": "成了！多亏有你照应，要不然我可吃不消！",
+    "quiet": "成了。谢了。"
   },
   "classquest.selfdone": {
     "default": "对了，「{quest}」我自己去做完了。",
@@ -121,8 +121,8 @@
   "supply.opt.later": "现在不行",
   "//5": "Artisan trainers out in the world (Companions/ArtisanTrip). {skill}, {trainer}, {gold}, {leader}.",
   "artisan.ask": {
-    "default": "{leader}，我的{skill}可以学大师级了，可城里没人教，得去找{trainer}。有空带我去一趟吗？学费{gold}我自己出。",
-    "chatty": "{leader}{leader}！我的{skill}练到头啦，听说{trainer}能教大师级，陪我去一趟好不好？学费我自己出！",
+    "default": "{leader}，我的{skill}可以学大师级了，可城里无人能授，得去找{trainer}。有空带我去一趟吗？学费{gold}我自己出。",
+    "chatty": "{leader}，我的{skill}快摸到瓶颈了！听说{trainer}能指点大师级手艺，陪我去一趟怎样？学费我自个儿出。",
     "quiet": "大师级{skill}，要去找{trainer}。能带我去吗？",
     "frugal": "{leader}，大师级{skill}要{gold}，钱我攒好了，就差你带我去找{trainer}。"
   },
@@ -166,7 +166,7 @@
     "default": "{leader}，钱不够就从我这儿拿吧，别客气。",
     "frugal": "{leader}，我攒的钱你要用就拿，不过省着点花啊。"
   },
-  "affinity.unlock.rewards": "{leader}，以后任务奖励你帮我挑吧，你眼光比我好。",
+  "affinity.unlock.rewards": "{leader}，往后任务的赏赐你替我拿主意吧，你比我有眼力。",
   "affinity.unlock.account": "{leader}，我想一直跟着你。",
   "//7": "Joining the player's account at affinity 100 (Companions/Account/JoinOffer). {leader}.",
   "account.offer": {
@@ -174,23 +174,23 @@
     "quiet": "{leader}，说句话。"
   },
   "account.offer.page": {
-    "default": "跟你出生入死这么久了，我想正式进你的账号。以后你可以亲自带我出去闯，也可以随时叫我来帮忙。你愿意吗？",
-    "chatty": "{leader}，我想了好久！让我进你的账号吧，以后你想亲自玩我也行，叫我来帮忙也行，怎么样？",
-    "quiet": "……让我进你的账号吧。你愿意吗？"
+    "default": "跟你出生入死这么久，我想把名字正式记进你的名册里。往后无论你想亲自以我的身份闯荡艾泽拉斯，还是随时召我同行，我都听你的。你愿意吗？",
+    "chatty": "{leader}，我想了好久！把我记进你的名册吧，以后你想亲自替我出战也行，叫我来搭把手也行，怎么样？",
+    "quiet": "……把我的名字记进你的名册吧。你愿意吗？"
   },
   "account.offer.yes": "好，欢迎你。",
   "account.offer.later": "现在还不行。",
   "account.join.done": {
-    "default": "太好了！以后我就是你账号里的人了。",
-    "chatty": "太好啦！以后我就是你账号里的人了，多关照！",
-    "quiet": "嗯。以后一直在。"
+    "default": "太好了！从今往后，我就是你名册里的人了。",
+    "chatty": "太好了！往后我也是你名册里的一员了，多关照！",
+    "quiet": "嗯。以后都在。"
   },
-  "account.join.full": "你账号里的位置满了……腾出一个再叫我吧，我等你。",
+  "account.join.full": "你的名册已经满员了……腾出一个位置再叫我吧，我等你。",
   "account.later": {
     "default": "没关系，想好了就在伙伴名单里叫我一声。",
     "quiet": "好，等你。"
   },
-  "talk.opt.account": "到我的账号里来吧？",
+  "talk.opt.account": "把名字记进我的名册吧。",
   "//8": "A friend trait rolled at affinity 80 / 90 (Companions/Affinity/Traits). {leader}, {trait}: its name. Lines per trait can be added as \"affinity.trait.<key>\" (said instead).",
   "affinity.trait.life": {
     "default": "{leader}，跟着你这些日子，我也摸出了点自己的门道。（{trait}）",
@@ -225,7 +225,7 @@
   },
   "talk.hello.friend": {
     "default": "{leader}，怎么了？",
-    "chatty": "来啦来啦，要我帮什么忙？",
+    "chatty": "怎么了，{leader}？有事尽管吩咐！",
     "lazy": "嗯……什么事？"
   },
   "talk.hello.trusted": {
@@ -258,7 +258,7 @@
   },
   "talk.follow.ok": {
     "default": "走吧。",
-    "chatty": "走走走，等得我都快睡着了！"
+    "chatty": "走吧走吧，再歇下去骨头都要锈了！"
   },
   "talk.stay.cannot": "现在不行。",
   "talk.stay.team": "好，我们在这儿等你。",
@@ -296,8 +296,8 @@
   "craft.stop.combat": "先打架，回头再做！",
   "craft.stop.stopped": "好，先做到这儿。",
   "craft.stop.bagsfull": "我包里放不下了，腾点地方再说。",
-  "craft.stop.failed": "这个做不了……可能缺工具，或者得在铁砧、熔炉边上做。",
-  "craft.stop.cooldown": "这个现在做不了，得过阵子才行。",
+  "craft.stop.failed": "这个实在做不成——多半缺趁手的工具，或者得找个铁砧炉火才行。",
+  "craft.stop.cooldown": "这手艺急不得，得缓一阵子才能再做。",
   "//12": "He leaves by hearthstone or flight path (Companions/Travel/Departure). {leader}.",
   "leave.ask": {
     "default": "{leader}，你要走啊？我们在这儿等你？",
@@ -358,13 +358,13 @@
   "lead.back": {
     "default": "还是你来带队吧，我跟着你就行。",
     "quiet": "你带吧。",
-    "chatty": "哎别别，我可带不了队！{leader}，还是你来！"
+    "chatty": "别别，我可担不起带队的差事！{leader}，还是你来领路吧！"
   },
   "//15": "Sent away from the party in front of him (Life/Errands/WalkAway, a whisper). {leader}, {home}.",
   "leave.bye": {
     "default": "那我先走了，有事再叫我。",
     "quiet": "走了。有事叫我。",
-    "chatty": "好吧，那我先走啦！{leader}，想我了就叫我！"
+    "chatty": "那我先走一步啦！{leader}，有阵仗要打随时叫我！"
   },
   "leave.bye.hearth": {
     "default": "那我先回{home}了，有事再叫我。",
@@ -469,7 +469,7 @@
   "//25": "Out in the field (Life/Errands/LessonReminder). {lessons}: the names.",
   "lesson.remind": {
     "default": "我现在能学{lessons}了，下次进主城记得带我去趟训练师。",
-    "chatty": "对了对了！我能学{lessons}了，进主城的时候陪我去趟训练师好不好？",
+    "chatty": "对了！我能学{lessons}了，下回进城记得带我去趟训练师那儿！",
     "quiet": "能学{lessons}了。进城时带我去训练师。"
   },
   "lesson.remind.again": "{lessons}我还没学呢，进主城的时候别忘了带我去训练师。",
@@ -489,7 +489,7 @@
   "//27": "Recruiting (.kiro/docs/2026-11-21-companion-recruiting.md). A stranger talked to (Population/StrangerTalk); {level}: his level.",
   "meet.hello": {
     "default": "嗯？找我有事吗？",
-    "chatty": "哟，你好啊！有什么事？",
+    "chatty": "哟，这位朋友，找我有事？",
     "quiet": "……有事？",
     "lazy": "嗯……什么事？"
   },
@@ -516,7 +516,7 @@
   },
   "meet.join.yes": {
     "default": "行啊，正好一个人打得慢。走吧。",
-    "chatty": "好啊好啊！一个人打怪闷死了，走吧！",
+    "chatty": "正合我意！一个人清怪闷得慌，走吧！",
     "quiet": "……好，走吧。"
   },
   "meet.join.no": {
@@ -555,7 +555,7 @@
   "trial.bond.later": "好，你想好了随时跟我说。",
   "trial.intro": {
     "default": "重新认识一下：我叫{name}，是个{class}。以后请多关照了，{leader}。",
-    "chatty": "那我正式介绍一下！我叫{name}，{class}，能吃能打，就是有时候话多了点。以后多关照啦，{leader}！",
+    "chatty": "正式认识一下：我叫{name}，是个{class}，能吃能打，就是嘴碎了点。以后多照应啦，{leader}！",
     "quiet": "{name}，{class}。以后……请多关照。",
     "frugal": "我叫{name}，是个{class}。钱我会自己管好，不给你添麻烦。以后多关照，{leader}。"
   },
@@ -716,19 +716,19 @@
   "gather.summoning": "我去把{name}拉过来。",
   "gather.no_shards": "灵魂碎片不够，还有{count}个人没拉过来。",
   "//35": "A warlock's Soulstone for the healer (Rotations/WarlockRotation). {name}: the healer; {minutes}.",
-  "soulstone.unlearned": "我还没学会制造灵魂石，{name}身上没有灵魂石。",
-  "soulstone.noshard": "我没有灵魂碎片了，做不了灵魂石给{name}。",
-  "soulstone.cooldown": "灵魂石还在冷却，大约还要{minutes}分钟才能给{name}。",
-  "soulstone.cooldown.unknown": "灵魂石还在冷却，暂时给不了{name}。",
+  "soulstone.unlearned": "我还没修习灵魂石的法门，{name}身上眼下没有。",
+  "soulstone.noshard": "灵魂碎片用尽了，眼下凝不出灵魂石给{name}。",
+  "soulstone.cooldown": "灵魂石的法力还没缓过来，大概要再等{minutes}分钟才能给{name}。",
+  "soulstone.cooldown.unknown": "灵魂石的法力还没缓过来，眼下还给不了{name}。",
   "//36": "A population bot asked to join (Population/PopulationBotAI): no slot left for him, or said farewell before.",
   "//popbot": "A population bot turning down a plain group invite, typed as players do (Population/PopulationBotAI; English in the code before, kept as it was).",
   "popbot.decline": [
-    "no thanks",
-    "no ty",
-    "sorry, busy atm",
-    "nah im good, thx",
-    "soloing this one, ty",
-    "maybe later"
+    "不了，多谢",
+    "谢了，这会儿腾不开手",
+    "正忙着呢，下回吧",
+    "我一个人就行，谢啦",
+    "先不组了，祝好运",
+    "改天再一起"
   ],
   "popbot.noslot": [
     "你身边已经够热闹了，再多我一个怕是照顾不过来。",
@@ -745,13 +745,13 @@
   "craft.mail.subject": "代工",
   "//39": "Companion quests in the player's quest log (Shared/QuestMirror). mirror.prefix ends with a space; {giver}: who gives the quest; $B: a line break.",
   "mirror.prefix": "[队友] ",
-  "mirror.intro": "这是队友的任务：他杀的怪、他拿到的东西才算。带着他就行。$B$B",
-  "mirror.placeholder.intro": "队友还没接这个任务。带他去找{giver}，他接了以后，这里会换成任务本身。$B$B",
-  "mirror.placeholder.goal": "带队友去找{giver}",
+  "mirror.intro": "这是同伴接下的委托：只有他亲手击杀和收集的才算数，带他一起去吧。$B$B",
+  "mirror.placeholder.intro": "同伴还没接下这个委托。带他去找{giver}，他接下之后，这里就会显示具体内容。$B$B",
+  "mirror.placeholder.goal": "带同伴去找{giver}",
   "mirror.done": "完成任务目标",
-  "mirror.somegiver": "接任务的人",
+  "mirror.somegiver": "委托人",
   "//40": "Artisan trainer trips in the quest log (Shared/ArtisanTrainers). {skill}: the profession.",
   "artisan.quest.title": "大师级{skill}",
-  "artisan.quest.objective": "带队友去找大师级{skill}训练师",
-  "artisan.quest.details": "队友的{skill}已经可以学大师级了，可大师级训练师不在主城里。$B$B带他去找训练师（同一张大地图上会有红旗），到了附近他自己会过去，学费他自己出。"
+  "artisan.quest.objective": "带同伴去找大师级{skill}训练师",
+  "artisan.quest.details": "同伴的{skill}已到瓶颈，主城里无人能授，得去寻大师级训练师。$B$B带他动身吧（同一片大陆的地图上会有标记）；到了附近他自会前去拜师，学费不用你操心。"
 }
