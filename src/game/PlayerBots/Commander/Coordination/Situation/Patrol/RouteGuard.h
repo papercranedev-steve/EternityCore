@@ -28,7 +28,8 @@
  * Not for: dead members, players and pets (not ours to move); everyone during a retreat; the
  * pull's tank while it goes out or brings the pack back (Approach / Return, the pull owns its
  * walk), the opening controller walking to its spot (PullControl, its spot checks patrols),
- * line of sight hiders; the tank while it moves the fight (TeamPlan::fightSpot). In a fight a
+ * line of sight hiders; the tank while it moves the fight (TeamPlan::fightSpot). Not against
+ * the patrols of the pack the team hunts (TeamPlan::hunt): that fight is the one we walk to. In a fight a
  * member whose main tank stands on the route too: the whole fight is on it, the fight spot's
  * question (FightSpotAssigner), not one member's.
  *

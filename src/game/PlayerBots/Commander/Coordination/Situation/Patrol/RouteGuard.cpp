@@ -12,12 +12,44 @@ namespace Commander
 {
     namespace
     {
-        // A patrol comes to `at` before `staySec` (PatrolZone): which one and when.
-        PatrolFacts const* OnRoute(WorldModel const& world, Position3 const& at, float staySec, float& arriveSec)
+        // The creatures of the pack the team hunts (HuntPlan::target): the fight we walk to, a
+        // patrol among them is not one to step off from.
+        std::vector<ObjectGuid> HuntedPack(WorldModel const& world, TeamPlan const& plan)
         {
-            PatrolFacts const* p = nullptr;
-            arriveSec = PatrolZone::ArriveSec(world, at, &p);
-            return arriveSec >= 0.0f && arriveSec < staySec ? p : nullptr;
+            std::vector<ObjectGuid> out;
+            if (!plan.hunt.Active())
+                return out;
+            for (PackFacts const& pack : world.packs)
+                for (PackCreature const& c : pack.members)
+                    if (c.guid == plan.hunt.target)
+                    {
+                        for (PackCreature const& m : pack.members)
+                            out.push_back(m.guid);
+                        return out;
+                    }
+            out.push_back(plan.hunt.target);
+            return out;
+        }
+
+        // A patrol, not one of `ignore`, comes to `at` before `staySec` (PatrolZone): which
+        // one and when (the first).
+        PatrolFacts const* OnRoute(WorldModel const& world, Position3 const& at, float staySec,
+                                   std::vector<ObjectGuid> const& ignore, float& arriveSec)
+        {
+            PatrolFacts const* first = nullptr;
+            arriveSec = -1.0f;
+            for (PatrolFacts const& p : world.patrols)
+            {
+                if (std::find(ignore.begin(), ignore.end(), p.guid) != ignore.end())
+                    continue;
+                float const sec = PatrolZone::ArriveSec(world, p, at);
+                if (sec >= 0.0f && (!first || sec < arriveSec))
+                {
+                    first = &p;
+                    arriveSec = sec;
+                }
+            }
+            return first && arriveSec < staySec ? first : nullptr;
         }
 
         bool Exempt(TeamPlan const& plan, PartyMemberFacts const& m)
@@ -70,12 +102,17 @@ namespace Commander
         if (!world.field || plan.retreat.active || g.staySec <= 0.0f)
             return;
 
+        // The patrol the team hunts comes to us on purpose: walking off its route would undo
+        // the hunt's walk to it, every refresh (a field bot hunting a Prowler went back and
+        // forth beside its route, 2026-11-22).
+        std::vector<ObjectGuid> const hunted = HuntedPack(world, plan);
+
         // A whole fight on the route is PatrolAssigner's (header).
         if (world.HasPartyEnemy())
         {
             float tankArrive = 0.0f;
             if (PartyMemberFacts const* tank = Tanks::Main(world))
-                if (OnRoute(world, tank->pos, g.staySec, tankArrive))
+                if (OnRoute(world, tank->pos, g.staySec, hunted, tankArrive))
                     return;
         }
 
@@ -85,10 +122,10 @@ namespace Commander
             if (Exempt(plan, m))
                 continue;
             float arrive = 0.0f;
-            PatrolFacts const* p = OnRoute(world, m.standAt, g.staySec, arrive);
+            PatrolFacts const* p = OnRoute(world, m.standAt, g.staySec, hunted, arrive);
             // Walking off already: keep the task until it is off (OffRouteBehavior holds the walk).
             if (!p)
-                p = OnRoute(world, m.pos, g.staySec, arrive);
+                p = OnRoute(world, m.pos, g.staySec, hunted, arrive);
             if (!p)
                 continue;
 
