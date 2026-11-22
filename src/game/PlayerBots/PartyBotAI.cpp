@@ -53,6 +53,7 @@
 #include "Shared/BotChat.h"
 #include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
+#include "Shared/GameNames.h"
 #include "Shared/Portals.h"
 #include "Life/Errands/ErrandCommon.h"
 #include "GameObject.h"
@@ -179,6 +180,51 @@ void PartyBotAI::RefreshLessonContext()
     for (SpellEntry const* pSpell : m_spellListIndirectHeal)
         use(pSpell);
     use(m_resurrectionSpell);
+}
+
+std::vector<Life::WantedQuest> PartyBotAI::WantedPickUps(Player* pLeader, bool bonded) const
+{
+    std::vector<Life::WantedQuest> wanted;
+    if (bonded)
+    {
+        for (uint32 questId : Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow))
+        {
+            Life::WantedQuest w;
+            w.questId = questId;
+            wanted.push_back(w);
+        }
+    }
+    Life::QuestPickUp::AddLeaderQuests(me, pLeader, wanted);
+    return wanted;
+}
+
+bool PartyBotAI::UpdateQuestTurnIn(Player* pLeader)
+{
+    bool const busy = Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser);
+    for (Life::TurnedInQuest const& done : Life::QuestTurnIn::TakeTurnedIn(m_questTurnIn))
+    {
+        // One line per giver visit for the whole party (the once key), a new item worn its own.
+        Commander::VoiceEvent e;
+        e.speaker = me->GetObjectGuid();
+        e.onceMs = 20 * IN_MILLISECONDS;
+        std::string const item = done.itemId ? BotShared::GameNames::ItemName(done.itemId, pLeader) : std::string();
+        if (done.wore && !item.empty())
+        {
+            e.key = "voice.quest.turnin.wore";
+            e.tier = Commander::VoiceTier::Social;
+            e.vars.emplace_back("item", item);
+            e.once = "turnin.wore:" + std::to_string(done.giver.GetRawValue());
+            me->HandleEmoteCommand(EMOTE_ONESHOT_CHEER);
+        }
+        else
+        {
+            e.key = "voice.quest.turnin";
+            e.tier = Commander::VoiceTier::Flavor;
+            e.once = "turnin:" + std::to_string(done.giver.GetRawValue());
+        }
+        sCommanderMgr.QueueVoice(me, std::move(e));
+    }
+    return busy;
 }
 
 bool PartyBotAI::UpdateProvisions(Player* pLeader)
@@ -1212,14 +1258,12 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // Out in the field: important lessons waiting (party chat, it keeps following).
             if (errands)
                 Life::LessonReminder::Update(me, m_lessonReminder, pLeader, m_lessonContext, PersonalityTags());
-            static std::vector<uint32> const noPickUps;
             bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||
-                Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser) ||
-                Life::QuestPickUp::Update(me, m_questPickUp, pLeader,
-                    bonded ? Companions::ClassQuestFlow::WantedPickUps(me, m_classQuestFlow) : noPickUps) ||
+                UpdateQuestTurnIn(pLeader) ||
+                Life::QuestPickUp::Update(me, m_questPickUp, pLeader, WantedPickUps(pLeader, bonded)) ||
                 (errands && (Life::NpcVisit::Update(me, m_vendorVisit, pLeader, m_vendorTask) ||
                     Life::NpcVisit::Update(me, m_trainerVisit, pLeader, m_trainerTask) ||
                     Life::NpcVisit::Update(me, m_artisanVisit, pLeader, m_artisanTask) ||

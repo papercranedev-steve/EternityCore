@@ -127,6 +127,12 @@ public:
     // (Life/Errands/GiveProvisions: the leader, bots that ask); a companion, which buys its
     // food, asks a mage of the party first (AskProvisions). True: busy, the bot stays put.
     bool UpdateProvisions(Player* pLeader);
+    // The quests to take from their givers (Life/Errands/QuestPickUp.h): a bonded companion's
+    // class quest steps, then the leader's quests it does not have yet.
+    std::vector<Life::WantedQuest> WantedPickUps(Player* pLeader, bool bonded) const;
+    // The turn-in errand (Life/Errands/QuestTurnIn.h); what it handed in goes to the party voice
+    // (Commander/Commands/Voice/PartyVoice.h). True: busy.
+    bool UpdateQuestTurnIn(Player* pLeader);
     // Combat, a Commander plan, a resurrection first: their trades and casts stop for now.
     void PauseProvisions();
     // Too far from its anchor to walk: another map, or beyond Summon::FAR_YD and out of his
@@ -271,8 +277,8 @@ public:
     Companions::JoinOffer::State m_joinOffer;
     Life::ArtisanTask m_artisanTask;
     Life::NpcVisitState m_artisanVisit;
-    // Out of combat: takes the class quest steps the flow wants from their givers near the leader
-    // (Life/Errands/QuestPickUp.h).
+    // Out of combat: takes the class quest steps the flow wants from their givers near the leader,
+    // and the leader's quests it lacks at a giver he stands by (Life/Errands/QuestPickUp.h).
     Life::QuestPickUpState m_questPickUp;
     // Out of combat: a quest item used on the creature it is for (taming rods; Life/Errands/QuestItemUse.h).
     Life::QuestItemUseState m_questItemUse;

@@ -7,11 +7,11 @@
 #include "Creature.h"
 #include "GameObject.h"
 #include "Map.h"
-#include "MotionMaster.h"
 #include "ObjectMgr.h"
 #include "QuestDef.h"
 #include "WorldSession.h"
 #include "Timer.h"
+#include "Log.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "CellImpl.h"
@@ -49,13 +49,33 @@ namespace QuestTurnIn
             return quests;
         }
 
-        // The first finished quest `giver` ends, 0 = none.
-        uint32 EndedBy(WorldObject const* giver, std::vector<uint32> const& quests)
+        // The leader has (or had) the quest too: it is handed in with him.
+        bool WithLeader(Player const* anchor, uint32 questId)
+        {
+            return anchor && anchor->GetQuestStatus(questId) != QUEST_STATUS_NONE;
+        }
+
+        // The first finished quest `giver` ends where the party stands (GiverVisit::LeaderBy for
+        // the leader's quests, ANCHOR_YD of the center for the bot's own), 0 = none.
+        uint32 EndedBy(WorldObject const* giver, std::vector<uint32> const& quests, Player const* anchor,
+                       WorldObject const* center)
+        {
+            for (uint32 questId : quests)
+            {
+                if (!giver->HasInvolvedQuest(questId))
+                    continue;
+                if (WithLeader(anchor, questId) ? GiverVisit::LeaderBy(anchor, giver) : center->IsWithinDist(giver, ANCHOR_YD, false))
+                    return questId;
+            }
+            return 0;
+        }
+
+        bool EndsAny(WorldObject const* giver, std::vector<uint32> const& quests)
         {
             for (uint32 questId : quests)
                 if (giver->HasInvolvedQuest(questId))
-                    return questId;
-            return 0;
+                    return true;
+            return false;
         }
 
         class GiverCheck
@@ -65,12 +85,12 @@ namespace QuestTurnIn
             bool operator()(Creature* c)
             {
                 return c->IsAlive() && c->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER) && !c->IsHostileTo(m_me) &&
-                       m_me->IsWithinDist(c, m_range, false) && EndedBy(c, m_quests);
+                       m_me->IsWithinDist(c, m_range, false) && EndsAny(c, m_quests);
             }
             bool operator()(GameObject* go)
             {
                 return go->isSpawned() && go->GetGoType() == GAMEOBJECT_TYPE_QUESTGIVER &&
-                       m_me->IsWithinDist(go, m_range, false) && EndedBy(go, m_quests);
+                       m_me->IsWithinDist(go, m_range, false) && EndsAny(go, m_quests);
             }
 
         private:
@@ -86,14 +106,7 @@ namespace QuestTurnIn
             return me->GetMap()->GetCreature(guid);
         }
 
-        bool InReach(Player* me, WorldObject* giver)
-        {
-            if (GameObject* go = giver->ToGameObject())
-                return go->IsAtInteractDistance(me);
-            return me->IsWithinDistInMap(giver, INTERACTION_DISTANCE);
-        }
-
-        WorldObject* Pick(Player* me, QuestTurnInState& state, WorldObject const* anchor, uint32& questId)
+        WorldObject* Pick(Player* me, QuestTurnInState& state, Player const* anchor, WorldObject const* center, uint32& questId)
         {
             std::vector<uint32> const quests = FinishedQuests(me);
             if (quests.empty())
@@ -111,7 +124,7 @@ namespace QuestTurnIn
             givers.insert(givers.end(), objects.begin(), objects.end());
             givers.erase(std::remove_if(givers.begin(), givers.end(), [&](WorldObject* g)
             {
-                return Errands::IsDone(state.done, g->GetObjectGuid(), RETRY_MS) || !anchor->IsWithinDist(g, ANCHOR_YD, false);
+                return Errands::IsDone(state.done, g->GetObjectGuid(), RETRY_MS) || !EndedBy(g, quests, anchor, center);
             }), givers.end());
             std::sort(givers.begin(), givers.end(), [me](WorldObject* a, WorldObject* b)
             {
@@ -120,9 +133,10 @@ namespace QuestTurnIn
 
             for (WorldObject* g : givers)
             {
-                if (InReach(me, g) || Errands::WalkIsSafe(me, g->GetPositionX(), g->GetPositionY(), g->GetPositionZ(), MAX_PATH_DETOUR))
+                if (GiverVisit::InReach(me, g) ||
+                    Errands::WalkIsSafe(me, g->GetPositionX(), g->GetPositionY(), g->GetPositionZ(), MAX_PATH_DETOUR))
                 {
-                    questId = EndedBy(g, quests);
+                    questId = EndedBy(g, quests, anchor, center);
                     return g;
                 }
                 Errands::MarkDone(state.done, g->GetObjectGuid(), DONE_KEEP);
@@ -140,7 +154,7 @@ namespace QuestTurnIn
         }
 
         // Rewards the quest at the giver through the client's handler. False: refused (bags full).
-        bool TurnIn(Player* me, WorldObject* giver, Quest const* quest, uint32 reward)
+        bool TurnIn(Player* me, WorldObject* giver, Quest const* quest, uint32 reward, TurnedInQuest& done)
         {
             std::set<ObjectGuid> before;
             BotShared::Inventory::CollectBagItemGuids(me, before);
@@ -151,17 +165,36 @@ namespace QuestTurnIn
             packet.reward = reward;
             me->GetSession()->HandleQuestgiverChooseRewardOpcode(packet);
 
-            BotShared::Inventory::WearUpgrades(me, before);
-            return me->GetQuestRewardStatus(quest->GetQuestId()) || me->GetQuestStatus(quest->GetQuestId()) != QUEST_STATUS_COMPLETE;
+            bool const rewarded = me->GetQuestRewardStatus(quest->GetQuestId()) ||
+                                  me->GetQuestStatus(quest->GetQuestId()) != QUEST_STATUS_COMPLETE;
+            done.wore = BotShared::Inventory::WearUpgrades(me, before) > 0;
+            done.questId = quest->GetQuestId();
+            done.giver = giver->GetObjectGuid();
+            if (quest->GetRewChoiceItemsCount() > 0 && reward < QUEST_REWARD_CHOICES_COUNT)
+                done.itemId = quest->RewChoiceItemId[reward];
+            else if (quest->GetRewItemsCount() > 0)
+                done.itemId = quest->RewItemId[0];
+            sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[QuestTurnIn] %s: quest %u at %s %s.", me->GetName(), quest->GetQuestId(),
+                giver->GetObjectGuid().GetString().c_str(), rewarded ? "rewarded" : "refused");
+            return rewarded;
         }
     }
 
     void Stop(Player* me, QuestTurnInState& state, IRewardChooser& chooser)
     {
-        if (state.giver.IsEmpty())
+        bool const visiting = !state.giver.IsEmpty() || state.visit.lingerUntilMs;
+        GiverVisit::End(state.visit);
+        if (!visiting)
             return;
         Clear(me, state, chooser);
         Errands::StopWalk(me);
+    }
+
+    std::vector<TurnedInQuest> TakeTurnedIn(QuestTurnInState& state)
+    {
+        std::vector<TurnedInQuest> out;
+        out.swap(state.turnedIn);
+        return out;
     }
 
     bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser)
@@ -174,6 +207,9 @@ namespace QuestTurnIn
         }
 
         uint32 const now = WorldTimer::getMSTime();
+        if (GiverVisit::Lingering(me, state.visit, now))
+            return true;
+
         WorldObject* giver = nullptr;
         Quest const* quest = nullptr;
         if (!state.giver.IsEmpty())
@@ -181,10 +217,13 @@ namespace QuestTurnIn
             giver = FindGiver(me, state.giver);
             quest = sObjectMgr.GetQuestTemplate(state.questId);
             bool const waitingForChoice = state.choiceSinceMs != 0;
-            if (!giver || !quest || me->GetQuestStatus(state.questId) != QUEST_STATUS_COMPLETE ||
+            // The leader walked away from the giver of a quest he has too: the bot follows him.
+            bool const leaderLeft = giver && WithLeader(anchor, state.questId) && !GiverVisit::LeaderBy(anchor, giver);
+            if (!giver || !quest || me->GetQuestStatus(state.questId) != QUEST_STATUS_COMPLETE || leaderLeft ||
                 (!waitingForChoice && WorldTimer::getMSTimeDiff(state.startedMs, now) > GIVE_UP_MS))
             {
-                Errands::MarkDone(state.done, state.giver, DONE_KEEP);
+                if (!leaderLeft)
+                    Errands::MarkDone(state.done, state.giver, DONE_KEEP);
                 Stop(me, state, chooser);
                 return false;
             }
@@ -194,7 +233,7 @@ namespace QuestTurnIn
             if (now < state.nextSearchMs)
                 return false;
             uint32 questId = 0;
-            giver = Pick(me, state, center, questId);
+            giver = Pick(me, state, anchor, center, questId);
             quest = giver ? sObjectMgr.GetQuestTemplate(questId) : nullptr;
             if (!quest)
             {
@@ -204,46 +243,38 @@ namespace QuestTurnIn
             state.giver = giver->GetObjectGuid();
             state.questId = questId;
             state.startedMs = now;
-            state.nextMoveMs = 0;
             state.choiceSinceMs = 0;
         }
 
-        if (InReach(me, giver))
-        {
-            if (!me->IsStopped())
-                me->StopMoving();
-            me->SetFacingToObject(giver);
+        if (GiverVisit::Approach(me, state.visit, giver, anchor, now) != GiverVisit::Step::Act)
+            return true;
 
-            uint32 reward = 0;
-            if (quest->GetRewChoiceItemsCount() > 1)
+        uint32 reward = 0;
+        if (quest->GetRewChoiceItemsCount() > 1)
+        {
+            if (!state.choiceSinceMs)
+                state.choiceSinceMs = now;
+            if (!chooser.Choose(me, quest, reward))
             {
-                if (!state.choiceSinceMs)
-                    state.choiceSinceMs = now;
-                if (!chooser.Choose(me, quest, reward))
-                {
-                    // Nobody answered in time: the bot picks itself.
-                    if (WorldTimer::getMSTimeDiff(state.choiceSinceMs, now) < CHOICE_WAIT_MS)
-                        return true;
-                    reward = BotShared::QuestRewards::BestChoice(me, quest);
-                }
+                // Nobody answered in time: the bot picks itself.
+                if (WorldTimer::getMSTimeDiff(state.choiceSinceMs, now) < CHOICE_WAIT_MS)
+                    return true;
+                reward = BotShared::QuestRewards::BestChoice(me, quest);
             }
-
-            if (!TurnIn(me, giver, quest, reward))
-                Errands::MarkDone(state.done, giver->GetObjectGuid(), DONE_KEEP);
-            Clear(me, state, chooser);
-            state.nextSearchMs = 0;     // the giver may end another of its quests
-            return true;
         }
 
-        if (me->HasUnitState(UNIT_STATE_NO_FREE_MOVE))
-            return true;
-
-        if (now >= state.nextMoveMs)
+        TurnedInQuest done;
+        if (TurnIn(me, giver, quest, reward, done))
         {
-            state.nextMoveMs = now + REPATH_MS;
-            me->GetMotionMaster()->MovePoint(0, giver->GetPositionX(), giver->GetPositionY(), giver->GetPositionZ(),
-                                             MOVE_PATHFINDING | MOVE_RUN_MODE);
+            state.turnedIn.push_back(done);
+            if (state.turnedIn.size() > TURNED_IN_KEEP)
+                state.turnedIn.erase(state.turnedIn.begin());
         }
+        else
+            Errands::MarkDone(state.done, giver->GetObjectGuid(), DONE_KEEP);
+        GiverVisit::Acted(state.visit, now);
+        Clear(me, state, chooser);
+        state.nextSearchMs = 0;     // the giver may end another of its quests
         return true;
     }
 }

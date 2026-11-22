@@ -74,6 +74,7 @@ namespace Commander
         if (fightEnded)
             m_lastFightEndMs = nowMs;
         QuietMoments(world, plan, settings, fighting, nowMs);
+        QuestMoments(map, world, human, fighting, nowMs);
         Remember(world, plan);
     }
 

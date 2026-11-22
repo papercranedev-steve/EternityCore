@@ -1467,6 +1467,8 @@ class ObjectMgr
         }
 
         QuestRelationsMap& GetCreatureQuestRelationsMap() { return m_CreatureQuestRelations; }
+        // creature entry -> quest it ends (PartyBot voice: whom a finished quest goes back to)
+        QuestRelationsMap const& GetCreatureQuestInvolvedRelationsMap() const { return m_CreatureQuestInvolvedRelations; }
 
         void ResetOldMailCounter() { m_OldMailCounter = 0; }
         void IncrementOldMailCounter(uint32 count) { m_OldMailCounter += count; }

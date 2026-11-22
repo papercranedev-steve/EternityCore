@@ -7,10 +7,15 @@
  * means no reward). The reward comes from an IRewardChooser (RewardChooser.h); upgrades
  * among the rewards are put on. Soul companions doc §4.3 (stage S3).
  *
- * Same gate as the other errands (ErrandCommon::MayRun), safe walk, SEARCH_YD of the bot and
- * ANCHOR_YD of the anchor. A giver it could not reach in GIVE_UP_MS or that refused the
- * reward is not tried again for RETRY_MS (a giver stays where it is: from another spot, a
- * floor lower, the walk may work).
+ * At the giver as a player (GiverVisit.h): its own spot in front of it, a moment talking before
+ * the reward, a moment after. A quest the leader has (or had) too is handed in with him: only
+ * at a giver he stands by (GiverVisit::TOGETHER_YD); the bot's own (a class quest) at any giver
+ * within ANCHOR_YD of the anchor. What it handed in is kept for the caller (TakeTurnedIn: the
+ * party voice's line, PartyBotAI).
+ *
+ * Same gate as the other errands (ErrandCommon::MayRun), safe walk, SEARCH_YD of the bot. A
+ * giver it could not reach in GIVE_UP_MS or that refused the reward is not tried again for
+ * RETRY_MS (a giver stays where it is: from another spot, a floor lower, the walk may work).
  *
  * Map thread of the bot.
  */
@@ -21,6 +26,8 @@
 #include "Common.h"
 #include "ObjectGuid.h"
 #include "Life/Errands/ErrandCommon.h"
+#include "Life/Errands/GiverVisit.h"
+#include <vector>
 
 class Player;
 
@@ -28,15 +35,25 @@ namespace Life
 {
     class IRewardChooser;
 
+    // A quest the bot handed in.
+    struct TurnedInQuest
+    {
+        uint32 questId = 0;
+        ObjectGuid giver;
+        uint32 itemId = 0;          // the reward it chose, else the quest's first reward item, 0 = none
+        bool wore = false;          // it put on an item it got
+    };
+
     // Per bot (a member of its AI). Plain data.
     struct QuestTurnInState
     {
         ObjectGuid giver;           // creature or gameobject
         uint32 questId = 0;
         uint32 startedMs = 0;
-        uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
         uint32 choiceSinceMs = 0;   // standing at the giver waiting for the chooser, 0 = not yet
+        GiverVisitState visit;
+        std::vector<TurnedInQuest> turnedIn;    // not taken by the caller yet
         Errands::DoneList done;
     };
 
@@ -46,8 +63,8 @@ namespace Life
         constexpr float ANCHOR_YD = 35.0f;
         constexpr float MAX_PATH_DETOUR = 2.5f;
         constexpr uint32 SEARCH_MS = 2000;
-        constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 20000;
+        constexpr size_t TURNED_IN_KEEP = 8;
         // A cap only: a chooser asking the player gets the request board's answer first (its
         // timeout runs once the leader's earlier questions are done; several companions
         // turning in together are asked one after another).
@@ -59,6 +76,9 @@ namespace Life
         // True: the bot walks to a giver or stands at it this tick.
         bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser);
         void Stop(Player* me, QuestTurnInState& state, IRewardChooser& chooser);
+
+        // The quests handed in since the last call, oldest first.
+        std::vector<TurnedInQuest> TakeTurnedIn(QuestTurnInState& state);
     }
 }
 

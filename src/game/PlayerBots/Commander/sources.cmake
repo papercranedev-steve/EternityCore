@@ -28,6 +28,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Commands/Voice/PartyVoice.h
   ${COMMANDER_DIR}/Commands/Voice/PartyVoice.cpp
   ${COMMANDER_DIR}/Commands/Voice/VoiceMoments.cpp
+  ${COMMANDER_DIR}/Commands/Voice/QuestMoments.cpp
   ${COMMANDER_DIR}/Perception/WorldModel.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.h
   ${COMMANDER_DIR}/Perception/WorldModelBuilder.cpp

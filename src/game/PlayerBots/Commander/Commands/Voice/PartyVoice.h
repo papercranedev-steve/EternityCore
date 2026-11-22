@@ -17,9 +17,10 @@
  *  - Only with a human in the team (a team of bots has nobody to tell).
  *
  * Moments (VoiceMoments.cpp) are found by comparing this refresh's facts and plan with the last
- * one's; brain modules and rotations can also ask for a line: TeamPlan::voice (boss modules) or
- * Queue (GatherPlanner, the warlock's Soulstone). The crowd control marks (ControlMarks.h) run
- * here too.
+ * one's, the party's quest progress likewise (QuestMoments.cpp); brain modules, rotations and
+ * the bot's life can also ask for a line: TeamPlan::voice (boss modules) or Queue
+ * (GatherPlanner, the warlock's Soulstone, a quest handed in through PartyBotAI). The crowd
+ * control marks (ControlMarks.h) run here too.
  *
  * Map thread of the party (PartyCommander::Update, after the planners).
  */
@@ -95,6 +96,9 @@ namespace Commander
         void MemberMoments(Map* map, WorldModel const& world, bool fighting, bool fightEnded, uint32 nowMs);
         void QuietMoments(WorldModel const& world, TeamPlan const& plan, VoiceSettings const& settings, bool fighting,
                           uint32 nowMs);
+        // QuestMoments.cpp: the party's quest progress (who is done, who still needs what).
+        void QuestMoments(Map* map, WorldModel const& world, Player const* human, bool fighting, uint32 nowMs);
+        void QuestNews(Map* map, WorldModel const& world, Player const* human, uint32 questId, uint32 nowMs);
         void Remember(WorldModel const& world, TeamPlan const& plan);
 
         // PartyVoice.cpp
@@ -133,6 +137,17 @@ namespace Commander
         std::vector<ObjectGuid> m_pendingLevelUps;  // humans who levelled in a fight: said after it
         std::map<uint64, MemberState> m_members;
         std::map<uint64, EnemyState> m_enemies;
+
+        // QuestMoments.cpp: each member's quests at the last look, and the quests that changed
+        // since (said once the changes settled, out of a fight).
+        struct QuestSnap
+        {
+            bool complete = false;
+            uint32 have = 0;            // kills, objects and items counted so far
+        };
+        std::map<uint64, std::map<uint32, QuestSnap>> m_questSnaps;
+        std::map<uint32, uint32> m_questChanged;    // quest -> first change since it was said
+        uint32 m_nextQuestLookMs = 0;
 
         ControlMarks m_marks;
     };

@@ -25,6 +25,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Errands/QuestObjectRun.h
   ${LIFE_DIR}/Errands/QuestObjectRun.cpp
   ${LIFE_DIR}/Errands/RewardChooser.h
+  ${LIFE_DIR}/Errands/GiverVisit.h
+  ${LIFE_DIR}/Errands/GiverVisit.cpp
   ${LIFE_DIR}/Errands/QuestTurnIn.h
   ${LIFE_DIR}/Errands/QuestTurnIn.cpp
   ${LIFE_DIR}/Errands/QuestPickUp.h

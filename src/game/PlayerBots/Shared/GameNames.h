@@ -19,6 +19,11 @@ namespace GameNames
 {
     // `reader` null: the default name.
     std::string UnitName(Unit const* unit, Player const* reader);
+    // By template entry (locales_creature / locales_item / locales_quest), else the template's.
+    // Unknown entry: empty.
+    std::string CreatureName(uint32 entry, Player const* reader);
+    std::string ItemName(uint32 itemId, Player const* reader);
+    std::string QuestTitle(uint32 questId, Player const* reader);
 }
 }
 
