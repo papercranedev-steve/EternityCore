@@ -1041,5 +1041,35 @@
   "voice.boss.mograine.down": "莫格莱尼没死透！怀特迈恩来了先打她！",
   "voice.boss.mograine.revived": "他又站起来了！我拉住他，继续打怀特迈恩！",
   "voice.boss.gandling.healer": "我被传走了！先顶住，我清完房间就回来！",
-  "voice.boss.zf.wave3": "下面那波有两个精英，跟着囚犯一起下去，我们跟着你。"
+  "voice.boss.zf.wave3": "下面那波有两个精英，跟着囚犯一起下去，我们跟着你。",
+  "//43": "Quests in the party voice (Commander/Commands/Voice/QuestMoments.cpp; a hand-in: PartyBotAI::UpdateQuestTurnIn). {quest}: its title; {giver}: who it goes back to; {left}: voice.quest.part pieces joined by voice.quest.sep; {names}: bots not done; {name}: the player; {item}: a reward it put on.",
+  "voice.quest.alldone": {
+    "default": ["「{quest}」都齐了，回去找{giver}交吧。", "「{quest}」搞定了，去找{giver}交任务。"],
+    "chatty": "「{quest}」全齐了！走走走，找{giver}领赏去！",
+    "quiet": "「{quest}」齐了，找{giver}。"
+  },
+  "voice.quest.alldone.nogiver": {
+    "default": ["「{quest}」都齐了，回去交吧。", "「{quest}」搞定了，可以交了。"],
+    "quiet": "「{quest}」齐了。"
+  },
+  "voice.quest.self_left": {
+    "default": ["我的「{quest}」还差：{left}。", "「{quest}」我这边还没齐，差{left}。"],
+    "chatty": "等等我！「{quest}」我还差{left}，再打几只就好！"
+  },
+  "voice.quest.bots_left": "「{quest}」{names}还没齐，再打一会儿。",
+  "voice.quest.player_left": {
+    "default": ["我们的「{quest}」齐了，{name}你还差：{left}。", "「{quest}」我们这边够了，{name}还差{left}。"],
+    "chatty": "我们的「{quest}」都齐啦！{name}你还差{left}，加把劲！"
+  },
+  "voice.quest.almost": ["「{quest}」快齐了。", "「{quest}」差不多了，再来一点。"],
+  "voice.quest.part": "{name} {have}/{need}",
+  "voice.quest.sep": "，",
+  "voice.quest.turnin": {
+    "default": ["交了。", "任务交了。", "搞定，交上了。"],
+    "chatty": ["交了交了，赏钱到手！", "又办完一件事，痛快！"]
+  },
+  "voice.quest.turnin.wore": {
+    "default": ["拿到{item}，正好换上。", "{item}不错，我穿上了。"],
+    "chatty": "哇，{item}！正好换上，看我帅不帅？"
+  }
 }

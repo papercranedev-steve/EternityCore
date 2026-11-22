@@ -996,5 +996,34 @@
   "voice.boss.mograine.down": "Mograine isn't dead! Whitemane is coming, kill her first!",
   "voice.boss.mograine.revived": "He's back up! I've got him, stay on Whitemane!",
   "voice.boss.gandling.healer": "I got teleported! Hold on, I'll be back once the room is clear!",
-  "voice.boss.zf.wave3": "Two elites below. Go down with the prisoners, we will follow you."
+  "voice.boss.zf.wave3": "Two elites below. Go down with the prisoners, we will follow you.",
+  "voice.quest.alldone": {
+    "default": ["\"{quest}\" is done for all of us. Back to {giver}.", "We're done with \"{quest}\", let's hand it in to {giver}."],
+    "chatty": "All done with \"{quest}\"! Come on, {giver} owes us a reward!",
+    "quiet": "\"{quest}\" done. {giver}."
+  },
+  "voice.quest.alldone.nogiver": {
+    "default": ["\"{quest}\" is done for all of us, let's hand it in.", "We're done with \"{quest}\"."],
+    "quiet": "\"{quest}\" done."
+  },
+  "voice.quest.self_left": {
+    "default": ["I still need {left} for \"{quest}\".", "Not done with \"{quest}\" yet: {left}."],
+    "chatty": "Wait for me! Still need {left} for \"{quest}\", just a few more!"
+  },
+  "voice.quest.bots_left": "{names} still need more for \"{quest}\". A bit longer.",
+  "voice.quest.player_left": {
+    "default": ["We're done with \"{quest}\". {name}, you still need {left}.", "\"{quest}\" is done on our side, {name} still needs {left}."],
+    "chatty": "We've got all of \"{quest}\"! {name}, you still need {left}, come on!"
+  },
+  "voice.quest.almost": ["Almost done with \"{quest}\".", "\"{quest}\" is nearly there."],
+  "voice.quest.part": "{name} {have}/{need}",
+  "voice.quest.sep": ", ",
+  "voice.quest.turnin": {
+    "default": ["Handed in.", "Quest's in.", "Done, turned in."],
+    "chatty": ["Turned in, reward's mine!", "Another job done, feels good!"]
+  },
+  "voice.quest.turnin.wore": {
+    "default": ["Got {item}, putting it on.", "{item}, nice. Wearing it."],
+    "chatty": "Ooh, {item}! On it goes. How do I look?"
+  }
 }
