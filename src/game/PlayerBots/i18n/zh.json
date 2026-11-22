@@ -834,5 +834,212 @@
   "//40": "Artisan trainer trips in the quest log (Shared/ArtisanTrainers). {skill}: the profession.",
   "artisan.quest.title": "大师级{skill}",
   "artisan.quest.objective": "带同伴去找大师级{skill}训练师",
-  "artisan.quest.details": "同伴的{skill}已到瓶颈，主城里无人能授，得去寻大师级训练师。$B$B带他动身吧（同一片大陆的地图上会有标记）；到了附近他自会前去拜师，学费不用你操心。"
+  "artisan.quest.details": "同伴的{skill}已到瓶颈，主城里无人能授，得去寻大师级训练师。$B$B带他动身吧（同一片大陆的地图上会有标记）；到了附近他自会前去拜师，学费不用你操心。",
+  "//42": "The party voice (Commander/Commands/Voice/PartyVoice.h): what bots say to the players during a run. Said by whoever it concerns; objects are lines by personality tag. voice.mark.<0-7>: raid target marks (ControlMarks.h); voice.marked {mark} {name}; voice.cc.<spell>: a crowd control by its English spell name in lower case (Polymorph -> polymorph), the English name when missing. {target}: an enemy (with its mark), {cc}: a voice.cc word, {name}: a party member, {level}.",
+  "voice.mark.0": "星星",
+  "voice.mark.1": "大饼",
+  "voice.mark.2": "菱形",
+  "voice.mark.3": "三角",
+  "voice.mark.4": "月亮",
+  "voice.mark.5": "方块",
+  "voice.mark.6": "叉叉",
+  "voice.mark.7": "骷髅",
+  "voice.marked": "【{mark}】{name}",
+  "voice.cc.polymorph": "变羊",
+  "voice.cc.sap": "闷棍",
+  "voice.cc.blind": "致盲",
+  "voice.cc.gouge": "凿击",
+  "voice.cc.shackle_undead": "束缚",
+  "voice.cc.freezing_trap_effect": "冰冻陷阱",
+  "voice.cc.scare_beast": "恐吓野兽",
+  "voice.cc.wyvern_sting": "翼龙钉刺",
+  "voice.cc.hibernate": "休眠",
+  "voice.cc.entangling_roots": "缠绕",
+  "voice.cc.banish": "放逐",
+  "voice.cc.fear": "恐惧",
+  "voice.cc.seduction": "诱惑",
+  "voice.cc.turn_undead": "超度",
+  "voice.cc.repentance": "忏悔",
+  "voice.cc.mind_control": "精神控制",
+  "voice.cc.hammer_of_justice": "制裁之锤",
+  "voice.cc.frost_nova": "冰霜新星",
+  "voice.cc.psychic_scream": "心灵尖啸",
+  "voice.cc.howl_of_terror": "恐惧嚎叫",
+  "voice.cc.intimidating_shout": "破胆怒吼",
+  "voice.pull.wait.mana": {
+    "default": ["等我喝口水。","蓝不够，等我回一下。","稍等，我喝点水再开。"],
+    "chatty": ["别急别急，我喝口水，马上就好！","等我把这瓶水喝完～"],
+    "quiet": "等我回蓝。"
+  },
+  "voice.pull.wait.hp": [
+    "等我回点血。",
+    "血不多，等我吃点东西。"
+  ],
+  "voice.pull.wait.far": [
+    "{name}，过来点，要开了。",
+    "{name}，跟上，等你过来再拉。"
+  ],
+  "voice.pull.wait.dead": [
+    "{name}还躺着呢，先拉起来再说。",
+    "等{name}起来再开。"
+  ],
+  "voice.pull.wait.player": [
+    "{name}，好了我就开。",
+    "等你回满，{name}。"
+  ],
+  "voice.pull.patrol": [
+    "有巡逻，等它走过去再拉。",
+    "先别动，巡逻过来了。"
+  ],
+  "voice.pull.go": {
+    "default": ["开了。","我去拉了。","上了，跟紧。"],
+    "chatty": ["走起！","开怪开怪，都跟上！"],
+    "quiet": "拉了。"
+  },
+  "voice.pull.go.corner": [
+    "我拉到拐角，都站到我后面来。",
+    "拉回拐角打，别站出去。"
+  ],
+  "voice.pull.control": [
+    "{target}交给我，{cc}。",
+    "我{cc}{target}，别打它。",
+    "{target}我来{cc}。"
+  ],
+  "voice.pull.los": [
+    "我往后躲一下，把远程引过来。",
+    "先退到拐角，让那几个施法的走过来。"
+  ],
+  "voice.pull.cancel": [
+    "等太久了，这波先不拉了。",
+    "算了，这波不开了。"
+  ],
+  "voice.cc.on": [
+    "{target}{cc}了，别打它。",
+    "{cc}上了，{target}别碰。"
+  ],
+  "voice.cc.broke": [
+    "{target}醒了！",
+    "谁把{target}打醒了……"
+  ],
+  "voice.fight.healer_hit": {
+    "default": ["{target}在打我！","救命，{target}追着我打！","{target}打我了，拉一下！"],
+    "chatty": "哎哎哎，{target}打我了！快来人啊！",
+    "quiet": "{target}在打我。"
+  },
+  "voice.fight.oom": [
+    "蓝不多了！",
+    "快没蓝了，省着点打。"
+  ],
+  "voice.fight.oom.empty": [
+    "没蓝了！",
+    "一滴蓝都没了！"
+  ],
+  "voice.fight.runner": [
+    "{target}跑了，拦住它！",
+    "{target}要去叫人！"
+  ],
+  "voice.fight.patrol": [
+    "巡逻过来了！",
+    "又来一个，巡逻的！"
+  ],
+  "voice.fight.retreat": [
+    "撤！跟我跑！",
+    "打不过，撤！"
+  ],
+  "voice.fight.retreat.follow": [
+    "跟着{name}跑！",
+    "撤了撤了，跟上{name}！"
+  ],
+  "voice.fight.danger": [
+    "这波不对劲，要不先撤？",
+    "顶不太住了，你跑我们就跟着跑。"
+  ],
+  "voice.fight.wipe": [
+    "顶不住了……",
+    "要团了……"
+  ],
+  "voice.fight.wipe.hide": [
+    "我先躲起来，等会儿来拉你们。",
+    "我装死，待会儿起来救人。"
+  ],
+  "voice.fight.tank_down": [
+    "坦克倒了！",
+    "T倒了，小心！"
+  ],
+  "voice.fight.standin": [
+    "我来扛！",
+    "都往我这儿带！"
+  ],
+  "voice.fight.healer_down": [
+    "治疗倒了，小心血！",
+    "没奶了，都省着点！"
+  ],
+  "voice.fight.close_call": [
+    "好险……{name}，刚才差点就没了。",
+    "吓死我了，{name}你血都见底了。"
+  ],
+  "voice.death.self": {
+    "default": ["我倒了……","啊……我挂了。"],
+    "quiet": "倒了。"
+  },
+  "voice.death.ask_res": [
+    "谁拉我一下？",
+    "起不来了，拉我一把。"
+  ],
+  "voice.death.thanks": {
+    "default": ["谢了。","活过来了，多谢！"],
+    "chatty": "哎呀活过来了，谢啦谢啦！",
+    "quiet": "谢谢。"
+  },
+  "voice.levelup.self": [
+    "我升到{level}级了！",
+    "{level}级了！"
+  ],
+  "voice.levelup.player": {
+    "default": ["恭喜升级！","{name}，{level}级了，恭喜！","升级了，恭喜恭喜！"],
+    "chatty": "{level}级啦！今晚得好好庆祝一下！"
+  },
+  "voice.boss.kill": {
+    "default": ["搞定！","倒了！干得漂亮。","收工，打得不错。"],
+    "chatty": ["哈哈，倒了倒了！","漂亮！也不过如此嘛！"],
+    "quiet": "倒了。"
+  },
+  "voice.enter.dungeon": {
+    "default": ["进来了，都跟紧点。","这里不太平，小心点。"],
+    "chatty": "终于进来了，看看今天能捞到什么好东西！"
+  },
+  "voice.enter.raid": [
+    "人都到齐了吧？进去了。",
+    "大场面，大家打起精神。"
+  ],
+  "voice.idle": {
+    "default": ["歇会儿也好。","这一路走得可真远。"],
+    "chatty": ["你说这地方以前住的都是些什么人？","等这趟回去，我请大家喝一杯。","我昨晚做梦都在打怪……"],
+    "homebody": "好想回旅店坐坐，烤烤火。",
+    "frugal": "这一趟下来，修装备又得花不少钱。",
+    "lazy": "要不……我们再歇一会儿？",
+    "nightowl": "夜里赶路才有意思，安静。"
+  },
+  "voice.boss.vancleef.guards": "他叫帮手了！守卫交给我，治疗等一下再奶。",
+  "voice.boss.vancleef.hold": [
+    "先别把范克里夫打到一半，他会叫人！",
+    "停一停，等我们准备好再压他的血。"
+  ],
+  "voice.boss.vancleef.push": [
+    "可以了，打！",
+    "准备好了，压过去！"
+  ],
+  "voice.boss.thermaplugg.phase2": [
+    "他半血了，小心击退！",
+    "要开始击飞了，站稳点！"
+  ],
+  "voice.boss.thermaplugg.bombs": "还有炸弹机器人！远程打，近战别过去！",
+  "voice.boss.thermaplugg.presser": [
+    "墙上的按钮交给我。",
+    "亮了的侏儒脸我去按。"
+  ],
+  "voice.boss.mograine.down": "莫格莱尼没死透！怀特迈恩来了先打她！",
+  "voice.boss.mograine.revived": "他又站起来了！我拉住他，继续打怀特迈恩！",
+  "voice.boss.gandling.healer": "我被传走了！先顶住，我清完房间就回来！",
+  "voice.boss.zf.wave3": "下面那波有两个精英，跟着囚犯一起下去，我们跟着你。"
 }

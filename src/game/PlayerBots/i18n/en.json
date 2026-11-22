@@ -790,5 +790,211 @@
   "mirror.somegiver": "the quest giver",
   "artisan.quest.title": "Artisan {skill}",
   "artisan.quest.objective": "Bring your companion to an Artisan {skill} trainer",
-  "artisan.quest.details": "Your companion is ready for Artisan {skill}, but no capital trainer teaches it.$B$BTake them to the trainer (marked on your continent map); once nearby, they'll walk over and pay the fee themselves."
+  "artisan.quest.details": "Your companion is ready for Artisan {skill}, but no capital trainer teaches it.$B$BTake them to the trainer (marked on your continent map); once nearby, they'll walk over and pay the fee themselves.",
+  "voice.mark.0": "Star",
+  "voice.mark.1": "Circle",
+  "voice.mark.2": "Diamond",
+  "voice.mark.3": "Triangle",
+  "voice.mark.4": "Moon",
+  "voice.mark.5": "Square",
+  "voice.mark.6": "Cross",
+  "voice.mark.7": "Skull",
+  "voice.marked": "{name} ({mark})",
+  "voice.cc.polymorph": "Polymorph",
+  "voice.cc.sap": "Sap",
+  "voice.cc.blind": "Blind",
+  "voice.cc.gouge": "Gouge",
+  "voice.cc.shackle_undead": "Shackle",
+  "voice.cc.freezing_trap_effect": "Freezing Trap",
+  "voice.cc.scare_beast": "Scare Beast",
+  "voice.cc.wyvern_sting": "Wyvern Sting",
+  "voice.cc.hibernate": "Hibernate",
+  "voice.cc.entangling_roots": "Entangling Roots",
+  "voice.cc.banish": "Banish",
+  "voice.cc.fear": "Fear",
+  "voice.cc.seduction": "Seduce",
+  "voice.cc.turn_undead": "Turn Undead",
+  "voice.cc.repentance": "Repentance",
+  "voice.cc.mind_control": "Mind Control",
+  "voice.cc.hammer_of_justice": "Hammer of Justice",
+  "voice.cc.frost_nova": "Frost Nova",
+  "voice.cc.psychic_scream": "Psychic Scream",
+  "voice.cc.howl_of_terror": "Howl of Terror",
+  "voice.cc.intimidating_shout": "Intimidating Shout",
+  "voice.pull.wait.mana": {
+    "default": ["Hold on, drinking.","Need mana, give me a moment.","Wait, let me drink first."],
+    "chatty": ["Easy, easy, just finishing my drink!","One sip and I am ready, promise."],
+    "quiet": "Drinking."
+  },
+  "voice.pull.wait.hp": [
+    "Let me heal up first.",
+    "Low on health, eating."
+  ],
+  "voice.pull.wait.far": [
+    "{name}, come closer, we are about to pull.",
+    "Waiting for you, {name}."
+  ],
+  "voice.pull.wait.dead": [
+    "{name} is still dead, res first.",
+    "Waiting for {name} to get up."
+  ],
+  "voice.pull.wait.player": [
+    "Ready when you are, {name}.",
+    "Take your time, {name}."
+  ],
+  "voice.pull.patrol": [
+    "Patrol coming, wait for it to pass.",
+    "Hold, patrol."
+  ],
+  "voice.pull.go": {
+    "default": ["Pulling.","Going in.","Here they come."],
+    "chatty": ["Let's go!","Pulling, keep up!"],
+    "quiet": "Pulling."
+  },
+  "voice.pull.go.corner": [
+    "Pulling to the corner, stand behind me.",
+    "We fight at the corner, stay out of sight."
+  ],
+  "voice.pull.control": [
+    "{target} is mine: {cc}.",
+    "I'll {cc} {target}, don't touch it.",
+    "{cc} on {target}, leave it to me."
+  ],
+  "voice.pull.los": [
+    "Breaking line of sight, they will come to us.",
+    "Back around the corner, let the casters walk in."
+  ],
+  "voice.pull.cancel": [
+    "Took too long, calling this pull off.",
+    "Never mind, not pulling these."
+  ],
+  "voice.cc.on": [
+    "{target} is under {cc}, leave it.",
+    "{cc} on {target}, don't break it."
+  ],
+  "voice.cc.broke": [
+    "{target} is loose!",
+    "Who broke {target}..."
+  ],
+  "voice.fight.healer_hit": {
+    "default": ["{target} is on me!","Help, {target} is hitting me!","Get {target} off me!"],
+    "chatty": "Hey hey hey, {target} is on me! Somebody!",
+    "quiet": "{target} on me."
+  },
+  "voice.fight.oom": [
+    "Low on mana!",
+    "Running out of mana, careful."
+  ],
+  "voice.fight.oom.empty": [
+    "Out of mana!",
+    "OOM!"
+  ],
+  "voice.fight.runner": [
+    "{target} is running, stop it!",
+    "{target} is fleeing for help!"
+  ],
+  "voice.fight.patrol": [
+    "Patrol incoming!",
+    "Another one, a patrol!"
+  ],
+  "voice.fight.retreat": [
+    "Fall back! Follow me!",
+    "Too many, retreat!"
+  ],
+  "voice.fight.retreat.follow": [
+    "Follow {name}, run!",
+    "Running with {name}!"
+  ],
+  "voice.fight.danger": [
+    "This looks bad, maybe we should run?",
+    "We can't hold this. Run and we'll follow."
+  ],
+  "voice.fight.wipe": [
+    "We're done for...",
+    "This is a wipe..."
+  ],
+  "voice.fight.wipe.hide": [
+    "I'll hide and res you after.",
+    "Playing dead, I'll get you up later."
+  ],
+  "voice.fight.tank_down": [
+    "Tank down!",
+    "We lost the tank!"
+  ],
+  "voice.fight.standin": [
+    "I'll tank!",
+    "Bring them to me!"
+  ],
+  "voice.fight.healer_down": [
+    "Healer down, watch your health!",
+    "No heals, careful!"
+  ],
+  "voice.fight.close_call": [
+    "That was close, {name}.",
+    "Phew, you were nearly gone, {name}."
+  ],
+  "voice.death.self": {
+    "default": ["I'm down...","Ugh, I'm dead."],
+    "quiet": "Down."
+  },
+  "voice.death.ask_res": [
+    "Can someone res me?",
+    "A little help? Res please."
+  ],
+  "voice.death.thanks": {
+    "default": ["Thanks.","Back up, thank you!"],
+    "chatty": "Alive again! Thank you, thank you!",
+    "quiet": "Thanks."
+  },
+  "voice.levelup.self": [
+    "Level {level}!",
+    "Just hit {level}!"
+  ],
+  "voice.levelup.player": {
+    "default": ["Grats on the level!","Level {level}, grats {name}!","Ding! Congrats!"],
+    "chatty": "Level {level}! We have to celebrate tonight!"
+  },
+  "voice.boss.kill": {
+    "default": ["Done!","Down it goes. Nice work.","That's it, well played."],
+    "chatty": ["Ha! Down it goes!","Beautiful! Not so tough after all!"],
+    "quiet": "Down."
+  },
+  "voice.enter.dungeon": {
+    "default": ["We are in. Stay close.","Watch your step in here."],
+    "chatty": "Finally in! Let's see what treasure we find today!"
+  },
+  "voice.enter.raid": [
+    "Everyone here? Going in.",
+    "Big one. Stay sharp."
+  ],
+  "voice.idle": {
+    "default": ["A rest is good too.","We've come a long way."],
+    "chatty": ["Who do you think lived here before?","When we're back, the drinks are on me.","I dreamed about fighting all night..."],
+    "homebody": "I miss the inn and a warm fire.",
+    "frugal": "The repairs after this trip will cost a fortune.",
+    "lazy": "Maybe... we rest a little longer?",
+    "nightowl": "Travelling at night is nicer. Quiet."
+  },
+  "voice.boss.vancleef.guards": "He called his guards! I have them, healer wait a second.",
+  "voice.boss.vancleef.hold": [
+    "Don't push VanCleef to half yet, he calls guards!",
+    "Hold damage until we're ready."
+  ],
+  "voice.boss.vancleef.push": [
+    "Ready, burn him!",
+    "Go, push him!"
+  ],
+  "voice.boss.thermaplugg.phase2": [
+    "Half health, watch the knockback!",
+    "He's knocking us back now, careful!"
+  ],
+  "voice.boss.thermaplugg.bombs": "Bombs left! Ranged kill them, melee stay back!",
+  "voice.boss.thermaplugg.presser": [
+    "I'll handle the buttons.",
+    "I'll press the lit faces."
+  ],
+  "voice.boss.mograine.down": "Mograine isn't dead! Whitemane is coming, kill her first!",
+  "voice.boss.mograine.revived": "He's back up! I've got him, stay on Whitemane!",
+  "voice.boss.gandling.healer": "I got teleported! Hold on, I'll be back once the room is clear!",
+  "voice.boss.zf.wave3": "Two elites below. Go down with the prisoners, we will follow you."
 }
