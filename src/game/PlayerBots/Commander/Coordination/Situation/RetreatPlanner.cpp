@@ -462,6 +462,39 @@ namespace Commander
             return true;
         }
 
+        namespace
+        {
+            // Header MOVE_POINT_YD: he ran on past the point, the point goes with him.
+            void MovePointWithLeader(Player* leader, PartyCommander& commander)
+            {
+                RetreatPlan& r = commander.GetPlanMutable().retreat;
+                uint32 const now = WorldTimer::getMSTime();
+                if (r.movedMs && WorldTimer::getMSTimeDiff(r.movedMs, now) < MOVE_POINT_MS)
+                    return;
+                if (Dist3(PositionOf(leader), r.point) <= MOVE_POINT_YD)
+                    return;
+                r.movedMs = now;    // also after a failed search: no new search every tick
+
+                RetreatPlan const old = r;
+                std::vector<std::string> report;
+                if (!Start(leader, commander, report))
+                    return;
+                // Start began a new retreat: the same one goes on, its timeout from the first start.
+                r.automatic = old.automatic;
+                r.startedMs = old.startedMs;
+                r.declineNoted = old.declineNoted;
+                r.movedMs = now;
+                r.moves = old.moves + 1;
+                if (r.moves == 1)
+                    commander.GetPlanMutable().notes.push_back(Format("You ran on: the retreat point moves with you "
+                        "(now %.1f, %.1f, %.1f).", r.point.x, r.point.y, r.point.z));
+                // The MoveTo hold would keep the bots walking to the old point for up to its length.
+                for (Player* bot : BotsOf(leader))
+                    if (TeamBotAI* ai = dynamic_cast<TeamBotAI*>(bot->AI()))
+                        ai->Directives().ReleaseMovement();
+            }
+        }
+
         void Step(TeamBotAI* bot, PartyCommander& commander)
         {
             TeamPlan& plan = commander.GetPlanMutable();
@@ -504,6 +537,10 @@ namespace Commander
                     }
                 }
             }
+
+            if (r.active && !r.toDoor && world.HasPartyEnemy())
+                if (Player* leader = map->GetPlayer(world.leader))
+                    MovePointWithLeader(leader, commander);
 
             if (!r.active || !r.toDoor)
                 return;
@@ -650,9 +687,13 @@ namespace Commander
         }
 
         // Enemies leave world.enemies when they drop us from their threat list (evade clears it).
-        if (!world.HasPartyEnemy() && !missingCount)
+        // Then the leash is broken whoever is still on the way: done, the bots follow again
+        // (waiting for the leader at the point kept them standing 45 s while he walked on).
+        if (!world.HasPartyEnemy())
         {
-            finish(RetreatOutcome::Done, "Retreat done: the enemies gave up and everyone is at the retreat point.");
+            finish(RetreatOutcome::Done, missingCount
+                ? "Retreat done: the enemies gave up."
+                : "Retreat done: the enemies gave up and everyone is at the retreat point.");
             return;
         }
         if (WorldTimer::getMSTimeDiff(r.startedMs, now) > TIMEOUT_MS)

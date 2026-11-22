@@ -23,6 +23,15 @@ namespace Commander
             }
             return true;
         }
+
+        // An enemy is hitting the leader (its threat victim).
+        bool ChasesLeader(WorldModel const& world)
+        {
+            for (EnemyFacts const& e : world.enemies)
+                if (e.victim == world.leader)
+                    return true;
+            return false;
+        }
     }
 
     void RunAwayAssigner::Assign(WorldModel const& world, TeamPlan& plan) const
@@ -54,6 +63,10 @@ namespace Commander
         float const gain = danger ? DANGER_GAIN_YD : CALM_GAIN_YD;
         uint32 const ms = danger ? DANGER_RUN_MS : CALM_RUN_MS;
         if (run.gainYd < gain || run.runMs < ms)
+            return;
+        // Calm and nothing chases him: he walks on, the bots finish the fight and catch up.
+        // (A retreat here kept two bots standing 45 s at a point he never came back to.)
+        if (!danger && !ChasesLeader(world))
             return;
         PartyMemberFacts const* leader = world.FindMember(world.leader);
         if (!leader || (Tanks::IsTank(*leader) && !LeftTheParty(world, *leader)))

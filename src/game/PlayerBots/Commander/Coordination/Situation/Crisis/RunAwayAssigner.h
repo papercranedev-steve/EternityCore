@@ -11,7 +11,9 @@
  *   in danger  a contingency (TeamPlan::crisis: the tank or the healers gone) or
  *              RetreatAssigner::InDanger: a run of DANGER_GAIN_YD over DANGER_RUN_MS.
  *   otherwise  CALM_GAIN_YD over CALM_RUN_MS (a player repositioning, kiting back a few yards,
- *              walking to a corner does not stop the fight).
+ *              walking to a corner does not stop the fight), and only with an enemy on him
+ *              (user 2026-11-22: walking away from a fight the bots win is no retreat, they
+ *              finish it and catch up).
  * A leader who tanks drags the enemies with him (his run looks the same as a pull back to the
  * party): only when he is also LEAVE_PARTY_YD from every other living member.
  * Pure.

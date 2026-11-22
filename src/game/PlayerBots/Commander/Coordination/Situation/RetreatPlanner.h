@@ -85,8 +85,14 @@ namespace Commander
         float const DOOR_REACH_YD = 4.0f;
 
         // Map step after the assigners (PartyCommander::Update): starts a retreat RunAwayAssigner
-        // asked for (and tells the leader, or why it cannot), steps door runners out.
+        // asked for (and tells the leader, or why it cannot), steps door runners out, and
+        // outdoors moves the point with the leader: once he is MOVE_POINT_YD from it while the
+        // enemies still fight us, at most every MOVE_POINT_MS, a new point is picked from where
+        // he is (Start's search; none found = the old one stays). The timeout keeps counting
+        // from the first start.
         void Step(TeamBotAI* bot, PartyCommander& commander);
+        float const MOVE_POINT_YD = 30.0f;
+        uint32 const MOVE_POINT_MS = 3000;
     }
 
     class RetreatAssigner : public IAssigner

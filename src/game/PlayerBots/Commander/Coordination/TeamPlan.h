@@ -508,6 +508,9 @@ namespace Commander
         bool automatic = false;
         uint32 declinedAtMs = 0;            // the last request that could not start (no retry for a while)
         uint32 startedMs = 0;
+        // The point moved with the leader (RetreatPlanner::Step, he ran on past it).
+        uint32 movedMs = 0;
+        uint32 moves = 0;
         uint32 enemiesAtStart = 0;
         RetreatOutcome lastOutcome = RetreatOutcome::None;
         std::vector<PullMemberName> names;  // for notes written by the pure assigner
