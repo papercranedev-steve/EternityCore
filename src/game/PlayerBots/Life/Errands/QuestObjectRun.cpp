@@ -75,7 +75,9 @@ namespace QuestObjectRun
 
             std::vector<GameObject*> objects;
             for (GameObject* go : found)
-                if (!Errands::IsDone(state.done, go->GetObjectGuid()) && anchor->IsWithinDist(go, ANCHOR_YD, false) &&
+                if (!Errands::IsDone(state.done, go->GetObjectGuid(), FORGET_MS) &&
+                    !Errands::IsDone(state.unreachable, go->GetObjectGuid(), UNREACHABLE_FORGET_MS) &&
+                    anchor->IsWithinDist(go, ANCHOR_YD, false) &&
                     BotShared::ObjectUse::HowToUse(me, go).way != BotShared::ObjectUse::Way::Cannot)
                     objects.push_back(go);
             std::sort(objects.begin(), objects.end(), [me](GameObject* a, GameObject* b)
@@ -89,14 +91,15 @@ namespace QuestObjectRun
                 ApproachPoint(me, go, x, y, z);
                 if (go->IsAtInteractDistance(me) || Errands::WalkIsSafe(me, x, y, z, MAX_PATH_DETOUR))
                     return go;
-                Errands::MarkDone(state.done, go->GetObjectGuid(), DONE_KEEP);
+                Errands::MarkDone(state.unreachable, go->GetObjectGuid(), DONE_KEEP);
             }
             return nullptr;
         }
 
-        void Finish(Player* me, QuestObjectRunState& state)
+        // `reached`: used (or gone, or no longer needed); otherwise could not reach or open it.
+        void Finish(Player* me, QuestObjectRunState& state, bool reached)
         {
-            Errands::MarkDone(state.done, state.object, DONE_KEEP);
+            Errands::MarkDone(reached ? state.done : state.unreachable, state.object, DONE_KEEP);
             state.object.Clear();
             state.opening = false;
             state.bagsBefore.clear();
@@ -144,12 +147,17 @@ namespace QuestObjectRun
                 if (me->IsNonMeleeSpellCasted(false))
                     return true;    // Opening, Pick Lock: the object opens when the cast ends
                 TakeWhatOpened(me, state);
-                Finish(me, state);
+                Finish(me, state, true);
                 return true;
             }
-            if (!go || !NeedsForQuest(me, go) || WorldTimer::getMSTimeDiff(state.startedMs, now) > GIVE_UP_MS)
+            if (!go || !NeedsForQuest(me, go))
             {
-                Finish(me, state);
+                Finish(me, state, true);
+                return false;
+            }
+            if (WorldTimer::getMSTimeDiff(state.startedMs, now) > GIVE_UP_MS)
+            {
+                Finish(me, state, false);
                 return false;
             }
         }
@@ -166,6 +174,8 @@ namespace QuestObjectRun
             state.object = go->GetObjectGuid();
             state.startedMs = now;
             state.nextMoveMs = 0;
+            state.closestYd = me->GetDistance(go);
+            state.closerMs = now;
         }
 
         // Walks up to it like a player, not just into reach (nextMoveMs: it was sent towards it).
@@ -177,7 +187,7 @@ namespace QuestObjectRun
             BotShared::Inventory::CollectBagItemGuids(me, state.bagsBefore);
             if (!BotShared::ObjectUse::Start(me, go, plan))
             {
-                Finish(me, state);
+                Finish(me, state, false);
                 return false;
             }
             me->SetFacingToObject(go);
@@ -186,9 +196,22 @@ namespace QuestObjectRun
             if (!me->IsNonMeleeSpellCasted(false))
             {
                 TakeWhatOpened(me, state);
-                Finish(me, state);
+                Finish(me, state, true);
             }
             return true;
+        }
+
+        // Walking but getting no closer: stuck, give it up (the follow takes over next tick).
+        float const distance = me->GetDistance(go);
+        if (distance < state.closestYd - PROGRESS_YD)
+        {
+            state.closestYd = distance;
+            state.closerMs = now;
+        }
+        else if (WorldTimer::getMSTimeDiff(state.closerMs, now) > STUCK_MS)
+        {
+            Finish(me, state, false);
+            return false;
         }
 
         if (me->HasUnitState(UNIT_STATE_NO_FREE_MOVE))
