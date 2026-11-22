@@ -134,7 +134,7 @@ namespace TownTrip
         void TryAsk(Player* me, TownTripState& state, Player* leader, std::vector<Trip::ITripPlanner*> const& planners,
                     std::vector<std::string> const& tags, uint32 now)
         {
-            if (!LeaderSettled(leader) || leader->GetMapId() != me->GetMapId())
+            if (!LeaderSettled(leader) || !me->IsWithinDistInMap(leader, ASK_YD))
                 return;
             if (!sRequestBoard.MayAsk(me->GetObjectGuid(), Requests::Intent::Errand))
                 return;

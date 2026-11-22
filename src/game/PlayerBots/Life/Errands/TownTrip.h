@@ -7,7 +7,8 @@
  * is free meanwhile (his own trainer, the bank): the bot does not follow, and walks back to a
  * leader up to Summon::FAR_YD away (PartyBotAI::FarBehind).
  *   Idle      every CHECK_MS: the leader is in a rest area (a city or an inn) and standing, the
- *             bot may run errands (ErrandCommon::MayRun) and some planner (Trip/TripPlan.h:
+ *             bot has arrived by him (ASK_YD: not still on its way after he hearthed or
+ *             flew there, nor elsewhere when he grouped it), the bot may run errands (ErrandCommon::MayRun) and some planner (Trip/TripPlan.h:
  *             shopping, training) finds it worth a trip. Then every planner adds its stops
  *             (one trip does all), the route is ordered by real walking distance
  *             (Trip/RouteOrder.h) and one question names every place and what for (doc §5:
@@ -108,6 +109,8 @@ namespace Life
     namespace TownTrip
     {
         constexpr float TRIP_YD = 150.0f;
+        // It asks only once it is by the leader (the class quest and artisan questions too).
+        constexpr float ASK_YD = 30.0f;
         // Done and the leader within this: just walk back, no question. A question only pays
         // when he went elsewhere in town (the mage quarter while the bot was at the bank).
         constexpr float NEAR_YD = 150.0f;
