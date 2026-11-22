@@ -11,7 +11,8 @@
  *
  * Same gate as the other errands (ErrandCommon::MayRun: out of combat), but no safe-walk check:
  * the target is an enemy in a field of them, and the player brought the bot there for it. A
- * creature it could not reach or use the item on is not tried again for DONE_KEEP creatures.
+ * creature it used the item on, or could not reach or use it on, is not tried again for DONE_KEEP
+ * creatures.
  * Map thread.
  */
 

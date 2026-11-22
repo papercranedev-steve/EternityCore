@@ -205,12 +205,12 @@ namespace QuestItemUse
             SpellCastTargets targets;
             targets.setUnitTarget(target);
             SpellEntry const* spell = BotShared::ItemUse::OnUseSpell(me, state.itemId);
+            // One use per creature, gone through or not: a creature the item already worked on
+            // (a woken Lazy Peon) gives no second credit.
+            Errands::MarkDone(state.done, target->GetObjectGuid(), DONE_KEEP);
             if (!BotShared::ItemUse::UseFromBags(me, state.itemId, targets))
-            {
                 sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[QuestItemUse] %s: item %u on %s (%u) did not go through (stand state %u).",
                     me->GetName(), state.itemId, target->GetName(), target->GetEntry(), uint32(me->GetStandState()));
-                Errands::MarkDone(state.done, target->GetObjectGuid(), DONE_KEEP);
-            }
             else if (spell && spell->HasAttribute(SPELL_ATTR_EX2_SPECIAL_TAMING_FLAG))
                 // (the party does not hit it meanwhile: doctrine HoldFire on a beast being tamed)
                 BotShared::BotChat::SayToParty(me, BotShared::Phrases::Say(BotShared::I18n::OfParty(me), "questitem.tame", {}, {}));
