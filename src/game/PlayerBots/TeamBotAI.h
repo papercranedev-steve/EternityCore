@@ -60,6 +60,9 @@ public:
     // A team of bots looks for its own fights (Commander HuntAssigner) unless a member does
     // not: a road traveller only fights what attacks it (ambient flow doc §3.2).
     virtual bool SeeksFights() const { return true; }
+    // The creature its own fights are best against (a population bot acting out a quest: its
+    // creature, HuntAssigner goes for its packs first). 0: any.
+    virtual uint32 PreferredPrey() const { return 0; }
 
     // Every frame, before the bot update's throttle (the subclass's UpdateAI): the Commander's
     // mid-cast checks (CastWatch, area channel, CastBreak), the movement hands (Backpedal,

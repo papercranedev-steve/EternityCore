@@ -27,6 +27,7 @@
 #include "SpellMgr.h"
 #include "Log.h"
 #include <algorithm>
+#include <limits>
 #include <vector>
 #include <cmath>
 
@@ -239,6 +240,10 @@ namespace Population
         m_teamGuid = me->GetObjectGuid();
         Commander::Team::JoinUnit(m_teamGuid, m_request.unitId);
 
+        // Acting out a quest (FieldDirector::BuildQuestRequest): where it starts.
+        if (m_request.kind == BotKind::Field && m_request.quest.step != QuestStep::None)
+            BeginQuestStep(m_request.quest.step, m_request.quest.startAlong);
+
         if (m_request.kind == BotKind::Traveller)
         {
             // On its race's mount from level 40 (most of them), already riding: it logged in out of sight.
@@ -330,9 +335,14 @@ namespace Population
         // A fight over: one more done; enough of them, or nothing left to hunt here: moving on.
         bool const inCombat = me->IsInCombat();
         bool const traveller = m_request.kind == BotKind::Traveller;
+        bool const quester = m_questStep != QuestStep::None;
+        if (quester)
+            CountQuestKills(inCombat);
         if (m_wasInCombat && !inCombat)
             ++m_fights;
         m_wasInCombat = inCombat;
+        if (quester && !inCombat)
+            AdvanceQuest();
 
         // A traveller at the road's end in someone's sight: on into the town, out of sight.
         if (traveller && !inCombat && m_handle->leave && m_phase != Phase::Gone)
@@ -344,7 +354,7 @@ namespace Population
             return;
         }
 
-        if (!traveller && !inCombat && !m_handle->done)
+        if (!traveller && !quester && !inCombat && !m_handle->done)
         {
             std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
             uint32 const idleSince = commander ? commander->GetPlan().hunt.idleSinceMs : 0;
@@ -385,7 +395,156 @@ namespace Population
             UpdateRoad();
             return;
         }
+        if (quester && !inCombat && !resting && !me->GetVictim())
+        {
+            UpdateQuestWalk();
+            return;
+        }
         FightVictim(me->GetVictim());
+    }
+
+    std::vector<Commander::Roads::RoadPoint> PopulationBotAI::QuestLine(bool towardsArea, float from) const
+    {
+        std::vector<Waypoint> const& way = m_request.quest.way;
+        std::vector<Commander::Roads::RoadPoint> line;
+        if (way.size() < 2)
+            return line;
+        std::vector<float> along(way.size(), 0.0f);
+        for (size_t i = 1; i < way.size(); ++i)
+            along[i] = along[i - 1] + std::sqrt((way[i].x - way[i - 1].x) * (way[i].x - way[i - 1].x) +
+                                                (way[i].y - way[i - 1].y) * (way[i].y - way[i - 1].y));
+        from = std::min(std::max(from, 0.0f), along.back());
+
+        // Where it is now, then the way's points on from there.
+        line.push_back({ me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() });
+        if (towardsArea)
+        {
+            for (size_t i = 0; i < way.size(); ++i)
+                if (along[i] > from)
+                    line.push_back({ way[i].x, way[i].y, way[i].z });
+        }
+        else
+        {
+            for (size_t i = way.size(); i-- > 0;)
+                if (along[i] < from)
+                    line.push_back({ way[i].x, way[i].y, way[i].z });
+        }
+        return line;
+    }
+
+    void PopulationBotAI::BeginQuestStep(QuestStep step, float from)
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        m_questStep = step;
+        m_questStepSinceMs = now;
+        switch (step)
+        {
+            case QuestStep::ToArea:
+                Life::Trip::RoadWalk::Begin(m_road, QuestLine(true, from), true, now);
+                break;
+            case QuestStep::ToGiver:
+                if (m_request.quest.way.size() < 2)
+                {
+                    // No way back known: done here (logs out out of sight, as a field bot).
+                    m_questStep = QuestStep::AtGiver;
+                    m_questDoneAtMs = now;
+                    m_handle->done = true;
+                    return;
+                }
+                Life::Trip::RoadWalk::Begin(m_road, QuestLine(false, from), true, now);
+                break;
+            case QuestStep::Hunt:
+                m_questIdleSinceMs = 0;
+                break;
+            case QuestStep::AtGiver:
+            {
+                // Handing it in: by the giver a moment, talking.
+                FacePoint(m_request.quest.giverX, m_request.quest.giverY);
+                me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
+                m_questDoneAtMs = now + urand(AT_GIVER_MIN_MS, AT_GIVER_MAX_MS);
+                break;
+            }
+            case QuestStep::None:
+                break;
+        }
+    }
+
+    void PopulationBotAI::CountQuestKills(bool inCombat)
+    {
+        if (inCombat)
+        {
+            // Its quest's creatures it fights now (counted once the fight is over and they are dead).
+            Unit* victim = me->GetVictim();
+            m_questIdleSinceMs = 0;
+            if (victim && victim->GetTypeId() == TYPEID_UNIT && victim->GetEntry() == m_request.quest.preyEntry &&
+                std::find(m_preyFought.begin(), m_preyFought.end(), victim->GetObjectGuid()) == m_preyFought.end())
+                m_preyFought.push_back(victim->GetObjectGuid());
+            return;
+        }
+        for (ObjectGuid const& guid : m_preyFought)
+        {
+            Creature* creature = me->GetMap()->GetCreature(guid);
+            if (!creature || !creature->IsAlive())
+                ++m_questKills;
+        }
+        m_preyFought.clear();
+    }
+
+    void PopulationBotAI::AdvanceQuest()
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        if (m_questStep == QuestStep::Hunt)
+        {
+            // Enough of them, or long enough at it (the quest is acted: it goes back anyway).
+            if (m_questKills >= m_request.quest.need ||
+                WorldTimer::getMSTimeDiff(m_questStepSinceMs, now) >= HUNT_GIVE_UP_MS)
+                BeginQuestStep(QuestStep::ToGiver, std::numeric_limits<float>::max());
+            return;
+        }
+        if (m_questStep == QuestStep::AtGiver && !m_handle->done && now >= m_questDoneAtMs)
+            m_handle->done = true;     // handed in: the manager lets it go out of sight
+    }
+
+    void PopulationBotAI::UpdateQuestWalk()
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        switch (m_questStep)
+        {
+            case QuestStep::ToArea:
+            case QuestStep::ToGiver:
+            {
+                Life::Trip::RoadWalkResult const r = Life::Trip::RoadWalk::Update(me, m_road, now);
+                if (r == Life::Trip::RoadWalkResult::Walking)
+                    return;
+                if (m_questStep == QuestStep::ToArea)
+                    BeginQuestStep(QuestStep::Hunt, 0.0f);
+                else if (r == Life::Trip::RoadWalkResult::Arrived)
+                    BeginQuestStep(QuestStep::AtGiver, 0.0f);
+                else
+                {
+                    m_questStep = QuestStep::AtGiver;   // stuck on the way back: done here
+                    m_questDoneAtMs = now;
+                }
+                return;
+            }
+            case QuestStep::Hunt:
+            {
+                // Nothing to hunt here (HuntAssigner found no fight): back to the middle of the
+                // area, once in a while.
+                if (!m_questIdleSinceMs)
+                    m_questIdleSinceMs = now;
+                if (WorldTimer::getMSTimeDiff(m_questIdleSinceMs, now) < HUNT_IDLE_WALK_MS || me->IsMoving())
+                    return;
+                m_questIdleSinceMs = now;
+                QuestPlan const& q = m_request.quest;
+                if (me->GetDistance2d(q.areaX, q.areaY, SizeFactor::None) > q.areaRadius * 0.5f + 10.0f)
+                    me->GetMotionMaster()->MovePoint(0, q.areaX, q.areaY, q.areaZ, MOVE_PATHFINDING | MOVE_RUN_MODE | MOVE_EXCLUDE_STEEP_SLOPES);
+                return;
+            }
+            case QuestStep::AtGiver:
+            case QuestStep::None:
+                return;
+        }
     }
 
     void PopulationBotAI::SetupProfession()

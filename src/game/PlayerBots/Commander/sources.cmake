@@ -380,8 +380,12 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.h
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/NavPather.h
+  ${COMMANDER_DIR}/Perception/Spatial/NavPather.cpp
   ${COMMANDER_DIR}/Perception/Spatial/RoadNetwork.h
   ${COMMANDER_DIR}/Perception/Spatial/RoadNetwork.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/QuestAreas.h
+  ${COMMANDER_DIR}/Perception/Spatial/QuestAreas.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/Arrival.h
   ${COMMANDER_DIR}/Behaviors/Movement/Arrival.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RestCatchUp.h

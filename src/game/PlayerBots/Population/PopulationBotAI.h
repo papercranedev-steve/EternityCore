@@ -39,8 +39,20 @@ namespace Population
 
         // No player leads it.
         Player* GetPartyLeader() const override { return nullptr; }
-        // A road traveller fights only what attacks it (no HuntAssigner fights).
-        bool SeeksFights() const override { return m_request.kind != BotKind::Traveller; }
+        // A road traveller fights only what attacks it (no HuntAssigner fights); so does someone
+        // walking to or from a quest's creatures.
+        bool SeeksFights() const override
+        {
+            return m_request.kind != BotKind::Traveller &&
+                   (m_questStep == QuestStep::None || m_questStep == QuestStep::Hunt);
+        }
+        // Hunting for a quest: its creature first.
+        uint32 PreferredPrey() const override
+        {
+            return m_questStep == QuestStep::Hunt ? m_request.quest.preyEntry : 0;
+        }
+        QuestStep GetQuestStep() const { return m_questStep; }
+        uint32 GetQuestKills() const { return m_questKills; }
 
         SpawnRequest const& GetRequest() const { return m_request; }
         std::string const& GetBotName() const { return m_name; }
@@ -88,6 +100,12 @@ namespace Population
         static constexpr uint32 TRAVELLER_RUN_PCT = 90;
         // Mount casts failing in a row (indoors, ...) before it goes on foot.
         static constexpr uint32 MOUNT_TRIES = 3;
+        // Acting out a quest: hunting this long at most, back to the area's middle after this
+        // long without a fight, by the giver this long.
+        static constexpr uint32 HUNT_GIVE_UP_MS = 12 * 60 * IN_MILLISECONDS;
+        static constexpr uint32 HUNT_IDLE_WALK_MS = 40 * IN_MILLISECONDS;
+        static constexpr uint32 AT_GIVER_MIN_MS = 8 * IN_MILLISECONDS;
+        static constexpr uint32 AT_GIVER_MAX_MS = 20 * IN_MILLISECONDS;
 
     private:
         // Field bot tick: the Commander's body steps (TeamBotAI) around its own life: looting
@@ -97,6 +115,15 @@ namespace Population
         void InitializeField();
         // Traveller out of combat: on its mount again, along the road; at its end done.
         void UpdateRoad();
+        // Field bot acting out a quest (SpawnRequest::quest): the steps, the kills of its
+        // creature, the walks between giver and area.
+        void BeginQuestStep(QuestStep step, float from);
+        void CountQuestKills(bool inCombat);
+        void AdvanceQuest();
+        void UpdateQuestWalk();
+        // From where it stands along the quest's way from `from` (yards from the giver), to the
+        // area or back to the giver.
+        std::vector<Commander::Roads::RoadPoint> QuestLine(bool towardsArea, float from) const;
         void Initialize();
         void EquipForTier();
         void HideFromNearbyPlayers();
@@ -141,6 +168,14 @@ namespace Population
         uint32 m_mountSpell = 0;        // rides this (0: on foot)
         uint32 m_mountTries = 0;        // failed mount casts in a row (indoors, ...): on foot after a few
         bool m_roadDone = false;
+
+        // Quest (field bot; walks use m_road)
+        QuestStep m_questStep = QuestStep::None;
+        uint32 m_questStepSinceMs = 0;
+        uint32 m_questKills = 0;
+        uint32 m_questIdleSinceMs = 0;      // Hunt: no fight since
+        uint32 m_questDoneAtMs = 0;         // AtGiver: handed in at
+        std::vector<ObjectGuid> m_preyFought;
 
         // Coming in from out of sight, living at the spot, going out of sight to log out.
         enum class Phase : uint8 { Entering, Living, Leaving, Gone };

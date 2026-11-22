@@ -30,6 +30,7 @@
 #define MANGOS_POPULATION_FIELD_H
 
 #include "Common.h"
+#include "Commander/Perception/Spatial/QuestAreas.h"
 #include "Population/FieldSpots.h"
 #include "Population/PopulationTypes.h"
 #include <unordered_map>
@@ -56,10 +57,17 @@ namespace Population
         static constexpr uint32 MOVING_CHECK_MIN_MS = 5 * IN_MILLISECONDS;
         static constexpr uint32 MOVING_CHECK_MAX_MS = 10 * IN_MILLISECONDS;
 
+        // Quest areas within this of an observer give quest spawns (ambient flow doc §4).
+        static constexpr float QUEST_NEAR_YD = 450.0f;
+
         void LoadConfig();
+        // The quest areas (once: world data); their ways are built in Update after the roads.
+        void LoadQuests();
         void Update(PopulationMgr& mgr, Observers const& observers, uint32 nowMs);
 
         bool IsEnabled() const { return m_enabled; }
+        Commander::Quests::QuestAreaIndex const& Quests() const { return m_quests; }
+        uint32 GetQuestPct() const { return m_questPct; }
         uint32 GetMaxUnits() const { return m_maxUnits; }
         // How busy the field is at x/y for `team` (PopBot.Field.FloorPct .. 1), and the field
         // bots wanted around an observer there (density x PopBot.Field.MaxUnits, rounded).
@@ -72,6 +80,9 @@ namespace Population
         // The open world of a continent around `o`, not a city, not flying.
         bool Fills(Observer const& o) const;
         bool BuildRequest(Observer const& o, Observers const& observers, Settlements const& settlements, SpawnRequest& out);
+        // Someone acting out a quest near `o`: hunting in its area beyond his sight, or on the
+        // way between the giver and the area (to it or back), walking past him.
+        bool BuildQuestRequest(Observer const& o, Observers const& observers, Settlements const& settlements, SpawnRequest& out);
         // Creature spawn points to log in at: ahead of a moving observer, else the ring; busier
         // spots (DensityAt) first more often.
         std::vector<FieldSpot const*> CandidateSpots(Observer const& o, float visibleYd, Settlements const& settlements);
@@ -88,7 +99,10 @@ namespace Population
         uint32 m_checkMinMs = 15 * IN_MILLISECONDS;
         uint32 m_checkMaxMs = 45 * IN_MILLISECONDS;
 
+        uint32 m_questPct = 60;         // of the field spawns near a quest area: acting out its quest
+
         FieldSpots m_spots;
+        Commander::Quests::QuestAreaIndex m_quests;
         std::unordered_map<uint32, uint32> m_nextCheckMs;     // observer guid -> time
         uint32 m_nextTickMs = 0;
     };

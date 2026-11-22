@@ -76,6 +76,31 @@ namespace Population
         uint32 seed = 0;                // same member and level = same gear
     };
 
+    // A field bot acting out a quest (ambient flow doc §4, user 2026-11-22: a pretend quest, real
+    // kills, nothing saved): from its giver along the way to the quest's creatures, hunting them,
+    // back to the giver, a moment there. Copied from Commander/Perception/Spatial/QuestAreas.
+    enum class QuestStep : uint8
+    {
+        None,       // no quest: hunts and moves on (field bot)
+        ToArea,     // walking from the giver to the creatures
+        Hunt,       // hunting the quest's creature
+        ToGiver,    // walking back
+        AtGiver,    // handing it in (a moment by the giver), then done
+    };
+
+    struct QuestPlan
+    {
+        QuestStep step = QuestStep::None;
+        uint32 questId = 0;
+        uint32 areaId = 0;                  // QuestAreaIndex id (commands, logs)
+        uint32 preyEntry = 0;
+        uint32 need = 0;                    // kills
+        float areaX = 0.0f, areaY = 0.0f, areaZ = 0.0f, areaRadius = 0.0f;
+        float giverX = 0.0f, giverY = 0.0f, giverZ = 0.0f;
+        std::vector<Waypoint> way;          // giver -> area (empty: none, done after the hunt)
+        float startAlong = 0.0f;            // ToArea / ToGiver: where on the way it starts
+    };
+
     struct SpawnRequest
     {
         BotKind kind = BotKind::Test;
@@ -120,6 +145,8 @@ namespace Population
         // Traveller: the road (RoadNetwork edge id); `rides`: on its race's mount from level 40.
         uint32 roadEdge = 0;
         bool rides = false;
+        // Field bot: the quest it acts out (step None: none).
+        QuestPlan quest;
         // Stand, mover, sitter: the places of the city or town for their day there (TownLife.h);
         // the role only decides where the day starts.
         PlaceMenu places;

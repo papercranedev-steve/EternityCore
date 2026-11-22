@@ -3353,6 +3353,12 @@ AHBuyer.MaxMarkup = 50
 #        Seconds between two checks around a player (one new field bot per check).
 #        Default: 15 / 45
 #
+#    PopBot.Field.QuestPct
+#        Of the field bots near a quest's creatures (clusters of the spawns of a kill or drop
+#        quest, .popbot quests): this share act out the quest (walk from its giver, hunt that
+#        creature, walk back and hand it in; nothing is saved). Percent.
+#        Default: 60
+#
 #    PopBot.Road.Enable
 #        People travelling the roads between the settlements past players (roads are built
 #        from the navmesh and patrol waypoints after each load, .popbot roads).
@@ -3502,6 +3508,7 @@ PopBot.Field.SpawnMaxYd = 240
 PopBot.Field.KeepYd = 320
 PopBot.Field.CheckMinSec = 15
 PopBot.Field.CheckMaxSec = 45
+PopBot.Field.QuestPct = 60
 PopBot.Road.Enable = 1
 PopBot.Road.PerHour = 20
 PopBot.Road.MaxNear = 4

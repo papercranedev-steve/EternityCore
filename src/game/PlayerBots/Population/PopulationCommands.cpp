@@ -33,6 +33,8 @@
 #include "Chat.h"
 #include "Player.h"
 #include "Map.h"
+#include "ObjectMgr.h"
+#include "QuestDef.h"
 #include "SharedDefines.h"
 #include "Population/PopulationMgr.h"
 #include "Population/PopulationBotAI.h"
@@ -607,6 +609,36 @@ namespace
                 Population::TravellerDirector::NEAR_ROAD_YD, nearCount, Population::TravellerDirector::NEAR_COUNT_YD);
     }
 
+    // Quest areas (Commander/Perception/Spatial/QuestAreas.h) near your position, acted out by
+    // field bots (FieldDirector::BuildQuestRequest).
+    void ShowQuests(ChatHandler* handler, Player* player)
+    {
+        Population::FieldDirector const& field = sPopulationMgr.GetFieldDirector();
+        Commander::Quests::QuestAreaIndex const& quests = field.Quests();
+        handler->PSendSysMessage("Quest areas: %u, ways %u%s (%u ms). %u%% of the field bots near one act out its quest.",
+            uint32(quests.All().size()), quests.WaysBuilt(), quests.IsBuilding() ? ", building" : "", quests.BuildMs(), field.GetQuestPct());
+        if (!player)
+            return;
+
+        uint32 shown = 0;
+        for (Commander::Quests::QuestArea const* a : quests.Near(player->GetMapId(), player->GetPositionX(), player->GetPositionY(),
+                 Population::FieldDirector::QUEST_NEAR_YD))
+        {
+            if (++shown > 10)
+                break;
+            Quest const* quest = sObjectMgr.GetQuestTemplate(a->questId);
+            CreatureInfo const* prey = sObjectMgr.GetCreatureTemplate(a->preyEntry);
+            CreatureInfo const* giver = sObjectMgr.GetCreatureTemplate(a->giverEntry);
+            handler->PSendSysMessage("#%u quest %u \"%s\" (level %u): %u x %s (%u-%u), %u spawns within %.0f yd, %.0f yd from you; giver %s, way %.0f yd%s",
+                a->id, a->questId, quest ? quest->GetTitle().c_str() : "?", uint32(a->questLevel), a->need,
+                prey ? prey->name.c_str() : "?", uint32(a->preyLevelMin), uint32(a->preyLevelMax), uint32(a->spawns.size()), a->radiusYd,
+                player->GetDistance2d(a->center.x, a->center.y), giver ? giver->name.c_str() : "?", a->wayLength,
+                a->ServesTeam(player->GetTeam()) ? "" : " (not your side)");
+        }
+        if (!shown)
+            handler->PSendSysMessage("No quest area within %.0f yd.", Population::FieldDirector::QUEST_NEAR_YD);
+    }
+
     // Towns (TownPopulation.h): those with a player near, and the ones near your position.
     void ShowTowns(ChatHandler* handler, Player* player)
     {
@@ -750,6 +782,12 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
+    if (!strcmp(sub, "quests"))
+    {
+        ShowQuests(this, player);
+        return true;
+    }
+
     if (!strcmp(sub, "town"))
     {
         ShowTowns(this, player);
@@ -853,6 +891,6 @@ bool ChatHandler::HandlePopBotCommand(char* args)
         return true;
     }
 
-    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|roads|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
+    SendSysMessage("Usage: .popbot [status|on|off|stats [reset]|list|roster|hubs|roads|quests|town|density|headless on|off|spawn ...|emote ...|despawn|clear|city [anchors]|fill|point ...|reload]");
     return false;
 }

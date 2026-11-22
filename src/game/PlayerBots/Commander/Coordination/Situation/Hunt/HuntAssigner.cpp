@@ -121,6 +121,13 @@ namespace Commander
                 candidates.push_back(&pack);
         std::sort(candidates.begin(), candidates.end(),
             [](PackFacts const* a, PackFacts const* b) { return a->ApproachYd() < b->ApproachYd(); });
+        // A member's preferred creature (acting out a quest): its packs first, nearest first.
+        if (world.preferredPrey)
+            std::stable_partition(candidates.begin(), candidates.end(), [&world](PackFacts const* p)
+            {
+                return std::any_of(p->members.begin(), p->members.end(),
+                    [&world](PackCreature const& c) { return c.entry == world.preferredPrey; });
+            });
         PackFacts const* best = nullptr;
         for (PackFacts const* pack : candidates)
             if (Winnable(world, *pack))
@@ -142,7 +149,10 @@ namespace Commander
             h.sinceMs = world.refreshedAtMs;
         h.target = target;
         h.idleSinceMs = 0;
-        h.why = "the nearest fight at our level we can win";
+        h.why = world.preferredPrey && std::any_of(best->members.begin(), best->members.end(),
+                    [&world](PackCreature const& c) { return c.entry == world.preferredPrey; })
+            ? "the nearest fight with our quest's creature"
+            : "the nearest fight at our level we can win";
     }
 
     void HuntAssigner::Clear(TeamPlan& plan) const

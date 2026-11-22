@@ -13,7 +13,7 @@
  *
  * Threads: Begin / Step on the world thread while the map threads are idle (PopulationMgr::Update):
  * Step loads the navmesh tiles an edge needs that are not loaded, finds the path and unloads them
- * again in the same call (Terrain.Preload.Continents is off on the live server). Queries are
+ * again in the same call (NavPather). Queries are
  * read-only, also from map threads once built (the edges are not changed until the next Begin,
  * which the caller only does from the world thread).
  */
@@ -22,20 +22,13 @@
 #define MANGOS_COMMANDER_ROAD_NETWORK_H
 
 #include "Common.h"
-#include <map>
+#include "Commander/Perception/Spatial/NavPather.h"
 #include <vector>
-
-class dtNavMeshQuery;
 
 namespace Commander
 {
     namespace Roads
     {
-        struct RoadPoint
-        {
-            float x = 0.0f, y = 0.0f, z = 0.0f;
-        };
-
         // A place roads lead to (a settlement).
         struct RoadNode
         {
@@ -69,7 +62,6 @@ namespace Commander
         {
         public:
             RoadNetwork() = default;
-            ~RoadNetwork();
             RoadNetwork(RoadNetwork const&) = delete;
             RoadNetwork& operator=(RoadNetwork const&) = delete;
 
@@ -108,16 +100,14 @@ namespace Commander
                 uint32 a = 0, b = 0;    // indexes into m_nodes
             };
             void PlanEdges();
-            dtNavMeshQuery* QueryFor(uint32 mapId);
-            bool FindPath(dtNavMeshQuery* query, RoadPoint const& from, RoadPoint const& to, std::vector<RoadPoint>& out) const;
-            bool Shape(dtNavMeshQuery* query, RoadNode const& a, RoadNode const& b, RoadEdge& out) const;
+            bool Shape(RoadNode const& a, RoadNode const& b, RoadEdge& out) const;
 
             std::vector<RoadNode> m_nodes;
             std::vector<RoadHint> m_hints;
             std::vector<Plan> m_planned;
             size_t m_next = 0;
             std::vector<RoadEdge> m_edges;
-            std::map<uint32, dtNavMeshQuery*> m_queries;
+            NavPather m_pather;
             uint32 m_failed = 0;
             uint32 m_buildMs = 0;
         };

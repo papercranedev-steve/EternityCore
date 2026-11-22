@@ -1899,6 +1899,16 @@ namespace WorldModelBuilder
             TeamBotAI const* ai = p && p->AI() ? dynamic_cast<TeamBotAI const*>(p->AI()) : nullptr;
             return !ai || ai->SeeksFights();
         });
+        world.preferredPrey = 0;
+        for (Player* p : members)
+        {
+            TeamBotAI const* ai = p && p->AI() ? dynamic_cast<TeamBotAI const*>(p->AI()) : nullptr;
+            if (ai && ai->PreferredPrey())
+            {
+                world.preferredPrey = ai->PreferredPrey();
+                break;
+            }
+        }
         world.mapKind = map->IsRaid() ? MapKind::Raid : map->IsDungeon() ? MapKind::Dungeon : MapKind::World;
         if (members.empty())
         {
