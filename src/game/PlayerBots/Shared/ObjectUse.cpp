@@ -14,11 +14,13 @@ namespace ObjectUse
 {
     namespace
     {
+        // Both lock effects, as Spell::CanOpenLock: a quest item that is the key of a quest object
+        // (Bashal'Aran's Ancient Flame, Sharpbeak's Cage) opens it with SPELL_EFFECT_OPEN_LOCK_ITEM.
         bool OpensLock(SpellEntry const* spell, uint32 lockType, int32* skillBonus = nullptr)
         {
             for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
             {
-                if (spell->Effect[i] != SPELL_EFFECT_OPEN_LOCK)
+                if (spell->Effect[i] != SPELL_EFFECT_OPEN_LOCK && spell->Effect[i] != SPELL_EFFECT_OPEN_LOCK_ITEM)
                     continue;
                 if (lockType && uint32(spell->EffectMiscValue[i]) != lockType)
                     continue;
