@@ -276,6 +276,9 @@ namespace Population
         static constexpr uint32 BUFF_GAP_MS = 45 * IN_MILLISECONDS;
         static constexpr uint32 BUFF_MIN_MANA_PCT = 50;
         static constexpr uint32 BUFF_SAY_PCT = 20;
+        // After the buff, a gesture at him (a wave, a blown kiss, a smile, a salute, a bow ...).
+        static constexpr uint32 BUFF_EMOTE_PCT = 70;
+        static constexpr uint32 BUFF_EMOTE_MIN_MS = 800, BUFF_EMOTE_MAX_MS = 1800;
         static constexpr uint32 YIELD_REACT_GAP_MS = 60 * IN_MILLISECONDS;
         static constexpr uint32 YIELD_SAY_PCT = 35;
         static constexpr float REACT_YD = 40.0f;
@@ -290,6 +293,8 @@ namespace Population
         std::deque<std::pair<ObjectGuid, uint32>> m_mourned;    // dead players it mourned, when
         uint32 m_nextBuffCheckMs = 0;
         std::deque<std::pair<ObjectGuid, uint32>> m_buffed;     // players it buffed, when
+        ObjectGuid m_buffEmoteTo;           // the gesture after a buff goes to him
+        uint32 m_buffEmoteAtMs = 0;
         uint32 m_huntYieldSeenMs = 0;       // HuntPlan::yieldedAtMs reacted to
         uint32 m_prowlYieldSeenMs = 0;      // ProwlState::yieldedAtMs reacted to
         uint32 m_nextYieldReactMs = 0;

@@ -229,6 +229,22 @@ namespace Population
     bool PopulationBotAI::UpdatePassingBuff()
     {
         uint32 const now = WorldTimer::getMSTime();
+
+        // A moment after the buff: a wave, a blown kiss ... at him.
+        if (!m_buffEmoteTo.IsEmpty() && now >= m_buffEmoteAtMs)
+        {
+            Player* p = me->GetMap()->GetPlayer(m_buffEmoteTo);
+            m_buffEmoteTo.Clear();
+            if (p && p->IsInWorld() && me->IsWithinDist(p, REACT_YD, false))
+            {
+                static uint32 const emotes[] = { TEXTEMOTE_WAVE, TEXTEMOTE_WAVE, TEXTEMOTE_KISS, TEXTEMOTE_SMILE,
+                                                 TEXTEMOTE_SALUTE, TEXTEMOTE_BOW, TEXTEMOTE_NOD, TEXTEMOTE_CHEER };
+                if (!me->IsMoving())
+                    me->SetFacingToObject(p);
+                BotShared::BotChat::TextEmote(me, emotes[urand(0, uint32(sizeof(emotes) / sizeof(emotes[0])) - 1)], p);
+            }
+        }
+
         if (now < m_nextBuffCheckMs)
             return false;
         m_nextBuffCheckMs = now + BUFF_CHECK_MS;
@@ -275,6 +291,11 @@ namespace Population
             m_buffed.emplace_back(p->GetObjectGuid(), now);
             if (urand(0, 99) < BUFF_SAY_PCT)
                 SayTo(me, p, "buff.say", m_request.tags);
+            if (urand(0, 99) < BUFF_EMOTE_PCT)
+            {
+                m_buffEmoteTo = p->GetObjectGuid();
+                m_buffEmoteAtMs = now + urand(BUFF_EMOTE_MIN_MS, BUFF_EMOTE_MAX_MS);
+            }
             return true;
         }
         return false;
