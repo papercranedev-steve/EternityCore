@@ -1025,5 +1025,18 @@
   "voice.quest.turnin.wore": {
     "default": ["Got {item}, putting it on.", "{item}, nice. Wearing it."],
     "chatty": "Ooh, {item}! On it goes. How do I look?"
-  }
+  },
+  "questoffer.title": "\"{title}\"",
+  "questoffer.ask": {
+    "default": "{leader}, you can't take {quests} yet. Want me to pick it up?",
+    "quiet": "You can't take {quests}. Shall I?"
+  },
+  "questoffer.ask.done": {
+    "default": "{leader}, you've already done {quests}. Want me to take it too?",
+    "quiet": "You've done {quests}. Shall I?"
+  },
+  "questoffer.ask.many": "{leader}, you can't take {quests} yet, but {names} can. Shall we pick it up?",
+  "questoffer.ask.done.many": "{leader}, you've already done {quests}, but {names} haven't. Shall we pick it up?",
+  "questoffer.opt.yes": "Take it",
+  "questoffer.opt.no": "No need"
 }

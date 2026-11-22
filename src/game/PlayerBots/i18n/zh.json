@@ -1071,5 +1071,19 @@
   "voice.quest.turnin.wore": {
     "default": ["拿到{item}，正好换上。", "{item}不错，我穿上了。"],
     "chatty": "哇，{item}！正好换上，看我帅不帅？"
-  }
+  },
+  "//44": "A quest the player cannot take or already handed in, at the giver he stands by: shall the bots take it? (Life/Errands/QuestOffer). {leader}: the player; {quests}: questoffer.title pieces joined by place.comma; {names}: the bots asking (.many: more than one). .done: he handed in all of them.",
+  "questoffer.title": "《{title}》",
+  "questoffer.ask": {
+    "default": "{leader}，{quests}你现在接不了，要我先接上吗？",
+    "quiet": "{quests}你接不了，我接？"
+  },
+  "questoffer.ask.done": {
+    "default": "{leader}，{quests}你已经做过了，要我也接一个吗？",
+    "quiet": "{quests}你做过了，我接？"
+  },
+  "questoffer.ask.many": "{leader}，{quests}你现在接不了，{names}可以接，要我们接上吗？",
+  "questoffer.ask.done.many": "{leader}，{quests}你已经做过了，{names}还没做，要我们接上吗？",
+  "questoffer.opt.yes": "接吧",
+  "questoffer.opt.no": "不用了"
 }
