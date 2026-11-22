@@ -39,6 +39,7 @@
 #include "HonorMgr.h"
 #include "PlayerTaxi.h"
 #include "MirrorTimer.h"
+#include "SpellQueue.h"
 
 #include <string>
 #include <utility>
@@ -1391,6 +1392,9 @@ class Player final: public Unit
         void _LoadSpellCooldowns(std::unique_ptr<QueryResult> result);
         void _SaveSpellCooldowns() const;
 
+        // Cast the client sent early (spell queue window); started in Update.
+        SpellQueue& GetSpellQueue() { return m_spellQueue; }
+
         template <typename F>
         void RemoveSomeCooldown(F check)
         {
@@ -1413,6 +1417,8 @@ class Player final: public Unit
         /*********************************************************/
 
     private:
+        SpellQueue m_spellQueue;
+
         mutable uint32 m_resetTalentsMultiplier;
         time_t m_resetTalentsTime;
         uint32 m_usedTalentCount;

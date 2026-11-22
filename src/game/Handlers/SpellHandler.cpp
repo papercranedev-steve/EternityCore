@@ -261,25 +261,35 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPackets::Misc::GameObjectUse c
 
 void WorldSession::HandleCastSpellOpcode(WorldPackets::Spell::CastSpell const& packet)
 {
-    SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(packet.spellId);
+    // Sent early inside the client's spell queue window: held until the current cast / GCD ends.
+    if (_player->GetSpellQueue().Offer(_player, packet.spellId, packet.targets))
+        return;
+
+    CastSpellFromClient(packet.spellId, packet.targets);
+}
+
+void WorldSession::CastSpellFromClient(uint32 spellId, SpellCastTargets const& clientTargets)
+{
+    SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(spellId);
 
     if (!spellInfo)
         return;
 
     // not have spell in spellbook or spell passive and not casted by client
-    if (!_player->HasActiveSpell(packet.spellId) || spellInfo->IsPassiveSpell())
+    if (!_player->HasActiveSpell(spellId) || spellInfo->IsPassiveSpell())
     {
-        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "World: Player %u casts spell %u which he shouldn't have", _player->GetGUIDLow(), packet.spellId);
+        sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "World: Player %u casts spell %u which he shouldn't have", _player->GetGUIDLow(), spellId);
         //cheater? kick? ban?
         return;
     }
 
     // client provided targets
-    const_cast<SpellCastTargets&>(packet.targets).PrepareForSpellSystem(_player);
+    SpellCastTargets targets = clientTargets;
+    targets.PrepareForSpellSystem(_player);
     SpellEntry const* originalSpellInfo = spellInfo;
 
     // auto-selection buff level base at target level (in spellInfo)
-    if (Unit* target = packet.targets.getUnitTarget())
+    if (Unit* target = targets.getUnitTarget())
     {
         // Cannot cast negative spells on yourself. Handle it here since casting negative
         // spells on yourself is frequently used within the core itself for certain mechanics.
@@ -305,7 +315,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spell::CastSpell const& p
             DoLootRelease(lootGuid);
     }
 
-    Spell* spell = new Spell(_player, spellInfo, false, ObjectGuid(), nullptr, packet.targets.getUnitTarget());
+    Spell* spell = new Spell(_player, spellInfo, false, ObjectGuid(), nullptr, targets.getUnitTarget());
 
     // Spell has been down-ranked, remember what client wanted to cast.
     if (spellInfo != originalSpellInfo)
@@ -313,7 +323,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spell::CastSpell const& p
 
     // Nostalrius : Ivina
     spell->SetClientStarted(true);
-    spell->prepare(std::move(const_cast<SpellCastTargets&>(packet.targets)));
+    spell->prepare(std::move(targets));
 }
 
 void WorldSession::HandleCancelCastOpcode(WorldPackets::Spell::CancelCast const& packet)
@@ -321,6 +331,12 @@ void WorldSession::HandleCancelCastOpcode(WorldPackets::Spell::CancelCast const&
     // ignore for remote control state (for player case)
     Unit* mover = _player->GetMover();
     if (mover != _player && mover->GetTypeId() == TYPEID_PLAYER)
+        return;
+
+    // A cancel of the held spell drops only the held cast, even when the current cast is the same
+    // spell (the proxy sends a second cancel to stop that one too). Cancelling the current cast
+    // also drops the held one (Spell::finish).
+    if (_player->GetSpellQueue().Cancel(packet.spellId))
         return;
 
     if (_player->IsNonMeleeSpellCasted(false))

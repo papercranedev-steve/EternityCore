@@ -75,6 +75,7 @@ class Creature;
 class Item;
 class Object;
 class Player;
+class SpellCastTargets;
 class Unit;
 class WorldPacket;
 class WorldSocket;
@@ -730,6 +731,8 @@ class WorldSession
         void HandleUseItemOpcode(WorldPackets::Spell::UseItem const& packet);
         void HandleOpenItemOpcode(WorldPackets::Spell::OpenItem const& packet);
         void HandleCastSpellOpcode(WorldPackets::Spell::CastSpell const& packet);
+        // The player's own cast request (CMSG_CAST_SPELL, or one held by the spell queue).
+        void CastSpellFromClient(uint32 spellId, SpellCastTargets const& clientTargets);
         void HandleCancelCastOpcode(WorldPackets::Spell::CancelCast const& packet);
         void HandleCancelAuraOpcode(WorldPackets::Spell::CancelAura const& packet);
         void HandleCancelGrowthAuraOpcode(NullClientPacket const& packet);

@@ -238,6 +238,7 @@ set (game_SRCS
     Spells/SpellMgr.cpp
     Spells/SpellModifier.cpp
     Spells/SpellModMgr.cpp
+    Spells/SpellQueue.cpp
     Threat/HostileRefManager.cpp
     Threat/ThreatManager.cpp
     Transports/Transport.cpp
@@ -500,6 +501,7 @@ set (game_SRCS
     Spells/SpellMgr.h
     Spells/SpellModifier.h
     Spells/SpellModMgr.h
+    Spells/SpellQueue.h
     Threat/HostileRefManager.h
     Threat/ThreatManager.h
     Transports/Transport.h

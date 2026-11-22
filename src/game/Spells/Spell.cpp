@@ -4349,6 +4349,10 @@ void Spell::finish(bool ok)
 
     if (Player* pPlayer = m_caster->ToPlayer())
     {
+        // A failed or interrupted cast drops the cast queued behind it; the client drops it too.
+        if (!ok && !m_IsTriggeredSpell && pPlayer->GetCurrentSpell(CURRENT_GENERIC_SPELL) == this)
+            pPlayer->GetSpellQueue().Clear();
+
         if (!ok && pPlayer->GetClass() == CLASS_WARLOCK)
         {
             // Fix a client problem with ritual of doom, by itself it disables

@@ -1125,6 +1125,9 @@ void Player::Update(uint32 update_diff, uint32 p_time)
     Unit::Update(update_diff, p_time);
     if (m_AI)
         m_AI->UpdateAI(p_time);
+    // Right after the spell update above, so a held cast starts in the update the blocking cast
+    // ends; inside the delayed-teleport window like every other cast started during the update.
+    m_spellQueue.Update(this);
     SetCanDelayTeleport(false);
 
     time_t now = time(nullptr);
