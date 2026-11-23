@@ -337,6 +337,14 @@ void LoadDBCStores(std::string const& dataPath)
 
     LoadDBC(availableDbcLocales, bar, badDbcFiles, sTalentTabStore,           dbcPath, "TalentTab.dbc");
 
+    // The 1.12 TalentTab.dbc gives Mage Fire (41) the same order index as Arcane (81): 0. The client
+    // shows Arcane, Fire, Frost (1.14.2 TalentTab.db2: Fire = 1), and everything counting points per
+    // tab page (LFG talent trees, bot role and spec reading, the PartyBot talent panel) needs 0..2
+    // to be distinct within a class.
+    if (TalentTabEntry const* pMageFire = sTalentTabStore.LookupEntry(41))
+        if (pMageFire->tabpage == 0)
+            const_cast<TalentTabEntry*>(pMageFire)->tabpage = 1;
+
     LoadDBC(availableDbcLocales, bar, badDbcFiles, sTaxiPathStore,            dbcPath, "TaxiPath.dbc");
     for (uint32 i = 1; i < sTaxiPathStore.GetNumRows(); ++i)
         if (TaxiPathEntry const* entry = sTaxiPathStore.LookupEntry(i))
