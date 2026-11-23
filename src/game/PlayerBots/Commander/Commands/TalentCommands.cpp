@@ -2,17 +2,22 @@
  * Talent commands used by the PartyBot addon's talent panel (addons/PartyBot/Talents.lua).
  *
  *   .partybot talents [name]                     list the bot's talents
- *   .partybot learntalent <name> <talentId>      spend one free point, same rules as a player
+ *   .partybot learntalent <name> <talentId>[x<count>] ...
+ *                                                spend free points, same rules as a player, in the
+ *                                                given order (the panel sends the player's whole
+ *                                                choice when it closes; there is no way back)
  *   .partybot talentdebug <name> reset           free reset of all talents
  *   .partybot talentdebug <name> unlearn <id>    remove one rank (refused if the tree would break)
  *   .partybot talentdebug <name> autospec        premade spec template of the bot's role
- *                                                (talentdebug needs PartyBot.TalentDebug = 1)
+ *                                                (talentdebug needs PartyBot.TalentDebug = 1; GM
+ *                                                only, the addon has no button for it)
  *
  * Replies (system messages, ';' separated):
  *   PBTAL;<name>;BEGIN;<class>;<level>;<free points>;<debug 0/1>
  *   PBTAL;<name>;T;<tab 0-2>;<talentId>;<row>;<col>;<rank>;<max rank>;<depends on>;<depends on rank>;<spell rank 1>,<spell rank 2>,...
  *   PBTAL;<name>;END
- *   PBOK;<name>;talent;learn|unlearn;<talentId>;<new rank>   PBOK;<name>;talent;reset
+ *   PBOK;<name>;talent;learn;<points learned>   PBOK;<name>;talent;unlearn;<talentId>;<new rank>
+ *   PBOK;<name>;talent;reset
  *   PBOK;<name>;talent;autospec;<template name | random>
  *   PBERR;<name>;<code>   codes: usage nodebug notalent nopoints maxrank talentreq dependent tier
  * Every change is followed by the new PBTAL listing.
@@ -25,6 +30,8 @@
 #include "SpellMgr.h"
 #include "World.h"
 #include "DBCStores.h"
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <sstream>
 #include <string>
@@ -194,7 +201,45 @@ bool ChatHandler::HandlePartyBotTalentsCommand(char* args)
     return true;
 }
 
-// .partybot learntalent <name> <talentId>
+namespace
+{
+    // one more rank of the talent, same rules as a player; nullptr = learned, else the error code
+    char const* LearnOneRank(Player* pBot, uint32 talentId)
+    {
+        TalentEntry const* pTalent = ClassTalent(pBot, talentId);
+        if (!pTalent)
+            return "notalent";
+        uint32 const rank = CurrentRank(pBot, pTalent);
+        if (!pBot->GetFreeTalentPoints())
+            return "nopoints";
+        if (rank >= MaxRank(pTalent))
+            return "maxrank";
+        if (!pBot->LearnTalent(talentId, rank))     // tier or required talent missing
+            return "talentreq";
+        return nullptr;
+    }
+
+    // "<talentId>" or "<talentId>x<count>"
+    bool ParseTalentToken(char const* token, uint32& talentId, uint32& count)
+    {
+        char* end = nullptr;
+        talentId = uint32(strtoul(token, &end, 10));
+        if (end == token)
+            return false;
+        count = 1;
+        if (*end == 'x')
+        {
+            char const* countStart = end + 1;
+            count = uint32(strtoul(countStart, &end, 10));
+            if (end == countStart)
+                return false;
+        }
+        return !*end && talentId && count;
+    }
+}
+
+// .partybot learntalent <name> <talentId>[x<count>] ...
+// Learns in the given order and stops at the first point that can't be learned.
 bool ChatHandler::HandlePartyBotLearnTalentCommand(char* args)
 {
     std::string name;
@@ -202,37 +247,48 @@ bool ChatHandler::HandlePartyBotLearnTalentCommand(char* args)
     if (!pBot)
         return false;
 
-    uint32 talentId = 0;
-    if (!ExtractUInt32(&args, talentId))
+    uint32 learned = 0;
+    char const* error = nullptr;
+    char* token = ExtractArg(&args);
+    if (!token)
+        error = "usage";
+    for (; token && !error; token = ExtractArg(&args))
     {
-        PSendSysMessage("PBERR;%s;usage;.partybot learntalent <name> <talentId>", name.c_str());
-        SetSentErrorMessage(true);
-        return false;
+        uint32 talentId = 0;
+        uint32 count = 0;
+        if (!ParseTalentToken(token, talentId, count))
+        {
+            error = "usage";
+            break;
+        }
+        for (uint32 i = 0; i < count && !error; ++i)
+        {
+            error = LearnOneRank(pBot, talentId);
+            if (!error)
+                ++learned;
+        }
     }
 
-    char const* error = nullptr;
-    TalentEntry const* pTalent = ClassTalent(pBot, talentId);
-    uint32 const rank = pTalent ? CurrentRank(pBot, pTalent) : 0;
-    if (!pTalent)
-        error = "notalent";
-    else if (!pBot->GetFreeTalentPoints())
-        error = "nopoints";
-    else if (rank >= MaxRank(pTalent))
-        error = "maxrank";
-    else if (!pBot->LearnTalent(talentId, rank))     // tier or required talent missing
-        error = "talentreq";
-
+    if (learned)
+    {
+        TalentsChanged(pBot);
+        PSendSysMessage("PBOK;%s;talent;learn;%u", name.c_str(), learned);
+    }
     if (error)
     {
-        PSendSysMessage("PBERR;%s;%s", name.c_str(), error);
+        if (!strcmp(error, "usage"))
+            PSendSysMessage("PBERR;%s;usage;.partybot learntalent <name> <talentId>[x<count>] ...", name.c_str());
+        else
+            PSendSysMessage("PBERR;%s;%s", name.c_str(), error);
+    }
+    if (learned)
+        for (std::string const& line : TalentListing(pBot, name))
+            SendSysMessage(line.c_str());
+    if (error)
+    {
         SetSentErrorMessage(true);
         return false;
     }
-
-    TalentsChanged(pBot);
-    PSendSysMessage("PBOK;%s;talent;learn;%u;%u", name.c_str(), talentId, rank + 1);
-    for (std::string const& line : TalentListing(pBot, name))
-        SendSysMessage(line.c_str());
     return true;
 }
 
