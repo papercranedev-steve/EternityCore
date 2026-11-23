@@ -1026,6 +1026,10 @@
     "default": ["Got {item}, putting it on.", "{item}, nice. Wearing it."],
     "chatty": "Ooh, {item}! On it goes. How do I look?"
   },
+  "voice.quest.turnin.bagsfull": {
+    "default": ["My bags are full, I'll hand this one in later.", "No room for the reward. I'll come back once I've sold some stuff."],
+    "quiet": "Bags full, later."
+  },
   "questoffer.title": "\"{title}\"",
   "questoffer.ask": {
     "default": "{leader}, you can't take {quests} yet. Want me to pick it up?",

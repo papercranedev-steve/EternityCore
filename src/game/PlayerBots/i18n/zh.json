@@ -1072,6 +1072,10 @@
     "default": ["拿到{item}，正好换上。", "{item}不错，我穿上了。"],
     "chatty": "哇，{item}！正好换上，看我帅不帅？"
   },
+  "voice.quest.turnin.bagsfull": {
+    "default": ["包满了，这个任务我晚点再交。", "奖励放不下，等我卖掉点东西再来交。"],
+    "quiet": "包满了，晚点交。"
+  },
   "//44": "A quest the player cannot take or already handed in, at the giver he stands by: shall the bots take it? (Life/Errands/QuestOffer). {leader}: the player; {quests}: questoffer.title pieces joined by place.comma; {names}: the bots asking (.many: more than one). .done: he handed in all of them.",
   "questoffer.title": "《{title}》",
   "questoffer.ask": {
