@@ -34,6 +34,26 @@ namespace Handover
             }
             return true;
         }
+
+        // An item taken out of a character's inventory (`saved`: of one that saves) into `to`'s,
+        // the steps of a trade (TradeHandler). A temporary receiver never saves: the item must not
+        // stay in the DB, or it could be duplicated.
+        void Arrive(Item* item, bool saved, Player* to, ItemPosCountVec const& dest)
+        {
+            if (saved && to->IsSavingDisabled())
+            {
+                item->DeleteFromInventoryDB();
+                item->DeleteAllFromDB();
+            }
+            to->MoveItemToInventory(dest, item, true, saved);
+            // (item may be merged into a stack and deleted now)
+        }
+
+        // a slot in the bags (not worn, not the bank, not the bags themselves)
+        bool IsBagSlot(uint8 bag, uint8 slot)
+        {
+            return slot != NULL_SLOT && Player::IsInventoryPos(bag, slot);
+        }
     }
 
     bool Fits(Player const* to, uint32 itemId, uint32 count)
@@ -77,21 +97,12 @@ namespace Handover
         if (!fits && (mailSubject.empty() || to->IsSavingDisabled()))
             return Result::Failed;
 
-        // the steps of a trade (TradeHandler), as `.partybot giveslot`
         bool const saved = !from->IsSavingDisabled();
         from->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
         Result result;
         if (fits)
         {
-            // a temporary receiver never saves: the item must not stay in the DB, or it could be
-            // duplicated (as `.partybot takeslot`)
-            if (saved && to->IsSavingDisabled())
-            {
-                item->DeleteFromInventoryDB();
-                item->DeleteAllFromDB();
-            }
-            to->MoveItemToInventory(dest, item, true, saved);
-            // (item may be merged into a stack and deleted now)
+            Arrive(item, saved, to, dest);
             result = Result::Bags;
         }
         else
@@ -105,6 +116,67 @@ namespace Handover
         Save(from);
         Save(to);
         return result;
+    }
+
+    InventoryResult Plan(Player const* from, Item* item, Player const* to, uint8 bag, uint8 slot, Placement& placement)
+    {
+        placement = Placement();
+        uint8 bagSlot = 0;
+        if (bag == INVENTORY_SLOT_BAG_0 && slot < EQUIPMENT_SLOT_END)
+        {
+            uint16 eqDest = 0;
+            InventoryResult const msg = to->CanEquipItem(slot, eqDest, item, to->GetItemByPos(bag, slot) != nullptr);
+            if (msg != EQUIP_ERR_OK)
+                return msg;
+            placement.equipSlot = slot;
+        }
+        else if (bag != NULL_BAG)
+        {
+            if (to->CanStoreItem(bag, slot, placement.dest, item, bagSlot, false) == EQUIP_ERR_OK)
+                return EQUIP_ERR_OK;
+            placement.dest.clear();
+            // (bound items fail CanStoreItem on the other side: they stay)
+            Item* other = to->GetItemByPos(bag, slot);
+            uint8 const fromBag = item->GetBagSlot();
+            uint8 const fromSlot = item->GetSlot();
+            if (other && !other->IsInTrade() && IsBagSlot(bag, slot) && IsBagSlot(fromBag, fromSlot) &&
+                to->CanStoreItem(bag, slot, placement.dest, item, bagSlot, true) == EQUIP_ERR_OK &&
+                from->CanStoreItem(fromBag, fromSlot, placement.backDest, other, bagSlot, true) == EQUIP_ERR_OK)
+            {
+                placement.back = other;
+                return EQUIP_ERR_OK;
+            }
+            placement.dest.clear();
+            placement.backDest.clear();
+        }
+        return to->CanStoreItem(NULL_BAG, NULL_SLOT, placement.dest, item, bagSlot, false);
+    }
+
+    Item* Place(Player* from, Item* item, Player* to, Placement const& placement)
+    {
+        bool const fromSaved = !from->IsSavingDisabled();
+        bool const toSaved = !to->IsSavingDisabled();
+        ObjectGuid const guid = item->GetObjectGuid();
+        from->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
+        if (placement.back)
+            to->MoveItemFromInventory(placement.back->GetBagSlot(), placement.back->GetSlot(), true);
+        Arrive(item, fromSaved, to, placement.dest);
+        if (placement.back)
+            Arrive(placement.back, toSaved, from, placement.backDest);
+
+        // put on (checked in Plan; SwapItem tells a player's client if it still fails)
+        Item* landed = to->GetItemByGuid(guid);
+        if (landed && placement.equipSlot != NULL_SLOT)
+        {
+            to->SwapItem(landed->GetPos(), uint16(INVENTORY_SLOT_BAG_0) << 8 | placement.equipSlot);
+            landed = to->GetItemByGuid(guid);
+        }
+        if (!landed && !placement.dest.empty())
+            landed = to->GetItemByPos(placement.dest.front().pos);
+
+        Save(from);
+        Save(to);
+        return landed;
     }
 
     void Save(Player* player)

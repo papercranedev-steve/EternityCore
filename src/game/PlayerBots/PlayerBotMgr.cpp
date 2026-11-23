@@ -2643,7 +2643,31 @@ bool ChatHandler::HandlePartyBotUseSlotCommand(char* args)
     return true;
 }
 
-// .partybot giveslot <name> <bag 0-12> <slot>   move an item from the bot to the command user's bags
+// The optional place `<bag 0-5> <slot>` in the receiver's inventory at the end of giveslot /
+// takeslot / passslot (the addon's drop on one slot; 5 = his equipment: he puts it on). Nothing
+// there: dstBag NULL_BAG, anywhere in his bags (BotShared::Handover::Plan). False: not a place.
+bool ChatHandler::ExtractPartyBotDropPos(char** args, uint8& dstBag, uint8& dstSlot)
+{
+    dstBag = NULL_BAG;
+    dstSlot = NULL_SLOT;
+    if (!*args || !**args)
+        return true;
+    uint32 bagIndex = 0;
+    uint32 slotIndex = 0;
+    return ExtractUInt32(args, bagIndex) && ExtractUInt32(args, slotIndex) && bagIndex <= 5 &&
+        ResolvePartyBotItemPos(bagIndex, slotIndex, dstBag, dstSlot);
+}
+
+// A Handover::Plan refusal for the addon: he can't wear it in that slot (why), or no room
+static char const* PartyBotDropErrorCode(InventoryResult msg, uint8 dstBag, uint8 dstSlot,
+    BotShared::Handover::Placement const& placement, char const* fullCode)
+{
+    bool const wantedOn = dstBag == INVENTORY_SLOT_BAG_0 && dstSlot < EQUIPMENT_SLOT_END;
+    return wantedOn && placement.equipSlot == NULL_SLOT ? PartyBotInventoryErrorCode(msg) : fullCode;
+}
+
+// .partybot giveslot <name> <bag 0-12> <slot> [<bag 0-5> <slot>]   move an item from the bot to the
+// command user's bags; with a place: onto that slot of his (5: he puts it on), as Handover::Plan
 bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
 {
     Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
@@ -2659,10 +2683,13 @@ bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
     uint32 slotIndex = 0;
     uint8 bag = 0;
     uint8 slot = 0;
+    uint8 dstBag = NULL_BAG;
+    uint8 dstSlot = NULL_SLOT;
     if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) ||
-        !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot, true))
+        !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot, true) ||
+        !ExtractPartyBotDropPos(&args, dstBag, dstSlot))
     {
-        PSendSysMessage("PBERR;%s;usage;.partybot giveslot <name> <bag 0-12> <slot>", name.c_str());
+        PSendSysMessage("PBERR;%s;usage;.partybot giveslot <name> <bag 0-12> <slot> [<bag 0-5> <slot>]", name.c_str());
         SetSentErrorMessage(true);
         return false;
     }
@@ -2705,11 +2732,12 @@ bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
         }
     }
 
-    ItemPosCountVec dest;
-    uint8 bagSlot = 0;
-    if (pPlayer->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false) != EQUIP_ERR_OK)
+    BotShared::Handover::Placement placement;
+    InventoryResult const msg = BotShared::Handover::Plan(pBot, pItem, pPlayer, dstBag, dstSlot, placement);
+    if (msg != EQUIP_ERR_OK)
     {
-        PSendSysMessage("PBERR;%s;mybagsfull", name.c_str());
+        PSendSysMessage("PBERR;%s;%s;%u", name.c_str(),
+            PartyBotDropErrorCode(msg, dstBag, dstSlot, placement, "mybagsfull"), uint32(msg));
         SetSentErrorMessage(true);
         return false;
     }
@@ -2717,22 +2745,19 @@ bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
     uint32 itemId = pItem->GetEntry();
     uint32 count = pItem->GetCount();
 
-    // same steps as a trade (TradeHandler): remove from bot, store into player.
-    // Items of temporary bots were never saved, so they are new rows for the player.
-    pBot->MoveItemFromInventory(bag, slot, true);
-    pPlayer->MoveItemToInventory(dest, pItem, true, !pBot->IsSavingDisabled());
-    // pItem may be merged into an existing stack and deleted now
-
-    pBot->SaveInventoryAndGoldToDB();
-    pPlayer->SaveInventoryAndGoldToDB();
+    // same steps as a trade (TradeHandler); items of temporary bots were never saved, so they are
+    // new rows for the player
+    BotShared::Handover::Place(pBot, pItem, pPlayer, placement);
+    // (pItem may be merged into an existing stack and deleted now)
 
     PSendSysMessage("PBOK;%s;give;%u;%u", name.c_str(), itemId, count);
     return true;
 }
 
-// .partybot takeslot <name> <bag 0-12> <slot> [bank]   move an item from the command user to the bot's
-// bags, or with `bank` into the bot's bank (bag/slot refer to the command user's inventory, same
-// numbering as giveslot; his own bank, 6-12, and `bank` need him at a banker)
+// .partybot takeslot <name> <bag 0-12> <slot> [bank | <bag 0-5> <slot>]   move an item from the command
+// user to the bot's bags, with `bank` into the bot's bank, with a place onto that slot of the bot
+// (5: it puts it on), as Handover::Plan (the first bag/slot refer to the command user's inventory,
+// same numbering as giveslot; his own bank, 6-12, and `bank` need him at a banker)
 bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
 {
     Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
@@ -2751,13 +2776,20 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
     if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) ||
         !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot, true))
     {
-        PSendSysMessage("PBERR;%s;usage;.partybot takeslot <name> <bag 0-12> <slot> [bank]", name.c_str());
+        PSendSysMessage("PBERR;%s;usage;.partybot takeslot <name> <bag 0-12> <slot> [bank | <bag 0-5> <slot>]", name.c_str());
         SetSentErrorMessage(true);
         return false;
     }
 
-    char const* target = ExtractLiteralArg(&args);
-    bool const toBank = target && strcmp(target, "bank") == 0;
+    bool const toBank = ExtractLiteralArg(&args, "bank") != nullptr;
+    uint8 dstBag = NULL_BAG;
+    uint8 dstSlot = NULL_SLOT;
+    if (!toBank && !ExtractPartyBotDropPos(&args, dstBag, dstSlot))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot takeslot <name> <bag 0-12> <slot> [bank | <bag 0-5> <slot>]", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
     if ((toBank || Player::IsBankPos(bag, slot)) && !PartyBotBankAllows(pPlayer, pBot, name))
         return false;
 
@@ -2801,52 +2833,56 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
         }
     }
 
-    ItemPosCountVec dest;
-    uint8 bagSlot = 0;
+    uint32 itemId = pItem->GetEntry();
+    uint32 count = pItem->GetCount();
+
     if (toBank)
     {
+        ItemPosCountVec dest;
+        uint8 bagSlot = 0;
         if (pBot->CanBankItem(NULL_BAG, NULL_SLOT, dest, pItem, false, bagSlot) != EQUIP_ERR_OK)
         {
             PSendSysMessage("PBERR;%s;botbankfull", name.c_str());
             SetSentErrorMessage(true);
             return false;
         }
+
+        // same steps as a trade (TradeHandler); the store goes into the bank as well (BankItem is StoreItem)
+        pPlayer->MoveItemFromInventory(bag, slot, true);
+        if (pBot->IsSavingDisabled())
+        {
+            // temporary bot: item must not stay in the DB, or it could be duplicated
+            pItem->DeleteFromInventoryDB();
+            pItem->DeleteAllFromDB();
+        }
+        pBot->MoveItemToInventory(dest, pItem, true, true);
+        pPlayer->SaveInventoryAndGoldToDB();
+        pBot->SaveInventoryAndGoldToDB();
     }
-    else if (pBot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false) != EQUIP_ERR_OK)
+    else
     {
-        PSendSysMessage("PBERR;%s;botbagsfull", name.c_str());
-        SetSentErrorMessage(true);
-        return false;
+        BotShared::Handover::Placement placement;
+        InventoryResult const msg = BotShared::Handover::Plan(pPlayer, pItem, pBot, dstBag, dstSlot, placement);
+        if (msg != EQUIP_ERR_OK)
+        {
+            PSendSysMessage("PBERR;%s;%s;%u", name.c_str(),
+                PartyBotDropErrorCode(msg, dstBag, dstSlot, placement, "botbagsfull"), uint32(msg));
+            SetSentErrorMessage(true);
+            return false;
+        }
+        // The bot never sells it nor destroys it for room (Shared/BagSorting); a stack it was
+        // merged into is marked as a whole.
+        BotShared::GivenItems::Mark(pBot, BotShared::Handover::Place(pPlayer, pItem, pBot, placement));
     }
-
-    uint32 itemId = pItem->GetEntry();
-    uint32 count = pItem->GetCount();
-
-    // same steps as a trade (TradeHandler); the store goes into the bank as well (BankItem is StoreItem)
-    pPlayer->MoveItemFromInventory(bag, slot, true);
-    if (pBot->IsSavingDisabled())
-    {
-        // temporary bot: item must not stay in the DB, or it could be duplicated
-        pItem->DeleteFromInventoryDB();
-        pItem->DeleteAllFromDB();
-    }
-    pBot->MoveItemToInventory(dest, pItem, true, true);
-    // pItem may be merged into an existing stack and deleted now
-    // The bot never sells it nor destroys it for room (Shared/BagSorting); a merged stack is
-    // marked as a whole.
-    if (!toBank && !dest.empty())
-        BotShared::GivenItems::Mark(pBot, pBot->GetItemByPos(dest.front().pos));
-
-    pPlayer->SaveInventoryAndGoldToDB();
-    pBot->SaveInventoryAndGoldToDB();
 
     PSendSysMessage("PBOK;%s;take;%u;%u", name.c_str(), itemId, count);
     return true;
 }
 
-// .partybot passslot <from> <bag 0-5> <slot> <to>   one bot hands an item of its inventory to another
-// (the addon's team bags: dragging between companions). Both must let you manage their bags; bound
-// items stay where they are (as takeslot). No mail: a full receiver refuses.
+// .partybot passslot <from> <bag 0-5> <slot> <to> [<bag 0-5> <slot>]   one bot hands an item of its
+// inventory to another (the addon's team bags: dragging between companions), with a place onto that
+// slot of the receiver (5: it puts it on), as Handover::Plan. Both must let you manage their bags;
+// bound items stay where they are (as takeslot). No mail: a full receiver refuses.
 //   PBOK;<from>;pass;<item id>;<count>;<to>
 //   PBERR;<from>;...  (the receiver's own refusals, botbagsfull / locked, under <to>'s name)
 bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
@@ -2874,6 +2910,15 @@ bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
         return false;
     if (pTo == pFrom)
         return true;
+
+    uint8 dstBag = NULL_BAG;
+    uint8 dstSlot = NULL_SLOT;
+    if (!ExtractPartyBotDropPos(&args, dstBag, dstSlot))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot passslot <from> <bag 0-5> <slot> <to> [<bag 0-5> <slot>]", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
 
     // Handover runs in the map thread of both
     if (pTo->GetMap() != pFrom->GetMap())
@@ -2919,12 +2964,16 @@ bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
 
     uint32 const itemId = pItem->GetEntry();
     uint32 const count = pItem->GetCount();
-    if (BotShared::Handover::MoveItem(pFrom, pItem, pTo, "") != BotShared::Handover::Result::Bags)
+    BotShared::Handover::Placement placement;
+    InventoryResult const msg = BotShared::Handover::Plan(pFrom, pItem, pTo, dstBag, dstSlot, placement);
+    if (msg != EQUIP_ERR_OK)
     {
-        PSendSysMessage("PBERR;%s;botbagsfull", toName.c_str());
+        PSendSysMessage("PBERR;%s;%s;%u", toName.c_str(),
+            PartyBotDropErrorCode(msg, dstBag, dstSlot, placement, "botbagsfull"), uint32(msg));
         SetSentErrorMessage(true);
         return false;
     }
+    BotShared::Handover::Place(pFrom, pItem, pTo, placement);
     // (pItem may be merged into a stack and deleted now)
 
     PSendSysMessage("PBOK;%s;pass;%u;%u;%s", name.c_str(), itemId, count, toName.c_str());
