@@ -50,8 +50,8 @@ namespace Commander
             NavPather(NavPather const&) = delete;
             NavPather& operator=(NavPather const&) = delete;
 
-            // False: too many tiles (MAX_TILES) or no navmesh for the map; EndArea anyway.
-            bool BeginArea(uint32 mapId, float minX, float minY, float maxX, float maxY);
+            // False: too many tiles (`maxTiles`) or no navmesh for the map; EndArea anyway.
+            bool BeginArea(uint32 mapId, float minX, float minY, float maxX, float maxY, uint32 maxTiles = MAX_TILES);
             void EndArea();
 
             // The navmesh corners from `from` to `to` (both snapped to the mesh), complete only.

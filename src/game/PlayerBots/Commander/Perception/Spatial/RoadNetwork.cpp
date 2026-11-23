@@ -14,6 +14,12 @@ namespace Roads
     {
         // Tiles loaded around the straight line for one road.
         float const TILE_MARGIN_YD = 250.0f;
+        // Fallback roads (PlanFallback): Camp Narache's ramp leaves the straight line by ~600 yd,
+        // Light's Hope - Chillwind Camp is ~4150 yd; nearest first, this many tries per node.
+        float const FALLBACK_TILE_MARGIN_YD = 900.0f;
+        float const FALLBACK_MAX_EDGE_YD = 4500.0f;
+        uint32 const FALLBACK_MAX_TILES = 100;
+        size_t const FALLBACK_TRIES = 6;
         // Hints: within this of the shortest path (manual points: the wider one), not within a
         // node's core (+ margin: the place's own patrols), spaced along the road.
         float const HINT_CORRIDOR_YD = 50.0f;
@@ -70,8 +76,17 @@ namespace Roads
         m_planned.clear();
         m_next = 0;
         m_failures.clear();
+        m_linked.assign(m_nodes.size(), false);
+        m_fallbackPlanned = false;
+        m_fallbackBuilt = 0;
         m_buildMs = 0;
         PlanEdges();
+        if (m_planned.empty())
+        {
+            // (no Gabriel edge: Step would never run to plan the fallback)
+            m_fallbackPlanned = true;
+            PlanFallback();
+        }
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads: %u nodes, %u hint points, %u roads to build.",
             uint32(m_nodes.size()), uint32(m_hints.size()), uint32(m_planned.size()));
     }
@@ -102,6 +117,35 @@ namespace Roads
                 }
                 if (!blocked)
                     m_planned.push_back({ a, b });
+            }
+        }
+    }
+
+    void RoadNetwork::PlanFallback()
+    {
+        for (uint32 a = 0; a < m_nodes.size(); ++a)
+        {
+            if (m_linked[a])
+                continue;
+            RoadNode const& na = m_nodes[a];
+            std::vector<std::pair<float, uint32>> byDistance;
+            for (uint32 b = 0; b < m_nodes.size(); ++b)
+            {
+                RoadNode const& nb = m_nodes[b];
+                if (b == a || nb.mapId != na.mapId)
+                    continue;
+                float const d = Dist2d(na.x, na.y, nb.x, nb.y);
+                if (d >= 1.0f && d <= FALLBACK_MAX_EDGE_YD)
+                    byDistance.emplace_back(d, b);
+            }
+            std::sort(byDistance.begin(), byDistance.end());
+            for (size_t i = 0; i < byDistance.size() && i < FALLBACK_TRIES; ++i)
+            {
+                Plan p;
+                p.a = a;
+                p.b = byDistance[i].second;
+                p.fallback = true;
+                m_planned.push_back(p);
             }
         }
     }
@@ -211,10 +255,14 @@ namespace Roads
         RoadNode const& a = m_nodes[plan.a];
         RoadNode const& b = m_nodes[plan.b];
 
+        // (a fallback try for a node an earlier try already linked: nothing to do)
+        bool const attempt = !plan.fallback || !m_linked[plan.a];
         bool built = false;
         PathFail why = PathFail::None;
-        if (m_pather.BeginArea(a.mapId, std::min(a.x, b.x) - TILE_MARGIN_YD, std::min(a.y, b.y) - TILE_MARGIN_YD,
-                std::max(a.x, b.x) + TILE_MARGIN_YD, std::max(a.y, b.y) + TILE_MARGIN_YD))
+        float const margin = plan.fallback ? FALLBACK_TILE_MARGIN_YD : TILE_MARGIN_YD;
+        if (attempt && m_pather.BeginArea(a.mapId, std::min(a.x, b.x) - margin, std::min(a.y, b.y) - margin,
+                std::max(a.x, b.x) + margin, std::max(a.y, b.y) + margin,
+                plan.fallback ? FALLBACK_MAX_TILES : NavPather::MAX_TILES))
         {
             RoadEdge edge;
             if (Shape(a, b, edge))
@@ -224,13 +272,22 @@ namespace Roads
                 edge.nodeA = a.id;
                 edge.nodeB = b.id;
                 m_edges.push_back(std::move(edge));
+                m_linked[plan.a] = true;
+                m_linked[plan.b] = true;
                 built = true;
             }
         }
-        if (!built)
+        if (attempt && !built)
             why = m_pather.LastFail();
-        m_pather.EndArea();
-        if (!built)
+        if (attempt)
+            m_pather.EndArea();
+        if (built && plan.fallback)
+        {
+            ++m_fallbackBuilt;
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Fallback road %s - %s (map %u, %.0f yd straight, %.0f yd long) built.",
+                a.name.c_str(), b.name.c_str(), a.mapId, Dist2d(a.x, a.y, b.x, b.y), m_edges.back().length);
+        }
+        if (!built && !plan.fallback)
         {
             FailedRoad f;
             f.mapId = a.mapId;
@@ -247,13 +304,18 @@ namespace Roads
         }
 
         m_buildMs += uint32(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+        if (m_next >= m_planned.size() && !m_fallbackPlanned)
+        {
+            m_fallbackPlanned = true;
+            PlanFallback();
+        }
         if (m_next >= m_planned.size())
         {
             uint32 hinted = 0;
             for (RoadEdge const& e : m_edges)
                 hinted += e.hints ? 1 : 0;
-            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads built: %u of %u (%u through patrol or road points, %u failed), %u ms.",
-                uint32(m_edges.size()), uint32(m_planned.size()), hinted, uint32(m_failures.size()), m_buildMs);
+            sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads built: %u (%u through patrol or road points, %u fallback; %u of the planned failed), %u ms.",
+                uint32(m_edges.size()), hinted, m_fallbackBuilt, uint32(m_failures.size()), m_buildMs);
             LogUnlinked();
         }
         return m_next < m_planned.size();
@@ -261,33 +323,26 @@ namespace Roads
 
     void RoadNetwork::LogUnlinked() const
     {
-        // Places no road leads to: none planned (no neighbour within the cap) or all failed.
-        std::vector<uint32> planned(m_nodes.size(), 0);
+        // Places no road leads to: none tried (no node within the caps) or all tries failed.
+        std::vector<uint32> tried(m_nodes.size(), 0);
         for (Plan const& p : m_planned)
         {
-            ++planned[p.a];
-            ++planned[p.b];
+            ++tried[p.a];
+            ++tried[p.b];
         }
         uint32 unlinked = 0;
         for (size_t i = 0; i < m_nodes.size(); ++i)
         {
-            RoadNode const& n = m_nodes[i];
-            bool linked = false;
-            for (RoadEdge const& e : m_edges)
-                if (e.nodeA == n.id || e.nodeB == n.id)
-                {
-                    linked = true;
-                    break;
-                }
-            if (linked)
+            if (m_linked[i])
                 continue;
+            RoadNode const& n = m_nodes[i];
             ++unlinked;
-            if (planned[i])
-                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): all %u planned failed.",
-                    n.name.c_str(), n.mapId, n.x, n.y, planned[i]);
+            if (tried[i])
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): all %u tried failed.",
+                    n.name.c_str(), n.mapId, n.x, n.y, tried[i]);
             else
-                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): none planned.",
-                    n.name.c_str(), n.mapId, n.x, n.y);
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): no place within %.0f yd.",
+                    n.name.c_str(), n.mapId, n.x, n.y, FALLBACK_MAX_EDGE_YD);
         }
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Places without a road: %u of %u.", unlinked, uint32(m_nodes.size()));
     }

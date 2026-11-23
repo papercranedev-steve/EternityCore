@@ -112,8 +112,16 @@ namespace Commander
             struct Plan
             {
                 uint32 a = 0, b = 0;    // indexes into m_nodes
+                // Second pass for a node `a` no road reached: wider tile box, dropped once `a`
+                // has a road.
+                bool fallback = false;
             };
             void PlanEdges();
+            // After the Gabriel edges: for each node without a road, its nearest nodes (any
+            // direction, longer cap), tried nearest first until one is built (Camp Narache's way
+            // down leaves the narrow box, Menethil - Thelsamar is cut by Ironforge between them,
+            // Light's Hope has no node within MAX_EDGE_YD).
+            void PlanFallback();
             bool Shape(RoadNode const& a, RoadNode const& b, RoadEdge& out) const;
             // Logs the nodes no built edge touches (after the last Step).
             void LogUnlinked() const;
@@ -124,7 +132,10 @@ namespace Commander
             size_t m_next = 0;
             std::vector<RoadEdge> m_edges;
             NavPather m_pather;
-            std::vector<FailedRoad> m_failures;
+            std::vector<FailedRoad> m_failures;     // Gabriel edges only (a fallback try may well fail)
+            std::vector<bool> m_linked;             // per m_nodes index: some edge built
+            bool m_fallbackPlanned = false;
+            uint32 m_fallbackBuilt = 0;
             uint32 m_buildMs = 0;
         };
     }

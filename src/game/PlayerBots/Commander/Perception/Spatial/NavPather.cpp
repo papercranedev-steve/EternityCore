@@ -126,14 +126,14 @@ namespace Roads
         return query;
     }
 
-    bool NavPather::BeginArea(uint32 mapId, float minX, float minY, float maxX, float maxY)
+    bool NavPather::BeginArea(uint32 mapId, float minX, float minY, float maxX, float maxY, uint32 maxTiles)
     {
         EndArea();
         m_mapId = mapId;
         int32 const x0 = std::max(0, GridX(maxY)), x1 = std::min(MAX_NUMBER_OF_GRIDS - 1, GridX(minY));
         int32 const y0 = std::max(0, GridY(maxX)), y1 = std::min(MAX_NUMBER_OF_GRIDS - 1, GridY(minX));
         m_lastFail = PathFail::None;
-        if (x1 < x0 || y1 < y0 || uint32((x1 - x0 + 1) * (y1 - y0 + 1)) > MAX_TILES)
+        if (x1 < x0 || y1 < y0 || uint32((x1 - x0 + 1) * (y1 - y0 + 1)) > maxTiles)
         {
             m_lastFail = PathFail::TooManyTiles;
             return false;
