@@ -26,6 +26,9 @@ namespace Population
                 return false;
             if (info->flags_extra & CREATURE_FLAG_EXTRA_GUARD)
                 return false;
+            // Stable mounts (Theramore's horses), training dummies and town NPCs nobody levels on.
+            if (info->static_flags1 & (CREATURE_STATIC_FLAG_MOUNTABLE | CREATURE_STATIC_FLAG_NO_XP | CREATURE_STATIC_FLAG_UNKILLABLE))
+                return false;
             switch (info->type)
             {
                 case CREATURE_TYPE_CRITTER:

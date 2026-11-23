@@ -1,7 +1,8 @@
 /*
  * World population bots, field: where people level in the open world. Every creature spawn
  * point of a continent (`creature` table) of a creature a player would hunt: normal rank, no
- * guard, civilian, critter, totem or service NPC. A field bot logs in next to one, out of
+ * guard, civilian, critter, totem or service NPC, no stable mount, no XP-less or unkillable
+ * creature (training dummies, town NPCs). A field bot logs in next to one, out of
  * everyone's sight, and fights what lives there (Commander hunting, HuntAssigner).
  * Built per map on first use from ObjectMgr, kept in CELL_YD cells. World thread only.
  */
