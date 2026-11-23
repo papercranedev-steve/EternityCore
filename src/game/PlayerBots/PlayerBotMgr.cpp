@@ -2934,7 +2934,7 @@ bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
 // ---------------------------------------------------------------------------
 // The bots' bank, managed by the player at a banker (addon Bank.lua). Same gate as the bags
 // (Gates ManageBags); positions as above (bag 6-12). Prices as for players: BankBagSlotPrices.dbc.
-//   PBBANKT;BEGIN | M;<name>;<may 0/1>;<affinity it takes>;<affinity now> | END
+//   PBBANKT;BEGIN | M;<name>;<may 0/1>;<affinity it takes>;<affinity now>;<temporary 0/1> | END
 //   PBBANK;<name>;BEGIN
 //   PBBANK;<name>;B;<bag 0-4, 6, 7-12>;<size>;<id:count|0>,...   (his bags too: the other half of a bank)
 //   PBBANK;<name>;G;<bag slots bought>;<next slot's price, 0: all bought>;<id|0>,... (the 6 bag slots)
@@ -2969,13 +2969,15 @@ bool ChatHandler::HandlePartyBotBankTeamCommand(char* /*args*/)
         for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
         {
             Player* pBot = itr->getSource();
-            if (!pBot || pBot == pPlayer || !pBot->IsInWorld() || pBot->IsSavingDisabled() ||
+            if (!pBot || pBot == pPlayer || !pBot->IsInWorld() ||
                 !pBot->AI() || !dynamic_cast<PartyBotAI*>(pBot->AI()))
                 continue;
+            // a temporary bot is listed too (the addon says why it has no bank), never allowed
+            bool const temporary = pBot->IsSavingDisabled();
             Companions::Gates::Gate const gate = Companions::Gates::Gate::ManageBags;
-            PSendSysMessage("PBBANKT;M;%s;%u;%u;%u", pBot->GetName(),
-                uint32(Companions::Gates::Allows(pBot->GetGUIDLow(), gate)), Companions::Gates::Of(gate).affinity,
-                sCompanionMgr.GetAffinity(pBot->GetGUIDLow()));
+            PSendSysMessage("PBBANKT;M;%s;%u;%u;%u;%u", pBot->GetName(),
+                uint32(!temporary && Companions::Gates::Allows(pBot->GetGUIDLow(), gate)), Companions::Gates::Of(gate).affinity,
+                sCompanionMgr.GetAffinity(pBot->GetGUIDLow()), uint32(temporary));
         }
     }
     SendSysMessage("PBBANKT;END");
