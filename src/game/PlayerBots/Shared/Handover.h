@@ -1,7 +1,8 @@
 /*
  * Shared bot hands (PlayerBots/Shared): handing items from one character's bags to another's
  * without a trade window (a bot crafting with the player's materials: Life/Errands/
- * CraftForPlayer). When the receiver's bags are full, the items can go by mail instead.
+ * CraftForPlayer; one companion passing an item to another: `.partybot passslot`). When the
+ * receiver's bags are full, the items can go by mail instead.
  *
  * Items of a temporary bot (saving disabled) were never saved: they become new rows for the
  * receiver, as in `.partybot giveslot`. Both sides are saved after each hand-over.

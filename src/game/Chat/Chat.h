@@ -302,6 +302,7 @@ class ChatHandler
         bool HandlePartyBotUseSlotCommand(char * args);
         bool HandlePartyBotGiveSlotCommand(char * args);
         bool HandlePartyBotTakeSlotCommand(char * args);
+        bool HandlePartyBotPassSlotCommand(char * args);
         bool HandlePartyBotAccountsCommand(char * args);
         bool HandlePartyBotCharsCommand(char * args);
         Player* ExtractPartyBotTarget(char** args, std::string& name);

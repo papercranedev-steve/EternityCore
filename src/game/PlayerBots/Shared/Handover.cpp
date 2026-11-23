@@ -83,6 +83,13 @@ namespace Handover
         Result result;
         if (fits)
         {
+            // a temporary receiver never saves: the item must not stay in the DB, or it could be
+            // duplicated (as `.partybot takeslot`)
+            if (saved && to->IsSavingDisabled())
+            {
+                item->DeleteFromInventoryDB();
+                item->DeleteAllFromDB();
+            }
             to->MoveItemToInventory(dest, item, true, saved);
             // (item may be merged into a stack and deleted now)
             result = Result::Bags;
