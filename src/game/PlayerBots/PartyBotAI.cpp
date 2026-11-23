@@ -49,10 +49,12 @@
 #include "Commander/Team.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/TradeGate.h"
+#include "Companions/Affinity/Gates.h"
 #include "Shared/Phrases.h"
 #include "Shared/BotChat.h"
 #include "Shared/Trade.h"
 #include "Shared/GearUpgrade.h"
+#include "Shared/BagSorting.h"
 #include "Shared/GameNames.h"
 #include "Shared/Portals.h"
 #include "Life/Errands/ErrandCommon.h"
@@ -248,7 +250,18 @@ void PartyBotAI::TellBlockedQuests(Player* pLeader)
 
 bool PartyBotAI::UpdateQuestTurnIn(Player* pLeader)
 {
-    bool const busy = Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser);
+    bool const busy = Life::QuestTurnIn::Update(me, m_questTurnIn, pLeader, m_rewardChooser, &m_bagRules);
+    for (Life::RefusedQuest const& refused : Life::QuestTurnIn::TakeRefused(m_questTurnIn))
+    {
+        // Bags full even after making room: it hands it in later (QuestTurnIn::RETRY_MS).
+        Commander::VoiceEvent e;
+        e.speaker = me->GetObjectGuid();
+        e.key = "voice.quest.turnin.bagsfull";
+        e.tier = Commander::VoiceTier::Social;
+        e.once = "turnin.bagsfull:" + std::to_string(me->GetGUIDLow()) + ":" + std::to_string(refused.questId);
+        e.onceMs = 10 * MINUTE * IN_MILLISECONDS;
+        sCommanderMgr.QueueVoice(me, std::move(e));
+    }
     for (Life::TurnedInQuest const& done : Life::QuestTurnIn::TakeTurnedIn(m_questTurnIn))
     {
         // One line per giver visit for the whole party (the once key), a new item worn its own.
@@ -424,9 +437,28 @@ uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
     if (!pProto)
         return ROLL_PASS;
     // Need what it would wear; greed the rest that sells (as most players do).
-    if (BotShared::GearUpgrade::IsUpgrade(me, pProto))
-        return ROLL_NEED;
-    return pProto->SellPrice ? ROLL_GREED : ROLL_PASS;
+    bool const need = BotShared::GearUpgrade::IsUpgrade(me, pProto);
+    uint32 const worth = BotShared::BagSorting::WorthOf(itemId, 1);
+    if (!need && !worth)
+        return ROLL_PASS;
+    // The item comes when the roll ends: the room is made now (cheaper things destroyed, user
+    // 2026-11-23); no room for it, the player gets it.
+    if (!BotShared::BagSorting::MakeRoomFor(me, BagRules(), itemId, 1, need ? BotShared::BagSorting::PRICELESS : worth))
+        return ROLL_PASS;
+    return need ? ROLL_NEED : ROLL_GREED;
+}
+
+BotShared::BagSorting::Rules PartyBotAI::BagRules() const
+{
+    BotShared::BagSorting::Rules rules;
+    // Once the player manages its bags, unbound gear is his to sort out (user 2026-11-23).
+    rules.keepUnboundGear = Companions::Gates::Allows(me->GetGUIDLow(), Companions::Gates::Gate::ManageBags);
+    return rules;
+}
+
+void PartyBotAI::RefreshBagRules()
+{
+    m_bagRules = BagRules();
 }
 
 bool PartyBotAI::FillsUpAtOnce()
@@ -1312,7 +1344,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
             // below takes what he allowed).
             Life::QuestOffer::Update(me, m_questOffer, pLeader, PersonalityTags());
             TellBlockedQuests(pLeader);
-            bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader) ||
+            RefreshBagRules();
+            bool const busy = Life::LootRun::Update(me, m_lootRun, pLeader, &m_bagRules) ||
                 Life::GatherRun::Update(me, m_gatherRun, pLeader) ||
                 Life::QuestObjectRun::Update(me, m_questObjectRun, pLeader) ||
                 Life::QuestItemUse::Update(me, m_questItemUse, pLeader) ||

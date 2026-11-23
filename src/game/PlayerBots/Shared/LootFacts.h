@@ -22,6 +22,11 @@ struct Loot;
 
 namespace BotShared
 {
+    namespace BagSorting
+    {
+        struct Rules;
+    }
+
     namespace LootFacts
     {
         // Gray (poor quality) items are vendor trash: the player often leaves them on the corpse.
@@ -50,7 +55,10 @@ namespace BotShared
         // The loot window open on the player (Player::GetLootGuid): takes the money (shared with
         // the group by the money handler) and every item SlotsToTake gives, through the client's
         // own handlers, then closes it. True: a window was open.
-        bool TakeOpenLoot(Player* player, bool includePoor = false);
+        // `makeRoom`: an item that does not fit gets room first (Shared/BagSorting::MakeRoomFor:
+        // cheaper things in the bags are destroyed; a quest item gets room from anything not
+        // kept). Null: what does not fit stays.
+        bool TakeOpenLoot(Player* player, bool includePoor = false, BagSorting::Rules const* makeRoom = nullptr);
     }
 }
 

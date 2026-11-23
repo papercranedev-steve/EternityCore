@@ -2,6 +2,7 @@
 #include "Life/Errands/TownTrip.h"
 #include "Life/Errands/ErrandCommon.h"
 #include "Shared/AuctionMarket.h"
+#include "Shared/BagSorting.h"
 #include "Shared/ClassTraining.h"
 #include "Shared/Inventory.h"
 #include "Shared/Mailbox.h"
@@ -89,10 +90,22 @@ namespace Trip
 
         // ---- Stop actions ----
 
+        using BotShared::BagSorting::Fate;
+        using BotShared::BagSorting::Rules;
+
+        // What is sold where (Shared/BagSorting): vendors always take Vendor items, and Market
+        // items too when the trip has no auction house to post them at.
+        std::vector<Fate> VendorFates(bool withMarket)
+        {
+            return withMarket ? std::vector<Fate>{ Fate::Vendor, Fate::Market } : std::vector<Fate>{ Fate::Vendor };
+        }
+
         class AuctionAction final : public IStopAction
         {
         public:
             Needs needs;
+            Rules rules;
+            bool sell = false;      // post the Market items too
             char const* Name() const override { return "auction"; }
             // (searching takes a while, every listing is compared and bought on its own)
             Browse BrowseTime() const override
@@ -109,9 +122,11 @@ namespace Trip
                 std::vector<BotShared::AuctionMarket::Listing> const listings =
                     BotShared::AuctionMarket::PlanBuys(me, auctioneer, needs, budget, taken);
                 uint32 const asked = BotShared::AuctionMarket::Buyout(me, auctioneer, listings);
-                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at the auction house: %u listings for %u copper.",
-                    me->GetName(), uint32(listings.size()), asked);
-                return uint32(listings.size());
+                uint32 const posted = sell ? BotShared::AuctionMarket::Post(me, auctioneer,
+                    BotShared::BagSorting::WithFate(me, rules, { Fate::Market })) : 0;
+                sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Life] %s at the auction house: %u listings for %u copper, %u items posted.",
+                    me->GetName(), uint32(listings.size()), asked, posted);
+                return uint32(listings.size()) + posted;
             }
         };
 
@@ -135,6 +150,8 @@ namespace Trip
         public:
             Needs needs;
             bool repair = false;
+            Rules rules;
+            bool sellMarket = false;    // no auction house stop on this trip
             char const* Name() const override { return "vendor"; }
             // (every junk stack, the repair and every item bought is a click or two)
             Browse BrowseTime() const override
@@ -147,7 +164,8 @@ namespace Trip
                 if (!vendor)
                     return 0;
                 uint32 sold = 0;
-                uint32 const earned = BotShared::Vendor::SellJunk(me, vendor, &sold);
+                uint32 const earned = BotShared::Vendor::Sell(me, vendor,
+                    BotShared::BagSorting::WithFate(me, rules, VendorFates(sellMarket)), &sold);
                 uint32 repaired = 0;
                 if (repair && vendor->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_REPAIR))
                 {
@@ -274,20 +292,28 @@ namespace Trip
                 return true;
         if (LowestDurabilityPct(me) <= TRIP_DURABILITY_PCT)
             return true;
-        return BotShared::Inventory::FreeBagSlots(me) <= BotShared::Purchasing::KEEP_FREE_SLOTS && BotShared::Vendor::HasJunk(me);
+        return BotShared::Inventory::FreeBagSlots(me) <= BotShared::Purchasing::KEEP_FREE_SLOTS &&
+               BotShared::BagSorting::HasAny(me, Bags(), { Fate::Vendor, Fate::Market });
+    }
+
+    Rules ShoppingPlanner::Bags() const
+    {
+        return m_bags ? *m_bags : Rules();
     }
 
     void ShoppingPlanner::PlanStops(Player* me, Player const* leader, TripPlanStops& plan)
     {
         Needs const needs = BotShared::Supplies::Missing(me);
         uint32 const lowestPct = LowestDurabilityPct(me);
-        bool const junk = BotShared::Vendor::HasJunk(me);
+        Rules const bags = Bags();
+        bool const toVendor = BotShared::BagSorting::HasAny(me, bags, { Fate::Vendor });
+        bool const toMarket = BotShared::BagSorting::HasAny(me, bags, { Fate::Market });
         Budget budget = Budget::Of(me, TrainerReserve(me));
 
         // The auction house: the auctioneer nearest the leader with a mailbox nearby.
         Creature* auctioneer = nullptr;
         GameObject* mailbox = nullptr;
-        if (!needs.empty())
+        if (!needs.empty() || toMarket)
             for (Creature* c : LiveNpcs(me, leader, UNIT_NPC_FLAG_AUCTIONEER))
             {
                 for (BotShared::Mailbox::Spawn const& s : BotShared::Mailbox::Near(me->GetMapId(), c->GetPositionX(), c->GetPositionY(), MAILBOX_NEAR_AUCTION_YD))
@@ -301,7 +327,18 @@ namespace Trip
                 mailbox = nullptr;
             }
         auto auction = std::make_shared<AuctionAction>();
+        auction->rules = bags;
+        auction->sell = auctioneer && toMarket;
         std::set<uint32> taken;
+        auto newVendor = [&](Creature* npc)
+        {
+            VendorPlan vp;
+            vp.npc = npc;
+            vp.action = std::make_shared<VendorAction>();
+            vp.action->rules = bags;
+            vp.action->sellMarket = !auction->sell;
+            return vp;
+        };
 
         std::vector<Creature*> const vendors = LiveNpcs(me, leader, UNIT_NPC_FLAG_VENDOR);
         std::set<Creature*> unsafe;
@@ -353,33 +390,30 @@ namespace Trip
                     unsafe.insert(best);
                     continue;
                 }
-                VendorPlan vp;
-                vp.npc = best;
-                vp.action = std::make_shared<VendorAction>();
+                VendorPlan vp = newVendor(best);
                 Commit(me, vp, tierNeeds, budget, repairPending, tier);
                 chosen.push_back(vp);
             }
         }
 
-        // Junk to sell and no vendor on the way: the nearest one.
-        if (chosen.empty() && junk)
+        // Things for a vendor and no vendor on the way: the nearest one.
+        if (chosen.empty() && (toVendor || (toMarket && !auction->sell)))
             for (Creature* v : vendors)
                 if (SafeTo(me, v))
                 {
-                    VendorPlan vp;
-                    vp.npc = v;
-                    vp.action = std::make_shared<VendorAction>();
-                    chosen.push_back(vp);
+                    chosen.push_back(newVendor(v));
                     break;
                 }
 
         // The stops.
         int auctionIndex = -1;
-        if (auctioneer && !auction->needs.empty())
+        bool const buys = auctioneer && !auction->needs.empty();
+        if (buys || auction->sell)
             auctionIndex = plan.Add(StopAt(auctioneer, "place.auction", auction));
-        if (auctionIndex >= 0 || BotShared::Mailbox::HasMailToTake(me))
+        // (what it bought comes by mail at once; what it posted, once sold: a later trip)
+        if (buys || BotShared::Mailbox::HasMailToTake(me))
         {
-            GameObject* box = auctionIndex >= 0 ? mailbox : nullptr;
+            GameObject* box = buys ? mailbox : nullptr;
             if (!box)
             {
                 for (BotShared::Mailbox::Spawn const& s : BotShared::Mailbox::Near(me->GetMapId(), leader->GetPositionX(), leader->GetPositionY(), TownTrip::TRIP_YD))
@@ -395,7 +429,7 @@ namespace Trip
             if (box)
             {
                 TripStop stop = StopAt(box, nullptr, std::make_shared<MailboxAction>());
-                stop.after = auctionIndex;
+                stop.after = buys ? auctionIndex : -1;
                 plan.Add(stop);
             }
         }

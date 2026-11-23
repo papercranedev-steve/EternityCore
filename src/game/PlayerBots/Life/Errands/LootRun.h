@@ -16,7 +16,7 @@
  *     take through the client's own handlers (all loot rules apply), releases it and puts on
  *     what it looted that is an upgrade (Shared/Inventory.h);
  *   - a corpse it looted, could not reach in GIVE_UP_MS, or had no safe walk to is not tried
- *     again (bags full: the rest stays for the player).
+ *     again (bags full and no room made: the rest stays for the player).
  *
  * Map thread of the bot.
  */
@@ -29,6 +29,14 @@
 #include "Life/Errands/ErrandCommon.h"
 
 class Player;
+
+namespace BotShared
+{
+    namespace BagSorting
+    {
+        struct Rules;
+    }
+}
 
 namespace Life
 {
@@ -55,9 +63,12 @@ namespace Life
         constexpr uint32 JUNK_ROOM_SLOTS = 4;
 
         // `anchor`: corpses near it only (the party leader); null = near the bot.
+        // `bags`: what does not fit gets room (Shared/BagSorting::MakeRoomFor, user 2026-11-23:
+        // cheaper things are destroyed); null = it stays on the corpse (population bots: only
+        // the walk and the window matter).
         // True: the bot walks to a corpse or looted one this tick (the caller does nothing
         // else with its movement this tick).
-        bool Update(Player* me, LootRunState& state, Player const* anchor);
+        bool Update(Player* me, LootRunState& state, Player const* anchor, BotShared::BagSorting::Rules const* bags = nullptr);
 
         // The walk ends (combat, the bot no longer loots).
         void Stop(Player* me, LootRunState& state);

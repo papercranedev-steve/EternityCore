@@ -17,6 +17,8 @@ namespace BotShared
     {
         // Copper one item sells for at the auction house, 0 = it does not sell there.
         uint32 AuctionPrice(uint32 itemId);
+        // Copper `count` of it sell for there (rounded down: never above the buyer's price).
+        uint32 AuctionPrice(uint32 itemId, uint32 count);
         // The auction house price, else what a vendor pays; 0 = neither.
         uint32 WorthOf(uint32 itemId);
     }

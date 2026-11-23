@@ -1,6 +1,7 @@
 #include "Life/Errands/QuestTurnIn.h"
 #include "Life/Errands/RewardChooser.h"
 #include "Life/Errands/ErrandCommon.h"
+#include "Shared/BagSorting.h"
 #include "Shared/Inventory.h"
 #include "Shared/QuestRewards.h"
 #include "Player.h"
@@ -153,6 +154,25 @@ namespace QuestTurnIn
             state.choiceSinceMs = 0;
         }
 
+        // Bag slots the reward items take at most (none of them joining a stack).
+        uint32 RewardSlots(Quest const* quest, uint32 reward)
+        {
+            auto slotsOf = [](uint32 itemId, uint32 count)
+            {
+                ItemPrototype const* proto = itemId ? sObjectMgr.GetItemPrototype(itemId) : nullptr;
+                if (!proto || !count)
+                    return 0u;
+                uint32 const stack = std::max<uint32>(proto->GetMaxStackSize(), 1);
+                return (count + stack - 1) / stack;
+            };
+            uint32 slots = 0;
+            if (quest->GetRewChoiceItemsCount() > 0 && reward < QUEST_REWARD_CHOICES_COUNT)
+                slots += slotsOf(quest->RewChoiceItemId[reward], quest->RewChoiceItemCount[reward]);
+            for (uint32 i = 0; i < QUEST_REWARDS_COUNT; ++i)
+                slots += slotsOf(quest->RewItemId[i], quest->RewItemCount[i]);
+            return slots;
+        }
+
         // Rewards the quest at the giver through the client's handler. False: refused (bags full).
         bool TurnIn(Player* me, WorldObject* giver, Quest const* quest, uint32 reward, TurnedInQuest& done)
         {
@@ -197,7 +217,15 @@ namespace QuestTurnIn
         return out;
     }
 
-    bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser)
+    std::vector<RefusedQuest> TakeRefused(QuestTurnInState& state)
+    {
+        std::vector<RefusedQuest> out;
+        out.swap(state.refused);
+        return out;
+    }
+
+    bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser,
+                BotShared::BagSorting::Rules const* bags)
     {
         WorldObject const* center = anchor ? static_cast<WorldObject const*>(anchor) : me;
         if (!Errands::MayRun(me, anchor))
@@ -263,6 +291,10 @@ namespace QuestTurnIn
             }
         }
 
+        uint32 const slots = RewardSlots(quest, reward);
+        if (bags && BotShared::Inventory::FreeBagSlots(me) < slots)
+            BotShared::BagSorting::MakeRoom(me, *bags, slots, BotShared::BagSorting::PRICELESS);
+
         TurnedInQuest done;
         if (TurnIn(me, giver, quest, reward, done))
         {
@@ -271,7 +303,15 @@ namespace QuestTurnIn
                 state.turnedIn.erase(state.turnedIn.begin());
         }
         else
+        {
             Errands::MarkDone(state.done, giver->GetObjectGuid(), DONE_KEEP);
+            if (BotShared::Inventory::FreeBagSlots(me) < slots)
+            {
+                state.refused.push_back({ quest->GetQuestId(), giver->GetObjectGuid() });
+                if (state.refused.size() > TURNED_IN_KEEP)
+                    state.refused.erase(state.refused.begin());
+            }
+        }
         GiverVisit::Acted(state.visit, now);
         Clear(me, state, chooser);
         state.nextSearchMs = 0;     // the giver may end another of its quests

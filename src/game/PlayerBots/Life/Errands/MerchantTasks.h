@@ -1,7 +1,9 @@
 /*
  * Bot daily life (PlayerBots/Life): the business a bot does at NPCs (NpcVisit.h tasks).
  *
- *  - VendorTask: at a vendor sell the junk (Shared/Vendor::SellJunk), at an armorer repair
+ *  - VendorTask: at a vendor sell what only a vendor takes (Shared/BagSorting Fate::Vendor:
+ *    gray items, bound gear it replaced; the auction house items wait for a town trip, user
+ *    2026-11-23), at an armorer repair
  *    (when it can pay all of it), then buy the missing supplies by priority
  *    (Shared/Supplies, Shared/Vendor::PlanPurchases) keeping the money the class trainer
  *    will want for the important lessons (Trip/LessonPriority.h) for everything but critical
@@ -18,7 +20,11 @@
 
 #include "Life/Errands/NpcVisit.h"
 #include "Life/Errands/Trip/LessonPriority.h"
+#include "Shared/BagSorting.h"
 #include <set>
+#include <vector>
+
+class Item;
 
 namespace Life
 {
@@ -27,7 +33,10 @@ namespace Life
     public:
         // `lessons`: as TrainerTask's; the money kept for the trainer is that of the
         // important lessons only (Lessons::IMPORTANT). Null: all of them.
-        explicit VendorTask(Lessons::Context const* lessons = nullptr) : m_lessons(lessons) {}
+        // `bags`: what the bot sells (Shared/BagSorting), kept up to date by its AI; null = the
+        // default rules.
+        explicit VendorTask(Lessons::Context const* lessons = nullptr, BotShared::BagSorting::Rules const* bags = nullptr)
+            : m_lessons(lessons), m_bags(bags) {}
 
         char const* Name() const override { return "vendor"; }
         bool Wants(Player* me, Creature* npc) override;
@@ -35,8 +44,10 @@ namespace Life
 
     private:
         uint32 TrainingReserve(Player* me) const;
+        std::vector<Item*> ToSell(Player* me) const;
 
         Lessons::Context const* m_lessons;
+        BotShared::BagSorting::Rules const* m_bags;
     };
 
     class TrainerTask final : public INpcTask

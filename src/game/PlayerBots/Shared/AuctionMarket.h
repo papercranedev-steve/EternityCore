@@ -26,6 +26,7 @@
 #include <vector>
 
 class Creature;
+class Item;
 class Player;
 
 namespace BotShared
@@ -53,6 +54,17 @@ namespace BotShared
         // Queues the buyout bids (the bot must stand at the auctioneer). Returns the copper the
         // listings ask for; what was really paid shows in the bot's money next tick.
         uint32 Buyout(Player* player, Creature* auctioneer, std::vector<Listing> const& listings);
+
+        // Selling (user 2026-11-23, .kiro/docs/2026-11-23-bot-bags.md): each item at the AH bot's
+        // reference price (MarketValue::AuctionPrice, the price the AH buyer bot pays, so it
+        // sells): buyout = unit price x count, start bid POST_BID_PCT of it, POST_HOURS. Queues
+        // the client's sell packet (CMSG_AUCTION_SELL_ITEM, world thread: every check of a
+        // player's auction applies, the deposit is paid then). Items whose deposit the money left
+        // cannot pay are skipped. The money comes by mail when it sells (Shared/Mailbox).
+        // Returns how many were posted.
+        constexpr uint32 POST_BID_PCT = 75;     // as launcher/ahbot-prices.ps1 BidRatio
+        constexpr uint32 POST_HOURS = 24;
+        uint32 Post(Player* player, Creature* auctioneer, std::vector<Item*> const& items);
     }
 }
 

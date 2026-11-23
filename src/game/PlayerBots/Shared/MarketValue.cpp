@@ -15,6 +15,14 @@ namespace BotShared
             return std::max<uint32>(1, uint32(price + 0.5));
         }
 
+        uint32 AuctionPrice(uint32 itemId, uint32 count)
+        {
+            double price = 0.0;
+            if (!sAuctionHouseBotMgr.GetReferenceUnitPrice(itemId, price) || price <= 0.0)
+                return 0;
+            return uint32(price * std::max<uint32>(count, 1));
+        }
+
         uint32 WorthOf(uint32 itemId)
         {
             if (uint32 const auction = AuctionPrice(itemId))

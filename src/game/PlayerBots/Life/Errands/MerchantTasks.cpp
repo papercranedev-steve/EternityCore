@@ -33,12 +33,18 @@ namespace Life
         return Lessons::CostUpTo(Lessons::Available(me, *m_lessons), Lessons::IMPORTANT);
     }
 
+    std::vector<Item*> VendorTask::ToSell(Player* me) const
+    {
+        BotShared::BagSorting::Rules const rules = m_bags ? *m_bags : BotShared::BagSorting::Rules();
+        return BotShared::BagSorting::WithFate(me, rules, { BotShared::BagSorting::Fate::Vendor });
+    }
+
     bool VendorTask::Wants(Player* me, Creature* npc)
     {
         if (!npc->HasFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_VENDOR))
             return false;
         uint32 repairCost = 0;
-        if (CanRepairAll(me, npc, repairCost) || BotShared::Vendor::HasJunk(me))
+        if (CanRepairAll(me, npc, repairCost) || !ToSell(me).empty())
             return true;
         std::vector<BotShared::Supplies::Need> const needs = BotShared::Supplies::Missing(me);
         return !needs.empty() && !BotShared::Vendor::PlanPurchases(me, npc, needs, TrainingReserve(me)).empty();
@@ -47,7 +53,7 @@ namespace Life
     uint32 VendorTask::Do(Player* me, Creature* npc)
     {
         uint32 sold = 0;
-        uint32 const earned = BotShared::Vendor::SellJunk(me, npc, &sold);
+        uint32 const earned = BotShared::Vendor::Sell(me, npc, ToSell(me), &sold);
 
         uint32 repairCost = 0;
         uint32 repaired = 0;

@@ -26,13 +26,6 @@ namespace Vendor
                 fn(item);
         }
 
-        bool IsJunk(Item const* item)
-        {
-            ItemPrototype const* proto = item->GetProto();
-            return proto && proto->Quality == ITEM_QUALITY_POOR && proto->SellPrice > 0 &&
-                   proto->Class != ITEM_CLASS_QUEST && !proto->StartQuest;
-        }
-
         // Player::DurabilityRepair's price of one item (it computes it but returns 0).
         uint32 RepairCostOf(Item const* item, float discount)
         {
@@ -91,25 +84,16 @@ namespace Vendor
 
     }
 
-    bool HasJunk(Player const* player)
+    uint32 Sell(Player* player, Creature* vendor, std::vector<Item*> const& items, uint32* stacksSold)
     {
-        bool found = false;
-        ForEachBagItem(player, [&found](Item* item) { found = found || IsJunk(item); });
-        return found;
-    }
-
-    uint32 SellJunk(Player* player, Creature* vendor, uint32* stacksSold)
-    {
-        std::vector<ObjectGuid> junk;
-        ForEachBagItem(player, [&junk](Item* item)
-        {
-            if (IsJunk(item))
-                junk.push_back(item->GetObjectGuid());
-        });
+        std::vector<ObjectGuid> guids;
+        for (Item const* item : items)
+            if (item && item->GetProto()->SellPrice)
+                guids.push_back(item->GetObjectGuid());
         if (stacksSold)
-            *stacksSold = uint32(junk.size());
+            *stacksSold = uint32(guids.size());
         uint32 const before = player->GetMoney();
-        for (ObjectGuid const& guid : junk)
+        for (ObjectGuid const& guid : guids)
         {
             WorldPackets::Item::SellItem packet;
             packet.vendorGuid = vendor->GetObjectGuid();

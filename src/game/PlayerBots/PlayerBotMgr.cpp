@@ -32,6 +32,7 @@
 #include "Shared/Phrases.h"
 #include "Shared/Gaze.h"
 #include "Shared/Handover.h"
+#include "Shared/GivenItems.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -2831,6 +2832,10 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
     }
     pBot->MoveItemToInventory(dest, pItem, true, true);
     // pItem may be merged into an existing stack and deleted now
+    // The bot never sells it nor destroys it for room (Shared/BagSorting); a merged stack is
+    // marked as a whole.
+    if (!toBank && !dest.empty())
+        BotShared::GivenItems::Mark(pBot, pBot->GetItemByPos(dest.front().pos));
 
     pPlayer->SaveInventoryAndGoldToDB();
     pBot->SaveInventoryAndGoldToDB();

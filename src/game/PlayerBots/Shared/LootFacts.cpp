@@ -1,4 +1,5 @@
 #include "Shared/LootFacts.h"
+#include "Shared/BagSorting.h"
 #include "Creature.h"
 #include "GameObject.h"
 #include "Map.h"
@@ -44,6 +45,17 @@ namespace LootFacts
                 if (qi.index == index && !qi.is_looted)
                     return true;
             return false;
+        }
+
+        // The quest item in window slot `slot` (SlotsToTake numbering), null = none.
+        LootItem const* QuestItemInSlot(Player const* player, Loot const& loot, uint8 slot)
+        {
+            QuestItemMap::const_iterator const quest = loot.GetPlayerQuestItems().find(player->GetGUIDLow());
+            size_t const questSlot = slot - loot.items.size();
+            if (quest == loot.GetPlayerQuestItems().end() || questSlot >= quest->second->size())
+                return nullptr;
+            size_t const index = (*quest->second)[questSlot].index;
+            return index < loot.m_questItems.size() ? &loot.m_questItems[index] : nullptr;
         }
 
         // Shared, FFA or conditional item `i` the player would take now.
@@ -130,7 +142,7 @@ namespace LootFacts
         return slots;
     }
 
-    bool TakeOpenLoot(Player* player, bool includePoor)
+    bool TakeOpenLoot(Player* player, bool includePoor, BagSorting::Rules const* makeRoom)
     {
         ObjectGuid const guid = player->GetLootGuid();
         if (guid.IsEmpty())
@@ -162,6 +174,14 @@ namespace LootFacts
                 session->HandleLootMoneyOpcode(NullClientPacket(CMSG_LOOT_MONEY));
             for (uint8 slot : SlotsToTake(player, *loot, target, includePoor))
             {
+                if (makeRoom)
+                {
+                    bool const quest = slot >= loot->items.size();
+                    LootItem const* item = quest ? QuestItemInSlot(player, *loot, slot) : &loot->items[slot];
+                    if (item)
+                        BagSorting::MakeRoomFor(player, *makeRoom, item->itemid, item->count,
+                            quest ? BagSorting::PRICELESS : BagSorting::WorthOf(item->itemid, item->count));
+                }
                 WorldPackets::Loot::AutoStoreLootItem packet;
                 packet.lootSlot = slot;
                 session->HandleAutostoreLootItemOpcode(packet);

@@ -342,8 +342,13 @@ public:
     void RefreshLessonContext();
     // Out of combat: a companion's business at vendors and its class trainer near the leader
     // (Life/Errands/NpcVisit.h, MerchantTasks.h).
+    // What it sells and destroys for room (Shared/BagSorting, .kiro/docs/2026-11-23-bot-bags.md):
+    // refreshed before its errands (RefreshBagRules).
+    BotShared::BagSorting::Rules m_bagRules;
+    BotShared::BagSorting::Rules BagRules() const;
+    void RefreshBagRules();
     Life::NpcVisitState m_vendorVisit;
-    Life::VendorTask m_vendorTask{ &m_lessonContext };
+    Life::VendorTask m_vendorTask{ &m_lessonContext, &m_bagRules };
     Life::NpcVisitState m_trainerVisit;
     Life::TrainerTask m_trainerTask{ &m_lessonContext };
     // Out in the field: important lessons waiting at the trainer (Life/Errands/LessonReminder.h).
@@ -352,7 +357,7 @@ public:
     // auction house, mailbox and vendors, and the class trainer (m_trainerTask, so TakeLearned
     // sees what the trip learned).
     Life::TownTripState m_townTrip;
-    Life::Trip::ShoppingPlanner m_shoppingPlanner;
+    Life::Trip::ShoppingPlanner m_shoppingPlanner{ &m_bagRules };
     Life::Trip::TrainingPlanner m_trainingPlanner{ m_trainerTask };
     // Profession trainers: the lowest business, last on the trip (Trip/ProfessionPlanner.h).
     Life::Trip::ProfessionPlanner m_professionPlanner{ &m_lessonContext };

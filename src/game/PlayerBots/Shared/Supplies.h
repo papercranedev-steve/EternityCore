@@ -76,6 +76,11 @@ namespace BotShared
         // with something missing. Most important first.
         std::vector<Need> ToMake(Player const* player);
 
+        // The goods of every row of the player's supplies, of any priority, with something
+        // missing or not: the made goods and every reagent of their recipes too. What matches
+        // them stays in the bags (Shared/BagSorting; Goods::Matches).
+        std::vector<Goods::Spec> KeptGoods(Player const* player);
+
         // Some vendor in the world sells it (index built once).
         bool IsSoldByVendors(uint32 itemId);
         // Every item some vendor sells (the same index).

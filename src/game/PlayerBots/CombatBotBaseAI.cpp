@@ -19,6 +19,7 @@
 #include "Utilities/Random.h"
 #include "Commander/Perception/Profiles/PetAbilities.h"
 #include "Shared/GearSources.h"
+#include "Shared/GivenItems.h"
 #include "Shared/Inventory.h"
 #include "Shared/PetFood.h"
 
@@ -3533,6 +3534,8 @@ void CombatBotBaseAI::EquipOrUseNewItem()
             Item* pItem = me->GetItemByGuid(guid);
             if (!pItem || pItem->IsEquipped())
                 continue;
+            // Never sold nor destroyed for room by the bot (Shared/BagSorting).
+            BotShared::GivenItems::Mark(me, pItem);
 
             switch (pItem->GetProto()->Class)
             {

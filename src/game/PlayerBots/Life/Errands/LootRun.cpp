@@ -24,7 +24,7 @@ namespace LootRun
             return corpse->IsWithinDistInMap(me, me->GetMaxLootDistance(corpse), true, SizeFactor::None);
         }
 
-        // Gray items (vendor money, Shared/Vendor::SellJunk) while the bags have room for them.
+        // Gray items (vendor money, Shared/BagSorting) while the bags have room for them.
         bool TakesJunk(Player* me)
         {
             return BotShared::Inventory::FreeBagSlots(me) > JUNK_ROOM_SLOTS;
@@ -58,7 +58,7 @@ namespace LootRun
         }
 
         // Opens the corpse and takes what the loot rules give the bot, as a client would.
-        void LootCorpse(Player* me, Creature* corpse)
+        void LootCorpse(Player* me, Creature* corpse, BotShared::BagSorting::Rules const* bags)
         {
             ObjectGuid const guid = corpse->GetObjectGuid();
 
@@ -73,7 +73,7 @@ namespace LootRun
             if (me->GetLootGuid() != guid)
                 return;
 
-            BotShared::LootFacts::TakeOpenLoot(me, TakesJunk(me));
+            BotShared::LootFacts::TakeOpenLoot(me, TakesJunk(me), bags);
             BotShared::Inventory::WearUpgrades(me, before);
         }
     }
@@ -86,7 +86,7 @@ namespace LootRun
         Errands::StopWalk(me);
     }
 
-    bool Update(Player* me, LootRunState& state, Player const* anchor)
+    bool Update(Player* me, LootRunState& state, Player const* anchor, BotShared::BagSorting::Rules const* bags)
     {
         WorldObject const* center = anchor ? static_cast<WorldObject const*>(anchor) : me;
         if (!Errands::MayRun(me, anchor))
@@ -126,7 +126,7 @@ namespace LootRun
         {
             if (!me->IsStopped())
                 me->StopMoving();
-            LootCorpse(me, corpse);
+            LootCorpse(me, corpse, bags);
             Errands::MarkDone(state.done, corpse->GetObjectGuid(), DONE_KEEP);
             Stop(me, state);
             return true;

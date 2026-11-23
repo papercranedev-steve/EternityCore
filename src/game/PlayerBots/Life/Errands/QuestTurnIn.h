@@ -31,6 +31,14 @@
 
 class Player;
 
+namespace BotShared
+{
+    namespace BagSorting
+    {
+        struct Rules;
+    }
+}
+
 namespace Life
 {
     class IRewardChooser;
@@ -44,6 +52,13 @@ namespace Life
         bool wore = false;          // it put on an item it got
     };
 
+    // A quest the giver would not reward: no room for its items, even after making room.
+    struct RefusedQuest
+    {
+        uint32 questId = 0;
+        ObjectGuid giver;
+    };
+
     // Per bot (a member of its AI). Plain data.
     struct QuestTurnInState
     {
@@ -54,6 +69,7 @@ namespace Life
         uint32 choiceSinceMs = 0;   // standing at the giver waiting for the chooser, 0 = not yet
         GiverVisitState visit;
         std::vector<TurnedInQuest> turnedIn;    // not taken by the caller yet
+        std::vector<RefusedQuest> refused;      // not taken by the caller yet
         Errands::DoneList done;
     };
 
@@ -73,12 +89,17 @@ namespace Life
         constexpr uint32 RETRY_MS = 60000;      // a giver it gave up on is tried again after this
 
         // `anchor`: givers near it only (the party leader); null = near the bot.
+        // `bags`: the reward items get room first (Shared/BagSorting::MakeRoom, user 2026-11-23:
+        // anything not kept may go); null = bags full means no reward.
         // True: the bot walks to a giver or stands at it this tick.
-        bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser);
+        bool Update(Player* me, QuestTurnInState& state, Player const* anchor, IRewardChooser& chooser,
+                    BotShared::BagSorting::Rules const* bags = nullptr);
         void Stop(Player* me, QuestTurnInState& state, IRewardChooser& chooser);
 
         // The quests handed in since the last call, oldest first.
         std::vector<TurnedInQuest> TakeTurnedIn(QuestTurnInState& state);
+        // The quests refused since the last call (bags full; tried again after RETRY_MS).
+        std::vector<RefusedQuest> TakeRefused(QuestTurnInState& state);
     }
 }
 

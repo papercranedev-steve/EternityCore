@@ -1,5 +1,6 @@
 #include "Shared/AuctionMarket.h"
 #include "Shared/Vendor.h"
+#include "Shared/MarketValue.h"
 #include "AuctionHouseMgr.h"
 #include "Player.h"
 #include "Creature.h"
@@ -98,6 +99,37 @@ namespace AuctionMarket
             asked += l.buyout;
         }
         return asked;
+    }
+
+    uint32 Post(Player* player, Creature* auctioneer, std::vector<Item*> const& items)
+    {
+        AuctionHouseEntry const* houseEntry = AuctionHouseMgr::GetAuctionHouseEntry(auctioneer);
+        if (!houseEntry)
+            return 0;
+        uint32 const seconds = POST_HOURS * HOUR;
+        uint32 money = player->GetMoney();
+        uint32 posted = 0;
+        for (Item* item : items)
+        {
+            if (!item)
+                continue;
+            uint32 const buyout = MarketValue::AuctionPrice(item->GetEntry(), item->GetCount());
+            if (!buyout)
+                continue;
+            uint32 const deposit = AuctionHouseMgr::GetAuctionDeposit(houseEntry, seconds, item);
+            if (deposit > money)
+                continue;
+            money -= deposit;
+            auto packet = std::make_unique<WorldPackets::AuctionHouse::AuctionSellItem>();
+            packet->auctioneerGuid = auctioneer->GetObjectGuid();
+            packet->itemGuid = item->GetObjectGuid();
+            packet->buyout = buyout;
+            packet->bid = std::max<uint32>(1, buyout * POST_BID_PCT / 100);
+            packet->etime = seconds / MINUTE;
+            player->GetSession()->QueuePacket(std::move(packet));
+            ++posted;
+        }
+        return posted;
     }
 }
 }

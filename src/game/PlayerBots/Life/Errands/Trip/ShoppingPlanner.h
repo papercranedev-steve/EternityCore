@@ -2,7 +2,13 @@
  * Bot daily life (PlayerBots/Life), town trips: shopping (soul companions doc §4.4, §5).
  *
  * Worth a trip: a critical supply is missing (Shared/Supplies), an equipped item is nearly
- * broken (TRIP_DURABILITY_PCT), or the bags are full with junk to sell.
+ * broken (TRIP_DURABILITY_PCT), or the bags are full with something to sell (Shared/BagSorting:
+ * Vendor or Market items).
+ *
+ * Selling (user 2026-11-23, .kiro/docs/2026-11-23-bot-bags.md): Market items are posted at the
+ * auction house stop (one is planned for it even when nothing is bought there), Vendor items
+ * sold at every vendor stop; with no auction house on the trip the vendors take the Market
+ * items too.
  *
  * Plan, one money and bag budget for the whole trip (Shared/Purchasing: critical needs may
  * spend everything, the rest keeps the class trainer's price and two free slots), tier by
@@ -25,6 +31,7 @@
 #define MANGOS_LIFE_TRIP_SHOPPING_PLANNER_H
 
 #include "Life/Errands/Trip/TripPlan.h"
+#include "Shared/BagSorting.h"
 
 namespace Life
 {
@@ -37,10 +44,19 @@ namespace Trip
         static constexpr size_t MAX_VENDORS = 4;
         static constexpr float MAILBOX_NEAR_AUCTION_YD = 60.0f;
 
+        // `bags`: what the bot sells (Shared/BagSorting), kept up to date by its AI; null = the
+        // default rules.
+        explicit ShoppingPlanner(BotShared::BagSorting::Rules const* bags = nullptr) : m_bags(bags) {}
+
         char const* Name() const override { return "shopping"; }
         bool Worth(Player* me) override;
         void PlanStops(Player* me, Player const* leader, TripPlanStops& plan) override;
         char const* PurposeKey() const override { return "errand.why.shop"; }
+
+    private:
+        BotShared::BagSorting::Rules Bags() const;
+
+        BotShared::BagSorting::Rules const* m_bags;
     };
 }
 }

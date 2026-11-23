@@ -18,6 +18,7 @@
 #include <vector>
 
 class Creature;
+class Item;
 class Player;
 
 namespace BotShared
@@ -26,10 +27,10 @@ namespace BotShared
     {
         constexpr uint32 KEEP_FREE_SLOTS = Purchasing::KEEP_FREE_SLOTS;
 
-        // Gray items that sell (not quest items). Sells them all at `vendor`; returns the copper
-        // earned. `stacksSold`: how many stacks it offered (one click each in the window).
-        bool HasJunk(Player const* player);
-        uint32 SellJunk(Player* player, Creature* vendor, uint32* stacksSold = nullptr);
+        // Sells these bag items (whole stacks; what to sell: Shared/BagSorting) at `vendor`;
+        // returns the copper earned. `stacksSold`: how many stacks it offered (one click each in
+        // the window).
+        uint32 Sell(Player* player, Creature* vendor, std::vector<Item*> const& items, uint32* stacksSold = nullptr);
 
         // What repairing everything would cost now at `npc` (its reputation discount).
         uint32 RepairCost(Player* player, Creature const* npc);

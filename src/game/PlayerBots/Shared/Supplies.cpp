@@ -356,6 +356,20 @@ namespace Supplies
         }
     }
 
+    std::vector<Goods::Spec> KeptGoods(Player const* player)
+    {
+        std::set<Goods::Spec> kept;
+        for (Need const& n : AllNeeds(player))
+        {
+            kept.insert(n.goods);
+            if (n.recipe)
+                for (uint32 r = 0; r < MAX_SPELL_REAGENTS; ++r)
+                    if (n.recipe->Reagent[r] > 0)
+                        kept.insert(Goods::Exact(uint32(n.recipe->Reagent[r])));
+        }
+        return std::vector<Goods::Spec>(kept.begin(), kept.end());
+    }
+
     bool IsSoldByVendors(uint32 itemId)
     {
         std::unordered_set<uint32> const& sold = SoldByVendors();
