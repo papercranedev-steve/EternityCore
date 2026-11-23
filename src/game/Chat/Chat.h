@@ -314,6 +314,8 @@ class ChatHandler
         Player* ExtractPartyBotTarget(char** args, std::string& name);
         // The optional `<bag 0-5> <slot>` a drop on one slot adds (giveslot / takeslot / passslot).
         bool ExtractPartyBotDropPos(char** args, uint8& dstBag, uint8& dstSlot);
+        // PBINV of the bot's bags and money (`.partybot bags`, and before the PBOK of bag commands).
+        void SendPartyBotInventory(Player const* pBot);
         // A companion's affinity allows `gate` (Companions::Gates::Gate); else PBERR locked.
         bool PartyBotGateAllows(Player* pBot, std::string const& name, uint8 gate);
         bool HandlePartyBotTakeMoneyCommand(char* args);

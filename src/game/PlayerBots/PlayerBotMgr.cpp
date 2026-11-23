@@ -2197,18 +2197,26 @@ bool ChatHandler::HandlePartyBotBagsCommand(char* args)
     if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
         return false;
 
-    PSendSysMessage("PBINV;%s;BEGIN", name.c_str());
+    SendPartyBotInventory(pBot);
+    return true;
+}
+
+// The bot's bags and money (PBINV ... END): the answer to `.partybot bags`, and sent along before
+// the PBOK of every command that changed them, so the addon redraws without asking again.
+void ChatHandler::SendPartyBotInventory(Player const* pBot)
+{
+    char const* name = pBot->GetName();
+    PSendSysMessage("PBINV;%s;BEGIN", name);
 
     for (uint8 bagIndex = 0; bagIndex <= 4; ++bagIndex)
-        PSendSysMessage("PBINV;%s;B;%u;%s", name.c_str(), uint32(bagIndex), PartyBotBagContents(pBot, bagIndex).c_str());
+        PSendSysMessage("PBINV;%s;B;%u;%s", name, uint32(bagIndex), PartyBotBagContents(pBot, bagIndex).c_str());
 
     // Its money, and whether the player may take some (.partybot takemoney; Gates TakeMoney).
     Companions::Gates::Gate const takeMoney = Companions::Gates::Gate::TakeMoney;
-    PSendSysMessage("PBINV;%s;M;%u;%u;%u", name.c_str(), pBot->GetMoney(),
+    PSendSysMessage("PBINV;%s;M;%u;%u;%u", name, pBot->GetMoney(),
         uint32(Companions::Gates::Allows(pBot->GetGUIDLow(), takeMoney)), Companions::Gates::Of(takeMoney).affinity);
 
-    PSendSysMessage("PBINV;%s;END", name.c_str());
-    return true;
+    PSendSysMessage("PBINV;%s;END", name);
 }
 
 // .partybot takemoney <name> <copper>   the command user takes that much of the bot's money
@@ -2248,6 +2256,7 @@ bool ChatHandler::HandlePartyBotTakeMoneyCommand(char* args)
     pBot->SaveInventoryAndGoldToDB();
     pPlayer->SaveInventoryAndGoldToDB();
     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s took %u copper from %s.", pPlayer->GetName(), copper, name.c_str());
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;takemoney;%u;%u", name.c_str(), copper, pBot->GetMoney());
     return true;
 }
@@ -2319,6 +2328,7 @@ bool ChatHandler::HandlePartyBotEquipSlotCommand(char* args)
     }
 
     pBot->SaveInventoryAndGoldToDB();
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;equip;%u", name.c_str(), itemId);
     return true;
 }
@@ -2370,6 +2380,7 @@ bool ChatHandler::HandlePartyBotUnequipSlotCommand(char* args)
     uint32 itemId = pItem->GetEntry();
     pBot->AutoUnequipItemFromSlot(slotIndex); // to bags, or mail to the bot itself when full
     pBot->SaveInventoryAndGoldToDB();
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;unequip;%u;%u", name.c_str(), itemId, fitsInBags ? 0u : 1u);
     return true;
 }
@@ -2538,6 +2549,7 @@ bool ChatHandler::HandlePartyBotMoveSlotCommand(char* args)
     }
 
     pBot->SaveInventoryAndGoldToDB();
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;move;%u", name.c_str(), itemId);
     return true;
 }
@@ -2639,6 +2651,7 @@ bool ChatHandler::HandlePartyBotUseSlotCommand(char* args)
     }
 
     pBot->SaveInventoryAndGoldToDB();
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;use;%u", name.c_str(), itemId);
     return true;
 }
@@ -2750,6 +2763,7 @@ bool ChatHandler::HandlePartyBotGiveSlotCommand(char* args)
     BotShared::Handover::Place(pBot, pItem, pPlayer, placement);
     // (pItem may be merged into an existing stack and deleted now)
 
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;give;%u;%u", name.c_str(), itemId, count);
     return true;
 }
@@ -2875,6 +2889,7 @@ bool ChatHandler::HandlePartyBotTakeSlotCommand(char* args)
         BotShared::GivenItems::Mark(pBot, BotShared::Handover::Place(pPlayer, pItem, pBot, placement));
     }
 
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;take;%u;%u", name.c_str(), itemId, count);
     return true;
 }
@@ -2976,6 +2991,8 @@ bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
     BotShared::Handover::Place(pFrom, pItem, pTo, placement);
     // (pItem may be merged into a stack and deleted now)
 
+    SendPartyBotInventory(pFrom);
+    SendPartyBotInventory(pTo);
     PSendSysMessage("PBOK;%s;pass;%u;%u;%s", name.c_str(), itemId, count, toName.c_str());
     return true;
 }
@@ -3169,6 +3186,7 @@ bool ChatHandler::HandlePartyBotAutoBankCommand(char* args)
         pBot->BankItem(dest, pItem, true);
 
     pBot->SaveInventoryAndGoldToDB();
+    SendPartyBotInventory(pBot);
     PSendSysMessage("PBOK;%s;move;%u", name.c_str(), itemId);
     return true;
 }
