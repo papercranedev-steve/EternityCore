@@ -303,6 +303,12 @@ class ChatHandler
         bool HandlePartyBotGiveSlotCommand(char * args);
         bool HandlePartyBotTakeSlotCommand(char * args);
         bool HandlePartyBotPassSlotCommand(char * args);
+        bool HandlePartyBotBankTeamCommand(char * args);
+        bool HandlePartyBotBankCommand(char * args);
+        bool HandlePartyBotBuyBankSlotCommand(char * args);
+        bool HandlePartyBotAutoBankCommand(char * args);
+        // The command user is at a banker and the bot (saved, not temporary) is in his group; else PBERR.
+        bool PartyBotBankAllows(Player* pPlayer, Player* pBot, std::string const& name);
         bool HandlePartyBotAccountsCommand(char * args);
         bool HandlePartyBotCharsCommand(char * args);
         Player* ExtractPartyBotTarget(char** args, std::string& name);

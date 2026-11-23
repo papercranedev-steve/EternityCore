@@ -16,6 +16,7 @@
 #include "Utilities/Random.h"
 #include "Spell.h"
 #include "Bag.h"
+#include "DBCStores.h"
 #include "QuestDef.h"
 #include "Population/PopulationMgr.h"
 #include "Companions/CompanionMgr.h"
@@ -2041,6 +2042,10 @@ bool ChatHandler::HandlePartyBotUnequipCommand(char* args)
 // window open) and the bot in his group (PartyBotBankAllows).
 // ---------------------------------------------------------------------------
 
+static uint32 const PARTYBOT_BAG_BANK = 6;            // the bank: item slots 0-23, then its bag slots 24-29
+static uint32 const PARTYBOT_BAG_BANK_BAG_FIRST = 7;  // 7-12: inside bank bag 1-6
+static uint32 const PARTYBOT_BANK_BAGS = BANK_SLOT_BAG_END - BANK_SLOT_BAG_START;
+
 // A companion allows it by now (Companions/Affinity/Gates); else PBERR;<name>;locked;<needed>;<now>.
 // Plain party bots allow everything.
 bool ChatHandler::PartyBotGateAllows(Player* pBot, std::string const& name, uint8 gate)
@@ -2067,6 +2072,13 @@ bool ChatHandler::PartyBotBankAllows(Player* pPlayer, Player* pBot, std::string 
     if (!pBot || pBot == pPlayer || !pPlayer->IsInSameRaidWith(pBot))
     {
         PSendSysMessage("PBERR;%s;notingroup", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    // a temporary bot is never saved: what went into its bank would be gone with it
+    if (pBot->IsSavingDisabled())
+    {
+        PSendSysMessage("PBERR;%s;tempbot", name.c_str());
         SetSentErrorMessage(true);
         return false;
     }
@@ -2361,9 +2373,6 @@ bool ChatHandler::HandlePartyBotUnequipSlotCommand(char* args)
     return true;
 }
 
-uint32 const PARTYBOT_BAG_BANK = 6;            // the bank: item slots 0-23, then its bag slots 24-29
-uint32 const PARTYBOT_BAG_BANK_BAG_FIRST = 7;  // 7-12: inside bank bag 1-6
-
 // bag index used by the addon: 0 = backpack, 1-4 = bags, 5 = equipment (slot 0-18);
 // with `bank` also 6 = the bank and 7-12 = the bank bags (callers check PartyBotBankAllows).
 static bool ResolvePartyBotItemPos(uint32 bagIndex, uint32 slotIndex, uint8& bag, uint8& slot, bool bank = false)
@@ -2378,7 +2387,7 @@ static bool ResolvePartyBotItemPos(uint32 bagIndex, uint32 slotIndex, uint8& bag
         return true;
     }
     if (bank && bagIndex >= PARTYBOT_BAG_BANK_BAG_FIRST &&
-        bagIndex < PARTYBOT_BAG_BANK_BAG_FIRST + uint32(BANK_SLOT_BAG_END - BANK_SLOT_BAG_START))
+        bagIndex < PARTYBOT_BAG_BANK_BAG_FIRST + PARTYBOT_BANK_BAGS)
     {
         if (slotIndex >= MAX_BAG_SIZE)
             return false;
@@ -2914,6 +2923,197 @@ bool ChatHandler::HandlePartyBotPassSlotCommand(char* args)
     // (pItem may be merged into a stack and deleted now)
 
     PSendSysMessage("PBOK;%s;pass;%u;%u;%s", name.c_str(), itemId, count, toName.c_str());
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// The bots' bank, managed by the player at a banker (addon Bank.lua). Same gate as the bags
+// (Gates ManageBags); positions as above (bag 6-12). Prices as for players: BankBagSlotPrices.dbc.
+//   PBBANKT;BEGIN | M;<name>;<may 0/1>;<affinity it takes>;<affinity now> | END
+//   PBBANK;<name>;BEGIN
+//   PBBANK;<name>;B;<bag 0-4, 6, 7-12>;<size>;<id:count|0>,...   (his bags too: the other half of a bank)
+//   PBBANK;<name>;G;<bag slots bought>;<next slot's price, 0: all bought>;<id|0>,... (the 6 bag slots)
+//   PBBANK;<name>;M;<copper>
+//   PBBANK;<name>;END
+//   PBOK;<name>;bankslot;<bag slots bought>;<price paid>
+// ---------------------------------------------------------------------------
+
+// what the owner's next bank bag slot costs, 0 when all are bought (as HandleBuyBankSlotOpcode)
+static uint32 PartyBotNextBankSlotPrice(Player const* pOwner)
+{
+    BankBagSlotPricesEntry const* entry = sBankBagSlotPricesStore.LookupEntry(pOwner->GetBankBagSlotCount() + 1);
+    return entry ? entry->price : 0;
+}
+
+// .partybot bankteam   at a banker: the party bots of your group, and whether you may see their bank
+bool ChatHandler::HandlePartyBotBankTeamCommand(char* /*args*/)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    if (!pPlayer)
+        return false;
+    if (!pPlayer->CanUseBank())
+    {
+        SendSysMessage("PBERR;;nobank");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    SendSysMessage("PBBANKT;BEGIN");
+    if (Group* pGroup = pPlayer->GetGroup())
+    {
+        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* pBot = itr->getSource();
+            if (!pBot || pBot == pPlayer || !pBot->IsInWorld() || pBot->IsSavingDisabled() ||
+                !pBot->AI() || !dynamic_cast<PartyBotAI*>(pBot->AI()))
+                continue;
+            Companions::Gates::Gate const gate = Companions::Gates::Gate::ManageBags;
+            PSendSysMessage("PBBANKT;M;%s;%u;%u;%u", pBot->GetName(),
+                uint32(Companions::Gates::Allows(pBot->GetGUIDLow(), gate)), Companions::Gates::Of(gate).affinity,
+                sCompanionMgr.GetAffinity(pBot->GetGUIDLow()));
+        }
+    }
+    SendSysMessage("PBBANKT;END");
+    return true;
+}
+
+// .partybot bank <name>   his bank (and his bags), at a banker
+bool ChatHandler::HandlePartyBotBankCommand(char* args)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)) ||
+        !PartyBotBankAllows(pPlayer, pBot, name))
+        return false;
+
+    PSendSysMessage("PBBANK;%s;BEGIN", name.c_str());
+    for (uint32 bagIndex = 0; bagIndex <= 4; ++bagIndex)
+        PSendSysMessage("PBBANK;%s;B;%u;%s", name.c_str(), bagIndex, PartyBotBagContents(pBot, bagIndex).c_str());
+    for (uint32 bagIndex = PARTYBOT_BAG_BANK; bagIndex < PARTYBOT_BAG_BANK_BAG_FIRST + PARTYBOT_BANK_BAGS; ++bagIndex)
+        PSendSysMessage("PBBANK;%s;B;%u;%s", name.c_str(), bagIndex, PartyBotBagContents(pBot, bagIndex).c_str());
+
+    std::ostringstream bags;
+    for (uint8 i = BANK_SLOT_BAG_START; i < BANK_SLOT_BAG_END; ++i)
+    {
+        if (i != BANK_SLOT_BAG_START)
+            bags << ",";
+        Item* pBag = pBot->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
+        bags << (pBag ? pBag->GetEntry() : 0u);
+    }
+    PSendSysMessage("PBBANK;%s;G;%u;%u;%s", name.c_str(), uint32(pBot->GetBankBagSlotCount()),
+        PartyBotNextBankSlotPrice(pBot), bags.str().c_str());
+    PSendSysMessage("PBBANK;%s;M;%u", name.c_str(), pBot->GetMoney());
+    PSendSysMessage("PBBANK;%s;END", name.c_str());
+    return true;
+}
+
+// .partybot buybankslot <name>   you buy his next bank bag slot, at the price you pay for yours
+bool ChatHandler::HandlePartyBotBuyBankSlotCommand(char* args)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)) ||
+        !PartyBotBankAllows(pPlayer, pBot, name))
+        return false;
+
+    uint32 const price = PartyBotNextBankSlotPrice(pBot);
+    if (!price)
+    {
+        PSendSysMessage("PBERR;%s;allbankslots", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (pPlayer->GetMoney() < price)
+    {
+        PSendSysMessage("PBERR;%s;mynomoney;%u", name.c_str(), price);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    uint8 const slots = pBot->GetBankBagSlotCount() + 1;
+    pPlayer->ModifyMoney(-int32(price));
+    pBot->SetBankBagSlotCount(slots);
+    pPlayer->SaveInventoryAndGoldToDB();
+    pBot->SaveToDB();       // the slot count is a column of `characters`, not of the inventory
+    sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "[Companion] %s bought bank bag slot %u of %s for %u copper.",
+        pPlayer->GetName(), uint32(slots), name.c_str(), price);
+    PSendSysMessage("PBOK;%s;bankslot;%u;%u", name.c_str(), uint32(slots), price);
+    return true;
+}
+
+// .partybot autobank <name> <bag 0-12> <slot>   at a banker: his item from his bags into his bank,
+// or from his bank into his bags (what right-click does with your own while the bank is open)
+bool ChatHandler::HandlePartyBotAutoBankCommand(char* args)
+{
+    Player* pPlayer = m_session ? m_session->GetPlayer() : nullptr;
+    std::string name;
+    Player* pBot = ExtractPartyBotTarget(&args, name);
+    if (!pBot || !PartyBotGateAllows(pBot, name, uint8(Companions::Gates::Gate::ManageBags)))
+        return false;
+
+    uint32 bagIndex = 0;
+    uint32 slotIndex = 0;
+    uint8 bag = 0;
+    uint8 slot = 0;
+    if (!ExtractUInt32(&args, bagIndex) || !ExtractUInt32(&args, slotIndex) ||
+        !ResolvePartyBotItemPos(bagIndex, slotIndex, bag, slot, true))
+    {
+        PSendSysMessage("PBERR;%s;usage;.partybot autobank <name> <bag 0-12> <slot>", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (!PartyBotBankAllows(pPlayer, pBot, name))
+        return false;
+
+    Item* pItem = pBot->GetItemByPos(bag, slot);
+    if (!pItem)
+    {
+        PSendSysMessage("PBERR;%s;empty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    // worn things stay on him; a bag with things in it is emptied first
+    if (pItem->IsInTrade() || IsPartyBotEquipmentPos(bag, slot))
+    {
+        PSendSysMessage("PBERR;%s;other", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+    if (pItem->IsBag() && !((Bag*)pItem)->IsEmpty())
+    {
+        PSendSysMessage("PBERR;%s;bagnotempty", name.c_str());
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    bool const fromBank = Player::IsBankPos(bag, slot);
+    ItemPosCountVec dest;
+    uint8 bagSlot = 0;
+    InventoryResult msg = fromBank
+        ? pBot->CanStoreItem(NULL_BAG, NULL_SLOT, dest, pItem, bagSlot, false)
+        : pBot->CanBankItem(NULL_BAG, NULL_SLOT, dest, pItem, false, bagSlot);
+    if (msg != EQUIP_ERR_OK)
+    {
+        PSendSysMessage("PBERR;%s;%s", name.c_str(), fromBank ? "botbagsfull" : "botbankfull");
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    // as HandleAutoStoreBankItemOpcode
+    uint32 const itemId = pItem->GetEntry();
+    pBot->RemoveItem(bag, slot, true);
+    if (fromBank)
+    {
+        if (Item const* pStored = pBot->StoreItem(dest, pItem, true))
+            pBot->ItemAddedQuestCheck(pStored->GetEntry(), 0);
+    }
+    else
+        pBot->BankItem(dest, pItem, true);
+
+    pBot->SaveInventoryAndGoldToDB();
+    PSendSysMessage("PBOK;%s;move;%u", name.c_str(), itemId);
     return true;
 }
 

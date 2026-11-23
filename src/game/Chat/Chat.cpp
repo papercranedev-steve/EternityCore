@@ -120,6 +120,10 @@ ChatCommand * ChatHandler::getCommandTable()
         { "giveslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotGiveSlotCommand,    "", nullptr },
         { "takeslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTakeSlotCommand,    "", nullptr },
         { "passslot",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotPassSlotCommand,    "", nullptr },
+        { "bank",       SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotBankCommand,        "", nullptr },   // before bankteam: first prefix match wins
+        { "bankteam",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotBankTeamCommand,    "", nullptr },
+        { "buybankslot",SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotBuyBankSlotCommand, "", nullptr },
+        { "autobank",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotAutoBankCommand,    "", nullptr },
         { "takemoney",  SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotTakeMoneyCommand,   "", nullptr },
         { "accounts",   SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotAccountsCommand,    "", nullptr },
         { "chars",      SEC_ADMINISTRATOR,      false, &ChatHandler::HandlePartyBotCharsCommand,       "", nullptr },
