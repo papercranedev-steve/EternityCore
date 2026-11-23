@@ -12642,7 +12642,7 @@ bool Player::CanAddQuest(Quest const* pQuest, bool msg) const
     if (!SatisfyQuestLog(msg))
         return false;
 
-    if (!CanGiveQuestSourceItemIfNeed(pQuest))
+    if (!CanGiveQuestSourceItemIfNeed(pQuest, nullptr, msg))
         return false;
 
     return true;
@@ -13707,7 +13707,7 @@ bool Player::SatisfyQuestPrevChain(Quest const* qInfo, bool msg) const
     return true;
 }
 
-bool Player::CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* dest) const
+bool Player::CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* dest, bool msg) const
 {
     if (uint32 srcitem = pQuest->GetSrcItemId())
     {
@@ -13720,25 +13720,25 @@ bool Player::CanGiveQuestSourceItemIfNeed(Quest const* pQuest, ItemPosCountVec* 
 
         count -= has_count;                                 // real need amount
 
-        InventoryResult msg;
+        InventoryResult result;
         if (!dest)
         {
             ItemPosCountVec destTemp;
-            msg = CanStoreNewItem(NULL_BAG, NULL_SLOT, destTemp, srcitem, count);
+            result = CanStoreNewItem(NULL_BAG, NULL_SLOT, destTemp, srcitem, count);
         }
         else
-            msg = CanStoreNewItem(NULL_BAG, NULL_SLOT, *dest, srcitem, count);
+            result = CanStoreNewItem(NULL_BAG, NULL_SLOT, *dest, srcitem, count);
 
-        if (msg == EQUIP_ERR_OK)
+        if (result == EQUIP_ERR_OK)
             return true;
-        else
+        else if (msg)
         {
-            if (msg == EQUIP_ERR_INVENTORY_FULL)
+            if (result == EQUIP_ERR_INVENTORY_FULL)
                 SendQuestFailedAtTaker(pQuest->GetQuestId(), INVALIDREASON_QUEST_FAILED_INVENTORY_FULL);
-            else if (msg == EQUIP_ERR_CANT_CARRY_MORE_OF_THIS)
+            else if (result == EQUIP_ERR_CANT_CARRY_MORE_OF_THIS)
                 SendQuestFailedAtTaker(pQuest->GetQuestId(), INVALIDREASON_QUEST_FAILED_DUPLICATE_ITEM);
             else
-                SendEquipError(msg, nullptr, nullptr, 0, srcitem);
+                SendEquipError(result, nullptr, nullptr, 0, srcitem);
         }
 
         return false;
