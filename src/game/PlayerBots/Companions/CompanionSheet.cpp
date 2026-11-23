@@ -4,7 +4,8 @@
  * object, offline ones from the database; stats exist only while online (they are computed
  * at login).
  *
- *   .partybot companion <guid> char|rep|skill|honor     companions you recruited, your account's characters
+ *   .partybot companion <guid> char|rep|skill     companions you recruited, your account's characters
+ *   (his quests: CompanionQuestLog.cpp)
  *
  * Replies (system messages, ';' separated):
  *   PBCMV;<guid>;BEGIN;<page>;<online 0/1>
@@ -18,8 +19,6 @@
  *                 defense  def defB (skill, its bonus) dodge parry block bval
  *   rep    PBCMV;<guid>;F;<faction>;<parent faction>;<reputation incl. base>;<at war 0/1>
  *   skill  PBCMV;<guid>;K;<skill>;<category>;<value>;<max>;<bonus>;<name (server DBC)>
- *   honor  PBCMV;<guid>;H;<rank 0-18>;<highest rank 0-18>;<honorable kills>;<dishonorable kills>;
- *                 <last week kills>;<last week contribution>;<last week standing>
  *   PBCMV;<guid>;END;<page>
  *   PBERR;;notcompanion;<guid>   PBERR;;usage
  */
@@ -27,7 +26,6 @@
 #include "Chat.h"
 #include "Player.h"
 #include "Item.h"
-#include "HonorMgr.h"
 #include "ReputationMgr.h"
 #include "ObjectMgr.h"
 #include "ObjectAccessor.h"
@@ -288,38 +286,6 @@ namespace
             Skill(guid, f[0].GetUInt32(), f[1].GetUInt32(), f[2].GetUInt32(), 0, locale, out);
         } while (result->NextRow());
     }
-
-    // ---- honor ----
-
-    void Honor(uint32 guid, uint32 rank, uint32 highest, uint32 hk, uint32 dk, uint32 lastWeekHk, uint32 lastWeekCp,
-        uint32 standing, Lines& out)
-    {
-        std::ostringstream ss;
-        ss << Head(guid, "H") << rank << ";" << highest << ";" << hk << ";" << dk << ";" << lastWeekHk << ";"
-           << lastWeekCp << ";" << standing;
-        out.push_back(ss.str());
-    }
-
-    void HonorOnline(Player const* bot, uint32 guid, Lines& out)
-    {
-        HonorMgr const& mgr = bot->GetHonorMgr();
-        Honor(guid, mgr.GetCurrentHonorRank(), mgr.GetHighestRank().rank, mgr.GetTotalHK(), mgr.GetTotalDK(),
-            mgr.GetLastWeekHK(), uint32(mgr.GetLastWeekCP()), mgr.GetStanding(), out);
-    }
-
-    void HonorOffline(uint32 guid, Lines& out)
-    {
-        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery(
-            "SELECT `honor_rank_points`, `honor_highest_rank`, `honor_stored_hk`, `honor_stored_dk`, `honor_last_week_hk`,"
-            " `honor_last_week_cp`, `honor_standing` FROM `characters` WHERE `guid` = %u", guid));
-        if (!result)
-            return;
-        Field* f = result->Fetch();
-        uint32 const hk = f[2].GetUInt32();
-        HonorRankInfo const rank = HonorMgr::CalculateRank(f[0].GetFloat(), hk);
-        Honor(guid, rank.rank, f[1].GetUInt32(), hk, f[3].GetUInt32(), f[4].GetUInt32(), uint32(f[5].GetFloat()),
-            f[6].GetUInt32(), out);
-    }
 }
 
 bool ChatHandler::HandlePartyBotCompanionCommand(char* args)
@@ -329,7 +295,7 @@ bool ChatHandler::HandlePartyBotCompanionCommand(char* args)
     char* pageArg = nullptr;
     if (!player || !ExtractUInt32(&args, guid) || !(pageArg = ExtractLiteralArg(&args)))
     {
-        SendSysMessage("PBERR;;usage;.partybot companion <guid> char|rep|skill|honor");
+        SendSysMessage("PBERR;;usage;.partybot companion <guid> char|rep|skill");
         SetSentErrorMessage(true);
         return false;
     }
@@ -373,16 +339,9 @@ bool ChatHandler::HandlePartyBotCompanionCommand(char* args)
         else
             SkillsOffline(guid, locale, lines);
     }
-    else if (page == "honor")
-    {
-        if (bot)
-            HonorOnline(bot, guid, lines);
-        else
-            HonorOffline(guid, lines);
-    }
     else
     {
-        SendSysMessage("PBERR;;usage;.partybot companion <guid> char|rep|skill|honor");
+        SendSysMessage("PBERR;;usage;.partybot companion <guid> char|rep|skill");
         SetSentErrorMessage(true);
         return false;
     }

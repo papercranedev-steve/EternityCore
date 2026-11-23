@@ -1,15 +1,23 @@
 /*
- * Companions: one companion's quest log (the addon's companion quest log window,
- * addons/PartyBot/CompanionQuestLog.lua), built like the player's own: the quests in log
+ * Companions: one companion's quest log (the quest tab of the addon's companion sheet,
+ * addons/PartyBot/Sheet/QuestPage.lua), built like the player's own: the quests in log
  * order, whether each is done or failed, and the progress of every objective. Online
  * companions are read from the player object, offline ones from the database.
  *
- *   .partybot questlog <guid>      companions you recruited, your account's characters
+ *   .partybot questlog <guid>                  companions you recruited, your account's characters
+ *   .partybot questlog <guid> abandon <quest>  he drops it (online only), then the log as above
+ *   .partybot questlog <guid> share <quest>    he shares it with you (online, in your group): you get
+ *                                              the native shared quest window. Reply PBOK only.
+ *
+ *   PBOK;<name>;questabandon|questshare;<quest>
+ *   PBERR;<name>;noquest|questkeep|notsharable|notingroup|far|questhave|questdone|questcant|
+ *         questlogfull|questbusy;<quest>      (the quest* reasons after share are about you)
+ *   PBERR;;notfound;<guid>                     (an action while he is offline)
  *
  * Replies (system messages, ';' separated, free text last):
  *   PBQLOG;<guid>;BEGIN;<online 0/1>
  *   PBQLOG;<guid>;Q;<quest>;<level, 0 = his level>;<state 0 in progress / 1 complete / -1 failed>;
- *          <type (QuestInfo)>;<zone or -sort>;<header>;<title>
+ *          <type (QuestInfo)>;<sharable 0/1>;<zone or -sort>;<header>;<title>
  *   PBQLOG;<guid>;O;<quest>;<m creature / g object / i item>;<have>;<need>;<name>
  *   PBQLOG;<guid>;T;<quest>;<objectives text, a piece>          (pieces in order, joined by the addon)
  *   PBQLOG;<guid>;D;<quest>;<description, a piece>
@@ -26,6 +34,7 @@
 #include "ObjectMgr.h"
 #include "ObjectAccessor.h"
 #include "DBCStores.h"
+#include "GossipDef.h"
 #include "Map.h"
 #include "QuestDef.h"
 #include "Database/DatabaseEnv.h"
@@ -166,7 +175,7 @@ namespace
 
         std::ostringstream q;
         q << Head(guid, "Q", e.questId) << quest->GetQuestLevel() << ";" << state << ";" << quest->GetType() << ";"
-          << quest->GetZoneOrSort() << ";" << Clean(Header(quest->GetZoneOrSort(), dbc)) << ";"
+          << (quest->HasQuestFlag(QUEST_FLAGS_SHARABLE) ? 1 : 0) << ";" << quest->GetZoneOrSort() << ";" << Clean(Header(quest->GetZoneOrSort(), dbc)) << ";"
           << Clean(Localized(locale, &QuestLocale::Title, idx, quest->GetTitle()));
         out.push_back(q.str());
 
@@ -248,15 +257,61 @@ namespace
         } while (result->NextRow() && log.size() < MAX_QUEST_LOG_SIZE);
         return log;
     }
+
+    // abandon as the player's own log button does (CMSG_QUESTLOG_REMOVE_QUEST); "" = done
+    char const* Abandon(Player* bot, uint32 questId)
+    {
+        uint16 const slot = bot->FindQuestSlot(questId);
+        if (slot >= MAX_QUEST_LOG_SIZE)
+            return "noquest";
+        bot->RemoveQuestAtSlot(slot);
+        // (a quest start item he cannot give back keeps the quest)
+        return bot->FindQuestSlot(questId) < MAX_QUEST_LOG_SIZE ? "questkeep" : "";
+    }
+
+    // Shares with the player only, as the share button pushes to one member
+    // (WorldSession::HandlePushQuestToParty, the same checks in the same order, so the player
+    // hears why he got nothing). Once he accepts, his party bots take it too.
+    char const* Share(Player* bot, Player* player, uint32 questId)
+    {
+        Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+        if (!quest || !bot->IsCurrentQuest(questId))
+            return "noquest";
+        if (!bot->CanShareQuest(questId))
+            return "notsharable";
+        if (!player->IsInSameRaidWith(bot))
+            return "notingroup";
+        if (!bot->IsWithinDist(player, QUEST_SHARE_DISTANCE, true, SizeFactor::None))
+            return "far";
+        if (player->GetQuestStatus(questId) == QUEST_STATUS_COMPLETE || !player->SatisfyQuestStatus(quest, false))
+            return "questhave";
+        if (player->GetQuestRewardStatus(questId) && !quest->IsRepeatable())
+            return "questdone";
+        if (!player->CanTakeQuest(quest, false))
+            return "questcant";
+        if (!player->SatisfyQuestLog(false))
+            return "questlogfull";
+        if (player->GetQuestShareInfo())
+            return "questbusy";
+
+        player->PlayerTalkClass->SendQuestGiverQuestDetails(quest, bot->GetObjectGuid(), true);
+        player->SetQuestShareInfo(bot->GetObjectGuid(), questId);
+        return "";
+    }
 }
 
 bool ChatHandler::HandlePartyBotQuestLogCommand(char* args)
 {
     Player* player = GetSession() ? GetSession()->GetPlayer() : nullptr;
     uint32 guid = 0;
-    if (!player || !ExtractUInt32(&args, guid))
+    char* action = nullptr;
+    uint32 questId = 0;
+    bool const parsed = player && ExtractUInt32(&args, guid)
+        && (!(action = ExtractLiteralArg(&args)) || ExtractUInt32(&args, questId));
+    std::string const verb = action ? action : "";
+    if (!parsed || (action && verb != "abandon" && verb != "share"))
     {
-        SendSysMessage("PBERR;;usage;.partybot questlog <guid>");
+        SendSysMessage("PBERR;;usage;.partybot questlog <guid> [abandon|share <quest>]");
         SetSentErrorMessage(true);
         return false;
     }
@@ -273,6 +328,28 @@ bool ChatHandler::HandlePartyBotQuestLogCommand(char* args)
     if (bot && !bot->IsInWorld())
         bot = nullptr;
 
+    if (action)
+    {
+        // his log changes only while he is in the world
+        if (!bot)
+        {
+            PSendSysMessage("PBERR;;notfound;%u", guid);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        char const* error = verb == "abandon" ? Abandon(bot, questId) : Share(bot, player, questId);
+        if (*error)
+        {
+            PSendSysMessage("PBERR;%s;%s;%u", bot->GetName(), error, questId);
+            SetSentErrorMessage(true);
+            return false;
+        }
+        PSendSysMessage("PBOK;%s;quest%s;%u", bot->GetName(), verb.c_str(), questId);
+        if (verb == "share")
+            return true;
+    }
+
+    // the log (after an abandon too, so the window shows it gone)
     int const idx = GetSessionDbLocaleIndex();
     LocaleConstant const dbc = GetSessionDbcLocale();
     Lines lines;
