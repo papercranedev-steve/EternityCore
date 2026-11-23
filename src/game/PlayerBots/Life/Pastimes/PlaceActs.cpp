@@ -39,6 +39,8 @@ namespace Pastimes
         float const SEAT_TAKEN_YD = 0.8f;
         // A chair that is taken: stand by it this long, then go on.
         uint32 const TAKEN_STAY_MIN = 4, TAKEN_STAY_MAX = 9;
+        // Getting up from a chair: back to where it stood, if still about there.
+        float const STEP_BACK_MAX_YD = 6.0f;
         // At a fire: kneel instead of sitting (percent).
         uint32 const KNEEL_PCT = 25;
 
@@ -160,11 +162,20 @@ namespace Pastimes
                 case Posture::Chair:
                     if (chair && !SeatTaken(me, chair))
                     {
+                        float const x = me->GetPositionX(), y = me->GetPositionY(), z = me->GetPositionZ();
                         chair->Use(me);     // onto its nearest seat, sitting
-                        state.seated = true;
+                        // (Use gives up without line of sight: it stands, a short stay)
+                        if (me->IsSittingDown())
+                        {
+                            state.seated = true;
+                            state.onChair = true;
+                            state.stepX = x;
+                            state.stepY = y;
+                            state.stepZ = z;
+                            return;
+                        }
                     }
-                    else
-                        state.untilMs = now + Seconds(TAKEN_STAY_MIN, TAKEN_STAY_MAX);
+                    state.untilMs = now + Seconds(TAKEN_STAY_MIN, TAKEN_STAY_MAX);
                     return;
                 case Posture::Ground:
                     me->SetStandState(urand(0, 99) < KNEEL_PCT ? UNIT_STAND_STATE_KNEEL : UNIT_STAND_STATE_SIT);
@@ -207,6 +218,10 @@ namespace Pastimes
                 me->HandleEmoteState(0);
             if (state.seated && me->GetStandState() != UNIT_STAND_STATE_STAND)
                 me->SetStandState(UNIT_STAND_STATE_STAND);
+            // Off the seat, one step back to where it stood (no path leads out of the chair).
+            if (state.onChair && me->IsInWorld() && me->IsAlive() &&
+                me->GetDistance2d(state.stepX, state.stepY, SizeFactor::None) < STEP_BACK_MAX_YD)
+                me->NearTeleportTo(state.stepX, state.stepY, state.stepZ, me->GetOrientation());
             state = ActState();
         }
 

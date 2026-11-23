@@ -530,13 +530,21 @@ namespace Population
             TownAnchor const& a = town.anchors[index];
             if (a.chairEntry)
             {
-                // On the chair itself (the AI sits down on it: GameObject::Use).
+                // Beside the chair (the AI sits down on it: GameObject::Use, and gets back
+                // here when it stands up). Not in the chair: no path leads out of its
+                // collision (Life/Errands/Trip/StepOff.h).
+                Waypoint w;
+                if (!CityDirector::PickStandSpot(map, a.spot, 1.0f, 2.2f, float(M_PI), w))
+                    continue;
                 out.anchorIndex = index;
                 out.chairEntry = a.chairEntry;
-                out.x = a.spot.x;
-                out.y = a.spot.y;
-                out.z = a.spot.z;
-                out.o = a.spot.o;
+                out.x = w.x;
+                out.y = w.y;
+                out.z = w.z;
+                out.hasFacePoint = true;
+                out.faceX = a.spot.x;
+                out.faceY = a.spot.y;
+                out.o = FacingTo(w.x, w.y, a.spot.x, a.spot.y);
                 return true;
             }
 

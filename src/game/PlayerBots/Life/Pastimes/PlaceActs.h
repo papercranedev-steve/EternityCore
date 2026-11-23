@@ -57,6 +57,10 @@ namespace Pastimes
         uint32 untilMs = 0;
         uint32 nextBeatMs = 0;
         bool seated = false;        // on a chair or the ground: no beats, cannot turn
+        // On a chair's seat (inside the chair's collision: no path out, Trip/StepOff.h): End
+        // puts it back where it stood before sitting down.
+        bool onChair = false;
+        float stepX = 0.0f, stepY = 0.0f, stepZ = 0.0f;
         uint32 loopState = 0;       // EMOTE_STATE_* it keeps, 0: none
         float faceX = 0.0f, faceY = 0.0f;
         bool hasFace = false;
@@ -65,7 +69,9 @@ namespace Pastimes
     namespace PlaceActs
     {
         // The bot stands at the place now (facing it). `chair`: the chair of a Chair place
-        // (taken only if its seat is free; else the stay is short and standing).
+        // (taken only if its seat is free; else the stay is short and standing). The bot
+        // stands beside the chair, not on it: GameObject::Use puts it onto the seat, End back
+        // onto this spot.
         void Begin(Player* me, ActState& state, Place place, float faceX, float faceY, bool hasFace,
                    GameObject* chair, uint32 now);
         // False: the stay is over.

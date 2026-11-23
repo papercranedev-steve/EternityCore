@@ -1,6 +1,7 @@
 #include "Population/TownLife.h"
 #include "Population/CityPopulation.h"
 #include "Life/Errands/ErrandCommon.h"
+#include "Life/Errands/Trip/StepOff.h"
 #include "GameObject.h"
 #include "Map.h"
 #include "Player.h"
@@ -17,7 +18,11 @@ namespace Population
         float const MAX_VISIT_YD = 250.0f;
         uint32 const PICK_TRIES = 4;
         uint32 const SPOT_TRIES = 3;
-        float const CHAIR_REACH_YD = 1.2f;
+        // A chair: the spot beside it it walks to (GameObject::Use takes it onto the seat).
+        float const CHAIR_STEP_MIN_YD = 1.0f;
+        float const CHAIR_STEP_MAX_YD = 2.2f;
+        float const CHAIR_REACH_YD = 0.6f;
+        uint32 const CHAIR_SPOT_TRIES = 6;
 
         bool SpotTaken(Player* me, float x, float y)
         {
@@ -161,6 +166,9 @@ namespace Population
                 switch (Life::Trip::Approach::Update(me, m_dest, m_leg, now))
                 {
                     case Life::Trip::ApproachResult::Walking:
+                        // Stopped short in an object's collision on the way: one step out.
+                        if (!me->IsMoving())
+                            Life::Trip::StepOff::HopIfTrapped(me, { m_dest.x, m_dest.y, m_dest.z });
                         return;
                     case Life::Trip::ApproachResult::Failed:
                         Life::Errands::StopWalk(me);
@@ -250,6 +258,9 @@ namespace Population
                 continue;
             }
 
+            // Caught in an object's collision (no path leads out): one step out first.
+            Life::Trip::StepOff::HopIfTrapped(me, { dest.x, dest.y, dest.z });
+
             float const d = me->GetDistance2d(dest.x, dest.y, SizeFactor::None);
             dest.run = d <= WALK_YD ? urand(0, 99) >= WALK_PCT : urand(0, 99) < RUN_FAR_PCT;
             m_dest = dest;
@@ -277,12 +288,33 @@ namespace Population
         out = Life::Trip::Destination();
         if (place.chairEntry)
         {
-            // Onto the chair itself (PlaceActs takes its seat, if free).
-            out.x = place.x;
-            out.y = place.y;
-            out.z = place.z;
-            out.reachYd = CHAIR_REACH_YD;
-            return true;
+            // Beside the chair, not into it: in its collision no path leads out again
+            // (Life/Errands/Trip/StepOff.h). PlaceActs puts it onto the seat (if free) and
+            // back onto this spot when it gets up.
+            CityAnchor chair;
+            chair.type = place.type;
+            chair.x = place.x;
+            chair.y = place.y;
+            chair.z = place.z;
+            chair.o = place.o;
+            Life::Trip::StepOff::Spot const here = { me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() };
+            for (uint32 attempt = 0; attempt < CHAIR_SPOT_TRIES; ++attempt)
+            {
+                Waypoint w;
+                if (!CityDirector::PickStandSpot(me->GetMap(), chair, CHAIR_STEP_MIN_YD, CHAIR_STEP_MAX_YD, float(M_PI), w))
+                    return false;
+                if (SpotTaken(me, w.x, w.y) || !Life::Trip::StepOff::Leavable(me, { w.x, w.y, w.z }, here))
+                    continue;
+                out.x = w.x;
+                out.y = w.y;
+                out.z = w.z;
+                out.reachYd = CHAIR_REACH_YD;
+                out.hasFace = true;
+                out.faceX = place.x;
+                out.faceY = place.y;
+                return true;
+            }
+            return false;
         }
 
         CityAnchor anchor;

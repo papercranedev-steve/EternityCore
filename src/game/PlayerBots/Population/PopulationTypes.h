@@ -170,7 +170,7 @@ namespace Population
         std::shared_ptr<TravelParty> party;
         bool partyLeader = false;
 
-        // Town bots: the settlement (Settlements.h id); sitter: the chair at (x, y, z), 0 = sit on the ground.
+        // Town bots: the settlement (Settlements.h id); sitter: the chair next to (x, y, z), 0 = sit on the ground.
         uint32 settlementId = 0;
         uint32 chairEntry = 0;
 
