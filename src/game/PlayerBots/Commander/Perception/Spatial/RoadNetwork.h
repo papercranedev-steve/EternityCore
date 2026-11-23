@@ -115,6 +115,8 @@ namespace Commander
             };
             void PlanEdges();
             bool Shape(RoadNode const& a, RoadNode const& b, RoadEdge& out) const;
+            // Logs the nodes no built edge touches (after the last Step).
+            void LogUnlinked() const;
 
             std::vector<RoadNode> m_nodes;
             std::vector<RoadHint> m_hints;

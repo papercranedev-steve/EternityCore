@@ -254,8 +254,42 @@ namespace Roads
                 hinted += e.hints ? 1 : 0;
             sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Roads built: %u of %u (%u through patrol or road points, %u failed), %u ms.",
                 uint32(m_edges.size()), uint32(m_planned.size()), hinted, uint32(m_failures.size()), m_buildMs);
+            LogUnlinked();
         }
         return m_next < m_planned.size();
+    }
+
+    void RoadNetwork::LogUnlinked() const
+    {
+        // Places no road leads to: none planned (no neighbour within the cap) or all failed.
+        std::vector<uint32> planned(m_nodes.size(), 0);
+        for (Plan const& p : m_planned)
+        {
+            ++planned[p.a];
+            ++planned[p.b];
+        }
+        uint32 unlinked = 0;
+        for (size_t i = 0; i < m_nodes.size(); ++i)
+        {
+            RoadNode const& n = m_nodes[i];
+            bool linked = false;
+            for (RoadEdge const& e : m_edges)
+                if (e.nodeA == n.id || e.nodeB == n.id)
+                {
+                    linked = true;
+                    break;
+                }
+            if (linked)
+                continue;
+            ++unlinked;
+            if (planned[i])
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): all %u planned failed.",
+                    n.name.c_str(), n.mapId, n.x, n.y, planned[i]);
+            else
+                sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] No road reaches %s (map %u, %.0f %.0f): none planned.",
+                    n.name.c_str(), n.mapId, n.x, n.y);
+        }
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, "[PopBot] Places without a road: %u of %u.", unlinked, uint32(m_nodes.size()));
     }
 
     RoadNode const* RoadNetwork::FindNode(uint32 id) const
