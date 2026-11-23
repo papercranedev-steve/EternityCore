@@ -14,34 +14,47 @@ namespace Population
         {
             std::vector<char const*> heads;
             std::vector<char const*> tails;
+            // Put between head and tail in MIDDLE_PCT of the names ("Ber" "an" "ric"): head x
+            // tail alone ran out after about ten cohorts.
+            std::vector<char const*> middles;
         };
+
+        uint32 const MIDDLE_PCT = 35;
 
         SyllableSet const& SyllablesFor(uint8 race)
         {
             static SyllableSet const human = {
                 { "Al", "Ber", "Cal", "Dar", "Ed", "Gar", "Hal", "Jor", "Kel", "Mar", "Ner", "Ros", "Ser", "Tal", "Wil", "El", "Ash", "Bran", "Cor", "Lyn", "Rob", "Ga", "Ali", "Mer" },
-                { "ric", "win", "den", "ian", "ard", "ton", "vin", "wyn", "anor", "ella", "iss", "ey", "old", "mund", "a", "ana", "ine", "ert", "eth", "ias" } };
+                { "ric", "win", "den", "ian", "ard", "ton", "vin", "wyn", "anor", "ella", "iss", "ey", "old", "mund", "a", "ana", "ine", "ert", "eth", "ias" },
+                { "an", "el", "or", "ad", "er", "ri", "wy", "en" } };
             static SyllableSet const dwarf = {
                 { "Bael", "Brom", "Dur", "Gim", "Grun", "Kar", "Mag", "Thor", "Bof", "Dag", "Har", "Mur", "Bal", "Thur", "Bru", "Hel", "Kil", "Rag" },
-                { "grim", "dain", "in", "gar", "nir", "drum", "li", "ak", "bek", "dan", "ric", "mek", "gen", "tok", "ga", "da" } };
+                { "grim", "dain", "in", "gar", "nir", "drum", "li", "ak", "bek", "dan", "ric", "mek", "gen", "tok", "ga", "da" },
+                { "da", "gri", "ro", "bu", "an", "ar", "un" } };
             static SyllableSet const gnome = {
                 { "Fiz", "Gim", "Nim", "Tink", "Bink", "Wiz", "Spark", "Cog", "Pip", "Zap", "Fen", "Mek", "Bix", "Dink", "Pim", "Tob" },
-                { "wick", "ble", "zle", "bolt", "nob", "gle", "fizz", "kin", "sy", "wiz", "ple", "ket", "nik", "zer" } };
+                { "wick", "ble", "zle", "bolt", "nob", "gle", "fizz", "kin", "sy", "wiz", "ple", "ket", "nik", "zer" },
+                { "i", "a", "bi", "zi", "le", "o", "ni" } };
             static SyllableSet const nightElf = {
                 { "Ael", "Ela", "Fan", "Ily", "Lor", "Mal", "Sha", "Tyr", "Val", "Syl", "Ara", "Ner", "Fal", "Ith", "Ky", "Ty", "Sel", "Nae" },
-                { "andra", "dris", "thas", "wen", "rion", "nae", "dor", "iel", "ara", "yth", "lis", "dre", "ius", "anna", "orn", "elle" } };
+                { "andra", "dris", "thas", "wen", "rion", "nae", "dor", "iel", "ara", "yth", "lis", "dre", "ius", "anna", "orn", "elle" },
+                { "a", "e", "i", "la", "ri", "an", "ae", "en" } };
             static SyllableSet const orc = {
                 { "Grom", "Thra", "Kar", "Mok", "Naz", "Rok", "Dur", "Gor", "Zug", "Brak", "Ogr", "Kro", "Gar", "Gul", "Dra", "Ush", "Mag", "Rag" },
-                { "gar", "nak", "gash", "thar", "mosh", "rok", "ug", "dan", "gul", "osh", "grim", "tok", "nar", "rash", "zug", "kar" } };
+                { "gar", "nak", "gash", "thar", "mosh", "rok", "ug", "dan", "gul", "osh", "grim", "tok", "nar", "rash", "zug", "kar" },
+                { "a", "u", "ga", "ra", "zu", "o", "ka" } };
             static SyllableSet const troll = {
                 { "Zul", "Jin", "Vol", "Raz", "Sen", "Tak", "Zan", "Mal", "Ka", "Jen", "Rok", "Zal", "Tal", "Vash", "Mua" },
-                { "jin", "zek", "kai", "ja", "tuk", "rak", "zal", "zi", "shi", "dazar", "jan", "ko", "lo", "ga", "tu" } };
+                { "jin", "zek", "kai", "ja", "tuk", "rak", "zal", "zi", "shi", "dazar", "jan", "ko", "lo", "ga", "tu" },
+                { "a", "u", "ja", "zi", "ka", "o", "ji" } };
             static SyllableSet const tauren = {
                 { "Bai", "Hu", "Mu", "Tah", "Ka", "Ha", "Gro", "Tor", "Ma", "Ruk", "Ah", "Mo", "Tal", "Kodo", "Una" },
-                { "rnes", "hoof", "sha", "rnak", "wa", "ga", "lo", "ruk", "tahn", "hn", "mor", "ka", "dan", "nok", "wen" } };
+                { "rnes", "hoof", "sha", "rnak", "wa", "ga", "lo", "ruk", "tahn", "hn", "mor", "ka", "dan", "nok", "wen" },
+                { "a", "o", "ha", "na", "wa", "ko", "ta" } };
             static SyllableSet const undead = {
                 { "Mor", "Vel", "Gra", "Sar", "Ner", "Cal", "Mal", "Dra", "Vex", "Kel", "Bel", "Sil", "Zer", "Gal", "Rot" },
-                { "gath", "vin", "ius", "dred", "thos", "ren", "ix", "eth", "vane", "ric", "ath", "ok", "us", "ane", "is" } };
+                { "gath", "vin", "ius", "dred", "thos", "ren", "ix", "eth", "vane", "ric", "ath", "ok", "us", "ane", "is" },
+                { "e", "o", "ra", "ve", "la", "an", "mo" } };
 
             switch (race)
             {
@@ -57,8 +70,10 @@ namespace Population
         }
 
         // Names like the ones real players pick ("Shadowfang", "Ironheart").
-        char const* const g_styleHeads[] = { "Shadow", "Dark", "Storm", "Frost", "Blood", "Moon", "Sun", "Iron", "Night", "Grim", "Wolf", "Fire", "Stone", "Thunder", "Ash", "Raven", "Silver", "Wild" };
-        char const* const g_styleTails[] = { "blade", "fang", "heart", "strike", "walker", "bane", "shade", "hunter", "fury", "mane", "born", "claw", "fist", "song", "hide", "brew" };
+        char const* const g_styleHeads[] = { "Shadow", "Dark", "Storm", "Frost", "Blood", "Moon", "Sun", "Iron", "Night", "Grim", "Wolf", "Fire", "Stone", "Thunder", "Ash", "Raven", "Silver", "Wild",
+            "Ember", "Dusk", "Thorn", "Steel", "Rune", "Ebon", "Dawn", "Star" };
+        char const* const g_styleTails[] = { "blade", "fang", "heart", "strike", "walker", "bane", "shade", "hunter", "fury", "mane", "born", "claw", "fist", "song", "hide", "brew",
+            "ward", "forge", "shield", "runner", "mark", "wing" };
 
         bool IsLettersOnly(std::string const& name)
         {
@@ -144,6 +159,8 @@ namespace Population
         {
             SyllableSet const& set = SyllablesFor(race);
             name = set.heads[Roll(rng, 0, uint32(set.heads.size()) - 1)];
+            if (!set.middles.empty() && Roll(rng, 0, 99) < MIDDLE_PCT)
+                name += set.middles[Roll(rng, 0, uint32(set.middles.size()) - 1)];
             name += set.tails[Roll(rng, 0, uint32(set.tails.size()) - 1)];
         }
         normalizePlayerName(name, MAX_INTERNAL_PLAYER_NAME);

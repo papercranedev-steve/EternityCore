@@ -163,6 +163,7 @@ namespace Population
         RosterMember* FindMember(uint32 id);
         void CreateCohort(Player* owner, Identity const& identity);
         // Generates members until the cohort has PopBot.Roster.CohortSize (also after raising it).
+        // A fill that makes nobody marks the cohort unfillable (logged once, no retry every 5 s).
         void FillCohort(Cohort const& cohort, Identity const& identity);
         void UpdateAnchor(Cohort& cohort, Player* owner);
         // `race` / `classId` != 0: that one (of the cohort's team then).
@@ -184,6 +185,8 @@ namespace Population
         uint32 m_nextUpdateMs = 0;
         std::vector<Cohort> m_cohorts;
         std::vector<RosterMember> m_members;
+        // Cohorts a fill made nobody for (no free names): not tried again until the restart.
+        std::set<uint32> m_unfillable;
 
         static constexpr uint32 STRANGER_ID_BASE = 0x40000000;
         std::unordered_map<uint32, RosterMember> m_strangers;   // online strangers by stranger id

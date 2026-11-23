@@ -1,8 +1,9 @@
 /*
  * World population bots: who a bot is (name, race, class, level).
  *
- * Names are English. Built-in syllable lists per race plus "player style" compound names;
- * extra names can be added to the world table `custom_popbot_name` (sql/custom/popbot.sql).
+ * Names are English. Built-in syllable lists per race (head, sometimes a middle, tail) plus
+ * "player style" compound names; extra names come from the world table `custom_popbot_name`
+ * (sql/custom/popbot.sql creates it, sql/custom/popbot_names.sql fills it).
  * World thread only.
  */
 

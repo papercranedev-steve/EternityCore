@@ -451,7 +451,7 @@ namespace Population
         for (RosterMember const& m : m_members)
             if (m.cohortId == cohort.id)
                 ++have;
-        if (have >= m_cohortSize)
+        if (have >= m_cohortSize || m_unfillable.count(cohort.id))
             return;
 
         uint32 const cohortId = cohort.id;
@@ -483,8 +483,15 @@ namespace Population
             sql += row;
             ++made;
         }
-        if (made)
-            CharacterDatabase.DirectExecute(sql);
+        if (!made)
+        {
+            m_unfillable.insert(cohortId);
+            sLog.Out(LOG_BASIC, LOG_LVL_ERROR, "[PopBot] Roster: cohort %u of '%s' stays at %u of %u members: no free names"
+                " (custom_popbot_name, built-in syllables in PopulationIdentity.cpp). Not tried again until the restart.",
+                cohortId, cohort.ownerName.c_str(), have, m_cohortSize);
+            return;
+        }
+        CharacterDatabase.DirectExecute(sql);
 
         std::string const ownerName = cohort.ownerName;   // LoadCohorts below replaces `cohort`
         LoadCohorts();
