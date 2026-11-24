@@ -226,7 +226,11 @@ namespace Commander
             return;
         }
 
-        // 3. The pet stuns it with its next hit.
+        // 3. The pet stuns it with its next hit. Not a trap swarm or a self-destruct: the doctrine
+        // allows no control on them (RoleStamps.h; strat-20261124-231028: Intimidation spent on
+        // a crate insect).
+        if (plan.doctrine.Has(e.guid, STAMP_SWARM | STAMP_SELF_DESTRUCT))
+            return;
         SpellEntry const* stun = bot->Kit().PetStun();
         Pet* pet = me->GetPet();
         if (!stun || !pet || !pet->IsAlive() || pet->GetVictim() != chaser.unit ||

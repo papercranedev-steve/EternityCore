@@ -25,7 +25,8 @@
  *     the run's walk.
  *  3. Pet stun: the slow does not take and the pet fights the chaser: ClassKit::PetStun
  *     (Intimidation) on the pet, its next hit stuns the chaser; valued like 2 with the chaser
- *     held.
+ *     held. Not on a chaser the doctrine stamped Swarm or SelfDestruct (no control on them,
+ *     as in CrowdControlAssigner).
  * While its own run is under way: Hold (score 0) so the rotation's first cast does not stop
  * the walk.
  *
