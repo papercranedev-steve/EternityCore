@@ -210,6 +210,12 @@ namespace Commander
         float ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m);
         std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT,
                                       Position3 const* planned = nullptr);
+        // An autonomous hunt (Hunt/HuntAssigner.h) has no pull waiting for the party, so bots
+        // drink only below their own drink start share (RestValue::DrinkBelowShare with no pull
+        // share): bots need that share, not READY_MANA_PCT. With READY_MANA_PCT a bot between
+        // the two neither drank nor was ready, and the hunt waited for its spirit regeneration.
+        // Everything else as CheckReady.
+        std::vector<Issue> CheckReadyToHunt(WorldModel const& world);
     }
 
     class PullAssigner : public IAssigner

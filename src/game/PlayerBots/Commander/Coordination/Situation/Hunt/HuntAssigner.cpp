@@ -104,7 +104,7 @@ namespace Commander
         if (plan.retreat.active || plan.pull.phase != PullPhase::None)
             return;
         // Hurt, out of mana, someone dead or fighting: rest first (RestBehavior).
-        if (!PullPlanner::CheckReady(world).empty())
+        if (!PullPlanner::CheckReadyToHunt(world).empty())
         {
             h.target.Clear();
             h.idleSinceMs = 0;

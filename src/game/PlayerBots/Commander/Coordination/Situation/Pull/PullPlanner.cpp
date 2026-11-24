@@ -176,9 +176,14 @@ namespace Commander
         return (m.role == ROLE_HEALER ? pull.healerManaPct : READY_MANA_PCT) / 100.0f;
     }
 
-    std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct,
-                                                            Position3 const* planned)
+    namespace
     {
+    // CheckReady and CheckReadyToHunt: `manaNeededOf(m)` is the mana percent member m needs.
+    template <typename ManaNeeded>
+    std::vector<PullPlanner::Issue> FindIssues(WorldModel const& world, ManaNeeded manaNeededOf,
+                                               Position3 const* planned)
+    {
+        using namespace PullPlanner;
         std::vector<Issue> issues;
         PartyMemberFacts const* leader = world.FindMember(world.leader);
         for (PartyMemberFacts const& m : world.party)
@@ -194,8 +199,7 @@ namespace Commander
                 issues.push_back({ m.guid, "combat", 0.0f });
             if (m.healthPct < READY_HEALTH_PCT)
                 issues.push_back({ m.guid, "hp", m.healthPct });
-            // Healers: what the planned fight needs (PullPlan::healerManaPct, HealerManaNeededPct).
-            float const manaNeeded = (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
+            float const manaNeeded = manaNeededOf(m);
             // Healers: the mana pool, not manaPct (a shapeshifted healer still heals with it).
             // Others: only while mana is their active power. A feral druid bot stays in bear /
             // cat form and TeamBotAI::StartResting only drinks with mana active, so counting its
@@ -218,6 +222,27 @@ namespace Commander
             }
         }
         return issues;
+    }
+    }
+
+    std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct,
+                                                            Position3 const* planned)
+    {
+        // Healers: what the planned fight needs (PullPlan::healerManaPct, HealerManaNeededPct).
+        return FindIssues(world, [healerManaPct](PartyMemberFacts const& m)
+        {
+            return (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
+        }, planned);
+    }
+
+    std::vector<PullPlanner::Issue> PullPlanner::CheckReadyToHunt(WorldModel const& world)
+    {
+        // Bots: the share a new drink starts below (PartyMemberFacts::drinkStartShare), the
+        // same line RestBehavior drinks by when no pull waits.
+        return FindIssues(world, [](PartyMemberFacts const& m)
+        {
+            return (m.isBot && m.drinkStartShare > 0.0f) ? m.drinkStartShare * 100.0f : READY_MANA_PCT;
+        }, nullptr);
     }
 
     bool PullPlanner::Plan(Player* leader, PartyCommander& commander, Creature* selected, bool skipReady,
