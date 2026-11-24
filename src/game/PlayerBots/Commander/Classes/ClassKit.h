@@ -247,6 +247,11 @@ namespace Commander
         // Cooldowns for a party member (Innervate, Power Infusion, Mana Tide Totem): the brain picks
         // whom (BoostAssigner), BoostBehavior casts them; the rotations do not.
         virtual std::vector<AllyBoostSpell> AllyBoosts() const { return {}; }
+        // A spell its shapeshift form does not allow that it may still cast in combat: the bot
+        // leaves the form, casts it, and takes the form back at once (TeamBotAI::NeedsFormExit;
+        // the druid's Innervate from bear form, user 2026-11-25). Only spells whose value counts
+        // the time out of the form (Perception/Values/FormExitCost.h): everything else waits.
+        virtual bool LeavesFormFor(SpellEntry const* /*spell*/) const { return false; }
         // Damage cooldowns: only BurstBehavior casts them, the rotations do not. Racial ones
         // come from RaceKit (merged in WorldModelBuilder).
         virtual std::vector<BurstSpell> Bursts() const { return {}; }

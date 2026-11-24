@@ -1477,6 +1477,7 @@ namespace WorldModelBuilder
                 a.gcd = spell->StartRecoveryTime > 0;
                 a.ready = f.CanAct() && !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE) &&
                           ai->IsReadyWithStance(spell);
+                a.leavesForm = ai->NeedsFormExit(spell);
                 f.allyBoosts.push_back(a);
             }
         }

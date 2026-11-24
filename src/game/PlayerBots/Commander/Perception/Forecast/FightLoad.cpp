@@ -80,9 +80,11 @@ namespace FightLoad
             totalHealth += std::max(0.0f, f.health);
         }
         std::vector<float> mana;
+        std::vector<float> itemMana;
         for (Healer const& h : in.healers)
         {
             mana.push_back(h.mana);
+            itemMana.push_back(h.itemMana);
             r.manaStart += h.mana;
         }
         float const partyDps = std::max(1.0f, in.partyDps);
@@ -199,7 +201,16 @@ namespace FightLoad
                     hp[k] = std::min(maxHp[k], hp[k]);
             }
             for (size_t h = 0; h < in.healers.size(); ++h)
-                mana[h] = std::min(in.healers[h].maxMana, mana[h] + in.healers[h].regenPerSec * STEP_SEC);
+            {
+                Healer const& x = in.healers[h];
+                float const regen = x.regenPerSec + (t < x.boostSec ? x.boostRegenPerSec : 0.0f);
+                mana[h] = std::min(x.maxMana, mana[h] + regen * STEP_SEC);
+                if (itemMana[h] > 0.0f && x.maxMana - mana[h] >= itemMana[h])
+                {
+                    mana[h] += itemMana[h];
+                    itemMana[h] = 0.0f;
+                }
+            }
 
             r.lowestTankPct = std::min(r.lowestTankPct, std::max(0.0f, hp[0]) / maxHp[0] * 100.0f);
             // A holder low gives its foes up to the tank from the next step on.
@@ -442,6 +453,7 @@ namespace FightLoad
                 if (!m.HealsTeam() || !m.CanAct() || m.healRates.empty())
                     continue;
                 Healer h;
+                h.guid = m.guid;
                 h.rates = m.healRates;
                 h.mana = float(m.mana);
                 h.maxMana = float(m.maxMana);
@@ -526,6 +538,7 @@ namespace FightLoad
             // Healing instead of hitting: its own damage leaves the party's.
             out.partyDps = std::max(1.0f, out.partyDps - m->soloDps);
             Healer h;
+            h.guid = m->guid;
             h.rates = m->spareHealRates;
             if (!m->isBot)
                 for (HealRate& r : h.rates)
@@ -542,6 +555,7 @@ namespace FightLoad
             if (!m || m->alive || !m->selfRes || m->spareHealRates.empty() || !m->UsesMana())
                 continue;
             Healer h;
+            h.guid = m->guid;
             h.rates = m->spareHealRates;
             h.mana = float(m->riseMana);
             h.maxMana = float(m->maxMana);

@@ -214,6 +214,21 @@ public:
     static constexpr uint32 PB_STANCE_SWAP_MAX_RAGE_LOSS = 100;   // 10 rage
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
 
+    // Druid form exits (user 2026-11-25, Innervate from bear form). A spell the form does not
+    // allow, that the class kit lets it leave the form for (ClassKit::LeavesFormFor), is cast
+    // the same way as a warrior's stance swap from the callers' side (CanCastWithStance,
+    // IsReadyWithStance, DoCastWithStance): the form is cancelled (no global cooldown, the
+    // rage or energy is lost), the spell cast in the same call, and the form taken back in
+    // the frame the global cooldown ends (ContinueFormReturn), before any other action.
+    // No rage limit as for the warrior: the value counts what leaving costs (FormExitCost).
+    // True: `pSpellEntry` needs leaving the form now and may.
+    bool NeedsFormExit(SpellEntry const* pSpellEntry) const;
+    // The form's spell to take it back with (bear, dire bear, cat, moonkin), nullptr = none.
+    SpellEntry const* CurrentFormSpell() const;
+    // Mana for `pSpellEntry` plus the form back: an exit it could not come back from is refused.
+    bool HasManaForFormExit(SpellEntry const* pSpellEntry) const;
+    static constexpr uint32 PB_FORM_RETURN_TIMEOUT_MS = 4000;
+
     bool AttackStart(Unit* pVictim);
     // Shoot (5019) is learned and an unbroken wand is equipped (the server's own item rule,
     // Player::HasItemFitToSpellReqirements). Shoot has no global cooldown (spell_template:
@@ -246,6 +261,9 @@ public:
     void UpdateOutOfCombatAI() final;
     // The cast waiting for a stance swap (DoCastWithStance). True: it was cast or is still waiting.
     bool ContinueStanceSwap();
+    // The form left for a spell (NeedsFormExit), taken back once the global cooldown ends.
+    // True: cast this frame.
+    bool ContinueFormReturn();
 
     // Commander (PlayerBots/Commander/). Directives are created on first use.
     Commander::BotDirectives& Directives();
@@ -488,6 +506,13 @@ public:
         uint32 startMs = 0;
     };
     StanceSwap m_stanceSwap;
+    // The form DoCastWithStance left (NeedsFormExit), to take back (nullptr = none).
+    struct FormReturn
+    {
+        SpellEntry const* formSpell = nullptr;
+        uint32 startMs = 0;
+    };
+    FormReturn m_formReturn;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
     // Class kit (Commander/Classes/ClassKit.h); mutable for the on-first-use fallback in Kit().

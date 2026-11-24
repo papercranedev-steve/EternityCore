@@ -154,6 +154,13 @@ namespace Commander
                 b.kind = AllyBoostKind::Mana;
                 return { b };
             }
+
+            // Innervate from bear or cat form: a healer running dry (BoostValue counts the time
+            // out of the form, FormExitCost). Rebirth later.
+            bool LeavesFormFor(SpellEntry const* spell) const override
+            {
+                return spell && spell == m_bot.m_spells.druid.pInnervate;
+            }
         };
     }
 

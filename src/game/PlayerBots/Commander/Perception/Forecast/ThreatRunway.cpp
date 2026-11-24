@@ -74,11 +74,12 @@ namespace ThreatRunway
         // rate, tank rate, aggro factor, guid). Returns the tank's threat (with `addTank`).
         template <class Fn>
         float ForEachRival(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank,
-                           std::vector<PlannedThreat> const& planned, float addTank, Fn&& fn)
+                           std::vector<PlannedThreat> const& planned, float addTank, Fn&& fn,
+                           bool tankIdle = false)
         {
             uint32 const split = SplitCount(world, tank);
             PartyMemberFacts const* tankFacts = world.FindMember(tank);
-            float const tankRate = tankFacts ? HolderRate(world, e, *tankFacts) : 0.0f;
+            float const tankRate = tankFacts && !tankIdle ? HolderRate(world, e, *tankFacts) : 0.0f;
 
             float own = addTank;
             if (ThreatEntry const* t = ThreatView::FindEntry(e, tank))
@@ -127,6 +128,21 @@ namespace ThreatRunway
             out.shortfall = std::max(out.shortfall, 1.0f);
         }
         out.shortfall = std::max(0.0f, out.shortfall);
+        return out;
+    }
+
+    Result Idle(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank)
+    {
+        Result out;
+        out.sec = NEVER;
+        float const own = ForEachRival(world, e, tank, {}, 0.0f,
+            [&](float own, float threat, float rate, float tankRate, float factor, ObjectGuid guid)
+            {
+                AddRival(own, threat, rate, tankRate, factor, 0.0f, guid, out);
+            }, true);
+        if (own <= 0.0f)
+            out.sec = 0.0f;
+        out.shortfall = 0.0f;
         return out;
     }
 

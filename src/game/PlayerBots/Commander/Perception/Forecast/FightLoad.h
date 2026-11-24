@@ -20,7 +20,7 @@
  *            floor; until 2026-11-17 it had to cover all the damage, so Holy Light at a third
  *            of the mana efficiency), the fastest in an emergency. Mana for the heal plus
  *            ManaBudget::OVERHEAL waste, regenerating at its in-combat rate. Not counted:
- *            Illumination, potions, Lay on Hands.
+ *            Illumination, potions (a caller may add them: Healer::itemMana), Lay on Hands.
  *            Player healers are not counted (their spells are not known).
  *   spawns   (todo 9) a creature's death spawns come when it dies, its aggro summons with it
  *            (Build, FromWorld; CreatureProfile::deathSpawns / aggroSpawns, health and melee
@@ -93,11 +93,18 @@ namespace FightLoad
 
     struct Healer
     {
+        ObjectGuid guid;
         std::vector<HealRate> rates;
         float mana = 0.0f;
         float maxMana = 0.0f;
         float regenPerSec = 0.0f;   // inside the five second rule
         float restRegenPerSec = 0.0f; // outside it (AfterWait)
+        // Set by callers only (FromWorld leaves them 0; a pull is not planned on them):
+        // extra regeneration for the first boostSec seconds (an Innervate being valued,
+        // HealerManaValue), and mana from its ready consumables, drunk once all of it fits.
+        float boostRegenPerSec = 0.0f;
+        float boostSec = 0.0f;
+        float itemMana = 0.0f;
     };
 
     struct Input

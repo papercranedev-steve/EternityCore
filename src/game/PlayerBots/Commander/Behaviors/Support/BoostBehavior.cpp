@@ -39,7 +39,7 @@ namespace Commander
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(duty->spellId);
         Unit* target = me->GetMap()->GetUnit(duty->target);
         if (!spell || !target || !target->IsAlive() || (target != me && !me->IsWithinLOSInMap(target)) ||
-            !bot->CanTryToCastSpell(target, spell))
+            !bot->CanCastWithStance(target, spell))     // a druid tank leaves its form for it
             return;
 
         Proposal p;

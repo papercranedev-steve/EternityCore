@@ -1,5 +1,7 @@
 #include "Commander/Perception/Values/BoostValue.h"
 #include "Commander/Perception/Values/BurstValue.h"
+#include "Commander/Perception/Values/FormExitCost.h"
+#include "Commander/Perception/Values/HealerManaValue.h"
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -53,9 +55,10 @@ namespace BoostValue
                     return o;
                 float const gain = std::max(0.0f, target.manaRegen * INNERVATE_REGEN_MULT +
                                                   target.manaRegen - target.manaRegenCasting) * a.durationSec;
-                if (gain <= 0.0f || Missing(target) < gain)
+                if (gain <= 0.0f || Missing(target) < gain || a.durationSec <= 0.0f)
                     return o;
-                o.benefit = ManaWorth::Points(world, target, gain);
+                o.benefit = ManaWorth::Points(world, target, gain) +
+                            HealerManaValue::DeathAvoided(world, target, gain / a.durationSec, a.durationSec);
                 break;
             }
             case POWER:
@@ -93,6 +96,16 @@ namespace BoostValue
                 return o;
         }
         o.cost = Cost(world, caster, a);
+        if (a.leavesForm)
+        {
+            FormExitCost::Result const exit = FormExitCost::Of(world, caster, a.gcd ? Value::GCD_SEC : 0.0f);
+            if (!exit.allowed)
+            {
+                o = RescueValue::Option();
+                return o;
+            }
+            o.cost += exit.cost;
+        }
         return o;
     }
 }

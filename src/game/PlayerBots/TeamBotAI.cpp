@@ -327,6 +327,10 @@ bool TeamBotAI::UpdateFrameHands(uint32 diff)
     if (m_stanceSwap.spell && m_initialized && me->IsInWorld() && !me->IsBeingTeleported() &&
         ContinueStanceSwap())
         return true;
+    // Druid form exit (DoCastWithStance): the form back in the frame the global cooldown ends.
+    if (m_formReturn.formSpell && m_initialized && me->IsInWorld() && !me->IsBeingTeleported() &&
+        ContinueFormReturn())
+        return true;
 
     // The bot update skips while casting and every cast fails on the global cooldown: without
     // this the next action came up to a bot interval after a cast or GCD ended (an instant
@@ -1700,10 +1704,50 @@ SpellEntry const* TeamBotAI::StanceSwapFor(SpellEntry const* pSpellEntry) const
     return nullptr;
 }
 
+bool TeamBotAI::NeedsFormExit(SpellEntry const* pSpellEntry) const
+{
+    if (!pSpellEntry || me->GetClass() != CLASS_DRUID)
+        return false;
+    ShapeshiftForm const form = me->GetShapeshiftForm();
+    if (form == FORM_NONE || !me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT))
+        return false;
+    if (pSpellEntry->GetErrorAtShapeshiftedCast(form) == SPELL_CAST_OK ||
+        pSpellEntry->GetErrorAtShapeshiftedCast(FORM_NONE) != SPELL_CAST_OK)
+        return false;
+    return Kit().LeavesFormFor(pSpellEntry);
+}
+
+SpellEntry const* TeamBotAI::CurrentFormSpell() const
+{
+    for (auto const& aura : me->GetAurasByType(SPELL_AURA_MOD_SHAPESHIFT))
+        if (aura && aura->GetSpellProto())
+            return aura->GetSpellProto();
+    return nullptr;
+}
+
+bool TeamBotAI::HasManaForFormExit(SpellEntry const* pSpellEntry) const
+{
+    SpellEntry const* pForm = CurrentFormSpell();
+    if (!pForm)
+        return false;
+    uint32 cost = uint32(Spell::CalculatePowerCost(pForm, me));
+    if (Powers(pSpellEntry->powerType) == POWER_MANA)
+        cost += uint32(Spell::CalculatePowerCost(pSpellEntry, me));
+    return me->GetPower(POWER_MANA) >= cost;
+}
+
 bool TeamBotAI::CanCastWithStance(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
     if (CanTryToCastSpell(pTarget, pSpellEntry))
         return true;
+    if (NeedsFormExit(pSpellEntry))
+    {
+        if (!HasManaForFormExit(pSpellEntry))
+            return false;
+        uint32 const power = Powers(pSpellEntry->powerType) == POWER_MANA ? me->GetPower(POWER_MANA) : 0;
+        return CanTryToCastSpellAs(pTarget, pSpellEntry, FORM_NONE, power) &&
+               PassesPartyCastChecks(pTarget, pSpellEntry);
+    }
     if (m_stanceSwap.spell)
         return false;   // one swap at a time
     SpellEntry const* pStance = StanceSwapFor(pSpellEntry);
@@ -1727,6 +1771,8 @@ bool TeamBotAI::IsReadyWithStance(SpellEntry const* pSpellEntry) const
     uint32 const cost = uint32(Spell::CalculatePowerCost(pSpellEntry, me));
     if (pSpellEntry->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK)
         return powerType == POWER_HEALTH || me->GetPower(powerType) >= cost;
+    if (NeedsFormExit(pSpellEntry))
+        return HasManaForFormExit(pSpellEntry);
     if (m_stanceSwap.spell || !StanceSwapFor(pSpellEntry))
         return false;
     uint32 const rage = me->GetPower(POWER_RAGE);
@@ -1798,6 +1844,18 @@ SpellCastResult TeamBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSp
     if (!CanCastWithStance(pTarget, pSpellEntry))
         return SPELL_FAILED_ONLY_SHAPESHIFT;
 
+    // Druid: out of the form (instant, no global cooldown), the spell now, the form back as
+    // soon as the global cooldown ends (ContinueFormReturn).
+    if (NeedsFormExit(pSpellEntry))
+    {
+        SpellEntry const* pForm = CurrentFormSpell();
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+        m_formReturn.formSpell = pForm;
+        m_formReturn.startMs = WorldTimer::getMSTime();
+        StandStillFor(pSpellEntry);
+        return DoCastSpell(pTarget, pSpellEntry);
+    }
+
     SpellEntry const* pStance = StanceSwapFor(pSpellEntry);
     SpellCastResult const result = DoCastSpell(me, pStance);
     if (result == SPELL_CAST_OK)
@@ -1834,6 +1892,25 @@ bool TeamBotAI::ContinueStanceSwap()
         return DoCastSpell(pTarget, pSpellEntry) == SPELL_CAST_OK;
     }
     return false;
+}
+
+bool TeamBotAI::ContinueFormReturn()
+{
+    SpellEntry const* pForm = m_formReturn.formSpell;
+    if (!pForm)
+        return false;
+    // Back already (the rotation), dead, or it could not for too long: done.
+    if (!me->IsAlive() || me->GetShapeshiftForm() != FORM_NONE ||
+        WorldTimer::getMSTimeDiff(m_formReturn.startMs, WorldTimer::getMSTime()) > PB_FORM_RETURN_TIMEOUT_MS)
+    {
+        m_formReturn = FormReturn();
+        return false;
+    }
+    // The spell is still being cast, or its global cooldown runs: the next frame.
+    if (me->IsNonMeleeSpellCasted(false, false, true) || me->HasGCD(pForm) || !CanTryToCastSpell(me, pForm))
+        return false;
+    m_formReturn = FormReturn();
+    return DoCastSpell(me, pForm) == SPELL_CAST_OK;
 }
 
 float TeamBotAI::StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const

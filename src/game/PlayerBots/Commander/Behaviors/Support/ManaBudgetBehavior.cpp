@@ -68,6 +68,18 @@ namespace Commander
             return false;
         }
 
+        // The boost's caster leaves its form for it (AllyBoostAbility::leavesForm).
+        bool BoostLeavesForm(WorldModel const& world, BoostDuty const& d)
+        {
+            PartyMemberFacts const* caster = world.FindMember(d.bot);
+            if (!caster)
+                return false;
+            for (AllyBoostAbility const& a : caster->allyBoosts)
+                if (a.spellId == d.spellId)
+                    return a.leavesForm;
+            return false;
+        }
+
         bool BelowCeiling(WorldModel const& world, PartyMemberFacts const& m, float tension)
         {
             return m.alive && !m.charmed && m.maxHealth > 0 &&
@@ -233,9 +245,11 @@ namespace Commander
             return;
 
         // Own spells before consumables (user 2026-11-15): Innervate / Mana Tide on its way, or
-        // its own restore ready while nothing hits it (ProposeSelfRestore casts that).
+        // its own restore ready while nothing hits it (ProposeSelfRestore casts that). Not an
+        // Innervate from a druid that leaves its form for it (the tank in bear form, user
+        // 2026-11-25): the last resort, after the potions.
         for (BoostDuty const& d : plan.boosts)
-            if (d.target == self->guid)
+            if (d.target == self->guid && !BoostLeavesForm(world, d))
                 return;
         if (SpellEntry const* restore = bot->Kit().SelfManaRestore())
             if (me->IsSpellReady(restore) && !IsHit(world, *self))

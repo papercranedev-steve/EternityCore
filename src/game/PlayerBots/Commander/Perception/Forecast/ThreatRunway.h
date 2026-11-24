@@ -57,6 +57,10 @@ namespace Commander
         Result Of(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank,
                   std::vector<PlannedThreat> const& planned, float horizonSec, float addTank = 0.0f);
 
+        // Of with the tank adding nothing from now on (rate(T) = 0: it stops, a druid tank out
+        // of its form, Perception/Values/FormExitCost.h). No horizon: shortfall 0.
+        Result Idle(WorldModel const& world, EnemyFacts const& e, ObjectGuid tank);
+
         // One rival m of the tank on `e`: the seconds until m takes it (runway as above, for m
         // alone). Of's runway is the smallest of these.
         struct Rival

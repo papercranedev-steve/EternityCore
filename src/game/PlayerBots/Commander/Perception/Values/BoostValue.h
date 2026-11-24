@@ -7,7 +7,9 @@
  *     gain = (manaRegen x INNERVATE_REGEN_MULT + manaRegen - manaRegenCasting) x duration
  *            (+400% regeneration, all of it while casting: spell 29166 auras 110 / 134)
  *     only when the mana it misses is at least the gain (nothing is wasted: the boost waits
- *     for a big gap, like the heal boosts); benefit = ManaWorth::Points(target, gain)
+ *     for a big gap, like the heal boosts); benefit = ManaWorth::Points(target, gain) +
+ *     HealerManaValue::DeathAvoided(target, gain / duration, duration) (a healer running dry
+ *     before the fight ends loses the tank, with nobody to take over the team; user 2026-11-25)
  *   Power (Power Infusion) on a member who deals spell damage or heals (a healer, a ranged
  *     caster that is not a hunter), in combat, with no Power Infusion / Arcane Power up:
  *     benefit = Value::ContributionPerSec(target) x POWER_SHARE x duration
@@ -19,6 +21,9 @@
  *          mana cost) + Value::CooldownPoints over the fight left for cooldowns longer than
  *          BurstValue::SHORT_COOLDOWN_SEC (Innervate 6 min; Power Infusion 3 min, Mana Tide
  *          5 min are back for the next pull)
+ *          + FormExitCost::Of(caster) when it is cast after leaving a form (AllyBoostAbility::
+ *          leavesForm: a druid tank's Innervate from bear form); not offered when that says
+ *          the caster cannot leave now
  * Only while the party fights (the caller). Pure: WorldModel facts.
  */
 

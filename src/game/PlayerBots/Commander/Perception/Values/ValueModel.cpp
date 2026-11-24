@@ -2,6 +2,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Profiles/StandIn.h"
 #include "SharedDefines.h"
 #include "Timer.h"
 #include <algorithm>
@@ -66,6 +67,23 @@ namespace Value
         if (Tanks::IsTank(member))      // bots and players (Tanks.h)
             return DEATH_PENALTY_TANK;
         return DEATH_PENALTY_OTHER;
+    }
+
+    float HolderDeathPenalty(WorldModel const& world, PartyMemberFacts const& holder)
+    {
+        float team = 0.0f;
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.alive)
+                continue;
+            if (!m.isPet)
+                team += DeathPenalty(m);
+            if (m.guid == holder.guid || !m.CanAct())
+                continue;
+            if (Tanks::IsTank(m) || StandIn::Of(m).way != StandInWay::None)
+                return DeathPenalty(holder);
+        }
+        return std::max(team, DeathPenalty(holder));
     }
 
     namespace

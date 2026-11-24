@@ -254,6 +254,9 @@ namespace Commander
         uint32 manaCost = 0;
         bool gcd = false;
         bool ready = false;             // off cooldown, the mana, can act and cast
+        // Cast after leaving its form (TeamBotAI::NeedsFormExit: a druid in bear or cat form):
+        // BoostValue adds what the time out of the form costs (FormExitCost).
+        bool leavesForm = false;
     };
 
     // A resurrection a bot may cast in combat (ClassKit::CombatResurrection: Rebirth).

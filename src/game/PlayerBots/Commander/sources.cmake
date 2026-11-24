@@ -447,6 +447,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Combat/HarvestBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/BoostValue.h
   ${COMMANDER_DIR}/Perception/Values/BoostValue.cpp
+  ${COMMANDER_DIR}/Perception/Values/FormExitCost.h
+  ${COMMANDER_DIR}/Perception/Values/FormExitCost.cpp
+  ${COMMANDER_DIR}/Perception/Values/HealerManaValue.h
+  ${COMMANDER_DIR}/Perception/Values/HealerManaValue.cpp
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/BoostAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Duties/BlessingAssigner.h

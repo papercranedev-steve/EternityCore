@@ -67,6 +67,11 @@ namespace Commander
         float Points(WorldModel const& world, float health);
 
         float DeathPenalty(PartyMemberFacts const& member);
+        // The death of the member the enemies hit (Tanks::HitTaker) when the healing runs dry
+        // (user 2026-11-25): its own DeathPenalty while another member can hold them (another
+        // alive tank, a stand-in: Perception/Profiles/StandIn.h); else the team is lost, the
+        // DeathPenalty of every alive member summed (5-man: 30 + 30 + 3 x 15 = 105).
+        float HolderDeathPenalty(WorldModel const& world, PartyMemberFacts const& holder);
 
         // Damage the party deals per second: measured in this fight, else the last fight's
         // (RateFacts::lastFightDps, scaled by the number of damage dealers), else the sum of
