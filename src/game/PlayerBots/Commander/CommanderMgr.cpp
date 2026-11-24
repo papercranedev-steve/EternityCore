@@ -377,6 +377,22 @@ namespace Commander
         return itr != m_pullPlaces.end() ? itr->second : PullPlace::Auto;
     }
 
+    void CommanderMgr::SetPullStance(ObjectGuid player, PullStance stance)
+    {
+        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        if (stance == PullStance::Active)
+            m_pullStances.erase(player.GetRawValue());
+        else
+            m_pullStances[player.GetRawValue()] = stance;
+    }
+
+    PullStance CommanderMgr::GetPullStance(ObjectGuid player) const
+    {
+        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        auto itr = m_pullStances.find(player.GetRawValue());
+        return itr != m_pullStances.end() ? itr->second : PullStance::Active;
+    }
+
     void CommanderMgr::QueueVoice(Player const* member, VoiceEvent event)
     {
         if (!IsEnabled() || !member)

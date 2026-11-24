@@ -24,6 +24,10 @@ namespace Talk
             party.push_back(MakeStayService());
             party.push_back(MakeTeamService());
             list.push_back(MakeFolderService("party", "talk.opt.party", "talk.party.page", std::move(party)));
+            // 战斗策略 (user 2026-11-24)
+            std::vector<std::unique_ptr<Service>> strategy;
+            strategy.push_back(MakePullStanceService());
+            list.push_back(MakeFolderService("strategy", "talk.opt.strategy", "talk.strategy.page", std::move(strategy)));
             return list;
         }();
         return services;

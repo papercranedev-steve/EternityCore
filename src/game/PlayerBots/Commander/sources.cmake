@@ -114,6 +114,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.h
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/AutoClear.h
+  ${COMMANDER_DIR}/Coordination/Situation/AutoClear.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Guide.h
   ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Stay.h
@@ -489,6 +491,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Los/CasterLurePlanner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullMethod.h
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullPlace.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullStance.h
   ${COMMANDER_DIR}/Behaviors/Movement/LureBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/LureBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/OffRouteBehavior.h

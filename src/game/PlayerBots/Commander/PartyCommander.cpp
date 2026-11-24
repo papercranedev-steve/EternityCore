@@ -2,6 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/AutoClear.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/PushPlanner.h"
 #include "Commander/Coordination/Situation/GatherPlanner.h"
@@ -69,6 +70,7 @@ namespace Commander
         RetreatPlanner::Step(bot, *this);       // a retreat the player's run asked for, door steps
         ReleaseMovementAfterRetreat(bot);
         ClearPlanner::Step(bot, *this, nowMs);  // no-op unless `.partybot ai clear` is running
+        AutoClear::Step(bot, *this, nowMs);     // the player's active pull stance starts clears
         PushPlanner::Step(bot, *this, nowMs);   // no-op unless `.partybot ai push` is running (after the clear: reads its end)
         GatherPlanner::Step(bot, *this, nowMs); // members left behind: the warlocks summon them
 

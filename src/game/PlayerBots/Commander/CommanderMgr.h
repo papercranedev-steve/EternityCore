@@ -16,6 +16,7 @@
 #include "Commander/ThreatFeed.h"
 #include "Commander/Coordination/Situation/Pull/PullMethod.h"
 #include "Commander/Coordination/Situation/Pull/PullPlace.h"
+#include "Commander/Coordination/Situation/Pull/PullStance.h"
 #include "Commander/Coordination/Situation/Summon.h"
 #include "Commander/Commands/Voice/VoiceSettings.h"
 #include <atomic>
@@ -137,6 +138,10 @@ namespace Commander
         // fight place button). Runtime only, any thread (same lock as the pull method).
         void SetPullPlace(ObjectGuid player, PullPlace place);
         PullPlace GetPullPlace(ObjectGuid player) const;
+        // Whether this player's party starts fights on its own (PullStance.h; the talk window,
+        // `.partybot ai pullstance`). Runtime only, any thread (same lock as the pull method).
+        void SetPullStance(ObjectGuid player, PullStance stance);
+        PullStance GetPullStance(ObjectGuid player) const;
         // What this player wants to hear from his party (`.partybot voice`, the addon's
         // settings; VoiceSettings.h). Runtime only, any thread.
         void SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings);
@@ -178,6 +183,7 @@ namespace Commander
         mutable std::mutex m_pullMethodLock;
         std::map<uint64, PullMethod> m_pullMethods;     // player guid -> method, Auto not stored
         std::map<uint64, PullPlace> m_pullPlaces;       // player guid -> place, Auto not stored
+        std::map<uint64, PullStance> m_pullStances;     // player guid -> stance, Active not stored
 
         mutable std::mutex m_voiceLock;
         std::map<uint64, VoiceSettings> m_voiceSettings;    // player guid -> settings, defaults not stored

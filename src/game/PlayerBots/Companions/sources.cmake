@@ -57,6 +57,7 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/Talk/TalkCommands.cpp
   ${COMPANIONS_DIR}/Talk/Services/ServiceList.h
   ${COMPANIONS_DIR}/Talk/Services/StayService.cpp
+  ${COMPANIONS_DIR}/Talk/Services/StrategyService.cpp
   ${COMPANIONS_DIR}/Talk/Services/BagsService.cpp
   ${COMPANIONS_DIR}/Talk/Services/CraftService.cpp
   ${COMPANIONS_DIR}/Talk/Services/PortalService.cpp

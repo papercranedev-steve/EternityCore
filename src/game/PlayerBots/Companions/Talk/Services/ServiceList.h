@@ -19,6 +19,8 @@ namespace Talk
     std::unique_ptr<Service> MakeStayService();
     // 大家等我 / 大家跟我走 / 把掉队的召唤过来: orders for the whole party. Anyone.
     std::unique_ptr<Service> MakeTeamService();
+    // 主动开怪 / 被动开怪: the player's pull stance for his party (Commander PullStance.h). Anyone.
+    std::unique_ptr<Service> MakePullStanceService();
     // "让我看看你的包": the inspect window with his bags (Gates ManageBags).
     std::unique_ptr<Service> MakeBagsService();
     // His sheet, talents, quest log (addon windows). Anyone.

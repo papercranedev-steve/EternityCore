@@ -145,6 +145,18 @@ namespace Commander
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
     };
 
+    // The player's active pull stance (PullStance.h): AutoClear starts clears on its own.
+    struct AutoClearPlan
+    {
+        bool started = false;           // the running clear was started by AutoClear
+        bool wasActive = false;         // a clear ran on the last refresh (any: also `.partybot ai clear`)
+        ClearEnd lastEnd = ClearEnd::None;
+        uint32 endedAtMs = 0;           // when the last clear ended (0 = none yet)
+        Position3 endedAt;              // the leader then
+        Position3 leaderPos;            // last leader position that counted as a move
+        uint32 leaderStillSinceMs = 0;
+    };
+
     // Display name of a party member, captured when the pull is planned (the pure assigner
     // has no live objects to read names from).
     struct PullMemberName
@@ -1721,6 +1733,7 @@ namespace Commander
         PullPlan pull;
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
+        AutoClearPlan autoClear;
         HuntPlan hunt;
         PushPlan push;
         // The party bot the party follows out of combat instead of the player (Guide.h: the

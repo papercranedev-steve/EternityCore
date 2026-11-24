@@ -237,6 +237,27 @@ namespace
         return true;
     }
 
+    // .partybot ai pullstance [active|passive]   (no argument = show)
+    // Replies PBOK;;pullstance;<stance>: the addon keeps the player's choice (the server only
+    // until it restarts) and sends it again after login.
+    bool SetPullStance(ChatHandler* handler, Player* player, char const* arg)
+    {
+        Commander::PullStance stance = sCommanderMgr.GetPullStance(player->GetObjectGuid());
+        if (arg && !Commander::ParsePullStance(arg, stance))
+        {
+            handler->SendSysMessage("Usage: .partybot ai pullstance [active|passive]");
+            return false;
+        }
+        if (arg)
+            sCommanderMgr.SetPullStance(player->GetObjectGuid(), stance);
+        handler->PSendSysMessage("Pull stance: %s, %s.", Commander::PullStanceName(stance),
+            stance == Commander::PullStance::Active
+                ? "the tank pulls nearby packs on its own while the party is idle (needs a tank bot)"
+                : "the party fights what you start");
+        handler->PSendSysMessage("PBOK;;pullstance;%s", Commander::PullStanceName(stance));
+        return true;
+    }
+
     char const* PullPhaseName(Commander::PullPhase phase)
     {
         switch (phase)
@@ -733,6 +754,7 @@ namespace
         }
 
         Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
+        commander->GetPlanMutable().autoClear.started = false;     // the player's own: the passive stance leaves it
         handler->PSendSysMessage("Clearing packs within %.0f yd walk of here (open ways first, then those behind another pack), "
             "at most %u mobs per pull "
             "(assistance and aggro range counted; waits up to %u s for patrols to pass). ",
@@ -1317,7 +1339,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
         !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
-        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "field") || !strcmp(sub, "wayin") ||
+        !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "pullstance") || !strcmp(sub, "field") || !strcmp(sub, "wayin") ||
         !strcmp(sub, "guide") || !strcmp(sub, "push"))
     {
         Player* player = m_session->GetPlayer();
@@ -1338,6 +1360,8 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
             ok = SetPullMethod(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "pullplace"))
             ok = SetPullPlace(this, player, ExtractLiteralArg(&args));
+        else if (!strcmp(sub, "pullstance"))
+            ok = SetPullStance(this, player, ExtractLiteralArg(&args));
         else if (!strcmp(sub, "threat"))
         {
             char const* arg = ExtractLiteralArg(&args);
@@ -1377,7 +1401,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|debugsay [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|debugsay [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|pullstance [active|passive]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }
