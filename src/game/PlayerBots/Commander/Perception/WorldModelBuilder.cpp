@@ -1947,6 +1947,7 @@ namespace WorldModelBuilder
                     f.roleLocked = ai->IsRoleLocked();
                     f.functions = BotFunctions(f, coverage);
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
+                    f.drinkStartShare = ai->DrinkStartShare();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
                     f.eating = ai->IsEating();

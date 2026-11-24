@@ -12,8 +12,8 @@
  *     until it is within BACK_YD of him and he has stood still for STILL_MS (no sitting down
  *     and standing up again while he walks a few steps at a time);
  *   - a rest that ends within FINISH_SEC is finished first (the leader is not far yet).
- * Sitting down again starts below RestValue::START_SHARE only (each sitting uses a new food
- * or drink).
+ * Sitting down again starts below RestValue::START_SHARE (food) or RestValue::DrinkBelowShare
+ * (drink) only (each sitting uses a new food or drink).
  *
  * Only the free rest (no fight on or planned): the caller does not run it while the Commander
  * has an out-of-combat plan, a bot waits at its stay spot or a resurrection comes first; with

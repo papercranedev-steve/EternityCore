@@ -3,6 +3,7 @@
 #include "Commander/Coordination/Duties/FocusAssigner.h"
 #include "Commander/Coordination/Doctrine/HealerDamage.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/SwitchCost.h"
 #include "Commander/Perception/Tanks.h"
@@ -258,7 +259,8 @@ namespace Commander
             // Resting to full pays more than its part of the fight (RestBehavior, same value):
             // no target until it is done. Its first hit would put it in combat, no more drinking.
             // (Free rest, no fight on or planned: there is no target to give either.)
-            return !Tanks::IsTank(m) && RestValue::Of(world, m, plan.pull.PlannedFight()).Pays();
+            return !Tanks::IsTank(m) && RestValue::Of(world, m, plan.pull.PlannedFight(),
+                                                      PullPlanner::ReadyManaShare(plan.pull, m)).Pays();
         }
 
         // TargetDuty::suggestUntilMs (header): a valued switch to an enemy about to run away.

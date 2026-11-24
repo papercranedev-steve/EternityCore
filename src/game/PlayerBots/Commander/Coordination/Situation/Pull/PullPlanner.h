@@ -203,6 +203,11 @@ namespace Commander
             char const* what;   // "dead", "hp", "mana", "far", "combat"
             float value;
         };
+        // The mana share (0-1) CheckReady waits for from bot `m` while `pull` waits in
+        // WaitReady (healers PullPlan::healerManaPct, others READY_MANA_PCT); 0 otherwise.
+        // A bot drinks up to it (RestValue::DrinkBelowShare) so the pull does not wait for
+        // mana it would not drink.
+        float ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m);
         std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT,
                                       Position3 const* planned = nullptr);
     }

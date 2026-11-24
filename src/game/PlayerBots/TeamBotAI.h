@@ -41,6 +41,7 @@
 #include "Commander/Behaviors/Support/ResurrectApproach.h"
 #include "Commander/Behaviors/Movement/RestCatchUp.h"
 #include "Commander/Behaviors/Support/RestTopUp.h"
+#include "Commander/Perception/Values/FightManaSpend.h"
 #include "Shared/FoodAndDrink.h"
 #include <memory>
 
@@ -323,6 +324,13 @@ public:
     bool HoldsOffRest() const { return m_restCatchUp.active; }
     // Health (when it has food) or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
     bool NeedsRest() const;
+    // The mana share a new drink starts below, by what its last fights in this kind of place
+    // cost (RestValue::DrinkStartShare, user 2026-11-24). A fact for the Commander
+    // (PartyMemberFacts::drinkStartShare).
+    float DrinkStartShare() const;
+    // StartResting's line for a new drink: DrinkStartShare, or higher while a pull waits for
+    // more (RestValue::DrinkBelowShare, PullPlanner::ReadyManaShare).
+    float DrinkBelowShareNow() const;
     // Commander rest (BotActionType::Rest, Behaviors/Support/RestBehavior.h; the original eat and drink
     // is gone): eat when health is missing, drink when mana is, or keep sitting. False in
     // combat, while buffing, with a victim, or with nothing missing. More than 100 yd from the
@@ -465,6 +473,9 @@ public:
     Commander::RestCatchUpState m_restCatchUp;
     // Out of combat: the members' gaps a heal waits on (Commander/Behaviors/Support/RestTopUp.h).
     Commander::RestTopUpState m_restTopUp;
+    // What its last fights cost in mana (Commander/Perception/Values/FightManaSpend.h), every
+    // tick in UpdateBody. Not saved: a new session starts from the place's default.
+    Commander::FightManaSpendState m_fightManaSpend;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

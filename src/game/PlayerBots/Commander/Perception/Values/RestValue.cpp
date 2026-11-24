@@ -7,7 +7,23 @@ namespace Commander
 {
 namespace RestValue
 {
-    Worth Of(WorldModel const& world, PartyMemberFacts const& member, ManaWorth::Fight const& planned)
+    float DrinkStartShare(FightManaSpendState const& spend, bool dungeon)
+    {
+        float average = 0.0f;
+        if (!FightManaSpend::Average(spend, dungeon, MIN_FIGHTS, average))
+            return dungeon ? DUNGEON_DRINK_SHARE : OPEN_WORLD_DRINK_SHARE;
+        return std::min(START_SHARE, std::max(MIN_DRINK_SHARE, FIGHTS_MARGIN * average));
+    }
+
+    float DrinkBelowShare(PartyMemberFacts const& member, float pullReadyShare)
+    {
+        if (member.drinking)
+            return FULL_SHARE;
+        return std::max(member.drinkStartShare, pullReadyShare);
+    }
+
+    Worth Of(WorldModel const& world, PartyMemberFacts const& member, ManaWorth::Fight const& planned,
+             float pullReadyShare)
     {
         Worth w;
         if (!member.alive || member.inCombat)
@@ -16,7 +32,7 @@ namespace RestValue
         bool const fighting = world.HasPartyEnemy() || !world.targeted.empty();
 
         if (member.UsesMana() && member.drinkManaPerSec > 0.0f &&
-            float(member.mana) < float(member.maxMana) * (member.drinking ? FULL_SHARE : START_SHARE))
+            float(member.mana) < float(member.maxMana) * DrinkBelowShare(member, pullReadyShare))
         {
             w.drink = true;
             w.mana = float(member.maxMana) - float(member.mana);

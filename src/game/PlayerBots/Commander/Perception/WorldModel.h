@@ -708,6 +708,9 @@ namespace Commander
         // Bots with a mana pool: mana per second their drink restores (TeamBotAI::DrinkManaPerSec),
         // on top of manaRegen. Perception/Values/RestValue.h.
         float drinkManaPerSec = 0.0f;
+        // Bots: the mana share a new drink starts below, by what their last fights here cost
+        // (TeamBotAI::DrinkStartShare, RestValue::DrinkStartShare).
+        float drinkStartShare = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (TeamBotAI::IsDrinking)
         bool eating = false;        // bots: the food is on (TeamBotAI::IsEating)

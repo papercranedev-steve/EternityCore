@@ -23,12 +23,15 @@
  *            is Urgent and comes first). Others: their part of the fight while sitting,
  *            Value::ContributionPerSecAt(incoming) x seconds.
  * Members without the rates (players, no pool for drinking): nothing to rest.
+ * Drinking starts only below DrinkBelowShare (the next fight's mana, below), eating below
+ * START_SHARE.
  */
 
 #ifndef MANGOS_COMMANDER_REST_VALUE_H
 #define MANGOS_COMMANDER_REST_VALUE_H
 
 #include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Values/FightManaSpend.h"
 
 namespace Commander
 {
@@ -39,9 +42,29 @@ namespace Commander
     {
         // Mana and health at or above this share count as full (resting ends at 100%).
         static constexpr float FULL_SHARE = 0.99f;
-        // A new food or drink starts below this share only (user 2026-11-21: each sitting uses
-        // one up, a sip for the last few percent wastes it); the one on keeps going to full.
+        // A new food starts below this share only (user 2026-11-21: each sitting uses one up,
+        // a sip for the last few percent wastes it); the one on keeps going to full. Also the
+        // highest share a new drink starts below (DrinkStartShare).
         static constexpr float START_SHARE = 0.95f;
+
+        // A new drink (user 2026-11-24: casters drank after every open-world creature): when
+        // the mana left will not cover the next fight. Below FIGHTS_MARGIN x the average cost
+        // of the last fights in this kind of place (Values/FightManaSpend.h), once
+        // MIN_FIGHTS were recorded there; before that the place's default: open world
+        // OPEN_WORLD_DRINK_SHARE, dungeons and raids DUNGEON_DRINK_SHARE (user: 50% / 90%).
+        // Kept between MIN_DRINK_SHARE and START_SHARE. The drink on still runs to full.
+        static constexpr float OPEN_WORLD_DRINK_SHARE = 0.50f;
+        static constexpr float DUNGEON_DRINK_SHARE = 0.90f;
+        static constexpr float FIGHTS_MARGIN = 1.5f;
+        static constexpr uint32_t MIN_FIGHTS = 3;
+        static constexpr float MIN_DRINK_SHARE = 0.30f;
+        float DrinkStartShare(FightManaSpendState const& spend, bool dungeon);
+
+        // The share below which `member` drinks now: to full while drinking, else the higher
+        // of its own (PartyMemberFacts::drinkStartShare) and `pullReadyShare`, the mana a
+        // pull waiting for the party wants from it (PullPlanner::ReadyManaShare; 0 = none):
+        // the pull would wait for mana the bot did not drink otherwise.
+        float DrinkBelowShare(PartyMemberFacts const& member, float pullReadyShare);
 
         struct Worth
         {
@@ -58,7 +81,9 @@ namespace Commander
         };
 
         // `planned`: the pull's estimate (sec 0 = none), used while no damage comes in yet.
-        Worth Of(WorldModel const& world, PartyMemberFacts const& member, ManaWorth::Fight const& planned);
+        // `pullReadyShare`: DrinkBelowShare's.
+        Worth Of(WorldModel const& world, PartyMemberFacts const& member, ManaWorth::Fight const& planned,
+                 float pullReadyShare);
 
         // Seconds eating and drinking from `health` and `mana` to full take: the longer of the
         // two (both run at once). Eating assumed allowed.

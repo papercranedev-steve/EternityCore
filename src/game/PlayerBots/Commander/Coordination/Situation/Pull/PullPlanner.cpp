@@ -169,6 +169,13 @@ namespace Commander
             tank->GetName(), weapon->GetProto()->Name1, ammoType == ITEM_SUBCLASS_BULLET ? "bullets" : "arrows");
     }
 
+    float PullPlanner::ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m)
+    {
+        if (pull.phase != PullPhase::WaitReady || !m.isBot)
+            return 0.0f;
+        return (m.role == ROLE_HEALER ? pull.healerManaPct : READY_MANA_PCT) / 100.0f;
+    }
+
     std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct,
                                                             Position3 const* planned)
     {

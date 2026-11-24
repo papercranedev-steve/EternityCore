@@ -3,6 +3,7 @@
 #include "Commander/Behaviors/Movement/RangedStanceBehavior.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Classes/ClassKit.h"
@@ -69,7 +70,8 @@ namespace Commander
         if (!self || !self->CanAct())
             return;
 
-        RestValue::Worth const w = RestValue::Of(world, *self, plan.pull.PlannedFight());
+        RestValue::Worth const w = RestValue::Of(world, *self, plan.pull.PlannedFight(),
+                                                 PullPlanner::ReadyManaShare(plan.pull, *self));
         if (!w.Pays())
             return;
         if (!w.free && !PlaceOk(bot, world, plan, *self))

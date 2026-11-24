@@ -46,6 +46,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/RestValue.h"
+#include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Behaviors/Support/RestTopUp.h"
 #include "SpellMgr.h"
@@ -63,6 +64,9 @@ enum TeamBotSpells
 
 bool TeamBotAI::UpdateBody()
 {
+    // What its fights cost in mana, for when it drinks (Commander/Perception/Values/FightManaSpend.h).
+    Commander::FightManaSpend::Update(me, m_fightManaSpend);
+
     // Dropping down on the leader's trail: a cast (buff, heal) would stop the fall in the air.
     if (Commander::TrailFollow::IsFalling(me, m_trailFollow) || Commander::Landing::IsFalling(me, m_landing))
         return true;
@@ -966,13 +970,14 @@ bool TeamBotAI::StartResting()
     if (IsRestPending())
         return true;
 
-    // A new food or drink only below RestValue::START_SHARE (user 2026-11-21: each sitting uses
-    // one up; a sip for the last few percent wastes it). The one on runs to full.
+    // A new food only below RestValue::START_SHARE (user 2026-11-21: each sitting uses one up;
+    // a sip for the last few percent wastes it), a new drink only below what the next fight
+    // needs (RestValue::DrinkBelowShare, user 2026-11-24). The one on runs to full.
     float const start = Commander::RestValue::START_SHARE;
     bool const startEat = needToEat && !ActiveRest(Kind::Food) &&
         float(me->GetHealth()) < float(me->GetMaxHealth()) * start;
     bool const startDrink = needToDrink && !ActiveRest(Kind::Drink) &&
-        float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * start;
+        float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * DrinkBelowShareNow();
     if (startEat || startDrink)
     {
         if (me->IsMounted())
@@ -990,6 +995,23 @@ bool TeamBotAI::StartResting()
     if (startDrink && !ActiveRest(Kind::Drink) && !IsRestPending())
         BeginRest(Kind::Drink);
     return IsResting() || IsRestPending();
+}
+
+float TeamBotAI::DrinkStartShare() const
+{
+    return Commander::RestValue::DrinkStartShare(m_fightManaSpend, me->GetMap()->IsDungeon());
+}
+
+float TeamBotAI::DrinkBelowShareNow() const
+{
+    // The same share RestBehavior proposed the rest by (RestValue::Of), from this tick's
+    // facts: its own (DrinkStartShare, not the snapshot's) and a waiting pull's.
+    float pullShare = 0.0f;
+    if (sCommanderMgr.IsEnabled())
+        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
+            if (Commander::PartyMemberFacts const* self = commander->GetWorld().FindMember(me->GetObjectGuid()))
+                pullShare = Commander::PullPlanner::ReadyManaShare(commander->GetPlan().pull, *self);
+    return std::max(DrinkStartShare(), pullShare);
 }
 
 bool TeamBotAI::IsRestPending() const

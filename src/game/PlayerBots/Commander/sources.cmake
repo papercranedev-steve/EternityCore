@@ -313,6 +313,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/HealthRegen.cpp
   ${COMMANDER_DIR}/Perception/Values/RestValue.h
   ${COMMANDER_DIR}/Perception/Values/RestValue.cpp
+  ${COMMANDER_DIR}/Perception/Values/FightManaSpend.h
+  ${COMMANDER_DIR}/Perception/Values/FightManaSpend.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FearRisk.h
   ${COMMANDER_DIR}/Perception/Forecast/FearRisk.cpp
   ${COMMANDER_DIR}/Perception/Values/ControlValue.h
