@@ -285,6 +285,20 @@
   "talk.back.page": "Anything else?",
   "talk.stay.team": "Alright, we'll wait here for you.",
   "talk.follow.team": "On our way!",
+  "talk.strategy.page": {
+    "default": "How do you want us to fight?",
+    "quiet": "...How do we fight?"
+  },
+  "talk.pullstance.active": {
+    "default": "Right, we'll take on whatever we see.",
+    "chatty": "Finally! Anything that moves, we're on it!",
+    "quiet": "Mm. We'll go first."
+  },
+  "talk.pullstance.notank": "Nobody to hold them off up front. We'd better wait for you to start.",
+  "talk.pullstance.passive": {
+    "default": "Alright, you start, we follow.",
+    "quiet": "Mm. After you."
+  },
   "talk.bags.ok": {
     "default": "Go ahead.",
     "frugal": "Look all you want, just don't misplace anything."
@@ -415,6 +429,9 @@
   "talk.opt.interact": "Let me have a look at you.",
   "talk.opt.party": "About the group...",
   "talk.opt.back": "Something else.",
+  "talk.opt.strategy": "About how we fight...",
+  "talk.opt.pullstance.active": "Go after anything you see. (Active pulling)",
+  "talk.opt.pullstance.passive": "Wait for me to start the fight. (Passive pulling)",
   "talk.opt.sheet": "Let me see your gear.",
   "talk.opt.talents": "Show me your talents.",
   "talk.opt.quests": "What quests are you on?",

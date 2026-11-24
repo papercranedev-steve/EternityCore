@@ -295,6 +295,20 @@
   "talk.back.page": "还有什么事？",
   "talk.stay.team": "好，我们在这儿等你。",
   "talk.follow.team": "来了！",
+  "talk.strategy.page": {
+    "default": "你想我们怎么打？",
+    "quiet": "……怎么打？"
+  },
+  "talk.pullstance.active": {
+    "default": "好，看到怪我们就先上。",
+    "chatty": "早就等不及了！看到怪我们就冲！",
+    "quiet": "嗯，见怪就上。"
+  },
+  "talk.pullstance.notank": "队里没有坦克顶在前面，我们还是等你先动手吧。",
+  "talk.pullstance.passive": {
+    "default": "好，你先动手，我们再上。",
+    "quiet": "嗯，等你先动手。"
+  },
   "talk.bags.ok": {
     "default": "看吧。",
     "frugal": "看可以，别乱动我的东西啊。"
@@ -435,6 +449,9 @@
   "talk.opt.interact": "让我看看你的情况。",
   "talk.opt.party": "说说队伍的事……",
   "talk.opt.back": "说点别的吧。",
+  "talk.opt.strategy": "说说怎么打……",
+  "talk.opt.pullstance.active": "看到怪就主动上吧。（主动开怪）",
+  "talk.opt.pullstance.passive": "等我先动手再打。（被动开怪）",
   "talk.opt.sheet": "让我看看你的装备。",
   "talk.opt.talents": "让我看看你的天赋。",
   "talk.opt.quests": "你手上有哪些任务？",
