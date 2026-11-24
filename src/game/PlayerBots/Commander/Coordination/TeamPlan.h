@@ -350,6 +350,8 @@ namespace Commander
         // A clear's pull of a patrol before the pack it would join (PullPlanner::FindPatrolFirst):
         // failing it does not stop or skip anything, the pack is planned again.
         bool patrolFirst = false;
+        // Last look for a patrol first while the party gets ready (PATROL_FIRST_CHECK_MS).
+        uint32 patrolFirstCheckedMs = 0;
         // The estimate as ManaWorth's planned fight while the pull runs; none (sec 0) otherwise.
         ManaWorth::Fight PlannedFight() const
         {
@@ -446,7 +448,10 @@ namespace Commander
         // spot on the patrol's way since then (held in WaitReady), 0 = not waiting.
         bool ambush = false;
         uint32 ambushTimeoutMs = 0;
-        float ambushWaitSec = 0.0f;         // the patrol's predicted arrival at faceSpot (PullTimeline)
+        // The patrol's predicted arrival at faceSpot (PullTimeline), from ambushRefreshedMs;
+        // -1 = no spot on its way now (PullPlanner::RefreshAmbush while the party gets ready).
+        float ambushWaitSec = 0.0f;
+        uint32 ambushRefreshedMs = 0;
         uint32 ambushWaitSinceMs = 0;
 
         // The tank left Approach without a fight (cancelled, interrupted, called off): it still

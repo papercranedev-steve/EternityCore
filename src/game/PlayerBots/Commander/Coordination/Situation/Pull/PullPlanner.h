@@ -159,6 +159,15 @@ namespace Commander
         // PATROL_WAIT_MAX_MS: the clear skips it, a single pull is cancelled.
         float const AMBUSH_MAX_WAIT_SEC = 15.0f;
         float const AMBUSH_MAX_FROM_PARTY_YD = 35.0f;
+        // While the party gets ready (WaitReady) an ambush's spot and wait are found again
+        // this often (RefreshAmbush), and a clear looks for a patrol first this often.
+        uint32 const AMBUSH_REFRESH_MS = 1000;
+        uint32 const PATROL_FIRST_CHECK_MS = 1000;
+        // WaitReady ambush (header above): the spot on the patrol's way and its wait again
+        // (PullPlan::faceSpot, packAt, ambushWaitSec, ambushTimeoutMs). None now: ambushWaitSec
+        // -1 (no early go; the recheck before the tank goes waits for it to come round).
+        // Map thread, every AMBUSH_REFRESH_MS.
+        void RefreshAmbush(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs);
 
         // Patrols (PatrolTracker, WorldModel::patrols), also those the prediction counts as
         // joiners because they walk past the pack right now (strat-20261103-013312): a patrol
@@ -249,9 +258,11 @@ namespace Commander
         //  - a healer bot below healerManaPct / READY_HEALER_MANA_MARGIN: the fight's own
         //    mana without the margin, for a pull that goes wrong and needs heals at once;
         //  - the opening control's bot and the patrol hold's bot: they act at the opener;
-        //  - anyone (EarlyGoAllowed false) in an ambush (the patrol sets the time), a fight not
-        //    bearable even at full mana (healerManaPct READY_FULL_MANA_PCT), and a pull held
-        //    back once (PullPlan::earlyHeldBack: no going and coming back again);
+        //  - anyone (EarlyGoAllowed false) in an ambush with no spot on the patrol's way now
+        //    (RefreshAmbush: an ambush counts from the patrol's arrival, refreshed while the
+        //    party gets ready; user 2026-11-24), a fight not bearable even at full mana
+        //    (healerManaPct READY_FULL_MANA_PCT), and a pull held back once
+        //    (PullPlan::earlyHeldBack: no going and coming back again);
         //  - players and every other issue (dead, combat, far): goInSec unknown, the pull waits.
         // Before the opener the assigner checks again on every refresh; once the go lies more
         // than EARLY_GO_HOLD_SLACK_SEC away (a drinker stood up, the control went to a

@@ -301,7 +301,32 @@ namespace Commander
 
     bool PullPlanner::EarlyGoAllowed(PullPlan const& pull)
     {
-        return !pull.ambush && !pull.earlyHeldBack && pull.healerManaPct < READY_FULL_MANA_PCT;
+        return (!pull.ambush || pull.ambushWaitSec >= 0.0f) && !pull.earlyHeldBack &&
+            pull.healerManaPct < READY_FULL_MANA_PCT;
+    }
+
+    void PullPlanner::RefreshAmbush(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
+    {
+        PullPlan& pull = plan.pull;
+        if (pull.phase != PullPhase::WaitReady || !pull.ambush)
+            return;
+        if (pull.ambushRefreshedMs && WorldTimer::getMSTimeDiff(pull.ambushRefreshedMs, nowMs) < AMBUSH_REFRESH_MS)
+            return;
+        pull.ambushRefreshedMs = nowMs;
+        Creature* patrol = map->GetCreature(pull.target);
+        Player* tank = map->GetPlayer(pull.tank);
+        PatrolFacts const* facts = FindPatrol(world, pull.target);
+        Option const o = patrol && tank && facts && patrol->IsAlive() && !patrol->IsInCombat()
+            ? EvaluateAmbush(world, map, patrol, *facts, tank) : Option();
+        if (!o.ambush)
+        {
+            pull.ambushWaitSec = -1.0f;
+            return;
+        }
+        pull.faceSpot = o.spot.at;
+        pull.packAt = o.meetAt;
+        pull.ambushWaitSec = o.waitSec;
+        pull.ambushTimeoutMs = AmbushTimeoutMs(o.waitSec);
     }
 
     float PullPlanner::ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m)
@@ -768,9 +793,11 @@ namespace Commander
             });
             if (!alone)
                 continue;
+            // The fight starts when it comes by: healers drinking now have that long (counted
+            // at the plain out-of-combat regeneration, below what a drink gives).
             FightLoad::Input load;
             if (!FightLoad::Build(world, map, o.expected, load) ||
-                !FightLoad::Bearable(FightLoad::Simulate(load, "patrol first: alone")))
+                !FightLoad::Bearable(FightLoad::Simulate(FightLoad::AfterWait(load, o.waitSec), "patrol first: alone")))
                 continue;
             return guid;
         }
@@ -803,6 +830,9 @@ namespace Commander
         // (`pull now` skips the recheck). The tank holds its opener until it is decided.
         if (pull.phase == PullPhase::Approach && !pull.control.decided && (!pull.recheckOnApproach || pull.rechecked))
             PullControl::Choose(plan, world, map, nowMs);
+        // An ambush waiting for the party: the patrol walks on meanwhile (early go counts from
+        // its arrival).
+        RefreshAmbush(plan, world, map, nowMs);
         if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked)
             return RecheckResult::NotDue;
 

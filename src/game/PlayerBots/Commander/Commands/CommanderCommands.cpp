@@ -674,7 +674,7 @@ namespace
         if (hasForecast)
         {
             if (!Commander::PullPlanner::EarlyGoAllowed(pull))
-                handler->SendSysMessage("The tank waits until everyone is ready (ambush, a fight hard even at full mana, "
+                handler->SendSysMessage("The tank waits until everyone is ready (an ambush with no spot on the patrol's way now, a fight hard even at full mana, "
                     "or held back once).");
             else if (forecast.goInSec >= 0.0f)
                 handler->PSendSysMessage("Resting on into the pull counted, the tank goes in %.0fs.", forecast.goInSec);

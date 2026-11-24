@@ -363,6 +363,36 @@ namespace ClearPlanner
                 PullPatrolFirst(plan, commander, map, leader, patrolFirst);
                 return;
             }
+
+            PullPlan& pull = plan.pull;
+            if (pull.phase == PullPhase::WaitReady)
+            {
+                // A patrol-first ambush whose patrol walked on before the party was ready (no
+                // spot on its way now): back to the pack (it may be taken first next time round).
+                if (pull.patrolFirst && pull.ambushWaitSec < 0.0f)
+                {
+                    Creature* patrol = map->GetCreature(pull.target);
+                    Note(plan, Format("Patrol first: %s walked on before everyone was ready; back to the pack.",
+                        patrol ? patrol->GetName() : "the patrol"));
+                    plan.pull = PullPlan();
+                    return;
+                }
+                // While the party gets ready (drinking): a patrol that would join may come by
+                // alone now. Its ambush may go early too (it counts from the patrol's arrival).
+                if (!pull.ambush && !pull.patrolFirst &&
+                    (!pull.patrolFirstCheckedMs ||
+                     WorldTimer::getMSTimeDiff(pull.patrolFirstCheckedMs, nowMs) >= PullPlanner::PATROL_FIRST_CHECK_MS))
+                {
+                    pull.patrolFirstCheckedMs = nowMs;
+                    Creature* target = map->GetCreature(pull.target);
+                    Player* tank = map->GetPlayer(pull.tank);
+                    ObjectGuid const patrol = target && tank && target->IsAlive() && !target->IsInCombat()
+                        ? PullPlanner::FindPatrolFirst(plan, world, map, tank, target, pull.expected) : ObjectGuid();
+                    if (!patrol.IsEmpty())
+                        PullPatrolFirst(plan, commander, map, leader, patrol);
+                }
+                return;
+            }
             if (result != PullPlanner::RecheckResult::GiveUp && result != PullPlanner::RecheckResult::TooHard)
                 return;
 
