@@ -205,7 +205,8 @@ namespace Commander
             float value;
         };
         // The mana share (0-1) CheckReady waits for from bot `m` while `pull` waits in
-        // WaitReady (healers PullPlan::healerManaPct, others READY_MANA_PCT); 0 otherwise.
+        // WaitReady, or went early and is not over (healers PullPlan::healerManaPct, others
+        // READY_MANA_PCT); 0 otherwise.
         // A bot drinks up to it (RestValue::DrinkBelowShare) so the pull does not wait for
         // mana it would not drink.
         float ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m);
@@ -231,12 +232,19 @@ namespace Commander
         //  - a bot not resting yet (drink / food not on);
         //  - a healer bot below healerManaPct / READY_HEALER_MANA_MARGIN: the fight's own
         //    mana without the margin, for a pull that goes wrong and needs heals at once;
+        //  - the opening control's bot and the patrol hold's bot: they act at the opener;
+        //  - anyone (EarlyGoAllowed false) in an ambush (the patrol sets the time), a fight not
+        //    bearable even at full mana (healerManaPct READY_FULL_MANA_PCT), and a pull held
+        //    back once (PullPlan::earlyHeldBack: no going and coming back again);
         //  - players and every other issue (dead, combat, far): goInSec unknown, the pull waits.
-        // Not for ambushes (the patrol sets the time). Before the opener the assigner checks
-        // again on every refresh; once the go lies more than EARLY_GO_HOLD_SLACK_SEC away (a
-        // drinker stood up) the pull goes back to WaitReady.
+        // Before the opener the assigner checks again on every refresh; once the go lies more
+        // than EARLY_GO_HOLD_SLACK_SEC away (a drinker stood up, the control went to a
+        // drinker) the pull goes back to WaitReady. While the pull went early, ReadyManaShare
+        // holds until it is over: a drink that ran out starts again.
         float const EARLY_GO_TIME_SHARE = 0.7f;
         float const EARLY_GO_HOLD_SLACK_SEC = 2.0f;
+        uint32 const CHARGE_LEVEL = 4;      // warriors learn Charge (PullTimeline::Input::charges)
+        bool EarlyGoAllowed(PullPlan const& pull);
         struct ReadyWait
         {
             ObjectGuid who;

@@ -242,7 +242,7 @@ namespace Commander
                 }
                 // Only bots resting on into the pull are not ready: go now (PullPlanner.h, EARLY_GO_*).
                 PullPlanner::ReadyForecast forecast;
-                if (!pull.ambush && PullPlanner::ForecastReady(world, pull, issues, forecast) &&
+                if (PullPlanner::ForecastReady(world, pull, issues, forecast) &&
                     forecast.goInSec == 0.0f)
                 {
                     if (!pull.readyAnnounced)
@@ -335,6 +335,7 @@ namespace Commander
                     plan.notes.push_back("Holding the pull: " + DescribeIssues(earlyIssues, world, pull) +
                         " not ready in time.");
                     pull.wentEarly = false;
+                    pull.earlyHeldBack = true;
                     enter(PullPhase::WaitReady);
                 }
                 else if (pull.ambush)

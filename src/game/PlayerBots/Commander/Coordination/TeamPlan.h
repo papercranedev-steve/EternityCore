@@ -347,6 +347,7 @@ namespace Commander
         // The tank went while bots still rested, counting their rest on into the pull
         // (PullPlanner::ForecastReady, EARLY_GO_*): Approach checks it again until the opener.
         bool wentEarly = false;
+        bool earlyHeldBack = false;         // an early go was held back: this pull waits for everyone
         std::vector<PullMemberName> names;
 
         // What PullPlanner::Plan told the player (target, expected, ranged or not and why,

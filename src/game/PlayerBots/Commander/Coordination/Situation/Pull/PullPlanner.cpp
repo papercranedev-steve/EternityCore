@@ -170,13 +170,6 @@ namespace Commander
             tank->GetName(), weapon->GetProto()->Name1, ammoType == ITEM_SUBCLASS_BULLET ? "bullets" : "arrows");
     }
 
-    float PullPlanner::ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m)
-    {
-        if (pull.phase != PullPhase::WaitReady || !m.isBot)
-            return 0.0f;
-        return (m.role == ROLE_HEALER ? pull.healerManaPct : READY_MANA_PCT) / 100.0f;
-    }
-
     namespace
     {
     // The mana percent a pull waits for from `m` (CheckReady). Healers: what the planned fight
@@ -284,12 +277,28 @@ namespace Commander
         {
             in.opener = PullTimeline::Opener::WalkIn;
             in.openFrom = pull.packAt;
+            in.charges = !pull.returnToSpot && tank->classId == CLASS_WARRIOR && tank->level >= CHARGE_LEVEL;
             if (RouteFact const* route = world.FindRoute(pull.tank, pull.target))
                 if (route->pathYd > 0.0f)
                     in.pathYd = route->pathYd;
         }
         out = PullTimeline::Of(in);
         return true;
+    }
+
+    bool PullPlanner::EarlyGoAllowed(PullPlan const& pull)
+    {
+        return !pull.ambush && !pull.earlyHeldBack && pull.healerManaPct < READY_FULL_MANA_PCT;
+    }
+
+    float PullPlanner::ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m)
+    {
+        // Went early: until the pull is over, a drink that ran out starts again up to what
+        // the go counted on (else only below the bot's own drink start share).
+        bool const waits = pull.phase == PullPhase::WaitReady || (pull.wentEarly && pull.phase != PullPhase::None);
+        if (!waits || !m.isBot)
+            return 0.0f;
+        return (m.role == ROLE_HEALER ? pull.healerManaPct : READY_MANA_PCT) / 100.0f;
     }
 
     bool PullPlanner::ForecastReady(WorldModel const& world, PullPlan const& pull, std::vector<Issue> const& issues,
@@ -300,6 +309,7 @@ namespace Commander
             return false;
         bool known = true;
         float goIn = 0.0f;
+        bool const credit = EarlyGoAllowed(pull);
         for (Issue const& issue : issues)
         {
             ReadyWait w;
@@ -317,7 +327,10 @@ namespace Commander
                 bool const resting = hp ? m->eating : m->drinking;
                 bool const belowFloor = mana && m->role == ROLE_HEALER &&
                     issue.value < pull.healerManaPct / READY_HEALER_MANA_MARGIN;
-                if (m->guid != pull.tank && resting && !belowFloor)
+                // The opening control and the patrol hold act at the opener (the controller
+                // walks to its spot before it).
+                bool const actsAtOpener = m->guid == pull.control.bot || m->guid == pull.holdBot;
+                if (credit && m->guid != pull.tank && !actsAtOpener && resting && !belowFloor)
                     w.neededAtSec = EARLY_GO_TIME_SHARE *
                         (m->HealsTeam() ? out.timeline.contactSec : out.timeline.damageSec);
             }

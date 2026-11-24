@@ -6,7 +6,8 @@
  *
  *   walkSec     the tank's walk to where it opens: path / RUN_YARDS_PER_SEC. Walk-in: to the
  *               target, less MELEE_REACH; the navmesh path when known (RouteFact), else the
- *               straight line x PATH_FACTOR. Shot / face / ambush: to that spot.
+ *               straight line x PATH_FACTOR; a charging warrior to CHARGE_MAX_YD. Shot /
+ *               face / ambush: to that spot.
  *   openSec     the pull starts: walk-in on arrival; shot + OPENER_SEC (cast, flight); face +
  *               FACE_NOTICE_SEC; ambush the later of the walk and the patrol's predicted wait.
  *   contactSec  the pack is on the tank where the party fights (the healers' first heals):
@@ -38,6 +39,10 @@ namespace PullTimeline
     float const OPENER_SEC = 1.0f;
     float const FACE_NOTICE_SEC = 1.0f;
     float const THREAT_LEAD_SEC = 3.0f;
+    // A walk-in warrior charges when the pack is fought where it stands (PullMethod.h): the
+    // walk ends this far from the target, the flight counted as no time (it errs early, the
+    // safe side for the healers' and casters' rest).
+    float const CHARGE_MAX_YD = 25.0f;
 
     enum class Opener { WalkIn, Shot, Face, Ambush };
 
@@ -47,6 +52,7 @@ namespace PullTimeline
         Position3 tankAt;           // now
         Position3 openFrom;         // walk-in: the target; else the shot / face / ambush spot
         float pathYd = -1.0f;       // the tank's navmesh walk to openFrom, < 0 = unknown
+        bool charges = false;       // walk-in: the tank charges the last CHARGE_MAX_YD
         Position3 packAt;           // the target (ambush: where the patrol meets the tank)
         float ambushWaitSec = 0.0f; // ambush: the patrol comes by after this long
         bool returnToSpot = false;  // the tank brings the pack back to fightSpot

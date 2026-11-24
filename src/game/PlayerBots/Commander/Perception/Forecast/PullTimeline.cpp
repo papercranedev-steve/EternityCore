@@ -21,7 +21,7 @@ namespace PullTimeline
         bool const walkIn = in.opener == Opener::WalkIn;
         float walkYd = in.pathYd >= 0.0f ? in.pathYd : Distance2d(in.tankAt, in.openFrom) * PATH_FACTOR;
         if (walkIn)
-            walkYd = std::max(0.0f, walkYd - MELEE_REACH);
+            walkYd = std::max(0.0f, walkYd - (in.charges ? CHARGE_MAX_YD : MELEE_REACH));
         r.walkSec = walkYd / RUN_YARDS_PER_SEC;
 
         switch (in.opener)
