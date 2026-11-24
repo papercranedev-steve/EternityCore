@@ -232,6 +232,7 @@ namespace ClearPlanner
                 clear.forgotAtMs = nowMs;
                 clear.skipped.clear();
                 clear.skippedPacks = 0;
+                clear.patrolFirstTried.clear();
                 clear.tappedNoted.clear();
                 clear.stealthNoted.clear();
                 clear.noWayNoted.clear();
@@ -330,10 +331,38 @@ namespace ClearPlanner
         // The tank is about to go (WaitReady -> Approach this refresh): predict again and look
         // at patrols (PullPlanner::RecheckBeforeApproach). Given up: skip the pack; too hard in
         // a clear that asks: put it to the player.
-        void RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
+        // Patrol first (PullPlanner::FindPatrolFirst): the pack's pull makes way for the patrol's.
+        // Not planned after all: not tried again, the pack's pull is planned again next round.
+        void PullPatrolFirst(TeamPlan& plan, PartyCommander& commander, Map* map, Player* leader, ObjectGuid patrolGuid)
+        {
+            Creature* patrol = map->GetCreature(patrolGuid);
+            Creature* pack = map->GetCreature(plan.pull.target);
+            std::string const packName = pack ? pack->GetName() : "the";
+            plan.pull = PullPlan();
+            plan.lastPullOutcome = PullOutcome::None;
+            std::vector<std::string> report;
+            if (!patrol || !PullPlanner::Plan(leader, commander, patrol, false, report) || !plan.pull.ambush)
+            {
+                plan.pull = PullPlan();
+                plan.clear.patrolFirstTried.push_back(patrolGuid);
+                return;
+            }
+            plan.pull.patrolFirst = true;
+            Note(plan, Format("Patrol first: %s comes by alone in about %.0f s, taking it before %s's pack.",
+                patrol->GetName(), plan.pull.ambushWaitSec, packName.c_str()));
+        }
+
+        void RecheckBeforeApproach(TeamPlan& plan, PartyCommander& commander, WorldModel const& world, Map* map,
+                                   Player* leader, uint32 nowMs)
         {
             std::string why;
-            PullPlanner::RecheckResult const result = PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why);
+            ObjectGuid patrolFirst;
+            PullPlanner::RecheckResult const result = PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why, &patrolFirst);
+            if (result == PullPlanner::RecheckResult::PatrolFirst)
+            {
+                PullPatrolFirst(plan, commander, map, leader, patrolFirst);
+                return;
+            }
             if (result != PullPlanner::RecheckResult::GiveUp && result != PullPlanner::RecheckResult::TooHard)
                 return;
 
@@ -445,8 +474,18 @@ namespace ClearPlanner
         // A pull is being prepared or executed.
         if (plan.pull.phase != PullPhase::None)
         {
-            RecheckBeforeApproach(plan, world, map, nowMs);
+            RecheckBeforeApproach(plan, commander, world, map, leader, nowMs);
             return;
+        }
+
+        // A patrol-first pull that did not happen (the patrol did not come by, the plan no
+        // longer fitted): the patrol is not tried again, the pack is planned again.
+        if (plan.pull.patrolFirst &&
+            (plan.lastPullOutcome == PullOutcome::Cancelled || plan.lastPullOutcome == PullOutcome::CalledOff))
+        {
+            plan.lastPullOutcome = PullOutcome::None;
+            clear.patrolFirstTried.push_back(plan.pull.target);
+            plan.pull = PullPlan();
         }
 
         switch (plan.lastPullOutcome)

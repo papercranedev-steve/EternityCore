@@ -386,6 +386,10 @@ namespace Commander
                 return false;
             }
             pack = FindPackOf(world, selected->GetObjectGuid());
+            // A selected patrol is that patrol (ambushed on its way), not the pack it walks
+            // through now (a clear's patrol first, FindPatrolFirst; the player selecting it).
+            if (FindPatrol(world, selected->GetObjectGuid()))
+                pack = nullptr;
             if (pack)
             {
                 // Somebody else has loot rights: their fight, not ours.
@@ -722,8 +726,59 @@ namespace Commander
         return true;
     }
 
+    ObjectGuid PullPlanner::FindPatrolFirst(TeamPlan const& plan, WorldModel const& world, Map* map, Player* tank,
+                                            Creature* target, std::vector<ObjectGuid> const& expected)
+    {
+        Trace::Scope scope("pull", "patrolfirst");
+        scope.Label("patrol first?");
+        std::vector<Creature*> candidates;
+        auto add = [&candidates](Creature* c)
+        {
+            if (c && c->IsAlive() && !c->IsInCombat() &&
+                std::find(candidates.begin(), candidates.end(), c) == candidates.end())
+                candidates.push_back(c);
+        };
+        // Predicted to come now (walking past the pack), or walking next to the pull later.
+        for (ObjectGuid g : expected)
+            if (FindPatrol(world, g))
+                add(map->GetCreature(g));
+        PatrolStart const joining = ChooseStart(world, map, target, tank, map->GetUnit(world.leader), plan.pull.spot,
+                                                expected, 0.0f);
+        for (PatrolArrival const& a : joining.patrols)
+        {
+            // (one coming by only after the fight is not part of it)
+            float const arrive = a.ArriveAfter(0.0f);
+            if (arrive >= 0.0f && arrive <= joining.fightSec)
+                add(a.patrol);
+        }
+
+        for (Creature* patrol : candidates)
+        {
+            ObjectGuid const guid = patrol->GetObjectGuid();
+            PatrolFacts const* facts = FindPatrol(world, guid);
+            if (!facts || Contains(plan.clear.patrolFirstTried, guid) || !tank->IsValidAttackTarget(patrol))
+                continue;
+            Option const o = EvaluateAmbush(world, map, patrol, *facts, tank);
+            if (!o.ambush)
+                continue;
+            // Alone: where it meets the tank it brings nobody of the planned pull.
+            bool const alone = std::none_of(o.expected.begin(), o.expected.end(), [&](ObjectGuid g)
+            {
+                return g != guid && Contains(expected, g);
+            });
+            if (!alone)
+                continue;
+            FightLoad::Input load;
+            if (!FightLoad::Build(world, map, o.expected, load) ||
+                !FightLoad::Bearable(FightLoad::Simulate(load, "patrol first: alone")))
+                continue;
+            return guid;
+        }
+        return ObjectGuid();
+    }
+
     PullPlanner::RecheckResult PullPlanner::RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map,
-                                                                  uint32 nowMs, std::string& why)
+                                                                  uint32 nowMs, std::string& why, ObjectGuid* patrolFirst)
     {
         Trace::Scope scope("pull", "pullcheck");
         scope.Label("recheck before the tank goes");
@@ -882,6 +937,17 @@ namespace Commander
         for (ObjectGuid g : pull.expected)
             if (!Contains(expected, g) && IsStealthedPackCreature(world, g))
                 expected.push_back(g);
+
+        // A patrol that would join can be taken alone first: the clear pulls it, then this pack.
+        if (patrolFirst && clear.active && !pull.ambush)
+        {
+            ObjectGuid const patrol = FindPatrolFirst(plan, world, map, tank, target, expected);
+            if (!patrol.IsEmpty())
+            {
+                *patrolFirst = patrol;
+                return RecheckResult::PatrolFirst;
+            }
+        }
 
         // The fight with the party as it is now (everyone ready), patrols left to step 2.
         FightLoad::Input nowLoad;

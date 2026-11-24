@@ -78,12 +78,24 @@ namespace Commander
             // party cannot carry it (after REPREDICT_WAIT_MS, or a patrol still joining after
             // PATROL_WAIT_MAX_MS). A clear that asks puts it to the player instead of skipping.
             TooHard,
+            // Clear only: a patrol walking next to the pull can be ambushed alone now (user
+            // 2026-11-24, "单拉路过的胖子"): `patrolFirst` says which. The caller plans that
+            // patrol's pull instead; the pack is planned again after it (FindPatrolFirst).
+            PatrolFirst,
         };
         // Runs when PullAssigner has just moved the pull to Approach. Map thread.
         // ClearPlanner::Step calls it on every refresh while a pull is going, so it is also the
         // pull's map-thread step: in Settle it runs SearchLosBreak (and returns NotDue).
         RecheckResult RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs,
-                                            std::string& why);
+                                            std::string& why, ObjectGuid* patrolFirst = nullptr);
+
+        // Patrol first: a patrol that would join the planned pull (walks next to it while the
+        // fight lasts, or is predicted to come now) and that can be ambushed (AmbushSpot, the
+        // usual AMBUSH_MAX_WAIT_SEC / AMBUSH_MAX_FROM_PARTY_YD) bringing no creature of the
+        // planned pull, in a fight the estimate says the party carries. Not a patrol in
+        // ClearPlan::patrolFirstTried. Empty: none.
+        ObjectGuid FindPatrolFirst(TeamPlan const& plan, WorldModel const& world, Map* map, Player* tank,
+                                   Creature* target, std::vector<ObjectGuid> const& expected);
 
         // Line of sight pull, map thread, Settle only, once per pull (PullPlan::losBreak).
         // The doctrine chose to lure (OutlierTactic::Lure: the enemies stamped STAMP_LURE this

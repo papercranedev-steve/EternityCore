@@ -188,6 +188,9 @@ namespace Commander
         // leader (PackRouteState::NoWay), already reported. Looked at again every round.
         std::vector<ObjectGuid> noWayNoted;
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
+        // Patrols whose patrol-first pull failed (did not come by, called off): not tried again
+        // in this clear (a standing one forgets them with the skips).
+        std::vector<ObjectGuid> patrolFirstTried;
     };
 
     // A question to the player before a pull (Situation/Pull/PullQuestions.h). The asking tank's life opens the
@@ -344,6 +347,9 @@ namespace Commander
         // with everyone rested (full tank, full healer mana), again before the tank goes with
         // the party as it is (patrols joining included). No estimate: false.
         bool hard = false;
+        // A clear's pull of a patrol before the pack it would join (PullPlanner::FindPatrolFirst):
+        // failing it does not stop or skip anything, the pack is planned again.
+        bool patrolFirst = false;
         // The estimate as ManaWorth's planned fight while the pull runs; none (sec 0) otherwise.
         ManaWorth::Fight PlannedFight() const
         {
