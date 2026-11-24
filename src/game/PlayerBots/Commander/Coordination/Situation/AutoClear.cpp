@@ -48,10 +48,14 @@ namespace AutoClear
                 leader->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || leader->InBattleGround();
         }
 
-        // The team does something else the player asked for.
-        bool TeamBusy(TeamPlan const& plan)
+        // The team does something else the player asked for. Members told to wait elsewhere
+        // do not count, only the main tank who would pull.
+        bool TeamBusy(TeamPlan const& plan, WorldModel const& world)
         {
-            return plan.push.active || plan.retreat.active || !plan.guide.IsEmpty() || !plan.stay.members.empty();
+            if (plan.push.active || plan.retreat.active || !plan.guide.IsEmpty())
+                return true;
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            return tank && plan.stay.Find(tank->guid);
         }
 
         // After the last clear ended (header: nothing left / any other end).
@@ -87,7 +91,7 @@ namespace AutoClear
         void StepDungeon(TeamPlan& plan, PartyCommander& commander, WorldModel const& world, Player* leader, uint32 nowMs)
         {
             AutoClearPlan& autoClear = plan.autoClear;
-            bool const idle = !plan.clear.active && plan.pull.phase == PullPhase::None && !TeamBusy(plan) &&
+            bool const idle = !plan.clear.active && plan.pull.phase == PullPhase::None && !TeamBusy(plan, world) &&
                 !world.HasPartyEnemy();
             if (!idle || !LeaderSettled(autoClear, leader, nowMs) || !MayStartAgain(autoClear, leader, nowMs))
                 return;
@@ -175,13 +179,17 @@ namespace AutoClear
             if (pack.maxLevel > j.leaderLevel + MAX_LEVEL_ABOVE)
                 return Verdict::Exclude;
 
-            bool const selected = any([&j](PackCreature const& c) { return c.aggressive && c.guid == j.selection; });
             bool const comesAnyway = any([&j](PackCreature const& c) { return ComesAnyway(c, j.world); });
-            if (selected || comesAnyway)
+            if (comesAnyway)
                 return Verdict::Pull;
 
+            // Selected: a normal one is pulled; an elite only after asking (players select to
+            // look at a creature's level too).
+            bool const selected = any([&j](PackCreature const& c) { return c.aggressive && c.guid == j.selection; });
             bool const quest = any([](PackCreature const& c) { return c.questNeeded; });
             bool const elite = pack.eliteCount > 0;
+            if (selected && !elite)
+                return Verdict::Pull;
             if (quest && !elite)
                 return Verdict::Pull;
 
@@ -191,8 +199,8 @@ namespace AutoClear
                 campOut = camp;
                 return camp->pull ? Verdict::Pull : Verdict::Exclude;
             }
-            if (quest)
-                return Verdict::Ask;    // (an elite a quest needs: also while he travels)
+            if (quest || selected)
+                return Verdict::Ask;    // (an elite a quest needs, or he selected: also while he travels)
 
             bool const startsFights = any([](PackCreature const& c) { return c.aggressive && !c.noAggro; });
             bool const allGray = !any([&j](PackCreature const& c) { return c.level > j.grayLevel; });
@@ -232,10 +240,31 @@ namespace AutoClear
             return entries;
         }
 
-        // He selected an idle creature that would not come on its own, and then a fight with it
-        // started: he started it, its camp is one he wants (CampMemory::byPlayer).
-        void WatchSelection(AutoClearPlan& autoClear, WorldModel const& world, Player* leader, uint32 nowMs)
+        // The fight with the watched creature is his own: our pull did not start it, and he
+        // attacks it or it attacks him (selecting alone is no sign: players look at levels).
+        bool HisFight(PullPlan const& pull, Map* map, Player* leader, ObjectGuid watched)
         {
+            if (pull.target == watched || std::find(pull.expected.begin(), pull.expected.end(), watched) != pull.expected.end())
+                return false;
+            Creature const* creature = map->GetCreature(watched);
+            if (!creature)
+                return false;
+            Unit const* hisVictim = leader->GetVictim();
+            Unit const* itsVictim = creature->GetVictim();
+            return (hisVictim && hisVictim->GetObjectGuid() == watched) || itsVictim == leader;
+        }
+
+        // He selected an idle creature that would not come on its own, and then he fought it
+        // (HisFight): his choice, its camp is one he wants (CampMemory::byPlayer).
+        void WatchSelection(AutoClearPlan& autoClear, PullPlan const& pull, WorldModel const& world, Map* map,
+                            Player* leader, uint32 nowMs)
+        {
+            if (!autoClear.watched.IsEmpty() && world.FindEnemy(autoClear.watched) &&
+                !HisFight(pull, map, leader, autoClear.watched))
+            {
+                autoClear.watched = ObjectGuid();
+                autoClear.watchedEntries.clear();
+            }
             if (!autoClear.watched.IsEmpty() && world.FindEnemy(autoClear.watched))
             {
                 CampMemory* camp = nullptr;
@@ -271,8 +300,16 @@ namespace AutoClear
                 for (PackCreature const& c : pack.members)
                     if (c.guid == selection)
                     {
+                        // (it comes on its own now: a fight with it says nothing about him)
                         if (ComesAnyway(c, world) || c.tappedByOther)
+                        {
+                            if (autoClear.watched == c.guid)
+                            {
+                                autoClear.watched = ObjectGuid();
+                                autoClear.watchedEntries.clear();
+                            }
                             return;
+                        }
                         autoClear.watched = c.guid;
                         autoClear.watchedEntries = EntriesOf(pack);
                         autoClear.watchedPos = c.pos;
@@ -295,11 +332,11 @@ namespace AutoClear
             ClearPlan& clear = plan.clear;
             SampleTrail(autoClear, leader, nowMs);
             ForgetCamps(autoClear, PositionOf(leader), nowMs);
-            WatchSelection(autoClear, world, leader, nowMs);
+            WatchSelection(autoClear, plan.pull, world, map, leader, nowMs);
 
             std::vector<ObjectGuid> chosen;
             PackFacts const* askPack = nullptr;
-            bool const blocked = LeaderBusy(leader) || TeamBusy(plan) || leader->GetMap() != map;
+            bool const blocked = LeaderBusy(leader) || TeamBusy(plan, world) || leader->GetMap() != map;
             if (!blocked)
             {
                 Judging const j{ world, autoClear, leader->GetLevel(), MaNGOS::XP::GetGrayLevel(leader->GetLevel()),

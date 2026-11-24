@@ -13,22 +13,24 @@
  *
  * Open world: a standing clear (ClearPlan::standing, chosenOnly) that pulls only the packs
  * chosen here every refresh (Judge):
- *   Pull     the player has it selected, it will start a fight anyway (a member within its aggro
- *            range + FIGHT_MARGIN_YD), a quest of a member still needs it (QuestNeeds; elites
- *            asked), or its camp is one he wants (he started a fight there himself, or answered
- *            "clear").
+ *   Pull     it will start a fight anyway (a member within its aggro range + FIGHT_MARGIN_YD),
+ *            the player has it selected (not an elite), a quest of a member still needs it
+ *            (QuestNeeds; elites asked), or its camp is one he wants (he started a fight there
+ *            himself, or answered "clear").
  *   Ask      the player wanders here (his trail of the last WANDER_MS within WANDER_YD; standing
- *            still too) and the pack gives experience and starts fights; a quest's elites.
+ *            still too) and the pack gives experience and starts fights; elites he selected or
+ *            a quest needs (also while he travels).
  *   Exclude  bosses, other players' (tapped, claimed), more than MAX_LEVEL_ABOVE over him,
  *            gray or neutral (unless a quest's), a camp he answered "leave", anything else
  *            while he travels; everything while he is dead, mounted, flying, resting, in a
- *            battleground, or the team has members told to wait, a guide, a retreat, a push.
- * He walks off before the tank reached the pack: that pull is called off (ClearPlanner).
+ *            battleground, or the main tank is told to wait, a guide, a retreat, a push.
+ * He walks away from the pack before the tank reached it: that pull is called off (ClearPlanner).
  *
  * Camps (TeamPlan CampMemory): creatures of the same kinds standing near one another. He
  * started a fight himself: an idle creature he selected that would not have come on its own
- * (WatchSelection) is in a fight next; its camp is pulled STARTED_MEMORY_MS from his last such
- * fight. A creature that came to us is no sign: such packs stay as they are (asked while he
+ * (WatchSelection; watching stops once it would) gets into a fight our pull did not start, and
+ * he attacks it or it attacks him (HisFight); its camp is pulled STARTED_MEMORY_MS from his last
+ * such fight. A creature that came to us is no sign: such packs stay as they are (asked while he
  * wanders). His answer is kept ANSWER_MEMORY_MS. A camp grows by the spots of its pulled packs
  * and is dropped once he is CAMP_FORGET_YD from all of them.
  *

@@ -15,6 +15,10 @@
  * are waited for but do not count as a death).
  * Packs whose hostile members are all stealthed are passed over each round, not skipped.
  *
+ * A standing clear (the pull stance in the open world, AutoClear.h) never ends with nothing
+ * left, follows the leader, calls a pull off when he walks away from the pack before the tank
+ * got there, forgets its skips every FORGET_MS and counts a death DEATH_MEMORY_MS.
+ *
  * Runs on the map thread from PartyCommander::Update (needs live objects for planning).
  * Step also runs RecheckBeforeApproach for a single `.partybot ai pull` (no clear running).
  */
@@ -53,6 +57,10 @@ namespace Commander
         uint32 const REPREDICT_WAIT_MS = 30 * 1000;
 
         uint32 const MAX_LEVEL_ABOVE_LEADER = 3;
+
+        // A standing clear (ClearPlan::standing)
+        uint32 const FORGET_MS = 3 * MINUTE * IN_MILLISECONDS;          // skips and notes kept this long
+        uint32 const DEATH_MEMORY_MS = 5 * MINUTE * IN_MILLISECONDS;    // a death counts this long
 
         // `anchor`: where the clear is centred (the leader; the guide in the push mode).
         // `followsLeader`: pause while the leader walks away (false: the push planner moves the party).

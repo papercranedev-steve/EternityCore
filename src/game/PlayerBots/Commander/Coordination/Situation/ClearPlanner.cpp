@@ -192,7 +192,8 @@ namespace ClearPlanner
         // A standing clear (ClearPlan::standing): the anchor is wherever the leader is while
         // no pull is under way. He walks off before the tank reached the pack: the pull is
         // called off (he did not want that fight), the tank comes back. Returns false then.
-        bool TrackLeader(TeamPlan& plan, Player* leader)
+        // Walking towards the pack (to join the fight) is fine: only walking away from it counts.
+        bool TrackLeader(TeamPlan& plan, Player* leader, Map* map)
         {
             ClearPlan& clear = plan.clear;
             Position3 const here = PositionOf(leader);
@@ -200,18 +201,45 @@ namespace ClearPlanner
             if (phase == PullPhase::None)
             {
                 clear.anchor = here;
+                clear.pullLeaderYd = -1.0f;
                 return true;
             }
-            if ((phase == PullPhase::WaitReady || phase == PullPhase::Approach) &&
-                PackResolver::Distance(here, clear.anchor) > MAX_LEADER_DRIFT)
+            if (phase != PullPhase::WaitReady && phase != PullPhase::Approach)
+                return true;
+            Creature const* target = map->GetCreature(plan.pull.target);
+            if (!target)
+                return true;
+            float const yd = leader->GetDistance(target);
+            if (clear.pullLeaderYd < 0.0f)
+                clear.pullLeaderYd = yd;
+            if (yd <= clear.pullLeaderYd + MAX_LEADER_DRIFT)
+                return true;
+            plan.pull = PullPlan();
+            plan.lastPullOutcome = PullOutcome::None;
+            clear.anchor = here;
+            clear.pullLeaderYd = -1.0f;
+            Note(plan, "Pull called off: you walked away from it.");
+            return false;
+        }
+
+        // A standing clear runs for hours (ClearPlan::forgotAtMs, lastDeathMs).
+        void ForgetOld(ClearPlan& clear, uint32 nowMs)
+        {
+            if (!clear.forgotAtMs)
+                clear.forgotAtMs = nowMs;
+            if (WorldTimer::getMSTimeDiff(clear.forgotAtMs, nowMs) >= FORGET_MS)
             {
-                plan.pull = PullPlan();
-                plan.lastPullOutcome = PullOutcome::None;
-                clear.anchor = here;
-                Note(plan, "Pull called off: you walked on.");
-                return false;
+                clear.forgotAtMs = nowMs;
+                clear.skipped.clear();
+                clear.skippedPacks = 0;
+                clear.tappedNoted.clear();
+                clear.stealthNoted.clear();
+                clear.noWayNoted.clear();
+                clear.approved.clear();
             }
-            return true;
+            if (clear.deathEvents && !clear.reviveWaitSinceMs &&
+                WorldTimer::getMSTimeDiff(clear.lastDeathMs, nowMs) >= DEATH_MEMORY_MS)
+                clear.deathEvents = 0;
         }
 
         bool AnyIn(PackFacts const& pack, std::vector<ObjectGuid> const& list)
@@ -270,7 +298,10 @@ namespace ClearPlanner
             {
                 // Members already dead at the start are waited for, but are not a death of this clear.
                 if (newDeath)
+                {
                     ++clear.deathEvents;
+                    clear.lastDeathMs = nowMs;
+                }
                 if (clear.deathEvents >= MAX_DEATH_EVENTS)
                 {
                     Stop(commander, names + " died (second fight with a death).");
@@ -386,7 +417,9 @@ namespace ClearPlanner
         if (world.HasPartyEnemy())
             clear.idleSinceMs = nowMs;
 
-        if (clear.standing ? !TrackLeader(plan, leader)
+        if (clear.standing)
+            ForgetOld(clear, nowMs);
+        if (clear.standing ? !TrackLeader(plan, leader, map)
                            : clear.followsLeader && !FollowLeader(plan, commander, world, leader, nowMs))
             return;
 

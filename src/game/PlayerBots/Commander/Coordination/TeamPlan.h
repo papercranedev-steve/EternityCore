@@ -139,6 +139,14 @@ namespace Commander
         bool asks = false;
         ClearAsk ask;
         std::vector<ObjectGuid> approved;
+        // Standing: the leader's distance to the pull's target when it was planned (-1 = no
+        // pull); he goes farther than this + MAX_LEADER_DRIFT before the tank got there: off.
+        float pullLeaderYd = -1.0f;
+        // Standing (it runs for hours): skips and notes are forgotten every FORGET_MS (a pack
+        // that could not be pulled then may be now, respawns keep their guid), deaths count
+        // only DEATH_MEMORY_MS after the last.
+        uint32 forgotAtMs = 0;
+        uint32 lastDeathMs = 0;
         // Pauses while the leader walks away from the anchor (`.partybot ai clear`). The push
         // mode's clears do not: the push planner moves the party, the anchor is the guide's spot.
         bool followsLeader = true;
