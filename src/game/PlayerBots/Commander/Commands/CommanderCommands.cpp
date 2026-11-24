@@ -638,19 +638,40 @@ namespace
         Commander::Position3 planned;
         bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && commander->GetPlan().PlannedFightSpot(planned);
         auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana, hasPlanned ? &planned : nullptr);
+        // The waiting pull's timeline, and when it could go if drinking on into the pull
+        // counted (PullPlanner::ForecastReady; shown only, the pull still waits for CheckReady).
+        Commander::PullPlanner::ReadyForecast forecast;
+        bool const hasForecast = pull.phase == Commander::PullPhase::WaitReady &&
+            Commander::PullPlanner::ForecastReady(commander->GetWorld(), pull, issues, forecast);
+        if (hasForecast)
+            handler->PSendSysMessage("If the tank went now: walk %.0fs, pull starts at %.0fs, pack on the tank at %.0fs, "
+                "damage from %.0fs.", forecast.timeline.walkSec, forecast.timeline.openSec,
+                forecast.timeline.contactSec, forecast.timeline.damageSec);
         if (issues.empty())
         {
             handler->SendSysMessage("Everyone is ready.");
             return true;
         }
-        for (auto const& i : issues)
+        for (size_t n = 0; n < issues.size(); ++n)
         {
+            auto const& i = issues[n];
+            char when[64] = "";
+            if (hasForecast && n < forecast.waits.size() && forecast.waits[n].readySec >= 0.0f)
+                snprintf(when, sizeof(when), " (there in %.0fs, needed at %.0fs)",
+                         forecast.waits[n].readySec, forecast.waits[n].neededAtSec);
             if (!strcmp(i.what, "hp") || !strcmp(i.what, "mana"))
-                handler->PSendSysMessage("    %s: %s %.0f%%", NameOf(map, i.who).c_str(), i.what, i.value);
+                handler->PSendSysMessage("    %s: %s %.0f%%%s", NameOf(map, i.who).c_str(), i.what, i.value, when);
             else if (!strcmp(i.what, "far"))
                 handler->PSendSysMessage("    %s: %.0f yd away", NameOf(map, i.who).c_str(), i.value);
             else
                 handler->PSendSysMessage("    %s: %s", NameOf(map, i.who).c_str(), i.what);
+        }
+        if (hasForecast)
+        {
+            if (forecast.goInSec >= 0.0f)
+                handler->PSendSysMessage("Counting rest on into the pull, the tank could go in %.0fs.", forecast.goInSec);
+            else
+                handler->SendSysMessage("Counting rest on into the pull: unknown (not only bots' health and mana).");
         }
         return true;
     }

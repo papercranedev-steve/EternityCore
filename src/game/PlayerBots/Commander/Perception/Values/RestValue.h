@@ -89,6 +89,12 @@ namespace Commander
         // two (both run at once). Eating assumed allowed.
         float SecondsToFull(PartyMemberFacts const& member, float health, float mana);
 
+        // Seconds until `member` has `mana` / `health` (absolute), sitting with its drink / food
+        // from now (the one on, or a new one; spirit regeneration counted for mana; without a
+        // drink spirit regeneration alone). 0 already there, < 0 never (nothing restores it).
+        float SecondsToMana(PartyMemberFacts const& member, float mana);
+        float SecondsToHealth(PartyMemberFacts const& member, float health);
+
         // Seconds of resting one health-to-mana cast (warlock Life Tap, tapManaPerCast) saves
         // before sitting down (user 2026-11-16: mana empty, health full -> tap until the two
         // take about as long, then eat and drink). 0 when it saves nothing: a fight on (no

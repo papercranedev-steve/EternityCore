@@ -79,6 +79,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/AreaValue.cpp
   ${COMMANDER_DIR}/Perception/Forecast/Runners.h
   ${COMMANDER_DIR}/Perception/Forecast/Runners.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/PullTimeline.h
+  ${COMMANDER_DIR}/Perception/Forecast/PullTimeline.cpp
   ${COMMANDER_DIR}/Perception/Forecast/TauntWindow.h
   ${COMMANDER_DIR}/Perception/Forecast/TauntWindow.cpp
   ${COMMANDER_DIR}/Perception/Forecast/AreaRound.h

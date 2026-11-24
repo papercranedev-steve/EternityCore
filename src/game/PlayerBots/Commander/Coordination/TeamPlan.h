@@ -353,6 +353,7 @@ namespace Commander
         // spot on the patrol's way since then (held in WaitReady), 0 = not waiting.
         bool ambush = false;
         uint32 ambushTimeoutMs = 0;
+        float ambushWaitSec = 0.0f;         // the patrol's predicted arrival at faceSpot (PullTimeline)
         uint32 ambushWaitSinceMs = 0;
 
         // The tank left Approach without a fight (cancelled, interrupted, called off): it still

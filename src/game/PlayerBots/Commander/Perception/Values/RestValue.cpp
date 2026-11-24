@@ -83,6 +83,26 @@ namespace RestValue
         return sec;
     }
 
+    float SecondsToMana(PartyMemberFacts const& member, float mana)
+    {
+        float const gap = mana - float(member.mana);
+        if (gap <= 0.0f)
+            return 0.0f;
+        // While the drink is on, manaRegen already includes it (as in Of).
+        float rate = member.manaRegen;
+        if (!member.drinking && member.UsesMana() && member.drinkManaPerSec > 0.0f)
+            rate += member.drinkManaPerSec;
+        return rate > 0.0f ? gap / rate : -1.0f;
+    }
+
+    float SecondsToHealth(PartyMemberFacts const& member, float health)
+    {
+        float const gap = health - float(member.health);
+        if (gap <= 0.0f)
+            return 0.0f;
+        return member.foodHealthPerSec > 0.0f ? gap / member.foodHealthPerSec : -1.0f;
+    }
+
     float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member)
     {
         if (!member.alive || member.inCombat || world.HasPartyEnemy() || !world.targeted.empty())

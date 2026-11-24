@@ -23,6 +23,7 @@
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
+#include "Commander/Perception/Values/RestValue.h"
 #include "TeamBotAI.h"
 #include "Creature.h"
 #include "CreatureGroups.h"
@@ -178,6 +179,13 @@ namespace Commander
 
     namespace
     {
+    // The mana percent a pull waits for from `m` (CheckReady). Healers: what the planned fight
+    // needs (PullPlan::healerManaPct, HealerManaNeededPct).
+    float PullManaPct(PartyMemberFacts const& m, float healerManaPct)
+    {
+        return (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : PullPlanner::READY_MANA_PCT;
+    }
+
     // CheckReady and CheckReadyToHunt: `manaNeededOf(m)` is the mana percent member m needs.
     template <typename ManaNeeded>
     std::vector<PullPlanner::Issue> FindIssues(WorldModel const& world, ManaNeeded manaNeededOf,
@@ -228,10 +236,9 @@ namespace Commander
     std::vector<PullPlanner::Issue> PullPlanner::CheckReady(WorldModel const& world, float healerManaPct,
                                                             Position3 const* planned)
     {
-        // Healers: what the planned fight needs (PullPlan::healerManaPct, HealerManaNeededPct).
         return FindIssues(world, [healerManaPct](PartyMemberFacts const& m)
         {
-            return (m.isBot && m.role == ROLE_HEALER) ? healerManaPct : READY_MANA_PCT;
+            return PullManaPct(m, healerManaPct);
         }, planned);
     }
 
@@ -243,6 +250,80 @@ namespace Commander
         {
             return (m.isBot && m.drinkStartShare > 0.0f) ? m.drinkStartShare * 100.0f : READY_MANA_PCT;
         }, nullptr);
+    }
+
+    bool PullPlanner::Timeline(WorldModel const& world, PullPlan const& pull, PullTimeline::Result& out)
+    {
+        if (pull.phase == PullPhase::None)
+            return false;
+        PartyMemberFacts const* tank = world.FindMember(pull.tank);
+        if (!tank)
+            return false;
+        PullTimeline::Input in;
+        in.tankAt = tank->pos;
+        in.packAt = pull.packAt;
+        in.returnToSpot = pull.returnToSpot;
+        in.fightSpot = pull.spot;
+        if (pull.ambush)
+        {
+            in.opener = PullTimeline::Opener::Ambush;
+            in.openFrom = pull.faceSpot;
+            in.ambushWaitSec = pull.ambushWaitSec;
+        }
+        else if (pull.rangedPullSpell)
+        {
+            in.opener = PullTimeline::Opener::Shot;
+            in.openFrom = pull.rangedSpot;
+        }
+        else if (pull.facePull)
+        {
+            in.opener = PullTimeline::Opener::Face;
+            in.openFrom = pull.faceSpot;
+        }
+        else
+        {
+            in.opener = PullTimeline::Opener::WalkIn;
+            in.openFrom = pull.packAt;
+            if (RouteFact const* route = world.FindRoute(pull.tank, pull.target))
+                if (route->pathYd > 0.0f)
+                    in.pathYd = route->pathYd;
+        }
+        out = PullTimeline::Of(in);
+        return true;
+    }
+
+    bool PullPlanner::ForecastReady(WorldModel const& world, PullPlan const& pull, std::vector<Issue> const& issues,
+                                    ReadyForecast& out)
+    {
+        out = ReadyForecast();
+        if (!Timeline(world, pull, out.timeline))
+            return false;
+        bool known = true;
+        float goIn = 0.0f;
+        for (Issue const& issue : issues)
+        {
+            ReadyWait w;
+            w.who = issue.who;
+            w.what = issue.what;
+            PartyMemberFacts const* m = world.FindMember(issue.who);
+            bool const hp = !strcmp(issue.what, "hp");
+            bool const mana = !strcmp(issue.what, "mana");
+            if (m && m->isBot && (hp || mana))
+            {
+                w.readySec = hp ? RestValue::SecondsToHealth(*m, float(m->maxHealth) * READY_HEALTH_PCT / 100.0f)
+                                : RestValue::SecondsToMana(*m, float(m->maxMana) * PullManaPct(*m, pull.healerManaPct) / 100.0f);
+                w.neededAtSec = m->guid == pull.tank ? 0.0f
+                              : m->HealsTeam() ? out.timeline.contactSec
+                              : out.timeline.damageSec;
+            }
+            if (w.readySec < 0.0f)
+                known = false;
+            else
+                goIn = std::max(goIn, w.readySec - w.neededAtSec);
+            out.waits.push_back(w);
+        }
+        out.goInSec = known ? goIn : -1.0f;
+        return true;
     }
 
     bool PullPlanner::Plan(Player* leader, PartyCommander& commander, Creature* selected, bool skipReady,
@@ -481,6 +562,7 @@ namespace Commander
             pull.faceSpot = best.spot.at;
             pull.ambush = true;
             pull.ambushTimeoutMs = AmbushTimeoutMs(best.waitSec);
+            pull.ambushWaitSec = best.waitSec;
         }
         else if (best.ranged)
         {
@@ -708,6 +790,7 @@ namespace Commander
             pull.faceSpot = o.spot.at;
             pull.packAt = o.meetAt;
             pull.ambushTimeoutMs = AmbushTimeoutMs(o.waitSec);
+            pull.ambushWaitSec = o.waitSec;
             expected = o.expected;
         }
         else

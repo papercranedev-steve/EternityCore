@@ -46,6 +46,7 @@
 
 #include "Commander/Coordination/IAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Forecast/PullTimeline.h"
 #include <string>
 #include <vector>
 
@@ -216,6 +217,34 @@ namespace Commander
         // the two neither drank nor was ready, and the hunt waited for its spirit regeneration.
         // Everything else as CheckReady.
         std::vector<Issue> CheckReadyToHunt(WorldModel const& world);
+
+        // `pull`'s moments if its tank went now (Perception/Forecast/PullTimeline.h). False:
+        // no pull planned or its tank is not in the party.
+        bool Timeline(WorldModel const& world, PullPlan const& pull, PullTimeline::Result& out);
+
+        // How long the ready wait would be if a bot's drinking and eating on into the pull
+        // counted (user 2026-11-24, step 1: shown by `.partybot ai ready` only, nothing waits
+        // on it yet). Each bot needs its mana and health by the moment it acts: the pull's
+        // tank at the go, a bot healing the team at contact, everyone else at damageSec.
+        struct ReadyWait
+        {
+            ObjectGuid who;
+            char const* what = "";      // an Issue's
+            float readySec = -1.0f;     // resting gets it there in this long; < 0 never or not a rest issue
+            float neededAtSec = 0.0f;
+        };
+        struct ReadyForecast
+        {
+            PullTimeline::Result timeline;
+            std::vector<ReadyWait> waits;   // one per issue
+            // The go could come this long from now: the latest readySec - neededAtSec, at
+            // least 0. < 0: unknown (a player's issue, someone dead, in combat, far, or never
+            // getting there by resting).
+            float goInSec = -1.0f;
+        };
+        // `issues`: CheckReady's for this pull. False as Timeline.
+        bool ForecastReady(WorldModel const& world, PullPlan const& pull, std::vector<Issue> const& issues,
+                           ReadyForecast& out);
     }
 
     class PullAssigner : public IAssigner
