@@ -7,7 +7,9 @@
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Config/Config.h"
+#include "Database/DatabaseEnv.h"
 #include "Group.h"
+#include "Log.h"
 #include "Map.h"
 #include "Timer.h"
 #include <algorithm>
@@ -404,11 +406,46 @@ namespace Commander
 
     void CommanderMgr::SetPullStance(ObjectGuid player, PullStance stance)
     {
-        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        {
+            std::lock_guard<std::mutex> guard(m_pullMethodLock);
+            if (stance == PullStance::Active)
+                m_pullStances.erase(player.GetRawValue());
+            else
+                m_pullStances[player.GetRawValue()] = stance;
+        }
         if (stance == PullStance::Active)
-            m_pullStances.erase(player.GetRawValue());
+            CharacterDatabase.PExecute("DELETE FROM `custom_character_pull_stance` WHERE `guid` = %u", player.GetCounter());
         else
-            m_pullStances[player.GetRawValue()] = stance;
+            CharacterDatabase.PExecute("REPLACE INTO `custom_character_pull_stance` (`guid`, `stance`) VALUES (%u, '%s')",
+                player.GetCounter(), PullStanceName(stance));
+    }
+
+    void CommanderMgr::LoadPullStances()
+    {
+        CharacterDatabase.DirectExecute(
+            "CREATE TABLE IF NOT EXISTS `custom_character_pull_stance` ("
+            " `guid` INT UNSIGNED NOT NULL COMMENT 'characters.guid',"
+            " `stance` VARCHAR(8) NOT NULL COMMENT 'passive (active is not stored)',"
+            " PRIMARY KEY (`guid`)"
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='PartyBot: whether the party starts fights on its own (the talk window)'");
+
+        std::map<uint64, PullStance> stances;
+        std::unique_ptr<QueryResult> result(CharacterDatabase.Query("SELECT `guid`, `stance` FROM `custom_character_pull_stance`"));
+        if (result)
+        {
+            do
+            {
+                Field* f = result->Fetch();
+                PullStance stance;
+                std::string const name = f[1].GetCppString();
+                if (ParsePullStance(name.c_str(), stance) && stance != PullStance::Active)
+                    stances[ObjectGuid(HIGHGUID_PLAYER, f[0].GetUInt32()).GetRawValue()] = stance;
+            } while (result->NextRow());
+        }
+
+        std::lock_guard<std::mutex> guard(m_pullMethodLock);
+        m_pullStances = std::move(stances);
+        sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [PartyBot] %u pull stances loaded.", uint32(m_pullStances.size()));
     }
 
     PullStance CommanderMgr::GetPullStance(ObjectGuid player) const

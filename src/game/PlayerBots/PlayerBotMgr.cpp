@@ -167,6 +167,8 @@ void PlayerBotMgr::Load()
     // The bots' text and the accounts' languages, before anything says or builds text.
     BotShared::I18n::Load();
     BotShared::Phrases::Load();
+    // The players' saved choices for their parties (the talk window's pull stance).
+    sCommanderMgr.LoadPullStances();
     // The addon's messages (Shared/AddonChannel): what is on the player's screen.
     BotShared::Gaze::Load();
     BotShared::QuestOverrides::Load();

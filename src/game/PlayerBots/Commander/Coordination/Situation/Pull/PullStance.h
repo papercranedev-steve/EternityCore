@@ -1,6 +1,6 @@
 /*
  * Whether the party starts fights on its own, chosen by the player (the talk window's 战斗策略
- * page, `.partybot ai pullstance`). Read by AutoClear (Situation/Pull/AutoClear.h).
+ * page, `.partybot ai pullstance`), saved per character (CommanderMgr::SetPullStance). Read by AutoClear (Situation/Pull/AutoClear.h).
  *
  *   Active   (default) the tank pulls nearby packs one after another, like `.partybot ai clear`
  *            around the player, whenever the party is idle. Only with a tank bot: without one

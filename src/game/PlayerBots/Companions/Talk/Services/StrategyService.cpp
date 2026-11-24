@@ -4,7 +4,6 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Tanks.h"
 #include "Shared/Phrases.h"
-#include "Chat.h"
 #include "Player.h"
 
 namespace Companions
@@ -48,9 +47,7 @@ namespace Talk
             {
                 Commander::PullStance const stance = arg == PASSIVE_ARG ? Commander::PullStance::Passive
                                                                         : Commander::PullStance::Active;
-                sCommanderMgr.SetPullStance(ctx.player->GetObjectGuid(), stance);
-                // The addon keeps it (the server only until it restarts).
-                ChatHandler(ctx.player).PSendSysMessage("PBOK;;pullstance;%s", Commander::PullStanceName(stance));
+                sCommanderMgr.SetPullStance(ctx.player->GetObjectGuid(), stance);     // (saved)
 
                 Outcome outcome;
                 outcome.kind = Outcome::Kind::Close;

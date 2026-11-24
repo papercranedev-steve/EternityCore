@@ -237,9 +237,8 @@ namespace
         return true;
     }
 
-    // .partybot ai pullstance [active|passive]   (no argument = show)
-    // Replies PBOK;;pullstance;<stance>: the addon keeps the player's choice (the server only
-    // until it restarts) and sends it again after login.
+    // .partybot ai pullstance [active|passive]   (no argument = show; the choice is saved)
+    // Replies PBOK;;pullstance;<stance>.
     bool SetPullStance(ChatHandler* handler, Player* player, char const* arg)
     {
         Commander::PullStance stance = sCommanderMgr.GetPullStance(player->GetObjectGuid());

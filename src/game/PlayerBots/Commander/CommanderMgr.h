@@ -147,9 +147,12 @@ namespace Commander
         void SetPullPlace(ObjectGuid player, PullPlace place);
         PullPlace GetPullPlace(ObjectGuid player) const;
         // Whether this player's party starts fights on its own (PullStance.h; the talk window,
-        // `.partybot ai pullstance`). Runtime only, any thread (same lock as the pull method).
+        // `.partybot ai pullstance`). Saved per character (custom_character_pull_stance, Active
+        // not stored); any thread (same lock as the pull method).
         void SetPullStance(ObjectGuid player, PullStance stance);
         PullStance GetPullStance(ObjectGuid player) const;
+        // Reads the saved stances (startup, PlayerBotMgr::Load).
+        void LoadPullStances();
         // What this player wants to hear from his party (`.partybot voice`, the addon's
         // settings; VoiceSettings.h). Runtime only, any thread.
         void SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings);
