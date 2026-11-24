@@ -93,10 +93,8 @@ namespace PullQuestion
         ask.fallback = "no";
         state.requestId = sRequestBoard.Open(me, leader, ask);
         if (!state.requestId)
-        {
-            sCommanderMgr.AnswerPullQuestion(me, q.id, false);
-            return;
-        }
+            return;     // (not shown: the brain drops it, asks again later)
+        sCommanderMgr.MarkPullQuestionShown(me, q.id);
         BotShared::BotChat::SayToParty(me, ask.text);
     }
 }

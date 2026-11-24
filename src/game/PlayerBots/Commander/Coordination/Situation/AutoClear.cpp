@@ -122,20 +122,31 @@ namespace AutoClear
             });
         }
 
-        void ForgetAreas(AutoClearPlan& autoClear, Position3 const& leaderPos, uint32 nowMs)
+        void ForgetCamps(AutoClearPlan& autoClear, Position3 const& leaderPos, uint32 nowMs)
         {
-            auto& areas = autoClear.areas;
-            areas.erase(std::remove_if(areas.begin(), areas.end(), [&](AreaAnswer const& a)
+            auto& camps = autoClear.camps;
+            camps.erase(std::remove_if(camps.begin(), camps.end(), [&](CampMemory const& c)
             {
-                return int32(a.untilMs - nowMs) <= 0 || Distance(a.center, leaderPos) > AREA_FORGET_YD;
-            }), areas.end());
+                return int32(c.untilMs - nowMs) <= 0 ||
+                    std::none_of(c.spots.begin(), c.spots.end(), [&](Position3 const& s) { return Distance(s, leaderPos) <= CAMP_FORGET_YD; });
+            }), camps.end());
         }
 
-        AreaAnswer const* AreaAt(AutoClearPlan const& autoClear, Position3 const& p)
+        // The camp `pack` belongs to: a kind of it, near one of the camp's spots (newest first).
+        CampMemory const* CampOf(AutoClearPlan const& autoClear, PackFacts const& pack)
         {
-            for (AreaAnswer const& a : autoClear.areas)
-                if (Distance(a.center, p) <= AREA_YD)
-                    return &a;
+            for (CampMemory const& camp : autoClear.camps)
+            {
+                bool const kind = std::any_of(pack.members.begin(), pack.members.end(), [&camp](PackCreature const& c)
+                {
+                    return std::find(camp.entries.begin(), camp.entries.end(), c.entry) != camp.entries.end();
+                });
+                if (kind && std::any_of(camp.spots.begin(), camp.spots.end(), [&pack](Position3 const& s)
+                    {
+                        return Distance(s, pack.center) <= CAMP_YD;
+                    }))
+                    return &camp;
+            }
             return nullptr;
         }
 
@@ -151,9 +162,12 @@ namespace AutoClear
             bool wanders;
         };
 
-        // Header: Pull / Ask / Exclude.
-        Verdict Judge(PackFacts const& pack, Judging const& j)
+        bool ComesAnyway(PackCreature const& c, WorldModel const& world);
+
+        // Header: Pull / Ask / Exclude. `campOut`: the camp memory that decided, if one did.
+        Verdict Judge(PackFacts const& pack, Judging const& j, CampMemory const*& campOut)
         {
+            campOut = nullptr;
             auto any = [&pack](auto pred) { return std::any_of(pack.members.begin(), pack.members.end(), pred); };
 
             if (any([](PackCreature const& c) { return c.boss || c.tappedByOther || !c.claimedBy.IsEmpty(); }))
@@ -162,35 +176,114 @@ namespace AutoClear
                 return Verdict::Exclude;
 
             bool const selected = any([&j](PackCreature const& c) { return c.aggressive && c.guid == j.selection; });
-            bool const comesAnyway = any([&j](PackCreature const& c)
-            {
-                if (!c.aggressive || c.noAggro || c.stealthed)
-                    return false;
-                for (PartyMemberFacts const& m : j.world.party)
-                    if (m.alive && Distance(m.pos, c.pos) <= c.reach + FIGHT_MARGIN_YD)
-                        return true;
-                return false;
-            });
+            bool const comesAnyway = any([&j](PackCreature const& c) { return ComesAnyway(c, j.world); });
             if (selected || comesAnyway)
                 return Verdict::Pull;
 
-            // Uncertain: what he answered for this area, else ask (`anywhere`: also while he travels).
-            auto uncertain = [&](bool anywhere)
-            {
-                if (AreaAnswer const* area = AreaAt(j.autoClear, pack.center))
-                    return area->clear ? Verdict::Pull : Verdict::Exclude;
-                return anywhere || j.wanders ? Verdict::Ask : Verdict::Exclude;
-            };
-
+            bool const quest = any([](PackCreature const& c) { return c.questNeeded; });
             bool const elite = pack.eliteCount > 0;
-            if (any([](PackCreature const& c) { return c.questNeeded; }))
-                return elite ? uncertain(true) : Verdict::Pull;
+            if (quest && !elite)
+                return Verdict::Pull;
+
+            // A camp he fought himself or answered about (also "别管" for a quest's elites).
+            if (CampMemory const* camp = CampOf(j.autoClear, pack))
+            {
+                campOut = camp;
+                return camp->pull ? Verdict::Pull : Verdict::Exclude;
+            }
+            if (quest)
+                return Verdict::Ask;    // (an elite a quest needs: also while he travels)
 
             bool const startsFights = any([](PackCreature const& c) { return c.aggressive && !c.noAggro; });
             bool const allGray = !any([&j](PackCreature const& c) { return c.level > j.grayLevel; });
             if (!startsFights || allGray)
                 return Verdict::Exclude;
-            return uncertain(false);
+            return j.wanders ? Verdict::Ask : Verdict::Exclude;
+        }
+
+        // A creature of `pack` comes to the party on its own (FIGHT_MARGIN_YD).
+        bool ComesAnyway(PackCreature const& c, WorldModel const& world)
+        {
+            if (!c.aggressive || c.noAggro || c.stealthed)
+                return false;
+            for (PartyMemberFacts const& m : world.party)
+                if (m.alive && Distance(m.pos, c.pos) <= c.reach + FIGHT_MARGIN_YD)
+                    return true;
+            return false;
+        }
+
+        // The camp `pack` was matched to grows by its spot (the camp is found as it is walked).
+        void Grow(CampMemory& camp, PackFacts const& pack)
+        {
+            if (camp.spots.size() >= MAX_CAMP_SPOTS)
+                return;
+            for (Position3 const& s : camp.spots)
+                if (Distance(s, pack.center) < CAMP_SPOT_STEP_YD)
+                    return;
+            camp.spots.push_back(pack.center);
+        }
+
+        std::vector<uint32> EntriesOf(PackFacts const& pack)
+        {
+            std::vector<uint32> entries;
+            for (PackCreature const& c : pack.members)
+                if (std::find(entries.begin(), entries.end(), c.entry) == entries.end())
+                    entries.push_back(c.entry);
+            return entries;
+        }
+
+        // He selected an idle creature that would not come on its own, and then a fight with it
+        // started: he started it, its camp is one he wants (CampMemory::byPlayer).
+        void WatchSelection(AutoClearPlan& autoClear, WorldModel const& world, Player* leader, uint32 nowMs)
+        {
+            if (!autoClear.watched.IsEmpty() && world.FindEnemy(autoClear.watched))
+            {
+                CampMemory* camp = nullptr;
+                for (CampMemory& c : autoClear.camps)
+                    if (c.byPlayer && std::find(c.entries.begin(), c.entries.end(), autoClear.watchedEntries.front()) != c.entries.end() &&
+                        std::any_of(c.spots.begin(), c.spots.end(), [&](Position3 const& s) { return Distance(s, autoClear.watchedPos) <= CAMP_YD; }))
+                    {
+                        camp = &c;
+                        break;
+                    }
+                if (camp)
+                {
+                    camp->untilMs = nowMs + STARTED_MEMORY_MS;
+                    if (camp->spots.size() < MAX_CAMP_SPOTS)
+                        camp->spots.push_back(autoClear.watchedPos);
+                }
+                else
+                {
+                    CampMemory fresh;
+                    fresh.entries = autoClear.watchedEntries;
+                    fresh.spots.push_back(autoClear.watchedPos);
+                    fresh.pull = true;
+                    fresh.byPlayer = true;
+                    fresh.untilMs = nowMs + STARTED_MEMORY_MS;
+                    autoClear.camps.insert(autoClear.camps.begin(), std::move(fresh));
+                }
+                autoClear.watched = ObjectGuid();
+                autoClear.watchedEntries.clear();
+            }
+
+            ObjectGuid const selection = leader->GetSelectionGuid();
+            for (PackFacts const& pack : world.packs)
+                for (PackCreature const& c : pack.members)
+                    if (c.guid == selection)
+                    {
+                        if (ComesAnyway(c, world) || c.tappedByOther)
+                            return;
+                        autoClear.watched = c.guid;
+                        autoClear.watchedEntries = EntriesOf(pack);
+                        autoClear.watchedPos = c.pos;
+                        return;
+                    }
+            // (selected none idle: the old one stays watched while it is still about, in a fight just begun)
+            if (!autoClear.watched.IsEmpty() && !world.FindEnemy(autoClear.watched) && selection != autoClear.watched)
+            {
+                autoClear.watched = ObjectGuid();
+                autoClear.watchedEntries.clear();
+            }
         }
 
         // Chooses the packs of the standing clear (starts it when there is one); returns the
@@ -201,7 +294,8 @@ namespace AutoClear
             AutoClearPlan& autoClear = plan.autoClear;
             ClearPlan& clear = plan.clear;
             SampleTrail(autoClear, leader, nowMs);
-            ForgetAreas(autoClear, PositionOf(leader), nowMs);
+            ForgetCamps(autoClear, PositionOf(leader), nowMs);
+            WatchSelection(autoClear, world, leader, nowMs);
 
             std::vector<ObjectGuid> chosen;
             PackFacts const* askPack = nullptr;
@@ -215,11 +309,14 @@ namespace AutoClear
                 {
                     if (pack.ApproachYd() > WORLD_RADIUS)
                         continue;
-                    switch (Judge(pack, j))
+                    CampMemory const* camp = nullptr;
+                    switch (Judge(pack, j, camp))
                     {
                         case Verdict::Pull:
                             for (PackCreature const& c : pack.members)
                                 chosen.push_back(c.guid);
+                            if (camp)
+                                Grow(const_cast<CampMemory&>(*camp), pack);     // (one of autoClear.camps)
                             break;
                         case Verdict::Ask:
                             if (pack.ApproachYd() < askYd)
@@ -265,8 +362,13 @@ namespace AutoClear
             ClearPlan& clear = plan.clear;
             if (q.kind == PullAskKind::Area)
             {
-                plan.autoClear.areas.push_back({ q.where, yes, nowMs + AREA_MEMORY_MS });
-                Note(plan, yes ? "You want the creatures around here cleared." : "Leaving the creatures around here alone.");
+                CampMemory camp;
+                camp.entries = q.entries;
+                camp.spots.push_back(q.where);
+                camp.pull = yes;
+                camp.untilMs = nowMs + ANSWER_MEMORY_MS;
+                plan.autoClear.camps.insert(plan.autoClear.camps.begin(), std::move(camp));
+                Note(plan, yes ? "You want that camp cleared." : "Leaving that camp alone.");
                 return;
             }
             if (clear.ask.first == q.first)
@@ -281,8 +383,7 @@ namespace AutoClear
             Note(plan, yes ? "You said yes: pulling it." : "You said no: leaving it.");
         }
 
-        void Ask(TeamPlan& plan, ObjectGuid asker, PullAskKind kind, ObjectGuid first, uint32 count,
-                 std::vector<ObjectGuid> pack, Position3 const& where, uint32 nowMs)
+        PullQuestion& Ask(TeamPlan& plan, ObjectGuid asker, PullAskKind kind, ObjectGuid first, uint32 nowMs)
         {
             PullQuestion& q = plan.pullQuestion;
             q = PullQuestion();
@@ -290,10 +391,8 @@ namespace AutoClear
             q.kind = kind;
             q.asker = asker;
             q.first = first;
-            q.count = count;
-            q.pack = std::move(pack);
-            q.where = where;
             q.sinceMs = nowMs;
+            return q;
         }
 
         void Questions(TeamPlan& plan, WorldModel const& world, Map* map, Player* leader, PackFacts const* areaPack,
@@ -305,7 +404,9 @@ namespace AutoClear
                 if (q.answer == PullQuestion::Answer::Pending &&
                     WorldTimer::getMSTimeDiff(q.sinceMs, nowMs) < QUESTION_MAX_MS)
                     return;
-                Apply(plan, q, nowMs);  // (no answer in time: Pending counts as no)
+                // (shown and no answer in time: no; never shown: dropped, asked again later)
+                if (q.answer != PullQuestion::Answer::Pending || q.shown)
+                    Apply(plan, q, nowMs);
                 q = PullQuestion();
                 return;
             }
@@ -323,7 +424,9 @@ namespace AutoClear
                     ask = ClearAsk();
                 else
                 {
-                    Ask(plan, tank->guid, ask.kind, ask.first, ask.count, ask.pack, PositionOf(leader), nowMs);
+                    PullQuestion& asked = Ask(plan, tank->guid, ask.kind, ask.first, nowMs);
+                    asked.count = ask.count;
+                    asked.pack = ask.pack;
                     return;
                 }
             }
@@ -336,7 +439,11 @@ namespace AutoClear
                     first = c.guid;
                     break;
                 }
-            Ask(plan, tank->guid, PullAskKind::Area, first, 0, {}, PositionOf(leader), nowMs);
+            PullQuestion& asked = Ask(plan, tank->guid, PullAskKind::Area, first, nowMs);
+            for (PackCreature const& c : areaPack->members)
+                asked.pack.push_back(c.guid);
+            asked.entries = EntriesOf(*areaPack);
+            asked.where = areaPack->center;
         }
     }
 
@@ -394,6 +501,12 @@ namespace AutoClear
             return false;
         out = plan.pullQuestion;
         return true;
+    }
+
+    void MarkShown(TeamPlan& plan, uint32 id)
+    {
+        if (plan.pullQuestion.id == id)
+            plan.pullQuestion.shown = true;
     }
 
     void Answer(TeamPlan& plan, uint32 id, bool yes)

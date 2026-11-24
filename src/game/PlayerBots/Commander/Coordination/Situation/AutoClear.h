@@ -13,22 +13,29 @@
  *
  * Open world: a standing clear (ClearPlan::standing, chosenOnly) that pulls only the packs
  * chosen here every refresh (Judge):
- *   Pull     a quest of a member still needs it (QuestNeeds), the player has it selected, it
- *            will start a fight anyway (a member within its aggro range + FIGHT_MARGIN_YD), or
- *            the player answered "clear" for this area. Elites only when selected or coming
- *            anyway; else asked.
+ *   Pull     the player has it selected, it will start a fight anyway (a member within its aggro
+ *            range + FIGHT_MARGIN_YD), a quest of a member still needs it (QuestNeeds; elites
+ *            asked), or its camp is one he wants (he started a fight there himself, or answered
+ *            "clear").
  *   Ask      the player wanders here (his trail of the last WANDER_MS within WANDER_YD; standing
- *            still too) and the pack gives experience and starts fights.
+ *            still too) and the pack gives experience and starts fights; a quest's elites.
  *   Exclude  bosses, other players' (tapped, claimed), more than MAX_LEVEL_ABOVE over him,
- *            gray or neutral (unless a quest's), an area he answered "leave", anything else
+ *            gray or neutral (unless a quest's), a camp he answered "leave", anything else
  *            while he travels; everything while he is dead, mounted, flying, resting, in a
  *            battleground, or the team has members told to wait, a guide, a retreat, a push.
  * He walks off before the tank reached the pack: that pull is called off (ClearPlanner).
  *
+ * Camps (TeamPlan CampMemory): creatures of the same kinds standing near one another. He
+ * started a fight himself: an idle creature he selected that would not have come on its own
+ * (WatchSelection) is in a fight next; its camp is pulled STARTED_MEMORY_MS from his last such
+ * fight. A creature that came to us is no sign: such packs stay as they are (asked while he
+ * wanders). His answer is kept ANSWER_MEMORY_MS. A camp grows by the spots of its pulled packs
+ * and is dropped once he is CAMP_FORGET_YD from all of them.
+ *
  * Questions (TeamPlan::pullQuestion, one at a time, not during a fight): the main tank asks
  * (Companions/Fight/PullQuestion opens the popup; the answer comes back through
- * CommanderMgr::AnswerPullQuestion). Area answers are kept AREA_MEMORY_MS for AREA_YD around
- * where he stood, dropped once he is AREA_FORGET_YD away. No answer within QUESTION_MAX_MS: no.
+ * CommanderMgr::AnswerPullQuestion). Shown and unanswered within QUESTION_MAX_MS: no; never
+ * shown (the tank had another question open): dropped, asked again later.
  *
  * Passive again: a clear AutoClear started stops (a pull already under way is finished) and
  * the open question is dropped.
@@ -66,15 +73,22 @@ namespace Commander
         float const WANDER_YD = 30.0f;              // ... all of it within this of where he is
 
         // Questions
-        uint32 const QUESTION_MAX_MS = 60 * 1000;   // unanswered (or never shown) this long: no
-        float const AREA_YD = 60.0f;                // an area answer covers packs this close to where he stood
-        float const AREA_FORGET_YD = 150.0f;        // ... and is dropped once he is this far
-        uint32 const AREA_MEMORY_MS = 10 * MINUTE * IN_MILLISECONDS;
+        uint32 const QUESTION_MAX_MS = 60 * 1000;   // shown and unanswered this long: no; never shown: dropped
+
+        // Camps (TeamPlan CampMemory)
+        float const CAMP_YD = 50.0f;                // a pack of the camp's kinds this close to one of its spots
+        float const CAMP_SPOT_STEP_YD = 15.0f;      // a pulled pack farther than this from every spot adds one
+        uint32 const MAX_CAMP_SPOTS = 20;
+        float const CAMP_FORGET_YD = 150.0f;        // dropped once he is this far from all its spots
+        uint32 const ANSWER_MEMORY_MS = 10 * MINUTE * IN_MILLISECONDS;     // from his answer
+        uint32 const STARTED_MEMORY_MS = 5 * MINUTE * IN_MILLISECONDS;     // from his last fight there
 
         void Step(TeamBotAI* bot, PartyCommander& commander, uint32 nowMs);
 
         // The question waiting for the player's answer (false: none).
         bool OpenQuestion(TeamPlan const& plan, PullQuestion& out);
+        // The asker showed question `id` to the player (PullQuestion::shown).
+        void MarkShown(TeamPlan& plan, uint32 id);
         // The player answered question `id` (an old id: ignored).
         void Answer(TeamPlan& plan, uint32 id, bool yes);
     }

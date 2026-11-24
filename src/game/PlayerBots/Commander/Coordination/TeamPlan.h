@@ -185,24 +185,37 @@ namespace Commander
         ObjectGuid asker;               // the main tank bot
         ObjectGuid first;               // the creature it names
         uint32 count = 0;               // TooMany
-        std::vector<ObjectGuid> pack;   // Boss / TooMany: the pack it is about
-        Position3 where;                // Area: the leader when asked
+        std::vector<ObjectGuid> pack;   // the pack it is about
+        std::vector<uint32> entries;    // Area: its kinds (the camp the answer is about)
+        Position3 where;                // Area: its centre
         uint32 sinceMs = 0;
+        // The asker showed it to the player (CommanderMgr::MarkPullQuestionShown). One that
+        // could not be shown in time is dropped, not taken as a no.
+        bool shown = false;
         Answer answer = Answer::Pending;
     };
 
-    // The player's answer about one area of the open world (AutoClear.h).
-    struct AreaAnswer
+    // What the player wants done with one camp of the open world (AutoClear.h): creatures of
+    // these kinds standing near any of the spots. From a fight he started himself there, or
+    // from his answer. The spots grow as its packs are pulled (the camp is found as it is walked).
+    struct CampMemory
     {
-        Position3 center;
-        bool clear = false;             // "清": its uncertain packs are pulled; "别管": not asked again
+        std::vector<uint32> entries;
+        std::vector<Position3> spots;
+        bool pull = false;              // "清" / he fought them himself; false: "别管"
+        bool byPlayer = false;          // he started a fight there (else his answer)
         uint32 untilMs = 0;
     };
 
     // The player's active pull stance (PullStance.h): AutoClear starts clears on its own.
     struct AutoClearPlan
     {
-        std::vector<AreaAnswer> areas;
+        std::vector<CampMemory> camps;  // newest first: the first that matches counts
+        // An idle creature the player has selected that would not come on its own: a fight
+        // with it starting next is one he started (a camp he wants, CampMemory::byPlayer).
+        ObjectGuid watched;
+        std::vector<uint32> watchedEntries;     // its pack's kinds
+        Position3 watchedPos;
         uint32 nextQuestionId = 1;
         // The leader's recent positions (one per AutoClear::TRAIL_STEP_MS): wandering or travelling.
         struct LeaderSample

@@ -105,6 +105,8 @@ namespace Commander
         // The team's question to the player before a pull (Situation/AutoClear.h), waiting for
         // his answer; the asker's life shows it (Companions/Fight/PullQuestion). False: none.
         bool GetPullQuestion(TeamBotAI const* bot, PullQuestion& out);
+        // The asker showed question `id` to him (one never shown is not taken as a no).
+        void MarkPullQuestionShown(Player const* bot, uint32 id);
         // His answer to question `id` (an old one: ignored).
         void AnswerPullQuestion(Player const* bot, uint32 id, bool yes);
         // A line for the players from `member`'s party voice (Commands/Voice/PartyVoice.h), e.g.

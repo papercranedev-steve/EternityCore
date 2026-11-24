@@ -210,6 +210,14 @@ namespace Commander
         return commander && AutoClear::OpenQuestion(commander->GetPlan(), out);
     }
 
+    void CommanderMgr::MarkPullQuestionShown(Player const* bot, uint32 id)
+    {
+        if (!IsEnabled() || !bot)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(bot))
+            AutoClear::MarkShown(commander->GetPlanMutable(), id);
+    }
+
     void CommanderMgr::AnswerPullQuestion(Player const* bot, uint32 id, bool yes)
     {
         if (!IsEnabled() || !bot)
