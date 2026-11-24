@@ -390,7 +390,8 @@ public:
     // Hide the CombatBotBaseAI versions so every dispel started from TeamBotAI skips
     // debuffs the Commander vetoed (Commander/VetoChecks.h).
     bool IsValidDispelTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
-    Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
+    // Members first, then their pets.
+    Unit* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
     // While the Commander heal module controls healing, casts its heal order instead (none: no heal).
     // Out of combat the target is Commander::RestTopUp::Select (only a gap worth a heal).

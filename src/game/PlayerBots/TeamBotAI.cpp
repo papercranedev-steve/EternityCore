@@ -805,8 +805,9 @@ bool TeamBotAI::IsAssignedToBreakControl(Unit const* pTarget) const
                                                                WorldTimer::getMSTime());
 }
 
-// Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above.
-Player* TeamBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
+// Same as CombatBotBaseAI::SelectDispelTarget, calling the IsValidDispelTarget above, then
+// the members' pets (the base version only looks at players, so pets kept their poisons).
+Unit* TeamBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
 {
     // Fix: only dispels that may target a hostile unit (Dispel Magic) can remove a creature's
     // mind control. Cleanse, Purify, Remove Curse, Cure Poison / Disease are friendly-only
@@ -833,6 +834,18 @@ Player* TeamBotAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const
                     return pMember;
             }
         }
+    }
+
+    // Pets after every player. A pet mind controlled by an enemy is skipped.
+    for (Player* pMember : Commander::Team::Members(me))
+    {
+        Pet* pPet = pMember ? pMember->GetPet() : nullptr;
+        if (pPet && pPet->IsInWorld() && pPet->IsAlive() &&
+            me->IsValidHelpfulTarget(pPet) &&
+            IsValidDispelTarget(pPet, pSpellEntry) &&
+            me->IsWithinLOSInMap(pPet) &&
+            me->IsWithinDist(pPet, 30.0f))
+            return pPet;
     }
 
     return nullptr;
