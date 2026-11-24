@@ -865,7 +865,11 @@ namespace Commander
             if (!Contains(expected, g) && IsStealthedPackCreature(world, g))
                 expected.push_back(g);
 
-        uint32 const maxMobs = clear.active ? clear.maxMobs : 0;
+        // A pack the player said yes to (ClearPlan::approved, asked because it was over the
+        // limit) has no limit here either.
+        bool const approved = std::any_of(pull.expected.begin(), pull.expected.end(),
+            [&clear](ObjectGuid g) { return Contains(clear.approved, g); });
+        uint32 const maxMobs = clear.active && !approved ? clear.maxMobs : 0;
         if (maxMobs && expected.size() > maxMobs)
         {
             if (!pull.recheckWaitSinceMs)
