@@ -349,9 +349,10 @@
     "default": "{leader}, {name} is just ahead. Shall I start when you're ready?",
     "quiet": "{name}. Start?"
   },
-  "pull.ask.many": {
-    "default": "{leader}, that {name} pack has {count} of them. Pull it?",
-    "quiet": "{count} of them. Pull?"
+  "pull.ask.hard": {
+    "default": "{leader}, that {name} pack has {count} of them. I may not hold them. Pull anyway?",
+    "chatty": "{leader}, {count} of those {name}, and they hit hard. Not sure I can hold. Really pull?",
+    "quiet": "{count}, may not hold. Pull?"
   },
   "pull.opt.clear": "Clear them",
   "pull.opt.pull": "Pull",
@@ -890,6 +891,11 @@
     "Pulling to the corner, stand behind me.",
     "We fight at the corner, stay out of sight."
   ],
+  "voice.pull.go.hard": {
+    "default": ["This one's rough, I may not hold. Stay sharp.","Going in. They hit hard, keep me up, run if it turns."],
+    "chatty": ["Tough crowd, everyone bring your best!","Hard one. Potions ready, and run if it goes wrong!"],
+    "quiet": "Hard one, careful."
+  },
   "voice.pull.control": [
     "{target} is mine: {cc}.",
     "I'll {cc} {target}, don't touch it.",

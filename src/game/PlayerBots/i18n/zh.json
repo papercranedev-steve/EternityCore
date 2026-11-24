@@ -363,9 +363,10 @@
     "default": "{leader}，{name}就在前面。准备好了我就开？",
     "quiet": "{name}，开吗？"
   },
-  "pull.ask.many": {
-    "default": "{leader}，{name}那包有{count}只，拉不拉？",
-    "quiet": "{count}只，拉吗？"
+  "pull.ask.hard": {
+    "default": "{leader}，{name}那包{count}只，我怕扛不住，还拉吗？",
+    "chatty": "{leader}，{name}那包{count}只，硬得很，我心里没底，真要拉？",
+    "quiet": "{count}只，怕扛不住，拉吗？"
   },
   "pull.opt.clear": "清了吧",
   "pull.opt.pull": "拉",
@@ -936,6 +937,11 @@
     "我拉到拐角，都站到我后面来。",
     "拉回拐角打，别站出去。"
   ],
+  "voice.pull.go.hard": {
+    "default": ["这包不好打，我怕扛不住，都打起精神。","上了，这群硬，奶好我，不行就撤。"],
+    "chatty": ["这群可不好啃，都拿出看家本领来！","硬仗，药水准备好，不对劲就跑！"],
+    "quiet": "不好打，小心。"
+  },
   "voice.pull.control": [
     "{target}交给我，{cc}。",
     "我{cc}{target}，别打它。",
