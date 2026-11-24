@@ -1,6 +1,6 @@
 /*
  * Companions, fights: the pull stance's question to the player (Commander/Coordination/
- * Situation/AutoClear.h; design .kiro/docs/2026-11-24-pull-stance.md §4). The brain writes
+ * Situation/Pull/PullQuestions.h; design .kiro/docs/2026-11-24-pull-stance.md §4). The brain writes
  * the question into the team plan (it may not reach the popup, Life/Requests); the asking tank
  * shows it here and gives the answer back (CommanderMgr::AnswerPullQuestion).
  *

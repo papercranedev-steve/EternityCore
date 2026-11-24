@@ -2,7 +2,7 @@
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
-#include "Commander/Coordination/Situation/AutoClear.h"
+#include "Commander/Coordination/Situation/Pull/AutoClear.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/PushPlanner.h"
 #include "Commander/Coordination/Situation/GatherPlanner.h"
@@ -313,6 +313,8 @@ namespace Commander
             WorldModelBuilder::RefreshPacks(bot, m_world, Guide::Current(m_plan, bot->me));
             m_world.packsRefreshedAtMs = nowMs;
         }
+        // (after the packs: which of them come anyway, the leader's choice among them)
+        m_leaderActivity.Annotate(m_world, nowMs);
         // (after the packs: an enemy's pack mates are left out of its route check)
         m_meleeRoutes.Annotate(bot->me->GetMap(), m_world, nowMs);
         // (after the rates: time to the flee line uses the party's damage)

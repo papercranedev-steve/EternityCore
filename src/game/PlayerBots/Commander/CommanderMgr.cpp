@@ -1,6 +1,6 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Coordination/Situation/AutoClear.h"
+#include "Commander/Coordination/Situation/Pull/PullQuestions.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/Stay.h"
 #include "Commander/Coordination/Situation/Summon.h"
@@ -207,7 +207,7 @@ namespace Commander
         if (!IsEnabled() || !bot || !bot->me)
             return false;
         std::shared_ptr<PartyCommander> commander = FindCommander(bot->me);
-        return commander && AutoClear::OpenQuestion(commander->GetPlan(), out);
+        return commander && PullQuestions::Open(commander->GetPlan(), out);
     }
 
     void CommanderMgr::MarkPullQuestionShown(Player const* bot, uint32 id)
@@ -215,7 +215,7 @@ namespace Commander
         if (!IsEnabled() || !bot)
             return;
         if (std::shared_ptr<PartyCommander> commander = FindCommander(bot))
-            AutoClear::MarkShown(commander->GetPlanMutable(), id);
+            PullQuestions::MarkShown(commander->GetPlanMutable(), id);
     }
 
     void CommanderMgr::AnswerPullQuestion(Player const* bot, uint32 id, bool yes)
@@ -223,7 +223,7 @@ namespace Commander
         if (!IsEnabled() || !bot)
             return;
         if (std::shared_ptr<PartyCommander> commander = FindCommander(bot))
-            AutoClear::Answer(commander->GetPlanMutable(), id, yes);
+            PullQuestions::Answer(commander->GetPlanMutable(), id, yes);
     }
 
     bool CommanderMgr::StartSummon(Player const* warlock, ObjectGuid target, std::vector<ObjectGuid> const& helpers)

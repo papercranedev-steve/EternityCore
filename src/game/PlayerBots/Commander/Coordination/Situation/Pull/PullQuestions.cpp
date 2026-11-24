@@ -1,0 +1,131 @@
+#include "Commander/Coordination/Situation/Pull/PullQuestions.h"
+#include "Commander/Coordination/Situation/Pull/Camps.h"
+#include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Tanks.h"
+#include "Creature.h"
+#include "Map.h"
+#include "Timer.h"
+
+namespace Commander
+{
+namespace PullQuestions
+{
+    namespace
+    {
+        void Note(TeamPlan& plan, std::string text)
+        {
+            plan.notes.push_back(std::move(text));
+        }
+
+        void Apply(TeamPlan& plan, PullQuestion const& q, uint32 nowMs)
+        {
+            bool const yes = q.answer == PullQuestion::Answer::Yes;
+            if (q.kind == PullAskKind::Area)
+            {
+                Camps::RememberAnswer(plan.autoClear.camps, q.entries, q.where, yes, nowMs);
+                Note(plan, yes ? "You want that camp cleared." : "Leaving that camp alone.");
+                return;
+            }
+            ClearPlan& clear = plan.clear;
+            if (clear.ask.first == q.first)
+                clear.ask = ClearAsk();
+            if (yes)
+                clear.approved.insert(clear.approved.end(), q.pack.begin(), q.pack.end());
+            else
+            {
+                clear.skipped.insert(clear.skipped.end(), q.pack.begin(), q.pack.end());
+                ++clear.skippedPacks;
+            }
+            Note(plan, yes ? "You said yes: pulling it." : "You said no: leaving it.");
+        }
+
+        PullQuestion& Ask(TeamPlan& plan, ObjectGuid asker, PullAskKind kind, ObjectGuid first, uint32 nowMs)
+        {
+            PullQuestion& q = plan.pullQuestion;
+            q = PullQuestion();
+            q.id = plan.autoClear.nextQuestionId++;
+            q.kind = kind;
+            q.asker = asker;
+            q.first = first;
+            q.sinceMs = nowMs;
+            return q;
+        }
+    }
+
+    void Step(TeamPlan& plan, WorldModel const& world, Map* map, PackFacts const* areaPack, uint32 nowMs)
+    {
+        PullQuestion& q = plan.pullQuestion;
+        if (q.id)
+        {
+            if (q.answer == PullQuestion::Answer::Pending &&
+                WorldTimer::getMSTimeDiff(q.sinceMs, nowMs) < QUESTION_MAX_MS)
+                return;
+            // (shown and no answer in time: no; never shown: dropped, asked again later)
+            if (q.answer != PullQuestion::Answer::Pending || q.shown)
+                Apply(plan, q, nowMs);
+            q = PullQuestion();
+            return;
+        }
+        if (world.HasPartyEnemy())
+            return;
+        PartyMemberFacts const* tank = Tanks::Main(world, true);
+        if (!tank)
+            return;
+
+        ClearAsk& ask = plan.clear.ask;
+        if (!ask.pack.empty())
+        {
+            Creature const* first = plan.clear.active ? map->GetCreature(ask.first) : nullptr;
+            if (!first || !first->IsAlive() || first->IsInCombat())
+                ask = ClearAsk();
+            else
+            {
+                PullQuestion& asked = Ask(plan, tank->guid, ask.kind, ask.first, nowMs);
+                asked.count = ask.count;
+                asked.pack = ask.pack;
+                return;
+            }
+        }
+        if (!areaPack || areaPack->members.empty())
+            return;
+        ObjectGuid first = areaPack->members.front().guid;
+        for (PackCreature const& c : areaPack->members)
+            if (c.aggressive && !c.noAggro)
+            {
+                first = c.guid;
+                break;
+            }
+        PullQuestion& asked = Ask(plan, tank->guid, PullAskKind::Area, first, nowMs);
+        for (PackCreature const& c : areaPack->members)
+            asked.pack.push_back(c.guid);
+        asked.entries = Camps::EntriesOf(*areaPack);
+        asked.where = areaPack->center;
+    }
+
+    void Drop(TeamPlan& plan)
+    {
+        plan.pullQuestion = PullQuestion();
+    }
+
+    bool Open(TeamPlan const& plan, PullQuestion& out)
+    {
+        if (!plan.pullQuestion.id || plan.pullQuestion.answer != PullQuestion::Answer::Pending)
+            return false;
+        out = plan.pullQuestion;
+        return true;
+    }
+
+    void MarkShown(TeamPlan& plan, uint32 id)
+    {
+        if (plan.pullQuestion.id == id)
+            plan.pullQuestion.shown = true;
+    }
+
+    void Answer(TeamPlan& plan, uint32 id, bool yes)
+    {
+        PullQuestion& q = plan.pullQuestion;
+        if (q.id == id && q.answer == PullQuestion::Answer::Pending)
+            q.answer = yes ? PullQuestion::Answer::Yes : PullQuestion::Answer::No;
+    }
+}
+}

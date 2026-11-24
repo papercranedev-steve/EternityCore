@@ -104,7 +104,7 @@ namespace Commander
         bool Active() const { return !target.IsEmpty(); }
     };
 
-    // What the party asks the player before a pull (TeamPlan::pullQuestion, AutoClear.h).
+    // What the party asks the player before a pull (TeamPlan::pullQuestion, Situation/Pull/PullQuestions.h).
     enum class PullAskKind : uint8
     {
         Area,       // open world: "clear the creatures around here?"
@@ -126,7 +126,7 @@ namespace Commander
     {
         bool active = false;
         ClearEnd lastEnd = ClearEnd::None;
-        // The active pull stance in the open world (AutoClear.h): never ends with nothing left
+        // The active pull stance in the open world (Situation/Pull/AutoClear.h): never ends with nothing left
         // (waits for the next pack), the anchor moves with the leader whenever no pull is under
         // way, and a pull the tank has not reached yet is called off when he walks off.
         bool standing = false;
@@ -183,7 +183,7 @@ namespace Commander
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
     };
 
-    // A question to the player before a pull (AutoClear.h). The asking tank's life opens the
+    // A question to the player before a pull (Situation/Pull/PullQuestions.h). The asking tank's life opens the
     // popup (Companions/Fight/PullQuestion), the answer comes back through CommanderMgr.
     struct PullQuestion
     {
@@ -203,7 +203,7 @@ namespace Commander
         Answer answer = Answer::Pending;
     };
 
-    // What the player wants done with one camp of the open world (AutoClear.h): creatures of
+    // What the player wants done with one camp of the open world (Situation/Pull/Camps.h): creatures of
     // these kinds standing near any of the spots. From a fight he started himself there, or
     // from his answer. The spots grow as its packs are pulled (the camp is found as it is walked).
     struct CampMemory
@@ -218,20 +218,8 @@ namespace Commander
     // The player's active pull stance (PullStance.h): AutoClear starts clears on its own.
     struct AutoClearPlan
     {
-        std::vector<CampMemory> camps;  // newest first: the first that matches counts
-        // An idle creature the player has selected that would not come on its own: a fight
-        // with it starting next is one he started (a camp he wants, CampMemory::byPlayer).
-        ObjectGuid watched;
-        std::vector<uint32> watchedEntries;     // its pack's kinds
-        Position3 watchedPos;
+        std::vector<CampMemory> camps;  // newest first: the first that matches counts (Situation/Pull/Camps.h)
         uint32 nextQuestionId = 1;
-        // The leader's recent positions (one per AutoClear::TRAIL_STEP_MS): wandering or travelling.
-        struct LeaderSample
-        {
-            uint32 atMs = 0;
-            Position3 pos;
-        };
-        std::vector<LeaderSample> leaderTrail;
         bool started = false;           // the running clear was started by AutoClear
         bool wasActive = false;         // a clear ran on the last refresh (any: also `.partybot ai clear`)
         ClearEnd lastEnd = ClearEnd::None;

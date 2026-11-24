@@ -1,6 +1,6 @@
 /*
  * PartyBot Commander layer 1 (perception): creatures the team's quests still need
- * (PackCreature::questNeeded; the active pull stance pulls them, Situation/AutoClear.h).
+ * (PackCreature::questNeeded; the active pull stance pulls them, Situation/Pull/AutoClear.h).
  *
  * Needed by a member (the player or a bot of the team, each its own quest log) when one of his
  * current quests still counts kills of it (ReqCreatureOrGOId, not yet ReqCreatureOrGOCount;

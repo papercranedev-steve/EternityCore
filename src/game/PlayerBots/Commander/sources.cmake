@@ -116,8 +116,14 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.h
   ${COMMANDER_DIR}/Coordination/Situation/ClearPlanner.cpp
-  ${COMMANDER_DIR}/Coordination/Situation/AutoClear.h
-  ${COMMANDER_DIR}/Coordination/Situation/AutoClear.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/AutoClear.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/AutoClear.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PackJudge.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PackJudge.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/Camps.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/Camps.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullQuestions.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/PullQuestions.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Guide.h
   ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Stay.h
@@ -273,6 +279,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Support/WipeBehavior.cpp
   ${COMMANDER_DIR}/Perception/Spatial/LeaderRun.h
   ${COMMANDER_DIR}/Perception/Spatial/LeaderRun.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderActivity.h
+  ${COMMANDER_DIR}/Perception/Spatial/LeaderActivity.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/RetreatBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/PushBehavior.h

@@ -130,6 +130,8 @@ namespace WorldModelBuilder
             }
             if (Unit const* victim = unit->GetVictim())
                 f.victim = victim->GetObjectGuid();
+            if (Player const* player = unit->ToPlayer())
+                f.selection = player->GetSelectionGuid();
             f.casting = unit->IsNonMeleeSpellCasted(false, false, true);
             for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
                 if (Spell const* spell = unit->GetCurrentSpell(type))

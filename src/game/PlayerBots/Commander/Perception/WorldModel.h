@@ -592,6 +592,7 @@ namespace Commander
         // to is taken last among equally good ones, position field doc section 6).
         Position3 standAt;
         ObjectGuid victim;          // who this member is attacking
+        ObjectGuid selection;       // players (bots too): what is selected
         // Bots: the first live enemy carrying one of the raid marks the player told this bot to
         // focus (`.partybot focusmark`, TeamBotAI::m_marksToFocus). Empty = none. A player
         // order for TargetAssigner.
@@ -1026,6 +1027,9 @@ namespace Commander
         // A member's quest still needs it (Profiles/QuestNeeds.h: kills, or a quest item it
         // drops). Only in a team with a real player (the pull stance reads it).
         bool questNeeded = false;
+        // It will start a fight on its own: hostile, starts fights, visible, and a live member
+        // is within its aggro range + a margin (LeaderActivity annotator, every refresh).
+        bool comesAnyway = false;
         uint32 creatureTypeMask = 0;    // 1 << (CreatureType - 1)
         Position3 pos;
         float reach = 0.0f;             // aggro range against the main tank while fighting, else this bot
@@ -1152,6 +1156,23 @@ namespace Commander
     // The kind of map (Map::IsRaid / IsDungeon). World: the open world and battlegrounds.
     enum class MapKind : uint8 { World, Dungeon, Raid };
 
+    // A fight the leader started himself (Perception/Spatial/LeaderActivity.h).
+    struct LeaderEngage
+    {
+        ObjectGuid creature;
+        std::vector<uint32> entries;    // the kinds of its pack
+        Position3 pos;                  // where it stood
+    };
+
+    // What the leader does outside fights (Perception/Spatial/LeaderActivity.h).
+    struct LeaderActivityFacts
+    {
+        // He stays around here (also standing still), not on his way somewhere.
+        bool wanders = false;
+        // Fights he started himself since the last refresh.
+        std::vector<LeaderEngage> engaged;
+    };
+
     // The leader running away from the party's fight (Perception/Spatial/LeaderRun.h).
     struct LeaderRunFacts
     {
@@ -1180,6 +1201,7 @@ namespace Commander
         uint32 preferredPrey = 0;
         MapKind mapKind = MapKind::World;   // the map the team fights on (the refreshing bot's)
         LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
+        LeaderActivityFacts leaderActivity;     // PartyCommander's LeaderActivity annotator
         std::vector<PartyMemberFacts> party;
         // Dead members with their body or corpse on this map (a released one's ghost is not in
         // `party` when it waits on another map).

@@ -14,6 +14,7 @@
 #include "Commander/Perception/Spatial/PositionFieldBuilder.h"
 #include "Commander/Perception/Forecast/FleePredictor.h"
 #include "Commander/Perception/Spatial/LeaderRun.h"
+#include "Commander/Perception/Spatial/LeaderActivity.h"
 #include "Commander/Registry.h"
 #include "Commander/ThreatFeed.h"
 #include "Commander/Commands/Voice/PartyVoice.h"
@@ -130,6 +131,7 @@ namespace Commander
         PositionFieldBuilder m_positionField;
         FleePredictor m_fleePredictor;
         LeaderRun m_leaderRun;
+        LeaderActivity m_leaderActivity;
         ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
         PartyVoice m_voice;             // what the bots say to the players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh

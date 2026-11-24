@@ -15,7 +15,7 @@
  * are waited for but do not count as a death).
  * Packs whose hostile members are all stealthed are passed over each round, not skipped.
  *
- * A standing clear (the pull stance in the open world, AutoClear.h) never ends with nothing
+ * A standing clear (the pull stance in the open world, Pull/AutoClear.h) never ends with nothing
  * left, follows the leader, calls a pull off when he walks away from the pack before the tank
  * got there, forgets its skips every FORGET_MS and counts a death DEATH_MEMORY_MS.
  *

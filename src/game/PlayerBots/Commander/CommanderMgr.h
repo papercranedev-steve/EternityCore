@@ -102,7 +102,7 @@ namespace Commander
         // "把掉队的都拉过来": the team gathers its members left behind now (GatherPlanner), on the
         // leader's map. False: no commander there.
         bool GatherNow(Player const* leader);
-        // The team's question to the player before a pull (Situation/AutoClear.h), waiting for
+        // The team's question to the player before a pull (Situation/Pull/PullQuestions.h), waiting for
         // his answer; the asker's life shows it (Companions/Fight/PullQuestion). False: none.
         bool GetPullQuestion(TeamBotAI const* bot, PullQuestion& out);
         // The asker showed question `id` to him (one never shown is not taken as a no).
