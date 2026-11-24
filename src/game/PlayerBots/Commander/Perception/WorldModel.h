@@ -1072,6 +1072,8 @@ namespace Commander
         // The first idle creature of another pack (or a patrol) the walk comes into the aggro
         // range of (SafeRoute::PathIsSafe), empty = none. That creature would join on the way.
         ObjectGuid blocker;
+        // The leader has line of sight to `target` (Walk / Straight only).
+        bool leaderSees = false;
     };
 
     struct PackFacts

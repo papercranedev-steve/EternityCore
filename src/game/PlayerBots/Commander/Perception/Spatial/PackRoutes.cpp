@@ -60,12 +60,25 @@ namespace PackRoutes
             return nullptr;
         }
 
+        // The leader has line of sight to a member (the nearest first).
+        bool LeaderSees(Player* leader, PackFacts const& pack, PackCreature const& nearest)
+        {
+            auto sees = [leader](PackCreature const& c) { return leader->IsWithinLOS(c.pos.x, c.pos.y, c.pos.z); };
+            if (sees(nearest))
+                return true;
+            return std::any_of(pack.members.begin(), pack.members.end(), [&](PackCreature const& c)
+            {
+                return &c != &nearest && sees(c);
+            });
+        }
+
         void Route(Player* leader, Position3 const& from, SafeRoute::IdleCreatures const& allIdle, PackFacts& pack)
         {
             PackCreature const* target = NearestMember(pack, from);
             if (!target)
                 return;
             pack.route.target = target->guid;
+            pack.route.leaderSees = LeaderSees(leader, pack, *target);
 
             PathInfo path(leader);
             path.calculate(target->pos.x, target->pos.y, target->pos.z);

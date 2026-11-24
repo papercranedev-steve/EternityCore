@@ -52,7 +52,8 @@ namespace Commander
         uint32 const REVIVE_WAIT_MS = 60 * 1000;    // after a fight with deaths, wait this long for resurrection
         uint32 const MAX_DEATH_EVENTS = 2;          // fights with a death before the clear stops
 
-        // Prediction again when the tank is about to go; over the limit this long: skip the pack.
+        // Prediction again when the tank is about to go; too hard (or over the limit) this long:
+        // skip the pack, or ask about it (ClearPlan::asks).
         // (Patrol waiting has its own limit, PullPlanner::PATROL_WAIT_MAX_MS.)
         uint32 const REPREDICT_WAIT_MS = 30 * 1000;
 

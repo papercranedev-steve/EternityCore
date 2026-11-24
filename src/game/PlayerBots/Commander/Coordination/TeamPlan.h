@@ -58,7 +58,7 @@ namespace Commander
         bool active = false;
         PushPhase phase = PushPhase::Clear;
         float radius = 40.0f;           // of each clear
-        uint32 maxMobs = 4;
+        uint32 maxMobs = 0;             // ClearPlan::maxMobs
         ObjectGuid guideBefore;         // TeamPlan::guide before the push, restored at the end
 
         // Goal: a hostile spawn still alive (SpawnTargets), empty = pick one.
@@ -109,7 +109,7 @@ namespace Commander
     {
         Area,       // open world: "clear the creatures around here?"
         Boss,       // a boss the clear would leave to him: "shall I start it?"
-        TooMany,    // a pack over the clear's limit: "N of them, pull?"
+        Hard,       // the fight estimate says the party cannot carry it: "N of them, I may not hold, pull?"
     };
 
     // A pack a clear would leave that the player may want (ClearPlan::asks): AutoClear asks him.
@@ -118,7 +118,7 @@ namespace Commander
         PullAskKind kind = PullAskKind::Boss;
         std::vector<ObjectGuid> pack;   // its members (empty = nothing to ask)
         ObjectGuid first;               // the one the question names
-        uint32 count = 0;               // TooMany: predicted to bring
+        uint32 count = 0;               // Hard: predicted to bring
     };
 
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
@@ -134,8 +134,9 @@ namespace Commander
         // never-starts-a-fight checks are AutoClear's then.
         bool chosenOnly = false;
         std::vector<ObjectGuid> chosen;
-        // A boss or a pack over the limit is not skipped but put in `ask` (one at a time) and
-        // the clear does not end while it waits; the player's yes puts it in `approved`.
+        // A boss or a pack the fight estimate says is too hard (PullPlan::hard) is not skipped
+        // but put in `ask` (one at a time) and the clear does not end while it waits; the
+        // player's yes puts it in `approved` (no estimate or limit stops it then).
         bool asks = false;
         ClearAsk ask;
         std::vector<ObjectGuid> approved;
@@ -151,8 +152,14 @@ namespace Commander
         // mode's clears do not: the push planner moves the party, the anchor is the guide's spot.
         bool followsLeader = true;
         Position3 anchor;               // leader position at start, moved when the leader settles elsewhere
-        float radius = 40.0f;
-        uint32 maxMobs = 4;             // skip packs predicted to bring more
+        float radius = 40.0f;           // walk from the leader
+        // Only the packs in front of the leader (the active pull stance in a dungeon, user
+        // 2026-11-24): no other creature on the way (PackRoute::blocker) and in his sight
+        // (PackRoute::leaderSees); `radius` is only the safety cap then.
+        bool frontOnly = false;
+        // Skip packs predicted to bring more; 0 = no count limit, the fight estimate decides
+        // (PullPlan::hard). Only a number the player gave (`.partybot ai clear r n`) sets one.
+        uint32 maxMobs = 0;
         uint32 cleared = 0;
         uint32 skippedPacks = 0;
         std::vector<ObjectGuid> skipped;    // members of packs judged too hard or unpullable
@@ -192,7 +199,7 @@ namespace Commander
         PullAskKind kind = PullAskKind::Area;
         ObjectGuid asker;               // the main tank bot
         ObjectGuid first;               // the creature it names
-        uint32 count = 0;               // TooMany
+        uint32 count = 0;               // Hard
         std::vector<ObjectGuid> pack;   // the pack it is about
         std::vector<uint32> entries;    // Area: its kinds (the camp the answer is about)
         Position3 where;                // Area: its centre
@@ -333,6 +340,10 @@ namespace Commander
         float expectedManaStart = 0.0f;
         float expectedManaLeft = 0.0f;
         float expectedLowestTankPct = 0.0f;
+        // The fight estimate (FightLoad::Bearable) says the party cannot carry it: at planning
+        // with everyone rested (full tank, full healer mana), again before the tank goes with
+        // the party as it is (patrols joining included). No estimate: false.
+        bool hard = false;
         // The estimate as ManaWorth's planned fight while the pull runs; none (sec 0) otherwise.
         ManaWorth::Fight PlannedFight() const
         {
@@ -369,7 +380,7 @@ namespace Commander
         // Set for every pull except `.partybot ai pull now`.
         bool recheckOnApproach = false;
         bool rechecked = false;
-        uint32 recheckWaitSinceMs = 0;      // clear: prediction over the limit since then, 0 = not waiting
+        uint32 recheckWaitSinceMs = 0;      // clear: too hard (or over its limit) since then, 0 = not waiting
         // Last full recheck. While held (patrol, over the limit) the pull comes back to
         // Approach on every refresh; the next full recheck waits RECHECK_PATROL_WAIT_MS /
         // RECHECK_HOLD_MS after this.

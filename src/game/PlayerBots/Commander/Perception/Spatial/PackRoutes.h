@@ -6,7 +6,8 @@
  * its length, or no way at all, and the first idle creature of another pack the walk comes
  * into the aggro range of (SafeRoute::PathIsSafe against the leader, the pack itself left out).
  * A pack in a corridor is then nearer than one outside it, and a pack whose way passes another
- * pack is known to be behind it.
+ * pack is known to be behind it. Also whether the leader sees any of its members (line of
+ * sight): a pack in front of him (the active pull stance in a dungeon).
  *
  * Facts only: the clear (ClearPlanner) decides the order. Calculated by RefreshPacks out of
  * combat for the MAX_ROUTED_PACKS nearest packs (one path each); the rest stay Unknown.

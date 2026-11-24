@@ -290,9 +290,11 @@ namespace PushPlanner
         push.phase = PushPhase::Clear;
         ClearPlanner::Start(tank, commander, radius, maxMobs, false);
 
-        report.push_back(Format("%s leads: it clears every pack within %.0f yd walk (at most %u mobs per pull), "
+        std::string const limit = maxMobs ? Format("at most %u mobs per pull", maxMobs)
+                                          : std::string("packs the fight estimate says are too hard skipped");
+        report.push_back(Format("%s leads: it clears every pack within %.0f yd walk (%s), "
             "then walks on to the next living creature and clears again. The party follows %s.",
-            tank->GetName(), radius, maxMobs, tank->GetName()));
+            tank->GetName(), radius, limit.c_str(), tank->GetName()));
         report.push_back(Format("Before each step everyone must be within %.0f yd of %s and done eating and drinking, "
             "you too. Bosses are yours. '.partybot ai push stop' to stop.", GATHER_YD, tank->GetName()));
         return true;

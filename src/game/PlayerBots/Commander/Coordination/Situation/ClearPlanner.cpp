@@ -247,16 +247,26 @@ namespace ClearPlanner
             return AnyMember(pack, [&list](PackCreature const& c) { return Contains(list, c.guid); });
         }
 
-        // ClearPlan::asks: put the pack up for a question instead of skipping it (one at a time).
-        void PutUp(ClearPlan& clear, PackFacts const& pack, Creature* first, PullAskKind kind, uint32 count)
+        // ClearPlan::asks: put the creatures up for a question instead of skipping them (one at
+        // a time). False: another question is waiting.
+        bool PutUp(ClearPlan& clear, std::vector<ObjectGuid> const& creatures, ObjectGuid first, PullAskKind kind,
+                   uint32 count)
         {
             if (!clear.ask.pack.empty())
-                return;
+                return false;
             clear.ask.kind = kind;
-            clear.ask.first = first->GetObjectGuid();
+            clear.ask.first = first;
             clear.ask.count = count;
+            clear.ask.pack = creatures;
+            return true;
+        }
+
+        bool PutUp(ClearPlan& clear, PackFacts const& pack, Creature* first, PullAskKind kind, uint32 count)
+        {
+            std::vector<ObjectGuid> members;
             for (PackCreature const& c : pack.members)
-                clear.ask.pack.push_back(c.guid);
+                members.push_back(c.guid);
+            return PutUp(clear, members, first->GetObjectGuid(), kind, count);
         }
 
         // After a fight: dead members get up to REVIVE_WAIT_MS to be resurrected (the original
@@ -318,15 +328,24 @@ namespace ClearPlanner
         }
 
         // The tank is about to go (WaitReady -> Approach this refresh): predict again and look
-        // at patrols (PullPlanner::RecheckBeforeApproach). Given up (still over the limit, or a
-        // patrol still near after waiting): skip the pack.
+        // at patrols (PullPlanner::RecheckBeforeApproach). Given up: skip the pack; too hard in
+        // a clear that asks: put it to the player.
         void RecheckBeforeApproach(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
         {
             std::string why;
-            if (PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why) != PullPlanner::RecheckResult::GiveUp)
+            PullPlanner::RecheckResult const result = PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why);
+            if (result != PullPlanner::RecheckResult::GiveUp && result != PullPlanner::RecheckResult::TooHard)
                 return;
 
             ClearPlan& clear = plan.clear;
+            if (result == PullPlanner::RecheckResult::TooHard && clear.asks)
+            {
+                // (another question waiting: planned again after it)
+                if (PutUp(clear, plan.pull.expected, plan.pull.target, PullAskKind::Hard, uint32(plan.pull.expected.size())))
+                    Note(plan, "Asking you about it: " + why + ".");
+                plan.pull = PullPlan();
+                return;
+            }
             for (ObjectGuid g : plan.pull.expected)
                 clear.skipped.push_back(g);
             ++clear.skippedPacks;
@@ -529,6 +548,10 @@ namespace ClearPlanner
                 // A long way round (the other side of a wall): out of range.
                 if (pack.ApproachYd() > clear.radius)
                     continue;
+                // Not in front of him: behind another pack (pulled once that one is dead) or
+                // out of his sight. Looked at again every round.
+                if (clear.frontOnly && (!pack.route.blocker.IsEmpty() || !pack.route.leaderSees))
+                    continue;
 
                 // Bosses and creatures that never start a fight are left to the player.
                 // (chosen packs: AutoClear decided, e.g. a neutral creature a quest needs)
@@ -593,21 +616,26 @@ namespace ClearPlanner
                     continue;
                 }
 
-                if (plan.pull.expected.size() > clear.maxMobs && !approved && clear.asks)
+                // Too hard even rested (the fight estimate), or over a limit the player gave:
+                // asked about when the clear asks, else skipped. A yes lets it through.
+                uint32 const count = uint32(plan.pull.expected.size());
+                bool const overLimit = clear.maxMobs && count > clear.maxMobs;
+                if (!approved && (plan.pull.hard || overLimit))
                 {
-                    uint32 const count = uint32(plan.pull.expected.size());
-                    plan.pull = PullPlan();
-                    PutUp(clear, pack, first, PullAskKind::TooMany, count);
-                    continue;
-                }
-                if (plan.pull.expected.size() > clear.maxMobs && !approved)
-                {
-                    char buf[200];
-                    snprintf(buf, sizeof(buf), "Skipping %s's pack: would bring %u (limit %u).",
-                        first->GetName(), uint32(plan.pull.expected.size()), clear.maxMobs);
+                    if (!overLimit && clear.asks)
+                    {
+                        // (another question waiting: this one after it)
+                        plan.pull = PullPlan();
+                        if (PutUp(clear, pack, first, PullAskKind::Hard, count))
+                            Note(plan, Format("Asking you about %s's pack: %u, too hard by the fight estimate.",
+                                first->GetName(), count));
+                        continue;
+                    }
+                    std::string const why = overLimit ? Format("would bring %u (limit %u)", count, clear.maxMobs)
+                                                      : Format("%u, too hard by the fight estimate", count);
                     plan.pull = PullPlan();
                     Skip(clear, pack);
-                    Note(plan, buf);
+                    Note(plan, "Skipping " + std::string(first->GetName()) + "'s pack: " + why + ".");
                     continue;
                 }
 
@@ -646,8 +674,10 @@ namespace ClearPlanner
             ? Format(" %u pack(s) with only stealthed creatures left; pull them yourself.", stealthOnly) : "";
         std::string const noWayText = noWay
             ? Format(" %u pack(s) nearby with no walkable way from here.", noWay) : "";
-        Stop(commander, Format("nothing left to pull within %.0f yd walk (%u packs skipped in total).",
-            clear.radius, clear.skippedPacks) + stealthText + noWayText, ClearEnd::NothingLeft);
+        std::string const where = clear.frontOnly ? std::string("in front of you (in your sight, nothing in between)")
+                                                  : Format("within %.0f yd walk", clear.radius);
+        Stop(commander, Format("nothing left to pull %s (%u packs skipped in total).",
+            where.c_str(), clear.skippedPacks) + stealthText + noWayText, ClearEnd::NothingLeft);
     }
 }
 }

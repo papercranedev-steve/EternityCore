@@ -102,9 +102,10 @@ namespace AutoClear
                 !world.HasPartyEnemy();
             if (!idle || !LeaderSettled(autoClear, leader, nowMs) || !MayStartAgain(autoClear, leader, nowMs))
                 return;
-            ClearPlanner::Start(leader, commander, ClearPlan().radius, ClearPlan().maxMobs);
+            ClearPlanner::Start(leader, commander, FRONT_WALK_YD, 0);
+            plan.clear.frontOnly = true;
             plan.clear.asks = true;
-            Started(plan, "Active pull stance: clearing around you.");
+            Started(plan, "Active pull stance: clearing what is in front of you.");
         }
 
         // ---- open world ----
@@ -178,7 +179,7 @@ namespace AutoClear
                 !MayStartAgain(autoClear, leader, nowMs))
                 return askPack;
 
-            ClearPlanner::Start(leader, commander, WORLD_RADIUS, ClearPlan().maxMobs);
+            ClearPlanner::Start(leader, commander, WORLD_RADIUS, 0);
             clear.standing = true;
             clear.chosenOnly = true;
             clear.asks = true;

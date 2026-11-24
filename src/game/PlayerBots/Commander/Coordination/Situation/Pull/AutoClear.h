@@ -6,10 +6,12 @@
  * Only with a real player leading (a team of bots hunts on its own, Hunt/HuntAssigner), the
  * pull module on and a tank bot alive (Tanks::Main, bots only): without one it is passive.
  *
- * Dungeon / raid: a plain clear (ClearPlanner, its defaults) around the player once he stood
- * still LEADER_STILL_MS and nothing else runs; after it ended: nothing left -> once he moved
- * MOVED_YD or RETRY_MS later; any other end (deaths, a failed pull, stopped) -> once he moved
- * MOVED_YD. A boss or a pack over the limit is asked about (ClearPlan::asks) instead of skipped.
+ * Dungeon / raid: a clear of the packs in front of the player (ClearPlan::frontOnly: nothing
+ * in between, in his sight, at most FRONT_WALK_YD walk) once he stood still LEADER_STILL_MS
+ * and nothing else runs; after it ended: nothing left -> once he moved MOVED_YD or RETRY_MS
+ * later; any other end (deaths, a failed pull, stopped) -> once he moved MOVED_YD. No count
+ * limit: a boss or a pack the fight estimate says is too hard (PullPlan::hard) is asked about
+ * (ClearPlan::asks) instead of skipped.
  *
  * Open world: a standing clear (ClearPlan::standing, chosenOnly) of the packs within
  * WORLD_RADIUS that PackJudge says Pull, chosen again every refresh; the nearest Ask pack is
@@ -42,6 +44,7 @@ namespace Commander
         float const LEADER_STILL_RADIUS = 2.0f;     // ... within this distance
         float const MOVED_YD = 20.0f;               // moved this far from where the last clear ended
         uint32 const RETRY_MS = 30 * 1000;          // nothing was left: look again after this long
+        float const FRONT_WALK_YD = 100.0f;         // safety cap of the packs in front (walk)
 
         // Open world
         float const WORLD_RADIUS = 30.0f;           // packs this far (walk) from the player

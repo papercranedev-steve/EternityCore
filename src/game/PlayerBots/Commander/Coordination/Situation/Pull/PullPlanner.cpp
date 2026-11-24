@@ -83,20 +83,33 @@ namespace Commander
         // spends (the total shared out) x READY_HEALER_MANA_MARGIN, as a share of the smallest
         // pool. At least READY_HEALER_MIN_MANA_PCT, at most READY_FULL_MANA_PCT (also when not
         // bearable even then). No estimate or no healer bot: READY_MANA_PCT as before.
-        float HealerManaNeededPct(FightLoad::Input input, bool haveLoad)
+        // The fight as it starts once everyone is ready: the tank at full health, every healer
+        // bot at full mana.
+        FightLoad::Input Rested(FightLoad::Input input)
         {
-            if (!haveLoad || input.healers.empty())
-                return PullPlanner::READY_MANA_PCT;
-            float smallestPool = 0.0f;
             for (FightLoad::Healer& h : input.healers)
-            {
                 h.mana = h.maxMana;
+            input.tankHealth = input.tankMaxHealth;
+            return input;
+        }
+
+        // PullPlan::hard at planning: not bearable even rested. No estimate: not hard.
+        bool HardEvenRested(FightLoad::Input const& input, bool haveLoad)
+        {
+            return haveLoad && !FightLoad::Bearable(FightLoad::Simulate(Rested(input), "too hard? (rested)"));
+        }
+
+        float HealerManaNeededPct(FightLoad::Input const& load, bool haveLoad)
+        {
+            if (!haveLoad || load.healers.empty())
+                return PullPlanner::READY_MANA_PCT;
+            FightLoad::Input const input = Rested(load);
+            float smallestPool = 0.0f;
+            for (FightLoad::Healer const& h : input.healers)
                 if (h.maxMana > 0.0f && (smallestPool <= 0.0f || h.maxMana < smallestPool))
                     smallestPool = h.maxMana;
-            }
             if (smallestPool <= 0.0f)
                 return PullPlanner::READY_MANA_PCT;
-            input.tankHealth = input.tankMaxHealth;
             FightLoad::Result const r = FightLoad::Simulate(input, "healer mana needed (full mana, full tank)");
             if (!FightLoad::Bearable(r))
                 return PullPlanner::READY_FULL_MANA_PCT;
@@ -572,6 +585,7 @@ namespace Commander
         pull.plannedAtMs = pull.phaseSinceMs;
         pull.phase = skipReady ? PullPhase::Approach : PullPhase::WaitReady;
         pull.healerManaPct = HealerManaNeededPct(load, haveLoad);
+        pull.hard = HardEvenRested(load, haveLoad);
         // `pull now` means now: no second prediction, no waiting for patrols.
         pull.recheckOnApproach = !skipReady;
         if (best.ambush)
@@ -682,8 +696,12 @@ namespace Commander
         // tank is about to go (RecheckBeforeApproach).
         FightLoad::Input fightLoad;
         if (FightLoad::Build(world, map, pull.expected, fightLoad))
+        {
             report.push_back("Fight estimate: " + FightLoad::Describe(FightLoad::Simulate(fightLoad, "estimate: report")) +
                 Format(", party damage %.0f/s (%s).", fightLoad.partyDps, Value::CapacityDpsSource(world)));
+            if (pull.hard)
+                report.push_back("Too hard even when everyone is ready: " + FightLoad::Describe(FightLoad::Simulate(Rested(fightLoad))) + ".");
+        }
         PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected,
                                                 PATROL_WAIT_MAX_MS / 1000.0f);
         SetPatrolHold(pull, patrols);
@@ -865,24 +883,35 @@ namespace Commander
             if (!Contains(expected, g) && IsStealthedPackCreature(world, g))
                 expected.push_back(g);
 
-        // A pack the player said yes to (ClearPlan::approved, asked because it was over the
-        // limit) has no limit here either.
+        // The fight with the party as it is now (everyone ready), patrols left to step 2.
+        FightLoad::Input nowLoad;
+        bool const hardNow = FightLoad::Build(world, map, expected, nowLoad) &&
+            !FightLoad::Bearable(FightLoad::Simulate(nowLoad, "too hard? (before the tank goes)"));
+
+        // A clear holds a pull that is too hard (or over a limit the player gave) and gives it
+        // up after REPREDICT_WAIT_MS. A pack the player said yes to (ClearPlan::approved) is
+        // never held for it; a single pull is his order and goes (PullPlan::hard warns).
         bool const approved = std::any_of(pull.expected.begin(), pull.expected.end(),
             [&clear](ObjectGuid g) { return Contains(clear.approved, g); });
-        uint32 const maxMobs = clear.active && !approved ? clear.maxMobs : 0;
-        if (maxMobs && expected.size() > maxMobs)
+        bool const judged = clear.active && !approved;
+        bool const overLimit = judged && clear.maxMobs && expected.size() > clear.maxMobs;
+        if (overLimit || (judged && hardNow))
         {
+            std::string const what = overLimit
+                ? Format("would now bring %u (limit %u)", uint32(expected.size()), clear.maxMobs)
+                : Format("is too hard now (%s)", FightLoad::Describe(FightLoad::Simulate(nowLoad)).c_str());
             if (!pull.recheckWaitSinceMs)
             {
                 pull.recheckWaitSinceMs = nowMs;
-                plan.notes.push_back(Format("Holding the pull: %s would now bring %u (limit %u). Waiting for that to change.",
-                    target->GetName(), uint32(expected.size()), maxMobs));
+                plan.notes.push_back(Format("Holding the pull: %s %s. Waiting for that to change.",
+                    target->GetName(), what.c_str()));
             }
             else if (WorldTimer::getMSTimeDiff(pull.recheckWaitSinceMs, nowMs) > ClearPlanner::REPREDICT_WAIT_MS)
             {
-                why = Format("still %u after %u seconds", uint32(expected.size()), ClearPlanner::REPREDICT_WAIT_MS / 1000);
+                why = Format("%s after %u seconds", overLimit ? Format("still %u", uint32(expected.size())).c_str()
+                                                              : "still too hard", ClearPlanner::REPREDICT_WAIT_MS / 1000);
                 AddUnique(pull.expected, expected);
-                return RecheckResult::GiveUp;
+                return overLimit ? RecheckResult::GiveUp : RecheckResult::TooHard;
             }
             holdBack();
             return RecheckResult::Hold;
@@ -918,13 +947,15 @@ namespace Commander
         }
         else if (patrols.considered && !patrols.bearableNow)
         {
-            // Waited the whole time and it is still too much: the clear skips the pack.
-            if (clear.active && waitedMs >= PATROL_WAIT_MAX_MS)
+            // No start within the wait is bearable (waited the whole time, or waiting does not
+            // help): too hard for the clear (it skips or asks).
+            if (judged)
             {
-                why = Format("patrol %s still near after %u seconds", patrols.Main()->patrol->GetName(),
-                    PATROL_WAIT_MAX_MS / 1000);
+                why = waitedMs >= PATROL_WAIT_MAX_MS
+                    ? Format("patrol %s still near after %u seconds", patrols.Main()->patrol->GetName(), PATROL_WAIT_MAX_MS / 1000)
+                    : Format("too hard with patrol %s joining", patrols.Main()->patrol->GetName());
                 AddUnique(pull.expected, expected);
-                return RecheckResult::GiveUp;
+                return RecheckResult::TooHard;
             }
             if (pull.patrolWaitingFor != mainPatrol || pull.patrolWaitSinceMs)
                 plan.notes.push_back(PatrolVerdict(patrols, "Waiting") + " Pulling.");
@@ -939,8 +970,13 @@ namespace Commander
         else if (pull.patrolWaitSinceMs)
             plan.notes.push_back("The patrol has moved away, pulling.");
 
+        // The fight the tank goes into (the patrols' verdict when one joins).
+        pull.hard = !patrols.considered ? hardNow
+                  : patrols.Held()      ? !patrols.bearableAtStart
+                                        : !patrols.bearableNow;
         if (pull.recheckWaitSinceMs)
-            plan.notes.push_back(Format("%s would bring %u now, pulling.", target->GetName(), uint32(expected.size())));
+            plan.notes.push_back(Format("%s would bring %u now and the party can carry it, pulling.", target->GetName(),
+                uint32(expected.size())));
         else if (expected.size() != pull.expected.size())
             plan.notes.push_back(Format("Predicted again: %s now brings %u (was %u): %s.", target->GetName(),
                 uint32(expected.size()), uint32(pull.expected.size()), NamesOf(map, expected, &aggroAdds, " (aggro range)").c_str()));

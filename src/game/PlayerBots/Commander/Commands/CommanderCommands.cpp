@@ -356,8 +356,9 @@ namespace
         if (plan.pull.phase == Commander::PullPhase::None)
             handler->SendSysMessage("Pull: none");
         if (plan.clear.active)
-            handler->PSendSysMessage("Clear: running, %.0f yd, max %u mobs, %u packs done, %u skipped",
-                plan.clear.radius, plan.clear.maxMobs, plan.clear.cleared, plan.clear.skippedPacks);
+            handler->PSendSysMessage("Clear: running, %.0f yd%s, max %u mobs (0 = by the fight estimate), %u packs done, %u skipped",
+                plan.clear.radius, plan.clear.frontOnly ? " (in front of you only)" : "", plan.clear.maxMobs,
+                plan.clear.cleared, plan.clear.skippedPacks);
         if (plan.retreat.active)
             handler->PSendSysMessage("Retreat%s%s: to (%.1f, %.1f, %.1f), %.0f yd from you, for %.1fs, %u enemies left",
                 plan.retreat.toDoor ? " out through the door" : "", plan.retreat.automatic ? " (you ran)" : "",
@@ -732,6 +733,14 @@ namespace
         return ok;
     }
 
+    // ClearPlan::maxMobs for the player: a limit he gave, or the fight estimate.
+    std::string LimitText(uint32 maxMobs)
+    {
+        if (!maxMobs)
+            return "packs the fight estimate says are too hard skipped";
+        return "at most " + std::to_string(maxMobs) + " mobs per pull";
+    }
+
     // .partybot ai clear [radius] [maxmobs] | stop
     bool StartClear(ChatHandler* handler, Player* player, char const* first, char const* second)
     {
@@ -767,26 +776,26 @@ namespace
         }
 
         float radius = 40.0f;
-        uint32 maxMobs = 4;
+        uint32 maxMobs = 0;
         if (first)
             radius = float(atof(first));
         if (second)
             maxMobs = uint32(atoi(second));
         // The clear only sees packs in the pack scan.
         float const maxRadius = Commander::WorldModelBuilder::PACK_SCAN_RADIUS;
-        if (radius < 10.0f || radius > maxRadius || maxMobs < 1 || maxMobs > 10)
+        if (radius < 10.0f || radius > maxRadius || maxMobs > 10)
         {
-            handler->PSendSysMessage("Usage: .partybot ai clear [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 4] | stop",
-                maxRadius);
+            handler->PSendSysMessage("Usage: .partybot ai clear [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 0 = "
+                "the fight estimate decides] | stop", maxRadius);
             return false;
         }
 
         Commander::ClearPlanner::Start(player, *commander, radius, maxMobs);
         commander->GetPlanMutable().autoClear.started = false;     // the player's own: the passive stance leaves it
         handler->PSendSysMessage("Clearing packs within %.0f yd walk of here (open ways first, then those behind another pack), "
-            "at most %u mobs per pull "
+            "%s "
             "(assistance and aggro range counted; waits up to %u s for patrols to pass). ",
-            radius, maxMobs, Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
+            radius, LimitText(maxMobs).c_str(), Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
         handler->PSendSysMessage(
             "Pauses while you are more than %.0f yd away (goes on where you stop); stops when nothing is left, "
             "the tank is gone or someone dies twice. '.partybot ai clear stop' to stop.",
@@ -811,16 +820,16 @@ namespace
         }
 
         float radius = 40.0f;
-        uint32 maxMobs = 4;
+        uint32 maxMobs = 0;
         if (first)
             radius = float(atof(first));
         if (second)
             maxMobs = uint32(atoi(second));
         float const maxRadius = Commander::WorldModelBuilder::PACK_SCAN_RADIUS;
-        if (radius < 10.0f || radius > maxRadius || maxMobs < 1 || maxMobs > 10)
+        if (radius < 10.0f || radius > maxRadius || maxMobs > 10)
         {
-            handler->PSendSysMessage("Usage: .partybot ai push [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 4] | stop",
-                maxRadius);
+            handler->PSendSysMessage("Usage: .partybot ai push [radius 10-%.0f, default 40] [max mobs per pull 1-10, default 0 = "
+                "the fight estimate decides] | stop", maxRadius);
             return false;
         }
 

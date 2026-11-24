@@ -69,11 +69,15 @@ namespace Commander
         {
             NotDue,     // not the refresh the tank leaves on, or already rechecked
             Go,         // the tank goes (expected list updated)
-            Hold,       // back to WaitReady: too many now (clear limit) or a patrol is coming
+            Hold,       // back to WaitReady: too hard or too many now (clear) or a patrol is coming
             // Clear only: still over the limit after ClearPlanner::REPREDICT_WAIT_MS, or a patrol
             // still near after PATROL_WAIT_MAX_MS. `pull.expected` holds every creature seen in
             // the predictions (to skip); `why` says why. The caller resets the pull.
             GiveUp,
+            // Clear only, like GiveUp, but the pull itself works: the fight estimate says the
+            // party cannot carry it (after REPREDICT_WAIT_MS, or a patrol still joining after
+            // PATROL_WAIT_MAX_MS). A clear that asks puts it to the player instead of skipping.
+            TooHard,
         };
         // Runs when PullAssigner has just moved the pull to Approach. Map thread.
         // ClearPlanner::Step calls it on every refresh while a pull is going, so it is also the

@@ -32,7 +32,7 @@ namespace PullQuestion
             switch (kind)
             {
                 case Commander::PullAskKind::Boss:    return { "pull.ask.boss", "pull.opt.start", "pull.opt.wait" };
-                case Commander::PullAskKind::TooMany: return { "pull.ask.many", "pull.opt.pull", "pull.opt.leave" };
+                case Commander::PullAskKind::Hard:    return { "pull.ask.hard", "pull.opt.pull", "pull.opt.leave" };
                 default:                              return { "pull.ask.area", "pull.opt.clear", "pull.opt.leave" };
             }
         }

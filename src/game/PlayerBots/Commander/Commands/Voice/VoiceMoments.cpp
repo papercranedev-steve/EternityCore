@@ -123,10 +123,11 @@ namespace Commander
         if (!pull.patrolWaitingFor.IsEmpty() && pull.patrolWaitingFor != m_patrolWait)
             Say("voice.pull.patrol", pull.tank, VoiceTier::Essential, nowMs, {}, "patrolwait:" + G(pull.patrolWaitingFor), 120000);
 
-        // Going: the tank tells the party (a corner fight: where to stand).
+        // Going: the tank tells the party (a corner fight: where to stand; a fight the estimate
+        // says is too hard, the player's order or his yes: a warning).
         if (pull.phase == PullPhase::Approach && (m_pullPhase == PullPhase::None || m_pullPhase == PullPhase::WaitReady))
-            Say(pull.corner ? "voice.pull.go.corner" : "voice.pull.go", pull.tank, VoiceTier::Essential, nowMs, {},
-                "go:" + pullKey, 120000);
+            Say(pull.corner ? "voice.pull.go.corner" : pull.hard ? "voice.pull.go.hard" : "voice.pull.go", pull.tank,
+                VoiceTier::Essential, nowMs, {}, "go:" + pullKey, 120000);
 
         // The opening control: the controller says what he takes (its mark is on already).
         if (pull.control.Active() && pull.control.sinceMs != m_pullControlSince)
