@@ -75,6 +75,25 @@ namespace Commander
             return text;
         }
 
+        // PullPlan::wentEarly no longer holds (PullPlanner::ForecastReady, EARLY_GO_HOLD_SLACK_SEC):
+        // `issues` says who. The tank's own issues do not count (walking away from the leader
+        // makes it "far"; it went with none of the rest kind).
+        bool EarlyGoBroken(WorldModel const& world, TeamPlan const& plan, std::vector<PullPlanner::Issue>& issues)
+        {
+            PullPlan const& pull = plan.pull;
+            Position3 planned;
+            bool const hasPlanned = plan.PlannedFightSpot(planned);
+            issues = PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr);
+            issues.erase(std::remove_if(issues.begin(), issues.end(),
+                [&pull](PullPlanner::Issue const& i) { return i.who == pull.tank; }), issues.end());
+            if (issues.empty())
+                return false;
+            PullPlanner::ReadyForecast forecast;
+            if (!PullPlanner::ForecastReady(world, pull, issues, forecast))
+                return false;
+            return forecast.goInSec < 0.0f || forecast.goInSec > PullPlanner::EARLY_GO_HOLD_SLACK_SEC;
+        }
+
         // Pulled enemy the tank waits for after a ranged pull fought in place: in the fight,
         // acting, coming for the tank with melee on (a caster standing back is not coming).
         bool IsComingToTank(EnemyFacts const& e, PullPlan const& pull)
@@ -217,6 +236,20 @@ namespace Commander
                     if (!pull.readyAnnounced)
                         plan.notes.push_back("Everyone ready, pulling.");
                     pull.readyAnnounced = true;
+                    pull.wentEarly = false;
+                    enter(PullPhase::Approach);
+                    return;
+                }
+                // Only bots resting on into the pull are not ready: go now (PullPlanner.h, EARLY_GO_*).
+                PullPlanner::ReadyForecast forecast;
+                if (!pull.ambush && PullPlanner::ForecastReady(world, pull, issues, forecast) &&
+                    forecast.goInSec == 0.0f)
+                {
+                    if (!pull.readyAnnounced)
+                        plan.notes.push_back("Pulling while " + DescribeIssues(issues, world, pull) +
+                            " rest on (ready by the time they act).");
+                    pull.readyAnnounced = true;
+                    pull.wentEarly = true;
                     enter(PullPhase::Approach);
                     return;
                 }
@@ -254,6 +287,7 @@ namespace Commander
                 PullShotState const& shot = pull.rangedShot;
                 uint32 const openedAtMs = shot.approachSinceMs == pull.phaseSinceMs ? shot.openedAtMs : 0;
                 std::string guardWhy;
+                std::vector<PullPlanner::Issue> earlyIssues;
                 std::vector<ObjectGuid> unexpected;
                 for (EnemyFacts const& e : world.enemies)
                     // (an ally's fight nearby, e.g. a guard, is not ours)
@@ -294,6 +328,15 @@ namespace Commander
                          (!openedAtMs || WorldTimer::getMSTimeDiff(openedAtMs, now) > OPENED_GRACE_MS))
                     interrupt(openedAtMs ? "other enemies came and the pulled ones did not follow." :
                                            "a fight with other enemies started.");
+                // Went early: until the opener the resting bots must still be ready in time (one
+                // stood up, a drink ran out). Else back to waiting.
+                else if (pull.wentEarly && !openedAtMs && EarlyGoBroken(world, plan, earlyIssues))
+                {
+                    plan.notes.push_back("Holding the pull: " + DescribeIssues(earlyIssues, world, pull) +
+                        " not ready in time.");
+                    pull.wentEarly = false;
+                    enter(PullPhase::WaitReady);
+                }
                 else if (pull.ambush)
                 {
                     // Waits on the patrol's way: no walk-in fallback (it would follow the patrol).

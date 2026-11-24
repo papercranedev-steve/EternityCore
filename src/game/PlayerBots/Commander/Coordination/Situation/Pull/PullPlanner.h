@@ -222,24 +222,35 @@ namespace Commander
         // no pull planned or its tank is not in the party.
         bool Timeline(WorldModel const& world, PullPlan const& pull, PullTimeline::Result& out);
 
-        // How long the ready wait would be if a bot's drinking and eating on into the pull
-        // counted (user 2026-11-24, step 1: shown by `.partybot ai ready` only, nothing waits
-        // on it yet). Each bot needs its mana and health by the moment it acts: the pull's
-        // tank at the go, a bot healing the team at contact, everyone else at damageSec.
+        // Going early (user 2026-11-24): the tank need not wait for a bot's mana or health it
+        // gets by resting on into the pull (it keeps drinking while the tank walks, opens and
+        // builds threat). Each bot needs them by the moment it acts, x EARLY_GO_TIME_SHARE
+        // (the timeline is a guess): a bot healing the team at contact, everyone else at
+        // damageSec. No credit (needed at the go) for:
+        //  - the pull's tank (walking, it cannot rest);
+        //  - a bot not resting yet (drink / food not on);
+        //  - a healer bot below healerManaPct / READY_HEALER_MANA_MARGIN: the fight's own
+        //    mana without the margin, for a pull that goes wrong and needs heals at once;
+        //  - players and every other issue (dead, combat, far): goInSec unknown, the pull waits.
+        // Not for ambushes (the patrol sets the time). Before the opener the assigner checks
+        // again on every refresh; once the go lies more than EARLY_GO_HOLD_SLACK_SEC away (a
+        // drinker stood up) the pull goes back to WaitReady.
+        float const EARLY_GO_TIME_SHARE = 0.7f;
+        float const EARLY_GO_HOLD_SLACK_SEC = 2.0f;
         struct ReadyWait
         {
             ObjectGuid who;
             char const* what = "";      // an Issue's
             float readySec = -1.0f;     // resting gets it there in this long; < 0 never or not a rest issue
-            float neededAtSec = 0.0f;
+            float neededAtSec = 0.0f;   // with EARLY_GO_TIME_SHARE; 0 = no credit (above)
         };
         struct ReadyForecast
         {
             PullTimeline::Result timeline;
             std::vector<ReadyWait> waits;   // one per issue
             // The go could come this long from now: the latest readySec - neededAtSec, at
-            // least 0. < 0: unknown (a player's issue, someone dead, in combat, far, or never
-            // getting there by resting).
+            // least 0 (0: go now). < 0: unknown (a player's issue, someone dead, in combat,
+            // far, or never getting there by resting).
             float goInSec = -1.0f;
         };
         // `issues`: CheckReady's for this pull. False as Timeline.

@@ -638,8 +638,8 @@ namespace
         Commander::Position3 planned;
         bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && commander->GetPlan().PlannedFightSpot(planned);
         auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana, hasPlanned ? &planned : nullptr);
-        // The waiting pull's timeline, and when it could go if drinking on into the pull
-        // counted (PullPlanner::ForecastReady; shown only, the pull still waits for CheckReady).
+        // The waiting pull's timeline, and when the tank goes counting bots resting on into the
+        // pull (PullPlanner::ForecastReady, the early go of PullAssigner's WaitReady).
         Commander::PullPlanner::ReadyForecast forecast;
         bool const hasForecast = pull.phase == Commander::PullPhase::WaitReady &&
             Commander::PullPlanner::ForecastReady(commander->GetWorld(), pull, issues, forecast);
@@ -657,8 +657,13 @@ namespace
             auto const& i = issues[n];
             char when[64] = "";
             if (hasForecast && n < forecast.waits.size() && forecast.waits[n].readySec >= 0.0f)
-                snprintf(when, sizeof(when), " (there in %.0fs, needed at %.0fs)",
-                         forecast.waits[n].readySec, forecast.waits[n].neededAtSec);
+            {
+                if (forecast.waits[n].neededAtSec > 0.0f)
+                    snprintf(when, sizeof(when), " (there in %.0fs, needed at %.0fs)",
+                             forecast.waits[n].readySec, forecast.waits[n].neededAtSec);
+                else
+                    snprintf(when, sizeof(when), " (there in %.0fs, needed at the go)", forecast.waits[n].readySec);
+            }
             if (!strcmp(i.what, "hp") || !strcmp(i.what, "mana"))
                 handler->PSendSysMessage("    %s: %s %.0f%%%s", NameOf(map, i.who).c_str(), i.what, i.value, when);
             else if (!strcmp(i.what, "far"))
@@ -668,10 +673,12 @@ namespace
         }
         if (hasForecast)
         {
-            if (forecast.goInSec >= 0.0f)
-                handler->PSendSysMessage("Counting rest on into the pull, the tank could go in %.0fs.", forecast.goInSec);
+            if (pull.ambush)
+                handler->SendSysMessage("Ambush: the tank waits until everyone is ready.");
+            else if (forecast.goInSec >= 0.0f)
+                handler->PSendSysMessage("Resting on into the pull counted, the tank goes in %.0fs.", forecast.goInSec);
             else
-                handler->SendSysMessage("Counting rest on into the pull: unknown (not only bots' health and mana).");
+                handler->SendSysMessage("The tank waits until everyone is ready (a player, or not only resting bots).");
         }
         return true;
     }

@@ -312,9 +312,14 @@ namespace Commander
             {
                 w.readySec = hp ? RestValue::SecondsToHealth(*m, float(m->maxHealth) * READY_HEALTH_PCT / 100.0f)
                                 : RestValue::SecondsToMana(*m, float(m->maxMana) * PullManaPct(*m, pull.healerManaPct) / 100.0f);
-                w.neededAtSec = m->guid == pull.tank ? 0.0f
-                              : m->HealsTeam() ? out.timeline.contactSec
-                              : out.timeline.damageSec;
+                // Credit only for a rest that is on (a bot still walking to its place may not
+                // sit down in time), and never below a healer's floor.
+                bool const resting = hp ? m->eating : m->drinking;
+                bool const belowFloor = mana && m->role == ROLE_HEALER &&
+                    issue.value < pull.healerManaPct / READY_HEALER_MANA_MARGIN;
+                if (m->guid != pull.tank && resting && !belowFloor)
+                    w.neededAtSec = EARLY_GO_TIME_SHARE *
+                        (m->HealsTeam() ? out.timeline.contactSec : out.timeline.damageSec);
             }
             if (w.readySec < 0.0f)
                 known = false;

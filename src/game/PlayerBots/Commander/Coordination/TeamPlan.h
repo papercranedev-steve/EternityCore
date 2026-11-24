@@ -281,6 +281,9 @@ namespace Commander
         uint32 lastReadyCheckMs = 0;
         bool readyNoteSent = false;         // "still waiting for ..." is sent once
         bool readyAnnounced = false;        // "everyone ready" is sent once
+        // The tank went while bots still rested, counting their rest on into the pull
+        // (PullPlanner::ForecastReady, EARLY_GO_*): Approach checks it again until the opener.
+        bool wentEarly = false;
         std::vector<PullMemberName> names;
 
         // What PullPlanner::Plan told the player (target, expected, ranged or not and why,
