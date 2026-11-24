@@ -104,11 +104,41 @@ namespace Commander
         bool Active() const { return !target.IsEmpty(); }
     };
 
+    // What the party asks the player before a pull (TeamPlan::pullQuestion, AutoClear.h).
+    enum class PullAskKind : uint8
+    {
+        Area,       // open world: "clear the creatures around here?"
+        Boss,       // a boss the clear would leave to him: "shall I start it?"
+        TooMany,    // a pack over the clear's limit: "N of them, pull?"
+    };
+
+    // A pack a clear would leave that the player may want (ClearPlan::asks): AutoClear asks him.
+    struct ClearAsk
+    {
+        PullAskKind kind = PullAskKind::Boss;
+        std::vector<ObjectGuid> pack;   // its members (empty = nothing to ask)
+        ObjectGuid first;               // the one the question names
+        uint32 count = 0;               // TooMany: predicted to bring
+    };
+
     // `.partybot ai clear`: pull nearby packs one after another (ClearPlanner).
     struct ClearPlan
     {
         bool active = false;
         ClearEnd lastEnd = ClearEnd::None;
+        // The active pull stance in the open world (AutoClear.h): never ends with nothing left
+        // (waits for the next pack), the anchor moves with the leader whenever no pull is under
+        // way, and a pull the tank has not reached yet is called off when he walks off.
+        bool standing = false;
+        // Only packs with a member in `chosen` (AutoClear's choice, every refresh); the boss and
+        // never-starts-a-fight checks are AutoClear's then.
+        bool chosenOnly = false;
+        std::vector<ObjectGuid> chosen;
+        // A boss or a pack over the limit is not skipped but put in `ask` (one at a time) and
+        // the clear does not end while it waits; the player's yes puts it in `approved`.
+        bool asks = false;
+        ClearAsk ask;
+        std::vector<ObjectGuid> approved;
         // Pauses while the leader walks away from the anchor (`.partybot ai clear`). The push
         // mode's clears do not: the push planner moves the party, the anchor is the guide's spot.
         bool followsLeader = true;
@@ -145,9 +175,42 @@ namespace Commander
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
     };
 
+    // A question to the player before a pull (AutoClear.h). The asking tank's life opens the
+    // popup (Companions/Fight/PullQuestion), the answer comes back through CommanderMgr.
+    struct PullQuestion
+    {
+        enum class Answer : uint8 { Pending, Yes, No };
+        uint32 id = 0;                  // 0 = none; new id per question
+        PullAskKind kind = PullAskKind::Area;
+        ObjectGuid asker;               // the main tank bot
+        ObjectGuid first;               // the creature it names
+        uint32 count = 0;               // TooMany
+        std::vector<ObjectGuid> pack;   // Boss / TooMany: the pack it is about
+        Position3 where;                // Area: the leader when asked
+        uint32 sinceMs = 0;
+        Answer answer = Answer::Pending;
+    };
+
+    // The player's answer about one area of the open world (AutoClear.h).
+    struct AreaAnswer
+    {
+        Position3 center;
+        bool clear = false;             // "清": its uncertain packs are pulled; "别管": not asked again
+        uint32 untilMs = 0;
+    };
+
     // The player's active pull stance (PullStance.h): AutoClear starts clears on its own.
     struct AutoClearPlan
     {
+        std::vector<AreaAnswer> areas;
+        uint32 nextQuestionId = 1;
+        // The leader's recent positions (one per AutoClear::TRAIL_STEP_MS): wandering or travelling.
+        struct LeaderSample
+        {
+            uint32 atMs = 0;
+            Position3 pos;
+        };
+        std::vector<LeaderSample> leaderTrail;
         bool started = false;           // the running clear was started by AutoClear
         bool wasActive = false;         // a clear ran on the last refresh (any: also `.partybot ai clear`)
         ClearEnd lastEnd = ClearEnd::None;
@@ -1738,6 +1801,7 @@ namespace Commander
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         AutoClearPlan autoClear;
+        PullQuestion pullQuestion;
         HuntPlan hunt;
         PushPlan push;
         // The party bot the party follows out of combat instead of the player (Guide.h: the

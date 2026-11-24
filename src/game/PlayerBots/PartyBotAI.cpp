@@ -1163,6 +1163,8 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         Companions::HomeBind::Update(me, pLeader, m_homeBind, PersonalityTags());
     if (me->GetClass() == CLASS_WARLOCK)
         Companions::SummonOffer::Update(me, pLeader, m_summonOffer, staying, PersonalityTags());
+    // "clear the wolves around here?" when the pull stance wants to know (the tank asks).
+    Companions::PullQuestion::Update(this, pLeader, m_pullQuestion, PersonalityTags());
 
     // (a bot waiting somewhere else does not care how the leader travels)
     if (pLeader->IsTaxiFlying() && !staying)

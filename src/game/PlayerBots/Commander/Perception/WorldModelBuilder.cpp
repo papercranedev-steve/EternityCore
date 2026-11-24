@@ -13,6 +13,7 @@
 #include "Commander/Perception/Profiles/PaladinBuffs.h"
 #include "Commander/Perception/Profiles/WarlockCurses.h"
 #include "Commander/Perception/Profiles/ShamanTotems.h"
+#include "Commander/Perception/Profiles/QuestNeeds.h"
 #include "Commander/Perception/Values/RescueValue.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/CommanderMgr.h"
@@ -2197,6 +2198,15 @@ namespace WorldModelBuilder
             return world.FindMember(c.player) != nullptr;
         }), claims.end());
 
+        // What the team's quests still need (members on this map; a team of bots: nobody asks).
+        std::vector<Player*> questers;
+        if (world.humanInTeam)
+            for (PartyMemberFacts const& m : world.party)
+                if (!m.isPet)
+                    if (Player* p = me->GetMap()->GetPlayer(m.guid))
+                        questers.push_back(p);
+        QuestNeeds::Cache questNeeds(std::move(questers));
+
         std::vector<PackCreature> creatures;
         world.patrols.clear();
         // Aggro range against the main tank while fighting: the fight is where the tank stands.
@@ -2242,6 +2252,7 @@ namespace WorldModelBuilder
             if (!claims.empty() && !creature->HasLootRecipient())
                 c.claimedBy = BotShared::PlayerClaims::ClaimantOf(claims, creature);
             c.noAggro = creature->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO);
+            c.questNeeded = world.humanInTeam && questNeeds.Needs(c.entry);
             c.creatureTypeMask = creature->GetCreatureTypeMask();
             c.reach = creature->GetAttackDistance(reachAgainst);
             c.health = creature->GetHealth();

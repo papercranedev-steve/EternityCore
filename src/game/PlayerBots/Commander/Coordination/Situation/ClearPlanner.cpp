@@ -189,6 +189,48 @@ namespace ClearPlanner
             return false;
         }
 
+        // A standing clear (ClearPlan::standing): the anchor is wherever the leader is while
+        // no pull is under way. He walks off before the tank reached the pack: the pull is
+        // called off (he did not want that fight), the tank comes back. Returns false then.
+        bool TrackLeader(TeamPlan& plan, Player* leader)
+        {
+            ClearPlan& clear = plan.clear;
+            Position3 const here = PositionOf(leader);
+            PullPhase const phase = plan.pull.phase;
+            if (phase == PullPhase::None)
+            {
+                clear.anchor = here;
+                return true;
+            }
+            if ((phase == PullPhase::WaitReady || phase == PullPhase::Approach) &&
+                PackResolver::Distance(here, clear.anchor) > MAX_LEADER_DRIFT)
+            {
+                plan.pull = PullPlan();
+                plan.lastPullOutcome = PullOutcome::None;
+                clear.anchor = here;
+                Note(plan, "Pull called off: you walked on.");
+                return false;
+            }
+            return true;
+        }
+
+        bool AnyIn(PackFacts const& pack, std::vector<ObjectGuid> const& list)
+        {
+            return AnyMember(pack, [&list](PackCreature const& c) { return Contains(list, c.guid); });
+        }
+
+        // ClearPlan::asks: put the pack up for a question instead of skipping it (one at a time).
+        void PutUp(ClearPlan& clear, PackFacts const& pack, Creature* first, PullAskKind kind, uint32 count)
+        {
+            if (!clear.ask.pack.empty())
+                return;
+            clear.ask.kind = kind;
+            clear.ask.first = first->GetObjectGuid();
+            clear.ask.count = count;
+            for (PackCreature const& c : pack.members)
+                clear.ask.pack.push_back(c.guid);
+        }
+
         // After a fight: dead members get up to REVIVE_WAIT_MS to be resurrected (the original
         // PartyBot AI does that). The second fight with a death stops the clear.
         // Returns true when everyone is alive.
@@ -264,12 +306,13 @@ namespace ClearPlanner
         }
 
         // First member to hand to the planner: hostile, starts fights, visible to the tank.
-        Creature* PickFirst(PackFacts const& pack, Map* map)
+        // `neutralToo`: a chosen pack (ClearPlan::chosenOnly) may be neutral, a quest's.
+        Creature* PickFirst(PackFacts const& pack, Map* map, bool neutralToo)
         {
             Creature* fallback = nullptr;
             for (PackCreature const& c : pack.members)
             {
-                if (!c.aggressive)
+                if (!c.aggressive && !neutralToo)
                     continue;
                 Creature* creature = map->GetCreature(c.guid);
                 if (!creature)
@@ -343,7 +386,8 @@ namespace ClearPlanner
         if (world.HasPartyEnemy())
             clear.idleSinceMs = nowMs;
 
-        if (clear.followsLeader && !FollowLeader(plan, commander, world, leader, nowMs))
+        if (clear.standing ? !TrackLeader(plan, leader)
+                           : clear.followsLeader && !FollowLeader(plan, commander, world, leader, nowMs))
             return;
 
         // A pull is being prepared or executed.
@@ -425,8 +469,15 @@ namespace ClearPlanner
                 PackFacts const& pack = *packPtr;
                 if (pack.distanceToLeader > clear.radius || IsSkipped(clear, pack))
                     continue;
+                // (not chosen now: maybe later, nothing to note)
+                if (clear.chosenOnly && !AnyIn(pack, clear.chosen))
+                    continue;
+                bool const approved = AnyIn(pack, clear.approved);
+                // (waiting for the player's answer about it)
+                if (!clear.ask.pack.empty() && AnyIn(pack, clear.ask.pack))
+                    continue;
 
-                Creature* first = PickFirst(pack, map);
+                Creature* first = PickFirst(pack, map, clear.chosenOnly);
                 if (!first)
                     continue;
 
@@ -447,8 +498,14 @@ namespace ClearPlanner
                     continue;
 
                 // Bosses and creatures that never start a fight are left to the player.
-                bool const boss = AnyMember(pack, [](PackCreature const& c) { return c.boss; });
-                bool const passive = !AnyMember(pack, [](PackCreature const& c) { return c.aggressive && !c.noAggro; });
+                // (chosen packs: AutoClear decided, e.g. a neutral creature a quest needs)
+                bool const boss = !approved && !clear.chosenOnly && AnyMember(pack, [](PackCreature const& c) { return c.boss; });
+                bool const passive = !clear.chosenOnly && !AnyMember(pack, [](PackCreature const& c) { return c.aggressive && !c.noAggro; });
+                if (boss && !passive && clear.asks)
+                {
+                    PutUp(clear, pack, first, PullAskKind::Boss, 0);
+                    continue;
+                }
                 if (boss || passive)
                 {
                     Skip(clear, pack);
@@ -472,9 +529,9 @@ namespace ClearPlanner
                 // Only stealthed creatures could start the fight: the tank cannot target them now.
                 // Not skipped for good (they may unstealth or walk into a visible pack): looked at
                 // again every round. They do not keep the clear running on their own.
-                bool const visibleHostile = AnyMember(pack, [](PackCreature const& c)
+                bool const visibleHostile = AnyMember(pack, [&clear](PackCreature const& c)
                 {
-                    return c.aggressive && !c.noAggro && !c.stealthed;
+                    return (clear.chosenOnly || (c.aggressive && !c.noAggro)) && !c.stealthed;
                 });
                 if (!visibleHostile)
                 {
@@ -503,7 +560,14 @@ namespace ClearPlanner
                     continue;
                 }
 
-                if (plan.pull.expected.size() > clear.maxMobs)
+                if (plan.pull.expected.size() > clear.maxMobs && !approved && clear.asks)
+                {
+                    uint32 const count = uint32(plan.pull.expected.size());
+                    plan.pull = PullPlan();
+                    PutUp(clear, pack, first, PullAskKind::TooMany, count);
+                    continue;
+                }
+                if (plan.pull.expected.size() > clear.maxMobs && !approved)
                 {
                     char buf[200];
                     snprintf(buf, sizeof(buf), "Skipping %s's pack: would bring %u (limit %u).",
@@ -540,8 +604,9 @@ namespace ClearPlanner
             }
         }
 
-        // Only packs other players are fighting are left: look again later.
-        if (passedOver)
+        // Only packs other players are fighting are left: look again later. A standing clear
+        // waits for the next pack; a pack put up for a question waits for the answer.
+        if (passedOver || clear.standing || !clear.ask.pack.empty())
             return;
 
         std::string const stealthText = stealthOnly

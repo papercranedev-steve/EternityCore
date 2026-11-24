@@ -32,6 +32,8 @@ namespace Requests
         Summon,         // "shall I summon you back?" (Companions/Travel/SummonOffer; once per departure)
         QuestOffer,     // "you can't take this quest here: shall I?" (Life/Errands/QuestOffer; keeps
                         // its own quiet per quest)
+        Pull,           // "clear the wolves around here?", "start the boss?" (Companions/Fight/
+                        // PullQuestion for the pull stance; it remembers the answers itself)
     };
 
     struct IntentDef

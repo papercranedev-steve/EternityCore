@@ -53,6 +53,7 @@
 #include "Life/Errands/LessonReminder.h"
 #include "Life/Pastimes/WaitAround.h"
 #include "Companions/Travel/Departure.h"
+#include "Companions/Fight/PullQuestion.h"
 #include "Companions/Travel/HearthAlong.h"
 #include "Companions/Travel/SummonOffer.h"
 #include "Life/Errands/Travel.h"
@@ -242,6 +243,9 @@ public:
     // The leader leaves by hearthstone or flight path: "shall we wait here?" (one bot asks,
     // Companions/Travel/Departure.h); a waiting warlock offers to summon him back (SummonOffer.h).
     Companions::Departure::State m_departure;
+    // The pull stance's question to the player, when it is this bot's (the main tank) to ask
+    // (Companions/Fight/PullQuestion.h).
+    Companions::PullQuestion::State m_pullQuestion;
     // He hearths, ours bound at the same inn: it hearths with him (Companions/Travel/HearthAlong.h).
     Companions::HearthAlong::State m_hearthAlong;
     Companions::SummonOffer::State m_summonOffer;

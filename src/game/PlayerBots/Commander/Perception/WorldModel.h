@@ -1023,6 +1023,9 @@ namespace Commander
         ObjectGuid claimedBy;
         bool boss = false;          // CreatureProfile::boss: pull and clear leave it to the player
         bool noAggro = false;       // CREATURE_FLAG_EXTRA_NO_AGGRO: never starts a fight
+        // A member's quest still needs it (Profiles/QuestNeeds.h: kills, or a quest item it
+        // drops). Only in a team with a real player (the pull stance reads it).
+        bool questNeeded = false;
         uint32 creatureTypeMask = 0;    // 1 << (CreatureType - 1)
         Position3 pos;
         float reach = 0.0f;             // aggro range against the main tank while fighting, else this bot

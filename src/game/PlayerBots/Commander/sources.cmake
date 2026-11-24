@@ -213,6 +213,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Profiles/Tags.cpp
   ${COMMANDER_DIR}/Perception/Profiles/SpawnSources.h
   ${COMMANDER_DIR}/Perception/Profiles/SpawnSources.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/QuestNeeds.h
+  ${COMMANDER_DIR}/Perception/Profiles/QuestNeeds.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/RescueBehavior.cpp
   ${COMMANDER_DIR}/Perception/Values/RescueValue.h

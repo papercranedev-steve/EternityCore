@@ -21,6 +21,8 @@ namespace Requests
             { Intent::Departure,    "leave",     20 * SEC,  0,          0 },
             { Intent::Summon,       "summon",    60 * SEC,  0,          0 },
             { Intent::QuestOffer,   "questoffer", 30 * SEC, 0,          0 },
+            // (the pull stance remembers the answer per area / pack itself)
+            { Intent::Pull,         "pull",      15 * SEC,  0,          0 },
         };
     }
 

@@ -34,6 +34,7 @@ namespace Commander
 {
     class PartyCommander;
     struct StaySpot;
+    struct PullQuestion;
     struct VoiceEvent;
 
     struct TickStats
@@ -101,6 +102,11 @@ namespace Commander
         // "把掉队的都拉过来": the team gathers its members left behind now (GatherPlanner), on the
         // leader's map. False: no commander there.
         bool GatherNow(Player const* leader);
+        // The team's question to the player before a pull (Situation/AutoClear.h), waiting for
+        // his answer; the asker's life shows it (Companions/Fight/PullQuestion). False: none.
+        bool GetPullQuestion(TeamBotAI const* bot, PullQuestion& out);
+        // His answer to question `id` (an old one: ignored).
+        void AnswerPullQuestion(Player const* bot, uint32 id, bool yes);
         // A line for the players from `member`'s party voice (Commands/Voice/PartyVoice.h), e.g.
         // a rotation's. Map thread of the member only. Nothing without a commander there.
         void QueueVoice(Player const* member, VoiceEvent event);

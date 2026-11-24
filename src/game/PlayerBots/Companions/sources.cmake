@@ -44,6 +44,8 @@ set(COMPANIONS_SRCS
   ${COMPANIONS_DIR}/ClassQuests/ClassQuestFlow.cpp
   ${COMPANIONS_DIR}/Travel/Departure.h
   ${COMPANIONS_DIR}/Travel/Departure.cpp
+  ${COMPANIONS_DIR}/Fight/PullQuestion.h
+  ${COMPANIONS_DIR}/Fight/PullQuestion.cpp
   ${COMPANIONS_DIR}/Travel/SummonOffer.h
   ${COMPANIONS_DIR}/Travel/SummonOffer.cpp
   ${COMPANIONS_DIR}/Travel/HomeBind.h
