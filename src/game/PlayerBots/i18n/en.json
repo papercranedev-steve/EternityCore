@@ -340,6 +340,24 @@
   "leave.follow": "Alright, we'll follow.",
   "leave.opt.yes": "Wait here for me",
   "leave.opt.no": "Follow along",
+  "pull.ask.area": {
+    "default": "{leader}, should we clear out the {name} around here?",
+    "chatty": "{leader}, lots of {name} around here. Want us to clear them while we're at it?",
+    "quiet": "{name}. Clear them?"
+  },
+  "pull.ask.boss": {
+    "default": "{leader}, {name} is just ahead. Shall I start when you're ready?",
+    "quiet": "{name}. Start?"
+  },
+  "pull.ask.many": {
+    "default": "{leader}, that {name} pack has {count} of them. Pull it?",
+    "quiet": "{count} of them. Pull?"
+  },
+  "pull.opt.clear": "Clear them",
+  "pull.opt.pull": "Pull",
+  "pull.opt.start": "Start",
+  "pull.opt.leave": "Leave them",
+  "pull.opt.wait": "Wait",
   "summon.ask": {
     "default": "{leader}, all done over there? Want a summon back?",
     "quiet": "Summon you back?"

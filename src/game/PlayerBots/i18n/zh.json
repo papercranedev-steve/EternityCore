@@ -353,6 +353,25 @@
   "leave.follow": "好，我们跟上。",
   "leave.opt.yes": "在这等我",
   "leave.opt.no": "跟上来",
+  "//12b": "The pull stance asks before a pull (Companions/Fight/PullQuestion). {leader}, {name} (a creature), {count}.",
+  "pull.ask.area": {
+    "default": "{leader}，这附近的{name}要不要清掉？",
+    "chatty": "{leader}，这一片{name}挺多的，顺手清了吧？",
+    "quiet": "{name}，清吗？"
+  },
+  "pull.ask.boss": {
+    "default": "{leader}，{name}就在前面。准备好了我就开？",
+    "quiet": "{name}，开吗？"
+  },
+  "pull.ask.many": {
+    "default": "{leader}，{name}那包有{count}只，拉不拉？",
+    "quiet": "{count}只，拉吗？"
+  },
+  "pull.opt.clear": "清了吧",
+  "pull.opt.pull": "拉",
+  "pull.opt.start": "开",
+  "pull.opt.leave": "别管",
+  "pull.opt.wait": "等等",
   "//13": "A waiting warlock summons him back (Companions/Travel/SummonOffer). {leader}, {helpers}.",
   "summon.ask": {
     "default": "{leader}，办完事了吗？要我把你拉回来吗？",
