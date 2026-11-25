@@ -69,11 +69,20 @@ namespace Battlefield
     }
 
     std::vector<DoctrineGroup> FromPull(WorldModel const& world, std::vector<Unit> const& expected,
-                                        ObjectGuid target, uint32 nowMs)
+                                        ObjectGuid target, uint32 nowMs, std::vector<DoctrineGroup> const* prev)
     {
         std::vector<DoctrineGroup> groups;
         if (expected.empty())
             return groups;
+        // The last split's pile (PILE_KEEP_YD).
+        std::vector<bool> wasInPile(expected.size(), false);
+        bool anyWasInPile = false;
+        if (prev)
+            for (DoctrineGroup const& g : *prev)
+                if (g.kind == GroupKind::Pile)
+                    for (size_t i = 0; i < expected.size(); ++i)
+                        if (std::find(g.members.begin(), g.members.end(), expected[i].guid) != g.members.end())
+                            anyWasInPile = wasInPile[i] = true;
         std::vector<uint32> eliteHealth;
         for (Unit const& u : expected)
             if (u.elite && u.maxHealth)
@@ -91,11 +100,13 @@ namespace Battlefield
         if (!targetUnit)
             targetUnit = &expected.front();
 
-        // The pile's seed: the target, or the melee one nearest to it.
+        // The pile's seed: the target, or the melee one nearest to it (of the last pile while
+        // it had one: the nearest one changes as they wander).
         int seed = -1;
+        bool const targetMelee = melee[size_t(targetUnit - &expected.front())];
         for (size_t i = 0; i < expected.size(); ++i)
         {
-            if (!melee[i])
+            if (!melee[i] || (!targetMelee && anyWasInPile && !wasInPile[i]))
                 continue;
             if (&expected[i] == targetUnit)
             {
@@ -118,7 +129,8 @@ namespace Battlefield
                 size_t const at = open.back();
                 open.pop_back();
                 for (size_t i = 0; i < expected.size(); ++i)
-                    if (melee[i] && !inPile[i] && PackResolver::Distance(expected[i].pos, expected[at].pos) <= CLUSTER_YD)
+                    if (melee[i] && !inPile[i] && PackResolver::Distance(expected[i].pos, expected[at].pos) <=
+                        (wasInPile[i] && wasInPile[at] ? PILE_KEEP_YD : CLUSTER_YD))
                     {
                         inPile[i] = true;
                         open.push_back(i);
@@ -134,13 +146,15 @@ namespace Battlefield
                         pile.heavy = expected[i].guid;
                 }
         }
-        for (size_t i = 0; i < expected.size(); ++i)
-        {
-            if (inPile[i])
-                continue;
-            int const g = Shared(groups, melee[i] ? GroupKind::MeleeStraggler : GroupKind::RangedStraggler, true, nowMs);
-            groups[g].members.push_back(expected[i].guid);
-        }
+        // (melee stragglers first, always: the order is part of the split TacticalDoctrine compares)
+        for (bool const meleePass : { true, false })
+            for (size_t i = 0; i < expected.size(); ++i)
+            {
+                if (inPile[i] || melee[i] != meleePass)
+                    continue;
+                int const g = Shared(groups, melee[i] ? GroupKind::MeleeStraggler : GroupKind::RangedStraggler, true, nowMs);
+                groups[g].members.push_back(expected[i].guid);
+            }
         return groups;
     }
 

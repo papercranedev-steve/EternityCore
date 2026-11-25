@@ -66,8 +66,15 @@ namespace Battlefield
         uint32 maxHealth = 0;
     };
 
+    // A pile member of the last split stays linked up to PILE_KEEP_YD (the pull's creatures
+    // wander while the party gets ready: at a hard CLUSTER_YD the split changed every few
+    // seconds, Stratholme 2026-11-25), a new one joins within CLUSTER_YD.
+    float const PILE_KEEP_YD = 13.0f;
+
+    // `prev`: the groups of the last refresh's plan (null: none), see PILE_KEEP_YD.
     std::vector<DoctrineGroup> FromPull(WorldModel const& world, std::vector<Unit> const& expected,
-                                        ObjectGuid target, uint32 nowMs);
+                                        ObjectGuid target, uint32 nowMs,
+                                        std::vector<DoctrineGroup> const* prev = nullptr);
     void AddPatrols(WorldModel const& world, Position3 const& spot, float withinSec,
                     std::vector<ObjectGuid> const& expected, uint32 nowMs, std::vector<DoctrineGroup>& groups);
 

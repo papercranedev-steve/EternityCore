@@ -145,7 +145,8 @@ namespace Commander
             PullPlan const& pull = plan.pull;
             d.phase = FightPhase::Planned;
             d.why = "groups of the planned pull";
-            d.groups = Battlefield::FromPull(world, PullUnits(world, pull.expected), pull.target, world.refreshedAtMs);
+            d.groups = Battlefield::FromPull(world, PullUnits(world, pull.expected), pull.target, world.refreshedAtMs,
+                prev.phase == FightPhase::Planned ? &prev.groups : nullptr);
             Position3 spot;
             if (plan.PlannedFightSpot(spot))
                 Battlefield::AddPatrols(world, spot, RouteGuard::StaySec(world, plan), pull.expected,
