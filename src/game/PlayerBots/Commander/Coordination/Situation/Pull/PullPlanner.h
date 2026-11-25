@@ -175,9 +175,13 @@ namespace Commander
 
         // Patrols (PatrolTracker, WorldModel::patrols), also those the prediction counts as
         // joiners because they walk past the pack right now (strat-20261103-013312): a patrol
-        // joins when its walk comes within max(PATROL_MIN_CLEARANCE, its aggro range) of any
-        // pulled creature (a patrol next to any of them is called in for help) or of the fight
-        // spot. The fight is estimated (Perception/Forecast/FightLoad.h: the creatures' damage on the
+        // joins when its walk is at one of the pull's places while the party is there
+        // (PullTimeline::Presence, since 2026-11-25; design .kiro/docs/2026-11-25-pull-patrol-
+        // timeline.md): the tank's walk (its aggro range + the hard line), the pulled creatures'
+        // spots until they leave, the open spot, the walk back and the fight place
+        // (max(PATROL_MIN_CLEARANCE, its aggro range)), the party's spot (the same against the
+        // leader). Before, the pulled creatures' spots and the party's spot counted for the
+        // whole fight and the walk never. The fight is estimated (Perception/Forecast/FightLoad.h: the creatures' damage on the
         // tank, the party's damage, the healer bots' real heals and mana) with every patrol
         // joining when its walk brings it, and the creatures it calls for help from where it
         // is then (AssistPredictor::ExpandAt, after the assistance delay; strat-20261108-230756:
@@ -188,8 +192,9 @@ namespace Commander
         //  - none: the start with the best estimate if it is PATROL_WAIT_MIN_GAIN better
         //    (tank health points) than now, else pull now (waiting does not help).
         // After PATROL_WAIT_MAX_MS of waiting a single pull goes, the clear skips the pack.
-        // Fight length for the tracks = the estimate without the patrols + PULL_LEAD_SEC (the
-        // tank walking out and back), within PATROL_HORIZON_SEC .. PATROL_HORIZON_MAX_SEC.
+        // Fight length for the tracks = the timeline's contact (the walk out and back; without
+        // a timeline PULL_LEAD_SEC) + the estimate without the patrols, within
+        // PATROL_HORIZON_SEC .. PATROL_HORIZON_MAX_SEC. Arrivals count from the tank's go.
         float const PATROL_HORIZON_SEC = 20.0f;
         float const PATROL_HORIZON_MAX_SEC = 120.0f;
         float const PULL_LEAD_SEC = 5.0f;

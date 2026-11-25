@@ -812,7 +812,7 @@ namespace Commander
             if (pull.hard)
                 report.push_back("Too hard even when everyone is ready: " + FightLoad::Describe(FightLoad::Simulate(Rested(fightLoad))) + ".");
         }
-        PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull.spot, pull.expected,
+        PatrolStart const patrols = ChooseStart(world, map, best.pullTarget, tank, leader, pull, pull.expected,
                                                 PATROL_WAIT_MAX_MS / 1000.0f);
         SetPatrolHold(pull, patrols);
         if (patrols.considered)
@@ -848,7 +848,7 @@ namespace Commander
         for (ObjectGuid g : expected)
             if (FindPatrol(world, g))
                 add(map->GetCreature(g));
-        PatrolStart const joining = ChooseStart(world, map, target, tank, map->GetUnit(world.leader), plan.pull.spot,
+        PatrolStart const joining = ChooseStart(world, map, target, tank, map->GetUnit(world.leader), plan.pull,
                                                 expected, 0.0f);
         for (PatrolArrival const& a : joining.patrols)
         {
@@ -1124,7 +1124,7 @@ namespace Commander
         //    estimate likes (ChooseStart), within what is left of PATROL_WAIT_MAX_MS.
         uint32 const waitedMs = pull.patrolWaitSinceMs ? WorldTimer::getMSTimeDiff(pull.patrolWaitSinceMs, nowMs) : 0;
         float const budgetSec = waitedMs >= PATROL_WAIT_MAX_MS ? 0.0f : (PATROL_WAIT_MAX_MS - waitedMs) / 1000.0f;
-        PatrolStart const patrols = ChooseStart(world, map, target, tank, leader, pull.spot, expected, budgetSec);
+        PatrolStart const patrols = ChooseStart(world, map, target, tank, leader, pull, expected, budgetSec);
         ObjectGuid const mainPatrol = patrols.Main() ? patrols.Main()->patrol->GetObjectGuid() : ObjectGuid();
         SetPatrolHold(pull, patrols);
         if (patrols.Held())

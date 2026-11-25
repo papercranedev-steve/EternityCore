@@ -19,8 +19,10 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolTracker.h"
 #include "Commander/Perception/Forecast/PullOdds.h"
+#include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
 #include "Commander/Perception/Tanks.h"
+#include "PathFinder.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/ControlValue.h"
@@ -91,11 +93,70 @@ namespace Commander
             }
         };
 
+        // The tank's navmesh walk from where it stands to `to` (empty: no complete path; the
+        // timeline then takes the straight line).
+        std::vector<Position3> WalkOf(Unit* tank, Position3 const& to)
+        {
+            std::vector<Position3> out;
+            PathInfo path(tank);
+            path.calculate(to.x, to.y, to.z);
+            if (path.getPathType() & (PATHFIND_NOT_USING_PATH | PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
+                return out;
+            for (auto const& v : path.getPath())
+            {
+                Position3 p;
+                p.x = v.x;
+                p.y = v.y;
+                p.z = v.z;
+                out.push_back(p);
+            }
+            return out;
+        }
+
+        // `pull`'s places with their times from the tank's go (PullTimeline::Presence), the
+        // tank where it stands now. `packSpots`: the pulled creatures (patrols left out).
+        // `contactSec`: the timeline's contact (the fight starts), -1 without a timeline.
+        std::shared_ptr<std::vector<PullTimeline::Zone> const> PullPlaces(WorldModel const& world, Unit* tank,
+            PullPlan const& pull, std::vector<Position3> const& packSpots, float& contactSec)
+        {
+            contactSec = -1.0f;
+            auto zones = std::make_shared<std::vector<PullTimeline::Zone>>();
+            PullTimeline::Input in;
+            if (!PullPlanner::TimelineInput(world, pull, in))
+            {
+                // (no timeline: the old places, the whole time)
+                for (Position3 const& s : packSpots)
+                    zones->push_back({ PullTimeline::ZoneKind::Place, s, 0.0f, PullTimeline::FOREVER, "pack" });
+                zones->push_back({ PullTimeline::ZoneKind::Party, pull.spot, 0.0f, PullTimeline::FOREVER, "party" });
+                return zones;
+            }
+            in.tankAt = PositionOf(tank);
+            std::vector<Position3> const walk = WalkOf(tank, in.openFrom);
+            if (walk.size() >= 2)
+            {
+                float yd = 0.0f;
+                for (size_t i = 1; i < walk.size(); ++i)
+                    yd += PackResolver::Distance(walk[i - 1], walk[i]);
+                in.pathYd = yd;
+            }
+            PullTimeline::Result const r = PullTimeline::Of(in);
+            contactSec = r.contactSec;
+            *zones = PullTimeline::Presence(in, r, walk, packSpots, pull.spot);
+            if (Trace::On())
+                Trace::Emit("places", "pull's places", Trace::Format(
+                    "{\"walkSec\":%.1f,\"openSec\":%.1f,\"contactSec\":%.1f,\"zones\":%u,\"walkPoints\":%u}",
+                    r.walkSec, r.openSec, r.contactSec, uint32(zones->size()), uint32(std::count_if(zones->begin(),
+                        zones->end(), [](PullTimeline::Zone const& z) { return z.kind == PullTimeline::ZoneKind::Walk; }))));
+            return zones;
+        }
+
         // Inputs of one start: the pull without the patrols plus every patrol that joins while
         // the fight lasts, from the time it arrives, and the creatures it calls for help there
         // (after the assistance delay; one called by two patrols counts once, the earliest).
+        // Times: `fightSec` and the arrivals count from the tank's go, the fight (FightLoad's
+        // 0 s) from `contactSec` (a patrol met on the walk is in the fight from its start).
         FightLoad::Result SimulateStart(FightLoad::Input base, std::vector<PatrolArrival>& patrols,
-                                        CallSource const& source, float startSec, float fightSec)
+                                        CallSource const& source, float startSec, float fightSec, float contactSec)
         {
             std::string const why = Trace::On() ? Trace::Format("start +%.1f s, patrols joining", startSec) : std::string();
             std::map<ObjectGuid, size_t> called;    // guid -> index in base.foes
@@ -108,11 +169,11 @@ namespace Commander
                 if (arrive > fightSec)
                     continue;
                 FightLoad::Foe f = p.foe;
-                f.arriveSec = arrive;
+                f.arriveSec = std::max(0.0f, arrive - contactSec);
                 base.foes.push_back(f);
                 for (PatrolCall const& c : source.At(p, index))
                 {
-                    float const at = arrive + c.foe.arriveSec;
+                    float const at = f.arriveSec + c.foe.arriveSec;
                     auto itr = called.find(c.guid);
                     if (itr != called.end())
                     {
@@ -142,7 +203,7 @@ namespace Commander
         // the start with the clearly best fight (WAIT_MIN_GAIN), else now (waiting does not
         // help).
         PatrolStart ChooseStart(WorldModel const& world, Map* map, Creature* target, Unit* tank, Unit* leader,
-                                Position3 const& spot, std::vector<ObjectGuid> const& expected, float waitBudgetSec)
+                                PullPlan const& pull, std::vector<ObjectGuid> const& expected, float waitBudgetSec)
         {
             PatrolStart out;
             Trace::Scope scope("patrolcheck");
@@ -193,46 +254,58 @@ namespace Commander
             }
             PartyMemberFacts const* tankFacts = Tanks::Main(world);
             FightLoad::Result const alone = FightLoad::Simulate(input, "without the patrols");
-            out.fightSec = std::min(PullPlanner::PATROL_HORIZON_MAX_SEC,
-                std::max(PullPlanner::PATROL_HORIZON_SEC, alone.fightSec + PullPlanner::PULL_LEAD_SEC));
+
+            // The pull's places and their times from the tank's go (header; PullTimeline::Presence).
+            // The fight (FightLoad's 0 s) starts at contact; without a timeline as before: at
+            // the go, PULL_LEAD_SEC added for the walk out and back.
+            float contactSec = -1.0f;
+            std::shared_ptr<std::vector<PullTimeline::Zone> const> const zones = PullPlaces(world, tank, pull, pullAt, contactSec);
+            out.contactSec = std::max(0.0f, contactSec);
+            out.fightSec = std::min(PullPlanner::PATROL_HORIZON_MAX_SEC, std::max(PullPlanner::PATROL_HORIZON_SEC,
+                alone.fightSec + (contactSec >= 0.0f ? contactSec : PullPlanner::PULL_LEAD_SEC)));
 
             for (Creature* patrol : walkers)
             {
                 PatrolArrival a;
                 a.patrol = patrol;
                 a.foe = FightLoad::FoeOf(patrol, *tankFacts);
-                float const toTank = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(tank));
-                float const toParty = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(leader ? leader : tank));
-                a.clearance = toTank;
+                float const reachTank = patrol->GetAttackDistance(tank);
+                a.clearance = std::max(PullPlanner::PATROL_MIN_CLEARANCE, reachTank);
+                a.walkReach = reachTank + SafeRoute::TIGHT_MARGIN;
+                a.partyReach = std::max(PullPlanner::PATROL_MIN_CLEARANCE, patrol->GetAttackDistance(leader ? leader : tank));
+                a.zones = zones;
                 PatrolTracker::Track const track = PatrolTracker::Predict(patrol, out.fightSec + waitBudgetSec);
                 a.source = track.source;
-                bool any = false;
                 for (PatrolTracker::TrackPoint const& p : track.points)
                 {
-                    bool in = PackResolver::Distance(p.pos, spot) <= toParty;
-                    for (size_t i = 0; !in && i < pullAt.size(); ++i)
-                        in = PackResolver::Distance(p.pos, pullAt[i]) <= toTank;
                     a.atSec.push_back(p.atSec);
-                    a.inside.push_back(in);
                     a.pos.push_back(p.pos);
-                    any = any || in;
                 }
+                // Comes to the party for some start within the wait (a start every sample step).
+                bool any = false;
+                for (float s = 0.0f; !any && s <= waitBudgetSec + 0.001f; s += PatrolTracker::SAMPLE_STEP_SEC)
+                    any = a.ArrivalIndex(s) >= 0;
                 if (Trace::On())
                 {
-                    // When it is next to the pull: the windows of "inside" track points.
-                    std::string windows;
-                    for (size_t i = 0; i < a.inside.size(); ++i)
-                        if (a.inside[i] && (i == 0 || !a.inside[i - 1]))
-                        {
-                            size_t j = i;
-                            while (j + 1 < a.inside.size() && a.inside[j + 1])
-                                ++j;
-                            windows += Trace::Format("%s[%.1f,%.1f]", windows.empty() ? "" : ",", a.atSec[i], a.atSec[j]);
-                        }
+                    // When it comes to the party pulled now: windows of samples at one of the
+                    // pull's places, and which place ("at", same order).
+                    std::string windows, at;
+                    for (size_t i = 0; i < a.atSec.size(); ++i)
+                    {
+                        PullTimeline::Zone const* z = a.ZoneAt(i, 0.0f);
+                        if (!z || (i > 0 && a.ZoneAt(i - 1, 0.0f)))
+                            continue;
+                        size_t j = i;
+                        while (j + 1 < a.atSec.size() && a.ZoneAt(j + 1, 0.0f))
+                            ++j;
+                        windows += Trace::Format("%s[%.1f,%.1f]", windows.empty() ? "" : ",", a.atSec[i], a.atSec[j]);
+                        at += Trace::Format("%s\"%s\"", at.empty() ? "" : ",", z->what);
+                    }
                     Trace::Emit("patrol", patrol->GetName(), Trace::Format(
-                        "{\"g\":\"%s\",\"source\":\"%s\",\"clearance\":%.1f,\"dps\":%.1f,\"hp\":%.0f,\"horizon\":%.1f,\"inside\":[%s]}",
+                        "{\"g\":\"%s\",\"source\":\"%s\",\"clearance\":%.1f,\"walkReach\":%.1f,\"dps\":%.1f,\"hp\":%.0f,"
+                        "\"horizon\":%.1f,\"inside\":[%s],\"at\":[%s]}",
                         Trace::Guid(patrol->GetObjectGuid()).c_str(), PatrolTracker::SourceName(a.source), a.clearance,
-                        a.foe.dps, a.foe.health, out.fightSec + waitBudgetSec, windows.c_str()));
+                        a.walkReach, a.foe.dps, a.foe.health, out.fightSec + waitBudgetSec, windows.c_str(), at.c_str()));
                 }
                 if (any)
                     out.patrols.push_back(std::move(a));
@@ -247,7 +320,7 @@ namespace Commander
             source.delaySec = sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_ASSISTANCE_DELAY) / 1000.0f;
 
             // Comes by only after the fight when pulled now and later: not part of this pull.
-            out.now = SimulateStart(input, out.patrols, source, 0.0f, out.fightSec);
+            out.now = SimulateStart(input, out.patrols, source, 0.0f, out.fightSec, out.contactSec);
             for (size_t i = 0; i < out.patrols.size(); ++i)
             {
                 float const arrive = out.patrols[i].ArriveAfter(0.0f);
@@ -281,7 +354,7 @@ namespace Commander
                     for (size_t j = 0; j < out.patrols.size(); ++j)
                         if (j != i)
                             others.push_back(out.patrols[j]);
-                    float const rest = SimulateStart(input, others, source, 0.0f, out.fightSec).fightSec;
+                    float const rest = SimulateStart(input, others, source, 0.0f, out.fightSec, out.contactSec).fightSec;
                     Creature const* patrol = out.patrols[i].patrol;
                     for (ControlValue::Option const& o : ControlValue::OptionsFor(world, patrol->GetEntry(), patrol->GetCreatureTypeMask()))
                     {
@@ -290,10 +363,11 @@ namespace Commander
                             continue;
                         FightLoad::Input held = input;
                         FightLoad::Foe f = out.patrols[i].foe;
-                        f.arriveSec = o.kind == ControlKind::Hold ? arrive + o.durationSec : std::max(arrive, rest);
+                        float const inFight = std::max(0.0f, arrive - out.contactSec);   // fight time
+                        f.arriveSec = o.kind == ControlKind::Hold ? inFight + o.durationSec : std::max(inFight, rest);
                         f.sameFight = true;
                         held.foes.push_back(f);
-                        FightLoad::Result const r = SimulateStart(held, others, source, 0.0f, out.fightSec);
+                        FightLoad::Result const r = SimulateStart(held, others, source, 0.0f, out.fightSec, out.contactSec);
                         if (!FightLoad::Bearable(r))
                             continue;
                         out.holdIndex = int(i);
@@ -310,7 +384,7 @@ namespace Commander
             FightLoad::Result best = out.now;
             for (float s = PatrolTracker::SAMPLE_STEP_SEC; s <= waitBudgetSec + 0.001f; s += PatrolTracker::SAMPLE_STEP_SEC)
             {
-                FightLoad::Result const r = SimulateStart(input, out.patrols, source, s, out.fightSec);
+                FightLoad::Result const r = SimulateStart(input, out.patrols, source, s, out.fightSec, out.contactSec);
                 if (FightLoad::Bearable(r))
                 {
                     out.startSec = s;
@@ -339,10 +413,18 @@ namespace Commander
             if (!main)
                 return "";
             std::string const name = main->patrol->GetName();
-            std::string const when = s.mainArriveNow <= 0.0f ? name + " is next to the pull"
-                : Format("%s joins in about %.0f s", name.c_str(), s.mainArriveNow);
+            // Where it meets the party (the pull's place, PullTimeline::Presence).
+            int const index = main->ArrivalIndex(0.0f);
+            PullTimeline::Zone const* zone = index >= 0 ? main->ZoneAt(size_t(index), 0.0f) : nullptr;
+            std::string const where = !zone ? std::string()
+                : zone->kind == PullTimeline::ZoneKind::Walk ? std::string(" on the tank's walk")
+                                                             : Format(" at the %s", zone->what);
+            std::string const when = s.mainArriveNow <= 0.0f ? name + " is next to the pull" + where
+                : Format("%s joins in about %.0f s%s", name.c_str(), s.mainArriveNow, where.c_str());
+            float const yd = zone && zone->kind == PullTimeline::ZoneKind::Walk ? main->walkReach
+                           : zone && zone->kind == PullTimeline::ZoneKind::Party ? main->partyReach : main->clearance;
             std::string const calls = s.mainCallsNow ? Format(", calling %u more for help there", s.mainCallsNow) : std::string();
-            return when + Format(" (%s, within %.0f yd)", PatrolTracker::SourceName(main->source), main->clearance) + calls;
+            return when + Format(" (%s, within %.0f yd)", PatrolTracker::SourceName(main->source), yd) + calls;
         }
 
         // What the patrol check decided, for the report and the notes. `waiting`: "The pull
