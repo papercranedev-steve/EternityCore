@@ -118,7 +118,10 @@ namespace Commander
         {
             at = planned;
             inDeadZone = deadZone > 0.0f && Distance2d(here, at) < deadZone;
-            inReach = Distance2d(here, at) <= CAST_RANGE && !inDeadZone && SightCache::Live(me, here, at);
+            bool const inRange = Distance2d(here, at) <= CAST_RANGE && !inDeadZone;
+            inReach = inRange && SightCache::Live(me, here, at);
+            if (inRange && !inReach && world.field && world.field->sight)
+                world.field->sight->MarkStandFailed(me, at);    // (below)
         }
         else
         {
@@ -141,6 +144,11 @@ namespace Commander
             float const distance = me->GetCombatDistance(victim);
             inDeadZone = deadZone > 0.0f && distance < deadZone;
             inReach = distance <= CAST_RANGE && !inDeadZone && SightCache::Live(me, here, at);
+            // In range but the line fails where it stands (not walking, above): the spot search
+            // does not take this cell again for this victim (SightCache::StandFailed,
+            // stockade-20261125-221620).
+            if (!inReach && distance <= CAST_RANGE && !inDeadZone && world.field && world.field->sight)
+                world.field->sight->MarkStandFailed(me, at);
         }
 
         SafeRoute::IdleCreatures const idle(me);

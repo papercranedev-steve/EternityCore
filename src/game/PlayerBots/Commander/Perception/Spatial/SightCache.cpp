@@ -27,6 +27,15 @@ namespace Commander
         return Line(viewer, from.x, from.y, from.z, to.x, to.y, to.z);
     }
 
+    bool SightCache::LiveFromCell(Unit const* viewer, Position3 const& cell, Position3 const& to)
+    {
+        float z = cell.z;
+        float const ground = viewer->GetMap()->GetHeight(cell.x, cell.y, cell.z + STAND_Z_TOLERANCE);
+        if (ground > INVALID_HEIGHT && std::fabs(ground - cell.z) <= STAND_Z_TOLERANCE)
+            z = ground;
+        return Line(viewer, cell.x, cell.y, z, to.x, to.y, to.z);
+    }
+
     SightCache::Sight SightCache::Cells(Unit const* viewer, Position3 const& from, Position3 const& to, uint32& budget)
     {
         if (viewer->GetMapId() != m_mapId)
@@ -91,5 +100,39 @@ namespace Commander
         f.tight = tight;
         f.atMs = now;
         m_pathFails.push_back(f);
+    }
+
+    bool SightCache::StandFailed(Unit const* viewer, Position3 const& spot, Position3 const& target) const
+    {
+        uint64 const v = viewer->GetObjectGuid().GetRawValue();
+        int32 const ax = PositionField::CellOf(spot.x), ay = PositionField::CellOf(spot.y);
+        int32 const tx = PositionField::CellOf(target.x), ty = PositionField::CellOf(target.y);
+        uint32 const now = WorldTimer::getMSTime();
+        for (StandFail const& f : m_standFails)
+            if (f.viewer == v && f.atX == ax && f.atY == ay && f.targetX == tx && f.targetY == ty &&
+                WorldTimer::getMSTimeDiff(f.atMs, now) <= STAND_FAIL_MS)
+                return true;
+        return false;
+    }
+
+    void SightCache::MarkStandFailed(Unit const* viewer, Position3 const& target)
+    {
+        uint32 const now = WorldTimer::getMSTime();
+        m_standFails.erase(std::remove_if(m_standFails.begin(), m_standFails.end(),
+            [now](StandFail const& f) { return WorldTimer::getMSTimeDiff(f.atMs, now) > STAND_FAIL_MS; }), m_standFails.end());
+        StandFail f;
+        f.viewer = viewer->GetObjectGuid().GetRawValue();
+        f.atX = PositionField::CellOf(viewer->GetPositionX());
+        f.atY = PositionField::CellOf(viewer->GetPositionY());
+        f.targetX = PositionField::CellOf(target.x);
+        f.targetY = PositionField::CellOf(target.y);
+        for (StandFail& old : m_standFails)
+            if (old.viewer == f.viewer && old.atX == f.atX && old.atY == f.atY && old.targetX == f.targetX && old.targetY == f.targetY)
+            {
+                old.atMs = now;
+                return;
+            }
+        f.atMs = now;
+        m_standFails.push_back(f);
     }
 }

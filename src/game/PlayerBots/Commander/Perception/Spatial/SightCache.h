@@ -17,8 +17,11 @@
  * Live(viewer, from, to): the same line now, exact positions, nothing kept: the final check
  * of the spot a module takes.
  *
+ * LiveFromCell(viewer, cell, to): Live from the ground the viewer will stand on at a cell.
+ *
  * PathFailed / MarkPathFailed: a short memo of failed path checks (below), kept here since the
- * same modules use it on the same cells.
+ * same modules use it on the same cells. StandFailed / MarkStandFailed: the same for a cell the
+ * bot stood on and did not see the target from.
  *
  * Owned by PositionFieldBuilder (kept across builds, dropped with the field), reached through
  * PositionField::sight. Map thread of the party.
@@ -47,6 +50,12 @@ namespace Commander
         enum class Sight : uint8 { Unknown, Yes, No };
 
         static bool Live(Unit const* viewer, Position3 const& from, Position3 const& to);
+        // Live from where the viewer will stand on a field cell: the cell's z is the navmesh's,
+        // the bot stands on the ground (Map::GetHeight, within STAND_Z_TOLERANCE of the cell).
+        // On a grazing line the two disagreed (stockade-20261125-221620: the hunters on the
+        // ramp below the platform walked between two cells for 8 s, each seen from the other).
+        static constexpr float STAND_Z_TOLERANCE = 1.0f;
+        static bool LiveFromCell(Unit const* viewer, Position3 const& cell, Position3 const& to);
         Sight Cells(Unit const* viewer, Position3 const& from, Position3 const& to, uint32& budget);
 
         // The walk of `walker` to the cell of `to` failed SafeRoute::PathIsSafe (`tight`: on the
@@ -58,7 +67,25 @@ namespace Commander
         bool PathFailed(Unit const* walker, Position3 const& to, bool tight) const;
         void MarkPathFailed(Unit const* walker, Position3 const& to, bool tight);
 
+        // `viewer` stood on the cell of `spot` and its Live line to the cell of `target` failed,
+        // within STAND_FAIL_MS. The search checks a cell from afar; standing there is the
+        // final answer, so the cell is not taken again for that target (the same loop as
+        // above, whatever made the two checks disagree). The target moving to another cell,
+        // or the time, lets it be tried again.
+        static constexpr uint32 STAND_FAIL_MS = 10000;
+        bool StandFailed(Unit const* viewer, Position3 const& spot, Position3 const& target) const;
+        // From where `viewer` stands now.
+        void MarkStandFailed(Unit const* viewer, Position3 const& target);
+
     private:
+        struct StandFail
+        {
+            uint64 viewer = 0;      // ObjectGuid raw
+            int32 atX = 0, atY = 0, targetX = 0, targetY = 0;
+            uint32 atMs = 0;
+        };
+        std::vector<StandFail> m_standFails;
+
         struct PathFail
         {
             uint64 walker = 0;      // ObjectGuid raw

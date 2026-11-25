@@ -14,8 +14,10 @@
  *    (Query::points); cells estimated in sight of `at` first (PositionField::SeesEstimate),
  *    each part by loss, equally good cells shared out (FieldSpots::PreferFree).
  *  - one pass in that order: this bot's own idle scan, paths that failed a moment ago skipped
- *    (SightCache::PathFailed), the real line of sight from the sight cache (at most `budget`
- *    new checks), then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at
+ *    (SightCache::PathFailed), cells the bot stood on and did not see `at` from
+ *    (SightCache::StandFailed), the real line of sight from the sight cache (at most `budget`
+ *    new checks), then the spell's line now from the ground of the cell
+ *    (SightCache::LiveFromCell) and SafeRoute::PathIsSafe on at
  *    most MAX_GEOMETRY_CHECKS cells; the first that passes is the answer.
  *  - Query::hereValid: the current spot is still good, a cell must save more than
  *    Query::margin on Query::lossHere (the search ends at the first cell that does not, cells

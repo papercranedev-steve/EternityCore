@@ -62,9 +62,12 @@
  * further in). Order (2026-11-15, the viewshed): cells the field estimates in sight of the
  * victim (PositionField::SeesEstimate, grid lines over the navmesh links) first, then the rest,
  * each by loss. One pass in that order: this bot's own idle scan, cells whose path failed a
- * moment ago skipped (SightCache::PathFailed), the real line of sight from the field's sight
+ * moment ago skipped (SightCache::PathFailed), cells it stood on a moment ago in range but out
+ * of the victim's sight skipped (SightCache::StandFailed, marked here; 2026-11-25,
+ * stockade-20261125-221620: the hunters on the ramp below the platform walked between two
+ * cells for 8 s, each passed the check from the other and failed once stood on), the real line of sight from the field's sight
  * cache (SightCache.h, kept per pair of cells, at most MAX_SIGHT_CHECKS new checks per tick),
- * then the spell's line now (SightCache::Live) and SafeRoute::PathIsSafe on at most
+ * then the spell's line now from the cell's ground (SightCache::LiveFromCell) and SafeRoute::PathIsSafe on at most
  * RangedSpot::MAX_GEOMETRY_CHECKS cells; the first that passes is taken. In the fight the walk counts a
  * circle covering the victim's spot only closer than the victim (ArrivingAt, MeleeRoutes.h).
  * (Before: cells probed nearest first with the real line only, those behind a wall used the

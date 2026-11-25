@@ -141,6 +141,12 @@ namespace RangedSpot
                     ++out.why.pathKept;
                     continue;
                 }
+                // Stood there a moment ago and did not see `at` (SightCache::StandFailed).
+                if (sight.StandFailed(me, s.pos, q.at))
+                {
+                    ++out.why.standKept;
+                    continue;
+                }
                 ++out.checked;
                 SightCache::Sight const v = sight.Cells(me, s.pos, q.at, budget);
                 if (v == SightCache::Sight::Unknown)
@@ -158,8 +164,9 @@ namespace RangedSpot
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;
-                // The kept answer is from the cells' centres: the spell's line now, then the path.
-                if (!SightCache::Live(me, s.pos, q.at))
+                // The kept answer is from the cells' centres: the spell's line now, from the
+                // ground the bot will stand on, then the path.
+                if (!SightCache::LiveFromCell(me, s.pos, q.at))
                 {
                     ++out.why.live;
                     continue;

@@ -10,6 +10,8 @@
  *   path      SafeRoute::PathIsSafe failed (then kept as failed: SightCache::PathFailed);
  *             pathWhy / blocker: the first failure's Verdict
  *   pathKept  skipped, failed the path a moment ago
+ *   standKept skipped, the bot stood there a moment ago and did not see the target
+ *             (SightCache::StandFailed)
  */
 
 #ifndef MANGOS_COMMANDER_SPOT_REJECTS_H
@@ -30,6 +32,7 @@ namespace Commander
         uint32 live = 0;
         uint32 path = 0;
         uint32 pathKept = 0;
+        uint32 standKept = 0;
         // The field's estimate (PositionField::SeesEstimate) against the real line, cells checked.
         uint32 estWrongSeen = 0;        // estimated in sight, hidden
         uint32 estWrongHidden = 0;      // estimated hidden, in sight
@@ -67,9 +70,9 @@ namespace Commander
         // JSON fields without the braces.
         std::string Json() const
         {
-            return Trace::Format("\"idle\":%u,\"hidden\":%u,\"budget\":%s,\"seen\":%u,\"live\":%u,\"path\":%u,\"pathKept\":%u,"
+            return Trace::Format("\"idle\":%u,\"hidden\":%u,\"budget\":%s,\"seen\":%u,\"live\":%u,\"path\":%u,\"pathKept\":%u,\"standKept\":%u,"
                                  "\"pathWhy\":\"%s\",\"blocker\":\"%s\",\"estWrongSeen\":%u,\"estWrongHidden\":%u",
-                                 idle, hidden, budget ? "true" : "false", seen, live, path, pathKept, pathWhy, blocker.c_str(),
+                                 idle, hidden, budget ? "true" : "false", seen, live, path, pathKept, standKept, pathWhy, blocker.c_str(),
                                  estWrongSeen, estWrongHidden);
         }
     };
