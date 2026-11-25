@@ -2,6 +2,7 @@
 #include "Commander/Team.h"
 #include "Commander/Behaviors/Movement/Arrival.h"
 #include "Commander/Perception/Spatial/TravelTime.h"
+#include "Commander/Perception/Spatial/AggroRange.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "TeamBotAI.h"
@@ -61,6 +62,14 @@ namespace CorpseRun
         // fight goes on), and no idle enemy has the body within its aggro range (user
         // 2026-11-15, wipe protection: the enemies walk home after a wipe, often to where the
         // party fell).
+        // The team's world model (its patrols), nullptr without a commander. Same map as the
+        // bot: the commander belongs to this map thread.
+        WorldModel const* World(Player const* me)
+        {
+            std::shared_ptr<PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            return commander ? &commander->GetWorld() : nullptr;
+        }
+
         RiseCheck SafeToRise(Player* me)
         {
             for (Player* member : Team::Members(me))
@@ -72,11 +81,12 @@ namespace CorpseRun
             for (Unit const* enemy : enemies)
                 if (enemy->IsInCombat())
                     return RiseCheck::Fight;
-            for (Unit const* enemy : enemies)
-                if (Creature const* c = enemy->ToCreature())
-                    if (c->IsAlive() && !c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO) &&
-                        me->IsWithinDistInMap(c, c->GetAttackDistance(me) + RISE_AGGRO_MARGIN))
-                        return RiseCheck::Idle;
+            Position3 at;
+            at.x = me->GetPositionX();
+            at.y = me->GetPositionY();
+            at.z = me->GetPositionZ();
+            if (AggroRange::SeenOnRise(me, enemies, World(me), at))
+                return RiseCheck::Idle;
             return RiseCheck::Safe;
         }
 
@@ -172,20 +182,15 @@ namespace CorpseRun
             me->TeleportTo(Here(corpse));
         }
 
-        // Would a bot alive at (x, y, z) be in an idle enemy's aggro range (+ RISE_AGGRO_MARGIN)?
+        // Would a bot alive at (x, y, z) start a fight with an idle enemy or a patrol coming by
+        // (AggroRange::SeenOnRise)?
         bool InIdleAggro(Player const* me, std::list<Unit*> const& enemies, float x, float y, float z)
         {
-            for (Unit const* enemy : enemies)
-            {
-                Creature const* c = enemy->ToCreature();
-                if (!c || !c->IsAlive() || c->IsInCombat() || c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
-                    continue;
-                float const reach = c->GetAttackDistance(me) + RISE_AGGRO_MARGIN;
-                float const dx = c->GetPositionX() - x, dy = c->GetPositionY() - y, dz = c->GetPositionZ() - z;
-                if (dx * dx + dy * dy + dz * dz <= reach * reach)
-                    return true;
-            }
-            return false;
+            Position3 at;
+            at.x = x;
+            at.y = y;
+            at.z = z;
+            return AggroRange::SeenOnRise(me, enemies, World(me), at);
         }
 
         // Where to rise, as a player picks his spot inside the reclaim circle: here if no idle

@@ -5,8 +5,9 @@
  * Body (not released):
  *   - a self resurrection (Soulstone, Reincarnation: PLAYER_SELF_RES_SPELL) is kept and used
  *     once it is safe (no member in combat, no enemy in combat within ENEMY_COMBAT_RADIUS, no
- *     idle enemy with the body in its aggro range + RISE_AGGRO_MARGIN: after a wipe they walk
- *     home, often to where the party fell), as the release dialog's button does
+ *     idle enemy with the body in its aggro range + a margin and no patrol coming within it
+ *     in the next seconds, AggroRange::SeenOnRise: after a wipe they walk home, often to
+ *     where the party fell), as the release dialog's button does
  *     (WorldSession::HandleSelfResOpcode). Idle enemies in the way for RISE_IDLE_WAIT_MS: the
  *     spirit is released after all. In the fight only when the brain says so (TeamPlan::rises,
  *     SelfRiseAssigner: rising wins it);
@@ -23,7 +24,7 @@
  *     trigger's destination) and the engine raises it there (Player::TeleportTo, as a player
  *     walking in); a corpse outside -> the ghost is put at its corpse and reclaims it once the
  *     reclaim delay is over (WorldSession::HandleReclaimCorpseOpcode), at a spot of the reclaim
- *     circle outside every idle enemy's aggro range + RISE_AGGRO_MARGIN, as a player picks it
+ *     circle outside every idle enemy's and coming patrol's reach (SeenOnRise), as a player picks it
  *     (none: it waits up to RISE_IDLE_WAIT_MS for a patrol, then rises); no corpse left -> it
  *     rises where it is;
  *   - back alive it walks to the leader (Behaviors/Movement/Arrival.h).
@@ -69,9 +70,9 @@ namespace Commander
     namespace CorpseRun
     {
         constexpr float ENEMY_COMBAT_RADIUS = 40.0f;
-        // Not rising within an idle enemy's aggro range + this (it would pull it at once), for
-        // at most RISE_IDLE_WAIT_MS; then the spirit is released (the corpse run instead).
-        constexpr float RISE_AGGRO_MARGIN = 5.0f;
+        // Not rising where an idle enemy or a patrol would see it (AggroRange::SeenOnRise: it
+        // would pull it at once), for at most RISE_IDLE_WAIT_MS; then the spirit is released
+        // (the corpse run instead).
         constexpr uint32 RISE_IDLE_WAIT_MS = 90 * 1000;
         // Reclaiming: idle enemies this far beyond the reclaim radius count; the rise spots
         // tried around the body (rings in yards, points per ring), all inside the radius.

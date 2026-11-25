@@ -302,7 +302,8 @@ public:
     void BreakControl();
     bool CastRescueWhileControlled();
     // Feign Death (hunter): up again once it did its job, at least FEIGN_DEATH_MIN_MS after the
-    // cast and nothing still hitting the bot; it stays down while the wipe plan hides it.
+    // cast and nothing still hitting the bot; it stays down while the wipe plan hides it, and
+    // while an idle enemy or a coming patrol would see it stand up (AggroRange::SeenOnRise).
     static constexpr uint32 FEIGN_DEATH_MIN_MS = 1000;
     bool ShouldEndFeignDeath() const;
     // Milliseconds until the bot's last Auto Shot hits its target, 0 when none is in flight.
@@ -388,6 +389,11 @@ public:
     // The area phase reserves this bot (TeamPlan::ForbidsLongCast): no spell with a cast or
     // channel time but its area spells.
     bool IsLongCastHeld(SpellEntry const* pSpell) const;
+    // Out of its combat form in combat (ClassKit::CombatForm: the druid tank's bear): a mana
+    // spell that would leave less than the form's cost. strat-20261126-000902: Barkskin from
+    // caster form left the tank 505 of the 684 for Dire Bear Form, it healed itself dry and
+    // tanked 43 s in caster form until it died. The form spell itself is not held.
+    bool IsFormManaReserved(SpellEntry const* pSpell) const;
     // A cast time damage spell at an enemy the others kill before it lands, or periodic damage on
     // one that dies before it pays (Constraints::WastedCast).
     bool IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) const;

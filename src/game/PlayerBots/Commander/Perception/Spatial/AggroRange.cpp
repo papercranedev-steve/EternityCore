@@ -84,5 +84,60 @@ namespace AggroRange
         return c->GetMap()->isInLineOfSight(w.home.x, w.home.y, w.home.z + HOME_EYE_HEIGHT,
                                              at.x, at.y, at.z + LOS_TARGET_HEIGHT);
     }
+
+    namespace
+    {
+        // IsIdleAggressor without `who` being targetable (a body, a feigning hunter).
+        bool WouldAggroOnRise(Creature const* c, Unit const* who)
+        {
+            return c->IsAlive() && !c->IsInCombat() && c->CanInitiateAttack() &&
+                   !c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO) && c->IsHostileTo(who);
+        }
+    }
+
+    bool SeenOnRise(Unit const* who, std::list<Unit*> const& nearby, WorldModel const* world, Position3 const& at)
+    {
+        for (Unit const* unit : nearby)
+        {
+            Creature const* c = unit->ToCreature();
+            if (c && WouldAggroOnRise(c, who) && CoversWandering(c, Reach(c, who, RISE_MARGIN), at))
+                return true;
+        }
+        if (!world)
+            return false;
+        // Patrols: where they walk in the next seconds (no line of sight there: it is ahead).
+        for (PatrolFacts const& p : world->patrols)
+        {
+            Creature const* c = who->GetMap()->GetCreature(p.guid);
+            if (!c || !WouldAggroOnRise(c, who))
+                continue;
+            float const reach = Reach(c, who, RISE_MARGIN);
+            if (reach <= 0.0f)
+                continue;
+            for (size_t i = 0; i < p.track.size(); ++i)
+            {
+                if (i > 0 && float(i) * p.trackStepSec > RISE_PATROL_AHEAD_SEC)
+                    break;
+                Position3 const& t = p.track[i];
+                float const dx = t.x - at.x, dy = t.y - at.y, dz = t.z - at.z;
+                if (!c->CanFly() && std::fabs(dz) > CREATURE_Z_ATTACK_RANGE)
+                    continue;
+                if (dx * dx + dy * dy + dz * dz <= reach * reach)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    bool SeenOnRise(Unit const* who, WorldModel const* world)
+    {
+        std::list<Unit*> nearby;
+        who->GetEnemyListInRadiusAround(who, RISE_SCAN_YD, nearby);
+        Position3 at;
+        at.x = who->GetPositionX();
+        at.y = who->GetPositionY();
+        at.z = who->GetPositionZ();
+        return SeenOnRise(who, nearby, world, at);
+    }
 }
 }

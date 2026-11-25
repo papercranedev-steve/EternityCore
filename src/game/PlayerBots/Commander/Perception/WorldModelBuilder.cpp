@@ -892,7 +892,8 @@ namespace WorldModelBuilder
                 a.maxRange = sSpellRangeStore.LookupEntry(spell->rangeIndex) ? CombatBotBaseAI::SpellMaxRange(me, spell) : 30.0f;
                 a.ready = !f.controlled && !f.silenced && me->IsSpellReady(spell) &&
                           me->GetPower(Powers(spell->powerType)) >= Spell::CalculatePowerCost(spell, me) &&
-                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK;
+                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+                          !ai->IsFormManaReserved(spell);
                 f.dispels.push_back(a);
             }
         }
@@ -957,7 +958,7 @@ namespace WorldModelBuilder
                         formOk = ai->IsReadyWithStance(stealth);
                 a.ready = !f.controlled && me->IsSpellReady(spell) &&
                           (powerType == POWER_HEALTH || me->GetPower(powerType) >= Spell::CalculatePowerCost(spell, me)) &&
-                          formOk &&
+                          formOk && !ai->IsFormManaReserved(spell) &&
                           HasReagents(me, spell) &&
                           !(f.silenced && spell->PreventionType == SPELL_PREVENTION_TYPE_SILENCE);
                 f.controls.push_back(a);

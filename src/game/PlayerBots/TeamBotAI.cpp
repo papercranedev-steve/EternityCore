@@ -45,6 +45,7 @@
 #include "Commander/Behaviors/CurrentAction.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Spatial/AggroRange.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
@@ -545,6 +546,10 @@ bool TeamBotAI::ShouldEndFeignDeath() const
         for (Commander::EnemyFacts const& e : commander->GetWorld().enemies)
             if (e.victim == me->GetObjectGuid())
                 return false;
+    // Not up where an idle enemy or a patrol coming by would see it: the aura lasts 6 min, as
+    // a body waits for its Soulstone (CorpseRun).
+    if (Commander::AggroRange::SeenOnRise(me, commander ? &commander->GetWorld() : nullptr))
+        return false;
     return true;
 }
 
@@ -620,6 +625,23 @@ bool TeamBotAI::IsLongCastHeld(SpellEntry const* pSpell) const
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && Commander::Constraints::LongCastHeld(this, commander->GetPlan(), pSpell) != nullptr;
+}
+
+bool TeamBotAI::IsFormManaReserved(SpellEntry const* pSpell) const
+{
+    // In a form a mana spell either cannot be cast or leaves the form (HasManaForFormExit
+    // counts the way back there).
+    if (!pSpell || Powers(pSpell->powerType) != POWER_MANA || !me->IsInCombat() ||
+        me->GetShapeshiftForm() != FORM_NONE)
+        return false;
+    SpellEntry const* pForm = Kit().CombatForm();
+    if (!pForm || pForm == pSpell || pSpell->HasAura(SPELL_AURA_MOD_SHAPESHIFT))
+        return false;
+    uint32 const cost = uint32(Spell::CalculatePowerCost(pSpell, me));
+    if (!cost)
+        return false;
+    uint32 const reserve = uint32(Spell::CalculatePowerCost(pForm, me));
+    return me->GetPower(POWER_MANA) < cost + reserve;
 }
 
 bool TeamBotAI::IsCastWasted(Unit const* pTarget, SpellEntry const* pSpell) const
@@ -1190,6 +1212,9 @@ bool TeamBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSp
     // The area phase reserves this bot: no cast or channel time but its area spells (a 2.5 s
     // Frostbolt held the Blizzard back, strat-20261113-235712).
     if (IsLongCastHeld(pSpellEntry))
+        return false;
+    // Out of the combat form: keep the mana to take it back.
+    if (IsFormManaReserved(pSpellEntry))
         return false;
     // The others kill the target before this cast would land (Commander finishing forecast).
     if (IsCastWasted(pTarget, pSpellEntry))
@@ -1804,7 +1829,7 @@ bool TeamBotAI::IsReadyWithStance(SpellEntry const* pSpellEntry) const
     Powers const powerType = Powers(pSpellEntry->powerType);
     uint32 const cost = uint32(Spell::CalculatePowerCost(pSpellEntry, me));
     if (pSpellEntry->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK)
-        return powerType == POWER_HEALTH || me->GetPower(powerType) >= cost;
+        return powerType == POWER_HEALTH || (me->GetPower(powerType) >= cost && !IsFormManaReserved(pSpellEntry));
     if (NeedsFormExit(pSpellEntry))
         return HasManaForFormExit(pSpellEntry);
     if (m_stanceSwap.spell || !StanceSwapFor(pSpellEntry))

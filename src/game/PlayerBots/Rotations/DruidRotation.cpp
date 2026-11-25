@@ -10,7 +10,10 @@
  *
  * In combat:
  *   Caster form: heals (the Commander heal module while the party fights), then into the
- *   combat form. Rooted in a form (not a tank in reach): leave the form.
+ *   combat form. A tank or melee druid keeps its form's mana while out of it
+ *   (TeamBotAI::IsFormManaReserved). Rooted: it stays in its form (the upstream PartyBot left
+ *   the form to break roots: rage gone, 55% base mana for Dire Bear Form each time; removed
+ *   2026-11-26 after strat-20261126-000902, where four webs left the tank in caster form).
  *   Cat: stealthed Pounce / Ravage / Tiger's Fury; 5 combo points Ferocious Bite, Rip; out of
  *   reach Faerie Fire (Feral); Shred, Rake, Claw. (Dash: the flee interception, to catch a
  *   runner, user 2026-11-15; until then on any moving victim out of reach.)
@@ -133,11 +136,6 @@ namespace
             Unit* pVictim = me->GetVictim();
             if (!pVictim)
                 return;
-
-            if (form != FORM_NONE && me->HasUnitState(UNIT_STATE_ROOT) &&
-                me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT) &&
-               (bot.m_role != ROLE_TANK || !me->CanReachWithMeleeAutoAttack(pVictim)))
-                me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
 
             // A healer deals damage by its tier this tick (healer damage tiers doc 2026-11-21,
             // section 6), from caster form, after the heal step above cast nothing: SPARE and FULL

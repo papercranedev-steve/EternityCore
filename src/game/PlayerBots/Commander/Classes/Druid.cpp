@@ -161,6 +161,21 @@ namespace Commander
             {
                 return spell && spell == m_bot.m_spells.druid.pInnervate;
             }
+
+            // As DruidRotation::EnterCombatForm: bear for a tank, cat (bear without it) for
+            // melee damage. A healer or a caster druid has none to keep.
+            SpellEntry const* CombatForm() const override
+            {
+                auto const& s = m_bot.m_spells.druid;
+                CombatBotRoles const role = m_bot.GetRole();
+                if (role == ROLE_HEALER || role == ROLE_RANGE_DPS)
+                    return nullptr;
+                if (m_bot.m_role == ROLE_TANK)
+                    return s.pBearForm;
+                if (role == ROLE_MELEE_DPS)
+                    return s.pCatForm ? s.pCatForm : s.pBearForm;
+                return nullptr;
+            }
         };
     }
 

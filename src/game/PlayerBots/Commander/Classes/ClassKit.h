@@ -252,6 +252,10 @@ namespace Commander
         // the druid's Innervate from bear form, user 2026-11-25). Only spells whose value counts
         // the time out of the form (Perception/Values/FormExitCost.h): everything else waits.
         virtual bool LeavesFormFor(SpellEntry const* /*spell*/) const { return false; }
+        // The shapeshift form its role fights in and must be able to take back after leaving it
+        // (the druid tank's bear, a melee druid's cat): out of it, mana spells keep that form's
+        // cost in reserve (TeamBotAI::IsFormManaReserved). nullptr = no such form.
+        virtual SpellEntry const* CombatForm() const { return nullptr; }
         // Damage cooldowns: only BurstBehavior casts them, the rotations do not. Racial ones
         // come from RaceKit (merged in WorldModelBuilder).
         virtual std::vector<BurstSpell> Bursts() const { return {}; }
