@@ -10,7 +10,7 @@
  *   Corner     the player wants corner fights (PullPlace::Corner, a test switch);
  *   BringBack  the pack stands farther than PullPlanner::RETURN_MIN_DISTANCE from the leader,
  *              the party should not fight it there (PullOdds::FightThere) and the leader's spot
- *              has less add risk;
+ *              has less add risk; brought back only as far as BringBackPoint says;
  *   Corner     the fight estimate is hard (IsHard: FightLoad says the tank drops below
  *              CORNER_TANK_PCT, the healers end below CORNER_MANA_LEFT_SHARE of their mana, or
  *              it is not bearable) and the pack is not brought back (user 2026-11-07: Auto takes
@@ -35,6 +35,8 @@
 
 #include "Commander/Coordination/Situation/Pull/PullPlace.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
+#include "Commander/Perception/Forecast/PullOdds.h"
+#include "Commander/Perception/Spatial/BringBackLine.h"
 #include "ObjectGuid.h"
 #include <string>
 #include <vector>
@@ -79,6 +81,21 @@ namespace Commander
         Choice Choose(Input const& in);
         bool IsHard(FightLoad::Result const& r);
         char const* Name(Kind place);
+
+        // BringBack: where on the way back (BringBackLine, from where the tank opens to the
+        // leader) the party fights (user 2026-11-25: only as far back as it takes not to pull
+        // more). The first point no idle creature would attack (with SafeRoute::IDLE_MARGIN)
+        // where the party can fight (PullOdds::FightThere with the risk there) and that is
+        // safer than the pack, then up to BACK_MARGIN_YD farther while the points stay so (the
+        // pack piles on its side of the tank). None: the end of the line (the leader).
+        float const BACK_MARGIN_YD = 5.0f;
+
+        struct BackPoint
+        {
+            size_t index = 0;           // into the line's points
+            bool safe = false;          // false: no safe point, the end of the line
+        };
+        BackPoint BringBackPoint(BringBackLine::Line const& line, PullOdds::Edge const& edge, float packRisk);
 
         struct Lure
         {

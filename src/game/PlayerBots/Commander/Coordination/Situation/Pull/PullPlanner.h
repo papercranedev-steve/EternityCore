@@ -146,8 +146,12 @@ namespace Commander
         // when PullOdds::FightThere says the party should not fight it where it stands, and
         // the spot has less add risk than the pack. With a ranged pull spell the tank then
         // opens from range (charging in and walking back gains nothing), and it walks back
-        // backwards facing the pack with charges vetoed (PullBehavior).
+        // backwards facing the pack with charges vetoed (PullBehavior). The fight spot is the
+        // first point safe enough on the walk back towards the leader
+        // (FightPlace::BringBackPoint), the leader's spot when there is none; chosen again by
+        // the recheck before the tank goes, noted when it moved more than RETURN_SPOT_MOVED_YD.
         float const RETURN_MIN_DISTANCE = 15.0f;
+        float const RETURN_SPOT_MOVED_YD = 3.0f;
 
         // Patrol targets (WorldModel::patrols) are ambushed on their way, never walked after
         // (PullChoice EvaluateAmbush, Perception/Spatial/AmbushSpot.h): a spot within

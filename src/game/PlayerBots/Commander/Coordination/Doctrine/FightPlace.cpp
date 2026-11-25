@@ -44,6 +44,30 @@ namespace FightPlace
         return c;
     }
 
+    BackPoint BringBackPoint(BringBackLine::Line const& line, PullOdds::Edge const& edge, float packRisk)
+    {
+        BackPoint out;
+        if (line.points.empty())
+            return out;
+        out.index = line.points.size() - 1;
+        auto ok = [&](BringBackLine::Point const& p)
+        {
+            return p.aggroBy.IsEmpty() && p.risk.total < packRisk && PullOdds::FightThere(edge, p.risk);
+        };
+        for (size_t i = 0; i < line.points.size(); ++i)
+        {
+            if (!ok(line.points[i]))
+                continue;
+            out.safe = true;
+            out.index = i;
+            float const until = line.points[i].yd + BACK_MARGIN_YD;
+            for (size_t j = i + 1; j < line.points.size() && line.points[j].yd <= until && ok(line.points[j]); ++j)
+                out.index = j;
+            break;
+        }
+        return out;
+    }
+
     char const* Name(Kind place)
     {
         switch (place)

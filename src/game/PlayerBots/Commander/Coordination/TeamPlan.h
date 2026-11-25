@@ -347,7 +347,10 @@ namespace Commander
         ObjectGuid target;
         ObjectGuid tank;
         std::vector<ObjectGuid> expected;   // AssistPredictor result, target included
-        Position3 spot;                     // where the party fights (leader position at command time)
+        // Where the party fights: brought back, the first point safe enough on the walk back
+        // towards the leader (FightPlace::BringBackPoint; the leader's spot when none); else the
+        // leader's position at command time.
+        Position3 spot;
         // The tank walks the pack back to `spot` (backwards, facing it: Behaviors/Movement/Backpedal.h),
         // decided by PullPlanner::Plan from the party's edge and the add risk (Perception/Forecast/PullOdds.h).
         bool returnToSpot = false;

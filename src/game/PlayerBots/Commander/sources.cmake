@@ -42,6 +42,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/SpawnTargets.cpp
   ${COMMANDER_DIR}/Perception/Spatial/AdvanceRoute.h
   ${COMMANDER_DIR}/Perception/Spatial/AdvanceRoute.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/BringBackLine.h
+  ${COMMANDER_DIR}/Perception/Spatial/BringBackLine.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatHistory.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/ThreatBehavior.h

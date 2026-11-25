@@ -20,6 +20,7 @@
 #include "Commander/Perception/Spatial/PatrolTracker.h"
 #include "Commander/Perception/Forecast/PullOdds.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
+#include "Commander/Perception/Spatial/BringBackLine.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -116,6 +117,42 @@ namespace Commander
             float const spentEach = std::max(0.0f, r.manaStart - r.manaLeft) / float(input.healers.size());
             float const pct = spentEach * PullPlanner::READY_HEALER_MANA_MARGIN / smallestPool * 100.0f;
             return std::min(PullPlanner::READY_FULL_MANA_PCT, std::max(PullPlanner::READY_HEALER_MIN_MANA_PCT, pct));
+        }
+
+        // Where a pack brought back is fought (PullPlan::spot): the point FightPlace::BringBackPoint
+        // picks on the walk from `openAt` to the leader, else the leader's spot.
+        struct ReturnSpot
+        {
+            Position3 at;
+            float risk = 0.0f;          // add risk there
+            bool safe = false;          // a point on the way, not the leader's spot
+            char const* why = "";       // not safe: why
+        };
+
+        ReturnSpot ChooseReturnSpot(WorldModel const& world, Player* tank, Position3 const& openAt,
+                                    Position3 const& leaderAt, std::vector<ObjectGuid> const& expected,
+                                    PullOdds::Edge const& edge, float packRisk)
+        {
+            ReturnSpot r;
+            r.at = leaderAt;
+            r.risk = PullOdds::NearbyAdds(world, leaderAt, expected).total;
+            BringBackLine::Line const line = BringBackLine::Along(tank, world, openAt, leaderAt, expected);
+            if (!line.path)
+            {
+                r.why = "no path back to you";
+                return r;
+            }
+            FightPlace::BackPoint const b = FightPlace::BringBackPoint(line, edge, packRisk);
+            if (!b.safe)
+            {
+                r.why = "no safer spot on the way";
+                return r;
+            }
+            BringBackLine::Point const& p = line.points[b.index];
+            r.at = p.pos;
+            r.risk = p.risk.total;
+            r.safe = true;
+            return r;
         }
     }
 
@@ -610,6 +647,15 @@ namespace Commander
             }
         }
 
+        // Brought back only as far as it takes (FightPlace::BringBackPoint), from where the
+        // tank opens towards the leader.
+        ReturnSpot back;
+        back.at = spot;
+        back.risk = spotRisk.total;
+        if (returnToSpot)
+            back = ChooseReturnSpot(world, tank, best.ranged || best.face ? best.spot.at : PositionOf(best.pullTarget),
+                                    spot, best.expected, edge, packRisk.total);
+
         TeamPlan& plan = commander.GetPlanMutable();
         PullPlan& pull = plan.pull;
         pull = PullPlan();
@@ -618,7 +664,7 @@ namespace Commander
         pull.tank = tank->GetObjectGuid();
         pull.expected = best.expected;
         pull.aggroRangeAdds = best.aggroAdds;
-        pull.spot = spot;
+        pull.spot = back.at;
         pull.returnToSpot = returnToSpot;
         pull.packAt = best.ambush ? best.meetAt : PositionOf(best.pullTarget);
         if (haveLoad && estimate.fightSec > 0.0f)
@@ -710,9 +756,14 @@ namespace Commander
         {
             // (fought where it meets the tank: said above)
         }
+        else if (pull.returnToSpot && back.safe)
+            report.push_back(Format("Tank brings them back %.0f yd from the pack, walking backwards, to the first spot "
+                "safe enough on the way to you (%s; there %.1f, you are %.0f yd farther).",
+                PackResolver::Distance(pull.packAt, pull.spot), odds.c_str(), back.risk,
+                PackResolver::Distance(pull.spot, spot)));
         else if (pull.returnToSpot)
-            report.push_back(Format("Tank brings them back to where you stand, walking backwards (%s; at your spot %.1f).",
-                odds.c_str(), spotRisk.total));
+            report.push_back(Format("Tank brings them back to where you stand, walking backwards (%s; at your spot %.1f; "
+                "%s).", odds.c_str(), spotRisk.total, back.why));
         else if (!distant)
             report.push_back("Fight where they stand (they are next to you).");
         else if (fightThere)
@@ -1033,10 +1084,26 @@ namespace Commander
             return RecheckResult::Hold;
         }
 
+        Unit* leader = map->GetUnit(world.leader);
+
+        // A pack brought back: its spot again, from where the tank opens now towards where the
+        // leader stands now (strat-20261125-233532: the spot was the leader's 17 s before, the
+        // leader had walked 16 yd on while the party got ready).
+        if (pull.returnToSpot && !pull.ambush && leader)
+        {
+            Position3 const openAt = pull.rangedPullSpell ? pull.rangedSpot : pull.facePull ? pull.faceSpot : PositionOf(target);
+            ReturnSpot const back = ChooseReturnSpot(world, tank, openAt, PositionOf(leader), expected,
+                PullOdds::PartyEdge(world, map, expected), PullOdds::NearbyAdds(world, PositionOf(target), expected).total);
+            if (PackResolver::Distance(back.at, pull.spot) > RETURN_SPOT_MOVED_YD)
+                plan.notes.push_back(Format("Fight spot again: %.0f yd from the pack (%s).",
+                    PackResolver::Distance(PositionOf(target), back.at),
+                    back.safe ? "the first spot safe enough on the way to you" : back.why));
+            pull.spot = back.at;
+        }
+
         // 2. Patrols walking next to the pull while it lasts, joiners walking past included
         //    (scenarios 4, 11, 13; strat-20261103-013312): wait for the start the fight
         //    estimate likes (ChooseStart), within what is left of PATROL_WAIT_MAX_MS.
-        Unit* leader = map->GetUnit(world.leader);
         uint32 const waitedMs = pull.patrolWaitSinceMs ? WorldTimer::getMSTimeDiff(pull.patrolWaitSinceMs, nowMs) : 0;
         float const budgetSec = waitedMs >= PATROL_WAIT_MAX_MS ? 0.0f : (PATROL_WAIT_MAX_MS - waitedMs) / 1000.0f;
         PatrolStart const patrols = ChooseStart(world, map, target, tank, leader, pull.spot, expected, budgetSec);
