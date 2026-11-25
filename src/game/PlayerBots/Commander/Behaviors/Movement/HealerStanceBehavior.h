@@ -84,9 +84,11 @@
  *            spot does not see. Also part of StayLoss here when the anchor is in reach.
  * Order and checks as the ranged stance (2026-11-15, the viewshed): cells the field estimates
  * in sight of the anchor (PositionField::SeesEstimate) first, then the rest, each by loss; one
- * pass: this healer's own idle scan, recent path failures skipped, the real line from the
+ * pass: this healer's own idle scan, recent path failures skipped, cells it stood on a moment
+ * ago in heal range but out of the anchor's sight skipped (SightCache::StandFailed, marked
+ * here; 2026-11-25, as the ranged stance), the real line from the
  * field's sight cache (SightCache.h, at most MAX_SIGHT_CHECKS new checks per tick), then the
- * heal's line now (SightCache::Live) and SafeRoute::PathIsSafe (in the fight ArrivingAt the
+ * heal's line now from the cell's ground (SightCache::LiveFromCell) and SafeRoute::PathIsSafe (in the fight ArrivingAt the
  * anchor) on at most MAX_GEOMETRY_CHECKS cells. Line of
  * sight as the spell checks it (collision height to target + 1 yd; before 2026-11-14 eye to
  * eye at 2 yd). (The rings started straight behind the anchor; that only broke ties of the

@@ -371,10 +371,16 @@ namespace Commander
                 return;
         }
 
-        bool const anchorOk = Distance2d(ctx.here, ctx.anchor) <= HEAL_RANGE && Los(me, ctx.here, ctx.anchor);
+        bool const anchorInRange = Distance2d(ctx.here, ctx.anchor) <= HEAL_RANGE;
+        bool const anchorOk = anchorInRange && Los(me, ctx.here, ctx.anchor);
         // (the field and its sight cache: built while the party fights or a pull runs; without
         // them no cells, only the walk to the anchor below)
         SightCache* const sight = world.field ? world.field->sight.get() : nullptr;
+        // In range but the line fails where it stands (not walking, above): the cell search
+        // does not take this cell again for this anchor (SightCache::StandFailed, as the ranged
+        // stance; stockade-20261125-221620).
+        if (anchorInRange && !anchorOk && sight)
+            sight->MarkStandFailed(me, ctx.anchor);
         // Real line of sight checks not kept yet, this tick.
         uint32 budget = MAX_SIGHT_CHECKS;
         // How narrowly a spot sees the tank among the enemies it holds (Perception/Values/
@@ -482,6 +488,12 @@ namespace Commander
                     ++why.pathKept;
                     continue;
                 }
+                // Stood there a moment ago and did not see the anchor (SightCache::StandFailed).
+                if (sight->StandFailed(me, s.pos, ctx.anchor))
+                {
+                    ++why.standKept;
+                    continue;
+                }
                 ++checked;
                 SightCache::Sight const v = sight->Cells(me, s.pos, ctx.anchor, budget);
                 if (v == SightCache::Sight::Unknown)
@@ -499,8 +511,9 @@ namespace Commander
                 if (checks >= MAX_GEOMETRY_CHECKS)
                     break;
                 ++checks;
-                // The kept answer is from the cells' centres: the heal's line now, then the path.
-                if (!Los(me, s.pos, ctx.anchor))
+                // The kept answer is from the cells' centres: the heal's line now, from the
+                // ground the healer will stand on, then the path.
+                if (!SightCache::LiveFromCell(me, s.pos, ctx.anchor))
                 {
                     ++why.live;
                     continue;
