@@ -1,5 +1,6 @@
 #include "Commander/Perception/Spatial/PackRoutes.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PullWalk.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Creature.h"
 #include "PathFinder.h"
@@ -12,15 +13,6 @@ namespace PackRoutes
 {
     namespace
     {
-        Position3 ToPosition(Vector3 const& v)
-        {
-            Position3 p;
-            p.x = v.x;
-            p.y = v.y;
-            p.z = v.z;
-            return p;
-        }
-
         // The member the walk goes to: nearest to the leader (the pull starts on that side).
         PackCreature const* NearestMember(PackFacts const& pack, Position3 const& from)
         {
@@ -47,36 +39,6 @@ namespace PackRoutes
             return guids;
         }
 
-        // The first creature of `others` the path comes into before it comes into `own` (the
-        // pack itself), or null. Past that point the pack is on the walker anyway: a creature
-        // standing beside or behind it is a possible add the pull planner predicts, not in
-        // between (strat-20261125: neighbouring Stratholme packs blocked each other, every one
-        // "past" the next, and the active pull stance found nothing in front).
-        Creature const* FirstBlocker(SafeRoute::IdleCreatures const& others, SafeRoute::IdleCreatures const& own,
-                                     PathInfo const& path)
-        {
-            auto const& pts = path.getPath();
-            for (size_t i = 1; i < pts.size(); ++i)
-            {
-                Position3 const a = ToPosition(pts[i - 1]);
-                Position3 const b = ToPosition(pts[i]);
-                uint32 const steps = std::max(1u, uint32(SafeRoute::Distance2d(a, b) / SafeRoute::PATH_SAMPLE_STEP));
-                for (uint32 s = 1; s <= steps; ++s)
-                {
-                    float const f = float(s) / steps;
-                    Position3 p;
-                    p.x = a.x + (b.x - a.x) * f;
-                    p.y = a.y + (b.y - a.y) * f;
-                    p.z = a.z + (b.z - a.z) * f;
-                    if (own.Near(p))
-                        return nullptr;
-                    if (Creature const* c = others.Blocker(p))
-                        return c;
-                }
-            }
-            return nullptr;
-        }
-
         // The leader has line of sight to a member (the nearest first).
         bool LeaderSees(Player* leader, PackFacts const& pack, PackCreature const& nearest)
         {
@@ -89,7 +51,8 @@ namespace PackRoutes
             });
         }
 
-        void Route(Player* leader, Position3 const& from, SafeRoute::IdleCreatures const& allIdle, PackFacts& pack)
+        void Route(Player* leader, Position3 const& from, SafeRoute::IdleCreatures const& idle,
+                   std::vector<PatrolFacts> const& patrols, PackFacts& pack)
         {
             PackCreature const* target = NearestMember(pack, from);
             if (!target)
@@ -117,14 +80,8 @@ namespace PackRoutes
             pack.route.state = PackRouteState::Walk;
             pack.route.walkYd = path.Length();
 
-            // The pack itself comes anyway: only other creatures block the walk, and only
-            // before it reaches the pack's own aggro range.
-            std::vector<ObjectGuid> const members = GuidsOf(pack);
-            SafeRoute::IdleCreatures others = allIdle;
-            others.Ignore(members);
-            SafeRoute::IdleCreatures own = allIdle;
-            own.KeepOnly(members);
-            if (Creature const* blocker = FirstBlocker(others, own, path))
+            // Who is in between: the walk to a pull's rule (PullWalk.h).
+            if (Creature const* blocker = PullWalk::FirstBlocker(idle, path, GuidsOf(pack), patrols))
                 pack.route.blocker = blocker->GetObjectGuid();
         }
     }
@@ -145,14 +102,9 @@ namespace PackRoutes
 
         // One scan for all walks. The hard line (TIGHT_MARGIN): "blocked" means the walk really
         // comes into a creature's aggro range, not only near the comfort margin.
-        SafeRoute::IdleCreatures idle(leader, from, farthest + IDLE_SCAN_MARGIN, SafeRoute::TIGHT_MARGIN);
-        std::vector<ObjectGuid> patrolGuids;
-        patrolGuids.reserve(patrols.size());
-        for (PatrolFacts const& p : patrols)
-            patrolGuids.push_back(p.guid);
-        idle.Ignore(patrolGuids);
+        SafeRoute::IdleCreatures const idle(leader, from, farthest + IDLE_SCAN_MARGIN, SafeRoute::TIGHT_MARGIN);
         for (size_t i = 0; i < count; ++i)
-            Route(leader, from, idle, packs[i]);
+            Route(leader, from, idle, patrols, packs[i]);
     }
 }
 }

@@ -5,7 +5,8 @@
  * near. Here every pack gets the navmesh walk from the leader to its member nearest the leader:
  * its length, or no way at all, and the first idle creature of another pack the walk comes
  * into the aggro range of before it comes into the pack's own (aggro ranges against the
- * leader, patrols left out). One beside or behind the pack is not in between: the pack is on
+ * leader, patrols left out): the walk to a pull's rule, PullWalk.h, shared with the pull
+ * planner and its walk guard. One beside or behind the pack is not in between: the pack is on
  * the walker first, and the pull planner predicts such an add.
  * A pack in a corridor is then nearer than one outside it, and a pack whose way passes another
  * pack is known to be behind it. Also whether the leader sees any of its members (line of

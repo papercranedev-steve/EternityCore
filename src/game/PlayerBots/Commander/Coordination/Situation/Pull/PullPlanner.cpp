@@ -4,6 +4,7 @@
 #include "Commander/Coordination/Situation/Pull/PullPatrolCheck.h"
 #include "Commander/Coordination/Situation/Pull/PullLosSearch.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Perception/Spatial/PullWalk.h"
 #include "Commander/Coordination/Situation/Los/LosBreak.h"
 #include "Commander/Coordination/Situation/Los/LosHealerSpot.h"
 #include "Commander/Coordination/Situation/Patrol/PatrolAssigner.h"
@@ -1033,7 +1034,16 @@ namespace Commander
             // A walk-in is predicted for where the target stands now: the walk guard measures
             // from here (PullAssigner::TARGET_MOVED_YD).
             if (!pull.OpensFromAfar())
+            {
                 pull.packAt = PositionOf(target);
+                // Who the walk in passes comes too (the planner counted it the same way).
+                if (Creature const* blocker = WalkInBlocker(world, target, tank, expected))
+                {
+                    std::vector<ObjectGuid> const along = PullWalk::PackOf(world, blocker->GetObjectGuid());
+                    AddUnique(expected, along);
+                    AddUnique(aggroAdds, along);
+                }
+            }
         }
         // Stealthed pack members were added by the planner, keep counting them.
         for (ObjectGuid g : pull.expected)

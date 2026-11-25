@@ -21,6 +21,10 @@
  * to its home than that end (SafeRoute::IdleCreatures::LeavingFrom / ArrivingAt). Not for an
  * enemy only targeted: it is not fighting at its spot yet.
  * Each check records why it is not safe (RouteFact::why / blocker, trace "route").
+ * An enemy only targeted (not fighting yet): the walk to it is a pull, also checked by the pull
+ * walk's rule (PullWalk.h: patrols left out, only until the pack's own aggro range, hard line;
+ * RouteFact::pullBlocker), the one the pull planner chose by. The walk guard reads that; these
+ * rules here stay for the walks of melee bots into a fight.
  * A walk an idle creature's margin blocks is checked again on the hard line
  * (SafeRoute::TIGHT_MARGIN, RouteFact::safeTight, since 2026-11-14): the brain takes it when no
  * other enemy is open to the bot (DamageTargets).

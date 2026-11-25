@@ -1130,6 +1130,11 @@ namespace Commander
         float pathYd = 0.0f;        // path length (straight distance without a navmesh)
         char const* why = "";       // not safe: SafeRoute::Verdict::why
         ObjectGuid blocker;         // "idle creature": the one the walk comes into
+        // An enemy only targeted (not fighting yet): the walk to it is a pull. Who is in between
+        // by the pull walk's rule (PullWalk.h, the hard line; the pull planner judged the walk by
+        // it): empty = nobody. The walk guard reads this (PullAssigner).
+        bool pullChecked = false;
+        ObjectGuid pullBlocker;
     };
 
     // Fight-wide rates for the common value unit (value-scoring doc section 3).

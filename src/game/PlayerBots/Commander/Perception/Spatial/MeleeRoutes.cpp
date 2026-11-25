@@ -1,5 +1,6 @@
 #include "Commander/Perception/Spatial/MeleeRoutes.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/PullWalk.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Trace/Trace.h"
 #include "Creature.h"
@@ -22,6 +23,7 @@ namespace Commander
             int32 cached = -1;          // index in the cache, -1 = never checked
             bool due = false;
             bool engaged = false;       // fighting the party at its spot (header: ArrivingAt)
+            bool targetedOnly = false;  // in WorldModel::targeted, not fighting yet (RouteFact::pullBlocker)
         };
 
         bool WalksToMelee(PartyMemberFacts const& m)
@@ -80,6 +82,7 @@ namespace Commander
                 p.enemy = e;
                 p.distance = distance;
                 p.engaged = k < fighting && e->acting && !e->victim.IsEmpty();
+                p.targetedOnly = k >= fighting;
                 for (size_t i = 0; i < m_cache.size(); ++i)
                     if (m_cache[i].fact.bot == m.guid && m_cache[i].fact.enemy == e->guid)
                         p.cached = int32(i);
@@ -177,6 +180,15 @@ namespace Commander
             if (!e.fact.safe && verdict.blocker)
                 e.fact.safeTight = SafeRoute::PathIsSafe(me, pathIdleOf(me, p, SafeRoute::TIGHT_MARGIN), p->enemy->pos,
                                                          MAX_DETOUR);
+            // Only targeted: the walk is a pull, judged by the pull walk's rule (header).
+            if (p->targetedOnly)
+            {
+                e.fact.pullChecked = true;
+                SafeRoute::IdleCreatures const idle = scanOf(me, p, SafeRoute::TIGHT_MARGIN).LeavingFrom(p->bot->pos);
+                if (Creature const* c = PullWalk::Blocker(me, idle, p->enemy->pos, PullWalk::PackOf(world, p->enemy->guid),
+                                                          world.patrols))
+                    e.fact.pullBlocker = c->GetObjectGuid();
+            }
             if (Trace::On())
                 Trace::Emit("route", Trace::Format("%s -> %s: %s%s%s%s", me->GetName(), Trace::Guid(e.fact.enemy).c_str(),
                         e.fact.safe ? "safe" : verdict.why,

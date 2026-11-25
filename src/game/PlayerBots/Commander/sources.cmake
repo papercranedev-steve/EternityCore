@@ -38,6 +38,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/PackResolver.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.h
   ${COMMANDER_DIR}/Perception/Spatial/PackRoutes.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/PullWalk.h
+  ${COMMANDER_DIR}/Perception/Spatial/PullWalk.cpp
   ${COMMANDER_DIR}/Perception/Spatial/SpawnTargets.h
   ${COMMANDER_DIR}/Perception/Spatial/SpawnTargets.cpp
   ${COMMANDER_DIR}/Perception/Spatial/AdvanceRoute.h

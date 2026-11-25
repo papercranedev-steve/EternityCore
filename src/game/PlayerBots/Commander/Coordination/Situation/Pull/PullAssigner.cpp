@@ -129,9 +129,11 @@ namespace Commander
             float const moved = PackResolver::Distance(at, pull.packAt);
             if (moved > PullAssigner::TARGET_MOVED_YD)
                 return Format("the target walked %.0f yd from where the pull was planned.", moved);
+            // The walk by the rule the planner chose walking in by (PullWalk.h): only a creature
+            // that came into the way since then calls it off.
             RouteFact const* route = world.FindRoute(pull.tank, pull.target);
-            if (route && !route->safeTight && !route->blocker.IsEmpty() && !Contains(pull.expected, route->blocker))
-                return "the walk to the target passes the aggro range of a creature the prediction does not count.";
+            if (route && route->pullChecked && !route->pullBlocker.IsEmpty() && !Contains(pull.expected, route->pullBlocker))
+                return "a creature the prediction does not count came into the walk to the target.";
             return std::string();
         }
 

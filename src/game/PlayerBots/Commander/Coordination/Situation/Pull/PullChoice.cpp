@@ -16,8 +16,11 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Forecast/AssistPredictor.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
+#include "Commander/Perception/Spatial/MeleeRoutes.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Spatial/PatrolTracker.h"
+#include "Commander/Perception/Spatial/PullWalk.h"
+#include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Forecast/PullOdds.h"
 #include "Commander/Perception/Spatial/ShotSpot.h"
 #include "Commander/Perception/Spatial/AmbushSpot.h"
@@ -144,6 +147,20 @@ namespace Commander
         // whichever brings fewer, then fewer elites; a shot on a tie (more room to the aggro
         // ranges). It needs a spot (`avoid`: spots that failed live); none: walks in (`noSpot`,
         // ranked after the candidates that have one).
+        Creature const* WalkInBlocker(WorldModel const& world, Creature* target, Player* tank,
+                                      std::vector<ObjectGuid> const& expected)
+        {
+            Position3 const from = PositionOf(tank);
+            Position3 const to = PositionOf(target);
+            float const radius = std::min(MeleeRoutes::MAX_SCAN_YD,
+                PackResolver::Distance(from, to) + MeleeRoutes::SCAN_EXTRA_YD);
+            SafeRoute::IdleCreatures const idle =
+                SafeRoute::IdleCreatures(tank, from, radius, SafeRoute::TIGHT_MARGIN).LeavingFrom(from);
+            Creature const* blocker = PullWalk::Blocker(tank, idle, to, PullWalk::PackOf(world, target->GetObjectGuid()),
+                                                        world.patrols);
+            return blocker && !Contains(expected, blocker->GetObjectGuid()) ? blocker : nullptr;
+        }
+
         PatrolFacts const* FindPatrol(WorldModel const& world, ObjectGuid guid)
         {
             for (PatrolFacts const& p : world.patrols)
@@ -208,6 +225,16 @@ namespace Commander
             o.expected = AssistPredictor::Guids(melee);
             o.aggroAdds = AggroRangeGuids(melee);
 
+            // The walk there by the pull walk's rule (PullWalk.h), the one the walk guard holds
+            // it to: a creature in between comes along with its pack.
+            Creature const* walkBlocker = WalkInBlocker(world, c, tank, o.expected);
+            if (walkBlocker)
+            {
+                std::vector<ObjectGuid> const along = PullWalk::PackOf(world, walkBlocker->GetObjectGuid());
+                AddUnique(o.expected, along);
+                AddUnique(o.aggroAdds, along);
+            }
+
             bool const caster = IsRangedCaster(c);
             o.caster = caster;
             Creature const* neighbour = UnpredictedNeighbour(world, map, c, o.expected);
@@ -245,6 +272,8 @@ namespace Commander
                         o.rangedWhy = pick->face ? "you chose face pulls" : "you chose ranged pulls";
                     else if (caster)
                         o.rangedWhy = Format("%s stands back and casts", c->GetName());
+                    else if (walkBlocker)
+                        o.rangedWhy = Format("the walk in passes %s", walkBlocker->GetName());
                     else if (walkInAdds)
                         o.rangedWhy = Format("walking in would bring %u more by aggro range", uint32(o.aggroAdds.size()));
                     else

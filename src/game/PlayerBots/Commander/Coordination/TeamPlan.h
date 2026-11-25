@@ -187,6 +187,9 @@ namespace Commander
         uint32 cleared = 0;
         uint32 skippedPacks = 0;
         std::vector<ObjectGuid> skipped;    // members of packs judged too hard or unpullable
+        // Packs (ClearPlanner::PackKey) whose pull the walk guard called off once: planned again
+        // from where things are now; called off a second time: skipped.
+        std::vector<ObjectGuid> calledOff;
         uint32 idleSinceMs = 0;         // last time the party was in a fight
 
         // Leader walked away from the anchor (looting): paused, resumes where the leader stops.

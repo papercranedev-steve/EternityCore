@@ -270,6 +270,7 @@ namespace ClearPlanner
                 clear.forgotAtMs = nowMs;
                 clear.skipped.clear();
                 clear.skippedPacks = 0;
+                clear.calledOff.clear();
                 clear.patrolFirstTried.clear();
                 clear.tappedNoted.clear();
                 clear.stealthNoted.clear();
@@ -591,9 +592,18 @@ namespace ClearPlanner
                 ++clear.cleared;
                 break;
             case PullOutcome::CalledOff:
-                // The plan no longer fitted before the opener (the reason was noted). The same
-                // pack would be planned the same way again: skip it, go on with the next.
+                // The plan no longer fitted before the opener (the reason was noted): something
+                // changed since it was planned (the planner and the walk guard judge the walk by
+                // one rule, PullWalk.h). Planned again from what is there now; called off again:
+                // skipped, go on with the next.
                 plan.lastPullOutcome = PullOutcome::None;
+                if (!KeyIn(world, plan.pull.expected, clear.calledOff))
+                {
+                    std::vector<ObjectGuid> const key = PackKey(world, plan.pull.expected);
+                    clear.calledOff.insert(clear.calledOff.end(), key.begin(), key.end());
+                    Note(plan, "Planning it again from here.");
+                    break;
+                }
                 Skip(clear, PackKey(world, plan.pull.expected));
                 break;
             case PullOutcome::None:

@@ -320,9 +320,9 @@ namespace Commander
         // Walk guard of a walk-in pull, before the fight starts (230431: the tank followed a
         // patrolling gargoyle 70 yd into an idle pack). The pull is called off
         // (PullOutcome::CalledOff) when
-        //  - the tank's walk to the target (WorldModel::routes, MeleeRoutes) comes into the
-        //    aggro range of an idle creature the prediction does not count, on the hard line
-        //    (RouteFact::safeTight false, a blocker not in PullPlan::expected), or
+        //  - the tank's walk to the target, by the pull walk's rule the planner chose walking in
+        //    by (PullWalk.h, RouteFact::pullBlocker), comes into the aggro range of a creature
+        //    not in PullPlan::expected: one that came into the way since, or
         //  - the target is more than TARGET_MOVED_YD from where it was planned (packAt): the
         //    prediction was made for another place.
         // A shot or face pull has its own checked spot and walk (ShotSpot, AmbushSpot).

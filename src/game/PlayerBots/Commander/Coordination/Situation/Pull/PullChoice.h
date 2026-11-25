@@ -68,8 +68,17 @@ namespace Commander
         // whichever brings fewer, then fewer elites; a shot on a tie (more room to the aggro
         // ranges). It needs a spot (`avoid`: spots that failed live); none: walks in (`noSpot`,
         // ranked after the candidates that have one).
+        // Also when the walk in passes a creature the prediction does not bring (WalkInBlocker);
+        // walking in anyway counts it and its pack.
         Option Evaluate(WorldModel const& world, Map* map, Creature* c, Player* tank, Openers const& op,
                         std::vector<Position3> const& avoid = std::vector<Position3>());
+
+        // The first creature the tank's walk to `target` comes into that `expected` does not
+        // count (Perception/Spatial/PullWalk.h, the hard line, out of the circle the tank
+        // stands in): the rule of RouteFact::pullBlocker, which the walk guard reads, so a plan
+        // that walks in is not called off for what it already knew. Null: nobody.
+        Creature const* WalkInBlocker(WorldModel const& world, Creature* target, Player* tank,
+                                      std::vector<ObjectGuid> const& expected);
 
         // Best pull among `candidates` (target choice in PullChoice.cpp, Better), leaving out
         // `excluded`. Stealthed members are skipped (the tank cannot target them and would walk
