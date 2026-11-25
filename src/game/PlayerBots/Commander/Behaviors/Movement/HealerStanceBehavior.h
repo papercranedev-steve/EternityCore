@@ -23,7 +23,8 @@
  * walk costs nothing now and saves walking it during the fight: Value::ContributionPerSecAt
  * (PullPlan::expectedIncomingDps, the FightLoad estimate) x walk seconds, which has to beat
  * PullBehavior's wait (Hold). No planned spot (the opening hold past the arrival): it waits
- * where it is (PullPlan::HoldsWaiting). Not in WaitReady (drinking).
+ * where it is (PullPlan::HoldsWaiting). A bot eating or drinking stays seated (only an idle
+ * creature's reach moves it): it walks to its place once RestBehavior gets it up.
  *
  * Anchor (who to stay with): a tank (Perception/Tanks.h, bot or player; with several, the one
  * most enemies hit); else the member most enemies are hitting; else the party leader. Other

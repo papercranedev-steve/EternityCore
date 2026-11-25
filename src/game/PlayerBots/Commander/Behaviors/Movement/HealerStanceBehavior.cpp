@@ -329,6 +329,9 @@ namespace Commander
         }
         if (me->IsNonMeleeSpellCasted(false, false, true))
             return;
+        // Resting is waiting too (as the ranged stance): the walk to the place would stand it up.
+        if (prepare && !unsafe && bot->IsResting())
+            return;
 
         Context ctx;
         ctx.me = me;

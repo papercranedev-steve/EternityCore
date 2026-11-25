@@ -38,6 +38,8 @@
  * instead of a victim, same checks, rings PREPARE_RADII (one more at 28 yd); value
  * Value::ContributionPerSecAt(PullPlan::expectedIncomingDps) x walk seconds, cost 0 (see
  * HealerStanceBehavior.h). No planned spot: it waits where it is (PullPlan::HoldsWaiting).
+ * A bot eating or drinking stays seated (only an idle creature's reach moves it): it walks
+ * to its place once RestBehavior gets it up.
  * Runs while the party fights (WorldModel::InFight), also for a bot not in combat itself; no
  * victim yet: the brain's target for it (TeamPlan::targets; TargetBehavior attacks only in
  * range and sight). Ranged bots do not follow the leader then (TeamBotAI::IsStanceControlled).

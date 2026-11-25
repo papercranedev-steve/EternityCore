@@ -155,6 +155,12 @@ namespace Commander
         // In the fight a circle covering the victim's spot counts only closer than the victim
         // (FieldSpots.h): a spot taken by that rule is not left again next tick.
         bool const unsafe = (prepare ? idle : idle.ArrivingAt(at)).Near(here);
+        // Resting is waiting too (as PullBehavior's hold): the walk to the place (Assigned, above
+        // the rest) would stand it up while the pull waits for its mana, again each time the
+        // planned spot moves (strat-20261125: the pull waited 84 s for a hunter at 12% mana with
+        // water in its bags). It walks once RestBehavior gets it up.
+        if (prepare && !unsafe && bot->IsResting())
+            return;
         // The enemies' exposure (2026-11-10, user: squishy casters stand well back;
         // Perception/Values/Exposure.h). Not before the fight, not for the area caster: the
         // area phase picked where it casts from.
