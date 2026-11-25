@@ -21,8 +21,14 @@
  * new place in it (Reroll), at least MIN_GAP from where the team's other members follow to or
  * stand: dart throwing, PLACE_TRIES candidates (a Poisson disk built one bot at a time), else
  * the candidate farthest from the others. The zone grows with the followers (AREA_PER_FOLLOWER).
+ * Lead (user 2026-11-25): the team's main tank (Tanks::Main, a bot, not the leader itself)
+ * takes the same zone in front of the leader instead, and starts at once when the leader walks
+ * towards it (LEAD_* style, FollowMovementGenerator's ahead rule). FollowSpot's candidates are
+ * behind first: where the front is not safe the tank goes behind and stays there (no drift
+ * back) until the next stop rerolls a place in front.
  * Tick: while walking the bot's place drifts a little; once the leader has stood a while the
- * bot looks around, takes a step or sits down (out of combat only).
+ * bot looks around, takes a step or sits down (out of combat only). A place outside the bot's
+ * zone (FollowSpot moved it for safety) does not drift: the next stop rerolls.
  * FollowSpot still decides whether the offset is safe: TeamBotAI asks it with Heading() after
  * Reroll() / Tick(); the first move of each MoveFollow is never held back.
  *
@@ -71,6 +77,10 @@ namespace HumanFollow
     constexpr float PLACE_ANGLE = 0.5f;
     // A new place once the leader stops this far from where it stood before (not for a step).
     constexpr float REROLL_MOVE_YD = 4.0f;
+    // Lead: the tank in front starts before the leader walks into it (leader after the slack
+    // and the reaction: 1.5 + 0.2 s x 7 yd/s = 2.9 yd, the tank stands 2.5 yd + both radii ahead).
+    constexpr uint32 LEAD_REACTION_MS = REACTION_MIN_MS;
+    constexpr float LEAD_START_SLACK = START_SLACK_MIN;
 
     // Drift (leader walking): every DRIFT_EVERY_MIN..MAX_MS a new place DRIFT_SPREAD /
     // DRIFT_ANGLE around the current one (MIN_GAP kept; the next stop rerolls near the bot's
@@ -120,15 +130,19 @@ namespace HumanFollow
 
     Personality Of(Player const* bot);
 
-    // A new place in the bot's preferred part of the zone behind `leader`, MIN_GAP from the
-    // team's other members where possible (FollowSpot not asked: the caller does).
+    // `bot` walks in front of `leader`: the main tank of its team, not the leader.
+    bool Leads(Player const* bot, Unit const* leader);
+
+    // A new place in the bot's preferred part of its zone (behind `leader`, in front for the
+    // lead), MIN_GAP from the team's other members where possible (FollowSpot not asked: the
+    // caller does).
     FollowSpot::Offset Reroll(Player const* bot, Unit const* leader, float heading);
 
     // The direction the follow offset is measured from: the heading of the bot's styled follow
     // of `leader`, else the leader's facing (a new follow starts from it).
     float Heading(Player const* bot, Unit const* leader);
 
-    FollowStyle StyleOf(Player const* bot, float heading);
+    FollowStyle StyleOf(Player const* bot, Unit const* leader, float heading);
 
     // Every bot update with a leader; `following`: it follows `leader` with a style at `current`
     // (after the follow spot check). Looks around and sits by itself; true: follow at `next`

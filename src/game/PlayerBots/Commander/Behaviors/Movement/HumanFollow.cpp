@@ -1,4 +1,7 @@
 #include "Commander/Behaviors/Movement/HumanFollow.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Team.h"
 #include "MotionMaster.h"
 #include "Player.h"
@@ -135,16 +138,20 @@ namespace HumanFollow
             return z;
         }
 
-        // Dart throwing around (`share`, `angle`): the first candidate MIN_GAP from every taken
-        // spot, else the one farthest from them.
-        FollowSpot::Offset Place(Zone const& z, float share, float angle, float shareSpread, float angleSpread)
+        // The middle of the bot's zone, as an offset angle: straight behind, ahead for the lead.
+        float CenterOf(bool leads)
         {
-            float const lo = float(M_PI) - ZONE_ARC / 2.0f;
-            float const hi = float(M_PI) + ZONE_ARC / 2.0f;
-            // (0..2pi first: FollowSpot's candidates may come as -pi..pi)
-            angle = std::fmod(angle, 2.0f * float(M_PI));
-            if (angle < 0.0f)
-                angle += 2.0f * float(M_PI);
+            return leads ? 0.0f : float(M_PI);
+        }
+
+        // Dart throwing around (`share`, `angle`) in the zone around `center`: the first
+        // candidate MIN_GAP from every taken spot, else the one farthest from them.
+        FollowSpot::Offset Place(Zone const& z, float center, float share, float angle, float shareSpread, float angleSpread)
+        {
+            float const lo = center - ZONE_ARC / 2.0f;
+            float const hi = center + ZONE_ARC / 2.0f;
+            // (within pi of the centre first: FollowSpot's candidates may come as -pi..pi)
+            angle = center + std::remainder(angle - center, 2.0f * float(M_PI));
 
             FollowSpot::Offset best;
             float bestGap2 = -1.0f;
@@ -168,11 +175,18 @@ namespace HumanFollow
             return best;
         }
 
-        // Around the current place (a drift, a step).
-        FollowSpot::Offset Drifted(Player const* bot, Unit const* leader, FollowSpot::Offset const& current)
+        // Around the current place (a drift, a step). False: the place is outside the bot's
+        // zone (FollowSpot moved it for safety, the tank behind the leader near a pack): it
+        // stays there, a drift would clamp it back to where it was not safe; the next stop
+        // rerolls.
+        bool Drifted(Player const* bot, Unit const* leader, FollowSpot::Offset const& current, FollowSpot::Offset& next)
         {
+            float const center = CenterOf(Leads(bot, leader));
+            if (FollowSpot::AngleGap(current.angle, center) > ZONE_ARC / 2.0f + 0.01f)
+                return false;
             Zone const z = ZoneOf(bot, leader, Heading(bot, leader));
-            return Place(z, z.ShareOf(current.dist), current.angle, DRIFT_SPREAD, DRIFT_ANGLE);
+            next = Place(z, center, z.ShareOf(current.dist), current.angle, DRIFT_SPREAD, DRIFT_ANGLE);
+            return true;
         }
 
         bool IsStill(Unit const* u)
@@ -186,14 +200,27 @@ namespace HumanFollow
         }
     }
 
+    bool Leads(Player const* bot, Unit const* leader)
+    {
+        if (bot == leader)
+            return false;
+        // (the commander of the bot's own map: this map thread)
+        std::shared_ptr<PartyCommander> const commander = sCommanderMgr.FindCommander(bot);
+        if (!commander)
+            return false;
+        PartyMemberFacts const* tank = Tanks::Main(commander->GetWorld());
+        return tank && tank->guid == bot->GetObjectGuid() && tank->guid != leader->GetObjectGuid();
+    }
+
     FollowSpot::Offset Reroll(Player const* bot, Unit const* leader, float heading)
     {
         Personality const p = Of(bot);
         Zone const z = ZoneOf(bot, leader, heading);
         // (the personality's distance as a share of the 1-follower zone: the same part of a
-        // deeper zone with more followers)
+        // deeper zone with more followers; its side the same off the middle of either zone)
         float const share = (p.offset.dist - DIST_MIN) / (DIST_MAX - DIST_MIN);
-        return Place(z, share, p.offset.angle, PLACE_SPREAD, PLACE_ANGLE);
+        float const center = CenterOf(Leads(bot, leader));
+        return Place(z, center, share, center + (p.offset.angle - float(M_PI)), PLACE_SPREAD, PLACE_ANGLE);
     }
 
     bool Tick(Player* bot, Unit const* leader, IdleState& s, bool following,
@@ -249,8 +276,7 @@ namespace HumanFollow
             if (!Due(now, s.nextActMs))
                 return false;
             s.nextActMs = 0;
-            next = Drifted(bot, leader, current);
-            return true;
+            return Drifted(bot, leader, current, next);
         }
 
         uint32 const stood = WorldTimer::getMSTimeDiff(s.stillSinceMs, now);
@@ -276,10 +302,7 @@ namespace HumanFollow
             return false;
         }
         if (roll < LOOK_CHANCE + STEP_CHANCE || stood < SIT_AFTER_MS)
-        {
-            next = Drifted(bot, leader, current);
-            return true;
-        }
+            return Drifted(bot, leader, current, next);
         bot->SetStandState(UNIT_STAND_STATE_SIT);
         s.sat = true;
         return false;
@@ -293,7 +316,7 @@ namespace HumanFollow
         return leader->GetOrientation();
     }
 
-    FollowStyle StyleOf(Player const* bot, float heading)
+    FollowStyle StyleOf(Player const* bot, Unit const* leader, float heading)
     {
         Personality const p = Of(bot);
         FollowStyle s;
@@ -301,6 +324,12 @@ namespace HumanFollow
         s.reactionMs = p.reactionMs;
         s.startSlack = p.startSlack;
         s.stopSlack = p.stopSlack;
+        if (Leads(bot, leader))
+        {
+            s.reactionMs = std::min(s.reactionMs, LEAD_REACTION_MS);
+            s.startSlack = std::min(s.startSlack, LEAD_START_SLACK);
+            s.stopSlack = std::min(s.stopSlack, s.startSlack - BAND_GAP);
+        }
         s.faceArc = p.faceArc;
         s.turnDelayMs = p.turnDelayMs;
         return s;

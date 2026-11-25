@@ -47,7 +47,20 @@ bool FollowMovementGenerator<T>::IsFarEnoughToMoveStationaryFollower(T &owner) c
 {
     if (!m_styled)
         return TargetedMovementGeneratorMedium<T, FollowMovementGenerator<T> >::IsFarEnoughToMoveStationaryFollower(owner);
-    return !i_target->IsWithinDist(&owner, m_fOffset + m_style.startSlack);
+    if (!i_target->IsWithinDist(&owner, m_fOffset + m_style.startSlack))
+        return true;
+    // Ahead rule (FollowStyle.h): a follower in front of a moving leader also starts once its
+    // follow point is startSlack away. Before, the leader walking towards it came closer, so the
+    // tank leading the way stood until the leader had walked through it and was offset +
+    // startSlack past it, then ran behind at the leader's speed.
+    if (std::cos(m_fAngle) <= 0.0f || (!i_target->IsMoving() && i_target->movespline->Finalized()))
+        return false;
+    float const d = m_fOffset + owner.GetObjectBoundingRadius() + i_target->GetObjectBoundingRadius();
+    float const px = i_target->GetPositionX() + d * std::cos(m_heading + m_fAngle);
+    float const py = i_target->GetPositionY() + d * std::sin(m_heading + m_fAngle);
+    float const dx = owner.GetPositionX() - px;
+    float const dy = owner.GetPositionY() - py;
+    return dx * dx + dy * dy > m_style.startSlack * m_style.startSlack;
 }
 
 template<>

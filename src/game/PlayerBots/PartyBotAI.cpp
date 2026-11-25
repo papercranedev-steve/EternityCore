@@ -520,7 +520,7 @@ void PartyBotAI::IssueFollow(Unit* pLeader, float heading, char const* why)
     // (on a transport: the original follow, the offset at the leader's facing)
     if (UsesSafeFollow())
         me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle,
-                                          Commander::HumanFollow::StyleOf(me, heading));
+                                          Commander::HumanFollow::StyleOf(me, pLeader, heading));
     else
         me->GetMotionMaster()->MoveFollow(pLeader, m_followOffset.dist, m_followOffset.angle);
 }
@@ -534,7 +534,7 @@ void PartyBotAI::StartFollowing(Unit* pLeader, char const* why)
         // Fix: a random 3-6 yd at a random angle all around the leader (also in front of him)
         // and the same start, stop and turn for every bot: the bot's own place behind him.
         // Fix: that place was the same at every start (from the guid): a new one in its part of
-        // the zone, spaced from the team (HumanFollow::Reroll).
+        // the zone, spaced from the team (HumanFollow::Reroll; the main tank's zone is in front).
         m_followOffset = Commander::HumanFollow::Reroll(me, pLeader, heading);
         m_followOffset = ChooseFollowOffset(pLeader, heading);
         m_followCheckX = pLeader->GetPositionX();
