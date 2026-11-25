@@ -58,6 +58,46 @@ namespace Commander
             pull.holdSpellId = held ? patrols.holdSpellId : 0;
         }
 
+        // The tank walks out (Approach, rechecked, before the opener): the same patrol check
+        // (ChooseStart) from where it is now, at most every RECHECK_PATROL_WAIT_MS (design
+        // .kiro/docs/2026-11-25-pull-patrol-timeline.md 2.3). The prediction before the go may
+        // be off: a Spline or Standing track is a guess, a patrol stopped or turned. Not
+        // bearable now and not held by a bot: back to WaitReady with the plan as it is (user
+        // 2026-11-25 D2); the full recheck runs again when the tank is about to go and waits
+        // for the patrol, or skips / asks as before the go. Once per pull: a second time the
+        // tank goes on (no walking back and forth on one patrol's guess).
+        void WatchPatrolsOnTheWay(TeamPlan& plan, WorldModel const& world, Map* map, uint32 nowMs)
+        {
+            PullPlan& pull = plan.pull;
+            if (pull.ambush || pull.walkPatrolHeld)
+                return;
+            if (pull.walkPatrolCheckMs &&
+                WorldTimer::getMSTimeDiff(pull.walkPatrolCheckMs, nowMs) < PullPlanner::RECHECK_PATROL_WAIT_MS)
+                return;
+            pull.walkPatrolCheckMs = nowMs;
+            Creature* target = map->GetCreature(pull.target);
+            Player* tank = map->GetPlayer(pull.tank);
+            // The opener went (or a fight started): the assigner's business now.
+            if (!target || !tank || !target->IsAlive() || target->IsInCombat() || tank->IsInCombat())
+                return;
+            Trace::Scope scope("pull", "walkpatrols");
+            scope.Label("patrols while the tank walks out");
+            PatrolStart const patrols = ChooseStart(world, map, target, tank, map->GetUnit(world.leader), pull,
+                                                    pull.expected, PullPlanner::PATROL_WAIT_MAX_MS / 1000.0f);
+            if (!patrols.considered || patrols.bearableNow || patrols.Held())
+                return;
+            pull.walkPatrolHeld = true;
+            ObjectGuid const main = patrols.Main() ? patrols.Main()->patrol->GetObjectGuid() : ObjectGuid();
+            plan.notes.push_back("Holding the pull on the way: " + PatrolVerdict(patrols, "Waiting"));
+            pull.patrolWaitingFor = main;
+            if (!pull.patrolWaitSinceMs)
+                pull.patrolWaitSinceMs = nowMs;
+            pull.lastRecheckMs = 0;     // the full recheck runs at once when the tank may go again
+            pull.rechecked = false;
+            pull.phase = PullPhase::WaitReady;
+            pull.phaseSinceMs = nowMs;
+        }
+
         // Approach of an ambush ends by then (PullPlan::ambushTimeoutMs): the predicted arrival
         // plus PullAssigner::AMBUSH_EXTRA_MS.
         uint32 AmbushTimeoutMs(float waitSec)
@@ -915,6 +955,11 @@ namespace Commander
         // An ambush waiting for the party: the patrol walks on meanwhile (early go counts from
         // its arrival).
         RefreshAmbush(plan, world, map, nowMs);
+        if (pull.phase == PullPhase::Approach && pull.recheckOnApproach && pull.rechecked)
+        {
+            WatchPatrolsOnTheWay(plan, world, map, nowMs);
+            return RecheckResult::NotDue;
+        }
         if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked)
             return RecheckResult::NotDue;
 

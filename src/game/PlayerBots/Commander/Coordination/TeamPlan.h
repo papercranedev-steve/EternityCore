@@ -432,6 +432,12 @@ namespace Commander
         // RECHECK_HOLD_MS after this.
         uint32 lastRecheckMs = 0;
 
+        // The patrol check again while the tank walks out (PullPlanner::RecheckBeforeApproach,
+        // design .kiro/docs/2026-11-25-pull-patrol-timeline.md 2.3): last time, and whether it
+        // already held the pull once (a second time the tank goes on: no walking back and forth).
+        uint32 walkPatrolCheckMs = 0;
+        bool walkPatrolHeld = false;
+
         // Patrol expected near the target or the fight spot soon: held in WaitReady.
         uint32 patrolWaitSinceMs = 0;       // 0 = not waiting for a patrol
         ObjectGuid patrolWaitingFor;        // the patrol last announced (a new one is announced again)
