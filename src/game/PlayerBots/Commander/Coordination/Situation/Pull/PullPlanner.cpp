@@ -738,8 +738,9 @@ namespace Commander
             SpellEntry const* spell = sSpellMgr.GetSpellEntry(rangedSpell);
             std::string const clearance = best.spot.clearance < ShotSpot::NO_CREATURE_CLEARANCE
                 ? Format(", %.0f yd outside the nearest aggro range", best.spot.clearance) : std::string();
-            report.push_back(Format("Ranged pull: %s opens with %s from %.0f yd%s (%s).",
+            report.push_back(Format("Ranged pull: %s opens with %s from %.0f yd%s%s (%s).",
                 tank->GetName(), spell ? spell->SpellName[0].c_str() : "?", best.spot.range, clearance.c_str(),
+                best.spot.onPatrolWay ? ", on a patrol's way (the pull waits for it if needed)" : "",
                 best.rangedWhy.c_str()));
         }
         else if (best.face)

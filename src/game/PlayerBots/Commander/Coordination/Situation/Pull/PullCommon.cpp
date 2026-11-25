@@ -173,6 +173,8 @@ namespace Commander
             request.maxRange = range;
             request.minRange = SpellMinRange(spellId);
             request.avoid = avoid;
+            request.patrolsTimed = true;        // ChooseStart times the pull around patrols
+            request.standSec = PullPlanner::SPOT_PATROL_PREFER_SEC;
             return ShotSpot::Find(map, request, spot, &why);
         }
 
@@ -185,6 +187,8 @@ namespace Commander
             request.shooter = tank;
             request.avoid = avoid;
             request.ignore = GroupOf(world, target);
+            request.patrolsTimed = true;
+            request.standSec = PullPlanner::SPOT_PATROL_PREFER_SEC;
             return ShotSpot::FindFace(map, request, spot, &why);
         }
 

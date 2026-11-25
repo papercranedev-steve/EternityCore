@@ -130,6 +130,20 @@ namespace ShotSpot
             return out;
         }
 
+        // Idle waypoint walkers within `radius` of `center` (Request::patrolsTimed).
+        std::vector<ObjectGuid> PatrolGuids(Creature const* center, Player* who, float radius)
+        {
+            std::list<Creature*> found;
+            IdleCheck check(who);
+            MaNGOS::CreatureListSearcher<IdleCheck> searcher(found, check);
+            Cell::VisitGridObjects(center, searcher, radius);
+            std::vector<ObjectGuid> out;
+            for (Creature* c : found)
+                if (c->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE)
+                    out.push_back(c->GetObjectGuid());
+            return out;
+        }
+
         bool OnPatrolWay(std::vector<Walker> const& walkers, Position3 const& at)
         {
             return std::any_of(walkers.begin(), walkers.end(), [&at](Walker const& w)
@@ -175,16 +189,63 @@ namespace ShotSpot
             for (Ring const& r : rings)
                 maxRadius = std::max(maxRadius, r.radius);
 
-            std::vector<Idle> const idle = ScanIdle(target, shooter, ScanRadius(maxRadius), request.ignore);
+            // Patrols timed by the caller (Request::patrolsTimed): out of the idle and walk checks.
+            std::vector<ObjectGuid> ignore = request.ignore;
+            if (request.patrolsTimed)
+            {
+                std::vector<ObjectGuid> const patrols = PatrolGuids(target, shooter,
+                    std::min(PATROL_SCAN_MAX_YD, ScanRadius(maxRadius) + request.standSec * PATROL_SCAN_YD_PER_SEC));
+                ignore.insert(ignore.end(), patrols.begin(), patrols.end());
+            }
+            std::vector<Idle> const idle = ScanIdle(target, shooter, ScanRadius(maxRadius), ignore);
             // The walk check (SafeRoute) uses the server's rule (line of sight included) around the target.
             SafeRoute::IdleCreatures walkIdle(shooter, target, AGGRO_MARGIN, ScanRadius(maxRadius));
-            walkIdle.Ignore(request.ignore);
+            walkIdle.Ignore(ignore);
             std::vector<Walker> const walkers = ScanWalkers(target, shooter,
                 std::min(PATROL_SCAN_MAX_YD, ScanRadius(maxRadius) + request.standSec * PATROL_SCAN_YD_PER_SEC),
                 request.standSec, request.ignore);
 
             uint32 losChecks = 0;
             uint32 paths = 0;
+            // The target's sight and the walk; false with `failure` set (the budget: give up).
+            bool budgetOut = false;
+            auto seenAndWalkable = [&](Position3 const& p) -> bool
+            {
+                if (losChecks >= MAX_LOS_CHECKS)
+                {
+                    reached(Failure::Budget);
+                    budgetOut = true;
+                    return false;
+                }
+                ++losChecks;
+                if (!target->IsWithinLOS(p.x, p.y, p.z, true, UNIT_HEIGHT))
+                {
+                    reached(Failure::NoSight);
+                    return false;
+                }
+                if (paths >= MAX_PATHS)
+                {
+                    reached(Failure::Budget);
+                    budgetOut = true;
+                    return false;
+                }
+                ++paths;
+                if (!SafeRoute::PathIsSafe(shooter, walkIdle, p, MAX_DETOUR))
+                {
+                    reached(Failure::NoPath);
+                    return false;
+                }
+                return true;
+            };
+            // On a patrol's way with patrolsTimed: tried after every other candidate.
+            struct Later
+            {
+                Position3 at;
+                Ring ring;
+                float clearance;
+            };
+            std::vector<Later> later;
+
             for (Ring const& ring : rings)
             {
                 for (float const turn : TURNS)
@@ -213,40 +274,42 @@ namespace ShotSpot
                     if (OnPatrolWay(walkers, p))
                     {
                         reached(Failure::Patrol);
+                        if (request.patrolsTimed)
+                            later.push_back({ p, ring, clearance });
                         continue;
                     }
 
-                    if (losChecks >= MAX_LOS_CHECKS)
+                    if (!seenAndWalkable(p))
                     {
-                        reached(Failure::Budget);
-                        return fail();
-                    }
-                    ++losChecks;
-                    if (!target->IsWithinLOS(p.x, p.y, p.z, true, UNIT_HEIGHT))
-                    {
-                        reached(Failure::NoSight);
-                        continue;
-                    }
-
-                    if (paths >= MAX_PATHS)
-                    {
-                        reached(Failure::Budget);
-                        return fail();
-                    }
-                    ++paths;
-                    if (!SafeRoute::PathIsSafe(shooter, walkIdle, p, MAX_DETOUR))
-                    {
-                        reached(Failure::NoPath);
+                        if (budgetOut)
+                            return fail();
                         continue;
                     }
 
                     out.at = p;
                     out.range = ring.range;
                     out.clearance = clearance;
+                    out.onPatrolWay = false;
                     if (why)
                         *why = Failure::None;
                     return true;
                 }
+            }
+            for (Later const& l : later)
+            {
+                if (!seenAndWalkable(l.at))
+                {
+                    if (budgetOut)
+                        return fail();
+                    continue;
+                }
+                out.at = l.at;
+                out.range = l.ring.range;
+                out.clearance = l.clearance;
+                out.onPatrolWay = true;
+                if (why)
+                    *why = Failure::None;
+                return true;
             }
             return fail();
         }

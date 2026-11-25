@@ -199,6 +199,10 @@ namespace Commander
         float const PATROL_HORIZON_MAX_SEC = 120.0f;
         float const PULL_LEAD_SEC = 5.0f;
         float const PATROL_MIN_CLEARANCE = 15.0f;
+        // The tank's shot and face pull spots (ShotSpot::Request::patrolsTimed): one no patrol
+        // walks past within this long is tried first; one on a patrol's way is not refused
+        // (ChooseStart times the pull, user 2026-11-25 D1).
+        float const SPOT_PATROL_PREFER_SEC = 10.0f;
         uint32 const PATROL_WAIT_MAX_MS = 30 * 1000;
         float const PATROL_WAIT_MIN_GAIN = 10.0f;
         // While a held pull comes back to Approach on every refresh, RecheckBeforeApproach

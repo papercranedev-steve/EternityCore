@@ -22,6 +22,8 @@
  *    side included unless ignored) walks within its aggro range + AGGRO_MARGIN of it during
  *    the next standSec seconds (PatrolTracker; strat-20261107-195427: the priest's opening
  *    control spot lay on Patchwork Horror's path, it walked into her while the tank waited);
+ *    With Request::patrolsTimed (the tank's pull) patrols are left out of the idle and walk
+ *    checks and this one only orders the candidates (off a patrol's way first);
  *  - it is not within AVOID_RADIUS of a point the caller rules out (spots that failed live);
  *  - the target sees it (from the target's eyes to UNIT_HEIGHT above the point);
  *  - the walk there is safe (SafeRoute::PathIsSafe: reachable, at most MAX_DETOUR times the
@@ -88,6 +90,12 @@ namespace ShotSpot
         float standSec = 0.0f;
         // Creatures left out of the idle creature checks (they come with the pull anyway).
         std::vector<ObjectGuid> ignore;
+        // The caller times the pull around patrols (the tank's pull: PullPatrolCheck::ChooseStart,
+        // user 2026-11-25 D1): patrols (waypoint walkers) are left out of the idle creature
+        // and walk checks, and a spot on a patrol's way within standSec is only tried after
+        // every other one (Spot::onPatrolWay), never refused for it. Refusing pushed the
+        // planner to walk in, which checks less (Stratholme: bats over the whole courtyard).
+        bool patrolsTimed = false;
     };
 
     // Why no spot was found.
@@ -110,6 +118,9 @@ namespace ShotSpot
         // Smallest (distance - reach) over the idle creatures; NO_CREATURE_CLEARANCE when none
         // would attack the shooter.
         float clearance = 0.0f;
+        // Request::patrolsTimed: a patrol walks within reach of it within standSec (no spot
+        // off every patrol's way was usable).
+        bool onPatrolWay = false;
     };
     float const NO_CREATURE_CLEARANCE = 1000.0f;
 
