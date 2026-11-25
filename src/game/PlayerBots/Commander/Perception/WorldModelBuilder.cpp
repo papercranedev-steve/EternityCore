@@ -2286,7 +2286,7 @@ namespace WorldModelBuilder
         // Walks from the leader or guide (the clear's order): only out of combat, when nothing
         // is pulled from here anyway and the paths are not worth the time.
         if (!fighting && walker)
-            PackRoutes::Fill(walker, world.packs);
+            PackRoutes::Fill(walker, world.packs, world.patrols);
 
         // Ally candidates for the next RefreshCombat: friendly creatures in combat around the
         // leader. Grid objects only (players are party members or strangers, never allies).

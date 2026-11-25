@@ -108,7 +108,7 @@ namespace PackRoutes
         }
     }
 
-    void Fill(Player* leader, std::vector<PackFacts>& packs)
+    void Fill(Player* leader, std::vector<PackFacts>& packs, std::vector<PatrolFacts> const& patrols)
     {
         if (packs.empty())
             return;
@@ -124,7 +124,12 @@ namespace PackRoutes
 
         // One scan for all walks. The hard line (TIGHT_MARGIN): "blocked" means the walk really
         // comes into a creature's aggro range, not only near the comfort margin.
-        SafeRoute::IdleCreatures const idle(leader, from, farthest + IDLE_SCAN_MARGIN, SafeRoute::TIGHT_MARGIN);
+        SafeRoute::IdleCreatures idle(leader, from, farthest + IDLE_SCAN_MARGIN, SafeRoute::TIGHT_MARGIN);
+        std::vector<ObjectGuid> patrolGuids;
+        patrolGuids.reserve(patrols.size());
+        for (PatrolFacts const& p : patrols)
+            patrolGuids.push_back(p.guid);
+        idle.Ignore(patrolGuids);
         for (size_t i = 0; i < count; ++i)
             Route(leader, from, idle, packs[i]);
     }

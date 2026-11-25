@@ -1080,8 +1080,9 @@ namespace Commander
         PackRouteState state = PackRouteState::Unknown;
         float walkYd = 0.0f;
         ObjectGuid target;          // the member the walk goes to (nearest to the leader)
-        // The first idle creature of another pack (or a patrol) the walk comes into the aggro
-        // range of (SafeRoute::PathIsSafe), empty = none. That creature would join on the way.
+        // The first idle creature of another pack the walk comes into the aggro range of
+        // (SafeRoute::PathIsSafe), empty = none. That creature would join on the way. Patrols
+        // never count (PackRoutes::Fill): the pull planner times the pull around them.
         ObjectGuid blocker;
         // The leader has line of sight to `target` (Walk / Straight only).
         bool leaderSees = false;
