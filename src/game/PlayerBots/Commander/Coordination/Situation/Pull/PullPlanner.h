@@ -257,6 +257,9 @@ namespace Commander
         // `pull`'s moments if its tank went now (Perception/Forecast/PullTimeline.h). False:
         // no pull planned or its tank is not in the party.
         bool Timeline(WorldModel const& world, PullPlan const& pull, PullTimeline::Result& out);
+        // The timeline's input for `pull` (tank where it stands now, the walk's length from
+        // its route when known). False as Timeline.
+        bool TimelineInput(WorldModel const& world, PullPlan const& pull, PullTimeline::Input& in);
 
         // Going early (user 2026-11-24): the tank need not wait for a bot's mana or health it
         // gets by resting on into the pull (it keeps drinking while the tank walks, opens and

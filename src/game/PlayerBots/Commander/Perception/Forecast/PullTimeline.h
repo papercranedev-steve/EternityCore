@@ -26,6 +26,7 @@
 #define MANGOS_COMMANDER_PULL_TIMELINE_H
 
 #include "Commander/Perception/WorldModel.h"
+#include <vector>
 
 namespace Commander
 {
@@ -68,6 +69,49 @@ namespace PullTimeline
     };
 
     Result Of(Input const& in);
+
+    // ---- Where the party is, when (design: .kiro/docs/2026-11-25-pull-patrol-timeline.md) ----
+    //
+    // The pull as places with time windows (seconds from the tank's go), for the one check that
+    // judges patrols (PullPatrolCheck::ChooseStart): a patrol joins when it is at a place while
+    // the party is there. Before, the check looked at the pulled creatures' spots and the
+    // party's spot for the whole fight and never at the tank's walk: a patrol crossing the walk
+    // was seen by nobody, one passing a spot the pack had left long ago (brought back) counted
+    // as joining, with the creatures it would call there.
+    //
+    //   Walk   the tank's walk to openFrom, a point every WALK_SAMPLE_YD at its time on the walk
+    //          (walkSec spread over the path), +- WALK_WINDOW_SEC. Radius: the patrol's aggro
+    //          range against the tank + the hard line (it only walks past; user 2026-11-25 D3).
+    //   Place  the tank and the pack: the pulled creatures' spots until PACK_LEAVE_SEC after
+    //          the opener; the open spot (shot, face, ambush) from walkSec; brought back: the
+    //          walk back (points as for Walk, at BACK_YARDS_PER_SEC) and the fight spot from
+    //          the tank's arrival there; fought where they stand: the pack's spot (walk-in,
+    //          ambush: the meeting point) or the open spot (shot, face) to the end.
+    //          Radius: max(PATROL_MIN_CLEARANCE, aggro range against the tank) (the caller's).
+    //   Party  the party's spot (`partyAt`, where the leader stands) the whole time. Radius:
+    //          max(PATROL_MIN_CLEARANCE, aggro range against the leader).
+    enum class ZoneKind : uint8 { Walk, Place, Party };
+
+    struct Zone
+    {
+        ZoneKind kind = ZoneKind::Place;
+        Position3 center;
+        float fromSec = 0.0f;
+        float toSec = 0.0f;             // FOREVER: to the end of the fight
+        char const* what = "";          // "walk", "pack", "open spot", "walk back", "fight", "party"
+    };
+
+    float const FOREVER = 1.0e9f;
+    float const WALK_SAMPLE_YD = 3.0f;
+    float const WALK_WINDOW_SEC = 0.5f;     // = PatrolTracker::SAMPLE_STEP_SEC
+    float const PACK_LEAVE_SEC = 2.0f;
+
+    // `walk`: the tank's navmesh walk from in.tankAt to in.openFrom (empty: the straight line).
+    // `packSpots`: where the pulled creatures stand now.
+    std::vector<Zone> Presence(Input const& in, Result const& r, std::vector<Position3> const& walk,
+                               std::vector<Position3> const& packSpots, Position3 const& partyAt);
+
+    char const* KindName(ZoneKind kind);
 }
 }
 

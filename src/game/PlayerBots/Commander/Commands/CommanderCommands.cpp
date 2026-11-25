@@ -648,6 +648,29 @@ namespace
             handler->PSendSysMessage("If the tank went now: walk %.0fs, pull starts at %.0fs, pack on the tank at %.0fs, "
                 "damage from %.0fs.", forecast.timeline.walkSec, forecast.timeline.openSec,
                 forecast.timeline.contactSec, forecast.timeline.damageSec);
+        // Where the party is meanwhile (the patrol check's places, straight-line walk here).
+        Commander::PullTimeline::Input in;
+        if (hasForecast && Commander::PullPlanner::TimelineInput(commander->GetWorld(), pull, in))
+        {
+            std::vector<Commander::PullTimeline::Zone> const zones = Commander::PullTimeline::Presence(
+                in, forecast.timeline, std::vector<Commander::Position3>(), std::vector<Commander::Position3>{ in.packAt },
+                pull.spot);
+            std::string places;
+            uint32 walkPoints = 0;
+            for (Commander::PullTimeline::Zone const& z : zones)
+            {
+                if (z.kind == Commander::PullTimeline::ZoneKind::Walk || !strcmp(z.what, "walk back"))
+                {
+                    ++walkPoints;
+                    continue;
+                }
+                char buf[96];
+                snprintf(buf, sizeof(buf), "%s%s %.0f-%s", places.empty() ? "" : ", ", z.what, z.fromSec,
+                         z.toSec >= Commander::PullTimeline::FOREVER ? "end" : std::to_string(int32(z.toSec + 0.5f)).c_str());
+                places += buf;
+            }
+            handler->PSendSysMessage("Patrol check places (s): %s; %u walk points.", places.c_str(), walkPoints);
+        }
         if (issues.empty())
         {
             handler->SendSysMessage("Everyone is ready.");

@@ -319,12 +319,21 @@ namespace Commander
 
     bool PullPlanner::Timeline(WorldModel const& world, PullPlan const& pull, PullTimeline::Result& out)
     {
+        PullTimeline::Input in;
+        if (!TimelineInput(world, pull, in))
+            return false;
+        out = PullTimeline::Of(in);
+        return true;
+    }
+
+    bool PullPlanner::TimelineInput(WorldModel const& world, PullPlan const& pull, PullTimeline::Input& in)
+    {
         if (pull.phase == PullPhase::None)
             return false;
         PartyMemberFacts const* tank = world.FindMember(pull.tank);
         if (!tank)
             return false;
-        PullTimeline::Input in;
+        in = PullTimeline::Input();
         in.tankAt = tank->pos;
         in.packAt = pull.packAt;
         in.returnToSpot = pull.returnToSpot;
@@ -354,7 +363,6 @@ namespace Commander
                 if (route->pathYd > 0.0f)
                     in.pathYd = route->pathYd;
         }
-        out = PullTimeline::Of(in);
         return true;
     }
 
