@@ -112,11 +112,29 @@ namespace Commander
             return true;
         }
 
+        // A shot or face pull that did not work becomes a walk-in mid-Approach. Who the walk in
+        // brings (PullWalk.h: a creature in between and its pack) is only known on the map
+        // thread: the full recheck before the tank goes runs again for it
+        // (PullPlanner::RecheckBeforeApproach, as for a new target, ReplaceUnshootableTarget).
+        // Without it the walk guard called the walk-in off at once for a creature the plan had
+        // not counted, the clear planned the same shot again, it failed again: two rounds, then
+        // the pack was skipped.
+        void WalkInAgain(PullPlan& pull, uint32 now)
+        {
+            if (!pull.recheckOnApproach)
+                return;     // `pull now`: no recheck, as planned
+            pull.rechecked = false;
+            pull.phaseSinceMs = now;
+        }
+
         // Walk guard of a walk-in pull (PullAssigner::TARGET_MOVED_YD): why the plan no longer
         // fits, empty when it still does.
         std::string WalkGuard(WorldModel const& world, PullPlan const& pull)
         {
             if (pull.OpensFromAfar())
+                return std::string();
+            // The recheck is about to count the walk in (WalkInAgain): nothing to hold it to yet.
+            if (pull.recheckOnApproach && !pull.rechecked)
                 return std::string();
             EnemyFacts const* target = world.FindTargeted(pull.target);
             Position3 at;
@@ -366,12 +384,14 @@ namespace Commander
                 else if (pull.rangedPullSpell && elapsed > RANGED_PULL_FALLBACK_MS)
                 {
                     pull.rangedPullSpell = 0;
+                    WalkInAgain(pull, now);
                     plan.notes.push_back(NameIn(pull, world, pull.tank) +
                         " could not open from range (no ammo, line of sight or form?). Walking in instead.");
                 }
                 else if (pull.facePull && elapsed > RANGED_PULL_FALLBACK_MS)
                 {
                     pull.facePull = false;
+                    WalkInAgain(pull, now);
                     plan.notes.push_back(NameIn(pull, world, pull.tank) + " could not face pull. Walking in instead.");
                 }
                 return;

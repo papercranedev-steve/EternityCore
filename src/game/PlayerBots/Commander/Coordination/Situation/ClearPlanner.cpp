@@ -783,8 +783,11 @@ namespace ClearPlanner
                     Note(plan, report.front());
                 for (std::string const& line : report)
                 {
+                    // How the tank opens and why: a walk-in says why it is not a shot (no spot,
+                    // and which check failed), else nobody can tell from the notes afterwards.
                     if (line.find("casts from range") != std::string::npos ||
-                        line.rfind("Ranged pull:", 0) == 0 || line.rfind("Patrol ", 0) == 0)
+                        line.rfind("Ranged pull:", 0) == 0 || line.rfind("Face pull:", 0) == 0 ||
+                        line.rfind("Walking in", 0) == 0 || line.rfind("Patrol ", 0) == 0)
                         Note(plan, line);
                     else if (line.rfind("No ranged pull:", 0) == 0 && !clear.missingAmmoNoted)
                     {
