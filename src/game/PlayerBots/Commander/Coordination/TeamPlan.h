@@ -178,7 +178,8 @@ namespace Commander
         float radius = 40.0f;           // walk from the leader
         // Only the packs in front of the leader (the active pull stance in a dungeon, user
         // 2026-11-24): no other creature on the way (PackRoute::blocker) and in his sight
-        // (PackRoute::leaderSees); `radius` is only the safety cap then.
+        // (PackRoute::leaderSees) or a short walk (ClearPlanner::FRONT_UNSEEN_WALK_YD, user
+        // 2026-11-25); `radius` is only the safety cap then.
         bool frontOnly = false;
         // Skip packs predicted to bring more; 0 = no count limit, the fight estimate decides
         // (PullPlan::hard). Only a number the player gave (`.partybot ai clear r n`) sets one.

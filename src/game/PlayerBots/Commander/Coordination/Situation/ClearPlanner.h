@@ -60,6 +60,11 @@ namespace Commander
 
         uint32 const MAX_LEVEL_ABOVE_LEADER = 3;
 
+        // ClearPlan::frontOnly: a pack out of the leader's sight still counts as in front when
+        // the navmesh walk to it is this short and passes no other creature (user 2026-11-25:
+        // about the next one or two cells of a prison corridor).
+        float const FRONT_UNSEEN_WALK_YD = 40.0f;
+
         // A standing clear (ClearPlan::standing)
         uint32 const FORGET_MS = 3 * MINUTE * IN_MILLISECONDS;          // skips and notes kept this long
         uint32 const DEATH_MEMORY_MS = 5 * MINUTE * IN_MILLISECONDS;    // a death counts this long

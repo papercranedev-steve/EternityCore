@@ -7,7 +7,8 @@
  * pull module on and a tank bot alive (Tanks::Main, bots only): without one it is passive.
  *
  * Dungeon / raid: a clear of the packs in front of the player (ClearPlan::frontOnly: nothing
- * in between, in his sight, at most FRONT_WALK_YD walk) once he stood still LEADER_STILL_MS
+ * in between, in his sight or a short walk (ClearPlanner::FRONT_UNSEEN_WALK_YD), at most
+ * FRONT_WALK_YD walk) once he stood still LEADER_STILL_MS
  * and nothing else runs; after it ended: nothing left -> once he moved MOVED_YD or RETRY_MS
  * later; any other end (deaths, a failed pull, stopped) -> once he moved MOVED_YD. No count
  * limit: a boss or a pack the fight estimate says is too hard (PullPlan::hard) is asked about

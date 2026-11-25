@@ -110,6 +110,17 @@ namespace ClearPlanner
             return false;
         }
 
+        // ClearPlan::frontOnly: nothing in between on the walk, and in the leader's sight or a
+        // short navmesh walk (FRONT_UNSEEN_WALK_YD: a prison cell next to him, stockade-20261125:
+        // the server sees no line into the cells, the clear found nothing in front for 8 minutes).
+        bool IsInFront(PackFacts const& pack)
+        {
+            if (!pack.route.blocker.IsEmpty())
+                return false;
+            return pack.route.leaderSees ||
+                (pack.route.state == PackRouteState::Walk && pack.route.walkYd <= FRONT_UNSEEN_WALK_YD);
+        }
+
         // A bot that can pull (Perception/Tanks.h).
         bool HasLivingTank(WorldModel const& world)
         {
@@ -618,8 +629,8 @@ namespace ClearPlanner
                 if (pack.ApproachYd() > clear.radius)
                     continue;
                 // Not in front of him: behind another pack (pulled once that one is dead) or
-                // out of his sight. Looked at again every round.
-                if (clear.frontOnly && (!pack.route.blocker.IsEmpty() || !pack.route.leaderSees))
+                // out of his sight and not a short walk. Looked at again every round.
+                if (clear.frontOnly && !IsInFront(pack))
                     continue;
 
                 // Bosses and creatures that never start a fight are left to the player.
@@ -743,7 +754,7 @@ namespace ClearPlanner
             ? Format(" %u pack(s) with only stealthed creatures left; pull them yourself.", stealthOnly) : "";
         std::string const noWayText = noWay
             ? Format(" %u pack(s) nearby with no walkable way from here.", noWay) : "";
-        std::string const where = clear.frontOnly ? std::string("in front of you (in your sight, nothing in between)")
+        std::string const where = clear.frontOnly ? Format("in front of you (in your sight or within %.0f yd walk, nothing in between)", FRONT_UNSEEN_WALK_YD)
                                                   : Format("within %.0f yd walk", clear.radius);
         Stop(commander, Format("nothing left to pull %s (%u packs skipped in total).",
             where.c_str(), clear.skippedPacks) + stealthText + noWayText, ClearEnd::NothingLeft);
