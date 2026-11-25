@@ -21,6 +21,27 @@ namespace Commander
 {
     namespace
     {
+        // Fix: the arbiter charges a cast for ending the one in progress (CurrentAction::
+        // InterruptCost, "ends the cast"), but a player's non-triggered spell is refused while
+        // another one is cast (Spell::prepare: SPELL_FAILED_SPELL_IN_PROGRESS): a player stops
+        // the cast first. strat-20261125-233314: attacked during Aimed Shot, the hunter's Feign
+        // Death failed 7 times, the rescue gave up and he finished the cast under the hits;
+        // Rapid Fire / Bestial Wrath failed 17 times, healers' heals 19 times that evening.
+        // A channel needs nothing: Spell::prepare skips it and the new cast ends it.
+        // Only when the new spell can go now (timers, power, range), else the cast is kept.
+        void EndCastInProgress(TeamBotAI* bot, Unit* pTarget, SpellEntry const* spell)
+        {
+            Player* me = bot->me;
+            Spell const* current = me->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (!current || current->getState() != SPELL_STATE_PREPARING || !current->m_spellInfo ||
+                current->m_spellInfo->Id == spell->Id)
+                return;
+            bool const canGo = pTarget ? bot->CanTryToCastSpell(pTarget, spell)
+                                       : me->IsSpellReady(spell) && !me->HasGCD(spell);
+            if (canGo)
+                me->InterruptSpell(CURRENT_GENERIC_SPELL, false);
+        }
+
         char const* ActionName(BotActionType type)
         {
             switch (type)
@@ -569,6 +590,19 @@ namespace Commander
             {
                 if (!action.spell)
                     return false;
+                // Feign Death waits for the last Auto Shot to land (TeamBotAI::AutoShotLandsInMs):
+                // its hit would end it at once. Up to then no new shot and nothing else from the
+                // rotation (true: done this tick); the rescue proposes it again next tick.
+                // All 5 Feign Deaths of 2026-11-25 ended within 0.7 s; in strat-20261125-225806
+                // and -233532 the hit of a shot fired just before is seen ending it.
+                if (action.spell->HasAura(SPELL_AURA_FEIGN_DEATH) && bot->AutoShotLandsInMs())
+                {
+                    if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+                        me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
+                    return true;
+                }
+                EndCastInProgress(bot, action.atPoint || action.facing >= 0.0f ? nullptr : (pTarget ? pTarget : me),
+                                  action.spell);
                 if (action.atPoint)
                     return bot->DoCastAt(action.x, action.y, action.z, action.spell) == SPELL_CAST_OK;
                 if (action.facing >= 0.0f)

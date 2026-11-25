@@ -305,6 +305,12 @@ public:
     // cast and nothing still hitting the bot; it stays down while the wipe plan hides it.
     static constexpr uint32 FEIGN_DEATH_MIN_MS = 1000;
     bool ShouldEndFeignDeath() const;
+    // Milliseconds until the bot's last Auto Shot hits its target, 0 when none is in flight.
+    // The hit ends the shooter's Feign Death (Unit::DealDamage) and puts its threat back
+    // (strat-20261125-225806: Auto Shot at 12.60, Feign Death at 12.70, the hit at 13.41 ended it).
+    // A shot is a triggered spell of its own (Unit::_UpdateAutoRepeatSpell), not a current spell:
+    // when it went off is read from the ranged attack timer it resets.
+    uint32 AutoShotLandsInMs() const;
     // While the party fights a Commander stance module places this healer, ranged (keeping a
     // caster distance), melee damage bot or tank (Takeover::Stance: HealerStanceBehavior,
     // RangedStanceBehavior, MeleeStanceBehavior, TankStanceBehavior), also before it is in

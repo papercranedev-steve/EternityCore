@@ -441,7 +441,9 @@ namespace Commander
                 hold.tier = ProposalTier::Assigned;
                 hold.score = 0.0f;
                 hold.source = "position";
-                hold.reason = "walking out of an area, keep walking";
+                // (any module's walk, not only this one's: the reason said "walking out of an
+                // area" up to 2026-11-25 and read in reviews as a hazard walk)
+                hold.reason = "a walk under way, keep walking";
                 hold.action.type = BotActionType::Hold;
                 out.push_back(hold);
             }

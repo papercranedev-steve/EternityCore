@@ -548,6 +548,40 @@ bool TeamBotAI::ShouldEndFeignDeath() const
     return true;
 }
 
+uint32 TeamBotAI::AutoShotLandsInMs() const
+{
+    // Spell batching and the bot's own tick between the hit and the next decision.
+    uint32 const MARGIN_MS = 200;
+
+    if (!me->HasSpell(ClassRotations::SPELL_AUTO_SHOT))
+        return 0;
+    SpellEntry const* shot = sSpellMgr.GetSpellEntry(ClassRotations::SPELL_AUTO_SHOT);
+    if (!shot || shot->speed <= 0.0f)
+        return 0;
+
+    // The target of the running Auto Shot; once it is stopped, the victim it was shooting.
+    Unit* target = nullptr;
+    if (Spell const* autoRepeat = me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+        target = me->GetMap()->GetUnit(autoRepeat->m_targets.getUnitTargetGuid());
+    if (!target)
+        target = me->GetVictim();
+    if (!target || !target->IsAlive())
+        return 0;
+
+    // The timer counts down from the weapon's speed after each shot (ResetAttackTimer); at 0
+    // the last shot is a whole swing old, longer than any flight.
+    uint32 const left = me->GetAttackTimer(RANGED_ATTACK);
+    uint32 const cycle = me->GetAttackTime(RANGED_ATTACK);
+    if (!left || left > cycle)
+        return 0;
+    uint32 const sinceShotMs = cycle - left;
+
+    // As Spell::AddUnitTarget: from the caster to the target's centre, at least 5 yd.
+    float const dist = std::max(5.0f, me->GetDistance3dToCenter(target));
+    uint32 const flightMs = uint32(dist / shot->speed * 1000.0f) + MARGIN_MS;
+    return sinceShotMs < flightMs ? flightMs - sinceShotMs : 0;
+}
+
 bool TeamBotAI::IsStealthControlled() const
 {
     return m_directives && m_directives->IsTakenOver(Commander::Takeover::Stealth, WorldTimer::getMSTime());

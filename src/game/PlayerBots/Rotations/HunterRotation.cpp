@@ -16,7 +16,8 @@
  *      during the 3 s cast and the next shot comes at the earliest 0.5 s after it
  *      (Unit::_UpdateAutoRepeatSpell), so started just after a shot it costs about one second
  *      of shooting, started just before one a whole shot. Highest rank; rank 1 below
- *      LOW_MANA_PCT (rank 6: 310 mana, +600 damage; rank 1: 75 mana, +70).
+ *      LOW_MANA_PCT (rank 6: 310 mana, +600 damage; rank 1: 75 mana, +70). Not on a victim
+ *      that walks inside the minimum range before the cast ends (EndsOutsideMinRange).
  *   5. Multi-Shot rank 1 only (pMultiShotRank1).
  *   6. Serpent Sting above LOW_MANA_PCT (whether it pays before the enemy dies:
  *      Constraints::WastedCast in the party cast checks).
@@ -36,7 +37,9 @@
 #include "Player.h"
 #include "Pet.h"
 #include "Spell.h"
+#include "DBCStores.h"
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -47,6 +50,9 @@ namespace
     uint32 const AIMED_AFTER_SHOT_MS = 600;
     // Auto Shot's wind-up after a cast (Unit::_UpdateAutoRepeatSpell).
     uint32 const AUTO_SHOT_WINDUP_MS = 500;
+    // Aimed Shot only when the victim is still this far beyond the minimum range at the end of
+    // the cast (EndsOutsideMinRange): a step of either side.
+    float const MIN_RANGE_MARGIN_YD = 1.0f;
     // Out of combat, Mend Pet below this pet health percent.
     float const MEND_PET_BELOW_PCT = 80.0f;
 
@@ -169,6 +175,8 @@ namespace
             if (!pAimed)
                 return false;
             Player* me = m_bot.me;
+            if (!EndsOutsideMinRange(pAimed))
+                return false;
             if (!me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
                 return true;
             uint32 const left = me->GetAttackTimer(RANGED_ATTACK);
@@ -176,6 +184,29 @@ namespace
             if (left + AIMED_AFTER_SHOT_MS >= cycle)
                 return true;
             return left >= uint32(std::max(0, int32(pAimed->GetCastTime(me)))) + AUTO_SHOT_WINDUP_MS;
+        }
+
+        // Header step 4: the range is checked again when the cast ends (SPELL_FAILED_TOO_CLOSE),
+        // so not on a victim that walks into the minimum range during it. Its speed towards the
+        // hunter: its run speed times the cosine between its facing (it faces where it walks)
+        // and the line to the hunter. strat-20261125-233126: Aimed Shot at 4.64 on a Skeletal
+        // Berserker walking in, refused at 8.18 "too close", 3.5 s without a shot.
+        bool EndsOutsideMinRange(SpellEntry const* pAimed) const
+        {
+            Player* me = m_bot.me;
+            Unit* pVictim = me->GetVictim();
+            SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(pAimed->rangeIndex);
+            if (!pVictim || !range || !range->minRange)
+                return true;
+            float dist = me->GetCombatDistance(pVictim);
+            if (pVictim->IsMoving())
+            {
+                float const castSec = float(std::max(0, int32(pAimed->GetCastTime(me)))) / 1000.0f;
+                float const towards = std::cos(pVictim->GetOrientation() - pVictim->GetAngle(me));
+                if (towards > 0.0f)
+                    dist -= pVictim->GetSpeed(MOVE_RUN) * towards * castSec;
+            }
+            return dist >= range->minRange + MIN_RANGE_MARGIN_YD;
         }
     };
 }
