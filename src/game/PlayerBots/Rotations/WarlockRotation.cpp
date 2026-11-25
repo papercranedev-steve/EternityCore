@@ -2,7 +2,8 @@
  * Warlock rotation (moved out of PartyBotAI.cpp 2026-11-14; reworked 2026-11-15 for the level 60
  * 22/3/26 spec with Siphon Life, Improved Imp and Ruin, user: no pet sacrifice for now).
  *
- * Out of combat: Detect Invisibility on the party, Demon Armor; with a victim (an opener): the
+ * Out of combat: Detect Invisibility on the tanks and the real players (none in a raid
+ * instance, user 2026-11-25), Demon Armor; with a victim (an opener): the
  * combat steps; without one: a Soulstone on the party's healer (Soulstone: create it, use it).
  * The pet (the Imp, every ability its level allows) is summoned by PartyBotAI::UpdateAI out of
  * combat (SummonPetIfNeeded), not only here: resting and the walk back after a corpse run skip
@@ -33,12 +34,15 @@
 #include "Rotations/ClassRotation.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/Tanks.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "DamageSpells.h"
 #include "RoleCapability.h"
 #include "Player.h"
 #include "Group.h"
+#include "Map.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
 
@@ -72,7 +76,7 @@ namespace
             auto const& s = bot.m_spells.warlock;
 
             if (s.pDetectInvisibility)
-                if (Player* pTarget = bot.SelectBuffTarget(s.pDetectInvisibility))
+                if (Unit* pTarget = SelectDetectInvisibilityTarget(s.pDetectInvisibility))
                     if (Buff(pTarget, s.pDetectInvisibility))
                         return;
 
@@ -129,6 +133,32 @@ namespace
         }
 
     private:
+        // Detect Invisibility only on the tanks (Tanks::IsTank, bots and players) and the real
+        // players; not in a raid instance (user 2026-11-25: on every member it wasted mana and
+        // GCDs). Without a Commander (no party snapshot): nobody.
+        Unit* SelectDetectInvisibilityTarget(SpellEntry const* pSpell) const
+        {
+            Player* me = m_bot.me;
+            if (me->GetMap()->IsRaid())
+                return nullptr;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return nullptr;
+            for (Commander::PartyMemberFacts const& m : commander->GetWorld().party)
+            {
+                if (!m.alive || m.isPet || (m.isBot && !Commander::Tanks::IsTank(m)))
+                    continue;
+                Unit* pTarget = me->GetMap()->GetUnit(m.guid);
+                if (!pTarget || !pTarget->IsInWorld() || !me->IsValidHelpfulTarget(pTarget) ||
+                    !m_bot.IsValidBuffTarget(pTarget, pSpell) ||
+                    m_bot.IsBuffPendingFromOther(pTarget, pSpell, nullptr) ||
+                    !me->IsWithinDist(pTarget, 30.0f) || !me->IsWithinLOSInMap(pTarget))
+                    continue;
+                return pTarget;
+            }
+            return nullptr;
+        }
+
         // Out of combat, nothing else to do (user 2026-11-15, cooldown doc 2026-11-14-cooldown-spells.md
         // 10): the party's healer without a Soulstone Resurrection gets one. With the stone in the
         // bags: use it on the healer (its 30 min cooldown is the warlock's); without: create the
