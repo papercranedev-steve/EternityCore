@@ -19,9 +19,12 @@
  *      LOW_MANA_PCT (rank 6: 310 mana, +600 damage; rank 1: 75 mana, +70). Not on a victim
  *      that walks inside the minimum range before the cast ends (EndsOutsideMinRange).
  *   5. Multi-Shot rank 1 only (pMultiShotRank1).
- *   6. Serpent Sting above LOW_MANA_PCT (whether it pays before the enemy dies:
+ *   6. Hunter's Mark above LOW_MANA_PCT on an unmarked victim expected to live
+ *      MARK_MIN_TTD_SEC (MarkPays; up to 2026-11-25 only the opener marked: 3 marks in 9
+ *      Stratholme fights).
+ *   7. Serpent Sting above LOW_MANA_PCT (whether it pays before the enemy dies:
  *      Constraints::WastedCast in the party cast checks).
- *   7. In the victim's melee reach: Mongoose Bite, Raptor Strike.
+ *   8. In the victim's melee reach: Mongoose Bite, Raptor Strike.
  * While Auto Shot runs (UpdateWhileAutoRepeating): stopped inside 8 yd, else the same steps.
  *
  * Not cast: Arcane Shot (190 mana for 183 damage, the worst shot for mana), Volley, Scare
@@ -38,6 +41,10 @@
 #include "Pet.h"
 #include "Spell.h"
 #include "DBCStores.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Values/ValueModel.h"
 #include <algorithm>
 #include <cmath>
 
@@ -53,6 +60,11 @@ namespace
     // Aimed Shot only when the victim is still this far beyond the minimum range at the end of
     // the cast (EndsOutsideMinRange): a step of either side.
     float const MIN_RANGE_MARGIN_YD = 1.0f;
+    // Hunter's Mark in combat on a victim expected to live at least this long (MarkPays). Rank 4:
+    // +110 ranged attack power on it, about +8 damage per second for each hunter shooting it
+    // (14 attack power = 1 dps), so ~100 damage over 12 s for 60 mana. Its global cooldown
+    // costs little here: cast after Aimed Shot and Multi-Shot, and Auto Shot goes on through it.
+    float const MARK_MIN_TTD_SEC = 12.0f;
     // Out of combat, Mend Pet below this pet health percent.
     float const MEND_PET_BELOW_PCT = 80.0f;
 
@@ -124,6 +136,8 @@ namespace
                 return;
             if (Cast(pVictim, s.pMultiShotRank1))
                 return;
+            if (!lowMana && MarkPays(pVictim) && Cast(pVictim, s.pHuntersMark))
+                return;
             if (!lowMana && Cast(pVictim, s.pSerpentSting))
                 return;
 
@@ -138,6 +152,22 @@ namespace
         }
 
     private:
+        // Header step 6: not marked yet (another hunter's mark of the same rank counts) and
+        // expected to live MARK_MIN_TTD_SEC (Value::EnemyTimeToDie, as the paladin's
+        // Judgement). Without a commander (no facts) only the opener marks.
+        bool MarkPays(Unit* pVictim) const
+        {
+            SpellEntry const* pMark = m_bot.m_spells.hunter.pHuntersMark;
+            if (!pMark || pVictim->HasAura(pMark->Id) || !sCommanderMgr.IsEnabled())
+                return false;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(m_bot.me);
+            if (!commander)
+                return false;
+            Commander::WorldModel const& world = commander->GetWorld();
+            Commander::EnemyFacts const* enemy = world.FindEnemy(pVictim->GetObjectGuid());
+            return enemy && Commander::Value::EnemyTimeToDie(world, *enemy) >= MARK_MIN_TTD_SEC;
+        }
+
         // Between fights: the pet back up before the next pull (in combat: PetCareBehavior).
         void MendPet()
         {
