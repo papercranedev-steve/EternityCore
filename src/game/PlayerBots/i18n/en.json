@@ -354,6 +354,13 @@
     "chatty": "{leader}, {count} of those {name}, and they hit hard. Not sure I can hold. Really pull?",
     "quiet": "{count}, may not hold. Pull?"
   },
+  "pull.ask.notready": {
+    "default": "{leader}, {who}: out of water, mana is coming back slowly. Pull anyway?",
+    "chatty": "{leader}, {who}: not a drop of water left. Sitting here waiting for mana could take ages. Shall we just go?",
+    "quiet": "{who}: no water. Pull anyway?"
+  },
+  "pull.ask.notready.item": "{name} ({mana}% mana)",
+  "pull.ask.notready.sep": ", ",
   "pull.opt.clear": "Clear them",
   "pull.opt.pull": "Pull",
   "pull.opt.start": "Start",

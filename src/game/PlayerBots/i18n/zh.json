@@ -368,6 +368,14 @@
     "chatty": "{leader}，{name}那包{count}只，硬得很，我心里没底，真要拉？",
     "quiet": "{count}只，怕扛不住，拉吗？"
   },
+  "//12c": "A waiting pull: bots short of mana have nothing to drink. {who} = pull.ask.notready.item joined by pull.ask.notready.sep; item: {name}, {mana} (percent).",
+  "pull.ask.notready": {
+    "default": "{leader}，{who}没水了，干坐着回蓝要等很久。不等了，直接开？",
+    "chatty": "{leader}，{who}包里一口水都没有，这么干等下去天都黑了。要不直接开吧？",
+    "quiet": "{who}没水，直接开？"
+  },
+  "pull.ask.notready.item": "{name}（蓝{mana}%）",
+  "pull.ask.notready.sep": "、",
   "pull.opt.clear": "清了吧",
   "pull.opt.pull": "拉",
   "pull.opt.start": "开",
