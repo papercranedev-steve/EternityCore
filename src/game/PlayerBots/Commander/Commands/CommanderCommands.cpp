@@ -635,9 +635,10 @@ namespace
                 NameOf(map, pull.patrolWaitingFor).c_str(),
                 WorldTimer::getMSTimeDiffToNow(pull.patrolWaitSinceMs) / 1000.0f,
                 Commander::PullPlanner::PATROL_WAIT_MAX_MS / 1000);
-        Commander::Position3 planned;
-        bool const hasPlanned = pull.phase == Commander::PullPhase::WaitReady && commander->GetPlan().PlannedFightSpot(planned);
-        auto issues = Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana, hasPlanned ? &planned : nullptr);
+        // (the waiting pull's own check: the player's "go without them" left out)
+        auto issues = pull.phase == Commander::PullPhase::WaitReady
+            ? Commander::PullPlanner::CheckPullReady(commander->GetWorld(), commander->GetPlan())
+            : Commander::PullPlanner::CheckReady(commander->GetWorld(), healerMana);
         // The waiting pull's timeline, and when the tank goes counting bots resting on into the
         // pull (PullPlanner::ForecastReady, the early go of PullAssigner's WaitReady).
         Commander::PullPlanner::ReadyForecast forecast;
@@ -665,7 +666,8 @@ namespace
                     snprintf(when, sizeof(when), " (there in %.0fs, needed at the go)", forecast.waits[n].readySec);
             }
             if (!strcmp(i.what, "hp") || !strcmp(i.what, "mana"))
-                handler->PSendSysMessage("    %s: %s %.0f%%%s", NameOf(map, i.who).c_str(), i.what, i.value, when);
+                handler->PSendSysMessage("    %s: %s %.0f%%%s%s", NameOf(map, i.who).c_str(), i.what, i.value, when,
+                    Commander::PullPlanner::NoDrinkIssue(commander->GetWorld(), i) ? " (nothing to drink)" : "");
             else if (!strcmp(i.what, "far"))
                 handler->PSendSysMessage("    %s: %.0f yd away", NameOf(map, i.who).c_str(), i.value);
             else

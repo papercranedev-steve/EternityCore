@@ -17,9 +17,39 @@ namespace PullQuestions
             plan.notes.push_back(std::move(text));
         }
 
+        void ApplyNotReady(TeamPlan& plan, PullQuestion const& q, bool yes, uint32 nowMs)
+        {
+            PullPlan& pull = plan.pull;
+            pull.noDrinkAnswered = true;
+            if (!yes)
+            {
+                Note(plan, "You said wait: waiting for their mana to come back.");
+                return;
+            }
+            ReadyWaiver& waiver = plan.readyWaiver;
+            if (nowMs >= waiver.untilMs)
+                waiver.bots.clear();
+            for (NotReadyMember const& m : q.notReady)
+                if (std::find(waiver.bots.begin(), waiver.bots.end(), m.guid) == waiver.bots.end())
+                    waiver.bots.push_back(m.guid);
+            waiver.untilMs = nowMs + READY_WAIVER_MS;
+            // A clear judges the pull with the party as it is before the tank goes
+            // (PullPlanner::RecheckBeforeApproach): his yes is to that fight too.
+            if (plan.clear.active)
+                for (ObjectGuid g : pull.expected)
+                    if (std::find(plan.clear.approved.begin(), plan.clear.approved.end(), g) == plan.clear.approved.end())
+                        plan.clear.approved.push_back(g);
+            Note(plan, "You said go: not waiting for their mana.");
+        }
+
         void Apply(TeamPlan& plan, PullQuestion const& q, uint32 nowMs)
         {
             bool const yes = q.answer == PullQuestion::Answer::Yes;
+            if (q.kind == PullAskKind::NotReady)
+            {
+                ApplyNotReady(plan, q, yes, nowMs);
+                return;
+            }
             if (q.kind == PullAskKind::Area)
             {
                 Camps::RememberAnswer(plan.autoClear.camps, q.entries, q.where, yes, nowMs);
@@ -52,11 +82,21 @@ namespace PullQuestions
         }
     }
 
-    void Step(TeamPlan& plan, WorldModel const& world, Map* map, PackFacts const* areaPack, uint32 nowMs)
+    void Step(TeamPlan& plan, WorldModel const& world, Map* map, PackFacts const* areaPack, uint32 nowMs,
+              bool stance)
     {
         PullQuestion& q = plan.pullQuestion;
+        PullPlan const& pull = plan.pull;
         if (q.id)
         {
+            // NotReady: gone with what it was about (the pull went or ended, they have
+            // something to drink now or their mana came back).
+            if (q.kind == PullAskKind::NotReady && q.answer == PullQuestion::Answer::Pending &&
+                (pull.phase != PullPhase::WaitReady || pull.noDrink.empty()))
+            {
+                q = PullQuestion();
+                return;
+            }
             if (q.answer == PullQuestion::Answer::Pending &&
                 WorldTimer::getMSTimeDiff(q.sinceMs, nowMs) < QUESTION_MAX_MS)
                 return;
@@ -70,6 +110,17 @@ namespace PullQuestions
             return;
         PartyMemberFacts const* tank = Tanks::Main(world, true);
         if (!tank)
+            return;
+
+        if (pull.phase == PullPhase::WaitReady && !pull.noDrinkAnswered && !pull.noDrink.empty() &&
+            pull.noDrinkSinceMs && WorldTimer::getMSTimeDiff(pull.noDrinkSinceMs, nowMs) >= NOT_READY_ASK_MS)
+        {
+            PullQuestion& asked = Ask(plan, tank->guid, PullAskKind::NotReady, pull.target, nowMs);
+            asked.pack = pull.expected;
+            asked.notReady = pull.noDrink;
+            return;
+        }
+        if (!stance)
             return;
 
         ClearAsk& ask = plan.clear.ask;
@@ -104,7 +155,8 @@ namespace PullQuestions
 
     void Drop(TeamPlan& plan)
     {
-        plan.pullQuestion = PullQuestion();
+        if (plan.pullQuestion.kind != PullAskKind::NotReady)
+            plan.pullQuestion = PullQuestion();
     }
 
     bool Open(TeamPlan const& plan, PullQuestion& out)

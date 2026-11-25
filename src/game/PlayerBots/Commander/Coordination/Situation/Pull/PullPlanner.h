@@ -237,6 +237,12 @@ namespace Commander
         float ReadyManaShare(PullPlan const& pull, PartyMemberFacts const& m);
         std::vector<Issue> CheckReady(WorldModel const& world, float healerManaPct = READY_MANA_PCT,
                                       Position3 const* planned = nullptr);
+        // CheckReady for `plan`'s waiting pull (its healer mana and planned fight spot), without
+        // the mana of bots the player said not to wait for (TeamPlan::readyWaiver).
+        std::vector<Issue> CheckPullReady(WorldModel const& world, TeamPlan const& plan);
+        // A mana issue of a bot with nothing to drink (PartyMemberFacts::hasDrink): only its
+        // regeneration brings it back, the tank asks the player (PullAskKind::NotReady).
+        bool NoDrinkIssue(WorldModel const& world, Issue const& issue);
         // An autonomous hunt (Hunt/HuntAssigner.h) has no pull waiting for the party, so bots
         // drink only below their own drink start share (RestValue::DrinkBelowShare with no pull
         // share): bots need that share, not READY_MANA_PCT. With READY_MANA_PCT a bot between

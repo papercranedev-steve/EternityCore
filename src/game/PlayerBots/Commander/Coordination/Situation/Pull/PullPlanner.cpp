@@ -248,6 +248,27 @@ namespace Commander
         }, planned);
     }
 
+    std::vector<PullPlanner::Issue> PullPlanner::CheckPullReady(WorldModel const& world, TeamPlan const& plan)
+    {
+        Position3 planned;
+        bool const hasPlanned = plan.PlannedFightSpot(planned);
+        std::vector<Issue> issues = CheckReady(world, plan.pull.healerManaPct, hasPlanned ? &planned : nullptr);
+        uint32 const nowMs = world.refreshedAtMs;
+        issues.erase(std::remove_if(issues.begin(), issues.end(), [&plan, nowMs](Issue const& i)
+        {
+            return !strcmp(i.what, "mana") && plan.readyWaiver.Covers(i.who, nowMs);
+        }), issues.end());
+        return issues;
+    }
+
+    bool PullPlanner::NoDrinkIssue(WorldModel const& world, Issue const& issue)
+    {
+        if (strcmp(issue.what, "mana"))
+            return false;
+        PartyMemberFacts const* m = world.FindMember(issue.who);
+        return m && m->isBot && !m->hasDrink;
+    }
+
     std::vector<PullPlanner::Issue> PullPlanner::CheckReadyToHunt(WorldModel const& world)
     {
         // Bots: the share a new drink starts below (PartyMemberFacts::drinkStartShare), the

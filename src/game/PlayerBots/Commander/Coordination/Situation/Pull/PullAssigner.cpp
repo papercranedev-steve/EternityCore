@@ -81,9 +81,7 @@ namespace Commander
         bool EarlyGoBroken(WorldModel const& world, TeamPlan const& plan, std::vector<PullPlanner::Issue>& issues)
         {
             PullPlan const& pull = plan.pull;
-            Position3 planned;
-            bool const hasPlanned = plan.PlannedFightSpot(planned);
-            issues = PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr);
+            issues = PullPlanner::CheckPullReady(world, plan);
             issues.erase(std::remove_if(issues.begin(), issues.end(),
                 [&pull](PullPlanner::Issue const& i) { return i.who == pull.tank; }), issues.end());
             if (issues.empty())
@@ -222,13 +220,20 @@ namespace Commander
                 // The player or a patrol started a fight: not a failure of the plan.
                 if (fightStarted || world.HasPartyEnemy())
                 {
+                    plan.readyWaiver = ReadyWaiver();   // (it was for the next fight)
                     interrupt("a fight started.");
                     return;
                 }
-                Position3 planned;
-                bool const hasPlanned = plan.PlannedFightSpot(planned);
-                std::vector<PullPlanner::Issue> const issues =
-                    PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr);
+                std::vector<PullPlanner::Issue> const issues = PullPlanner::CheckPullReady(world, plan);
+                // Nothing to drink: the tank asks the player (PullQuestions, PullAskKind::NotReady).
+                pull.noDrink.clear();
+                for (PullPlanner::Issue const& i : issues)
+                    if (PullPlanner::NoDrinkIssue(world, i))
+                        pull.noDrink.push_back({ i.who, i.value });
+                if (pull.noDrink.empty())
+                    pull.noDrinkSinceMs = 0;
+                else if (!pull.noDrinkSinceMs)
+                    pull.noDrinkSinceMs = now;
                 if (issues.empty())
                 {
                     // Announce once: RecheckBeforeApproach may send the pull back here (new
@@ -261,7 +266,14 @@ namespace Commander
                     PartyMemberFacts const* m = world.FindMember(i.who);
                     return !m || m->isBot;
                 });
-                if (botIssue && pull.lastReadyCheckMs)
+                // A bot with nothing to drink is the player's call when he is there (asked, his
+                // no means wait for its regeneration), not a timeout.
+                bool const timesOut = std::any_of(issues.begin(), issues.end(), [&world](PullPlanner::Issue const& i)
+                {
+                    PartyMemberFacts const* m = world.FindMember(i.who);
+                    return !m || (m->isBot && !(world.humanInTeam && PullPlanner::NoDrinkIssue(world, i)));
+                });
+                if (timesOut && pull.lastReadyCheckMs)
                     pull.botWaitMs += WorldTimer::getMSTimeDiff(pull.lastReadyCheckMs, now);
                 pull.lastReadyCheckMs = now;
 
@@ -295,6 +307,7 @@ namespace Commander
                         unexpected.push_back(e.guid);
                 if (fightStarted)
                 {
+                    plan.readyWaiver = ReadyWaiver();   // (it was for this fight)
                     // Enemies nobody expected are in this fight too: the pack-coming wait and
                     // the line of sight pull count them.
                     if (!unexpected.empty())

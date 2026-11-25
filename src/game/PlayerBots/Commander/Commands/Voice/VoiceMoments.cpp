@@ -92,13 +92,14 @@ namespace Commander
             WorldTimer::getMSTimeDiff(pull.phaseSinceMs, nowMs) >= WAIT_SAY_MS)
         {
             m_waitChecked = true;
-            Position3 planned;
-            bool const hasPlanned = plan.PlannedFightSpot(planned);
             uint32 said = 0;
-            for (PullPlanner::Issue const& issue : PullPlanner::CheckReady(world, pull.healerManaPct, hasPlanned ? &planned : nullptr))
+            for (PullPlanner::Issue const& issue : PullPlanner::CheckPullReady(world, plan))
             {
                 PartyMemberFacts const* m = world.FindMember(issue.who);
                 if (!m || m->isPet || said >= 2)
+                    continue;
+                // Nothing to drink: not "drinking"; the tank's question says it (PullAskKind::NotReady).
+                if (PullPlanner::NoDrinkIssue(world, issue))
                     continue;
                 std::string const what = issue.what;
                 std::string const once = "wait:" + what + ":" + G(m->guid);

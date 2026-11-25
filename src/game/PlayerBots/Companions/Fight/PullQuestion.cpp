@@ -33,8 +33,27 @@ namespace PullQuestion
             {
                 case Commander::PullAskKind::Boss:    return { "pull.ask.boss", "pull.opt.start", "pull.opt.wait" };
                 case Commander::PullAskKind::Hard:    return { "pull.ask.hard", "pull.opt.pull", "pull.opt.leave" };
+                case Commander::PullAskKind::NotReady: return { "pull.ask.notready", "pull.opt.start", "pull.opt.wait" };
                 default:                              return { "pull.ask.area", "pull.opt.clear", "pull.opt.leave" };
             }
+        }
+
+        // NotReady: "Ujiro (38% mana), Hilowuk (20% mana)".
+        std::string NotReadyList(Map* map, BotShared::I18n::Lang lang, Commander::PullQuestion const& q)
+        {
+            std::string const sep = Phrases::Word(lang, "pull.ask.notready.sep");
+            std::string list;
+            for (Commander::NotReadyMember const& m : q.notReady)
+            {
+                Player const* p = map->GetPlayer(m.guid);
+                if (!p)
+                    continue;
+                Phrases::Vars vars;
+                vars["name"] = p->GetName();
+                vars["mana"] = std::to_string(int(m.manaPct + 0.5f));
+                list += (list.empty() ? "" : sep) + Phrases::Text(lang, "pull.ask.notready.item", vars);
+            }
+            return list;
         }
 
         void Close(State& state, Requests::Outcome outcome)
@@ -81,6 +100,8 @@ namespace PullQuestion
         vars["leader"] = leader->GetName();
         vars["name"] = first ? BotShared::GameNames::CreatureName(first->GetEntry(), leader) : std::string();
         vars["count"] = std::to_string(q.count);
+        if (q.kind == Commander::PullAskKind::NotReady)
+            vars["who"] = NotReadyList(me->GetMap(), lang, q);
         Words const words = WordsOf(q.kind);
 
         Requests::Ask ask;

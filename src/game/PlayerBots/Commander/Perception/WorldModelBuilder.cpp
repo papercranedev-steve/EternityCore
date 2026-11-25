@@ -1954,6 +1954,7 @@ namespace WorldModelBuilder
                     f.drinkStartShare = ai->DrinkStartShare();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
+                    f.hasDrink = f.drinking || ai->NextRest(BotShared::FoodAndDrink::Kind::Drink) != nullptr;
                     f.eating = ai->IsEating();
                     f.canShootWand = ai->CanShootWand();
                     f.healerDamageSet = ai->m_healerDamageTier;

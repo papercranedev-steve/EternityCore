@@ -110,6 +110,29 @@ namespace Commander
         Area,       // open world: "clear the creatures around here?"
         Boss,       // a boss the clear would leave to him: "shall I start it?"
         Hard,       // the fight estimate says the party cannot carry it: "N of them, I may not hold, pull?"
+        // A waiting pull: bots short of mana have nothing to drink (PullPlan::noDrink), "X has
+        // no water, pull anyway?" Any pull, any stance.
+        NotReady,
+    };
+
+    // Bot short of mana with nothing to drink while a pull waits (PullPlan::noDrink).
+    struct NotReadyMember
+    {
+        ObjectGuid guid;
+        float manaPct = 0.0f;
+    };
+
+    // The player's yes to a NotReady question: the ready check does not wait for these bots'
+    // mana until the next fight starts (PullAssigner) or until `untilMs`. Kept by the team, not
+    // the pull: a patrol first or a hold that plans the pull again keeps it.
+    struct ReadyWaiver
+    {
+        std::vector<ObjectGuid> bots;
+        uint32 untilMs = 0;
+        bool Covers(ObjectGuid bot, uint32 nowMs) const
+        {
+            return nowMs < untilMs && std::find(bots.begin(), bots.end(), bot) != bots.end();
+        }
     };
 
     // A pack a clear would leave that the player may want (ClearPlan::asks): AutoClear asks him.
@@ -204,6 +227,7 @@ namespace Commander
         ObjectGuid first;               // the creature it names
         uint32 count = 0;               // Hard
         std::vector<ObjectGuid> pack;   // the pack it is about
+        std::vector<NotReadyMember> notReady;   // NotReady: who has nothing to drink
         std::vector<uint32> entries;    // Area: its kinds (the camp the answer is about)
         Position3 where;                // Area: its centre
         uint32 sinceMs = 0;
@@ -376,6 +400,13 @@ namespace Commander
         // (PullPlanner::ForecastReady, EARLY_GO_*): Approach checks it again until the opener.
         bool wentEarly = false;
         bool earlyHeldBack = false;         // an early go was held back: this pull waits for everyone
+        // Bots the ready check waits for mana from that have nothing to drink (no water, not
+        // drinking; PartyMemberFacts::hasDrink), this refresh, the player's waiver left out.
+        // With a human in the team they do not count toward the timeout: the tank asks him
+        // (PullAskKind::NotReady, PullQuestions) instead, and his no means wait for them.
+        std::vector<NotReadyMember> noDrink;
+        uint32 noDrinkSinceMs = 0;          // noDrink not empty since then, 0 = empty
+        bool noDrinkAnswered = false;       // he answered for this pull: not asked again
         std::vector<PullMemberName> names;
 
         // What PullPlanner::Plan told the player (target, expected, ranged or not and why,
@@ -1834,6 +1865,7 @@ namespace Commander
         ClearPlan clear;
         AutoClearPlan autoClear;
         PullQuestion pullQuestion;
+        ReadyWaiver readyWaiver;    // the player's yes to a NotReady question
         HuntPlan hunt;
         PushPlan push;
         // The party bot the party follows out of combat instead of the player (Guide.h: the

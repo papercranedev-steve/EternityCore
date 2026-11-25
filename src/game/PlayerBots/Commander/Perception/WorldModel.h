@@ -717,6 +717,9 @@ namespace Commander
         float drinkStartShare = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (TeamBotAI::IsDrinking)
+        // Bots: something to drink in the bags (or the free drink, TeamBotAI::NextRest), or the
+        // drink is on. Whatever form it is in (drinkManaPerSec is 0 in bear form).
+        bool hasDrink = false;
         bool eating = false;        // bots: the food is on (TeamBotAI::IsEating)
         // Bots: Shoot is learned and a wand that is not broken is equipped (TeamBotAI::
         // CanShootWand). A healer's free attack (healer damage tiers doc 2026-11-21).

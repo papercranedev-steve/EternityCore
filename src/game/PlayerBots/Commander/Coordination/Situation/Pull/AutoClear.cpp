@@ -223,6 +223,8 @@ namespace AutoClear
                 autoClear.started = false;
                 autoClear.wasActive = false;
             }
+            // His own pulls wait for the party too: who has nothing to drink is still asked.
+            PullQuestions::Step(plan, world, map, nullptr, nowMs, false);
             return;
         }
 
