@@ -63,12 +63,14 @@ local FACTION_CLASS = { paladin = "alliance", shaman = "horde" }
 --  - four bags (Traveler's Backpack, 16 slots);
 --  - u:stock(): what a companion keeps (Shared/Supplies): ammo for the worn ranged weapon, food,
 --    drink, buff and resurrection reagents, the Ankh, pet food, conjured food and water, poisons;
+--    its food and drink (bought or conjured) topped up to FOOD_STACKS full stacks;
 --  - healing potions, and mana potions for mana users: the best one it can use (ItemKit uses them);
 --  - what no vendor sells: Soul Shards (the shaman's totems come with u:trainup's class quests).
 local BAG = 4500
 local HEAL_POTIONS = { 13446, 3928, 1710, 929, 858, 118 }     -- Major .. Minor Healing Potion
 local MANA_POTIONS = { 13444, 13443, 6149, 3827, 3385, 2455 }  -- Major .. Minor Mana Potion
 local POTIONS = 5
+local FOOD_STACKS = 5   -- food and drink from u:stock topped up to 5 full stacks each (one ran out)
 local MANA_CLASSES = { [2] = true, [3] = true, [5] = true, [7] = true, [8] = true, [9] = true, [11] = true }
 local CLASS_EXTRAS = {
     [9] = { { 6265, 20 } },     -- warlock: Soul Shard
@@ -89,7 +91,7 @@ local function stockUp(u, extra)
     for _, it in ipairs(items) do
         if u:itemcount(it[1]) < (it[2] or 1) then u:additem(it[1], (it[2] or 1) - u:itemcount(it[1])) end
     end
-    u:stock()
+    u:stock(FOOD_STACKS)
     local heal = bestUsable(u, HEAL_POTIONS)
     if heal then u:additem(heal, POTIONS) end
     local mana = MANA_CLASSES[u:class()] and bestUsable(u, MANA_POTIONS)

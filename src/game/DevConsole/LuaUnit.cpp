@@ -69,6 +69,7 @@
 #include <cstring>
 #include <list>
 #include <map>
+#include <set>
 #include <ctime>
 #include <shared_mutex>
 
@@ -2062,9 +2063,12 @@ namespace DevConsole
     // had shopped and made them: what it makes (conjured food and water, poisons) as the
     // products, the rest as the best vendor item it can use (ammo, food, drink, pet food,
     // reagents, Ankh). Food and drink a teammate would give it are given too.
+    // u:stock(foodStacks): the food and drink it got are topped up to that many full stacks
+    // (a test runs longer than a companion's normal stock lasts).
     static int U_stock(lua_State* L)
     {
         Player* p = CheckPlayer(L, 1);
+        lua_Integer const foodStacks = luaL_optinteger(L, 2, 0);
         namespace Supplies = BotShared::Supplies;
         // (Missing leaves out what a mage in the party provides; the bot sets it again next update)
         Supplies::SetProvided(p->GetObjectGuid(), {});
@@ -2084,6 +2088,23 @@ namespace DevConsole
             uint32 const have = BotShared::Goods::CountInBags(p, n.goods);
             if (n.target > have)
                 give(StockItemFor(p, n.goods), n.target - have);
+        }
+        if (foodStacks > 0)
+        {
+            std::set<uint32> eaten;
+            for (auto const& g : given)
+                if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(g.first))
+                    if (BotShared::Goods::Matches(p, BotShared::Goods::Of(BotShared::Goods::Kind::Food), proto) ||
+                        BotShared::Goods::Matches(p, BotShared::Goods::Of(BotShared::Goods::Kind::Drink), proto))
+                        eaten.insert(g.first);
+            for (uint32 const itemId : eaten)
+            {
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                uint32 const want = uint32(foodStacks) * std::max<uint32>(proto->GetMaxStackSize(), 1);
+                uint32 const have = p->GetItemCount(itemId);
+                if (want > have)
+                    give(itemId, want - have);
+            }
         }
         lua_createtable(L, int(given.size()), 0);
         int i = 0;
