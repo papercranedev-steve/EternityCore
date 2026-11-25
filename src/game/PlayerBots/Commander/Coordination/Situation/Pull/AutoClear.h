@@ -40,8 +40,8 @@ namespace Commander
     namespace AutoClear
     {
         // Dungeon
-        uint32 const LEADER_STILL_MS = 5000;        // the player stood still this long ...
-        float const LEADER_STILL_RADIUS = 2.0f;     // ... within this distance
+        uint32 const LEADER_STILL_MS = 3000;        // the player stayed this long ...
+        float const LEADER_STILL_RADIUS = 8.0f;     // ... within this distance (strafing in place counts, running does not)
         float const MOVED_YD = 20.0f;               // moved this far from where the last clear ended
         uint32 const RETRY_MS = 30 * 1000;          // nothing was left: look again after this long
         float const FRONT_WALK_YD = 100.0f;         // safety cap of the packs in front (walk)

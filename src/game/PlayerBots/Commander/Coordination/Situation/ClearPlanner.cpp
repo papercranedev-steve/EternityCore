@@ -141,10 +141,12 @@ namespace ClearPlanner
             return order;
         }
 
-        // Leader moved away from the anchor. Outside a pull this only pauses: the leader is
-        // usually looting a corpse; once standing still the clear goes on from there.
-        // Returns false while paused (or stopped).
-        bool FollowLeader(TeamPlan& plan, PartyCommander& commander, WorldModel const& world, Player* leader, uint32 nowMs)
+        // Leader moved away from the anchor. This only pauses: the leader is usually looting a
+        // corpse or walking on; once he settles the clear goes on from there. A pull already
+        // under way (the tank left) is finished first: the leader usually walks after the tank
+        // to join the fight (recording strat-20261125-211343, stopping there ended the whole
+        // clear). Returns false while paused.
+        bool FollowLeader(TeamPlan& plan, WorldModel const& world, Player* leader, uint32 nowMs)
         {
             ClearPlan& clear = plan.clear;
             Position3 const here = PositionOf(leader);
@@ -166,10 +168,7 @@ namespace ClearPlanner
 
             PullPhase const phase = plan.pull.phase;
             if (phase != PullPhase::None && phase != PullPhase::WaitReady)
-            {
-                Stop(commander, "you moved away from the starting point during a pull.");
-                return false;
-            }
+                return true;
             if (!clear.paused)
             {
                 clear.paused = true;
@@ -177,7 +176,8 @@ namespace ClearPlanner
                 if (phase == PullPhase::WaitReady)
                     plan.pull = PullPlan();
                 Note(plan, Format("Clear paused: you are more than %.0f yd from the start. "
-                    "It goes on from where you stand still for %u seconds.", MAX_LEADER_DRIFT, LEADER_STILL_MS / 1000));
+                    "It goes on from where you stay (within %.0f yd) for %u seconds.", MAX_LEADER_DRIFT,
+                    LEADER_STILL_RADIUS, LEADER_STILL_MS / 1000));
             }
             if (!world.HasPartyEnemy() && WorldTimer::getMSTimeDiff(clear.leaderStillSinceMs, nowMs) >= LEADER_STILL_MS)
             {
@@ -498,7 +498,7 @@ namespace ClearPlanner
         if (clear.standing)
             ForgetOld(clear, nowMs);
         if (clear.standing ? !TrackLeader(plan, leader, map)
-                           : clear.followsLeader && !FollowLeader(plan, commander, world, leader, nowMs))
+                           : clear.followsLeader && !FollowLeader(plan, world, leader, nowMs))
             return;
 
         // A pull is being prepared or executed.

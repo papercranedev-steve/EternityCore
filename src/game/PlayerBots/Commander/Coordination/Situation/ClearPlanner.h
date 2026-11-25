@@ -8,7 +8,8 @@
  * PackRoutes.h; range = the walk, packs with no walkable way are passed over) -> PullPlanner::Plan (waits until everyone is ready) -> predict again and wait
  * for patrols when the tank is about to go (PullPlanner::RecheckBeforeApproach) -> pull -> repeat.
  *
- * Pauses while the leader is away from the start (resumes where the leader stops).
+ * Pauses while the leader is away from the start (resumes where the leader settles); a pull
+ * the tank already started is finished first.
  * A pull interrupted by another fight (player attacked, patrol) does not stop it.
  * Stops when nothing is left, there is no living tank, a pull fails, somebody is not
  * resurrected in time, or somebody dies a second time (members already dead at the start
@@ -45,9 +46,9 @@ namespace Commander
         uint32 const LOOT_WAIT_MAX_MS = 15000;      // counted from the end of the fight
         float const LOOT_RADIUS = 30.0f;            // corpses this close to the leader
 
-        float const MAX_LEADER_DRIFT = 20.0f;       // leader further than this from the start: pause (stop mid-pull)
-        uint32 const LEADER_STILL_MS = 5000;        // leader standing this long ...
-        float const LEADER_STILL_RADIUS = 2.0f;     // ... within this distance: resume from there
+        float const MAX_LEADER_DRIFT = 20.0f;       // leader further than this from the start: pause (a pull under way is finished)
+        uint32 const LEADER_STILL_MS = 3000;        // leader staying this long ...
+        float const LEADER_STILL_RADIUS = 8.0f;     // ... within this distance (strafing in place counts, running does not): resume from there
 
         uint32 const REVIVE_WAIT_MS = 60 * 1000;    // after a fight with deaths, wait this long for resurrection
         uint32 const MAX_DEATH_EVENTS = 2;          // fights with a death before the clear stops
