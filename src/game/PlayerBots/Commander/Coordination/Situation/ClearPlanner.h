@@ -69,6 +69,16 @@ namespace Commander
         uint32 const FORGET_MS = 3 * MINUTE * IN_MILLISECONDS;          // skips and notes kept this long
         uint32 const DEATH_MEMORY_MS = 5 * MINUTE * IN_MILLISECONDS;    // a death counts this long
 
+        // A pack is remembered (ClearPlan::skipped, approved, ask.pack, chosen) by its members
+        // that stay put; a pack of patrols only by its patrols. A patrol walks from pack to
+        // pack: its guid in these lists made every pack it later walked past count as skipped
+        // or approved (strat-20261125: Rockwing Screechers fly over the whole courtyard; a "yes"
+        // to one hard pack would have let every pack they passed through unasked).
+        std::vector<ObjectGuid> PackKey(WorldModel const& world, std::vector<ObjectGuid> const& guids);
+        std::vector<ObjectGuid> PackKey(PackFacts const& pack);
+        // A guid of PackKey(world, guids) is in `list`.
+        bool KeyIn(WorldModel const& world, std::vector<ObjectGuid> const& guids, std::vector<ObjectGuid> const& list);
+
         // `anchor`: where the clear is centred (the leader; the guide in the push mode).
         // `followsLeader`: pause while the leader walks away (false: the push planner moves the party).
         void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader = true);

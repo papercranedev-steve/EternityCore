@@ -1,5 +1,6 @@
 #include "Commander/Coordination/Situation/Pull/PullQuestions.h"
 #include "Commander/Coordination/Situation/Pull/Camps.h"
+#include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Tanks.h"
 #include "Creature.h"
@@ -17,7 +18,7 @@ namespace PullQuestions
             plan.notes.push_back(std::move(text));
         }
 
-        void ApplyNotReady(TeamPlan& plan, PullQuestion const& q, bool yes, uint32 nowMs)
+        void ApplyNotReady(TeamPlan& plan, WorldModel const& world, PullQuestion const& q, bool yes, uint32 nowMs)
         {
             PullPlan& pull = plan.pull;
             pull.noDrinkAnswered = true;
@@ -36,18 +37,18 @@ namespace PullQuestions
             // A clear judges the pull with the party as it is before the tank goes
             // (PullPlanner::RecheckBeforeApproach): his yes is to that fight too.
             if (plan.clear.active)
-                for (ObjectGuid g : pull.expected)
+                for (ObjectGuid g : ClearPlanner::PackKey(world, pull.expected))
                     if (std::find(plan.clear.approved.begin(), plan.clear.approved.end(), g) == plan.clear.approved.end())
                         plan.clear.approved.push_back(g);
             Note(plan, "You said go: not waiting for their mana.");
         }
 
-        void Apply(TeamPlan& plan, PullQuestion const& q, uint32 nowMs)
+        void Apply(TeamPlan& plan, WorldModel const& world, PullQuestion const& q, uint32 nowMs)
         {
             bool const yes = q.answer == PullQuestion::Answer::Yes;
             if (q.kind == PullAskKind::NotReady)
             {
-                ApplyNotReady(plan, q, yes, nowMs);
+                ApplyNotReady(plan, world, q, yes, nowMs);
                 return;
             }
             if (q.kind == PullAskKind::Area)
@@ -102,7 +103,7 @@ namespace PullQuestions
                 return;
             // (shown and no answer in time: no; never shown: dropped, asked again later)
             if (q.answer != PullQuestion::Answer::Pending || q.shown)
-                Apply(plan, q, nowMs);
+                Apply(plan, world, q, nowMs);
             q = PullQuestion();
             return;
         }

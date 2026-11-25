@@ -57,16 +57,26 @@ namespace ClearPlanner
             return std::any_of(pack.members.begin(), pack.members.end(), pred);
         }
 
+        bool AnyIn(PackFacts const& pack, std::vector<ObjectGuid> const& list)
+        {
+            std::vector<ObjectGuid> const key = PackKey(pack);
+            return std::any_of(key.begin(), key.end(), [&list](ObjectGuid g) { return Contains(list, g); });
+        }
+
         bool IsSkipped(ClearPlan const& clear, PackFacts const& pack)
         {
-            return AnyMember(pack, [&clear](PackCreature const& c) { return Contains(clear.skipped, c.guid); });
+            return AnyIn(pack, clear.skipped);
+        }
+
+        void Skip(ClearPlan& clear, std::vector<ObjectGuid> const& key)
+        {
+            clear.skipped.insert(clear.skipped.end(), key.begin(), key.end());
+            ++clear.skippedPacks;
         }
 
         void Skip(ClearPlan& clear, PackFacts const& pack)
         {
-            for (PackCreature const& c : pack.members)
-                clear.skipped.push_back(c.guid);
-            ++clear.skippedPacks;
+            Skip(clear, PackKey(pack));
         }
 
         void Note(TeamPlan& plan, std::string text)
@@ -110,12 +120,29 @@ namespace ClearPlanner
             return false;
         }
 
-        // ClearPlan::frontOnly: nothing in between on the walk, and in the leader's sight or a
+        // ClearPlan::frontOnly: nothing in between on the walk (a pack side by side on each
+        // other's walk: the nearer one, BlockedByNearerPack), and in the leader's sight or a
         // short navmesh walk (FRONT_UNSEEN_WALK_YD: a prison cell next to him, stockade-20261125:
         // the server sees no line into the cells, the clear found nothing in front for 8 minutes).
-        bool IsInFront(PackFacts const& pack)
+        // Two packs side by side, each on the other's walk: the nearer walk is in front (else
+        // neither ever was, and the clear stopped with "nothing left" in front of both).
+        bool BlockedByNearerPack(WorldModel const& world, PackFacts const& pack)
         {
-            if (!pack.route.blocker.IsEmpty())
+            ObjectGuid const blocker = pack.route.blocker;
+            auto const other = std::find_if(world.packs.begin(), world.packs.end(), [blocker](PackFacts const& p)
+            {
+                return AnyMember(p, [blocker](PackCreature const& c) { return c.guid == blocker; });
+            });
+            if (other == world.packs.end() || &*other == &pack)
+                return true;
+            ObjectGuid const back = other->route.blocker;
+            bool const mutual = !back.IsEmpty() && AnyMember(pack, [back](PackCreature const& c) { return c.guid == back; });
+            return !mutual || other->ApproachYd() < pack.ApproachYd();
+        }
+
+        bool IsInFront(WorldModel const& world, PackFacts const& pack)
+        {
+            if (!pack.route.blocker.IsEmpty() && BlockedByNearerPack(world, pack))
                 return false;
             return pack.route.leaderSees ||
                 (pack.route.state == PackRouteState::Walk && pack.route.walkYd <= FRONT_UNSEEN_WALK_YD);
@@ -254,11 +281,6 @@ namespace ClearPlanner
                 clear.deathEvents = 0;
         }
 
-        bool AnyIn(PackFacts const& pack, std::vector<ObjectGuid> const& list)
-        {
-            return AnyMember(pack, [&list](PackCreature const& c) { return Contains(list, c.guid); });
-        }
-
         // ClearPlan::asks: put the creatures up for a question instead of skipping them (one at
         // a time). False: another question is waiting.
         bool PutUp(ClearPlan& clear, std::vector<ObjectGuid> const& creatures, ObjectGuid first, PullAskKind kind,
@@ -275,10 +297,7 @@ namespace ClearPlanner
 
         bool PutUp(ClearPlan& clear, PackFacts const& pack, Creature* first, PullAskKind kind, uint32 count)
         {
-            std::vector<ObjectGuid> members;
-            for (PackCreature const& c : pack.members)
-                members.push_back(c.guid);
-            return PutUp(clear, members, first->GetObjectGuid(), kind, count);
+            return PutUp(clear, PackKey(pack), first->GetObjectGuid(), kind, count);
         }
 
         // After a fight: dead members get up to REVIVE_WAIT_MS to be resurrected (the original
@@ -411,14 +430,13 @@ namespace ClearPlanner
             if (result == PullPlanner::RecheckResult::TooHard && clear.asks)
             {
                 // (another question waiting: planned again after it)
-                if (PutUp(clear, plan.pull.expected, plan.pull.target, PullAskKind::Hard, uint32(plan.pull.expected.size())))
+                if (PutUp(clear, PackKey(world, plan.pull.expected), plan.pull.target, PullAskKind::Hard,
+                          uint32(plan.pull.expected.size())))
                     Note(plan, "Asking you about it: " + why + ".");
                 plan.pull = PullPlan();
                 return;
             }
-            for (ObjectGuid g : plan.pull.expected)
-                clear.skipped.push_back(g);
-            ++clear.skippedPacks;
+            Skip(clear, PackKey(world, plan.pull.expected));
             Creature* target = map->GetCreature(plan.pull.target);
             std::string const whose = target ? std::string(target->GetName()) + "'s" : "the";
             Note(plan, "Skipping " + whose + " pack: " + why + ".");
@@ -444,6 +462,33 @@ namespace ClearPlanner
             }
             return fallback;
         }
+    }
+
+    std::vector<ObjectGuid> PackKey(WorldModel const& world, std::vector<ObjectGuid> const& guids)
+    {
+        std::vector<ObjectGuid> key;
+        for (ObjectGuid g : guids)
+        {
+            bool const patrol = std::any_of(world.patrols.begin(), world.patrols.end(),
+                [g](PatrolFacts const& p) { return p.guid == g; });
+            if (!patrol)
+                key.push_back(g);
+        }
+        return key.empty() ? guids : key;
+    }
+
+    std::vector<ObjectGuid> PackKey(PackFacts const& pack)
+    {
+        std::vector<ObjectGuid> key, patrols;
+        for (PackCreature const& c : pack.members)
+            (c.patrol ? patrols : key).push_back(c.guid);
+        return key.empty() ? patrols : key;
+    }
+
+    bool KeyIn(WorldModel const& world, std::vector<ObjectGuid> const& guids, std::vector<ObjectGuid> const& list)
+    {
+        std::vector<ObjectGuid> const key = PackKey(world, guids);
+        return std::any_of(key.begin(), key.end(), [&list](ObjectGuid g) { return Contains(list, g); });
     }
 
     void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader)
@@ -549,9 +594,7 @@ namespace ClearPlanner
                 // The plan no longer fitted before the opener (the reason was noted). The same
                 // pack would be planned the same way again: skip it, go on with the next.
                 plan.lastPullOutcome = PullOutcome::None;
-                for (ObjectGuid g : plan.pull.expected)
-                    clear.skipped.push_back(g);
-                ++clear.skippedPacks;
+                Skip(clear, PackKey(world, plan.pull.expected));
                 break;
             case PullOutcome::None:
                 break;
@@ -630,7 +673,7 @@ namespace ClearPlanner
                     continue;
                 // Not in front of him: behind another pack (pulled once that one is dead) or
                 // out of his sight and not a short walk. Looked at again every round.
-                if (clear.frontOnly && !IsInFront(pack))
+                if (clear.frontOnly && !IsInFront(world, pack))
                     continue;
 
                 // Bosses and creatures that never start a fight are left to the player.

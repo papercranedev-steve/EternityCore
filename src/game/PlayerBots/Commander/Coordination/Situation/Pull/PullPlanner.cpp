@@ -1008,8 +1008,7 @@ namespace Commander
         // A clear holds a pull that is too hard (or over a limit the player gave) and gives it
         // up after REPREDICT_WAIT_MS. A pack the player said yes to (ClearPlan::approved) is
         // never held for it; a single pull is his order and goes (PullPlan::hard warns).
-        bool const approved = std::any_of(pull.expected.begin(), pull.expected.end(),
-            [&clear](ObjectGuid g) { return Contains(clear.approved, g); });
+        bool const approved = ClearPlanner::KeyIn(world, pull.expected, clear.approved);
         bool const judged = clear.active && !approved;
         bool const overLimit = judged && clear.maxMobs && expected.size() > clear.maxMobs;
         if (overLimit || (judged && hardNow))
