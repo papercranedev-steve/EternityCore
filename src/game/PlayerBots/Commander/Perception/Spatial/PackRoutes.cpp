@@ -47,15 +47,32 @@ namespace PackRoutes
             return guids;
         }
 
-        // The first creature of `idle` the path comes into, or null.
-        Creature const* FirstBlocker(SafeRoute::IdleCreatures const& idle, PathInfo const& path)
+        // The first creature of `others` the path comes into before it comes into `own` (the
+        // pack itself), or null. Past that point the pack is on the walker anyway: a creature
+        // standing beside or behind it is a possible add the pull planner predicts, not in
+        // between (strat-20261125: neighbouring Stratholme packs blocked each other, every one
+        // "past" the next, and the active pull stance found nothing in front).
+        Creature const* FirstBlocker(SafeRoute::IdleCreatures const& others, SafeRoute::IdleCreatures const& own,
+                                     PathInfo const& path)
         {
             auto const& pts = path.getPath();
             for (size_t i = 1; i < pts.size(); ++i)
             {
-                Creature const* blocker = nullptr;
-                if (!SafeRoute::SegmentIsSafe(idle, ToPosition(pts[i - 1]), ToPosition(pts[i]), &blocker))
-                    return blocker;
+                Position3 const a = ToPosition(pts[i - 1]);
+                Position3 const b = ToPosition(pts[i]);
+                uint32 const steps = std::max(1u, uint32(SafeRoute::Distance2d(a, b) / SafeRoute::PATH_SAMPLE_STEP));
+                for (uint32 s = 1; s <= steps; ++s)
+                {
+                    float const f = float(s) / steps;
+                    Position3 p;
+                    p.x = a.x + (b.x - a.x) * f;
+                    p.y = a.y + (b.y - a.y) * f;
+                    p.z = a.z + (b.z - a.z) * f;
+                    if (own.Near(p))
+                        return nullptr;
+                    if (Creature const* c = others.Blocker(p))
+                        return c;
+                }
             }
             return nullptr;
         }
@@ -100,10 +117,14 @@ namespace PackRoutes
             pack.route.state = PackRouteState::Walk;
             pack.route.walkYd = path.Length();
 
-            // The pack itself comes anyway: only other creatures block the walk.
-            SafeRoute::IdleCreatures idle = allIdle;
-            idle.Ignore(GuidsOf(pack));
-            if (Creature const* blocker = FirstBlocker(idle, path))
+            // The pack itself comes anyway: only other creatures block the walk, and only
+            // before it reaches the pack's own aggro range.
+            std::vector<ObjectGuid> const members = GuidsOf(pack);
+            SafeRoute::IdleCreatures others = allIdle;
+            others.Ignore(members);
+            SafeRoute::IdleCreatures own = allIdle;
+            own.KeepOnly(members);
+            if (Creature const* blocker = FirstBlocker(others, own, path))
                 pack.route.blocker = blocker->GetObjectGuid();
         }
     }

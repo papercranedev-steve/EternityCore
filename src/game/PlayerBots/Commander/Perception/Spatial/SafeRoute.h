@@ -65,6 +65,8 @@ namespace Commander
             // Leave these out (they come anyway: the pull target and its group, for the walk
             // to a face pull spot).
             void Ignore(std::vector<ObjectGuid> const& guids);
+            // Only these (PackRoutes: where the walk reaches the pack itself).
+            void KeepOnly(std::vector<ObjectGuid> const& guids);
             // For the walk out of an unsafe spot `from` (stance modules): a copy in which a
             // creature that already covers `from` only counts at points closer to its home than
             // `from` (by more than LEAVE_TOLERANCE). Without it every path sample inside the

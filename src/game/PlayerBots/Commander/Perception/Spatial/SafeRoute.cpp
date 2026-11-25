@@ -112,6 +112,14 @@ namespace SafeRoute
         }), m_idle.end());
     }
 
+    void IdleCreatures::KeepOnly(std::vector<ObjectGuid> const& guids)
+    {
+        m_idle.erase(std::remove_if(m_idle.begin(), m_idle.end(), [&guids](Idle const& i)
+        {
+            return std::find(guids.begin(), guids.end(), i.creature->GetObjectGuid()) == guids.end();
+        }), m_idle.end());
+    }
+
     Creature const* IdleCreatures::Blocker(Position3 const& p) const
     {
         for (Idle const& c : m_idle)
