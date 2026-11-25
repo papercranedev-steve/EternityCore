@@ -26,6 +26,9 @@
 -- Lineup: ".scenario <id> [class:role ...]" replaces the default bots, e.g.
 -- ".scenario stockade paladin:tank rogue:meleedps hunter:rangedps druid:healer". The last lineup is
 -- kept for ".scenario reset" unless reset gets its own.
+-- "class:role:affinity" (0-100, e.g. "rogue:meleedps:60") makes that bot a temporary soul
+-- companion of the leader with this affinity (setcompanion / setaffinity: in memory only, gone
+-- when it is removed). Without it the bot is a plain party bot as before.
 
 scenario = scenario or {}
 
@@ -71,7 +74,9 @@ end
 
 local function lineupText(lineup)
     local parts = {}
-    for _, b in ipairs(lineup) do parts[#parts + 1] = b.class .. ":" .. (b.role or "auto") end
+    for _, b in ipairs(lineup) do
+        parts[#parts + 1] = b.class .. ":" .. (b.role or "auto") .. (b.affinity and (":" .. b.affinity) or "")
+    end
     return table.concat(parts, ",")
 end
 
@@ -380,14 +385,16 @@ function scenario.find(id)
     end
 end
 
--- "class:role class:role ..." (spaces or commas; role may be left out = auto) -> lineup, or nil, error.
--- Empty text -> nil, nil (use the default).
+-- "class:role[:affinity] ..." (spaces or commas; role may be left out = auto, affinity = not a
+-- companion) -> lineup, or nil, error. Empty text -> nil, nil (use the default).
 local function parseLineup(leader, text)
     local lineup = {}
     local faction = HORDE_RACES[leader:race()] and "horde" or "alliance"
     for token in (text or ""):gmatch("[^%s,]+") do
-        local class, role = token:lower():match("^(%a+):?(%a*)$")
+        local class, role, aff = token:lower():match("^(%a+):?(%a*):?(%d*)$")
         if not class or not CLASS_ID[class] then return nil, "未知职业：" .. token end
+        local affinity = tonumber(aff)
+        if affinity and affinity > 100 then return nil, "好感度是 0-100：" .. token end
         role = (role ~= "") and role or "auto"
         if role ~= "auto" and not CLASS_ROLES[class][role] then
             return nil, class .. " 不能当 " .. role
@@ -395,7 +402,7 @@ local function parseLineup(leader, text)
         if FACTION_CLASS[class] and FACTION_CLASS[class] ~= faction then
             return nil, class .. " 不是你这个阵营的职业"
         end
-        lineup[#lineup + 1] = { class = class, role = role }
+        lineup[#lineup + 1] = { class = class, role = role, affinity = affinity }
     end
     if #lineup == 0 then return nil, nil end
     if #lineup > 4 then return nil, "最多 4 个队友" end
@@ -598,6 +605,14 @@ local function finish(leader, s)
             leader:select(b)
             leader:cmd(string.format(".additem %d %d", it[1], it[2] or 1))
         end
+        -- a soul companion with this affinity (gates, traits, own loot, buys its own supplies)
+        if want and want.affinity then
+            if b:setcompanion(true, leader) then
+                b:setaffinity(want.affinity)
+            else
+                warnings[#warnings + 1] = b:name() .. " 没能设成同伴"
+            end
+        end
         b:revive()
         b:refill()
         b:resetcd()
@@ -618,7 +633,11 @@ local function finish(leader, s)
     end
     scenario.running = nil
     scenario.current = s.id
-    local names = map(bots, function(b) return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. ")" end)
+    local names = map(bots, function(b)
+        local a = b:affinity()
+        local aff = a.temporary and ("，好感 " .. a.value) or ""
+        return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. aff .. ")"
+    end)
     say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪。%s",
         s.title, s.level, table.concat(names, " "), respawned,
         rec.enabled and ("战斗会自动录制（级别 " .. rec.level .. "）。") or "战斗录制已关闭（/pbr 里打开）。"))
@@ -781,6 +800,7 @@ function scenario.command(leader, args)
                 say(leader, ".scenario " .. s.id .. "  " .. s.title .. "（默认 " .. lineupText(s.bots) .. "）")
             end
             say(leader, ".scenario <id> 职业:职责 ...  换阵容，例如 .scenario stockade paladin:tank rogue hunter druid:healer")
+            say(leader, "职业:职责:好感度  设成这个好感度的同伴（只在内存里），例如 rogue:meleedps:60")
             say(leader, ".scenario reset [阵容]  重开当前场景    .scenario stop  结束")
             say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
             say(leader, ".scenario mark [说明]  战斗中觉得不对时标记这一刻（记下现场，复盘时看）")
