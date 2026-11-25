@@ -2,7 +2,8 @@
 --
 -- The leader (the player) gets the scenario level, a premade spec and premade gear for its class.
 -- Bots are temporary party bots with the lineup's class/role, premade spec and premade gear, so
--- every run with the same lineup starts the same. The recorder (recorder.lua) is started for the party.
+-- every run with the same lineup starts the same; on top, what their level gives (u:trainup:
+-- trainer spells, class quest abilities, talent points) and full supplies (stockUp). The recorder (recorder.lua) is started for the party.
 --
 -- Messages to the player: plain text for the chat window, and "PBSCN;..." lines for the addon.
 --
@@ -63,15 +64,14 @@ local FACTION_CLASS = { paladin = "alliance", shaman = "horde" }
 --  - u:stock(): what a companion keeps (Shared/Supplies): ammo for the worn ranged weapon, food,
 --    drink, buff and resurrection reagents, the Ankh, pet food, conjured food and water, poisons;
 --  - healing potions, and mana potions for mana users: the best one it can use (ItemKit uses them);
---  - what no vendor sells: Soul Shards, and the shaman's totems (a class quest reward).
+--  - what no vendor sells: Soul Shards (the shaman's totems come with u:trainup's class quests).
 local BAG = 4500
 local HEAL_POTIONS = { 13446, 3928, 1710, 929, 858, 118 }     -- Major .. Minor Healing Potion
 local MANA_POTIONS = { 13444, 13443, 6149, 3827, 3385, 2455 }  -- Major .. Minor Mana Potion
 local POTIONS = 5
 local MANA_CLASSES = { [2] = true, [3] = true, [5] = true, [7] = true, [8] = true, [9] = true, [11] = true }
 local CLASS_EXTRAS = {
-    [9] = { { 6265, 20 } },                                     -- warlock: Soul Shard
-    [7] = { { 5175, 1 }, { 5176, 1 }, { 5177, 1 }, { 5178, 1 } }, -- shaman: Earth, Fire, Water, Air Totem
+    [9] = { { 6265, 20 } },     -- warlock: Soul Shard
 }
 
 local function bestUsable(u, ids)
@@ -617,6 +617,9 @@ local function finish(leader, s)
         local want = entryFor(b, role)
         local spec, gear = applyPremades(b, s.level, role, leader)
         for _, w in ipairs(premadeWarnings(b, role, spec, gear)) do warnings[#warnings + 1] = w end
+        -- the template may be of a lower level: trainer spells, class quest abilities and talent
+        -- points of the scenario level on top (before stockUp: the supplies follow the spells)
+        b:trainup()
         -- extra items: from the scenario's default entry with this class and role
         local items = {}
         for _, w in ipairs(s.bots) do

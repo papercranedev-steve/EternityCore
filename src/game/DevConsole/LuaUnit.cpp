@@ -48,6 +48,8 @@
 #include "Shared/Supplies.h"
 #include "Shared/Goods.h"
 #include "Shared/Crafting.h"
+#include "Shared/ClassTraining.h"
+#include "Shared/ClassQuestChains.h"
 #include "Shared/Professions.h"
 #include "Shared/Gathering.h"
 #include "Shared/SkillUpCost.h"
@@ -2139,6 +2141,71 @@ namespace DevConsole
         return 1;
     }
 
+    // u:trainup() -> { spells, chains, talents }: a party bot gets what a player of its level would
+    // have (test scenarios, after the premade spec):
+    //  - every class trainer spell and rank of its level (Shared/ClassTraining, free);
+    //  - the class quest ability chains its level allows, as done (Shared/ClassQuestChains: Tame
+    //    Beast, totems, demons, Bear Form ...), which a companion needs (GetsFreeAbilities false);
+    //  - its free talent points, spent toward the next premade spec template up (its role first),
+    //    as a bot between two templates gets them (CombatBotBaseAI::LearnPremadeSpecForClass).
+    static int U_trainup(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        PartyBotAI* ai = GetPartyBotAI(p);
+        if (!ai)
+            return luaL_error(L, "%s is not a party bot", p->GetName());
+
+        uint32 const spells = BotShared::ClassTraining::LearnAvailable(p, false).learned;
+
+        namespace Chains = BotShared::ClassQuestChains;
+        uint32 chains = 0;
+        for (Chains::Chain const* chain : Chains::ChainsFor(p))
+        {
+            if (chain->kind != Chains::Kind::Ability || Chains::IsDone(p, *chain))
+                continue;
+            std::vector<Quest const*> const steps = Chains::StepsFor(p, *chain);
+            if (steps.empty() || p->GetLevel() < steps.back()->GetMinLevel())
+                continue;
+            if (Chains::GrantDone(p, *chain))
+                ++chains;
+        }
+
+        uint32 const freeBefore = p->GetFreeTalentPoints();
+        if (freeBefore)
+        {
+            // the lowest template above its level; of its role when there is one
+            PlayerPremadeSpecTemplate const* next = nullptr;
+            for (auto const& itr : sObjectMgr.GetPlayerPremadeSpecTemplates())
+            {
+                PlayerPremadeSpecTemplate const& s = itr.second;
+                if (s.requiredClass != p->GetClass() || s.level <= p->GetLevel())
+                    continue;
+                if (!next)
+                {
+                    next = &s;
+                    continue;
+                }
+                bool const role = s.role == ai->m_role, nextRole = next->role == ai->m_role;
+                if (role != nextRole ? role : (s.level != next->level ? s.level < next->level : s.entry < next->entry))
+                    next = &s;
+            }
+            if (next)
+                ai->LearnTalentsTowards(*next);
+            if (p->GetFreeTalentPoints())
+                ai->LearnRandomTalents();
+        }
+        ai->m_resetSpellData = true;
+
+        lua_createtable(L, 0, 3);
+        lua_pushinteger(L, spells);
+        lua_setfield(L, -2, "spells");
+        lua_pushinteger(L, chains);
+        lua_setfield(L, -2, "chains");
+        lua_pushinteger(L, freeBefore - p->GetFreeTalentPoints());
+        lua_setfield(L, -2, "talents");
+        return 1;
+    }
+
     // u:setcompanion(true, recruiter) / u:setcompanion(false) -> bool
     // A temporary party bot acts as a soul companion of `recruiter` (errands, town trips, requests)
     // until it logs out; in memory only (CompanionMgr::MarkTemporary).
@@ -2603,7 +2670,7 @@ namespace DevConsole
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
-            { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags },
+            { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags }, { "trainup", U_trainup },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "affinity", U_affinity }, { "setaffinity", U_setaffinity },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
