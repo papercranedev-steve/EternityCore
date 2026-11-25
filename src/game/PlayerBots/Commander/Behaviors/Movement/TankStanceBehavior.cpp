@@ -117,6 +117,28 @@ namespace Commander
         }
     }
 
+    namespace
+    {
+        // The nearest enemy hitting this tank that has found no way to it (header).
+        EnemyFacts const* Unreached(WorldModel const& world, ObjectGuid tank, Position3 const& here)
+        {
+            EnemyFacts const* best = nullptr;
+            float bestYd = 0.0f;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.victim != tank || e.unreachedMs < TS::UNREACHED_MS)
+                    continue;
+                float const yd = SafeRoute::Distance2d(here, e.pos);
+                if (!best || yd < bestYd)
+                {
+                    best = &e;
+                    bestYd = yd;
+                }
+            }
+            return best;
+        }
+    }
+
     bool TankStanceBehavior::AppliesTo(TeamBotAI const* bot) const
     {
         return bot->GetRole() == ROLE_TANK;
@@ -158,6 +180,19 @@ namespace Commander
         // Hiding from a caster (LureBehavior walks it): no chase back into its sight.
         if (plan.HidingFor(self->guid))
             return;
+
+        if (EnemyFacts const* stuck = Unreached(world, self->guid, Here(me)))
+        {
+            Proposal p = Make(ProposalTier::Urgent, BotActionType::MoveTo,
+                              "it finds no way to the tank: walk to it");
+            p.action.target = stuck->guid;
+            p.action.x = stuck->pos.x;
+            p.action.y = stuck->pos.y;
+            p.action.z = stuck->pos.z;
+            p.action.holdMs = WalkHoldMs(me, SafeRoute::Distance2d(Here(me), stuck->pos));
+            out.push_back(p);
+            return;
+        }
 
         // The brain's target, else the victim.
         Unit* enemy = nullptr;

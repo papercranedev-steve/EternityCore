@@ -897,6 +897,11 @@ namespace Commander
         // time-to-die shares, taunts and heal-threat losses.
         bool acting = true;
         bool meleeEnabled = true;       // AI melee on (walking bombs, casters standing back turn it off)
+        // How long its chase has not reached its victim (Creature::m_targetNotReachableTimer, 0 =
+        // reaches it): the victim stands where it finds no path and no line (in a wall, behind
+        // bars). After 3 s the core sets it evading (every hit evades, it regenerates; `acting`
+        // false), after 24 s it goes home (stockade-20261125-221049).
+        uint32 unreachedMs = 0;
         bool moving = false;            // Unit::IsMoving (a caster between two casts stands still)
         bool patrol = false;            // walks a waypoint path out of combat (default movement)
         // A temporary aura that hurts or turns back whoever hits it (damage shield: Inferno Shell,

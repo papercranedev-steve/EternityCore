@@ -667,6 +667,7 @@ namespace WorldModelBuilder
             FillControlState(creature, partyUnits, e);
             e.ignoresAssistThreat = IgnoresAssistThreat(creature);
             e.meleeEnabled = !creature->AI() || creature->AI()->IsMeleeAttackEnabled();
+            e.unreachedMs = creature->m_targetNotReachableTimer;
             e.moving = creature->IsMoving();
             e.patrol = creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
             // Temporary damage shields and spell reflection (doctrine HoldFire, RoleStamps.h).

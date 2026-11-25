@@ -33,6 +33,13 @@
  *      it instead is the team rescue's (RescueAssigner); once it turns, it comes.
  *    Where the chase ended is where the tank stands: the next refresh judges the spot again
  *    from there (FightSpot), it does not walk back on its own (doc 9, answer 4).
+ *  - Before all that (not while the pull or the fight spot walks it, not while hiding): an
+ *    enemy whose victim is this tank has found no way to it for UNREACHED_MS
+ *    (EnemyFacts::unreachedMs: the tank stands in a wall, behind bars, off the navmesh; the
+ *    core then makes it evade every hit and go home after 24 s, stockade-20261125-221049: the
+ *    tank stepped 2 yd while chasing another enemy, stood 4 yd off it for 25 s, it reset).
+ *    Walk to where it stands (MoveTo, tier Urgent: its fight is lost otherwise; the nearest such
+ *    enemy). It stands still meanwhile; once it reaches the tank the core's timer and the walk end.
  *
  * Not while: the retreat runs, rooted, on a transport, the bot cannot act.
  * Tank facing (turning enemies away from the party) is not done.
@@ -54,6 +61,9 @@ namespace Commander
         static constexpr uint32 HOLD_EXTRA_MS = 1000;
         static constexpr uint32 BACKPEDAL_ORDER_MS = 1500;
         static constexpr float HORIZON_SEC = 8.0f;
+        // An enemy hitting this tank has found no way to it this long (EnemyFacts::unreachedMs;
+        // the core makes it evade at 3 s): walk to it.
+        static constexpr uint32 UNREACHED_MS = 1000;
 
         char const* GetId() const override { return "tankstance"; }
         bool AppliesTo(TeamBotAI const* bot) const override;
