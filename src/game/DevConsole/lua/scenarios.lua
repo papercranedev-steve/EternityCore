@@ -15,7 +15,7 @@
 --   approach           min/max distance of the computed spot from the pack centre
 --   bots               default lineup { {class=, role=, items=}, ... } (1-4 bots)
 --                      items: { {itemId, count}, ... } extra items for a bot of this class and
---                      role, added after the premade gear and the class ammo (classItems)
+--                      role, added after the premade gear with the supplies (stockUp)
 --   spotOf             id whose recorded spot (.scenario setspot) this scenario shares
 --   respawn            what to respawn on load: radius around 'pack' (default 120), or a list of
 --                      `creature` guids (bosses whose hall the tester cleared by hand)
@@ -57,19 +57,43 @@ local CLASS_ROLES = {
 local HORDE_RACES = { [2] = true, [5] = true, [6] = true, [8] = true }
 local FACTION_CLASS = { paladin = "alliance", shaman = "horde" }
 
--- Arrows and bullets for classes that can use a bow, gun or crossbow: the premade ranged weapon
--- decides which one the bot equips (EquipAmmoFromBags picks the matching type out of combat).
-local AMMO = { -- min level, arrow, bullet
-    { 40, 11285, 11284 }, { 25, 3030, 3033 }, { 10, 2515, 2519 }, { 1, 2512, 2516 },
+-- Supplies for every bot (stockUp), so a soul companion (it buys its own, nothing is free) does not
+-- run dry during a test, plain bots alike:
+--  - four bags (Traveler's Backpack, 16 slots);
+--  - u:stock(): what a companion keeps (Shared/Supplies): ammo for the worn ranged weapon, food,
+--    drink, buff and resurrection reagents, the Ankh, pet food, conjured food and water, poisons;
+--  - healing potions, and mana potions for mana users: the best one it can use (ItemKit uses them);
+--  - what no vendor sells: Soul Shards, and the shaman's totems (a class quest reward).
+local BAG = 4500
+local HEAL_POTIONS = { 13446, 3928, 1710, 929, 858, 118 }     -- Major .. Minor Healing Potion
+local MANA_POTIONS = { 13444, 13443, 6149, 3827, 3385, 2455 }  -- Major .. Minor Mana Potion
+local POTIONS = 5
+local MANA_CLASSES = { [2] = true, [3] = true, [5] = true, [7] = true, [8] = true, [9] = true, [11] = true }
+local CLASS_EXTRAS = {
+    [9] = { { 6265, 20 } },                                     -- warlock: Soul Shard
+    [7] = { { 5175, 1 }, { 5176, 1 }, { 5177, 1 }, { 5178, 1 } }, -- shaman: Earth, Fire, Water, Air Totem
 }
-local AMMO_CLASSES = { warrior = true, rogue = true, hunter = true }
 
-local function classItems(class, level)
-    if not AMMO_CLASSES[class] then return {} end
-    for _, a in ipairs(AMMO) do
-        if level >= a[1] then return { { a[2], 200 }, { a[3], 200 } } end
+local function bestUsable(u, ids)
+    for _, id in ipairs(ids) do
+        if u:canuse(id) then return id end
     end
-    return {}
+end
+
+-- after the premade gear (clearbags empties the bags first); 'extra' = the scenario's items
+local function stockUp(u, extra)
+    u:wearbags(BAG)
+    local items = {}
+    for _, it in ipairs(CLASS_EXTRAS[u:class()] or {}) do items[#items + 1] = it end
+    for _, it in ipairs(extra or {}) do items[#items + 1] = it end
+    for _, it in ipairs(items) do
+        if u:itemcount(it[1]) < (it[2] or 1) then u:additem(it[1], (it[2] or 1) - u:itemcount(it[1])) end
+    end
+    u:stock()
+    local heal = bestUsable(u, HEAL_POTIONS)
+    if heal then u:additem(heal, POTIONS) end
+    local mana = MANA_CLASSES[u:class()] and bestUsable(u, MANA_POTIONS)
+    if mana then u:additem(mana, POTIONS) end
 end
 
 local function lineupText(lineup)
@@ -111,7 +135,7 @@ scenario.list = {
         needsRecordedSpot = true,
         approach = { min = 26, max = 38, clear = 24 },
         bots = {
-            -- the tank's premade crossbow (Blackcrow) gets its arrows from classItems: tests the
+            -- the tank's premade crossbow (Blackcrow) gets its arrows from stockUp: tests the
             -- ranged pull with ammo
             { class = "warrior", role = "tank" },
             { class = "rogue",   role = "meleedps" },
@@ -593,18 +617,15 @@ local function finish(leader, s)
         local want = entryFor(b, role)
         local spec, gear = applyPremades(b, s.level, role, leader)
         for _, w in ipairs(premadeWarnings(b, role, spec, gear)) do warnings[#warnings + 1] = w end
-        local items = classItems(want and want.class or "", s.level)
         -- extra items: from the scenario's default entry with this class and role
+        local items = {}
         for _, w in ipairs(s.bots) do
             if want and w.class == want.class and w.role == role then
-                for _, it in ipairs(w.items or {}) do items[#items + 1] = it end
+                items = w.items or {}
                 break
             end
         end
-        for _, it in ipairs(items) do
-            leader:select(b)
-            leader:cmd(string.format(".additem %d %d", it[1], it[2] or 1))
-        end
+        stockUp(b, items)
         -- a soul companion with this affinity (gates, traits, own loot, buys its own supplies)
         if want and want.affinity then
             if b:setcompanion(true, leader) then

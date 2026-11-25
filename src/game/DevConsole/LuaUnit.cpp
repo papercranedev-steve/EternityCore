@@ -46,6 +46,8 @@
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
 #include "Shared/Supplies.h"
+#include "Shared/Goods.h"
+#include "Shared/Crafting.h"
 #include "Shared/Professions.h"
 #include "Shared/Gathering.h"
 #include "Shared/SkillUpCost.h"
@@ -2016,6 +2018,127 @@ namespace DevConsole
         return 1;
     }
 
+    // Up to `count` of `itemId` into the bags, in stacks; how many fit.
+    static uint32 StoreNewItems(Player* p, uint32 itemId, uint32 count)
+    {
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        if (!proto)
+            return 0;
+        uint32 const stack = std::max<uint32>(proto->GetMaxStackSize(), 1);
+        uint32 stored = 0;
+        while (stored < count)
+        {
+            uint32 const n = std::min(stack, count - stored);
+            ItemPosCountVec dest;
+            if (p->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, itemId, n) != EQUIP_ERR_OK)
+                break;
+            if (!p->StoreNewItem(dest, itemId, true, Item::GenerateItemRandomPropertyId(itemId)))
+                break;
+            stored += n;
+        }
+        return stored;
+    }
+
+    // The item to give for `goods`: the exact one, else the best one some vendor sells that the
+    // player can use now (what a companion would buy, Shared/Vendor). 0 = none.
+    static uint32 StockItemFor(Player const* p, BotShared::Goods::Spec const& goods)
+    {
+        if (goods.kind == BotShared::Goods::Kind::Item)
+            return goods.id;
+        ItemPrototype const* best = nullptr;
+        for (uint32 id : BotShared::Supplies::SoldByVendors())
+        {
+            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(id);
+            if (proto && BotShared::Goods::Matches(p, goods, proto) && (!best || BotShared::Goods::Better(p, goods, proto, best)))
+                best = proto;
+        }
+        return best ? best->ItemId : 0;
+    }
+
+    // u:stock() -> { {item, count}, ... } what was put into the bags.
+    // Test scenarios: the bot gets its whole supplies (Shared/Supplies, every priority) as if it
+    // had shopped and made them: what it makes (conjured food and water, poisons) as the
+    // products, the rest as the best vendor item it can use (ammo, food, drink, pet food,
+    // reagents, Ankh). Food and drink a teammate would give it are given too.
+    static int U_stock(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        namespace Supplies = BotShared::Supplies;
+        // (Missing leaves out what a mage in the party provides; the bot sets it again next update)
+        Supplies::SetProvided(p->GetObjectGuid(), {});
+        std::vector<std::pair<uint32, uint32>> given;
+        auto give = [&](uint32 itemId, uint32 count)
+        {
+            if (itemId && count)
+                if (uint32 const n = StoreNewItems(p, itemId, count))
+                    given.emplace_back(itemId, n);
+        };
+        // made goods first: then their reagents are no longer missing
+        for (Supplies::Need const& n : Supplies::ToMake(p))
+            give(BotShared::Crafting::ProductOf(n.recipe).itemId, n.Missing());
+        // (one row per priority of the same goods: each target counts the whole stock)
+        for (Supplies::Need const& n : Supplies::Missing(p))
+        {
+            uint32 const have = BotShared::Goods::CountInBags(p, n.goods);
+            if (n.target > have)
+                give(StockItemFor(p, n.goods), n.target - have);
+        }
+        lua_createtable(L, int(given.size()), 0);
+        int i = 0;
+        for (auto const& g : given)
+        {
+            lua_createtable(L, 0, 2);
+            lua_pushinteger(L, g.first);
+            lua_setfield(L, -2, "item");
+            lua_pushinteger(L, g.second);
+            lua_setfield(L, -2, "count");
+            lua_rawseti(L, -2, ++i);
+        }
+        return 1;
+    }
+
+    // u:additem(entry, count = 1) -> how many fit in the bags
+    static int U_additem(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        lua_Integer const entry = luaL_checkinteger(L, 2);
+        lua_Integer const count = luaL_optinteger(L, 3, 1);
+        if (entry <= 0 || count <= 0)
+            return luaL_error(L, "bad item or count");
+        lua_pushinteger(L, StoreNewItems(p, uint32(entry), uint32(count)));
+        return 1;
+    }
+
+    // u:canuse(entry) -> bool: the player may use the item now (level, class, skill)
+    static int U_canuse(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(uint32(luaL_checkinteger(L, 2)));
+        lua_pushboolean(L, proto && p->CanUseItem(proto) == EQUIP_ERR_OK);
+        return 1;
+    }
+
+    // u:wearbags(entry) -> bags put on: a new bag of `entry` in every empty bag slot
+    static int U_wearbags(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        uint32 const entry = uint32(luaL_checkinteger(L, 2));
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+        if (!proto || proto->Class != ITEM_CLASS_CONTAINER)
+            return luaL_error(L, "item %u is not a bag", entry);
+        int worn = 0;
+        for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
+        {
+            if (p->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                continue;
+            uint16 dest = 0;
+            if (p->CanEquipNewItem(slot, dest, entry, false) == EQUIP_ERR_OK && p->EquipNewItem(dest, entry, true))
+                ++worn;
+        }
+        lua_pushinteger(L, worn);
+        return 1;
+    }
+
     // u:setcompanion(true, recruiter) / u:setcompanion(false) -> bool
     // A temporary party bot acts as a soul companion of `recruiter` (errands, town trips, requests)
     // until it logs out; in memory only (CompanionMgr::MarkTemporary).
@@ -2479,7 +2602,8 @@ namespace DevConsole
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
             { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
-            { "freeslots", U_freeslots }, { "supplies", U_supplies },
+            { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
+            { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags },
             { "setcompanion", U_setcompanion }, { "resting", U_resting },
             { "affinity", U_affinity }, { "setaffinity", U_setaffinity },
             { "prof", U_prof }, { "offline", U_offline }, { "reprof", U_reprof },
