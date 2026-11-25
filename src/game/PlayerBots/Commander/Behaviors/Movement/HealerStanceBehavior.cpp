@@ -252,10 +252,14 @@ namespace Commander
     }
 
     bool HealerStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
-                                         TeamPlan const& /*plan*/) const
+                                         TeamPlan const& plan) const
     {
-        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
-               !bot->me->GetTransport();
+        // Before the fight too (Propose's `prepare`, as RangedStanceBehavior): else the leader
+        // follow takes it back from its place every time the walk's hold runs out.
+        bool const inCombat = bot->me->IsInCombat();
+        Position3 planned;
+        return what == Takeover::Stance && !bot->me->GetTransport() &&
+               (world.InFight(inCombat) || (!inCombat && plan.PlannedFightSpot(planned)));
     }
 
     void HealerStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,

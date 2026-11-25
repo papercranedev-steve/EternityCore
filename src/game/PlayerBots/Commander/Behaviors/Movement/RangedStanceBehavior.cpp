@@ -39,10 +39,15 @@ namespace Commander
     }
 
     bool RangedStanceBehavior::TakesOver(Takeover what, TeamBotAI const* bot, WorldModel const& world,
-                                         TeamPlan const& /*plan*/) const
+                                         TeamPlan const& plan) const
     {
-        return what == Takeover::Stance && world.InFight(bot->me->IsInCombat()) &&
-               !bot->me->GetTransport();
+        // Before the fight too (the place for the planned fight, Propose's `prepare`): else the
+        // leader follow started again once the walk's hold ran out and took it back, every
+        // ~1.1 s while the pull waited (Stratholme 2026-11-25, hunter and warlock).
+        bool const inCombat = bot->me->IsInCombat();
+        Position3 planned;
+        return what == Takeover::Stance && !bot->me->GetTransport() &&
+               (world.InFight(inCombat) || (!inCombat && plan.PlannedFightSpot(planned)));
     }
 
     void RangedStanceBehavior::Propose(TeamBotAI const* bot, WorldModel const& world,
