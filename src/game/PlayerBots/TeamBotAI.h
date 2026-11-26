@@ -214,19 +214,27 @@ public:
     static constexpr uint32 PB_STANCE_SWAP_MAX_RAGE_LOSS = 100;   // 10 rage
     static constexpr uint32 PB_STANCE_SWAP_TIMEOUT_MS = 1500;
 
-    // Druid form exits (user 2026-11-25, Innervate from bear form). A spell the form does not
-    // allow, that the class kit lets it leave the form for (ClassKit::LeavesFormFor), is cast
-    // the same way as a warrior's stance swap from the callers' side (CanCastWithStance,
-    // IsReadyWithStance, DoCastWithStance): the form is cancelled (no global cooldown, the
-    // rage or energy is lost), the spell cast in the same call, and the form taken back in
-    // the frame the global cooldown ends (ContinueFormReturn), before any other action.
-    // No rage limit as for the warrior: the value counts what leaving costs (FormExitCost).
-    // True: `pSpellEntry` needs leaving the form now and may.
+    // Form exits (user 2026-11-25, druid Innervate from bear form; 2026-11-26, priest heals
+    // from Shadowform). A spell the form does not allow, that the class kit lets it leave the
+    // form for (ClassKit::LeavesFormFor), is cast the same way as a warrior's stance swap from
+    // the callers' side (CanCastWithStance, IsReadyWithStance, DoCastWithStance): the form is
+    // cancelled (no global cooldown, the rage or energy is lost), the spell cast in the same
+    // call, and the form taken back in the frame the global cooldown ends (ContinueFormReturn),
+    // before any other action; or not at all in this fight (ClassKit::TakesFormBackAfterExit,
+    // LeftFormThisFight). No rage limit as for the warrior: the value counts what leaving costs
+    // (FormExitCost). True: `pSpellEntry` needs leaving the form now and may.
     bool NeedsFormExit(SpellEntry const* pSpellEntry) const;
     // The form's spell to take it back with (bear, dire bear, cat, moonkin), nullptr = none.
     SpellEntry const* CurrentFormSpell() const;
-    // Mana for `pSpellEntry` plus the form back: an exit it could not come back from is refused.
+    // Mana for `pSpellEntry`, plus the form back when the kit takes it back: an exit it could
+    // not come back from is refused.
     bool HasManaForFormExit(SpellEntry const* pSpellEntry) const;
+    // It left its form for a spell (DoCastWithStance) in this fight and the kit does not take
+    // it back (ClassKit::TakesFormBackAfterExit): the rotation leaves the form off until the
+    // fight is over (not in combat, the heal module no longer deciding its heals).
+    bool LeftFormThisFight() const { return m_leftFormThisFight; }
+    // Heals castable now or after leaving the form (CanCastWithStance): ChooseHeal's options.
+    bool CanTryToCastHeal(Unit const* pTarget, SpellEntry const* pSpellEntry) const override;
     static constexpr uint32 PB_FORM_RETURN_TIMEOUT_MS = 4000;
 
     bool AttackStart(Unit* pVictim);
@@ -250,7 +258,6 @@ public:
     // (not released) or its corpse on this map (a ghost anywhere); in range and sight, not
     // asked already. True: cast.
     bool CastResurrection(SpellEntry const* pSpell, ObjectGuid deadGuid);
-    Player* SelectShieldTarget() const;
     // Back alive away from the leader, walking to him (Commander/Behaviors/Movement/Arrival.h).
     bool IsArriving() const { return m_arrival.active; }
 
@@ -438,7 +445,7 @@ public:
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
     // While the Commander heal module controls healing, casts its heal order instead (none: no heal);
     // in combat nothing else. Out of combat the target is Commander::RestTopUp::Select (only a gap
-    // worth a heal).
+    // worth a heal), the heal cast after leaving a form when needed (DoCastWithStance).
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
     // Hides CombatBotBaseAI::FindAndPreHealTarget: off while the heal module controls healing.
     bool FindAndPreHealTarget();
@@ -539,6 +546,7 @@ public:
         uint32 startMs = 0;
     };
     FormReturn m_formReturn;
+    bool m_leftFormThisFight = false;   // LeftFormThisFight
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
     // Class kit (Commander/Classes/ClassKit.h); mutable for the on-first-use fallback in Kit().

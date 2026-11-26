@@ -174,6 +174,9 @@ public:
     // `directOnly`: leave out pure HoTs. `extraNeed`: damage expected on top of the missing
     // health (pre-heal). False when nothing heals.
     bool ChooseHeal(Unit* pTarget, HealChoice& out, bool directOnly = false, float extraNeed = 0.0f) const;
+    // A heal ChooseHeal may pick: CanTryToCastSpell (TeamBotAI: also after leaving a form, a
+    // shadow priest's heals).
+    virtual bool CanTryToCastHeal(Unit const* pTarget, SpellEntry const* pSpellEntry) const { return CanTryToCastSpell(pTarget, pSpellEntry); }
     // Damage per second the target is taking now. Base: melee of its attackers in reach
     // (average weapon damage / attack time, before armor). PartyBotAI uses the Commander's facts.
     virtual float GetIncomingDps(Unit const* pTarget) const;

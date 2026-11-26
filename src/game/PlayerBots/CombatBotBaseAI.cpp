@@ -1850,7 +1850,7 @@ bool CombatBotBaseAI::ChooseHeal(Unit* pTarget, HealChoice& out, bool directOnly
         for (HealSpells::Option const& o : out.options)
             if (o.spell == spell)
                 return;     // Regrowth is in both lists
-        if (!HealSpells::IsSingleTargetHeal(spell) || !CanTryToCastSpell(pTarget, spell))
+        if (!HealSpells::IsSingleTargetHeal(spell) || !CanTryToCastHeal(pTarget, spell))
             return;
         HealSpells::Option o;
         o.spell = spell;

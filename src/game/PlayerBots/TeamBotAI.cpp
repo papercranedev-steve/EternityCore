@@ -333,6 +333,9 @@ bool TeamBotAI::UpdateFrameHands(uint32 diff)
     if (m_formReturn.formSpell && m_initialized && me->IsInWorld() && !me->IsBeingTeleported() &&
         ContinueFormReturn())
         return true;
+    // Priest form exit: the fight is over (also the party's, while its heals are still ordered).
+    if (m_leftFormThisFight && !me->IsInCombat() && !IsHealingControlled())
+        m_leftFormThisFight = false;
 
     // The bot update skips while casting and every cast fails on the global cooldown: without
     // this the next action came up to a bot interval after a cast or GCD ended (an instant
@@ -799,11 +802,12 @@ bool TeamBotAI::CastHealOrder()
     // A healer resting during the party's fight (RestBehavior) gets up for the heal.
     if (!me->IsStandingUp())
         me->SetStandState(UNIT_STAND_STATE_STAND);
-    if (!CanTryToCastSpell(pTarget, action.spell))
+    // (a heal its form does not allow: out of the form first, NeedsFormExit)
+    if (!CanCastWithStance(pTarget, action.spell))
         return false;
     if (!CastPrepSpell(action.prepSpell))
         return false;
-    if (DoCastSpell(pTarget, action.spell) != SPELL_CAST_OK)
+    if (DoCastWithStance(pTarget, action.spell) != SPELL_CAST_OK)
         return false;
     // A pure HoT starts no heal chain: the target is not topped up by it now, the next heal
     // waits for its deficit as usual.
@@ -856,7 +860,11 @@ bool TeamBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPer
     if (Commander::VetoChecks::IsHealVetoed(this, pTarget))
         return false;
 
-    return HealInjuredTarget(pTarget);
+    // (CombatBotBaseAI::HealInjuredTarget, with the form exit of a heal its form does not allow)
+    HealChoice choice;
+    if (!ChooseHeal(pTarget, choice))
+        return false;
+    return DoCastWithStance(pTarget, choice.spell) == SPELL_CAST_OK;
 }
 
 float TeamBotAI::GetIncomingDps(Unit const* pTarget) const
@@ -1613,33 +1621,6 @@ bool TeamBotAI::CastResurrectionAtCorpse(Corpse* pCorpse, SpellEntry const* pRes
     return pSpell->prepare(std::move(targets)) == SPELL_CAST_OK;
 }
 
-Player* TeamBotAI::SelectShieldTarget() const
-{
-
-    // Until 2026-11-01: any attacked member below 90%. A shield costs more mana per point than
-    // a heal and the absorbed damage gives a warrior no rage, so it is kept for members who
-    // may die before a heal lands (HealSpells::IsInDanger). The lowest health first.
-    Player* pBest = nullptr;
-    for (Player* pMember : Commander::Team::Members(me))
-    {
-        if (pMember)
-        {
-            // We already checked self.
-            if (pMember == me)
-                continue;
-
-            if (pMember->IsImmuneToMechanic(MECHANIC_SHIELD) || !IsValidHealTarget(pMember))
-                continue;
-            if (pBest && pBest->GetHealthPercent() <= pMember->GetHealthPercent())
-                continue;
-            if (IsInHealDanger(pMember))
-                pBest = pMember;
-        }
-    }
-
-    return pBest;
-}
-
 void TeamBotAI::UpdateWeaponStance()
 {
     if (me->IsMounted())
@@ -1833,7 +1814,8 @@ SpellEntry const* TeamBotAI::StanceSwapFor(SpellEntry const* pSpellEntry) const
 
 bool TeamBotAI::NeedsFormExit(SpellEntry const* pSpellEntry) const
 {
-    if (!pSpellEntry || me->GetClass() != CLASS_DRUID)
+    // (warrior stances: StanceSwapFor; no kit leaves them)
+    if (!pSpellEntry)
         return false;
     ShapeshiftForm const form = me->GetShapeshiftForm();
     if (form == FORM_NONE || !me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT))
@@ -1857,10 +1839,15 @@ bool TeamBotAI::HasManaForFormExit(SpellEntry const* pSpellEntry) const
     SpellEntry const* pForm = CurrentFormSpell();
     if (!pForm)
         return false;
-    uint32 cost = uint32(Spell::CalculatePowerCost(pForm, me));
+    uint32 cost = Kit().TakesFormBackAfterExit() ? uint32(Spell::CalculatePowerCost(pForm, me)) : 0;
     if (Powers(pSpellEntry->powerType) == POWER_MANA)
         cost += uint32(Spell::CalculatePowerCost(pSpellEntry, me));
     return me->GetPower(POWER_MANA) >= cost;
+}
+
+bool TeamBotAI::CanTryToCastHeal(Unit const* pTarget, SpellEntry const* pSpellEntry) const
+{
+    return CanCastWithStance(pTarget, pSpellEntry);
 }
 
 bool TeamBotAI::CanCastWithStance(Unit const* pTarget, SpellEntry const* pSpellEntry) const
@@ -1969,14 +1956,19 @@ SpellCastResult TeamBotAI::DoCastWithStance(Unit* pTarget, SpellEntry const* pSp
     if (!CanCastWithStance(pTarget, pSpellEntry))
         return SPELL_FAILED_ONLY_SHAPESHIFT;
 
-    // Druid: out of the form (instant, no global cooldown), the spell now, the form back as
-    // soon as the global cooldown ends (ContinueFormReturn).
+    // Out of the form (instant, no global cooldown), the spell now, the form back as soon as
+    // the global cooldown ends (ContinueFormReturn: druid) or at the next fight (priest).
     if (NeedsFormExit(pSpellEntry))
     {
         SpellEntry const* pForm = CurrentFormSpell();
         me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
-        m_formReturn.formSpell = pForm;
-        m_formReturn.startMs = WorldTimer::getMSTime();
+        if (Kit().TakesFormBackAfterExit())
+        {
+            m_formReturn.formSpell = pForm;
+            m_formReturn.startMs = WorldTimer::getMSTime();
+        }
+        else
+            m_leftFormThisFight = true;
         StandStillFor(pSpellEntry);
         return DoCastSpell(pTarget, pSpellEntry);
     }

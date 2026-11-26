@@ -212,7 +212,8 @@ namespace Commander
             Player* me = bot->me;
             if (Value::TakenDps(world, self.guid) <= 0.0f)
                 return false;
-            if (!me->IsSpellReady(spell) || !bot->CanTryToCastSpell(me, spell))
+            // (from Shadowform: the arbiter leaves the form first, TeamBotAI::DoCastWithStance)
+            if (!me->IsSpellReady(spell) || !bot->CanCastWithStance(me, spell))
                 return false;
             float const heal = HealSpells::Estimate(me, me, spell).direct;
             float const missing = float(me->GetMaxHealth()) - float(me->GetHealth());

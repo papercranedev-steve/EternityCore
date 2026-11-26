@@ -115,6 +115,22 @@ namespace Commander
             {
                 return m_bot.m_spells.priest.pDesperatePrayer;
             }
+
+            // Heals (Heal, Flash Heal, Renew, Desperate Prayer...) are not allowed in Shadowform
+            // (spell_template stancesNot 1 << 27; Power Word: Shield and Inner Focus are): a
+            // shadow priest that heals for the team leaves the form for the heal the heal module
+            // or the team rescue orders (until 2026-11-26 it left the form at the start of every
+            // fight once it had the heal function, and never took it again).
+            bool LeavesFormFor(SpellEntry const* spell) const override
+            {
+                return spell && (spell->HasEffect(SPELL_EFFECT_HEAL) || spell->HasAura(SPELL_AURA_PERIODIC_HEAL));
+            }
+
+            // Shadowform again at the next fight, not after each heal (ClassKit.h).
+            bool TakesFormBackAfterExit() const override
+            {
+                return false;
+            }
         };
     }
 
