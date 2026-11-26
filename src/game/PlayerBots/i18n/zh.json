@@ -841,7 +841,7 @@
   "gather.all_here": "人都齐了，没有掉队的。",
   "gather.summoning": "我去把{name}拉过来。",
   "gather.no_shards": "灵魂碎片不够，还有{count}个人没拉过来。",
-  "//35": "A warlock's Soulstone for the healer (Rotations/WarlockRotation). {name}: the healer; {minutes}.",
+  "//35": "A warlock's Soulstone for a member (Rotations/WarlockRotation; whom: Commander SoulstoneAssigner). {name}: that member; {minutes}.",
   "soulstone.unlearned": "我还没修习灵魂石的法门，{name}身上眼下没有。",
   "soulstone.noshard": "灵魂碎片用尽了，眼下凝不出灵魂石给{name}。",
   "soulstone.cooldown": "灵魂石的法力还没缓过来，大概要再等{minutes}分钟才能给{name}。",
