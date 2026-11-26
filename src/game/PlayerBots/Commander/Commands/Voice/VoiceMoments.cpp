@@ -9,6 +9,7 @@
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Map.h"
 #include "Player.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
 #include <cstring>
@@ -30,6 +31,14 @@ namespace Commander
         constexpr uint32 ENTER_SAY_MS = 8000;
 
         std::string G(ObjectGuid guid) { return std::to_string(guid.GetRawValue()); }
+
+        // The control ends on the next hit (sheep, sap, sleep): worth telling the party not to
+        // hit it. A stun or a fear is not (Bash: hitting it is the point).
+        bool BreaksOnHit(uint32 spellId)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            return spell && spell->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS);
+        }
 
         // The bot behind a control (a bot, or the owner of a bot's pet), empty otherwise.
         ObjectGuid BotCaster(WorldModel const& world, ObjectGuid caster)
@@ -131,7 +140,7 @@ namespace Commander
                 VoiceTier::Essential, nowMs, {}, "go:" + pullKey, 120000);
 
         // The opening control: the controller says what he takes (its mark is on already).
-        if (pull.control.Active() && pull.control.sinceMs != m_pullControlSince)
+        if (pull.control.Active() && pull.control.sinceMs != m_pullControlSince && BreaksOnHit(pull.control.spellId))
             Say("voice.pull.control", pull.control.bot, VoiceTier::Essential, nowMs,
                 { { "target", EnemyName(map, pull.control.target, human) }, { "cc", ControlWord(human, pull.control.spellId) } },
                 "pc:" + G(pull.control.target));
@@ -152,7 +161,8 @@ namespace Commander
             std::string const g = G(e.guid);
 
             // A bot's control landed (the opening control was said before the pull).
-            if (e.control.spellId && !e.control.landing && (!prev || prev->controlSpell != e.control.spellId))
+            if (e.control.spellId && !e.control.landing && e.control.breaksOnDamage &&
+                (!prev || prev->controlSpell != e.control.spellId))
             {
                 ObjectGuid const caster = BotCaster(world, e.control.caster);
                 auto const opening = m_said.find("pc:" + g);
