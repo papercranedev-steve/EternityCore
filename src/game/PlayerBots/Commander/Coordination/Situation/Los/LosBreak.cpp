@@ -49,6 +49,21 @@ namespace Commander
                 return true;
             }
 
+            // Inside an object (LosBreak.h): none of the places ENCLOSED_PROBE_YD around `p`
+            // (4 directions, eye height at both ends) sees it.
+            bool Enclosed(Map* map, Position3 const& p)
+            {
+                static float const dirs[4][2] = { { 1.0f, 0.0f }, { -1.0f, 0.0f }, { 0.0f, 1.0f }, { 0.0f, -1.0f } };
+                float const eye = p.z + UNIT_HEIGHT;
+                for (auto const& d : dirs)
+                {
+                    float const x = p.x + d[0] * ENCLOSED_PROBE_YD, y = p.y + d[1] * ENCLOSED_PROBE_YD;
+                    if (map->isInLineOfSight(x, y, eye, p.x, p.y, eye))
+                        return false;
+                }
+                return true;
+            }
+
             // Farthest a vertex of the caster's navmesh path to `p` lies off the straight line
             // caster -> p (ground plane). 0 without a navmesh path.
             float PathBend(Creature const* caster, Position3 const& p)
@@ -120,6 +135,9 @@ namespace Commander
                         }
                     }
                     if (seen)
+                        continue;
+                    // Hidden because nobody sees it: inside an object, the ray goes on.
+                    if (Enclosed(map, p))
                         continue;
                     Candidate cand;
                     cand.pos = p;

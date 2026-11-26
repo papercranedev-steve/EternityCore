@@ -13,6 +13,12 @@
  * outwards from FIRST_STEP to MAX_DISTANCE every STEP; its first point that no caster sees is
  * the ray's candidate (the nearest corner on that side). A point on the way is skipped when its
  * ground is more than MAX_HEIGHT_DIFF from the center's or the caller's filter rejects it.
+ * A hidden point inside an object is skipped too (the ray goes on): none of the places
+ * ENCLOSED_PROBE_YD around it in 4 directions sees it (eye height at both ends).
+ * strat-20261126-232120: the 4 yd point of the first ray was inside a small object of
+ * Stratholme's street the navmesh walks over (1 yd above the floor, flat enough); no caster saw
+ * it because nobody did, from any side. The tank stood there for the fight, the healer found
+ * no spot in sight of it (343 cells) and stayed, the tank died.
  * At most MAX_LOS_CHECKS caster checks per search.
  * The candidates, nearest to the center first, are then checked for the walk (at most
  * MAX_PATHS): every watcher sees the point, the point sees every `sees` place, the mover gets
@@ -72,6 +78,9 @@ namespace Commander
         float const FLAT_TOLERANCE = 1.0f;
         float const MESH_Z_TOLERANCE = 1.0f;
         float const CORNER_MIN_BEND_YD = 1.5f;
+        // Inside an object: no place this far around the point sees it (more than half a small
+        // object such as a pillar or a rubble pile; behind a pillar the open side still sees it).
+        float const ENCLOSED_PROBE_YD = 3.0f;
 
         // How good the point FindPoint returned is (see "Ranking" above).
         struct PointQuality
