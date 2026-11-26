@@ -20,6 +20,7 @@
 #include "Group.h"
 #include "Chat.h"
 #include "Map.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 
 namespace Commander
@@ -285,6 +286,18 @@ namespace Commander
             else
                 slot->module->Clear(m_plan);
         }
+        // Shared cooldowns (the shocks): the allocator sees spending one as spending the others.
+        auto const cooldownCategory = [](uint32 spellId) -> uint32
+        {
+            SpellEntry const* spell = spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
+            return spell && spell->CategoryRecoveryTime ? spell->Category : 0;
+        };
+        for (DutyNeed& n : needs)
+            for (DutyCandidate& c : n.candidates)
+                c.cooldownCategory = cooldownCategory(c.spellId);
+        for (DutyReserve& r : reserves)
+            for (DutyReserve::Cover& c : r.covers)
+                c.cooldownCategory = cooldownCategory(c.spellId);
         m_plan.offers = needs;      // the log of what was offered (TeamPlan::offers)
         m_plan.reserves = reserves;
         m_plan.duties = DutyAllocator::Allocate(std::move(needs), m_plan.reserves);

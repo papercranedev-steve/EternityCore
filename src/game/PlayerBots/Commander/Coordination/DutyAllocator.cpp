@@ -148,7 +148,7 @@ namespace DutyAllocator
                         if (m_needs[i].now && m_choice[i] >= 0)
                         {
                             DutyCandidate const& c = m_needs[i].candidates[m_choice[i]];
-                            spent.push_back({ c.bot, c.spellId, m_needs[i].target, m_needs[i].points });
+                            spent.push_back({ c.bot, c.spellId, m_needs[i].target, m_needs[i].points, c.cooldownCategory });
                         }
                     score.now -= ReserveLoss(m_reserves, spent);
                 }
@@ -245,7 +245,8 @@ namespace DutyAllocator
             for (DutyReserve::Cover const& c : r.covers)
             {
                 auto const s = std::find_if(spent.begin(), spent.end(), [&c](Spend const& x)
-                    { return x.bot == c.bot && x.spellId == c.spellId; });
+                    { return x.bot == c.bot && (x.spellId == c.spellId ||
+                             (c.cooldownCategory && x.cooldownCategory == c.cooldownCategory)); });
                 if (s == spent.end())
                 {
                     allSpent = false;

@@ -93,6 +93,10 @@ namespace Commander
     {
         ObjectGuid bot;
         uint32 spellId = 0;         // ability it would use, 0 = none in particular
+        // The spell's shared cooldown (SpellEntry::Category with a CategoryRecoveryTime, 0 =
+        // its own only), filled by PartyCommander before Allocate: spending Frost Shock spends
+        // the Earth Shock a reserve counts on (DutyReserve).
+        uint32 cooldownCategory = 0;
         float rank = 0.0f;          // module's own order of preference, highest first
         // Points answering the need with this candidate is worth (its net, the module's sticky
         // bonus included): what the allocator compares across needs. Not `valued`: the
@@ -126,8 +130,9 @@ namespace Commander
     };
 
     // A need expected later (team cooldown budget, 2026-11-17): an enemy cast the listed
-    // abilities could stop. Answering a need acting now with one of them (that bot, that spell)
-    // spends it for its cooldown. An allocation that spends every cover loses
+    // abilities could stop. Answering a need acting now with one of them (that bot, that spell
+    // or one of its shared cooldown, Cover::cooldownCategory: a flee stop's Frost Shock spends
+    // the Earth Shock) spends it for its cooldown. An allocation that spends every cover loses
     // (points - the least valuable need a cover was spent on) x the smallest cover share (the
     // chance the cast comes before the first of them is back): keeping that kick would have
     // traded the cheaper cast for this one; a cast worth less than what was kicked loses nothing
@@ -141,6 +146,7 @@ namespace Commander
         {
             ObjectGuid bot;
             uint32 spellId = 0;
+            uint32 cooldownCategory = 0;    // as DutyCandidate::cooldownCategory
             float share = 0.0f;         // chance the cast comes within its cooldown if spent now
             float shareOnGroup = 0.0f;  // the same when spent on `group` itself (its school lockout)
         };
@@ -197,6 +203,7 @@ namespace Commander
             uint32 spellId = 0;
             ObjectGuid target;
             float points = 0.0f;    // the need's points
+            uint32 cooldownCategory = 0;    // a cover of the same bot and category is spent too
         };
         float ReserveLoss(std::vector<DutyReserve> const& reserves, std::vector<Spend> const& spent);
 
