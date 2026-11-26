@@ -42,6 +42,7 @@ public:
     virtual void UpdateWhileAutoRepeating() {}
 
 protected:
+    // Not held from the rotation (TeamBotAI::IsHeldFromRotation: flee stop, kept interrupt),
     // CanTryToCastSpell + DoCastSpell; true = cast.
     bool Cast(Unit* pTarget, SpellEntry const* pSpell);
     // Cast, then marks the bot as buffing (UpdateAI waits for the buff before moving on).

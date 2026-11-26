@@ -2075,7 +2075,7 @@ namespace Commander
         }
 
         // `bot` keeps `spellId` for a flee stop (todo 13): nobody else casts it, the rotation
-        // neither (TeamBotAI::IsSpellHeld), only FleeStopBehavior. A finisher kept (Kidney
+        // neither (TeamBotAI::IsHeldFromRotation), only FleeStopBehavior. A finisher kept (Kidney
         // Shot) holds the bot's other finishers too (`finisher`: the spell needs combo
         // points), so the points stay for it.
         bool HoldsSpell(ObjectGuid bot, uint32 spellId, bool finisher) const

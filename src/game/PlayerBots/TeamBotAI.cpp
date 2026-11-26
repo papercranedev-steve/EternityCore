@@ -609,12 +609,16 @@ bool TeamBotAI::IsGapCloserForbidden(SpellEntry const* pSpell) const
     return commander && commander->GetPlan().ForbidsGapCloser(me->GetObjectGuid());
 }
 
-bool TeamBotAI::IsSpellHeld(SpellEntry const* pSpell) const
+bool TeamBotAI::IsHeldFromRotation(SpellEntry const* pSpell) const
 {
     if (!pSpell)
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
-    return commander && commander->GetPlan().HoldsSpell(me->GetObjectGuid(), pSpell->Id, pSpell->NeedsComboPoints());
+    if (!commander)
+        return false;
+    Commander::TeamPlan const& plan = commander->GetPlan();
+    return plan.HoldsSpell(me->GetObjectGuid(), pSpell->Id, pSpell->NeedsComboPoints()) ||
+           Commander::Constraints::InterruptKept(this, plan, pSpell) != nullptr;
 }
 
 bool TeamBotAI::IsLongCastHeld(SpellEntry const* pSpell) const
@@ -1230,9 +1234,7 @@ bool TeamBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSp
     // The pull brings the pack back: charging in would put the tank in the middle of it.
     if (IsGapCloserForbidden(pSpellEntry))
         return false;
-    // Kept for an enemy about to run away (Commander flee stop): only that module casts it.
-    if (IsSpellHeld(pSpellEntry))
-        return false;
+    // (a spell kept for a flee stop or an interrupt: IsHeldFromRotation, the rotation's check)
     // The area phase reserves this bot: no cast or channel time but its area spells (a 2.5 s
     // Frostbolt held the Blizzard back, strat-20261113-235712).
     if (IsLongCastHeld(pSpellEntry))
@@ -1914,8 +1916,6 @@ bool TeamBotAI::CanTryToCastSpellAt(float x, float y, float z, SpellEntry const*
     if (me->GetDistance(x, y, z, SizeFactor::None) > SpellMaxRange(me, pSpellEntry))
         return false;
     if (!me->IsWithinLOS(x, y, z))
-        return false;
-    if (IsSpellHeld(pSpellEntry))
         return false;
     if (!me->IsInCombat())
         return true;

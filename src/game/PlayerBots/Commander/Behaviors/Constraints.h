@@ -12,6 +12,8 @@
  *   Cast with a charge effect  TeamPlan::ForbidsGapCloser
  *   Cast of a kept spell       TeamPlan::HoldsSpell (a flee stop's spell, and a kept
  *                              finisher's other finishers), except FleeStopBehavior's own
+ *                              (the rotations: TeamBotAI::IsHeldFromRotation, with
+ *                              InterruptKept below)
  *   Cast that deals damage     WakesControl below: the target, the area of an area spell,
  *   or splashes                the enemy a chained hit jumps to, the enemies next to the
  *                              victim of a melee splash buff must not be KeepsUnbroken,
@@ -81,6 +83,13 @@ namespace Commander
         // bot's area spells (AreaDamageBehavior::Judges), and the area phase reserves the bot.
         // The arbiter's check above and every other cast of the bot (TeamBotAI::PassesPartyCastChecks).
         char const* LongCastHeld(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell);
+
+        // An interrupt the plan keeps for `bot` (user 2026-11-26): it is the primary or backup of
+        // an interrupt duty (TeamPlan::interrupts) or covers a later cast (TeamPlan::reserves,
+        // DutyReserve). `spell` is that interrupt or shares its cooldown category (the shaman's
+        // shocks: category 19, 6 s), or null. For the class rotations (ClassRotation::Cast):
+        // only InterruptBehavior spends it.
+        char const* InterruptKept(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell);
 
         // CastForbidden for a ground area spell cast at the point `centre` (BotAction::atPoint):
         // no neutral creature and no kept control within its radius of `centre`.

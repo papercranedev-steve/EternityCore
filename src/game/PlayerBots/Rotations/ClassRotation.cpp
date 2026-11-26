@@ -10,7 +10,7 @@
 
 bool ClassRotation::Cast(Unit* pTarget, SpellEntry const* pSpell)
 {
-    return pSpell && pTarget && m_bot.CanTryToCastSpell(pTarget, pSpell) &&
+    return pSpell && pTarget && !m_bot.IsHeldFromRotation(pSpell) && m_bot.CanTryToCastSpell(pTarget, pSpell) &&
            m_bot.DoCastSpell(pTarget, pSpell) == SPELL_CAST_OK;
 }
 

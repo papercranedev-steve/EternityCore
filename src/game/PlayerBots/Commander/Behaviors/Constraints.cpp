@@ -13,6 +13,7 @@
 #include "TeamBotAI.h"
 #include "Map.h"
 #include "SpellEntry.h"
+#include "SpellMgr.h"
 #include <cstring>
 
 namespace Commander
@@ -129,6 +130,32 @@ namespace Commander
             if (AreaDamageBehavior::Judges(bot, spell))
                 return nullptr;
             return "reserved for the area spell";
+        }
+
+        char const* InterruptKept(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell)
+        {
+            if (!spell)
+                return nullptr;
+            ObjectGuid const self = bot->me->GetObjectGuid();
+            auto const blocks = [spell](uint32 keptId)
+            {
+                if (!keptId)
+                    return false;
+                if (keptId == spell->Id)
+                    return true;
+                if (!spell->Category || !spell->CategoryRecoveryTime)
+                    return false;
+                SpellEntry const* kept = sSpellMgr.GetSpellEntry(keptId);
+                return kept && kept->Category == spell->Category;
+            };
+            for (InterruptDuty const& d : plan.interrupts)
+                if ((d.primary == self && blocks(d.primarySpellId)) || (d.backup == self && blocks(d.backupSpellId)))
+                    return "kept for an interrupt";
+            for (DutyReserve const& r : plan.reserves)
+                for (DutyReserve::Cover const& c : r.covers)
+                    if (c.bot == self && blocks(c.spellId))
+                        return "kept for a later interrupt";
+            return nullptr;
         }
 
         char const* CastAtForbidden(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,

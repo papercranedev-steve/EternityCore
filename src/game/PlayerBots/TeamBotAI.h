@@ -384,8 +384,13 @@ public:
     // tank must not charge now.
     bool IsEngageForbidden(Unit const* pUnit) const;
     bool IsGapCloserForbidden(SpellEntry const* pSpell) const;
-    // Commander flee stop keeps this spell (TeamPlan::HoldsSpell): the rotation does not cast it.
-    bool IsSpellHeld(SpellEntry const* pSpell) const;
+    // The rotation does not cast `pSpell` (ClassRotation::Cast): a Commander flee stop keeps it
+    // (TeamPlan::HoldsSpell), or the plan keeps an interrupt it is or shares a cooldown with
+    // (Constraints::InterruptKept: the shaman's Flame Shock while Earth Shock is kept). Module
+    // proposals get the same rules from the arbiter (Constraints::Broken), each module's own
+    // spell excepted; so not in PassesPartyCastChecks (until 2026-11-26 it refused
+    // FleeStopBehavior its own spell there).
+    bool IsHeldFromRotation(SpellEntry const* pSpell) const;
     // The area phase reserves this bot (TeamPlan::ForbidsLongCast): no spell with a cast or
     // channel time but its area spells.
     bool IsLongCastHeld(SpellEntry const* pSpell) const;

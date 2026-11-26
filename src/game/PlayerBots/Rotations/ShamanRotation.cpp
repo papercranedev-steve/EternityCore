@@ -10,6 +10,8 @@
  *      also deals damage for the team: Damage).
  *   2. Others: totems, then Damage: Stormstrike, Chain Lightning (not in melee), Flame Shock,
  *      Lightning Bolt (not a melee role, or the victim out of melee reach).
+ * Flame Shock shares the shocks' cooldown: not while the plan keeps this shaman's Earth Shock
+ * for an interrupt (ClassRotation::Cast, Constraints::InterruptKept).
  *
  * Totems (KeepTotems): the brain's choice per element (Coordination/Duties/TotemAssigner.h).
  * One is dropped when its element is empty, holds another totem or was left behind
