@@ -664,6 +664,27 @@ bool TeamBotAI::IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpe
     return IsSwingPullingAggro(pTarget);
 }
 
+bool TeamBotAI::IsChainHitPullingAggro(Unit const* pTarget, SpellEntry const* pSpell,
+                                       std::list<Unit*> const& reached) const
+{
+    // Cheap tests first: a damage hit while the bot fights, with the threat module on.
+    if (!Commander::SpellTags::DealsDamage(pSpell) || !me->IsInCombat() ||
+        !sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("threat"))
+        return false;
+    // A holder taking an enemy on (the tank's Cleave) is not worse.
+    if (TeamFunctions() & Commander::FUNCTION_HOLD)
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (!commander)
+        return false;
+    for (Unit const* pUnit : reached)
+        if (pUnit != pTarget && pUnit->IsCreature() && pUnit->IsInCombat() &&
+            Commander::ThreatBehavior::DamageNearAggro(this, commander->GetWorld(), commander->GetPlan(),
+                                                       pUnit->GetObjectGuid()))
+            return true;
+    return false;
+}
+
 bool TeamBotAI::IsSwingPullingAggro(Unit const* pTarget) const
 {
     if (!pTarget || pTarget == me || !pTarget->IsCreature() || !me->IsInCombat() ||
@@ -1250,6 +1271,8 @@ bool TeamBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSp
             for (Unit const* pUnit : targets)
                 if (WouldAreaSpellPullIdle(pUnit))
                     return false;
+            if (IsChainHitPullingAggro(pTarget, pSpellEntry, targets))
+                return false;
         }
     }
 

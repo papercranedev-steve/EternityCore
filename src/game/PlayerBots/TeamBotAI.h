@@ -402,6 +402,12 @@ public:
     // the damage dealers stop by the threat module's HoldFire, which would skip a healer's heal
     // step as well (healer damage tiers doc, 2026-11-21).
     bool IsDamagePullingAggro(Unit const* pTarget, SpellEntry const* pSpell) const;
+    // A chained damage hit (Multi-Shot, Chain Lightning) whose jumps could land on an enemy of
+    // the fight (`reached`, the target excluded) near pulling it off its holder: the same stop
+    // rule the victim gets (ThreatBehavior::DamageNearAggro), for every bot but holders. The threat module
+    // only watches the victim; Multi-Shot on every cooldown put threat on the enemies next to it
+    // (review 2026-11-26).
+    bool IsChainHitPullingAggro(Unit const* pTarget, SpellEntry const* pSpell, std::list<Unit*> const& reached) const;
     // The same rule for any hit of a healer on `pTarget` (its melee swings, FightVictim).
     bool IsSwingPullingAggro(Unit const* pTarget) const;
     // Stops a follow, or a chase not ordered by the stance module (OrderChase), that a

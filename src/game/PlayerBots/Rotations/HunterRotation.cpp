@@ -2,9 +2,9 @@
  * Hunter rotation (moved out of PartyBotAI.cpp 2026-11-14; shots reworked 2026-11-15 for the
  * beast mastery spec, user).
  *
- * Out of combat: Aspect of the Hawk; no victim: Mend Pet below MEND_PET_BELOW_PCT; with a
- * victim (an opener): Hunter's Mark, the pet on it, then the combat steps. The pet:
- * PartyBotAI::UpdateAI out of combat (SummonPetIfNeeded, TrainHunterPet).
+ * Out of combat: Aspect of the Hawk; no victim: Mend Pet below MEND_PET_BELOW_PCT. No opener
+ * (the team's hunt target: TeamBotAI::FightVictim runs the combat steps after the Commander
+ * hook). The pet: TeamBotAI::UpdateBody out of combat (SummonPetIfNeeded, TrainHunterPet).
  *
  * In combat:
  *   0. Melee auto attack on (user 2026-11-15: a hunter is ranged and melee; without it the boss
@@ -41,6 +41,7 @@
 #include "Pet.h"
 #include "Spell.h"
 #include "DBCStores.h"
+#include "SpellMgr.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/WorldModel.h"
@@ -82,24 +83,23 @@ namespace
             if (Cast(me, s.pAspectOfTheHawk))
                 return;
 
-            // (the pet: PartyBotAI::UpdateAI, SummonPetIfNeeded)
-            Unit* pVictim = me->GetVictim();
-            if (!pVictim)
-            {
+            // (the pet: TeamBotAI::UpdateBody, SummonPetIfNeeded)
+            // No opener here (review 2026-11-26): this step runs before the Commander hook, and
+            // the upstream one (Hunter's Mark, the pet sent in, then shooting) opened on any
+            // victim before the pull plan could hold it. Opening on the team's hunt target is
+            // TeamBotAI::FightVictim (IsOpeningOn) after the hook; the pet joins through the
+            // Commander's pet modules once the fight is on.
+            if (!me->GetVictim())
                 MendPet();
-                return;
-            }
-
-            if (Cast(pVictim, s.pHuntersMark))
-                return;
-            SendPetAt(pVictim);
-            UpdateInCombat();
         }
 
         void UpdateWhileAutoRepeating() override
         {
             Player* me = m_bot.me;
-            if (me->GetCombatDistance(me->GetVictim()) < MIN_SHOT_RANGE)
+            Unit* pVictim = me->GetVictim();
+            // (a running Auto Shot the plan forbids now, e.g. a reflection came up: stopped,
+            // as its start is refused in AutoShot)
+            if (me->GetCombatDistance(pVictim) < MIN_SHOT_RANGE || AutoShotForbidden(pVictim))
                 me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL, true);
             else
                 UpdateInCombat();
@@ -182,7 +182,8 @@ namespace
         {
             Player* me = m_bot.me;
             if (!me->HasSpell(ClassRotations::SPELL_AUTO_SHOT) || me->IsMoving() ||
-                me->GetCombatDistance(pVictim) <= MIN_SHOT_RANGE || me->IsNonMeleeSpellCasted())
+                me->GetCombatDistance(pVictim) <= MIN_SHOT_RANGE || me->IsNonMeleeSpellCasted() ||
+                AutoShotForbidden(pVictim))
                 return;
             // Auto Shot checks the facing (SPELL_CUSTOM_FACE_TARGET): turn first.
             if (!me->IsFacingTarget(pVictim))
@@ -196,6 +197,16 @@ namespace
                 default:
                     break;
             }
+        }
+
+        // Auto Shot is cast directly (no CanTryToCastSpell: its cast checks do not fit an
+        // autorepeat shot), so the plan's cast rules are asked here: a neutral creature, a
+        // reflection (doctrine HoldFire), a control kept unbroken (Constraints::CastForbidden
+        // through TeamBotAI::WouldWakeKeptControl, while the party fights).
+        bool AutoShotForbidden(Unit* pVictim) const
+        {
+            SpellEntry const* pShot = sSpellMgr.GetSpellEntry(ClassRotations::SPELL_AUTO_SHOT);
+            return pShot && m_bot.WouldWakeKeptControl(pVictim, pShot);
         }
 
         // Header step 4: no Auto Shot running, an Auto Shot just went off, or the next one is
