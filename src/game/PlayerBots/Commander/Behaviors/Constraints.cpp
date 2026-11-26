@@ -6,6 +6,7 @@
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Forecast/FinishForecast.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
+#include "Commander/Perception/Values/DamageSpellValue.h"
 #include "Commander/Perception/WorldModel.h"
 #include "DamageSpells.h"
 #include "Timer.h"
@@ -210,8 +211,9 @@ namespace Commander
                 return nullptr;
             float const busySec = DamageSpells::BusySec(me, spell);
             uint32 const horizon = landMs + dot.ticks * dot.periodMs;
-            uint32 const deathMs = FinishForecast::DeathMs(world, *enemy, self->guid,
-                                                           sinceRefresh + uint32(busySec * 1000.0f), horizon);
+            // (the earlier death estimate: DamageSpellValue::DeathMs, strat-20261127-000359)
+            uint32 const deathMs = DamageSpellValue::DeathMs(world, *enemy, self->guid,
+                                                             sinceRefresh + uint32(busySec * 1000.0f), horizon);
             if (!deathMs)
                 return nullptr;     // lives through the whole effect
             uint32 const ticks = deathMs > landMs ? std::min(dot.ticks, (deathMs - landMs) / dot.periodMs) : 0;

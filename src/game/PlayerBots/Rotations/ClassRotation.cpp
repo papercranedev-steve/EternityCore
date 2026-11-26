@@ -7,11 +7,54 @@
 #include "CreatureAI.h"
 #include "SpellMgr.h"
 #include "Commander/Classes/ClassKit.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
+#include "Commander/Perception/Values/DamageSpellValue.h"
+#include "Timer.h"
+#include <algorithm>
+#include <vector>
 
 bool ClassRotation::Cast(Unit* pTarget, SpellEntry const* pSpell)
 {
     return pSpell && pTarget && !m_bot.IsHeldFromRotation(pSpell) && m_bot.CanTryToCastSpell(pTarget, pSpell) &&
            m_bot.DoCastSpell(pTarget, pSpell) == SPELL_CAST_OK;
+}
+
+bool ClassRotation::CastBestDamage(Unit* pVictim, std::initializer_list<DamageOption> options)
+{
+    if (!pVictim)
+        return false;
+    Player* me = m_bot.me;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    Commander::WorldModel const* world = commander ? &commander->GetWorld() : nullptr;
+    if (!world || !world->FindEnemy(pVictim->GetObjectGuid()) || !world->FindMember(me->GetObjectGuid()))
+    {
+        for (DamageOption const& o : options)
+            if (Cast(pVictim, o.spell))
+                return true;
+        return false;
+    }
+
+    struct Rated
+    {
+        SpellEntry const* spell;
+        float perSec;
+    };
+    std::vector<Rated> rated;
+    uint32 const nowMs = WorldTimer::getMSTime();
+    for (DamageOption const& o : options)
+    {
+        if (!o.spell || m_bot.IsHeldFromRotation(o.spell) || !m_bot.CanTryToCastSpell(pVictim, o.spell))
+            continue;
+        float const perSec = Commander::DamageSpellValue::Rate(me, *world, pVictim, o.spell, nowMs, o.consumes).perSec;
+        if (perSec > 0.0f)
+            rated.push_back({ o.spell, perSec });
+    }
+    std::stable_sort(rated.begin(), rated.end(), [](Rated const& a, Rated const& b) { return a.perSec > b.perSec; });
+    for (Rated const& r : rated)
+        if (m_bot.DoCastSpell(pVictim, r.spell) == SPELL_CAST_OK)
+            return true;
+    return false;
 }
 
 bool ClassRotation::Buff(Unit* pTarget, SpellEntry const* pSpell)

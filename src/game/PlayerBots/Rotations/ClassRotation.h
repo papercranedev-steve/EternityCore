@@ -21,6 +21,7 @@
 #define MANGOS_PARTYBOT_CLASS_ROTATION_H
 
 #include "Common.h"
+#include <initializer_list>
 #include <memory>
 
 class TeamBotAI;
@@ -55,6 +56,19 @@ protected:
     // whenever it had a victim out of combat (every pull: a slow walk to a mob already on the
     // tank), below 10% health, or with the leader dead, feigning or stealthed.
     void DropUnwantedStealth(SpellEntry const* pStealthSpell);
+    // One single target damage spell of the rotation; `consumes`: a periodic effect of the bot's
+    // it ends (Conflagrate: Immolate).
+    struct DamageOption
+    {
+        SpellEntry const* spell = nullptr;
+        SpellEntry const* consumes = nullptr;
+    };
+    // Of the options it can cast now on `pVictim`, the one worth the most per second it is busy
+    // (Commander/Perception/Values/DamageSpellValue.h: damage landed before the victim dies,
+    // less the mana's worth), the next when a cast is refused; worth nothing (the mana is worth
+    // more than the damage it lands): not cast. Without a Commander or facts on the victim:
+    // the first in the list that casts. True = cast.
+    bool CastBestDamage(Unit* pVictim, std::initializer_list<DamageOption> options);
     // Wand when out of mana (below `manaPct`), standing, not already shooting.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
     // Wand at any mana (a healer's free attack, Commander HEALER_DAMAGE_FREE).

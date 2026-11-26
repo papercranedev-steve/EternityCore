@@ -15,9 +15,12 @@
  * In combat:
  *   1. Shadowburn when it kills the victim (DamageSpells::EstimateDirect, no crit) and the
  *      warlock holds more than SHARD_RESERVE Soul Shards (a kill within 5 s gives it back).
- *   2. Corruption, Siphon Life, Immolate, Conflagrate. A periodic spell on an enemy dying
- *      before it pays is refused for every cast (Constraints::WastedCast).
- *   3. Walk closer, Shadow Bolt (instant with Nightfall's Shadow Trance), wand below 5% mana.
+ *   2. The best of Corruption, Siphon Life, Immolate, Conflagrate (ends the Immolate) and Shadow
+ *      Bolt (instant with Nightfall's Shadow Trance) on the victim: CastBestDamage, damage landed
+ *      before it dies per busy second, less the mana (DamageSpellValue). Since 2026-11-27
+ *      (strat-20261127-000359: the periodic spells went first in a fixed order, on every new
+ *      enemy, and no Shadow Bolt was cast in a whole fight).
+ *   3. Walk closer, wand below 5% mana.
  * Gone 2026-11-26 (review): Death Coil on a victim in melee reach of the warlock or casting (it
  * is a 3 s fear: it ran the tank's target off the tank, past the doctrine's no-fear stamp).
  * Gone 2026-11-15: Searing Pain below 20% (a fire spell with high threat, worse than Shadow
@@ -111,20 +114,11 @@ namespace
             if (KillsWithShadowburn(pVictim) && Cast(pVictim, s.pShadowburn))
                 return;
 
-            if (Cast(pVictim, s.pCorruption))
-                return;
-            if (Cast(pVictim, s.pSiphonLife))
-                return;
-            if (Cast(pVictim, s.pImmolate))
-                return;
-            if (Cast(pVictim, s.pConflagrate))
+            if (CastBestDamage(pVictim, { { s.pCorruption }, { s.pSiphonLife }, { s.pImmolate },
+                                          { s.pConflagrate, s.pImmolate }, { s.pShadowBolt } }))
                 return;
 
             ChaseWhenOutOfRange(pVictim);
-
-            if (Cast(pVictim, s.pShadowBolt))
-                return;
-
             ShootWandBelowMana(pVictim, WAND_MANA_PCT);
         }
 

@@ -100,8 +100,9 @@ namespace Commander
         // channel, not an auto repeat shot) at an enemy (Perception/Forecast/FinishForecast.h):
         //   cast time   the others kill it before it lands (cast + flight from now);
         //   periodic    (Corruption, Serpent Sting, Immolate's ticks) the ticks it gets in before
-        //               the enemy dies (FinishForecast::DeathMs, the bot's own hits counted after
-        //               the spell's busy time), plus the direct part if it lands, are worth less
+        //               the enemy dies (DamageSpellValue::DeathMs: the earlier of the damage
+        //               sources on it and the party's shared rate, the bot's own hits counted
+        //               after the spell's busy time), plus the direct part if it lands, are worth less
         //               than the bot's own damage over that busy time (PartyMemberFacts::soloDps).
         // Every cast of the bot (TeamBotAI::PassesPartyCastChecks): the rotation goes on to an
         // instant spell (Arcane Shot after the Aimed Shot) or waits.
