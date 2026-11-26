@@ -2,14 +2,21 @@
  * Damage warrior rotation (moved out of PartyBotAI.cpp 2026-11-14). Tanks:
  * Rotations/WarriorTankRotation.cpp.
  *
- * Out of combat: Battle Stance, Charge an opener victim. Battle Shout and Bloodrage moved into
- * the fight (user, 2026-11-15): out of combat they were cast after every fight.
+ * Out of combat: the home stance only. Battle Shout and Bloodrage moved into the fight (user,
+ * 2026-11-15): out of combat they were cast after every fight.
+ *
+ * Home stance (review 2026-11-26): Berserker Stance once Bloodthirst is learned (fury), Battle
+ * Stance otherwise (arms and levelling: Overpower and Rend need it). Not while a Commander swap
+ * waits (TeamBotAI::DoCastWithStance: Sweeping Strikes, Retaliation from Berserker Stance), and
+ * only losing at most PB_STANCE_SWAP_MAX_RAGE_LOSS (the rage Tactical Mastery keeps counts),
+ * as the Commander's swaps: above it the rage is spent first. Before: Berserker Stance every
+ * tick for any spec, rage lost without Tactical Mastery, a Commander swap undone.
  *
  * In combat (rework 2026-11-15, level 60 fury dual wield 17/34/0):
  *   0. Bloodrage below 20 rage and above 50% health (no GCD).
- *   1. Berserker Stance first (Tactical Mastery keeps 25 rage); no Defensive Stance at low
- *      health (user: a damage warrior has no shield, -10% damage taken is not worth the rage).
- *   2. Execute below 20%, Overpower (Battle Stance only: levelling arms before Berserker Stance).
+ *   1. Back to the home stance; no Defensive Stance at low health (user: a damage warrior has
+ *      no shield, -10% damage taken is not worth the rage).
+ *   2. Execute below 20%, Overpower (Battle Stance only).
  *   3. Rend only without Bloodthirst (arms levelling), Mortal Strike, Bloodthirst.
  *   3b. Battle Shout when missing and rage above 30.
  *   4. Intercept, Whirlwind.
@@ -17,6 +24,11 @@
  *      above what Mortal Strike / Bloodthirst / Whirlwind need when one of them is ready within
  *      1.5 s; not in the Execute phase (Execute takes the rage).
  *   No victim: Battle Shout when missing.
+ *
+ * Gone 2026-11-26: Charge on a victim out of combat. The rotation runs before the Commander's
+ * hook there, and the "no charge" rule of a pull is the pull tank's only, so a damage warrior
+ * with a victim opened the fight or ran into the pack the tank was bringing back. Charge is the
+ * pull module's (ClassKit::OpenerCharge, as for the tank since 2026-11-02).
  *
  * Gone 2026-11-15: Hamstring on any moving victim (a pack walking to the tank moves too; the
  * fleeing ones are the Commander's FleeStopBehavior), Defensive Stance below 20% health and with
@@ -52,18 +64,10 @@ namespace
 
         void UpdateOutOfCombat() override
         {
-            TeamBotAI& bot = m_bot;
-            Player* me = bot.me;
-            auto const& w = bot.m_spells.warrior;
-
-            if (Cast(me, w.pBattleStance))
-                return;
-
             // No Battle Shout / Bloodrage here (user, 2026-11-15): rage decays out of combat, so every
             // shout that ran out cost a Bloodrage between fights. Both moved into the fight.
-
-            if (Unit* pVictim = me->GetVictim())
-                Cast(pVictim, w.pCharge);
+            // (no Charge: the pull module's, header)
+            KeepHomeStance();
         }
 
         void UpdateInCombat() override
@@ -89,8 +93,8 @@ namespace
                 Cast(me, w.pBloodrage))
                 return;
 
-            // Berserker Stance right after the Charge (no return: the next spell goes off in it).
-            Cast(me, w.pBerserkerStance);
+            if (KeepHomeStance())
+                return;
 
             bool const executePhase = w.pExecute && pVictim->GetHealthPercent() < EXECUTE_PHASE_PCT;
             if (executePhase && Cast(pVictim, w.pExecute))
@@ -128,6 +132,30 @@ namespace
         }
 
     private:
+        // Berserker Stance for a Bloodthirst warrior, Battle Stance otherwise (header).
+        SpellEntry const* HomeStance() const
+        {
+            auto const& w = m_bot.m_spells.warrior;
+            if (w.pBloodthirst && w.pBerserkerStance)
+                return w.pBerserkerStance;
+            return w.pBattleStance;
+        }
+
+        // True = the stance spell was cast (as WarriorTankRotation::KeepDefensiveStance). Not while
+        // a Commander swap waits, not losing more rage than the Commander's swaps may.
+        bool KeepHomeStance()
+        {
+            TeamBotAI& bot = m_bot;
+            Player* me = bot.me;
+            SpellEntry const* pStance = HomeStance();
+            if (!pStance || bot.m_stanceSwap.spell || me->HasAura(pStance->Id))
+                return false;
+            uint32 const rage = me->GetPower(POWER_RAGE);
+            if (rage - std::min(rage, bot.RageKeptOnStanceSwap()) > TeamBotAI::PB_STANCE_SWAP_MAX_RAGE_LOSS)
+                return false;
+            return Cast(me, pStance);
+        }
+
         uint32 PowerCost(SpellEntry const* pSpell) const
         {
             return Spell::CalculatePowerCost(pSpell, m_bot.me, nullptr, nullptr, false);

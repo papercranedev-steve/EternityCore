@@ -61,11 +61,13 @@ namespace
             Player* me = bot.me;
             auto const& w = bot.m_spells.warrior;
 
-            Unit* pVictim = me->GetVictim();
-            if (!pVictim)
+            // Before the victim check (review 2026-11-26): between two enemies the tank stayed in
+            // the stance a Commander swap had left it in, and its next Taunt or Revenge needed a swap.
+            if (KeepDefensiveStance())
                 return;
 
-            if (KeepDefensiveStance())
+            Unit* pVictim = me->GetVictim();
+            if (!pVictim)
                 return;
 
             bool const shield = bot.IsWearingShield(me);
