@@ -40,6 +40,15 @@
  *    tank stepped 2 yd while chasing another enemy, stood 4 yd off it for 25 s, it reset).
  *    Walk to where it stands (MoveTo, tier Urgent: its fight is lost otherwise; the nearest such
  *    enemy). It stands still meanwhile; once it reaches the tank the core's timer and the walk end.
+ *  - Then: out of everyone's sight, in a wall (strat-20261126-232120: the line of sight pull put
+ *    the tank inside a small object of Stratholme's street; the enemies hit it, its own spells
+ *    failed for sight, the healer found no spot that saw it and the tank died after 33 s). An
+ *    enemy hitting this tank is in its melee reach but out of its sight, and no bot healing the
+ *    team (PartyMemberFacts::HealsTeam) sees it: walk along the path to the nearest such healer
+ *    to the first of SIGHT_STEPS yards that the healer sees (SpotOk: ground, no idle creature,
+ *    safe path; MoveTo, tier Urgent). The tank does not count on the healer to find it (rule
+ *    "the other duties get it wrong"). Not while hiding from a caster (above). Without a healer
+ *    bot nothing.
  *
  * Not while: the retreat runs, rooted, on a transport, the bot cannot act.
  * Tank facing (turning enemies away from the party) is not done.
@@ -64,6 +73,8 @@ namespace Commander
         // An enemy hitting this tank has found no way to it this long (EnemyFacts::unreachedMs;
         // the core makes it evade at 3 s): walk to it.
         static constexpr uint32 UNREACHED_MS = 1000;
+        // Out of everyone's sight: the points along the path to the healer tried, nearest first.
+        static constexpr float SIGHT_STEPS[] = { 3.0f, 5.0f, 7.0f, 10.0f };
 
         char const* GetId() const override { return "tankstance"; }
         bool AppliesTo(TeamBotAI const* bot) const override;

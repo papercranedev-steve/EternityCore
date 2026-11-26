@@ -6,6 +6,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "TeamBotAI.h"
 #include "Map.h"
+#include "PathFinder.h"
 #include <algorithm>
 #include <cmath>
 
@@ -137,6 +138,93 @@ namespace Commander
             }
             return best;
         }
+
+        // Out of everyone's sight (header): an enemy hitting this tank is in its melee reach
+        // but out of its sight, and no healer of the team sees it. The healer to step towards
+        // (the nearest), else null.
+        Player const* UnseenBy(TeamBotAI const* bot, WorldModel const& world, ObjectGuid self)
+        {
+            Player* me = bot->me;
+            bool inWall = false;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (e.victim != self)
+                    continue;
+                Unit const* enemy = me->GetMap()->GetUnit(e.guid);
+                if (enemy && enemy->IsAlive() && me->CanReachWithMeleeAutoAttack(enemy) &&
+                    !me->IsWithinLOSInMap(enemy))
+                {
+                    inWall = true;
+                    break;
+                }
+            }
+            if (!inWall)
+                return nullptr;
+            Player const* nearest = nullptr;
+            float nearestYd = 0.0f;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (m.guid == self || !m.alive || !m.HealsTeam())
+                    continue;
+                Player const* healer = me->GetMap()->GetPlayer(m.guid);
+                if (!healer)
+                    continue;
+                if (healer->IsWithinLOSInMap(me))
+                    return nullptr;
+                float const yd = me->GetDistance(healer);
+                if (!nearest || yd < nearestYd)
+                {
+                    nearest = healer;
+                    nearestYd = yd;
+                }
+            }
+            return nearest;
+        }
+
+        // The first point along the tank's path to `healer`, TS::SIGHT_STEPS yards in, that the
+        // healer sees and passes SpotOk.
+        bool IntoSightOf(Player* me, Player const* healer, Position3& out)
+        {
+            PathInfo path(me);
+            path.calculate(healer->GetPositionX(), healer->GetPositionY(), healer->GetPositionZ());
+            if (path.getPathType() & (PATHFIND_NOPATH | PATHFIND_NOT_USING_PATH))
+                return false;
+            auto const& pts = path.getPath();
+            if (pts.size() < 2)
+                return false;
+            SafeRoute::IdleCreatures const idle(me);
+            float const nearZ = me->GetPositionZ();
+            for (float want : TS::SIGHT_STEPS)
+            {
+                // The point `want` yards along the path.
+                float walked = 0.0f;
+                bool have = false;
+                Position3 s;
+                for (size_t i = 1; i < pts.size() && !have; ++i)
+                {
+                    float const seg = (pts[i] - pts[i - 1]).length();
+                    if (walked + seg >= want && seg > 0.01f)
+                    {
+                        float const f = (want - walked) / seg;
+                        s.x = pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f;
+                        s.y = pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f;
+                        s.z = pts[i - 1].z + (pts[i].z - pts[i - 1].z) * f;
+                        have = true;
+                    }
+                    walked += seg;
+                }
+                if (!have)
+                    break;
+                if (!SpotOk(me, idle, nearZ, s))
+                    continue;
+                if (healer->IsWithinLOS(s.x, s.y, s.z, true, 2.0f))
+                {
+                    out = s;
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     bool TankStanceBehavior::AppliesTo(TeamBotAI const* bot) const
@@ -192,6 +280,22 @@ namespace Commander
             p.action.holdMs = WalkHoldMs(me, SafeRoute::Distance2d(Here(me), stuck->pos));
             out.push_back(p);
             return;
+        }
+
+        if (Player const* healer = UnseenBy(bot, world, self->guid))
+        {
+            Position3 to;
+            if (IntoSightOf(me, healer, to))
+            {
+                Proposal p = Make(ProposalTier::Urgent, BotActionType::MoveTo,
+                                  "in a wall, no healer sees it: step into the healer's sight");
+                p.action.x = to.x;
+                p.action.y = to.y;
+                p.action.z = to.z;
+                p.action.holdMs = WalkHoldMs(me, SafeRoute::Distance2d(Here(me), to));
+                out.push_back(p);
+                return;
+            }
         }
 
         // The brain's target, else the victim.
