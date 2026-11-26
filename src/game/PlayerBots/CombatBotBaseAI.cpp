@@ -1288,11 +1288,6 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.rogue.pStealth))
                         m_spells.rogue.pStealth = pSpellEntry;
                 }
-                else if (pSpellEntry->SpellName[0].find("Garrote") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.rogue.pGarrote))
-                        m_spells.rogue.pGarrote = pSpellEntry;
-                }
                 else if (pSpellEntry->SpellName[0].find("Ambush") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.rogue.pAmbush))
@@ -1327,16 +1322,6 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.rogue.pGouge))
                         m_spells.rogue.pGouge = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Rupture") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.rogue.pRupture))
-                        m_spells.rogue.pRupture = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Expose Armor") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.rogue.pExposeArmor))
-                        m_spells.rogue.pExposeArmor = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Kidney Shot") != std::string::npos)
                 {
@@ -1382,11 +1367,6 @@ void CombatBotBaseAI::PopulateSpellData()
                 {
                     if (IsHigherRankSpell(m_spells.rogue.pEvasion))
                         m_spells.rogue.pEvasion = pSpellEntry;
-                }
-                else if (pSpellEntry->SpellName[0].find("Riposte") != std::string::npos)
-                {
-                    if (IsHigherRankSpell(m_spells.rogue.pRiposte))
-                        m_spells.rogue.pRiposte = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Kick") != std::string::npos)
                 {

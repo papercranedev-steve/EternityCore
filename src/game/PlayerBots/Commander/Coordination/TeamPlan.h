@@ -94,6 +94,9 @@ namespace Commander
     struct HuntPlan
     {
         ObjectGuid target;
+        // The member the creature will hit (Tanks::HitTaker): it opens the fight, from stealth
+        // when it has one (HuntBehavior). The others walk in and attack as before.
+        ObjectGuid opener;
         uint32 sinceMs = 0;         // WorldModel::refreshedAtMs of the choice
         uint32 idleSinceMs = 0;     // nothing to hunt nearby since (0 = something was found)
         char const* why = "";       // static text

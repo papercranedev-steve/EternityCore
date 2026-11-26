@@ -58,6 +58,12 @@ namespace Commander
                 return m_bot.m_spells.druid.pFerociousBite;
             }
 
+            // Prowl: cat form only (CanTryToCastSpell checks the form).
+            SpellEntry const* Stealth() const override
+            {
+                return m_bot.m_spells.druid.pProwl;
+            }
+
             // Cower: cat form only (a bear is a tank, WorldModelBuilder skips tanks; the form is
             // read through TeamBotAI::IsReadyWithStance).
             std::vector<SpellEntry const*> ThreatDrops() const override

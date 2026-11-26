@@ -29,33 +29,12 @@ void ClassRotation::EndBuffing(SpellEntry const* pBuffSpell)
         m_bot.m_isBuffing = false;
 }
 
-bool ClassRotation::ShouldBeStealthed() const
+void ClassRotation::DropUnwantedStealth(SpellEntry const* pStealthSpell)
 {
     Player* me = m_bot.me;
-    if (me->IsMounted())
-        return false;
-    if (me->GetVictim() || me->GetHealthPercent() < 10.0f)
-        return true;
-    if (Player* pLeader = m_bot.GetPartyLeader())
-        return pLeader->IsDead() || pLeader->IsFeigningDeathSuccessfully() ||
-               pLeader->HasAuraType(SPELL_AURA_MOD_STEALTH) ||
-               pLeader->HasAuraType(SPELL_AURA_MOD_INVISIBILITY);
-    return false;
-}
-
-bool ClassRotation::KeepStealth(SpellEntry const* pStealthSpell)
-{
-    if (!pStealthSpell || m_bot.IsStealthControlled())
-        return false;
-
-    bool const shouldStealth = ShouldBeStealthed();
-    if (m_bot.me->HasAura(pStealthSpell->Id))
-    {
-        if (!shouldStealth)
-            m_bot.me->RemoveAurasDueToSpellByCancel(pStealthSpell->Id);
-        return false;
-    }
-    return shouldStealth && Cast(m_bot.me, pStealthSpell);
+    if (!pStealthSpell || m_bot.IsStealthControlled() || me->GetVictim() || !me->HasAura(pStealthSpell->Id))
+        return;
+    me->RemoveAurasDueToSpellByCancel(pStealthSpell->Id);
 }
 
 void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)

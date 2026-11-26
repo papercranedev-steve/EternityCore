@@ -302,8 +302,10 @@ namespace Commander
         // Eviscerate, cat Ferocious Bite): cast before a planned target switch so the points
         // are not lost (TargetBehavior, a suggested switch).
         virtual SpellEntry const* ComboFinisher() const { return nullptr; }
-        // Its own stealth (rogue Stealth): the Sap controller of a pull goes into stealth on
-        // its way (CrowdControlBehavior, Takeover::Stealth); the rotation decides otherwise.
+        // Its own stealth (rogue Stealth, cat Prowl). Only the Commander goes into it: the Sap
+        // controller of a pull on its way (CrowdControlBehavior, Takeover::Stealth), the opener
+        // of a hunt (HuntBehavior). The rotation only opens from it and cancels a stealth no
+        // module wants (ClassRotation::DropUnwantedStealth).
         virtual SpellEntry const* Stealth() const { return nullptr; }
         // An absorb the bot puts on itself before an area spell that may turn enemies to it
         // (mage Ice Barrier). The area phase decides it (Coordination/Doctrine/AreaPhase.h).

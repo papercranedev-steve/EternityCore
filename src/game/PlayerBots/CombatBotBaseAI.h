@@ -631,7 +631,6 @@ public:
             SpellEntry const* pAdrenalineRush;
             SpellEntry const* pEviscerate;
             SpellEntry const* pStealth;
-            SpellEntry const* pGarrote;
             SpellEntry const* pAmbush;
             SpellEntry const* pCheapShot;
             SpellEntry const* pPremeditation;
@@ -639,8 +638,6 @@ public:
             SpellEntry const* pHemorrhage;
             SpellEntry const* pGhostlyStrike;
             SpellEntry const* pGouge;
-            SpellEntry const* pRupture;
-            SpellEntry const* pExposeArmor;
             SpellEntry const* pKidneyShot;
             SpellEntry const* pColdBlood;
             SpellEntry const* pBladeFlurry;
@@ -650,7 +647,6 @@ public:
             SpellEntry const* pSap;     // only the Commander casts it (crowd control, before a pull)
             SpellEntry const* pPreparation;
             SpellEntry const* pEvasion;
-            SpellEntry const* pRiposte;
             SpellEntry const* pKick;
             SpellEntry const* pSprint;
             SpellEntry const* pMainHandPoison;

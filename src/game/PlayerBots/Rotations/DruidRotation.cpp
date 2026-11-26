@@ -5,8 +5,9 @@
  *
  * Out of combat: healer leaves its form; Mark / Gift of the Wild, Thorns (only tanks, hunter
  * pets and taunting pets, user 2026-11-15), Nature's Grasp;
- * caster form: into the combat form, heals above 80% mana; cat: Prowl (ClassRotation::
- * KeepStealth); with a victim (an opener): the combat steps.
+ * caster form: into the combat form, heals above 80% mana; cat: a Prowl no module wants is
+ * cancelled (ClassRotation::DropUnwantedStealth; the hunt's opener prowls, HuntBehavior); with
+ * a victim (an opener): the combat steps.
  *
  * In combat:
  *   Caster form: heals (the Commander heal module while the party fights), then into the
@@ -93,8 +94,7 @@ namespace
             }
             else if (me->GetShapeshiftForm() == FORM_CAT)
             {
-                if (KeepStealth(s.pProwl))
-                    return;
+                DropUnwantedStealth(s.pProwl);
             }
 
             if (me->GetVictim())

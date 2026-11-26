@@ -163,6 +163,8 @@ namespace Commander
         if (target != h.target)
             h.sinceMs = world.refreshedAtMs;
         h.target = target;
+        PartyMemberFacts const* opener = Tanks::HitTaker(world);
+        h.opener = opener ? opener->guid : ObjectGuid();
         h.idleSinceMs = 0;
         h.why = world.preferredPrey && std::any_of(best->members.begin(), best->members.end(),
                     [&world](PackCreature const& c) { return c.entry == world.preferredPrey; })

@@ -49,10 +49,12 @@ protected:
     bool Buff(Unit* pTarget, SpellEntry const* pSpell);
     // Ends m_isBuffing once the global cooldown of the buff that started it is over.
     void EndBuffing(SpellEntry const* pBuffSpell);
-    // Rogue Stealth, cat Prowl: in when there is a victim, the bot is almost dead, or the leader
-    // is dead / feigning / stealthed; cancelled otherwise. Stands down while the Commander keeps
-    // the Sap controller of a pull stealthed (TeamBotAI::IsStealthControlled). True = cast.
-    bool KeepStealth(SpellEntry const* pStealthSpell);
+    // Rogue Stealth, cat Prowl: only the Commander goes into it (ClassKit::Stealth). Cancelled
+    // without a victim to open on, unless a module keeps it (TeamBotAI::IsStealthControlled:
+    // the Sap controller of a pull). Until 2026-11-26 the rotation went into stealth itself
+    // whenever it had a victim out of combat (every pull: a slow walk to a mob already on the
+    // tank), below 10% health, or with the leader dead, feigning or stealthed.
+    void DropUnwantedStealth(SpellEntry const* pStealthSpell);
     // Wand when out of mana (below `manaPct`), standing, not already shooting.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
     // Wand at any mana (a healer's free attack, Commander HEALER_DAMAGE_FREE).

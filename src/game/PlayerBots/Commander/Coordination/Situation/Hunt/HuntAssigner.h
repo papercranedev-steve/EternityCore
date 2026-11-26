@@ -16,6 +16,8 @@
  *    with nobody to hold on the member hit, Tanks::HitTaker; damage and heals by function, so
  *    a lone healer counts its own; doc 2026-11-19-any-size-team.md). Nearest candidates first.
  * The choice is kept until the fight starts, the creature no longer qualifies, or KEEP_MS.
+ * Its opener (HuntPlan::opener) is the member the creature will hit (Tanks::HitTaker): a rogue
+ * or cat alone opens from stealth, one with a tank leaves the opening to the tank.
  * Nothing found: idleSinceMs tells the bot's life (Population/) how long it has had nothing
  * to do here (time to move on). Pure.
  */

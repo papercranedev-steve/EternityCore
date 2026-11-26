@@ -2,26 +2,30 @@
  * Rogue rotation (moved out of PartyBotAI.cpp 2026-11-14), combat swords (premade specs of
  * every level since 2026-11-15).
  *
- * Out of combat: main and off hand poisons, Stealth (ClassRotation::KeepStealth); with a victim
- * (an opener): the combat steps.
+ * Out of combat: main and off hand poisons (a companion's vials only while the Commander has
+ * nothing for it to do: no fight, pull or hunt), a Stealth no module wants is cancelled
+ * (ClassRotation::DropUnwantedStealth); with a victim (an opener): the combat steps.
  *
  * In combat:
- *   1. Stealthed: Premeditation, then Cheap Shot on a caster (the stun stops its cast), Ambush
- *      (a dagger only) or Cheap Shot otherwise. Garrote is not used: in 1.12 it is only a bleed,
- *      its silence came with TBC.
+ *   1. Stealthed (the Commander put it there: HuntBehavior's opener; not the Sap controller,
+ *      TeamBotAI::IsStealthControlled): Premeditation, then Ambush (a dagger, behind) or Cheap
+ *      Shot. Garrote is not used: in 1.12 it is only a bleed, its silence came with TBC.
  *   2. Slice and Dice with 1+ combo points when it is down or ends within SND_REFRESH_MS and
  *      the fight lasts at least SND_MIN_FIGHT_SEC more (Value::FightRemainingSec: the buff
  *      stays on through target switches, so the whole fight counts, not the victim's health).
  *   3. Eviscerate at 5 combo points, or with KILL_SHOT_MIN_POINTS+ when the victim dies within
  *      KILL_SHOT_HORIZON_MS (FinishForecast::DeathMs: the party's measured damage on it, ours
  *      too): the points die with it.
- *   4. Backstab, Ghostly Strike, Hemorrhage, Sinister Strike (Backstab, Hemorrhage, Ghostly
- *      Strike only for characters with their own talents and daggers; the server checks in
- *      TeamBotAI::PassesServerCastChecks skip Backstab without a dagger / not behind).
- * Without a Commander (no party snapshot): Slice and Dice above 10% victim health, no kill shot.
+ *   4. Backstab, Ghostly Strike, Hemorrhage, Sinister Strike (Ghostly Strike and Hemorrhage
+ *      are talents: only characters with their own talents have them; Backstab needs a dagger
+ *      and the back, the server checks in TeamBotAI::PassesServerCastChecks skip it otherwise).
+ * Without a Commander snapshot: no forecast, Slice and Dice when due, no kill shot.
  *
  * Sprint is no longer cast here (until 2026-11-15: whenever the victim was out of melee reach,
- * its 5 min cooldown went on a few yards).
+ * its 5 min cooldown went on a few yards). Taken out 2026-11-26: going into Stealth itself (on
+ * every victim out of combat, below 10% health, with the leader dead / feigning / stealthed);
+ * Cheap Shot on a caster as an interrupt the Commander did not know of (InterruptBehavior
+ * assigns interrupts; Unit::IsCaster is the creature's class, not a cast).
  *
  * The Commander decides: Vanish, Evasion, Feint (team rescue), Blind and Sap (crowd control;
  * Sap's stealth: Takeover::Stealth), Kick and Gouge (InterruptBehavior), Adrenaline Rush, Cold
@@ -46,7 +50,6 @@ namespace
 {
     uint32 const SND_REFRESH_MS = 2000;
     float const SND_MIN_FIGHT_SEC = 8.0f;
-    float const SND_NO_COMMANDER_MIN_PCT = 10.0f;
     // Two rogue global cooldowns: one more builder and the finisher would not both land.
     uint32 const KILL_SHOT_HORIZON_MS = 2000;
     // 1 point Eviscerate does less than the Sinister Strike it replaces.
@@ -74,11 +77,11 @@ namespace
                     bot.CastWeaponBuff(s.pOffHandPoison, EQUIPMENT_SLOT_OFFHAND) == SPELL_CAST_OK)
                     return;
             }
-            else if (PoisonFromBags(EQUIPMENT_SLOT_MAINHAND) || PoisonFromBags(EQUIPMENT_SLOT_OFFHAND))
+            else if (IdleForCommander() &&
+                     (PoisonFromBags(EQUIPMENT_SLOT_MAINHAND) || PoisonFromBags(EQUIPMENT_SLOT_OFFHAND)))
                 return;
 
-            if (KeepStealth(s.pStealth))
-                return;
+            DropUnwantedStealth(s.pStealth);
 
             if (me->GetVictim())
                 UpdateInCombat();
@@ -94,17 +97,12 @@ namespace
             if (!pVictim)
                 return;
 
-            if (me->HasAuraType(SPELL_AURA_MOD_STEALTH))
+            if (me->HasAuraType(SPELL_AURA_MOD_STEALTH) && !bot.IsStealthControlled())
             {
                 // (no return: Premeditation is off the global cooldown)
                 Cast(pVictim, s.pPremeditation);
 
-                if (pVictim->IsCaster())
-                {
-                    if (Cast(pVictim, s.pCheapShot))
-                        return;
-                }
-                else if (Cast(pVictim, s.pAmbush) || Cast(pVictim, s.pCheapShot))
+                if (Cast(pVictim, s.pAmbush) || Cast(pVictim, s.pCheapShot))
                     return;
             }
 
@@ -113,7 +111,7 @@ namespace
 
             uint8 const points = me->GetComboTargetGuid() == pVictim->GetObjectGuid() ? me->GetComboPoints() : 0;
 
-            if (points && SliceAndDiceDue(world, pVictim) && Cast(pVictim, s.pSliceAndDice))
+            if (points && SliceAndDiceDue(world) && Cast(pVictim, s.pSliceAndDice))
                 return;
 
             if ((points >= MAX_POINTS || (points >= KILL_SHOT_MIN_POINTS && DiesSoon(world, pVictim))) &&
@@ -146,7 +144,18 @@ namespace
             return pVial && m_bot.UseBagItemOnItem(pVial->GetEntry(), pWeapon);
         }
 
-        bool SliceAndDiceDue(Commander::WorldModel const* world, Unit const* pVictim) const
+        // A vial's 3 s cast makes PartyBotAI::UpdateAI return before the Commander hook (the
+        // out of combat rotation runs first): only while the Commander has nothing for the bot
+        // (PartyCommander::WantsOutOfCombatControl: no fight, pull, hunt, retreat or walk).
+        bool IdleForCommander() const
+        {
+            if (m_bot.me->GetVictim())
+                return false;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(m_bot.me);
+            return !commander || !commander->WantsOutOfCombatControl();
+        }
+
+        bool SliceAndDiceDue(Commander::WorldModel const* world) const
         {
             SpellEntry const* snd = m_bot.m_spells.rogue.pSliceAndDice;
             if (!snd)
@@ -154,10 +163,8 @@ namespace
             if (SpellAuraHolder const* holder = m_bot.me->GetSpellAuraHolder(snd->Id))
                 if (holder->GetAuraDuration() < 0 || uint32(holder->GetAuraDuration()) > SND_REFRESH_MS)
                     return false;
-            if (!world)
-                return pVictim->GetHealthPercent() > SND_NO_COMMANDER_MIN_PCT;
-            // No enemy health in the snapshot yet (just pulled): the fight is still ahead.
-            if (world->rates.enemyHealth <= 0.0f)
+            // No snapshot, or no enemy health in it yet (just pulled): the fight is still ahead.
+            if (!world || world->rates.enemyHealth <= 0.0f)
                 return true;
             return Commander::Value::FightRemainingSec(*world) >= SND_MIN_FIGHT_SEC;
         }
