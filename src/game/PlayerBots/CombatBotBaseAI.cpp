@@ -3364,9 +3364,8 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
         result == SPELL_FAILED_ITEM_NOT_READY) &&
         pSpellEntry->Reagent[0] && GetsFreeSupplies())
     {
-        if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START))
-            me->DestroyItem(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START, true);
-
+        // Into free bag space only. Upstream destroyed the first backpack item to make room
+        // (whatever the bot had looted there); full bags now go without (review 2026-11-26).
         AddItemToInventory(pSpellEntry->Reagent[0]);
     }
 
@@ -3482,11 +3481,11 @@ void CombatBotBaseAI::AddHunterAmmo()
 
                 if (pAmmoProto)
                 {
-                    if (Item* pItem = me->GetItemByPos(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START))
-                        me->DestroyItem(INVENTORY_SLOT_BAG_0, INVENTORY_SLOT_ITEM_START, true);
-
+                    // Into free bag space only (upstream destroyed the first backpack item to
+                    // make room); the ammo slot is set only when the stack is there.
                     AddItemToInventory(pAmmoProto->ItemId, pAmmoProto->GetMaxStackSize());
-                    me->SetAmmo(pAmmoProto->ItemId);
+                    if (me->HasItemCount(pAmmoProto->ItemId, 1))
+                        me->SetAmmo(pAmmoProto->ItemId);
                 }
             }
         }
