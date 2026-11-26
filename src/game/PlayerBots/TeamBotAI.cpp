@@ -203,8 +203,9 @@ void TeamBotAI::FightVictim(Unit* pVictim)
 
     KeepFacing(pVictim);
 
-    // In combat; or opening on the creature a team of bots hunts (the rotation's first shot).
-    if (me->IsInCombat() || IsOpeningOn(pVictim))
+    // In combat; opening on the creature a team of bots hunts (the rotation's first shot); or
+    // out of combat on an enemy the team is fighting (IsJoiningTeamFight).
+    if (me->IsInCombat() || IsOpeningOn(pVictim) || IsJoiningTeamFight(pVictim))
         UpdateInCombatAI();
 }
 
@@ -214,6 +215,17 @@ bool TeamBotAI::IsOpeningOn(Unit const* pVictim) const
         return false;
     std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
     return commander && commander->GetPlan().hunt.target == pVictim->GetObjectGuid();
+}
+
+bool TeamBotAI::IsJoiningTeamFight(Unit const* pVictim) const
+{
+    if (!pVictim || !pVictim->IsInCombat() || !sCommanderMgr.IsEnabled())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (!commander)
+        return false;
+    Commander::EnemyFacts const* enemy = commander->GetWorld().FindEnemy(pVictim->GetObjectGuid());
+    return enemy && !enemy->onAllyOnly;
 }
 
 uint8 TeamBotAI::TeamFunctions() const

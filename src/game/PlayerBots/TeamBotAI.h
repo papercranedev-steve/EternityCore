@@ -96,6 +96,12 @@ public:
     // `pVictim` is the creature its team of bots hunts (TeamPlan::hunt) and not fighting yet:
     // the rotation opens on it out of combat.
     bool IsOpeningOn(Unit const* pVictim) const;
+    // `pVictim` fights its team (a member or pet on its threat list: WorldModel::enemies) while
+    // this bot is out of combat: the rotation runs its combat steps. A player out of combat
+    // whose party fights still shoots; a hunter after Feign Death drops out of combat, and
+    // since the rotation lost its out-of-combat opener (2026-11-26) it stood 60 s without a
+    // shot with a victim 19 yd away (strat-20261126-224349).
+    bool IsJoiningTeamFight(Unit const* pVictim) const;
 
     // What this bot does for its team (Commander PartyMemberFacts::functions, TeamFunction bits
     // in Commander/CommanderTypes.h): its role's own plus what nobody else in the team does
