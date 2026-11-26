@@ -6,6 +6,7 @@
 #include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
+#include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
@@ -59,6 +60,15 @@ namespace Commander
             if (!victim || PackResolver::Distance(e.pos, victim->pos) <= PatrolAssigner::LURE_MIN_DISTANCE)
                 return false;
             return !e.meleeEnabled || LosBreak::IsRangedCaster(e.entry);
+        }
+
+        // Brings more (alarm, summoner) and stands where it is instead of walking out to its
+        // victim (strat-20261126-224046: Eye of Naxxramas, 278 health, hovered 37 yd off in the
+        // path for 10 s casting Summon Rockwing Gargoyles and nobody might hit it).
+        bool StaysToCallMore(EnemyFacts const& e)
+        {
+            return e.acting && !e.crowdControlled && e.health && !e.moving &&
+                   (Tags::RolesOf(e.entry) & (TAG_ALARM | TAG_SUMMONER)) != 0;
         }
 
         LosLure* LureOfHider(PatrolGuardPlan& m, ObjectGuid hider)
@@ -116,8 +126,14 @@ namespace Commander
             for (ObjectGuid g : m.avoid)
             {
                 EnemyFacts const* e = world.FindEnemy(g);
-                if (!e || !StandsBack(world, *e))
+                if (!e)
                     continue;
+                if (!StandsBack(world, *e))
+                {
+                    if (StaysToCallMore(*e))
+                        m.kill.push_back(g);
+                    continue;
+                }
                 if (LosLure* l = LureWithCaster(m, g))
                 {
                     if (l->state != LosLureState::Search && l->state != LosLureState::Active)

@@ -17,6 +17,7 @@
 #include "Timer.h"
 #include <algorithm>
 #include <cstdio>
+#include <limits>
 
 namespace Commander
 {
@@ -124,7 +125,56 @@ namespace Commander
             // Urgent tier (FocusAssigner::DETAIL_URGENT): a bomb, a patrol's caster, a summon whose
             // victim dies within the horizon. Else Assigned, against the other duties by points.
             bool urgent = false;
+            // Killed to stop its cast (CastKill): a candidate must kill it alone within this
+            // many seconds. 0 = no time limit.
+            float killBeforeSec = 0.0f;
         };
+
+        // A caster standing in a patrol's path that no lure brings out, or one that brings
+        // more and stands there (PatrolAssigner, same refresh: it runs in the situation stage).
+        // Worth what the patrol would cost.
+        bool PatrolKill(WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e, InterceptNeed& out)
+        {
+            if (!(plan.patrolGuard.active &&
+                  std::find(plan.patrolGuard.kill.begin(), plan.patrolGuard.kill.end(), e.guid) != plan.patrolGuard.kill.end() &&
+                  e.acting && !e.crowdControlled && e.health))
+                return false;
+            PartyMemberFacts const* victim = world.FindMember(e.victim);
+            out.enemy = &e;
+            out.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
+            out.reason = "in a patrol's path";
+            out.points = plan.patrolGuard.points;
+            out.rangedOnly = true;
+            out.urgent = true;
+            return true;
+        }
+
+        // Casting something worth stopping now, and one damage dealer may kill it before the
+        // cast ends (the candidates' check: FocusAssigner::CastKillSec). For when no interrupter
+        // reaches it (strat-20261126-224046: Eye of Naxxramas, 278 health, cast Summon Rockwing
+        // Gargoyles for 10 s 37 yd off; only a Bash and a Hammer of Justice were offered).
+        // Worth the cast x CAST_KILL_SHARE: an interrupter on it goes first (DutyKeyKind::
+        // CastStopped). Ranged only while it stands in a patrol's path.
+        bool CastKill(WorldModel const& world, TeamPlan const& plan, EnemyFacts const& e, InterceptNeed& out)
+        {
+            if (!e.acting || e.crowdControlled || !e.health || e.onAllyOnly ||
+                !e.castingSpellId || !e.castInterruptible || !e.castRemainingMs)
+                return false;
+            if (plan.doctrine.Has(e.guid, STAMP_SWARM | STAMP_HOLD_FIRE))
+                return false;
+            CastValue const cast = CastValues::InterruptBenefit(world, e);
+            if (!cast.spellId || cast.points <= 0.0f)
+                return false;
+            PartyMemberFacts const* victim = world.FindMember(e.victim);
+            out.enemy = &e;
+            out.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
+            out.reason = "kill before its cast ends";
+            out.points = cast.points * FocusAssigner::CAST_KILL_SHARE;
+            out.rangedOnly = plan.patrolGuard.Avoids(e.guid);
+            out.urgent = cast.lethal || cast.manaCritical;
+            out.killBeforeSec = e.castRemainingMs / 1000.0f;
+            return true;
+        }
 
         // Judged on facts only (simple version, see design doc "limits"):
         //  - melee off and a self-destruct spell in its profile: walks up and explodes (scenario 8).
@@ -174,23 +224,13 @@ namespace Commander
             for (EnemyFacts const& e : world.enemies)
             {
                 InterceptNeed n;
-                if (!NeedsIntercept(world, plan, e, n))
-                {
-                    // A caster standing in a patrol's path that no lure brings out
-                    // (PatrolAssigner, same refresh: it runs in the situation stage). Worth what
-                    // the patrol would cost.
-                    if (!(plan.patrolGuard.active &&
-                          std::find(plan.patrolGuard.kill.begin(), plan.patrolGuard.kill.end(), e.guid) != plan.patrolGuard.kill.end() &&
-                          e.acting && !e.crowdControlled && e.health))
-                        continue;
-                    PartyMemberFacts const* victim = world.FindMember(e.victim);
-                    n.enemy = &e;
-                    n.distanceToVictim = victim ? PackResolver::Distance(e.pos, victim->pos) : 0.0f;
-                    n.reason = "caster in a patrol's path";
-                    n.points = plan.patrolGuard.points;
-                    n.rangedOnly = true;
-                    n.urgent = true;
-                }
+                bool found = NeedsIntercept(world, plan, e, n);
+                if (!found)
+                    found = PatrolKill(world, plan, e, n = InterceptNeed());
+                if (!found)
+                    found = CastKill(world, plan, e, n = InterceptNeed());
+                if (!found)
+                    continue;
 
                 ObjectGuid previousBot;
                 for (InterceptDuty const& d : plan.intercepts)
@@ -209,6 +249,12 @@ namespace Commander
                     need.blockedBy.push_back({ DutyKeyKind::EnemyHandled, e.guid });
                     need.marks.push_back({ DutyKeyKind::EnemyHandled, e.guid });
                 }
+                // Killed to stop its cast: not while an interrupter is on that cast.
+                if (n.killBeforeSec > 0.0f)
+                {
+                    need.blockedBy.push_back({ DutyKeyKind::CastStopped, e.guid });
+                    need.marks.push_back({ DutyKeyKind::CastStopped, e.guid });
+                }
                 // Equal points: closest to its victim first (the most urgent).
                 need.tieMs = uint32(n.distanceToVictim * 1000.0f);
                 need.reason = n.reason;
@@ -225,9 +271,13 @@ namespace Commander
                     // when the enemy is already close (no running across the room).
                     float const range = n.rangedOnly ? FocusAssigner::PATROL_INTERCEPT_RANGE :
                                         ranged ? FocusAssigner::INTERCEPT_RANGE : FocusAssigner::MELEE_INTERCEPT_RANGE;
-                    if (PackResolver::Distance(m.pos, e.pos) > range)
+                    float const distance = PackResolver::Distance(m.pos, e.pos);
+                    if (distance > range)
                         continue;
                     float const reach = ranged ? FocusAssigner::RANGED_REACH : FocusAssigner::MELEE_REACH;
+                    if (n.killBeforeSec > 0.0f &&
+                        FocusAssigner::CastKillSec(m, e, distance - e.boundingRadius - reach) > n.killBeforeSec)
+                        continue;
                     float const cost = SwitchCost::Of(world, m, e, reach);
                     if (n.points <= cost)
                         continue;
@@ -245,6 +295,14 @@ namespace Commander
             }
         }
     }
+    float FocusAssigner::CastKillSec(PartyMemberFacts const& m, EnemyFacts const& e, float walkYd)
+    {
+        if (m.soloDps <= 0.0f)
+            return std::numeric_limits<float>::infinity();
+        return SwitchCost::SWITCH_SEC + std::max(0.0f, walkYd) / CastValues::RUN_YARDS_PER_SEC +
+               float(e.health) / m.soloDps;
+    }
+
     bool FocusAssigner::IsEligible(WorldModel const& world, EnemyFacts const& e, bool allowAllyOnly)
     {
         // A runner stays the focus (todo 13: the party was turning away from it, letting it

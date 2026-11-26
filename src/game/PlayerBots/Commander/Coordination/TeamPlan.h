@@ -788,7 +788,8 @@ namespace Commander
         std::vector<ObjectGuid> avoid;
         // Lures: written by PatrolAssigner, the point by PatrolPlanner::Step.
         std::vector<LosLure> lures;
-        // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot): a
+        // Casters of `avoid` no lure brings out (no point, timed out, victim not a bot), and
+        // enemies of `avoid` standing still that bring more (alarm, summoner): a
         // ranged damage dealer kills each (FocusAssigner intercept; since 2026-11-03 it runs after PatrolAssigner and reads this in the same refresh).
         std::vector<ObjectGuid> kill;
 

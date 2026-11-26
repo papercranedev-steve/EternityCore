@@ -952,6 +952,11 @@ namespace WorldModelBuilder
                 for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
                     if (SpellTags::IsDisableEffect(spell, i) && spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_FEAR)
                         a.fear = true;
+                if (a.fear)
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                        if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_INCREASE_SPEED)
+                            a.fearSpeedMult = std::max(a.fearSpeedMult,
+                                1.0f + float(spell->CalculateSimpleValue(SpellEffectIndex(i))) / 100.0f);
                 a.needsStealth = (spell->Stances & (1u << (FORM_STEALTH - 1))) != 0;
                 a.peacefulOnly = spell->HasAttribute(SPELL_ATTR_EX_ONLY_PEACEFUL_TARGETS);
                 a.oneTarget = spell->HasSingleTargetAura();

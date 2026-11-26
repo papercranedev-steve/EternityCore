@@ -44,7 +44,8 @@
  *            (strat-20261108-140533: the priest moved its shackle three times in 9 s.)
  *
  *   fears only:
- *   adds     for each pack FearRisk::Of returns: chance x (Loss(controlled + the pack joining
+ *   adds     for each pack FearRisk::Of returns (the run over `sec`, its speed bonus, the
+ *            runner's call for help on the way): chance x (Loss(controlled + the pack joining
  *            ADD_ARRIVE_SEC in) - Loss(controlled)), Loss = Points(damage) + Risk x penalty
  *   scatter  melee members (tank, melee, pets) on a target: LostAction(min(sec, REGATHER_SEC))
  *   other controls:

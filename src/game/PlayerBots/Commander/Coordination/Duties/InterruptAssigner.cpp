@@ -180,6 +180,12 @@ namespace Commander
             need.tieMs = c.live ? e.castRemainingMs : 0;
             need.wantsBackup = true;
             need.detail = c.category;
+            // A kick on the live cast: no one also has to kill it before the cast ends
+            // (FocusAssigner's intercept, DutyKeyKind::CastStopped; worth less, so it comes
+            // after this need and only when no interrupter is primary). Not blocked by it: the
+            // kick keeps its backup should the kill come too late.
+            if (c.live)
+                need.marks.push_back({ DutyKeyKind::CastStopped, e.guid });
 
             InterruptDuty const* previous = plan.FindInterruptDuty(e.guid);
             std::vector<Candidate> candidates;

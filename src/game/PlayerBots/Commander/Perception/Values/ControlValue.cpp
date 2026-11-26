@@ -219,7 +219,7 @@ namespace ControlValue
             if (tank)
             {
                 float const base = Loss(world, ctrl, penalty);
-                for (FearRisk::PackRisk const& risk : FearRisk::Of(world, member.pos, a.radius, a.durationSec, targets))
+                for (FearRisk::PackRisk const& risk : FearRisk::Of(world, member.pos, a.radius, w.sec, a.fearSpeedMult, targets))
                 {
                     FightLoad::Input withPack = controlled;
                     for (PackCreature const& c : risk.pack->members)

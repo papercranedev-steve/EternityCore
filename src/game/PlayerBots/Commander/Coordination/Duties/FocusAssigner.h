@@ -16,7 +16,10 @@
  * is what FocusBehavior uses as the benefit of a switch (times the bot's share of damage).
  *
  * Intercepts (TeamPlan::intercepts): enemies one bot kills at once without moving the party
- * focus (walking bombs, summons running at a healer). Combat scenarios 8 and 11.
+ * focus (walking bombs, summons running at a healer). Combat scenarios 8 and 11. Also (since
+ * 2026-11-26) an enemy casting something worth stopping that one candidate kills alone before
+ * the cast ends (CastKillSec within castRemainingMs; worth the cast x CAST_KILL_SHARE, skipped
+ * while an interrupter is primary on it: DutyKeyKind::CastStopped).
  * Since 2026-11-03 offered to DutyAllocator (one primary duty per bot, shared with interrupts):
  * candidates are ranged damage dealers within INTERCEPT_RANGE and melee within
  * MELEE_INTERCEPT_RANGE (ranged within PATROL_INTERCEPT_RANGE for patrol casters), ranked by the
@@ -34,6 +37,7 @@
 namespace Commander
 {
     struct EnemyFacts;
+    struct PartyMemberFacts;
 
     // Kill priority of one enemy (see file comment).
     struct FocusScore
@@ -89,6 +93,15 @@ namespace Commander
         void Offer(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& out) const override;
         void Apply(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan) const override;
         void Clear(TeamPlan& plan) const override;
+
+        // Kill before its cast ends (intercept, since 2026-11-26): the need is worth the cast's
+        // InterruptBenefit x this, so a kick on the same cast goes first. Untested guess (the
+        // kill time is an estimate, a kick is not).
+        static constexpr float CAST_KILL_SHARE = 0.8f;
+        // Seconds `m` alone needs to kill `e`: SwitchCost::SWITCH_SEC + the walk of `walkYd`
+        // (into range, <= 0: none) at CastValues::RUN_YARDS_PER_SEC + health / soloDps.
+        // Infinity without a damage estimate (soloDps 0: pets, healer bots).
+        static float CastKillSec(PartyMemberFacts const& m, EnemyFacts const& e, float walkYd);
 
         // Kill priority of `enemy` (TargetAssigner: focus and every bot's kill order).
         static FocusScore Evaluate(WorldModel const& world, EnemyFacts const& enemy);

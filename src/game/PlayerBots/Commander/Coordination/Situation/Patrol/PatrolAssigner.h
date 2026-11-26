@@ -22,8 +22,11 @@
  *            LURE_ARRIVED of the hider, turned to someone else or are gone; Failed after
  *            LURE_TIMEOUT_MS. One lure per hider and fight, at most MAX_LURE_CASTERS casters.
  *   kill   = casters of `avoid` standing back that no lure brings out (no point, failed,
- *            victim is a player or a pet, hider already used): a ranged damage dealer kills
- *            each (FocusAssigner intercept), worth `points` (the patrol joining a fight there).
+ *            victim is a player or a pet, hider already used), and enemies of `avoid` that
+ *            bring more (Tags alarm or summoner) and stand still (since 2026-11-26,
+ *            strat-20261126-224046: an Eye of Naxxramas hovered in the path casting its
+ *            summon, nobody might hit it): a ranged damage dealer kills each from where it
+ *            stands (FocusAssigner intercept), worth `points` (the patrol joining a fight there).
  * Guard ends when no enemy stands in its path any more, the patrol walks into the pile now
  * (the fight spot moves it), joined the fight or left the scan, the tank changed, the retreat
  * or the pull's walk out / back took over, or after GUARD_TIMEOUT_MS (not guarded again).

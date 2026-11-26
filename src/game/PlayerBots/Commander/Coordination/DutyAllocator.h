@@ -81,6 +81,9 @@ namespace Commander
         // A cooldown or shield keeps this member alive (save). Key = the member: no loose enemy
         // on it is taunted or faded in the same refresh.
         Saved,
+        // The enemy's cast running now is stopped: an interrupter is on it (interrupt), or one
+        // bot kills it before the cast ends (intercept "kill before its cast ends"). Key = enemy.
+        CastStopped,
     };
 
     struct DutyKey

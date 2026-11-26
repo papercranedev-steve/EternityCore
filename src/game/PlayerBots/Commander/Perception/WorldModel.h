@@ -92,6 +92,9 @@ namespace Commander
         uint32 manaCost = 0;            // 0 for rage / energy abilities
         bool breaksOnDamage = false;    // AURA_INTERRUPT_DAMAGE_CANCELS: polymorph, sap, sleep
         bool fear = false;              // the target runs around (SPELL_AURA_MOD_FEAR)
+        // Fears: its run speed x this (SPELL_AURA_MOD_INCREASE_SPEED on the target: 1.25 for
+        // Fear, Turn Undead, Psychic Scream; Death Coil has none). Perception/Forecast/FearRisk.h.
+        float fearSpeedMult = 1.0f;
         bool needsStealth = false;      // Sap
         bool peacefulOnly = false;      // target must not be in combat (Sap)
         // One target per caster (SpellEntry::HasSingleTargetAura: Shackle Undead, Polymorph,
