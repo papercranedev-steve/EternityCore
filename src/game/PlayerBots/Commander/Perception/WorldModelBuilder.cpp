@@ -48,6 +48,7 @@
 #include "CellImpl.h"
 #include "Timer.h"
 #include "Commander/BotDirectives.h"
+#include "Shared/ItemUse.h"
 #include "Shared/PlayerClaims.h"
 #include "MoveSpline.h"
 #include <algorithm>
@@ -1269,7 +1270,9 @@ namespace WorldModelBuilder
                 a.cooldownMs = c.cooldownMs;
                 a.selfOnly = true;
                 a.gcd = c.spell->StartRecoveryTime > 0;
-                a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
+                // (not in a form: BotShared::ItemUse::BagItemsBlocked)
+                a.ready = f.CanAct() && !BotShared::ItemUse::BagItemsBlocked(me) &&
+                          me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
                 f.survival.push_back(a);
             }
         }
@@ -1349,7 +1352,8 @@ namespace WorldModelBuilder
                     continue;
                 a.cooldownMs = c.cooldownMs;
                 a.category = c.category;
-                a.ready = f.CanAct() && me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
+                a.ready = f.CanAct() && !BotShared::ItemUse::BagItemsBlocked(me) &&
+                          me->IsSpellReady(c.spell, c.proto) && me->CanUseItem(c.proto) == EQUIP_ERR_OK;
                 f.manaItems.push_back(a);
             }
         }

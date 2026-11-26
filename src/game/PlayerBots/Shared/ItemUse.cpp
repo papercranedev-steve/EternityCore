@@ -63,8 +63,15 @@ namespace BotShared
             return spellSlot < MAX_ITEM_PROTO_SPELLS ? sSpellMgr.GetSpellEntry(item->GetProto()->Spells[spellSlot].SpellId) : nullptr;
         }
 
+        bool BagItemsBlocked(Player const* player)
+        {
+            return player->IsShapeShifted();
+        }
+
         bool UseFromBags(Player* player, uint32 itemId, SpellCastTargets const& targets)
         {
+            if (!player || BagItemsBlocked(player))
+                return false;
             uint8 bag = 0, slot = 0;
             Item* pItem = player ? FindInBags(player, itemId, bag, slot) : nullptr;
             if (!pItem)
