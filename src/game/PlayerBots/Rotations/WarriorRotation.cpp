@@ -19,12 +19,15 @@
  *   2. Execute below 20%, Overpower (Battle Stance only).
  *   3. Rend only without Bloodthirst (arms levelling), Mortal Strike, Bloodthirst.
  *   3b. Battle Shout when missing and rage above 30.
- *   4. Intercept, Whirlwind.
+ *   4. Whirlwind.
  *   5. Rage dump, Cleave (2+ enemies next to the victim) or Heroic Strike: above 30 rage and
  *      above what Mortal Strike / Bloodthirst / Whirlwind need when one of them is ready within
  *      1.5 s; not in the Execute phase (Execute takes the rage).
  *   No victim: Battle Shout when missing.
  *
+ * Gone 2026-11-26: Intercept (the melee stance module's, ClassKit::GapCloser: it moved the bot
+ * past the movement hold, the stance module's spot and route checks, and its stun kept an
+ * enemy walking to the tank where it was).
  * Gone 2026-11-26: Charge on a victim out of combat. The rotation runs before the Commander's
  * hook there, and the "no charge" rule of a pull is the pull tank's only, so a damage warrior
  * with a victim opened the fight or ran into the pack the tank was bringing back. Charge is the
@@ -115,8 +118,7 @@ namespace
             if (shoutMissing && rage > RAGE_DUMP && Cast(me, w.pBattleShout))
                 return;
 
-            if (Cast(pVictim, w.pIntercept))
-                return;
+            // (Intercept: the melee stance module's, ClassKit::GapCloser)
             if (Cast(me, w.pWhirlwind))
                 return;
 

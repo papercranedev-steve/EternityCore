@@ -1,5 +1,6 @@
 #include "Commander/Behaviors/Movement/MeleeStanceBehavior.h"
 #include "Commander/BotDirectives.h"
+#include "Commander/Classes/ClassKit.h"
 #include "Commander/Perception/Spatial/RouteRisk.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/PositionField.h"
@@ -91,6 +92,35 @@ namespace Commander
             return inFront ? MS::FRONT_LOSS_SHARE * Value::LostAction(world, self, horizonSec) : 0.0f;
         }
 
+        // Header "gap closer": the class's charge (Intercept) instead of the walk to `enemy`.
+        // The caller checked the walk (RouteRisk::Blocked, MayEngage).
+        void ProposeGapCloser(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+                              Unit* enemy, std::vector<Proposal>& out)
+        {
+            SpellEntry const* spell = bot->Kit().GapCloser();
+            if (!spell)
+                return;
+            // A moving enemy comes to the pile or is being brought there: the stun would keep it
+            // where it is, away from the tank's spot.
+            if (enemy->IsMoving())
+                return;
+            Player* me = bot->me;
+            if (HazardZones::IsInside(HazardZones::Get(world), HAZARD_MELEE, PositionOf(enemy)))
+                return;
+            // (range, rage, stance swap, kept controls, the pull's "no charge": CanCastWithStance)
+            if (!me->IsWithinLOSInMap(enemy) || !bot->CanCastWithStance(enemy, spell))
+                return;
+            float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+            float const walkSec = std::max(0.0f, me->GetDistance(enemy) - MS::MELEE_REACH) / speed;
+            float const horizon = std::max(1.0f, std::min(MS::HORIZON_SEC, Value::FightRemainingSec(world)));
+            Proposal p = Make(ProposalTier::Assigned, BotActionType::Cast, "charge to the victim instead of the walk");
+            p.action.target = enemy->GetObjectGuid();
+            p.action.spell = spell;
+            p.SetValue(Value::LostAction(world, self, horizon) + Value::LostAction(world, self, walkSec),
+                       Value::LostAction(world, self, Value::GCD_SEC));
+            out.push_back(p);
+        }
+
         bool IsListedAngle(float angle)
         {
             for (float a : ANGLES)
@@ -121,6 +151,10 @@ namespace Commander
                                        "the walk to the victim passes an idle pack"));
                 return false;
             }
+
+            // (next to the chase below: the arbiter takes the better one)
+            if (!inReach)
+                ProposeGapCloser(bot, world, self, enemy, out);
 
             float angle = float(M_PI);
             if (enemy->GetVictim() == me)

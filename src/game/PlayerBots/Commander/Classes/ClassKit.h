@@ -276,6 +276,11 @@ namespace Commander
         // Charge at an enemy to open a fight (warrior Charge). Only the Commander casts it
         // (PullBehavior: a walk-in pull fought where the pack stands); the tank rotation does not.
         virtual SpellEntry const* OpenerCharge() const { return nullptr; }
+        // A charge at an enemy in a fight that saves a melee bot the walk to it (warrior
+        // Intercept). Only the melee stance module casts it (MeleeStanceBehavior: the walk is open,
+        // the enemy stands still, no movement hold); the rotation does not (it moved the bot past
+        // the stance module's spot and route checks, and its stun kept the enemy from the tank).
+        virtual SpellEntry const* GapCloser() const { return nullptr; }
         // Breaks a fear on itself (warrior Berserker Rage): hands and feet, cast as soon as the
         // bot is feared (TeamBotAI::BreakControl), after the racial one (RaceKit::FearBreak).
         virtual SpellEntry const* FearBreak() const { return nullptr; }

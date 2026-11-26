@@ -31,6 +31,12 @@
  *    Proposed only when the bot does not run that chase yet (TeamBotAI::GetChaseAngle) or the
  *    angle changes. Value: out of reach Value::LostAction(HORIZON_SEC), in reach
  *    LostAction(KEEP_SEC) (keeps up with the victim), cost 0; tier Assigned.
+ * Gap closer (ClassKit::GapCloser, warrior Intercept; review 2026-11-26, before: the rotation's
+ * own): out of reach on an open walk (the checks above), the enemy standing still (a moving one
+ * comes to the pile or is brought there, the stun would keep it away from the tank), not in an
+ * area dangerous to melee, in sight, CanCastWithStance (range, rage and stance swap, kept
+ * controls, the pull's "no charge"). Proposed next to the chase: value the chase's plus
+ * LostAction(walk seconds saved), cost LostAction(GCD); the arbiter takes the better one.
  * No enemy it can walk to: wait near the tank (Tanks::Main, else the leader). Farther than
  * WAIT_NEAR_YD: walk to a position field cell WAIT_MIN_YD..WAIT_MAX_YD from it (since
  * 2026-11-10, step C; FieldSpots::Collect: ground linked to the party, no idle creature, no

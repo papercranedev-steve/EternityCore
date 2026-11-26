@@ -27,6 +27,13 @@ namespace Commander
                 return m_bot.m_spells.warrior.pCharge;
             }
 
+            // Intercept (Berserker Stance, 10 rage, 8-25 yd, stuns 3 s): a swap from Battle Stance
+            // when the rage allows (TeamBotAI::CanCastWithStance).
+            SpellEntry const* GapCloser() const override
+            {
+                return m_bot.m_spells.warrior.pIntercept;
+            }
+
             // Berserker Rage (Berserker Stance, 30 s): immune to fear, usable while feared (its
             // fear immunity lifts the fleeing state, Spell::CheckCasterAuras).
             SpellEntry const* FearBreak() const override
