@@ -10,6 +10,7 @@
 #include "Commander/Perception/Spatial/SightCache.h"
 #include "Commander/Perception/Values/SightMargin.h"
 #include "Commander/Behaviors/Movement/JoinGamble.h"
+#include "Commander/Behaviors/Combat/AreaDamageBehavior.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Trace/Trace.h"
 #include "TeamBotAI.h"
@@ -30,6 +31,27 @@ namespace Commander
             p.y = obj->GetPositionY();
             p.z = obj->GetPositionZ();
             return p;
+        }
+
+        // The area phase wants the caster at a spot it is not at yet (its cast's Move step, or
+        // its prep's spots): only AreaDamageBehavior's walk takes it there.
+        bool AreaSendsElsewhere(AreaPlan const& area, ObjectGuid guid, Position3 const& here)
+        {
+            std::vector<Position3> const* spots = nullptr;
+            if (AreaCast const* c = area.CastOf(guid))
+            {
+                if (c->step != AreaStep::Move)
+                    return false;
+                spots = &c->spots;
+            }
+            else if (AreaPrep const* p = area.PrepOf(guid))
+                spots = &p->spots;
+            if (!spots || spots->empty())
+                return false;
+            for (Position3 const& s : *spots)
+                if (Distance2d(here, s) <= AreaDamageBehavior::SPOT_REACHED_YD)
+                    return false;
+            return true;
         }
     }
 
@@ -102,8 +124,8 @@ namespace Commander
         // The area phase places its caster (AreaSpot.h, 2026-11-12): before the fight nothing
         // here; in the fight only an idle creature's reach moves it (Urgent), not its victim
         // out of range (the spell's centre is the area phase's choice).
-        bool const placed = plan.area.PlacesCaster(self->guid);
-        if (placed && prepare)
+        bool const areaPlaces = plan.area.PlacesCaster(self->guid);
+        if (areaPlaces && prepare)
             return;
         Position3 const here = PositionOf(me);
         Position3 at;               // what the bot must reach: its victim, or the planned fight spot
@@ -150,6 +172,14 @@ namespace Commander
             if (!inReach && distance <= CAST_RANGE && !inDeadZone && world.field && world.field->sight)
                 world.field->sight->MarkStandFailed(me, at);
         }
+
+        // The backup (user rule: other duties may fail): the area phase sends it to a spot and
+        // it is out of its victim's reach here. If the area phase's walk does not come (no spot
+        // passes its map checks), the stance walks it into reach, at Routine tier: any proposal
+        // of the area phase (Assigned) hides it. Before 2026-11-26 the stance left it there:
+        // a warlock out of combat stood 50 yd back for 137 s (strat-20261126-224508).
+        bool const backup = areaPlaces && !inReach && AreaSendsElsewhere(plan.area, self->guid, here);
+        bool const placed = areaPlaces && !backup;
 
         SafeRoute::IdleCreatures const idle(me);
         // In the fight a circle covering the victim's spot counts only closer than the victim
@@ -248,8 +278,9 @@ namespace Commander
             }
             else
             {
-                p.tier = ProposalTier::Assigned;
-                p.reason = inDeadZone ? "inside the minimum range of its attack" :
+                p.tier = backup ? ProposalTier::Routine : ProposalTier::Assigned;
+                p.reason = backup ? "victim out of reach, no walk of the area phase" :
+                           inDeadZone ? "inside the minimum range of its attack" :
                            !inReach ? (found.tight ? "victim out of range or sight (spot on the hard line)" : "victim out of range or sight") :
                            sightHere - s.sight > exposureHere - s.exposure ? "sees the victim only narrowly" : "too close to the enemies";
                 // Out of reach: it cannot do its job for the rest of the fight (SpotCost::OutOfReach).

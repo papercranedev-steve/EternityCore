@@ -13,7 +13,8 @@
  *   the party holds for the pull or the opening, or it waits: walk to the first of its spots that
  *   passes the map checks below (value moveGain; cost moveCost in combat, 0 before;
  *   Hold while walking), then its shield (shieldId, net gain). Tier Assigned.
- * Propose (its AreaCast in TeamPlan::area casts, in combat; several casters may each have one):
+ * Propose (its AreaCast in TeamPlan::area casts, the caster in combat or not yet: the brain plans
+ *   casts only in the party's fight; several casters may each have one):
  *   the healer named for a cast (allyShieldBot): its shield on that caster when not on it yet,
  *     tier Assigned, net allyShieldGain.
  *   the caster, in its cast's order:
@@ -65,8 +66,8 @@ namespace Commander
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
 
-        // `spell` is one of the bot's ClassKit::AreaDamage spells, this module is on and the bot
-        // is in combat: its threat is judged by the area phase, TeamBotAI::PassesPartyCastChecks
+        // `spell` is one of the bot's ClassKit::AreaDamage spells and this module is on: its
+        // threat is judged by the area phase, TeamBotAI::PassesPartyCastChecks
         // skips its rough check (which would block the module's own casts).
         static bool Judges(TeamBotAI const* bot, SpellEntry const* spell);
 

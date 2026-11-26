@@ -33,6 +33,9 @@
  *  - The area phase's caster (TeamPlan::area PlacesCaster: the phase, or its prep spot;
  *    AreaSpot.h, 2026-11-12): the area phase places it. Before the fight nothing here; in the
  *    fight only an idle creature's reach (Urgent), not the victim out of range or sight.
+ *    Backup (2026-11-26): sent to a spot it is not at (Move step or prep) and out of the
+ *    victim's reach: the usual walk into reach at Routine tier, so any proposal of the area
+ *    phase hides it; it moves the caster only when the area phase's walk does not come.
  * Before the fight (2026-11-07): out of combat while the pull runs, the brain's planned fight
  * spot (PullPlan::PlannedFightSpot; the idle pack itself for a walk-in fought where it stands)
  * instead of a victim, same checks, rings PREPARE_RADII (one more at 28 yd); value

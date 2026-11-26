@@ -232,9 +232,9 @@ namespace Commander
     {
         if (!sCommanderMgr.IsEnabled() || !sCommanderMgr.IsModuleEnabled("aoe"))
             return false;
-        // This module casts area spells in combat only.
-        if (!bot->me->IsInCombat())
-            return false;
+        // Not the bot's own combat flag (until 2026-11-26): the brain's area phase decides when
+        // (AreaPhase.h), its caster may still be out of combat at the first cast. The rotations
+        // cast these spells only in a fight (2026-11-02), where this held already.
         uint32 const first = sSpellMgr.GetFirstSpellInChain(spell->Id);
         for (AreaDamageSpell const& a : bot->Kit().AreaDamage())
             if (a.spell && sSpellMgr.GetFirstSpellInChain(a.spell->Id) == first)
@@ -258,7 +258,11 @@ namespace Commander
                     ProposePrep(bot, world, *prep, out);
                 return;
             }
-        if (!plans.Active() || !me->IsInCombat())
+        // The brain plans a cast only in the party's fight (AreaPhase.h): not the caster's own
+        // combat flag. With it, a warlock resting 50 yd back when the pull came stayed out of
+        // combat with its Rain of Fire planned for 137 s: nothing walked it there (the ranged
+        // stance leaves a placed caster to this module; strat-20261126-224508).
+        if (!plans.Active())
             return;
         PartyMemberFacts const* self = world.FindMember(guid);
         if (!self || !self->CanAct())
