@@ -39,6 +39,17 @@ namespace Commander
             return std::min(fightSec, (have + mana) / spend) - std::min(fightSec, have / spend);
         }
 
+        // Its health can pay a tap now: above the tap's cost (Life Tap fizzles at or below it,
+        // spell_warlock.cpp: it cannot kill), safe, not in danger.
+        bool HealthPaysTap(WorldModel const& world, PartyMemberFacts const& self)
+        {
+            if (self.tapManaPerCast <= 0.0f || self.tapManaPerHealth <= 0.0f)
+                return false;
+            if (float(self.health) <= self.tapManaPerCast / self.tapManaPerHealth)
+                return false;
+            return Safe(world, self) && !SurvivalValue::Of(world, self).InDanger();
+        }
+
         // The global cooldown would go unused: walking, or the filler cannot reach its victim
         // (none, out of sight, out of range).
         bool FreeGcd(TeamBotAI const* bot, SpellEntry const* filler)
@@ -64,10 +75,7 @@ namespace Commander
             float const gain = self.tapManaPerCast;
             if (float(self.maxMana) - mana < gain)
                 return;
-            // Life Tap fizzles at or below its cost (spell_warlock.cpp): it cannot kill.
-            if (float(self.health) <= gain / self.tapManaPerHealth)
-                return;
-            if (!Safe(world, self) || SurvivalValue::Of(world, self).InDanger())
+            if (!HealthPaysTap(world, self))
                 return;
             if (!bot->CanTryToCastSpell(me, tap))
                 return;
@@ -146,10 +154,12 @@ namespace Commander
             p.action.target = enemy->guid;
 
             // The cycle (header): its last mana goes into a drain, the health it brings back is
-            // tapped into Shadow Bolts again.
+            // tapped into Shadow Bolts again. Not while its health still pays a tap: taps just
+            // in time keep the mana low all fight, the drain would take the Shadow Bolts' place.
             HealthTradeBehavior::Cycle const cycle = HealthTradeBehavior::CycleOf(bot, world, self);
             float const mana = float(self.mana);
-            if (cycle.on && mana < drainCost + cycle.fillerCost && missing >= drained)
+            if (cycle.on && mana < drainCost + cycle.fillerCost && missing >= drained &&
+                !(bot->Kit().HealthToMana() && HealthPaysTap(world, self)))
             {
                 float const netSec = (gained * self.tapManaPerHealth - drainCost) / cycle.spend;
                 float const benefit = Value::LostAction(world, self, busySec * std::min(1.0f, drainShare)) +

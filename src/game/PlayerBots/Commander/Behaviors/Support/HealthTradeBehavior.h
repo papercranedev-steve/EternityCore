@@ -32,7 +32,9 @@
  * Drain Life, in combat, on its victim:
  *   cycle    the cycle is on, its mana pays less than the drain and one filler (the last mana
  *            goes into the drain, not into a Shadow Bolt that leaves too little for one), and
- *            the whole drain fits in the missing health. Nothing else gates it (hit or not).
+ *            the whole drain fits in the missing health, and its health cannot pay a tap now
+ *            (at or below the tap's cost, or not safe / in danger: with taps just in time the
+ *            mana stays low all fight, the drain would replace the Shadow Bolts). Hit or not.
  *            benefit  LostAction(channel x its damage share of the filler's)
  *                     + LostAction((drained health x k - its mana) / S): what the health buys back
  *            cost     LostAction(channel) x WAND_SHARE: near dry the wand is what it displaces

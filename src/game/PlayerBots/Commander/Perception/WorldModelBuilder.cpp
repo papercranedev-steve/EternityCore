@@ -1758,15 +1758,30 @@ namespace WorldModelBuilder
                 }
             }
 
-            // Life Tap: health -> mana (EffectBasePoints on SPELL_EFFECT_DUMMY, the script
-            // gives that mana for that health; talents not counted).
+            // Life Tap: health -> mana as spell_warlock.cpp WarlockLifeTapScript works it out:
+            // the health is the base points with the cost mods and the spell damage bonus, the
+            // mana that health with Improved Life Tap. (Up to 2026-11-26 the base points alone:
+            // strat-20261126-232120 a tap cost 599 health and gave ~720 mana, the facts said
+            // 424 and 424, so taps overfilled the mana.)
             if (SpellEntry const* tap = ai->Kit().HealthToMana())
             {
-                float const amount = float(std::max(0, tap->CalculateSimpleValue(EFFECT_INDEX_0)));
-                if (amount > 0.0f)
+                float health = float(std::max(0, tap->CalculateSimpleValue(EFFECT_INDEX_0)));
+                if (Player* modOwner = me->GetSpellModOwner())
+                    modOwner->ApplySpellMod(tap->Id, SPELLMOD_COST, health, nullptr, false);
+                health = me->SpellDamageBonusDone(me, tap, EFFECT_INDEX_0, std::max(0.0f, health), SPELL_DIRECT_DAMAGE);
+                health = me->SpellDamageBonusTaken(me, tap, EFFECT_INDEX_0, health, SPELL_DIRECT_DAMAGE);
+                float manaPct = 100.0f;
+                for (Aura const* aura : me->GetAurasByType(SPELL_AURA_DUMMY))
                 {
-                    f.tapManaPerHealth = 1.0f;
-                    f.tapManaPerCast = amount;
+                    // Improved Life Tap (the script's own test)
+                    SpellEntry const* proto = aura->GetSpellProto();
+                    if (proto->SpellFamilyName == SPELLFAMILY_WARLOCK && proto->SpellIconID == 208)
+                        manaPct += float(aura->GetModifier()->m_amount);
+                }
+                if (health > 0.0f)
+                {
+                    f.tapManaPerHealth = manaPct / 100.0f;
+                    f.tapManaPerCast = health * f.tapManaPerHealth;
                 }
             }
         }

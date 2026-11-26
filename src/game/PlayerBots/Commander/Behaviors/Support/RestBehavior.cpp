@@ -97,12 +97,23 @@ namespace Commander
         // shortens, one tap per tick, then it sits down.
         if (SpellEntry const* tap = bot->Kit().HealthToMana())
         {
-            if (RestValue::TapSavesSec(world, *self) > Value::GCD_SEC && bot->CanTryToCastSpell(me, tap))
+            if (RestValue::TapSavesSec(world, *self) > Value::GCD_SEC)
             {
-                p.action.type = BotActionType::Cast;
-                p.action.spell = tap;
-                p.action.target = self->guid;
-                p.reason = "rest: health to mana first, eat and drink together";
+                if (bot->CanTryToCastSpell(me, tap))
+                {
+                    p.action.type = BotActionType::Cast;
+                    p.action.spell = tap;
+                    p.action.target = self->guid;
+                    p.reason = "rest: health to mana first, eat and drink together";
+                }
+                // The last tap's global cooldown: wait it out standing. Sitting down now
+                // started a drink the next tap stood up from (user 2026-11-26: a tap, a drink,
+                // three times over, two drinks thrown away).
+                else if (me->HasGCD(tap))
+                {
+                    p.action.type = BotActionType::Hold;
+                    p.reason = "rest: health to mana first, the next tap after the global cooldown";
+                }
             }
         }
         out.push_back(p);
