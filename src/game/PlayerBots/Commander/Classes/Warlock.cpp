@@ -13,11 +13,14 @@ namespace Commander
             using ClassKit::ClassKit;
 
             // Banish: demons and elementals only. Fear: one target. Howl of Terror: everyone
-            // around the warlock.
+            // around the warlock. Death Coil: a 3 s fear on one target (and a drain); the
+            // crowd control assigner and the escape (an enemy hitting the warlock) pick it, the
+            // rotation does not any more (review 2026-11-26: it feared the tank's target off
+            // the tank, past the doctrine's no-fear stamp).
             std::vector<SpellEntry const*> Controls() const override
             {
                 auto const& s = m_bot.m_spells.warlock;
-                return { s.pBanish, s.pFear, s.pHowlofTerror };
+                return { s.pBanish, s.pFear, s.pHowlofTerror, s.pDeathCoil };
             }
 
             SpellEntry const* Filler() const override

@@ -152,6 +152,8 @@ void CombatBotBaseAI::PopulateSpellData()
 
     // Mage Frost Armor (to replace ice armor at low level)
     SpellEntry const* pFrostArmor = nullptr;
+    // Warlock Demon Skin (levels 1-19: the armor until Demon Armor is learned)
+    SpellEntry const* pDemonSkin = nullptr;
 
     bool hasDeadlyPoison = false;
     bool hasInstantPoison = false;
@@ -948,6 +950,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     if (IsHigherRankSpell(m_spells.warlock.pDemonArmor))
                         m_spells.warlock.pDemonArmor = pSpellEntry;
                 }
+                else if (pSpellEntry->SpellName[0].find("Demon Skin") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(pDemonSkin))
+                        pDemonSkin = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Death Coil") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.warlock.pDeathCoil))
@@ -1685,6 +1692,14 @@ void CombatBotBaseAI::PopulateSpellData()
                                         : pRockbiterWeapon ? pRockbiterWeapon : pFrostbrandWeapon;
             break;
         }
+        case CLASS_WARLOCK:
+        {
+            // Below level 20 Demon Skin (until 2026-11-26 no armor at all: only Demon Armor
+            // was looked for). The two replace each other (SPELL_WARLOCK_ARMOR).
+            if (!m_spells.warlock.pDemonArmor && pDemonSkin)
+                m_spells.warlock.pDemonArmor = pDemonSkin;
+            break;
+        }
         case CLASS_MAGE:
         {
             if (!m_spells.mage.pIceArmor && pFrostArmor)
@@ -2394,28 +2409,25 @@ void CombatBotBaseAI::SummonPetIfNeeded()
             return;
         }
 
-        // The Imp (Blood Pact for the party): the bot specs keep their pet and do not sacrifice
-        // it (user 2026-11-15). Before: a random demon of those learned.
-        if (me->HasSpell(SPELL_SUMMON_IMP))
+        // Only the Imp (Blood Pact for the party): the bot specs keep their pet and do not
+        // sacrifice it (user 2026-11-15); the warlock's pet is a health buff for the party, no
+        // other demon (user 2026-11-26). Until 2026-11-26 a random other demon when the Imp was
+        // not learned (it is from level 1).
+        if (!me->HasSpell(SPELL_SUMMON_IMP))
+            return;
+        if (GetsFreeAbilities())
         {
             me->CastSpell(me, SPELL_SUMMON_IMP, true);
             if (Pet* pPet = me->GetPet())
                 LearnDemonSpells(pPet);
             return;
         }
-        std::vector<uint32> vSummons;
-        if (me->HasSpell(SPELL_SUMMON_VOIDWALKER))
-            vSummons.push_back(SPELL_SUMMON_VOIDWALKER);
-        if (me->HasSpell(SPELL_SUMMON_FELHUNTER))
-            vSummons.push_back(SPELL_SUMMON_FELHUNTER);
-        if (me->HasSpell(SPELL_SUMMON_SUCCUBUS))
-            vSummons.push_back(SPELL_SUMMON_SUCCUBUS);
-        if (!vSummons.empty())
-        {
-            me->CastSpell(me, SelectRandomContainerElement(vSummons), true);
-            if (Pet* pPet = me->GetPet())
-                LearnDemonSpells(pPet);
-        }
+        // A companion summons it as a player does: its cast time and mana, standing (review
+        // 2026-11-26: before, a triggered summon, at once and free, again after every death).
+        // The pet's spells come with the next update (the branch above).
+        SpellEntry const* pSummon = sSpellMgr.GetSpellEntry(SPELL_SUMMON_IMP);
+        if (pSummon && !me->IsMoving() && !me->IsNonMeleeSpellCasted(false) && CanTryToCastSpell(me, pSummon))
+            DoCastSpell(me, pSummon);
     }
 }
 

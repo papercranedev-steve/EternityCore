@@ -15,7 +15,8 @@
  *             stand; CorpseRun keeps the body and rises once it is safe, then the bots
  *             resurrect the others out of combat (TeamBotAI).
  *   stone     no reviver: a warlock bot with a Soulstone ready (soulstoneItem) puts it on a
- *             member who resurrects (healer bots first, then bots, then players); WipeBehavior.
+ *             member who resurrects (bots that heal the team first, then bots, then players:
+ *             Duties/SoulstoneAssigner::TargetRank); WipeBehavior.
  *   hiders    bots that are not revivers with a "wipe" threat drop ready (Feign Death, Vanish:
  *             ThreatDropAbility::wipe) drop out of the fight and stay out until it is over
  *             (WipeBehavior holds them; no target, no heal).

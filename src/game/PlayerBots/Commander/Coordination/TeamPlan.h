@@ -1667,6 +1667,29 @@ namespace Commander
         }
     };
 
+    // Warlock Soulstones out of combat: whom each warlock bot gives one (SoulstoneAssigner.h).
+    // WarlockRotation makes and uses the stone, or says why it cannot.
+    struct SoulstoneDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid target;
+    };
+
+    struct SoulstonePlan
+    {
+        bool active = false;    // the module ran (off: no Soulstone)
+        std::vector<SoulstoneDuty> duties;
+
+        // Empty = nobody for this warlock.
+        ObjectGuid TargetFor(ObjectGuid bot) const
+        {
+            for (SoulstoneDuty const& d : duties)
+                if (d.bot == bot)
+                    return d.target;
+            return ObjectGuid();
+        }
+    };
+
     // The judgement each paladin bot keeps on its victim (JudgementAssigner.h): the seal it
     // judges for it. PaladinRotation casts it.
     struct JudgementDuty
@@ -1851,6 +1874,7 @@ namespace Commander
         TotemPlan totems;
         JudgementPlan judgements;
         CursePlan curses;
+        SoulstonePlan soulstones;
         std::vector<InterruptDuty> interrupts;
         // Last DutyAllocator result of all duty modules (PartyCommander::RunAssigners), kept for
         // `.partybot ai plan` (who was passed over and why). Modules read their own part above.

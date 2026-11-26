@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/Crisis/WipeAssigner.h"
+#include "Commander/Coordination/Duties/SoulstoneAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/FightLoad.h"
 #include "Timer.h"
@@ -43,16 +44,17 @@ namespace Commander
             return std::find(v.begin(), v.end(), g) != v.end();
         }
 
-        // Header "stone": who gets the Soulstone, empty = nobody fits.
+        // Header "stone": who gets the Soulstone, empty = nobody fits. The out-of-combat
+        // stone's order (SoulstoneAssigner::TargetRank), only members who resurrect the others.
         ObjectGuid StoneTarget(WorldModel const& world)
         {
             PartyMemberFacts const* best = nullptr;
             int bestRank = 0;
             for (PartyMemberFacts const& m : world.party)
             {
-                if (m.isPet || !m.alive || !m.resurrects || m.selfRes)
+                int const rank = SoulstoneAssigner::TargetRank(m);
+                if (rank < SoulstoneAssigner::RESURRECTS_RANK)
                     continue;
-                int const rank = (m.isBot && m.role == ROLE_HEALER) ? 3 : m.isBot ? 2 : 1;
                 if (rank > bestRank)
                 {
                     best = &m;

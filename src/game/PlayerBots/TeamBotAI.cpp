@@ -90,7 +90,8 @@ bool TeamBotAI::UpdateBody()
     }
     Commander::CorpseRun::OnAlive(me, m_corpseRun);
 
-    // The pet (a triggered summon, no cast time): before the walk back, resting and mounting.
+    // The pet (a triggered summon, no cast time; a companion warlock casts Summon Imp): before
+    // the walk back, resting and mounting.
     // From the rotation's out-of-combat step only, a warlock back from a corpse run walked to
     // the leader, then rested, and the next pull came first: no Imp until the fight was over.
     if (!me->IsInCombat() && !me->IsMounted())

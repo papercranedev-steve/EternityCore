@@ -38,7 +38,9 @@
  * on (creature type checked). Since 2026-11-07 (user: a priest saving itself with Psychic
  * Scream when everything runs at it counts) an area fear around the bot from
  * ClassKit::Controls (Psychic Scream, Howl of Terror) competes with them, valued by
- * Perception/Values/ControlValue (add risk near idle packs, scatter, mana, cooldown included).
+ * Perception/Values/ControlValue (add risk near idle packs, scatter, mana, cooldown included);
+ * since 2026-11-26 also a single target fear on one chaser (warlock Death Coil), not on a chaser
+ * the doctrine stamped NoMez (or a swarm, a self-destruct).
  *
  * Proposals (one per tick, besides Hold while a MoveTo of any module is under way):
  *  1. Hold spell, only in danger, castable, best value first. Tier Urgent.
@@ -80,7 +82,8 @@
  * assumed to take the enemy on arrival, and staying is valued as if nobody took it over within
  * the horizon (the tank's taunt from range is not predicted); no Blink; ranged chasers (casters standing back) are
  * left to the tank's own valuation; absorbed damage costs mana, not counted as a loss; hunters,
- * shamans and warlocks have no root / stun in their spell lists (slows and fears not used).
+ * shamans and warlocks have no root / stun in their spell lists (slows not used; fears only
+ * through ControlValue, above); Death Coil's drain heal is not counted in its worth.
  */
 
 #ifndef MANGOS_COMMANDER_ESCAPE_BEHAVIOR_H

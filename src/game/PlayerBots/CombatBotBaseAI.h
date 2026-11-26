@@ -225,8 +225,9 @@ public:
     virtual bool GetsFreeSupplies() const { return true; }
     // What a class quest gives a player is given for free: totem tools (AddAllSpellReagents),
     // a summoned and tamed hunter pet, Call Pet and Revive Pet without the spells
-    // (SummonPetIfNeeded). PartyBotAI: not for companions, they do the quests
-    // (Shared/ClassQuestAbilities) and have no pet until they own one.
+    // (SummonPetIfNeeded), the warlock's Imp summoned at once and for free. PartyBotAI: not for
+    // companions, they do the quests (Shared/ClassQuestAbilities), have no hunter pet until they
+    // own one and cast Summon Imp.
     virtual bool GetsFreeAbilities() const { return true; }
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();

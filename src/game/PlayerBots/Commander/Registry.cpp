@@ -39,6 +39,7 @@
 #include "Commander/Behaviors/Combat/RenewSurvivalBehavior.h"
 #include "Commander/Behaviors/Combat/CurseBehavior.h"
 #include "Commander/Coordination/Duties/CurseAssigner.h"
+#include "Commander/Coordination/Duties/SoulstoneAssigner.h"
 #include "Commander/Coordination/Duties/BoostAssigner.h"
 #include "Commander/Coordination/Duties/BlessingAssigner.h"
 #include "Commander/Coordination/Duties/TotemAssigner.h"
@@ -140,6 +141,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TotemAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<JudgementAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CurseAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<SoulstoneAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ControlledEndAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<SelfRiseAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrisisAssigner>()));

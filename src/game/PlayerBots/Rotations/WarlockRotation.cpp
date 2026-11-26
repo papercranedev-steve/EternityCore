@@ -4,7 +4,8 @@
  *
  * Out of combat: Detect Invisibility on the tanks and the real players (none in a raid
  * instance, user 2026-11-25), Demon Armor; with a victim (an opener): the
- * combat steps; without one: a Soulstone on the party's healer (Soulstone: create it, use it).
+ * combat steps; without one: a Soulstone on the member the brain gives this warlock
+ * (Commander/Coordination/Duties/SoulstoneAssigner.h, TeamPlan::soulstones; create it, use it).
  * The pet (the Imp, every ability its level allows) is summoned by PartyBotAI::UpdateAI out of
  * combat (SummonPetIfNeeded), not only here: resting and the walk back after a corpse run skip
  * the rotation, and the next pull came first. The Imp stays in Phase Shift, in and
@@ -12,22 +13,23 @@
  * Blood Pact stays).
  *
  * In combat:
- *   1. Death Coil when the victim is in melee reach of the warlock or casting.
- *   2. Shadowburn when it kills the victim (DamageSpells::EstimateDirect, no crit) and the
+ *   1. Shadowburn when it kills the victim (DamageSpells::EstimateDirect, no crit) and the
  *      warlock holds more than SHARD_RESERVE Soul Shards (a kill within 5 s gives it back).
- *   3. Corruption, Siphon Life, Immolate, Conflagrate. A periodic spell on an enemy dying
+ *   2. Corruption, Siphon Life, Immolate, Conflagrate. A periodic spell on an enemy dying
  *      before it pays is refused for every cast (Constraints::WastedCast).
- *   4. Walk closer, Shadow Bolt (instant with Nightfall's Shadow Trance), wand below 5% mana.
+ *   3. Walk closer, Shadow Bolt (instant with Nightfall's Shadow Trance), wand below 5% mana.
+ * Gone 2026-11-26 (review): Death Coil on a victim in melee reach of the warlock or casting (it
+ * is a 3 s fear: it ran the tank's target off the tank, past the doctrine's no-fear stamp).
  * Gone 2026-11-15: Searing Pain below 20% (a fire spell with high threat, worse than Shadow
  * Bolt here), Demonic Sacrifice, Life Tap below 10% mana and Drain Life below 30% health,
  * Curse of Agony (user: no curse until the curses are chosen for the party).
  *
  * The Commander decides: the damage curse (CurseAssigner picks Elements / Shadow / Recklessness
- * for the party, CurseBehavior casts it when CurseValue says it pays), Banish, Fear, Howl of Terror (crowd control), Rain of Fire (area
- * phase), Life Tap and Drain Life (HealthTradeBehavior: tap
- * and drain cycle when the mana runs out), Drain Soul on enemies about to die
- * (HarvestBehavior: the Soul Shards).
- * Still the rotation's own (doc 2026-11-14-hands-cleanup.md 3): Death Coil.
+ * for the party, CurseBehavior casts it when CurseValue says it pays), Banish, Fear, Howl of
+ * Terror, Death Coil (crowd control; Death Coil and Howl of Terror also on enemies hitting the
+ * warlock, EscapeBehavior), Rain of Fire (area phase), Life Tap and Drain Life
+ * (HealthTradeBehavior: tap and drain cycle when the mana runs out), Drain Soul on enemies
+ * about to die (HarvestBehavior: the Soul Shards), whom the Soulstone is for (SoulstoneAssigner).
  */
 
 #include "Shared/Phrases.h"
@@ -36,12 +38,9 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Tanks.h"
-#include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "DamageSpells.h"
-#include "RoleCapability.h"
 #include "Player.h"
-#include "Group.h"
 #include "Map.h"
 #include "ObjectMgr.h"
 #include "SpellMgr.h"
@@ -55,7 +54,7 @@ namespace
     // Minor Soulstone is trained at this level: below it, not knowing it is no news.
     uint32 const SOULSTONE_LEVEL = 18;
 
-    // Why the party's healer goes without a Soulstone (WarlockRotation::Note).
+    // Why the member the Soulstone is for goes without (WarlockRotation::Note).
     enum class SoulstoneNote : uint8
     {
         None,
@@ -109,9 +108,6 @@ namespace
             if (!pVictim)
                 return;
 
-            if ((pVictim->CanReachWithMeleeAutoAttack(me) || pVictim->IsNonMeleeSpellCasted()) &&
-                Cast(pVictim, s.pDeathCoil))
-                return;
             if (KillsWithShadowburn(pVictim) && Cast(pVictim, s.pShadowburn))
                 return;
 
@@ -160,17 +156,24 @@ namespace
         }
 
         // Out of combat, nothing else to do (user 2026-11-15, cooldown doc 2026-11-14-cooldown-spells.md
-        // 10): the party's healer without a Soulstone Resurrection gets one. With the stone in the
-        // bags: use it on the healer (its 30 min cooldown is the warlock's); without: create the
-        // best one it knows (a Soul Shard, SHARD_RESERVE is kept for this) while it and the
-        // leader stand still out of combat.
-        // The healer goes without one: the warlock says why, once per reason (user 2026-11-20).
+        // 10): the member the brain gives this warlock (SoulstoneAssigner; none without a
+        // Commander) gets one. With the stone in the bags: use it on that member (its 30 min
+        // cooldown is the warlock's); without: create the best one it knows (a Soul Shard,
+        // SHARD_RESERVE is kept for this) while it and the leader stand still out of combat.
+        // The member goes without one: the warlock says why, once per reason (user 2026-11-20);
+        // not for itself (a lone warlock).
         bool Soulstone()
         {
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             if (me->IsInCombat())
                 return false;
+            Player* pTarget = PlannedTarget();
+            if (!pTarget)
+            {
+                m_soulstoneNote = SoulstoneNote::None;
+                return false;
+            }
             SpellEntry const* pCreate = bot.m_spells.warlock.pCreateSoulstone;
             uint32 stone = 0;
             if (pCreate)
@@ -179,33 +182,30 @@ namespace
                         stone = uint32(pCreate->EffectItemType[i]);
             ItemPrototype const* pProto = stone ? sObjectMgr.GetItemPrototype(stone) : nullptr;
             SpellEntry const* pUse = pProto ? sSpellMgr.GetSpellEntry(pProto->Spells[0].SpellId) : nullptr;
-            Player* pHealer = SoulstoneTarget(pUse);
-            if (!pHealer)
-            {
-                m_soulstoneNote = SoulstoneNote::None;
+            // (the plan is from the last refresh: a stone may have landed since)
+            if (pUse && pTarget->HasAura(pUse->Id))
                 return false;
-            }
             if (!pCreate || !pUse)
             {
                 if (me->GetLevel() >= SOULSTONE_LEVEL)
-                    Note(SoulstoneNote::NotLearned, pHealer);
+                    Note(SoulstoneNote::NotLearned, pTarget);
                 return false;
             }
             if (!me->IsSpellReady(pUse, pProto))
             {
-                Note(SoulstoneNote::Cooldown, pHealer, me->GetSpellCooldownLeft(pUse));
+                Note(SoulstoneNote::Cooldown, pTarget, me->GetSpellCooldownLeft(pUse));
                 return false;
             }
             if (me->HasItemCount(stone, 1))
             {
                 m_soulstoneNote = SoulstoneNote::None;
-                return me->IsWithinLOSInMap(pHealer) && pUse->IsTargetInRange(me, pHealer) &&
-                       bot.UseBagItem(stone, pHealer);
+                return me->IsWithinLOSInMap(pTarget) && pUse->IsTargetInRange(me, pTarget) &&
+                       bot.UseBagItem(stone, pTarget);
             }
             for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
                 if (pCreate->Reagent[i] > 0 && !me->HasItemCount(uint32(pCreate->Reagent[i]), pCreate->ReagentCount[i]))
                 {
-                    Note(SoulstoneNote::NoShard, pHealer);
+                    Note(SoulstoneNote::NoShard, pTarget);
                     return false;
                 }
             if (me->IsMoving())
@@ -216,15 +216,17 @@ namespace
             return Cast(me, pCreate);
         }
 
-        // Why the healer has no Soulstone, in party chat (the party voice). Said again only for
-        // another reason.
-        void Note(SoulstoneNote note, Player const* pHealer, int32 cooldownMs = 0)
+        // Why the member has no Soulstone, in party chat (the party voice). Said again only for
+        // another reason; nothing to say when the stone was for itself.
+        void Note(SoulstoneNote note, Player const* pMember, int32 cooldownMs = 0)
         {
             if (note == m_soulstoneNote)
                 return;
             m_soulstoneNote = note;
+            if (pMember == m_bot.me)
+                return;
             BotShared::Phrases::Vars vars;
-            vars["name"] = pHealer->GetName();
+            vars["name"] = pMember->GetName();
             char const* key = nullptr;
             switch (note)
             {
@@ -247,42 +249,20 @@ namespace
             e.vars.assign(vars.begin(), vars.end());
             e.tier = Commander::VoiceTier::Essential;
             e.onceMs = 10 * IN_MILLISECONDS;    // (said again only for another reason: m_soulstoneNote)
-            e.once = std::string(key) + ":" + pHealer->GetName();
+            e.once = std::string(key) + ":" + pMember->GetName();
             sCommanderMgr.QueueVoice(m_bot.me, std::move(e));
         }
 
-        // A healer of the party (a healer bot; a player whose best role is healing,
-        // RoleCapabilities) without a Soulstone Resurrection (any rank: the stone's on-use aura
-        // or another warlock's).
-        Player* SoulstoneTarget(SpellEntry const* pUse) const
+        // The member TeamPlan::soulstones gives this warlock, alive on its map; null = none.
+        Player* PlannedTarget() const
         {
             Player* me = m_bot.me;
-            Player* pPlayerHealer = nullptr;
-            for (Player* pMember : Commander::Team::Members(me))
-            {
-                if (!pMember || !pMember->IsAlive() || pMember->GetMap() != me->GetMap() || HasSoulstone(pMember, pUse))
-                    continue;
-                if (TeamBotAI const* pAI = pMember->AI() ? dynamic_cast<TeamBotAI const*>(pMember->AI()) : nullptr)
-                {
-                    if (pAI->GetRole() == ROLE_HEALER)
-                        return pMember;
-                }
-                else if (!pPlayerHealer && RoleCapabilities::Assess(pMember).Best() == ROLE_HEALER)
-                    pPlayerHealer = pMember;
-            }
-            return pPlayerHealer;
-        }
-
-        static bool HasSoulstone(Player const* pMember, SpellEntry const* pUse)
-        {
-            // Soulstone Resurrection, ranks 1-5 (Player::SelectResurrectionSpellId).
-            static uint32 const RANKS[] = { 20707, 20762, 20763, 20764, 20765 };
-            if (pUse && pMember->HasAura(pUse->Id))
-                return true;
-            for (uint32 id : RANKS)
-                if (pMember->HasAura(id))
-                    return true;
-            return false;
+            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return nullptr;
+            ObjectGuid const guid = commander->GetPlan().soulstones.TargetFor(me->GetObjectGuid());
+            Player* pTarget = guid.IsEmpty() ? nullptr : me->GetMap()->GetPlayer(guid);
+            return pTarget && pTarget->IsInWorld() && pTarget->IsAlive() ? pTarget : nullptr;
         }
 
         // Step 2: spare shards, and its average direct damage takes the victim's whole health.
@@ -297,7 +277,7 @@ namespace
             return DamageSpells::EstimateDirect(me, pVictim, pSpell) >= float(pVictim->GetHealth());
         }
 
-        // The last reason said (Note); None once the healer has a stone or there is no healer.
+        // The last reason said (Note); None once the member has a stone or nobody is planned.
         SoulstoneNote m_soulstoneNote = SoulstoneNote::None;
     };
 }

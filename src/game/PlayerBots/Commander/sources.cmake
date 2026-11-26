@@ -489,6 +489,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Values/CurseValue.cpp
   ${COMMANDER_DIR}/Coordination/Duties/CurseAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/CurseAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/SoulstoneAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/SoulstoneAssigner.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/CurseBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/CurseBehavior.cpp
   ${COMMANDER_DIR}/Perception/Tanks.h

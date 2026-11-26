@@ -253,36 +253,63 @@ namespace Commander
             return true;
         }
 
-        // An area fear around the bot from its ClassKit::Controls (Psychic Scream, Howl of
-        // Terror), valued by ControlValue (user, 2026-11-07: a priest saving itself when
-        // everything runs at it counts; fear's add risk and scatter are in the worth). The
-        // fear does not change threat: they come back to the bot, the worth only counts what
-        // happens until the tank would have them (ControlValue::TAKEOVER_SEC).
-        bool ProposeSelfFear(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, Proposal& p)
+        // A fear from its ClassKit::Controls, valued by ControlValue (user, 2026-11-07: a priest
+        // saving itself when everything runs at it counts; fear's add risk and scatter are in
+        // the worth): an area one around the bot (Psychic Scream, Howl of Terror), or a single
+        // target one on a chaser (Death Coil, since 2026-11-26: before, the warlock rotation
+        // cast it on any victim in melee reach or casting). A chaser the doctrine keeps from
+        // fear (STAMP_NO_MEZ; a swarm, a self-destruct) is not taken by a single target fear.
+        // The fear does not change threat: they come back to the bot, the worth only counts
+        // what happens until the tank would have them (ControlValue::TAKEOVER_SEC).
+        bool ProposeFear(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan, PartyMemberFacts const& self,
+                         std::vector<Chaser> const& chasers, Proposal& p)
         {
             FightLoad::Input fight;
             bool haveFight = false;
             bool found = false;
-            for (ControlAbility const& a : self.controls)
+            auto consider = [&](ControlAbility const& a, SpellEntry const* spell, Unit* target,
+                                std::vector<EnemyFacts const*> const& targets)
             {
-                if (!a.ready || !a.fear || a.radius <= 0.0f)
-                    continue;
-                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
-                if (!spell || spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY || !bot->CanTryToCastSpell(bot->me, spell))
-                    continue;
-                std::vector<EnemyFacts const*> const targets = ControlValue::Targets(world, self, a, nullptr);
                 if (targets.empty())
-                    continue;
+                    return true;
                 if (!haveFight && !(haveFight = FightLoad::FromWorld(world, fight)))
                     return false;
                 ControlValue::Worth const w = ControlValue::Of(world, fight, self, a, targets);
                 if (found && w.Net() <= p.score)
-                    continue;
+                    return true;
                 p = MakeProposal(ProposalTier::Urgent, "dangerous hits: fear them off");
                 p.action.type = BotActionType::Cast;
                 p.action.spell = spell;
+                if (target)
+                    p.action.target = target->GetObjectGuid();
                 p.SetValue(w.Benefit(), w.Cost());
                 found = true;
+                return true;
+            };
+            for (ControlAbility const& a : self.controls)
+            {
+                if (!a.ready || !a.fear)
+                    continue;
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(a.spellId);
+                if (!spell)
+                    continue;
+                if (a.radius > 0.0f)
+                {
+                    if (spell->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY || !bot->CanTryToCastSpell(bot->me, spell))
+                        continue;
+                    if (!consider(a, spell, nullptr, ControlValue::Targets(world, self, a, nullptr)))
+                        return false;
+                    continue;
+                }
+                for (Chaser const& c : chasers)
+                {
+                    if (c.rooted || plan.doctrine.Has(c.facts->guid, STAMP_NO_MEZ | STAMP_SWARM | STAMP_SELF_DESTRUCT) ||
+                        (a.creatureTypeMask && !(c.unit->GetCreatureTypeMask() & a.creatureTypeMask)) ||
+                        !bot->CanTryToCastSpell(c.unit, spell))
+                        continue;
+                    if (!consider(a, spell, c.unit, ControlValue::Targets(world, self, a, c.facts)))
+                        return false;
+                }
             }
             return found;
         }
@@ -406,7 +433,8 @@ namespace Commander
             return;
 
         // 1. Hold them first when the hits are dangerous: the best of the class's roots / stuns,
-        // or an area fear around the bot (Psychic Scream) valued like the brain's controls.
+        // or a fear (Psychic Scream around the bot, Death Coil on a chaser) valued like the
+        // brain's controls.
         if (dangerous && !allHeld)
         {
             Proposal best;
@@ -421,7 +449,7 @@ namespace Commander
                 }
             }
             Proposal fear;
-            if (ProposeSelfFear(bot, world, *self, fear) && fear.score > 0.0f && (!found || fear.score > best.score))
+            if (ProposeFear(bot, world, plan, *self, chasers, fear) && fear.score > 0.0f && (!found || fear.score > best.score))
             {
                 best = fear;
                 found = true;

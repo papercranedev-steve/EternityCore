@@ -771,10 +771,15 @@ namespace Commander
         //               the self resurrection kept on its body (PLAYER_SELF_RES_SPELL).
         //   resurrects  it can resurrect others out of combat (bots: their resurrection spell;
         //               players: priests from level 10, paladins and shamans from 12).
+        //   soulstoned  alive with a Soulstone Resurrection on it (any warlock's, any rank).
         // soulstoneItem: warlock bots, a Soulstone in the bags whose use is ready (item entry).
+        // soulstoneReady: warlock bots, it knows Create Soulstone and the stone's use is off
+        // cooldown (in the bags or not; Coordination/Duties/SoulstoneAssigner.h).
         bool selfRes = false;
         bool resurrects = false;
+        bool soulstoned = false;
         uint32 soulstoneItem = 0;
+        bool soulstoneReady = false;
         // Dead with selfRes: the health and mana it rises with (Spell::EffectSelfResurrect: the
         // Soulstone's flat amounts, Reincarnation's percent). A dead healer bot with selfRes has
         // its heals in spareHealRates (FightLoad::Lineup::risen).

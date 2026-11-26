@@ -1360,7 +1360,13 @@ namespace WorldModelBuilder
         {
             uint32 riseSpell = 0;
             if (member->IsAlive())
+            {
                 f.selfRes = member->SelectResurrectionSpellId() != 0;
+                // Soulstone Resurrection ranks 1-5 (Player::SelectResurrectionSpellId).
+                static uint32 const SOULSTONE_AURAS[] = { 20707, 20762, 20763, 20764, 20765 };
+                for (uint32 id : SOULSTONE_AURAS)
+                    f.soulstoned = f.soulstoned || member->HasAura(id);
+            }
             else
             {
 #if SUPPORTED_CLIENT_BUILD >= CLIENT_BUILD_1_6_1
@@ -1395,7 +1401,8 @@ namespace WorldModelBuilder
         }
 
         // PartyMemberFacts::soulstoneItem: a warlock bot's Soulstone in its bags, its use ready
-        // (the same item as WarlockRotation::Soulstone: what its best Create Soulstone makes).
+        // (the same item as WarlockRotation::Soulstone: what its best Create Soulstone makes);
+        // soulstoneReady: that use is ready, the stone held or not.
         void FillSoulstone(TeamBotAI const* ai, PartyMemberFacts& f)
         {
             SpellEntry const* create = ai->m_spells.warlock.pCreateSoulstone;
@@ -1408,7 +1415,8 @@ namespace WorldModelBuilder
                 uint32 const stone = uint32(create->EffectItemType[i]);
                 ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stone);
                 SpellEntry const* use = proto ? sSpellMgr.GetSpellEntry(proto->Spells[0].SpellId) : nullptr;
-                if (use && ai->me->HasItemCount(stone, 1) && ai->me->IsSpellReady(use, proto))
+                f.soulstoneReady = use && ai->me->IsSpellReady(use, proto);
+                if (f.soulstoneReady && ai->me->HasItemCount(stone, 1))
                     f.soulstoneItem = stone;
                 return;
             }
