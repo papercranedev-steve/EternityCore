@@ -107,6 +107,9 @@ namespace RestValue
     {
         if (!member.alive || member.inCombat || world.HasPartyEnemy() || !world.targeted.empty())
             return 0.0f;
+        // Sitting with a food or a drink on: the cast stands it up and throws the item away.
+        if (member.eating || member.drinking)
+            return 0.0f;
         if (!member.UsesMana() || member.drinkManaPerSec <= 0.0f || member.foodHealthPerSec <= 0.0f ||
             member.tapManaPerCast <= 0.0f || member.tapManaPerHealth <= 0.0f)
             return 0.0f;

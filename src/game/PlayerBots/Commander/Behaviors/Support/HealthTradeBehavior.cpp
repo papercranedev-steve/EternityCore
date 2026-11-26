@@ -39,6 +39,19 @@ namespace Commander
             return std::min(fightSec, (have + mana) / spend) - std::min(fightSec, have / spend);
         }
 
+        // The global cooldown would go unused: walking, or the filler cannot reach its victim
+        // (none, out of sight, out of range).
+        bool FreeGcd(TeamBotAI const* bot, SpellEntry const* filler)
+        {
+            Player* me = bot->me;
+            if (me->IsMoving())
+                return true;
+            Unit* victim = me->GetVictim();
+            if (!victim || !victim->IsAlive() || !me->IsWithinLOSInMap(victim))
+                return true;
+            return !me->IsWithinDistInMap(victim, CombatBotBaseAI::SpellMaxRange(me, filler));
+        }
+
         void ProposeTap(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                         std::vector<Proposal>& out)
         {
@@ -59,7 +72,15 @@ namespace Commander
             if (!bot->CanTryToCastSpell(me, tap))
                 return;
 
-            // Tap when the mana runs out, not to keep it topped: nothing while it lasts the fight.
+            // Just in time (user 2026-11-26): a tap now gives what a tap later gives, so only
+            // when the next filler cannot be paid or the global cooldown is free anyway.
+            float const fillerCost = DamageSpells::ManaCost(me, filler);
+            bool const dry = mana < fillerCost;
+            bool const freeGcd = !dry && FreeGcd(bot, filler);
+            if (!dry && !freeGcd)
+                return;
+
+            // Nothing while the mana it has lasts the fight.
             float const spend = Spend(me, self, filler);
             if (spend <= 0.0f)
                 return;
@@ -70,7 +91,8 @@ namespace Commander
             Proposal p;
             p.tier = ProposalTier::Routine;
             p.source = "health";
-            p.reason = "mana runs out, nothing hits it: tap";
+            p.reason = dry ? "no mana for the next cast, nothing hits it: tap"
+                           : "the global cooldown is free anyway, nothing hits it: tap";
             p.action.type = BotActionType::Cast;
             p.action.spell = tap;
             p.action.target = self.guid;

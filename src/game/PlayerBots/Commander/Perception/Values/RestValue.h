@@ -99,7 +99,8 @@ namespace Commander
         // before sitting down (user 2026-11-16: mana empty, health full -> tap until the two
         // take about as long, then eat and drink). 0 when it saves nothing: a fight on (no
         // eating, the health is not won back), no tap, its mana does not fit, the health does
-        // not pay it.
+        // not pay it, already eating or drinking (user 2026-11-26: standing up to tap wasted
+        // the drink, a tap and a new drink three times over).
         float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member);
     }
 }

@@ -22,6 +22,11 @@
  *   gates    the mana it gives fits (nothing wasted); health above its cost; safe; not in
  *            danger (SurvivalValue::Of); the mana it has does not last the fight (benefit > 0;
  *            user 2026-11-16: tap when the mana runs out, not to keep it topped).
+ *   when     just in time (user 2026-11-26; strat-20261126-232120: seven taps in a row to full
+ *            mana and 51 health, no Shadow Bolt; the rotation is not a candidate, so any tap
+ *            with a positive score pushed it out): the mana left does not pay the next filler,
+ *            or the global cooldown is free anyway (walking; no victim, or it is out of the
+ *            filler's sight or range). A tap now gives what a tap later gives.
  *   benefit  LostAction(min(T, (M + gain) / S) - min(T, M / S)): filler seconds it adds
  *   cost     LostAction(GCD)
  * Drain Life, in combat, on its victim:
