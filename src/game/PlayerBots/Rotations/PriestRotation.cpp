@@ -109,8 +109,8 @@ namespace
                         Damage(pVictim);
                 }
             }
-            // Alone (a team of one, Commander/Team.h): nobody else heals it, as the paladin and
-            // shaman rotations heal themselves when low.
+            // Alone (a team of one, Commander/Team.h): nobody else heals it, as the paladin
+            // rotation heals itself when low.
             else if (!healPlanned && !Commander::Team::IsShared(me) && me->GetHealthPercent() < SOLO_SELF_HEAL_PCT &&
                      bot.HealInjuredTarget(me))
                 return;

@@ -13,8 +13,8 @@
  * before it took (the same totem twice does not stack). Totems of player shamans are not seen.
  *
  * Not a Duties module, like the blessings: a shaman keeps four totems at once. Runs every
- * refresh (pure function of the world model); ShamanRotation drops them in combat and picks
- * with Order() for a party with melee and mana users while the module is off.
+ * refresh (pure function of the world model); ShamanRotation drops them in combat (no totems
+ * without this plan since 2026-11-26).
  */
 
 #ifndef MANGOS_COMMANDER_TOTEM_ASSIGNER_H

@@ -423,8 +423,9 @@ public:
     // Members first, then their pets.
     Unit* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     // Hides CombatBotBaseAI::FindAndHealInjuredAlly: skips the heal when the Commander vetoed it.
-    // While the Commander heal module controls healing, casts its heal order instead (none: no heal).
-    // Out of combat the target is Commander::RestTopUp::Select (only a gap worth a heal).
+    // While the Commander heal module controls healing, casts its heal order instead (none: no heal);
+    // in combat nothing else. Out of combat the target is Commander::RestTopUp::Select (only a gap
+    // worth a heal).
     bool FindAndHealInjuredAlly(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f);
     // Hides CombatBotBaseAI::FindAndPreHealTarget: off while the heal module controls healing.
     bool FindAndPreHealTarget();

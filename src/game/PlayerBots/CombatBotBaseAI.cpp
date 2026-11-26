@@ -1704,21 +1704,9 @@ void CombatBotBaseAI::PopulateSpellData()
         }
         case CLASS_SHAMAN:
         {
-            if (pWindfuryWeapon && m_role == ROLE_MELEE_DPS)
-                m_spells.shaman.pWeaponBuff = pWindfuryWeapon;
-            else
-            {
-                std::vector<SpellEntry const*> weaponBuffs;
-                if (pWindfuryWeapon)
-                    weaponBuffs.push_back(pWindfuryWeapon);
-                if (pRockbiterWeapon)
-                    weaponBuffs.push_back(pRockbiterWeapon);
-                if (pFrostbrandWeapon)
-                    weaponBuffs.push_back(pFrostbrandWeapon);
-                if (!weaponBuffs.empty())
-                    m_spells.shaman.pWeaponBuff = SelectRandomContainerElement(weaponBuffs);
-            }
-
+            // The best melee imbue it knows (until 2026-11-26 a random one unless melee damage).
+            m_spells.shaman.pWeaponBuff = pWindfuryWeapon ? pWindfuryWeapon
+                                        : pRockbiterWeapon ? pRockbiterWeapon : pFrostbrandWeapon;
             break;
         }
         case CLASS_MAGE:

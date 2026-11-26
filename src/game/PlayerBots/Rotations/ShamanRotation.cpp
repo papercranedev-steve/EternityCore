@@ -1,23 +1,27 @@
 /*
- * Shaman rotation (moved out of PartyBotAI.cpp 2026-11-14, same steps).
+ * Shaman rotation (moved out of PartyBotAI.cpp 2026-11-14).
  *
- * Out of combat: weapon buff, Lightning Shield, heals (healer); with a victim (an opener):
- * totems, then the combat steps.
+ * Out of combat: weapon buff, Lightning Shield, the heal step (healer: Commander RestTopUp);
+ * with a victim (an opener): totems, then the combat steps.
  *
  * In combat:
- *   1. Not a healer: Frost Shock on a moving victim, Stormstrike, Chain Lightning, Purge,
- *      Flame Shock, Lightning Bolt (ranged role, or the victim out of melee reach).
- *   2. Healer: heals (the Commander heal module while the party fights), then totems, then a
- *      pre-heal. Others: totems, then a self heal below 20%.
+ *   1. Heals the team: the heal step (the Commander heal module's order, none = rest), totems
+ *      in the gaps, then its damage step (a healer: its tier, HealerDamage; a side healer that
+ *      also deals damage for the team: Damage).
+ *   2. Others: totems, then Damage: Stormstrike, Chain Lightning (not in melee), Flame Shock,
+ *      Lightning Bolt (not a melee role, or the victim out of melee reach).
  *
- * Totems (KeepTotems): the brain's choice per element (Coordination/Duties/TotemAssigner.h),
- * TotemAssigner::Order for a party with melee and mana users while the module is off. One is
- * dropped when its element is empty, holds another totem or was left behind
- * (CombatBotBaseAI::KeepShamanTotem).
+ * Totems (KeepTotems): the brain's choice per element (Coordination/Duties/TotemAssigner.h).
+ * One is dropped when its element is empty, holds another totem or was left behind
+ * (CombatBotBaseAI::KeepShamanTotem). Before the damage step: a damage dealer always has a
+ * Lightning Bolt to cast, so a lost totem never came back (until 2026-11-26).
  *
- * The Commander decides: Earth Shock on a cast (InterruptBehavior), Mana Tide (BoostBehavior),
- * Elemental Mastery (BurstBehavior), Nature's Swiftness (heal boosts), dispels in combat.
- * Still the rotation's own: Purge (no Commander module for enemy buffs yet).
+ * The Commander decides: Earth Shock on a cast (InterruptBehavior), Frost Shock on a fleeing
+ * enemy (FleeStopBehavior), Mana Tide (BoostBehavior), Elemental Mastery (BurstBehavior),
+ * Nature's Swiftness (heal boosts), dispels, every heal (self heals included).
+ * Removed 2026-11-26 (decisions the rotation made on its own): Frost Shock on any moving
+ * victim (mostly a pulled enemy walking to the tank), Purge on any buff, a self heal below 20%
+ * health, the pre-heal, percent heal thresholds, and the totem choice without the brain.
  */
 
 #include "Rotations/ClassRotation.h"
@@ -26,7 +30,6 @@
 #include "SpellMgr.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
-#include "Commander/Coordination/Duties/TotemAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 
 namespace
@@ -65,23 +68,14 @@ namespace
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
 
-            if (!bot.HealsForTeam())
-                if (Unit* pVictim = me->GetVictim())
-                    if (Damage(pVictim))
-                        return;
-
             // A healer heals before it drops totems: up to four totems are four GCDs without a
-            // heal (until 2026-11-15 totems came first, also at the pull and after a totem died).
-            // The heal module orders nothing while nobody needs a lift (rest): the totems go
-            // down in those gaps. One that also deals damage for the team (nobody else does)
-            // takes its damage step last.
+            // heal. The heal module orders nothing while nobody needs a lift: the totems go
+            // down in those gaps.
             if (bot.HealsForTeam())
             {
-                if (bot.FindAndHealInjuredAlly(50.0f, 90.0f))
+                if (bot.FindAndHealInjuredAlly())
                     return;
                 if (KeepTotems())
-                    return;
-                if (bot.FindAndPreHealTarget())
                     return;
                 if (Unit* pVictim = me->GetVictim())
                 {
@@ -96,84 +90,37 @@ namespace
             if (KeepTotems())
                 return;
 
-            if (me->GetHealthPercent() < 20.0f)
-                bot.HealInjuredTarget(me);
+            if (Unit* pVictim = me->GetVictim())
+                Damage(pVictim);
         }
 
     private:
         // A healer's damage step by its tier this tick (healer damage tiers doc 2026-11-21,
         // section 6). Its melee swings (FREE) need it next to the victim (step 5).
-        //   SPARE  Flame Shock; Lightning Bolt out of melee reach
-        //   FULL   + Frost Shock on a moving victim
+        //   SPARE and FULL  Flame Shock; Lightning Bolt out of melee reach
         void HealerDamage(Unit* pVictim, uint8 tier)
         {
             if (tier < Commander::HEALER_DAMAGE_SPARE)
                 return;
-            TeamBotAI& bot = m_bot;
-            auto const& s = bot.m_spells.shaman;
-            if (tier >= Commander::HEALER_DAMAGE_FULL && pVictim->IsMoving() && Cast(pVictim, s.pFrostShock))
-                return;
+            auto const& s = m_bot.m_spells.shaman;
             if (Cast(pVictim, s.pFlameShock))
                 return;
-            if (!bot.me->CanReachWithMeleeAutoAttack(pVictim))
+            if (!m_bot.me->CanReachWithMeleeAutoAttack(pVictim))
                 Cast(pVictim, s.pLightningBolt);
-        }
-
-        // The brain's totem plan, nullptr while the module (or the Commander) is off.
-        std::shared_ptr<Commander::PartyCommander> PlanOwner() const
-        {
-            if (!sCommanderMgr.IsEnabled())
-                return nullptr;
-            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(m_bot.me);
-            return commander && commander->GetPlan().totems.active ? commander : nullptr;
-        }
-
-        SpellEntry const* KnownTotem(Commander::TotemKind kind) const
-        {
-            auto const& s = m_bot.m_spells.shaman;
-            switch (kind)
-            {
-                case Commander::TotemKind::ManaSpring:      return s.pManaSpringTotem;
-                case Commander::TotemKind::HealingStream:   return s.pHealingStreamTotem;
-                case Commander::TotemKind::StrengthOfEarth: return s.pStrengthOfEarthTotem;
-                case Commander::TotemKind::Stoneskin:       return s.pStoneskinTotem;
-                case Commander::TotemKind::Windfury:        return s.pWindfuryTotem;
-                case Commander::TotemKind::GraceOfAir:      return s.pGraceOfAirTotem;
-                case Commander::TotemKind::TranquilAir:     return s.pTranquilAirTotem;
-                case Commander::TotemKind::Flametongue:     return s.pFlametongueTotem;
-                default:                                    return nullptr;
-            }
-        }
-
-        // Module off: the first of the element's list I know.
-        SpellEntry const* OwnTotemChoice(TotemSlot slot) const
-        {
-            Commander::TotemAssigner::PartyMix mix;
-            mix.melee = 1;
-            mix.manaUsers = 1;
-            for (Commander::TotemKind kind : Commander::TotemAssigner::Order(slot, mix))
-                if (SpellEntry const* spell = KnownTotem(kind))
-                    return spell;
-            return nullptr;
         }
 
         // One totem dropped (true), elements in the order water, earth, air, fire.
         bool KeepTotems()
         {
             TeamBotAI& bot = m_bot;
-            std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
+            std::shared_ptr<Commander::PartyCommander> const commander = sCommanderMgr.FindCommander(bot.me);
+            if (!commander)
+                return false;
             static TotemSlot const SLOTS[] = { TOTEM_SLOT_WATER, TOTEM_SLOT_EARTH, TOTEM_SLOT_AIR, TOTEM_SLOT_FIRE };
             for (TotemSlot slot : SLOTS)
             {
-                SpellEntry const* spell = nullptr;
-                if (owner)
-                {
-                    if (uint32 const spellId = owner->GetPlan().totems.TotemFor(bot.me->GetObjectGuid(), slot))
-                        spell = sSpellMgr.GetSpellEntry(spellId);
-                }
-                else
-                    spell = OwnTotemChoice(slot);
-                if (bot.KeepShamanTotem(slot, spell))
+                uint32 const spellId = commander->GetPlan().totems.TotemFor(bot.me->GetObjectGuid(), slot);
+                if (spellId && bot.KeepShamanTotem(slot, sSpellMgr.GetSpellEntry(spellId)))
                     return true;
             }
             return false;
@@ -183,21 +130,17 @@ namespace
         {
             TeamBotAI& bot = m_bot;
             auto const& s = bot.m_spells.shaman;
+            // A melee role stays on its swings: a 2.5 s cast stops them.
+            bool const meleeRole = bot.GetRole() == ROLE_MELEE_DPS || bot.GetRole() == ROLE_TANK;
+            bool const inReach = bot.me->CanReachWithMeleeAutoAttack(pVictim);
 
-            if (pVictim->IsMoving() && Cast(pVictim, s.pFrostShock))
-                return true;
             if (Cast(pVictim, s.pStormstrike))
                 return true;
-            if (Cast(pVictim, s.pChainLightning))
-                return true;
-            if (s.pPurge && bot.IsValidDispelTarget(pVictim, s.pPurge) && Cast(pVictim, s.pPurge))
+            if (!meleeRole && Cast(pVictim, s.pChainLightning))
                 return true;
             if (Cast(pVictim, s.pFlameShock))
                 return true;
-            // (a healer dealing damage too stands back like a caster)
-            if ((bot.GetRole() == ROLE_RANGE_DPS || bot.GetRole() == ROLE_HEALER ||
-                 !bot.me->CanReachWithMeleeAutoAttack(pVictim)) &&
-                Cast(pVictim, s.pLightningBolt))
+            if ((!meleeRole || !inReach) && Cast(pVictim, s.pLightningBolt))
                 return true;
             return false;
         }

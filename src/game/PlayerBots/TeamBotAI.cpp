@@ -816,11 +816,14 @@ bool TeamBotAI::FindAndHealInjuredAlly(float selfHealPercent, float groupHealPer
     // Commander hook (UpdateAI): the out of combat AI runs before the hook sets it.
     if (IsHealingControlled())
         return me->IsInCombat() && CastHealOrder();
+    // In combat only that module heals (user 2026-11-26: the Commander always runs). Until then a
+    // percent rule (SelectHealTarget) healed in the ticks before it took over.
+    if (me->IsInCombat())
+        return false;
 
     // Out of combat only a gap worth a heal (Commander/Behaviors/Support/RestTopUp.h, user
     // 2026-11-22: not every scratch natural regeneration fills, nor a max health that changed).
-    Unit* pTarget = me->IsInCombat() ? SelectHealTarget(selfHealPercent, groupHealPercent)
-                                     : Commander::RestTopUp::Select(this, m_restTopUp, selfHealPercent, groupHealPercent);
+    Unit* pTarget = Commander::RestTopUp::Select(this, m_restTopUp, selfHealPercent, groupHealPercent);
     if (!pTarget)
         return false;
 
@@ -1226,6 +1229,29 @@ bool TeamBotAI::PassesPartyCastChecks(Unit const* pTarget, SpellEntry const* pSp
     // a chained hit or a melee splash next to it. Every cast of the bot, rotations included.
     if (WouldWakeKeptControl(pTarget, pSpellEntry))
         return false;
+
+    // A chained hit (Chain Lightning) is no area spell to the server, but each jump takes the
+    // nearest enemy within CHAIN_SPELL_JUMP_RADIUS of the last one, idle ones too (Spell.cpp,
+    // TARGET_UNIT_ENEMY): same rule as the area spells below for every enemy it could reach.
+    if (pTarget && !pSpellEntry->IsPositiveSpell())
+    {
+        uint32 jumps = 0;
+        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+            if (pSpellEntry->EffectImplicitTargetA[i] == TARGET_UNIT_ENEMY && pSpellEntry->EffectChainTarget[i] > 1)
+                jumps = std::max(jumps, pSpellEntry->EffectChainTarget[i] - 1);
+        if (jumps)
+        {
+            // (melee ones, Cleave: only within the spell's reach around the target)
+            float const reach = pSpellEntry->DmgClass == SPELL_DAMAGE_CLASS_MELEE
+                ? Spells::GetSpellMaxRange(sSpellRangeStore.LookupEntry(pSpellEntry->rangeIndex))
+                : float(jumps * CHAIN_SPELL_JUMP_RADIUS);
+            std::list<Unit*> targets;
+            me->GetEnemyListInRadiusAround(pTarget, reach + AOE_IDLE_MARGIN, targets);
+            for (Unit const* pUnit : targets)
+                if (WouldAreaSpellPullIdle(pUnit))
+                    return false;
+        }
+    }
 
     if (pSpellEntry->IsAreaOfEffectSpell() && !pSpellEntry->IsPositiveSpell())
     {
