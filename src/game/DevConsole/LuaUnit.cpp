@@ -1965,6 +1965,17 @@ namespace DevConsole
         CheckPlayer(L, 1)->RemovePet(PET_SAVE_AS_DELETED);
         return 0;
     }
+    // u:givepet() -> true when a pet was tamed: a hunter bot without a pet gets a sturdy beast
+    // of its level (CombatBotBaseAI::TameStarterPet), also a companion (test scenarios: it has
+    // none until it tames one itself, which is not built yet).
+    static int U_givepet(lua_State* L)
+    {
+        TeamBotAI* ai = GetTeamBotAI(CheckPlayer(L, 1));
+        if (!ai)
+            return luaL_error(L, "not a bot");
+        lua_pushboolean(L, ai->TameStarterPet());
+        return 1;
+    }
     // ---- money and bags (life test scenarios, lua/tests/life) ----
     // u:money() -> copper
     static int U_money(lua_State* L)
@@ -2688,7 +2699,7 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
-            { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "cmd", U_cmd },
+            { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
             { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags }, { "trainup", U_trainup },

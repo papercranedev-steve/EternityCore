@@ -646,6 +646,9 @@ local function finish(leader, s)
         local back = spot.o + math.pi
         local ang = back + (i - (#bots + 1) / 2) * 0.6
         b:tp(spot.x + math.cos(ang) * 3.0, spot.y + math.sin(ang) * 3.0, spot.z, spot.o)
+        -- every hunter fights with a pet: a companion has none until it tames one itself (not
+        -- built yet), so it gets one here as a plain bot does (after the teleport: at its feet)
+        if b:class() == CLASS_ID.hunter then b:givepet() end
     end
     killCleared(leader, s)
     leader:gm(false)

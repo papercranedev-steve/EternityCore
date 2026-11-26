@@ -119,6 +119,10 @@ public:
     void ResetSpellData();
     void AddAllSpellReagents();
     void SummonPetIfNeeded();
+    // A hunter of level 10+ without a pet: a sturdy beast of its level summoned at its feet and
+    // tamed (bots with free abilities, SummonPetIfNeeded; test scenarios give a companion one,
+    // dev console u:givepet). False: not a hunter, too low, already has one, or the summon failed.
+    bool TameStarterPet();
     // The warlock's demon knows every ability its level allows (a player's Grimoires) and its
     // party aura (Blood Pact) is on autocast. Once per demon.
     void LearnDemonSpells(Pet* pPet);

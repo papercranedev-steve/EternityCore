@@ -2386,19 +2386,7 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (!freeAbilities)
             return;
 
-        // A sturdy family (user 2026-11-15): the pet holds enemies for the party besides
-        // damaging (bear, boar: Charge, gorilla: Thunderstomp, turtle: Shell Shield). A pet the
-        // player gives the bot is kept as it is.
-        uint32 petId = PickRandomValue(PET_BEAR, PET_BOAR, PET_GORILLA, PET_TURTLE);
-        if (Creature* pCreature = me->SummonCreature(petId,
-            me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f,
-            TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000))
-        {
-            pCreature->SetLevel(me->GetLevel());
-            me->CastSpell(pCreature, SPELL_TAME_BEAST, true);
-            if (Pet* pPet = me->GetPet())
-                TrainHunterPet(pPet);
-        }
+        TameStarterPet();
     }
     else if (me->GetClass() == CLASS_WARLOCK)
     {
@@ -2429,6 +2417,28 @@ void CombatBotBaseAI::SummonPetIfNeeded()
         if (pSummon && !me->IsMoving() && !me->IsNonMeleeSpellCasted(false) && CanTryToCastSpell(me, pSummon))
             DoCastSpell(me, pSummon);
     }
+}
+
+bool CombatBotBaseAI::TameStarterPet()
+{
+    if (me->GetClass() != CLASS_HUNTER || me->GetLevel() < 10 || me->GetPetGuid() || me->GetCharmGuid())
+        return false;
+
+    // A sturdy family (user 2026-11-15): the pet holds enemies for the party besides
+    // damaging (bear, boar: Charge, gorilla: Thunderstomp, turtle: Shell Shield). A pet the
+    // player gives the bot is kept as it is.
+    uint32 petId = PickRandomValue(PET_BEAR, PET_BOAR, PET_GORILLA, PET_TURTLE);
+    Creature* pCreature = me->SummonCreature(petId,
+        me->GetPositionX(), me->GetPositionY(), me->GetPositionZ(), 0.0f,
+        TEMPSUMMON_TIMED_COMBAT_OR_DEAD_DESPAWN, 3000, false, 3000);
+    if (!pCreature)
+        return false;
+    pCreature->SetLevel(me->GetLevel());
+    me->CastSpell(pCreature, SPELL_TAME_BEAST, true);
+    Pet* pPet = me->GetPet();
+    if (pPet)
+        TrainHunterPet(pPet);
+    return pPet != nullptr;
 }
 
 void CombatBotBaseAI::LearnDemonSpells(Pet* pPet)
