@@ -294,6 +294,15 @@ namespace AreaValue
             }
         }
 
+        // Header "At most N targets": the server hits a random maxTargets of them. Damage: the
+        // expected share; the turns stay as if each were hit (any of them may be).
+        if (spell.maxTargets && targets.size() > spell.maxTargets)
+        {
+            float const share = float(spell.maxTargets) / float(targets.size());
+            for (float& d : damage)
+                d *= share;
+        }
+
         // Enemies on the caster already hit it from their walk on (a channel only: pushback).
         std::vector<Hitter> onMe;
         if (spell.channel)
@@ -418,7 +427,19 @@ namespace AreaValue
         }
         float const extraMana = std::max(0.0f, spell.mana - self.fillerManaPerSec * busySec);
         out.mana = extraMana > 0.0f ? ManaWorth::Points(world, self, extraMana) : 0.0f;
-        finish(count, b, c + out.mana, l);
+        // Header "Rage and energy": the same two rules with the filler's own power.
+        out.power = 0.0f;
+        if (spell.power > 0.0f && self.fillerPowerPerSec > 0.0f && spell.powerType == self.fillerPowerType)
+        {
+            if (damage[count - 1] / spell.power < fillerPerSec / self.fillerPowerPerSec)
+            {
+                out.invalid = "less damage per rage or energy than the filler";
+                return out;
+            }
+            float const extraPower = std::max(0.0f, spell.power - self.fillerPowerPerSec * busySec);
+            out.power = extraPower > 0.0f ? Value::LostAction(world, self, extraPower / self.fillerPowerPerSec) : 0.0f;
+        }
+        finish(count, b, c + out.mana + out.power, l);
         out.valid = true;
         return out;
     }

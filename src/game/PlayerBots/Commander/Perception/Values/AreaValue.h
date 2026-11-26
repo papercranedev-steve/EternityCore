@@ -55,6 +55,16 @@
  *             ManaWorth(mana above what the filler spends in that time); not valid when it does
  *             less damage per mana than the filler.
  *   paid      the best n of the ticks left (the channel watch stops it only when every n loses).
+ * Melee area spells (2026-11-26, warrior Whirlwind):
+ *   At most N targets  AreaSpellFacts::maxTargets (Whirlwind 4, the server picks them at
+ *             random): with more in the circle the damage is the expected share; the turns
+ *             are counted as if each were hit.
+ *   Rage and energy  as the mana rules, with the filler's own power (fillerPowerPerSec, same
+ *             power type): not valid with less damage per point than the filler; the power
+ *             above what the filler spends in the same time costs the filler seconds it
+ *             would have paid for, LostAction(extra / fillerPowerPerSec) (Result::power).
+ *             White swings go on through an instant melee spell: its time cost is the GCD
+ *             the filler loses, as for a caster.
  * Pure: WorldModel facts.
  */
 
@@ -105,6 +115,7 @@ namespace Commander
             float cost = 0.0f;              // time + turns (+ mana when not paid)
             float turnLoss = 0.0f;
             float mana = 0.0f;              // points of the mana (not paid)
+            float power = 0.0f;             // points of the rage or energy (not paid)
             float net = 0.0f;
             std::vector<ObjectGuid> targets;
             std::vector<ObjectGuid> turning;    // enemies that turn to the caster within `ticks`

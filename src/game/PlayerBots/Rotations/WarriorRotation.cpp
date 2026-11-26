@@ -19,7 +19,7 @@
  *   2. Execute below 20%, Overpower (Battle Stance only).
  *   3. Rend only without Bloodthirst (arms levelling), Mortal Strike, Bloodthirst.
  *   3b. Battle Shout when missing and rage above 30.
- *   4. Whirlwind.
+ *   4. Whirlwind with at most one enemy in its circle (2+: the area phase, 2026-11-26).
  *   5. Rage dump, Cleave (2+ enemies next to the victim) or Heroic Strike: above 30 rage and
  *      above what Mortal Strike / Bloodthirst / Whirlwind need when one of them is ready within
  *      1.5 s; not in the Execute phase (Execute takes the rage).
@@ -45,6 +45,7 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
 #include "TeamBotAI.h"
 #include "Player.h"
 #include "Spell.h"
@@ -119,7 +120,10 @@ namespace
                 return;
 
             // (Intercept: the melee stance module's, ClassKit::GapCloser)
-            if (Cast(me, w.pWhirlwind))
+            // Whirlwind on a lone enemy only: with 2+ in its circle it is the area phase's
+            // (ClassKit::AreaDamage, AreaDamageBehavior), which weighs the threat on each.
+            if (w.pWhirlwind && me->GetEnemyCountInRadiusAround(me, Commander::SpellTags::AreaRadius(w.pWhirlwind)) <= 1 &&
+                Cast(me, w.pWhirlwind))
                 return;
 
             // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander

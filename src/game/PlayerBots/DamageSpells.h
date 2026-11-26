@@ -5,11 +5,19 @@
  *
  *   damage     per target: direct effects (average base + SpellDamageBonusDone, direct) plus
  *              every tick of periodic damage auras, also ground effects (Blizzard: persistent
- *              area aura), with the DOT bonus. Resistances, crits and the target's damage
- *              taken modifiers are not counted.
+ *              area aura), with the DOT bonus. Resistances, armor, crits and the target's
+ *              damage taken modifiers are not counted.
+ *              Melee spells (2026-11-26, melee area damage): weapon damage effects as
+ *              Spell::EffectWeaponDmg adds them (the average main hand hit, normalized for
+ *              Whirlwind / Mortal Strike, + the effects' bonus, x weapon percent), and school
+ *              damage of a melee spell, both with MeleeDamageBonusDone instead of the spell
+ *              power bonus. Bloodthirst's school damage is a share of attack power (its spell
+ *              script, spell_warrior.cpp), not its base points.
  *   busy       how long the caster is busy: the channel (Blizzard, Evocation), else the cast
- *              time, at least a global cooldown.
+ *              time, at least a global cooldown. (A next swing spell, Heroic Strike, Cleave,
+ *              has no global cooldown: still counted as one.)
  *   mana       HealSpells::ManaCost.
+ *   power      the cost in the spell's power when that is not mana (rage, energy).
  */
 
 #ifndef MANGOS_DAMAGE_SPELLS_H
@@ -42,6 +50,9 @@ namespace DamageSpells
     float BusySec(Unit const* caster, SpellEntry const* spell);
     // Mana the spell costs `caster` now; 0 for spells that do not use mana.
     float ManaCost(Unit* caster, SpellEntry const* spell);
+    // Rage or energy the spell costs `caster` now, in the power's own units (rage x10, as
+    // Unit::GetPower); 0 for mana and health spells.
+    float PowerCost(Unit* caster, SpellEntry const* spell);
 }
 
 #endif

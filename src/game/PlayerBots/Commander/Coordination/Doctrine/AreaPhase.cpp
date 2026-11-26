@@ -451,10 +451,10 @@ namespace Commander
             if (c)
             {
                 AreaValue::Result const& v = c->value;
-                data += Trace::Format(",\"net\":%.2f,\"benefit\":%.2f,\"cost\":%.2f,\"turnLoss\":%.2f,\"mana\":%.2f,"
+                data += Trace::Format(",\"net\":%.2f,\"benefit\":%.2f,\"cost\":%.2f,\"turnLoss\":%.2f,\"mana\":%.2f,\"power\":%.2f,"
                                       "\"targets\":%u,\"turning\":%u,\"shieldGain\":%.2f,\"move\":%s,\"moveCost\":%.2f,"
                                       "\"netHere\":%.2f,\"score\":%.2f",
-                    v.net, v.benefit, v.cost, v.turnLoss, v.mana, uint32(v.targets.size()), uint32(v.turning.size()),
+                    v.net, v.benefit, v.cost, v.turnLoss, v.mana, v.power, uint32(v.targets.size()), uint32(v.turning.size()),
                     c->shieldGain, c->move ? "true" : "false", c->moveCost, c->netHere, c->score);
             }
             Trace::Emit("areacand", label, data + "}");

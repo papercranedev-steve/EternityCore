@@ -1597,9 +1597,14 @@ namespace WorldModelBuilder
                     continue;
                 // A mage out of mana gives up no Blizzard when a pack member is sheeped or
                 // shackled (ControlValue::OfPull's aoe; strat-20261108-141921: charged at 30 mana).
+                // (rage and energy are not checked: a warrior has none before the pull, and
+                // gets it in the fight)
                 if (DamageSpells::ManaCost(me, a.spell) > float(me->GetPower(POWER_MANA)))
                     continue;
-                float const dps = DamageSpells::Estimate(me, victim, a.spell) / std::max(0.1f, DamageSpells::BusySec(me, a.spell));
+                // Over its cooldown when that is longer (Whirlwind 10 s; Blizzard has none): the
+                // damage it keeps up through a control's duration.
+                float const everySec = std::max(DamageSpells::BusySec(me, a.spell), a.spell->GetRecoveryTime() / 1000.0f);
+                float const dps = DamageSpells::Estimate(me, victim, a.spell) / std::max(0.1f, everySec);
                 if (dps <= f.areaDpsPerTarget)
                     continue;
                 f.areaDpsPerTarget = dps;
@@ -1653,11 +1658,14 @@ namespace WorldModelBuilder
                     a.tickThreat = me->ApplyTotalThreatModifier(a.perTick * sSpellMgr.GetSpellThreatMultiplier(spell),
                                                                 spell->GetSpellSchoolMask());
                     a.mana = DamageSpells::ManaCost(me, spell);
+                    a.power = DamageSpells::PowerCost(me, spell);
+                    a.powerType = uint8(spell->powerType);
                     a.radius = SpellTags::AreaRadius(spell);
+                    a.maxTargets = spell->MaxAffectedTargets;
                     if (k.onTarget)
                         a.range = CombatBotBaseAI::SpellMaxRange(me, spell);    // Arctic Reach: Blizzard 36 yd
-                    a.ready = f.CanAct() && !f.silenced && me->IsSpellReady(spell) &&
-                              a.mana <= float(me->GetPower(POWER_MANA));
+                    // (any power; Whirlwind from Battle Stance: after a swap within its rage rule)
+                    a.ready = f.CanAct() && !f.silenced && ai->IsReadyWithStance(spell);
                     f.areaSpells.push_back(a);
                 }
 
@@ -1781,6 +1789,20 @@ namespace WorldModelBuilder
             float const cost = float(Spell::CalculatePowerCost(filler, ai->me));
             float const castSec = std::max(filler->GetCastTime(ai->me) / 1000.0f, 1.5f);
             return cost / castSec;
+        }
+
+        // ClassKit::Filler's rage or energy per second of its busy time
+        // (PartyMemberFacts::fillerPowerPerSec / fillerPowerType).
+        void FillFillerPower(TeamBotAI const* ai, PartyMemberFacts& f)
+        {
+            SpellEntry const* filler = ai->Kit().Filler();
+            if (!filler)
+                return;
+            float const cost = DamageSpells::PowerCost(ai->me, filler);
+            if (cost <= 0.0f)
+                return;
+            f.fillerPowerPerSec = cost / DamageSpells::BusySec(ai->me, filler);
+            f.fillerPowerType = uint8(filler->powerType);
         }
 
         // Seconds until `caster` puts `spellId` back after a dispel, 0 = it does not (dead, not
@@ -1980,6 +2002,7 @@ namespace WorldModelBuilder
                         FillCurses(ai, f);
                         FillTotems(ai, f);
                         f.fillerManaPerSec = FillerManaPerSec(ai);
+                        FillFillerPower(ai, f);
                         if (SpellEntry const* filler = ai->Kit().Filler())
                         {
                             if (!filler->IsChanneledSpell() && filler->GetCastTime(member) > 0)

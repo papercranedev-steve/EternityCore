@@ -64,6 +64,28 @@ namespace Commander
                          { s.pChallengingShout, 0.0f, true, false, false } };
             }
 
+            // Whirlwind (Berserker Stance, 25 rage, 10 s, up to 4 enemies within 8 yd): the area
+            // phase casts it on 2+ enemies (from Battle Stance after a swap); on a lone enemy the
+            // damage rotation does (WarriorRotation). A damage warrior's only: AreaPhase and
+            // AreaDamageBehavior take damage roles.
+            std::vector<AreaDamageSpell> AreaDamage() const override
+            {
+                return { { m_bot.m_spells.warrior.pWhirlwind, false, 0.0f } };
+            }
+
+            // What a global cooldown of a damage warrior is worth (the area spell vs it): Mortal
+            // Strike, Bloodthirst, else Heroic Strike (levelling; a next swing spell, its estimate
+            // is the whole swing: the area spell has to beat more than it gives up).
+            SpellEntry const* Filler() const override
+            {
+                auto const& s = m_bot.m_spells.warrior;
+                if (s.pMortalStrike)
+                    return s.pMortalStrike;
+                if (s.pBloodthirst)
+                    return s.pBloodthirst;
+                return s.pHeroicStrike;
+            }
+
             // Demoralizing Shout: any stance, 10 rage, 30 s.
             std::vector<SpellEntry const*> AttackPowerDebuffs() const override
             {

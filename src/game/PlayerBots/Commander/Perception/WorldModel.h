@@ -461,10 +461,19 @@ namespace Commander
         float perTick = 0.0f;       // damage on each target per tick (spell power included)
         float tickThreat = 0.0f;    // threat of one tick on one target (spell multiplier, caster modifiers)
         float mana = 0.0f;          // the whole cast
+        // Rage or energy of the whole cast (Whirlwind 25 rage); 0 for a mana spell (`mana`).
+        // Valued against the filler's own (PartyMemberFacts::fillerPowerPerSec).
+        float power = 0.0f;
+        uint8 powerType = 0;        // Powers of `power`
         float radius = 0.0f;
+        // Enemies it hits at most, 0 = every one in the radius (Whirlwind 4: the server picks
+        // them at random, SpellEntry::MaxAffectedTargets).
+        uint32 maxTargets = 0;
         float range = 0.0f;         // onTarget: how far the centre may be
         float slowPct = 0.0f;       // ClassKit::AreaDamageSpell::slowPct (Improved Blizzard)
-        bool ready = false;         // off cooldown, the mana, can act and cast
+        // Off cooldown, its power (any type), can act and cast: now or after a warrior's stance
+        // swap within the rage it may lose (TeamBotAI::IsReadyWithStance).
+        bool ready = false;
     };
 
     // The bot's own area channel running now (Perception/Values/AreaValue.h continues it).
@@ -696,6 +705,11 @@ namespace Commander
         // Bots whose filler (ClassKit::Filler) costs mana: mana per second while casting it
         // (cost / max(cast time, GCD)). What spent mana is worth to a damage dealer (ManaWorth.h).
         float fillerManaPerSec = 0.0f;
+        // Bots whose filler costs rage or energy (warrior Mortal Strike / Bloodthirst): that
+        // power per second of its busy time (cost / BusySec), and the power. What an area spell's
+        // rage is worth: the filler seconds it would have paid for (AreaValue).
+        float fillerPowerPerSec = 0.0f;
+        uint8 fillerPowerType = 0;      // Powers
         // Damage per second this member deals on its own, estimated from its gear and spells
         // (WorldModelBuilder: weapon damage fields x Value::MELEE_ABILITY_FACTOR, a bot's
         // ClassKit::Filler x Value::CASTER_UPTIME, the larger). Value::DealtDps uses it before

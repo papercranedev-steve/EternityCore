@@ -73,6 +73,7 @@ namespace Tags
                 continue;
             if (!m.areaSpells.empty())
             {
+                // (a rage spell has mana 0: a warrior counts, its rage comes in the fight)
                 float cheapest = m.areaSpells.front().mana;
                 for (AreaSpellFacts const& a : m.areaSpells)
                     cheapest = std::min(cheapest, a.mana);

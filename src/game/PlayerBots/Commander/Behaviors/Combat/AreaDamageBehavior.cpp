@@ -326,7 +326,8 @@ namespace Commander
         p.action.spell = spell;
         if (a.centre.IsEmpty())
         {
-            if (!bot->CanTryToCastSpell(me, spell))
+            // (Whirlwind from Battle Stance: the arbiter's DoCastWithStance swaps first)
+            if (!bot->CanCastWithStance(me, spell))
                 return;
         }
         else

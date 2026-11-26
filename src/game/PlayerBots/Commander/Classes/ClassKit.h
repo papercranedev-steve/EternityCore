@@ -265,7 +265,9 @@ namespace Commander
         virtual SpellEntry const* FreeSelfHeal() const { return nullptr; }
         // Area damage spells the Commander casts on packs (the brain's area phase decides who,
         // which, where and when, Coordination/Doctrine/AreaPhase.h; AreaDamageBehavior casts it; the
-        // rotations do not cast them).
+        // rotations do not cast them, except a melee one on a lone enemy: Whirlwind is also a
+        // single target strike, WarriorRotation). Melee spells too since 2026-11-26: weapon
+        // damage, rage / energy costs, a stance swap first (DamageSpells, AreaValue).
         virtual std::vector<AreaDamageSpell> AreaDamage() const { return {}; }
         // The single target damage spell the rotation casts most: what an area spell is compared
         // with (AreaDamageBehavior) and how fast mana goes (ManaBudgetBehavior self restore).
