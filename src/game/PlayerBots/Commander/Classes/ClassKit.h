@@ -153,7 +153,8 @@ namespace Commander
         // Interrupts the Commander assigns (InterruptAssigner, WorldModel interrupt facts).
         virtual std::vector<SpellEntry const*> Interrupts() const { return {}; }
         // Friendly dispels it has learned (best rank, fallbacks when the better spell is not
-        // learned yet): what DispelAssigner can give it. Only the Commander casts them in
+        // learned yet), and removals by mechanic (Blessing of Freedom: DispelAbility::
+        // freesMechanics, read from the spell): what DispelAssigner can give it. Only the Commander casts them in
         // combat (DispelBehavior); out of combat the rotation does.
         virtual std::vector<SpellEntry const*> Dispels() const { return {}; }
         bool CanDispel() const

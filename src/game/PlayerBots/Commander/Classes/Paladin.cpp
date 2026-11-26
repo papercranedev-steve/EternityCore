@@ -16,11 +16,13 @@ namespace Commander
                 return { m_bot.m_spells.paladin.pHammerOfJustice };
             }
 
-            // Cleanse (Purify until learned).
+            // Cleanse (Purify until learned). Blessing of Freedom: a removal by mechanic (root,
+            // snare) on a member that has to move (user 2026-11-26; until then the rotation cast
+            // it on itself on any slow).
             std::vector<SpellEntry const*> Dispels() const override
             {
                 auto const& s = m_bot.m_spells.paladin;
-                return { s.pCleanse ? s.pCleanse : s.pPurify };
+                return { s.pCleanse ? s.pCleanse : s.pPurify, s.pBlessingOfFreedom };
             }
 
             // Turn Undead: a fear on undead (until 2026-11-26 the rotation's own, on a second

@@ -263,6 +263,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.cpp
   ${COMMANDER_DIR}/Perception/Spatial/HazardZones.h
   ${COMMANDER_DIR}/Perception/Spatial/HazardZones.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/MoveNeed.h
+  ${COMMANDER_DIR}/Perception/Spatial/MoveNeed.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/PositioningBehavior.h
   ${COMMANDER_DIR}/Behaviors/Movement/PositioningBehavior.cpp
   ${COMMANDER_DIR}/Perception/Spatial/PatrolTracker.h

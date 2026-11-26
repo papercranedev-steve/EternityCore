@@ -17,20 +17,21 @@
  *      kind), its own seal (OwnSeal), Judgement, Hammer of Wrath on a victim below 20%, Consecration (not a
  *      tank), Holy Shock (not with the heal function), Exorcism on undead and demons, Holy
  *      Wrath on undead / demons.
- *   4. Blessing of Freedom when rooted or slowed.
  * Blessing of Sacrifice is not cast (user 2026-11-15: it took a GCD before any heal, even in an
  * emergency, and moved the damage onto the paladin).
  *
  * The Commander decides: Divine Shield, Blessing of Protection, Lay on Hands (team rescue),
  * Hammer of Justice on a cast (InterruptBehavior), as a hold (EscapeBehavior) and on a fleeing
  * enemy (FleeStopBehavior), Turn Undead (crowd control, ClassKit::Controls), Consecration for
- * a tank (ThreatBehavior, ClassKit::AreaThreat), dispels in combat (DispelBehavior), Divine
+ * a tank (ThreatBehavior, ClassKit::AreaThreat), dispels in combat (DispelBehavior) and
+ * Blessing of Freedom on a member who has to move (DispelAssigner, a removal by mechanic), Divine
  * Favor and Holy Shock heals (heal module), every heal (self heals included).
  * Removed 2026-11-26 (decisions the rotation made on its own): a self heal below 30% health,
  * Hammer of Justice below 20% health (on its victim, not on what hit it), Turn Evil on a
  * second undead attacker (the 2.0 name: it never matched a 1.12 spell), Divine Favor spent on
  * a damage Holy Shock outside a healer's full damage tier, the pre-heal, percent heal
- * thresholds, and the aura and blessing choice without the brain.
+ * thresholds, the aura and blessing choice without the brain, and Blessing of Freedom on
+ * itself on any root or slow.
  */
 
 #include "Rotations/ClassRotation.h"
@@ -104,12 +105,8 @@ namespace
                 else if (bot.DealsDamageForTeam() && Damage())
                     return;
             }
-            else if (Damage())
-                return;
-
-            if ((me->HasUnitState(UNIT_STATE_ROOT) || me->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED)) &&
-                Cast(me, s.pBlessingOfFreedom))
-                return;
+            else
+                Damage();
         }
 
     private:

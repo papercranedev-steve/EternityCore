@@ -887,8 +887,23 @@ namespace WorldModelBuilder
                     if (spell->EffectImplicitTargetA[i] == TARGET_UNIT_FRIEND)
                         a.hostileOk = false;
                 }
-                if (!a.dispelMask)
+                // Removal by mechanic (Blessing of Freedom: root 7, snare 11; spell 1044).
+                if (spell->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
+                {
+                    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                        if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                            spell->EffectApplyAuraName[i] == SPELL_AURA_MECHANIC_IMMUNITY && spell->EffectMiscValue[i] > 0)
+                            a.freesMechanics |= 1u << (spell->EffectMiscValue[i] - 1);
+                    if (a.freesMechanics)
+                    {
+                        a.hostileOk = false;     // a blessing: friendly targets only
+                        a.immuneSec = std::max(0, spell->CalculateDuration(me)) / 1000.0f;   // talents too (Guardian's Favor)
+                    }
+                }
+                if (!a.dispelMask && !a.freesMechanics)
                     continue;
+                a.blessing = Spells::GetSpellSpecific(spell->Id) == SPELL_BLESSING;
+                a.cooldownSec = spell->GetRecoveryTime() / 1000.0f;
                 a.maxRange = sSpellRangeStore.LookupEntry(spell->rangeIndex) ? CombatBotBaseAI::SpellMaxRange(me, spell) : 30.0f;
                 a.ready = !f.controlled && !f.silenced && me->IsSpellReady(spell) &&
                           me->GetPower(Powers(spell->powerType)) >= Spell::CalculatePowerCost(spell, me) &&
@@ -1869,7 +1884,19 @@ namespace WorldModelBuilder
             }
         }
 
-        // Harmful dispellable auras creatures put on `member` (players: pets are not dispelled).
+        // A root or slow aura (what Blessing of Freedom lifts when it has the mechanic).
+        bool ImpairsMovement(SpellEntry const* spell)
+        {
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_ROOT ||
+                    spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_DECREASE_SPEED)
+                    return true;
+            return false;
+        }
+
+        // Harmful auras creatures put on `member` (players: pets are not dispelled): dispellable
+        // ones, and roots / slows with a mechanic of any dispel type (removal by mechanic,
+        // DispelAbility::freesMechanics).
         void FillDebuffs(Player const* member, PartyMemberFacts& f)
         {
             if (!member->IsAlive())
@@ -1879,13 +1906,17 @@ namespace WorldModelBuilder
             {
                 SpellAuraHolder const* holder = itr.second;
                 SpellEntry const* spell = holder->GetSpellProto();
-                if (holder->IsPositive() || !spell->Dispel || !holder->GetCasterGuid().IsCreature())
+                if (holder->IsPositive() || !holder->GetCasterGuid().IsCreature())
+                    continue;
+                uint32 const mechanics = spell->GetAllSpellMechanicMask();
+                if (!spell->Dispel && !(mechanics && ImpairsMovement(spell)))
                     continue;
                 if (std::any_of(f.debuffs.begin(), f.debuffs.end(), [spell](DebuffFacts const& d) { return d.spellId == spell->Id; }))
                     continue;   // one entry per spell (an aura holder per effect group)
                 DebuffFacts d;
                 d.spellId = spell->Id;
                 d.dispelType = uint8(spell->Dispel);
+                d.mechanicMask = mechanics;
                 d.caster = holder->GetCasterGuid();
                 Creature const* caster = map->GetCreature(d.caster);
                 d.casterLevel = caster ? caster->GetLevel() : member->GetLevel();

@@ -50,6 +50,15 @@ namespace Commander
     {
         uint32 spellId = 0;
         uint32 dispelMask = 0;       // 1 << DispelType of every SPELL_EFFECT_DISPEL
+        // Removal by mechanic (Blessing of Freedom: root, snare): an immunity aura that purges
+        // what it guards against (SPELL_AURA_MECHANIC_IMMUNITY + SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT,
+        // Unit::RemoveAurasAtMechanicImmunity), whatever the dispel type. 1 << (mechanic - 1).
+        uint32 freesMechanics = 0;
+        float immuneSec = 0.0f;      // that immunity lasts (nothing of those mechanics lands meanwhile)
+        // A paladin blessing (SPELL_BLESSING: one per paladin per target): it replaces the
+        // caster's other blessing on the target for the rest of the fight (Blessing of Freedom).
+        bool blessing = false;
+        float cooldownSec = 0.0f;
         float maxRange = 0.0f;
         bool ready = false;          // off cooldown, enough mana, can act and cast
         // Can also target a member mind controlled by a creature (Dispel Magic; the friendly-only
@@ -413,11 +422,13 @@ namespace Commander
         float FocusSaves() const { return std::max(0.0f, points - focusedPoints); }
     };
 
-    // A harmful, dispellable aura a creature put on a party member (players only).
+    // A harmful aura a creature put on a party member (players only): a dispellable one, or a
+    // root / slow with a mechanic (Hamstring, Net: Blessing of Freedom removes them).
     struct DebuffFacts
     {
         uint32 spellId = 0;
-        uint8 dispelType = 0;        // SpellEntry::Dispel
+        uint8 dispelType = 0;        // SpellEntry::Dispel, 0 = no dispel removes it
+        uint32 mechanicMask = 0;     // SpellEntry::GetAllSpellMechanicMask: 1 << (mechanic - 1)
         ObjectGuid caster;
         uint32 casterLevel = 0;
         uint32 remainingMs = 0;

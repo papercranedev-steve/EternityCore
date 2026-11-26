@@ -5,6 +5,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/CastValue.h"
 #include "Commander/Perception/Values/ManaWorth.h"
+#include "Commander/Perception/Spatial/MoveNeed.h"
 #include "SpellMgr.h"
 #include "SpellEntry.h"
 #include <algorithm>
@@ -21,14 +22,10 @@ namespace DispelValue
                    aura == SPELL_AURA_PERIODIC_DAMAGE_PERCENT;
         }
 
-        // A healer or ranged member with a melee enemy on it has to walk away (escape module).
-        bool NeedsToMove(WorldModel const& world, PartyMemberFacts const& m)
-        {
-            return (m.role == ROLE_HEALER || m.role == ROLE_RANGE_DPS) && Value::IncomingOn(world, m.guid) > 0.0f;
-        }
     }
 
-    Worth Of(WorldModel const& world, PartyMemberFacts const& member, DebuffFacts const& debuff)
+    Worth Of(WorldModel const& world, PartyMemberFacts const& member, DebuffFacts const& debuff,
+             float immuneSec, bool orderedToMove)
     {
         Worth w;
         SpellEntry const* spell = sSpellMgr.GetSpellEntry(debuff.spellId);
@@ -64,10 +61,12 @@ namespace DispelValue
             return w;
         }
 
-        // Seconds it would still work: until it ends, or until the caster puts it back.
-        float const effectSec = debuff.reapplySec > 0.0f ? std::min(leftSec, debuff.reapplySec) : leftSec;
+        // Seconds it would still work: until it ends, or until the caster puts it back (not
+        // before an immunity the removal leaves ends).
+        float const effectSec = debuff.reapplySec > 0.0f
+            ? std::min(leftSec, std::max(debuff.reapplySec, immuneSec)) : leftSec;
 
-        bool periodic = false, manaLeech = false, slow = false, other = false;
+        bool periodic = false, manaLeech = false, slow = false, root = false, other = false;
         for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
             if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
@@ -79,6 +78,8 @@ namespace DispelValue
                 manaLeech = true;
             else if (aura == SPELL_AURA_MOD_DECREASE_SPEED)
                 slow = true;
+            else if (aura == SPELL_AURA_MOD_ROOT)
+                root = true;
             else
                 other = true;
         }
@@ -102,8 +103,10 @@ namespace DispelValue
                 w.manaCritical = ManaWorth::Critical(world, member, mana);
             }
         }
-        if (slow && NeedsToMove(world, member))
-            w.points += Value::LostAction(world, member, std::min(effectSec, SLOW_SEC));
+        // A root or a slow costs only while the member has to move (MoveNeed; until 2026-11-26 a
+        // root counted as "anything else" wherever the member stood).
+        if ((root || slow) && (orderedToMove || MoveNeed::Of(world, member) != MoveReason::None))
+            w.points += Value::LostAction(world, member, std::min(effectSec, root ? ROOT_SEC : SLOW_SEC));
         if (other)
             w.points += Value::LostAction(world, member, std::min(effectSec, OTHER_SEC));
         return w;

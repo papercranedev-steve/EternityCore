@@ -17,15 +17,17 @@
  *                       channel (Soul Tap) the dispel also ends the caster's channel
  *                       (Unit::RemoveSpellAuraHolder interrupts it), so "would still" is the
  *                       channel time left: the same gain as interrupting it
- *     only slows        LostAction(member, min(left, SLOW_SEC)) for a healer / ranged member
- *                       with a melee enemy on it (has to walk away), else 0
- *                       (strat-20261102-012937: Dispel Magic on a chilled rogue, twice)
+ *     roots, slows      LostAction(member, min(left, ROOT_SEC / SLOW_SEC)) while the member has
+ *                       to move (Perception/Spatial/MoveNeed.h, or `orderedToMove`: the plan's
+ *                       retreat), else 0 (strat-20261102-012937: Dispel Magic on a chilled
+ *                       rogue, twice; user 2026-11-26: roots the same, Blessing of Freedom)
  *     anything else     (stat, armor, cast speed debuffs ...) LostAction(member, min(left,
  *                       OTHER_SEC)): their effect is not estimated yet; one global cooldown of
  *                       the member's output roughly matches "worth a dispel when a healer has
  *                       the time", which is what the rotation used to do with them
  *   "would still" = time left, capped at DebuffFacts::reapplySec when the caster puts it back
- *   (decision 2026-11-01: only reapplied debuffs are judged by that).
+ *   (decision 2026-11-01: only reapplied debuffs are judged by that), but not below the
+ *   removal's own immunity (`immuneSec`: Blessing of Freedom keeps roots and slows off).
  */
 
 #ifndef MANGOS_COMMANDER_DISPEL_VALUE_H
@@ -43,6 +45,8 @@ namespace Commander
     {
         static constexpr float WAKE_ON_DAMAGE_SEC = 2.0f;
         static constexpr float SLOW_SEC = 3.0f;
+        // A root stops the walk altogether: more of it is lost than to a slow.
+        static constexpr float ROOT_SEC = 4.0f;
         static constexpr float OTHER_SEC = 1.5f;
 
         struct Worth
@@ -53,7 +57,10 @@ namespace Commander
             bool manaCritical = false;
         };
 
-        Worth Of(WorldModel const& world, PartyMemberFacts const& member, DebuffFacts const& debuff);
+        // immuneSec: the removal keeps the debuff's kind off that long (DispelAbility::immuneSec).
+        // orderedToMove: the plan moves the member (retreat), whatever MoveNeed says.
+        Worth Of(WorldModel const& world, PartyMemberFacts const& member, DebuffFacts const& debuff,
+                 float immuneSec = 0.0f, bool orderedToMove = false);
     }
 }
 
