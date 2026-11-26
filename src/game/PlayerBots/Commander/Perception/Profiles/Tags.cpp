@@ -132,6 +132,9 @@ namespace Tags
             if (ref.source == SpellSource::OnHit)
                 continue;
             if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(ref.spellId))
+            {
+                if (SpellTags::WipesTargetThreat(spell))
+                    roles |= TAG_THREAT_WIPE;
                 for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
                 {
                     if (spell->Effect[i] == SPELL_EFFECT_INSTAKILL && spell->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER)
@@ -149,6 +152,7 @@ namespace Tags
                             roles |= TAG_SUMMONER;
                     }
                 }
+            }
             std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(ref.spellId);
             if (!sp)
                 continue;
@@ -169,7 +173,7 @@ namespace Tags
             { TAG_SELF_DESTRUCT, "self-destructs" }, { TAG_ALARM, "alarm" }, { TAG_HEALER, "healer" },
             { TAG_SUMMONER, "summoner" }, { TAG_MANA_DRAIN, "mana drain" }, { TAG_TOTEM, "totem" },
             { TAG_FLEES, "flees" }, { TAG_TAUNT_IMMUNE, "taunt immune" }, { TAG_CHARMER, "mind control" },
-            { TAG_RESURRECTS, "resurrects" } };
+            { TAG_RESURRECTS, "resurrects" }, { TAG_THREAT_WIPE, "wipes its target's threat" } };
         std::string out;
         for (auto const& n : names)
             if (roles & n.bit)

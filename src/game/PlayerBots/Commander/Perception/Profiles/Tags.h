@@ -55,6 +55,7 @@ namespace Commander
         TAG_TAUNT_IMMUNE  = 1 << 7,     // CREATURE_IMMUNITY_TAUNT, or the override table's tauntMult 0
         TAG_CHARMER       = 1 << 8,     // mind control (charm / possess aura: Dominate Mind)
         TAG_RESURRECTS    = 1 << 9,     // brings the dead back (resurrect effect, Raise Dead)
+        TAG_THREAT_WIPE   = 1 << 10,    // a spell that wipes its target's threat (SpellTags::WipesTargetThreat: Knock Away)
     };
 
     // A self-destruct on the way: where, when (doctrine and the blast module).

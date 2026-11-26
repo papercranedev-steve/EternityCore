@@ -75,6 +75,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/ThreatGap.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.h
   ${COMMANDER_DIR}/Perception/Forecast/ThreatRunway.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatWipe.h
+  ${COMMANDER_DIR}/Perception/Forecast/ThreatWipe.cpp
   ${COMMANDER_DIR}/Perception/Values/ThreatRisk.h
   ${COMMANDER_DIR}/Perception/Values/ThreatRisk.cpp
   ${COMMANDER_DIR}/Perception/Values/AggroTurnCost.h

@@ -49,6 +49,14 @@ namespace Commander
         // Lightning: EffectChainTarget > 1 on a damage effect). They are not area spells
         // (IsAreaOfEffectSpell), so the area checks missed them.
         bool ChainsToNearby(SpellEntry const* spell);
+
+        // Takes all its target's threat away on the caster's list (SPELL_EFFECT_MODIFY_THREAT_PERCENT
+        // -100 on the target), or the script effects that do it (SCRIPTED_THREAT_WIPES): cast on
+        // the tank, the next on the list gets the enemy (Patchwork Horror's Knock Away,
+        // strat-20261126-224508). Threat wipes in C++ boss scripts are not in the spell data
+        // (their encounter module's).
+        bool WipesTargetThreat(SpellEntry const* spell);
+        static constexpr uint32 SCRIPTED_THREAT_WIPES[] = { 10101 };     // Knock Away (Spell::EffectScriptEffect)
         // How far a chained hit jumps from its target (guess: melee cleaves reach about this
         // far, ranged chains further but rarely matter next to a sleeping enemy).
         static constexpr float CHAIN_JUMP_YD = 8.0f;

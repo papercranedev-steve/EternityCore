@@ -6,6 +6,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
+#include "Commander/Perception/Forecast/ThreatWipe.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "SpellEntry.h"
 #include <algorithm>
@@ -87,6 +88,36 @@ namespace RescueValue
             if (e.guid != except && !e.crowdControlled && e.acting && !e.onAllyOnly)
                 dps = std::max(dps, e.meleeDps + e.rangedDps);
         return dps;
+    }
+
+    float WipeReserve(WorldModel const& world, PartyMemberFacts const& tank, TauntAbility const& taunt,
+                      ObjectGuid except)
+    {
+        float const cooldownSec = taunt.cooldownMs / 1000.0f;
+        if (cooldownSec <= 0.0f)
+            return 0.0f;
+        float reserve = 0.0f;
+        for (EnemyFacts const& w : world.enemies)
+        {
+            if (w.guid == except || w.victim != tank.guid || !w.acting || w.crowdControlled)
+                continue;
+            ThreatWipe::Next const next = ThreatWipe::Of(w, world.refreshedAtMs);
+            if (!next.valid || next.MidSec() >= cooldownSec)
+                continue;
+            bool immune = false;
+            float const mult = LooseEnemy::Mult(w, &immune);
+            if (immune)
+                continue;
+            ThreatEntry const* row = NextHolder(w, tank.guid, 0.0f);
+            PartyMemberFacts const* holder = row ? world.FindMember(row->guid) : nullptr;
+            if (!holder)
+                continue;
+            float const uncovered = std::min(cooldownSec - next.MidSec(), HORIZON_SEC);
+            float const loss = LooseEnemy::Loss(world, w, *holder, tank, uncovered) -
+                               LooseEnemy::Loss(world, w, *holder, tank, TAUNT_REACTION_SEC);
+            reserve += std::max(0.0f, loss) * mult;
+        }
+        return reserve;
     }
 
     Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,

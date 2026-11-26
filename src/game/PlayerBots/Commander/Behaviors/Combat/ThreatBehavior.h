@@ -17,6 +17,8 @@
  *            brain gave someone else (the priest fades it) are not counted. Taunts without
  *            SPELL_EFFECT_ATTACK_ME (Challenging Shout / Roar) only lend threat while their
  *            aura lasts: their loss also counts the hits after it fades.
+ *            The baseline without the ability counts the tank's soonest single taunt (ready, or
+ *            once its cooldown ends) on the one loose enemy it saves most on (2026-11-26).
  *            Melee enemies on a healer or ranged bot also cost the victim's output while they
  *            chase it (Value::HarassLoss; casters standing back do not).
  *            Area threat: threat per enemy from spell data (spell_threat + damage x multiplier,

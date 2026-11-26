@@ -100,6 +100,14 @@ namespace Commander
         // healthy victim, strat-20261108-200046: one Taunt in 83 s).
         float NextTauntDps(WorldModel const& world, ObjectGuid except);
 
+        // A single taunt spent now is not there when an enemy on `tank` wipes its threat before
+        // the taunt's cooldown ends (Forecast/ThreatWipe.h, 2026-11-26: Knock Away): the next on
+        // that enemy's list takes its hits from the wipe (its middle estimate) until the taunt is
+        // back, instead of only the taunt's reaction. Points summed over those enemies, `except`
+        // (the one the taunt would be for) and taunt immune ones left out.
+        float WipeReserve(WorldModel const& world, PartyMemberFacts const& tank, TauntAbility const& taunt,
+                          ObjectGuid except);
+
         // `distance`: tank to enemy, yards. `tankRate`: LooseEnemy::TankRate.
         // `enemyDps`: NextTauntDps(world, e.guid).
         Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,

@@ -130,6 +130,9 @@ namespace Commander
         // Off cooldown and enough power, after the stance swap if one is needed
         // (TeamBotAI::IsReadyWithStance). Range and sight are per enemy.
         bool ready = false;
+        // Seconds until its cooldown ends (SpellCaster::GetSpellCooldownLeft; 0 = off cooldown,
+        // -1 = held until an event). Power and stance not counted: `ready` has them.
+        float cooldownLeftSec = 0.0f;
     };
 
     // An attack power debuff a tank bot keeps on the enemies around it (ClassKit::

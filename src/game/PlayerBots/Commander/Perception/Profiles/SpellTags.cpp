@@ -78,6 +78,21 @@ namespace SpellTags
         return radius;
     }
 
+    bool WipesTargetThreat(SpellEntry const* spell)
+    {
+        if (!spell)
+            return false;
+        for (uint32 id : SCRIPTED_THREAT_WIPES)
+            if (spell->Id == id)
+                return true;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            if (spell->Effect[i] == SPELL_EFFECT_MODIFY_THREAT_PERCENT &&
+                spell->CalculateSimpleValue(SpellEffectIndex(i)) <= -100 &&
+                spell->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER)
+                return true;
+        return false;
+    }
+
     bool ChainsToNearby(SpellEntry const* spell)
     {
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)

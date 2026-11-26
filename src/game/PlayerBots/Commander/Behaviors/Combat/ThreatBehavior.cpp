@@ -372,8 +372,39 @@ namespace Commander
             float horizon;
             float mult;
             bool deadly;
+            // Seconds it still hits its victim when the tank's soonest single taunt (Growl,
+            // Taunt) takes it, ready now or once its cooldown ends; -1 = none can.
+            float singleSec;
         };
         std::vector<LooseEntry> loose;
+        // The soonest single taunt on `e` at `distance`: seconds it still hits its victim, -1 none.
+        auto const singleTauntSec = [&](EnemyFacts const& e, float gap, float horizon, float distance)
+        {
+            float best = -1.0f;
+            if (plan.doctrine.Has(e.guid, STAMP_NO_TAUNT) || !e.InSightOf(self))
+                return best;
+            bool immune = false;
+            LooseEnemy::Mult(e, &immune);
+            if (immune)
+                return best;
+            for (TauntAbility const& t : myFacts->taunts)
+            {
+                if (distance - e.boundingRadius > t.maxRange)
+                    continue;
+                float wait = 0.0f;
+                if (!t.ready)
+                {
+                    // On cooldown only (power, a stance: not known when): it comes back by itself.
+                    if (!myFacts->CanAct() || t.cooldownLeftSec <= 0.0f)
+                        continue;
+                    wait = t.cooldownLeftSec;
+                }
+                float const sec = std::min(horizon, wait + RescueValue::TauntSecOnVictim(gap, tankRate, t.holdSec, horizon));
+                if (best < 0.0f || sec < best)
+                    best = sec;
+            }
+            return best;
+        };
 
         // 1. Loose enemies hitting someone who is not a tank.
         for (EnemyFacts const& e : world.enemies)
@@ -412,7 +443,8 @@ namespace Commander
             LooseValue const v = LooseEnemy::WinBack(world, e, *victim, *myFacts, tankRate, distance);
 
             if (distance <= GROUP_THREAT_RADIUS)
-                loose.push_back({ &e, victim, v.gap, v.horizon, mult, v.deadly });
+                loose.push_back({ &e, victim, v.gap, v.horizon, mult, v.deadly,
+                                  singleTauntSec(e, v.gap, v.horizon, distance) });
         }
 
         // Doctrine HoldPile (Area tactic, TankJob): two or more enemies turned onto the area caster
@@ -479,10 +511,29 @@ namespace Commander
                     }
                     std::vector<float> const before = LooseEnemy::SequentialRecovery(gaps, tankRate);
                     std::vector<float> const after = LooseEnemy::SequentialRecovery(rests, tankRate);
+                    // Without the ability the single taunt still takes one of them, ready now or in
+                    // a moment (2026-11-26: Challenging Roar, 10 min, went on one enemy 0.2 s before
+                    // Growl was back, strat-20261126-224508): the one it saves most on.
+                    size_t single = loose.size();
+                    float singleSaves = 0.0f;
                     for (size_t i = 0; i < loose.size(); ++i)
                     {
                         LooseEntry const& l = loose[i];
                         float const secBefore = std::min(before[i], l.horizon);
+                        if (l.singleSec < 0.0f || l.singleSec >= secBefore)
+                            continue;
+                        float const saves = LooseEnemy::Loss(world, *l.enemy, *l.victim, *myFacts, secBefore) -
+                                            LooseEnemy::Loss(world, *l.enemy, *l.victim, *myFacts, l.singleSec);
+                        if (saves > singleSaves)
+                        {
+                            single = i;
+                            singleSaves = saves;
+                        }
+                    }
+                    for (size_t i = 0; i < loose.size(); ++i)
+                    {
+                        LooseEntry const& l = loose[i];
+                        float const secBefore = i == single ? l.singleSec : std::min(before[i], l.horizon);
                         float const secAfter = holdSec > 0.0f
                             ? RescueValue::TauntSecOnVictim(l.gap, tankRate, holdSec, l.horizon)
                             : std::min(after[i], l.horizon);

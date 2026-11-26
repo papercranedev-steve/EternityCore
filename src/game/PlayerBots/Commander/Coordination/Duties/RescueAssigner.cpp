@@ -142,7 +142,10 @@ namespace Commander
                         break;
                     if (walkBlocked && distance - e.boundingRadius > t.maxRange)
                         continue;
-                    add(tank->guid, t.spellId, RescueValue::Taunt(world, e, *victim, *tank, t, tankRate, distance, enemyDps));
+                    RescueValue::Option o = RescueValue::Taunt(world, e, *victim, *tank, t, tankRate, distance, enemyDps);
+                    // Kept for an enemy on this tank about to wipe its threat (Knock Away).
+                    o.cost += RescueValue::WipeReserve(world, *tank, t, e.guid);
+                    add(tank->guid, t.spellId, o);
                 }
             }
 

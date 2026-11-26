@@ -1065,6 +1065,8 @@ namespace WorldModelBuilder
                 t.stanceSwap = ai->StanceSwapFor(spell) != nullptr;
                 t.gcd = spell->StartRecoveryCategory > 0;
                 t.ready = f.CanAct() && ai->IsReadyWithStance(spell);
+                int32 const left = ai->me->GetSpellCooldownLeft(spell);
+                t.cooldownLeftSec = left < 0 ? -1.0f : float(left) / 1000.0f;
                 f.taunts.push_back(t);
             }
         }
