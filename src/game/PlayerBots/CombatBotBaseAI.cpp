@@ -138,11 +138,6 @@ void CombatBotBaseAI::ResetSpellData()
 
 void CombatBotBaseAI::PopulateSpellData()
 {
-    // Paladin Seals
-    SpellEntry const* pSealOfRighteousness = nullptr;
-    SpellEntry const* pSealOfCommand = nullptr;
-    SpellEntry const* pSealOfFury = nullptr;
-
     // Shaman Weapon Buffs
     SpellEntry const* pFrostbrandWeapon = nullptr;
     SpellEntry const* pRockbiterWeapon = nullptr;
@@ -208,13 +203,13 @@ void CombatBotBaseAI::PopulateSpellData()
             {
                 if (pSpellEntry->SpellName[0].find("Seal of Righteousness") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pSealOfRighteousness))
-                        pSealOfRighteousness = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.paladin.pSealOfRighteousness))
+                        m_spells.paladin.pSealOfRighteousness = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Seal of Command") != std::string::npos)
                 {
-                    if (IsHigherRankSpell(pSealOfCommand))
-                        pSealOfCommand = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.paladin.pSealOfCommand))
+                        m_spells.paladin.pSealOfCommand = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Seal of Wisdom") != std::string::npos)
                 {
@@ -376,8 +371,8 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 else if (pSpellEntry->SpellName[0].find("Seal of Fury") != std::string::npos) // pre 1.9
                 {
-                    if (IsHigherRankSpell(pSealOfFury))
-                        pSealOfFury = pSpellEntry;
+                    if (IsHigherRankSpell(m_spells.paladin.pSealOfFury))
+                        m_spells.paladin.pSealOfFury = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Holy Shock") != std::string::npos)
                 {
@@ -1691,13 +1686,8 @@ void CombatBotBaseAI::PopulateSpellData()
     {
         case CLASS_PALADIN:
         {
-            if (pSealOfFury && m_role == ROLE_TANK)
-                m_spells.paladin.pSeal = pSealOfFury;
-            else if (pSealOfCommand)
-                m_spells.paladin.pSeal = pSealOfCommand;
-            else
-                m_spells.paladin.pSeal = pSealOfRighteousness;
-
+            // Its own seal: PaladinRotation::OwnSeal, each time (until 2026-11-26 Seal of
+            // Command here whenever learned, for tanks and healers and any weapon too).
             // Blessing and aura: no random pick any more (until 2026-11-15), the brain gives
             // each paladin its own (BlessingAssigner).
             break;

@@ -382,7 +382,11 @@ public:
         } raw;
         struct
         {
-            SpellEntry const* pSeal;
+            // Its own seal for its melee hits: PaladinRotation::OwnSeal picks one each time
+            // (role and weapon).
+            SpellEntry const* pSealOfRighteousness;
+            SpellEntry const* pSealOfCommand;
+            SpellEntry const* pSealOfFury;  // pre 1.9 (Righteous Fury after)
             // Seals judged for their debuff on the victim (the brain says which:
             // Commander/Coordination/Duties/JudgementAssigner.h).
             SpellEntry const* pSealOfWisdom;

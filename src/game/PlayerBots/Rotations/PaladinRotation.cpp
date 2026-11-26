@@ -14,7 +14,7 @@
  *      the team: Damage). Others: Damage: the judgement the brain gave it
  *      (Commander/Coordination/Duties/JudgementAssigner.h: Seal of Wisdom / Light, Judgement,
  *      then its own seal again; on a victim living JUDGEMENT_MIN_TTD_SEC+ without one of that
- *      kind), seal, Judgement, Hammer of Wrath on a victim below 20%, Consecration (not a
+ *      kind), its own seal (OwnSeal), Judgement, Hammer of Wrath on a victim below 20%, Consecration (not a
  *      tank), Holy Shock (not with the heal function), Exorcism on undead and demons, Holy
  *      Wrath on undead / demons.
  *   4. Blessing of Freedom when rooted or slowed.
@@ -218,6 +218,22 @@ namespace
             return Cast(pVictim, s.pJudgement) ? JudgeStep::Cast : JudgeStep::Waiting;
         }
 
+        // Its own seal for its melee hits (user 2026-11-26; until then Seal of Command whenever
+        // learned): Seal of Command only for a damage dealer with a two-handed weapon (its procs
+        // hit for a share of one slow weapon swing); a tank takes Seal of Righteousness (holy
+        // damage: Righteous Fury threat on every hit; Seal of Fury before 1.9), the rest too.
+        SpellEntry const* OwnSeal() const
+        {
+            auto const& s = m_bot.m_spells.paladin;
+            if (m_bot.m_role == ROLE_TANK)
+                return s.pSealOfFury ? s.pSealOfFury : s.pSealOfRighteousness;
+            if (s.pSealOfCommand && m_bot.m_role != ROLE_HEALER)
+                if (Item const* weapon = m_bot.me->GetWeaponForAttack(BASE_ATTACK, true, true))
+                    if (weapon->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+                        return s.pSealOfCommand;
+            return s.pSealOfRighteousness;
+        }
+
         // What Exorcism and Holy Wrath hit (until 2026-11-26 Exorcism only on undead).
         static bool IsUndeadOrDemon(Unit const* pVictim)
         {
@@ -252,9 +268,10 @@ namespace
                     return true;
                 holdSeal = kept == JudgeStep::Waiting;
             }
-            bool const hasSeal = s.pSeal && me->HasAura(s.pSeal->Id);
-            if (!holdSeal && !hasSeal && s.pSeal && (full || me->CanReachWithMeleeAutoAttack(pVictim)) &&
-                Cast(me, s.pSeal))
+            SpellEntry const* pSeal = OwnSeal();
+            bool const hasSeal = pSeal && me->HasAura(pSeal->Id);
+            if (!holdSeal && !hasSeal && pSeal && (full || me->CanReachWithMeleeAutoAttack(pVictim)) &&
+                Cast(me, pSeal))
                 return true;
             if (full)
             {
@@ -288,8 +305,9 @@ namespace
             bool const holdSeal = kept == JudgeStep::Waiting;
 
             // (until 2026-11-26 cast without returning: the same tick tried Judgement in its GCD)
-            bool const hasSeal = s.pSeal && me->HasAura(s.pSeal->Id);
-            if (!holdSeal && !hasSeal && Cast(me, s.pSeal))
+            SpellEntry const* pSeal = OwnSeal();
+            bool const hasSeal = pSeal && me->HasAura(pSeal->Id);
+            if (!holdSeal && !hasSeal && Cast(me, pSeal))
                 return true;
 
             if (!pVictim)
