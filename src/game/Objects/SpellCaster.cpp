@@ -2411,6 +2411,18 @@ void SpellCaster::AddGCD(SpellEntry const* spellEntry, uint32 forcedDuration /*=
     m_GCDCatMap.emplace(spellEntry->StartRecoveryCategory, std::chrono::milliseconds(gcdRecTime) + sWorld.GetCurrentClockTime());
 }
 
+void SpellCaster::AddGlobalCategoryGCD(uint32 durationMs)
+{
+    if (!durationMs)
+        return;
+    TimePoint const end = std::chrono::milliseconds(durationMs) + sWorld.GetCurrentClockTime();
+    auto const itr = m_GCDCatMap.find(SPELLCATEGORY_GLOBAL);
+    if (itr == m_GCDCatMap.end())
+        m_GCDCatMap.emplace(SPELLCATEGORY_GLOBAL, end);
+    else if (itr->second < end)
+        itr->second = end;
+}
+
 bool SpellCaster::HasGCD(SpellEntry const* spellEntry) const
 {
     if (spellEntry)

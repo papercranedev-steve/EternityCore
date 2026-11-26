@@ -95,17 +95,24 @@ void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)
             return;
         }
     }
-    // Learned and a wand equipped: without one the cast failed every tick.
-    if (m_bot.CanShootWand() &&
-       !me->IsMoving() &&
-        me->GetPowerPercent(POWER_MANA) < manaPct &&
-       !me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
-    {
-        // Shoot checks the facing (SPELL_CUSTOM_FACE_TARGET): turn first.
-        if (!me->IsFacingTarget(pVictim))
-            m_bot.FaceTarget(pVictim);
-        me->CastSpell(pVictim, ClassRotations::SPELL_SHOOT_WAND, false);
-    }
+    if (me->GetPowerPercent(POWER_MANA) < manaPct)
+        StartWand(pVictim);
+}
+
+bool ClassRotation::StartWand(Unit* pVictim)
+{
+    Player* me = m_bot.me;
+    // Learned and a wand equipped: without one the cast failed every tick. Not inside a global
+    // cooldown or a cast (2026-11-27): its first shot would go out there and start a global
+    // cooldown of its own (Spell::cast), pushing the next spell back; a spell ready the moment
+    // the cooldown ends is better than one shot.
+    if (!m_bot.CanShootWand() || me->IsMoving() || me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL) ||
+        me->HasGCD(nullptr) || me->IsNonMeleeSpellCasted(false, false, true))
+        return false;
+    // Shoot checks the facing (SPELL_CUSTOM_FACE_TARGET): turn first.
+    if (!me->IsFacingTarget(pVictim))
+        m_bot.FaceTarget(pVictim);
+    return me->CastSpell(pVictim, ClassRotations::SPELL_SHOOT_WAND, false) == SPELL_CAST_OK;
 }
 
 void ClassRotation::ChaseWhenOutOfRange(Unit* pVictim)

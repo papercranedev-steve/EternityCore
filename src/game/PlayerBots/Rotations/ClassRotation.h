@@ -69,8 +69,12 @@ protected:
     // more than the damage it lands): not cast. Without a Commander or facts on the victim:
     // the first in the list that casts. True = cast.
     bool CastBestDamage(Unit* pVictim, std::initializer_list<DamageOption> options);
-    // Wand when out of mana (below `manaPct`), standing, not already shooting.
+    // Wand when out of mana (below `manaPct`): StartWand.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
+    // Starts the wand on `pVictim`: learned with a wand, standing, not already shooting, no
+    // global cooldown or cast running (each shot fired starts one, Spell::cast). True = started.
+    // (A healer's shot that would pull aggro: ShootWandBelowMana checks it first.)
+    bool StartWand(Unit* pVictim);
     // Wand at any mana (a healer's free attack, Commander HEALER_DAMAGE_FREE).
     void ShootWand(Unit* pVictim) { ShootWandBelowMana(pVictim, 101.0f); }
     // A caster standing idle beyond its filler's range (30 yd without one) walks closer (BeginChasing honours

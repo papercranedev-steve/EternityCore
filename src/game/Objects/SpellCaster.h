@@ -367,6 +367,10 @@ public:
     // cooldown system
     virtual void AddGCD(SpellEntry const* spellEntry, uint32 forcedDuration = 0, bool updateClient = false);
     virtual bool HasGCD(SpellEntry const* spellEntry) const;
+    // Fix: the global cooldown (SPELLCATEGORY_GLOBAL) for `durationMs` from now, or until a
+    // later end it already has; for an effect without a spell entry of that category (a wand
+    // shot fired, Spell::cast).
+    void AddGlobalCategoryGCD(uint32 durationMs);
     void ResetGCD(SpellEntry const* spellEntry = nullptr);
     virtual void AddCooldown(SpellEntry const* spellEntry, ItemPrototype const* itemProto = nullptr, bool permanent = false, uint32 forcedDuration = 0);
     virtual void RemoveSpellCooldown(SpellEntry const* spellEntry, bool updateClient = true);

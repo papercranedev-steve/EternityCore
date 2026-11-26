@@ -55,6 +55,13 @@ using namespace Spells;
 
 #define SPELL_CHANNEL_VISUAL_TIMER 800
 
+namespace
+{
+    // Wands' Shoot and the global cooldown each shot fired starts (Spell::cast).
+    uint32 const SPELL_WAND_SHOOT = 5019;
+    uint32 const WAND_SHOT_GCD_MS = 1500;
+}
+
 extern pEffect SpellEffects[TOTAL_SPELL_EFFECTS];
 
 Spell::Spell(Unit* caster, SpellEntry const* info, bool triggered, ObjectGuid originalCasterGUID, SpellEntry const* triggeredBy, Unit* victim, SpellEntry const* triggeredByParent):
@@ -3707,6 +3714,18 @@ void Spell::cast(bool skipCheck)
 
     // CAST SPELL
     SendSpellCooldown();
+
+    // Fix (PartyBot 2026-11-27): every wand shot fired starts the 1.5 s global cooldown, as the
+    // 1.14 client shows and enforces it for its player (the user, a mage: a Frostbolt goes
+    // out before the first shot, after it every spell spins). The 1.12 data has none on Shoot,
+    // so nothing held the bots: a warlock's tap went out 0.7 s after a shot. Less the map
+    // update interval, as Player::AddGCD does.
+    if (m_spellInfo->Id == SPELL_WAND_SHOOT && m_caster->IsPlayer() &&
+        !static_cast<Player*>(m_caster)->HasCheatOption(PLAYER_CHEAT_NO_COOLDOWN))
+    {
+        uint32 const interval = sWorld.getConfig(CONFIG_UINT32_INTERVAL_MAPUPDATE);
+        m_caster->AddGlobalCategoryGCD(WAND_SHOT_GCD_MS > interval ? WAND_SHOT_GCD_MS - interval : 1);
+    }
 
     // Remove any remaining invis auras on cast completion, should only be gnomish cloaking device
     if (!m_IsTriggeredSpell && m_casterUnit)
