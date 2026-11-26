@@ -142,8 +142,16 @@ public:
     uint8 GetAttackersInRangeCount(float range) const;
     Unit* SelectAttackerDifferentFrom(Unit const* pExcept) const;
     Unit* SelectHealTarget(float selfHealPercent = 100.0f, float groupHealPercent = 100.0f) const;
+    // Buff targets: the players the bot buffs (BuffCandidates) in reach and sight, without the
+    // buff, nobody else casting it on them; a buff that only gives mana (BuffNeedsMana) only on
+    // those with mana. With a group version: that version when two or more of one subgroup miss it.
     Player* SelectBuffTarget(SpellEntry const* pSpellEntry) const;
     Player* SelectBuffTarget(SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry, SpellEntry const*& pSelectedSpellEntry) const;
+    // The players the bot buffs, itself included: its WoW group, else itself (TeamBotAI: its
+    // Commander team, a population unit too). Same map as the bot only.
+    virtual std::vector<Player*> BuffCandidates() const;
+    // Intellect or mana regeneration only (Arcane Intellect / Brilliance): wasted on a warrior or a rogue.
+    static bool BuffNeedsMana(SpellEntry const* pSpellEntry);
     Player* SelectDispelTarget(SpellEntry const* pSpellEntry) const;
     bool IsValidBuffTarget(Unit const* pTarget, SpellEntry const* pSpellEntry) const;
     // Another group member is already casting this buff (any rank, or the more powerful version)
@@ -510,6 +518,10 @@ public:
             SpellEntry const* pMageArmor;
             SpellEntry const* pColdSnap;
             SpellEntry const* pConjureManaGem;  // the best Conjure Mana Agate / Jade / Citrine / Ruby
+            SpellEntry const* pArcaneMissiles;  // only for a victim immune to fire and frost (MageKit::Fillers)
+            // Frostbolt, or Fireball for a fire build (more talent points in fire than in
+            // frost); set in PopulateSpellData (MageKit::Filler)
+            SpellEntry const* pFiller;
         } mage;
         struct
         {

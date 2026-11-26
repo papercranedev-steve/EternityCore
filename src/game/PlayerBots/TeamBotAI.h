@@ -236,6 +236,8 @@ public:
     bool CanShootWand() const;
     // Mage, warlock, priest: AttackStart does not turn melee swings on.
     bool IsClothCaster() const;
+    // Its Commander team on this map (a population unit without a WoW group too), itself included.
+    std::vector<Player*> BuffCandidates() const override;
     // A member whose body lies here unreleased (CORPSE) in range and sight of the resurrection.
     Player* SelectResurrectionTarget() const;
     // The corpse on this map of a member that released its spirit (a ghost, maybe elsewhere),

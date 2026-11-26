@@ -89,8 +89,13 @@ void ClassRotation::ShootWandBelowMana(Unit* pVictim, float manaPct)
 void ClassRotation::ChaseWhenOutOfRange(Unit* pVictim)
 {
     Player* me = m_bot.me;
+    // The filler's range with the range talents (Arctic Reach: Frostbolt 36 yd), as the cast
+    // check takes it; 30 yd without a filler. (Until 2026-11-26 always 30: a mage with Arctic
+    // Reach walked in 6 yd closer than it needed.)
+    SpellEntry const* pFiller = m_bot.Kit().Filler();
+    float const range = pFiller ? CombatBotBaseAI::SpellMaxRange(me, pFiller) : 30.0f;
     if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == IDLE_MOTION_TYPE &&
-        me->GetDistance(pVictim) > 30.0f)
+        me->GetCombatDistance(pVictim) > range)
         m_bot.BeginChasing(pVictim);
 }
 

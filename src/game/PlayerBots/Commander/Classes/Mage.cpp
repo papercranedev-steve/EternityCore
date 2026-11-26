@@ -39,9 +39,9 @@ namespace Commander
                 return { m_bot.m_spells.mage.pPolymorph };
             }
 
-            // The rotation puts Ice Barrier (frost talent, no mana per absorbed point) up when
-            // attacked; Mana Shield (2 mana per point) only when EscapeBehavior finds the hits
-            // dangerous and nothing else absorbs (Rotations/MageRotation.cpp).
+            // EscapeBehavior casts them: Ice Barrier (frost talent, no mana per absorbed point)
+            // when the hits it would take are worth its mana and GCD; Mana Shield (2 mana per
+            // point) only when the hits are dangerous and nothing else absorbs.
             std::vector<SpellEntry const*> ReactiveShields() const override
             {
                 auto const& s = m_bot.m_spells.mage;
@@ -62,14 +62,21 @@ namespace Commander
                 return { { s.pBlizzard, true, chill }, { s.pArcaneExplosion, false }, { s.pBlastWave, false } };
             }
 
+            // Fireball for a fire build (more points in fire than in frost), else Frostbolt
+            // (CombatBotBaseAI::PopulateSpellData).
             SpellEntry const* Filler() const override
             {
-                // Fireball for a fire build (deep fire talents), else Frostbolt.
+                return m_bot.m_spells.mage.pFiller;
+            }
+
+            // On a victim immune to the filler's school: the other bolt, then Arcane Missiles.
+            // (Before 2026-11-26 the rotation had only the filler: a frost mage on a frost
+            // immune enemy stood idle until it shot its wand at 5% mana.)
+            std::vector<SpellEntry const*> Fillers() const override
+            {
                 auto const& s = m_bot.m_spells.mage;
-                bool const fire = s.pCombustion || s.pPyroblast;
-                if (fire && s.pFireball)
-                    return s.pFireball;
-                return s.pFrostbolt ? s.pFrostbolt : s.pFireball;
+                SpellEntry const* other = s.pFiller == s.pFireball ? s.pFrostbolt : s.pFireball;
+                return { s.pFiller, other, s.pArcaneMissiles };
             }
 
             SpellEntry const* SelfManaRestore() const override

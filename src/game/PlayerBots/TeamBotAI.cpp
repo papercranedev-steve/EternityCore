@@ -1173,7 +1173,12 @@ float TeamBotAI::SpellReadyInSec(Unit const* pTarget, SpellEntry const* pSpellEn
 
 bool TeamBotAI::IsSpammedOverOwnAura(SpellEntry const* pSpellEntry) const
 {
-    return pSpellEntry && (pSpellEntry == Kit().Filler() || pSpellEntry->GetStackAmount() > 1);
+    if (!pSpellEntry)
+        return false;
+    if (pSpellEntry->GetStackAmount() > 1)
+        return true;
+    std::vector<SpellEntry const*> const fillers = Kit().Fillers();
+    return std::find(fillers.begin(), fillers.end(), pSpellEntry) != fillers.end();
 }
 
 // Checks the server makes at cast time (Spell::CheckRange, Spell::CheckCast, Spell::CheckItems)
@@ -1428,6 +1433,17 @@ bool TeamBotAI::IsClothCaster() const
         default:
             return false;
     }
+}
+
+std::vector<Player*> TeamBotAI::BuffCandidates() const
+{
+    std::vector<Player*> out;
+    for (Player* pMember : Commander::Team::Members(me))
+        if (pMember->IsInWorld() && pMember->GetMap() == me->GetMap())
+            out.push_back(pMember);
+    if (std::find(out.begin(), out.end(), me) == out.end())
+        out.push_back(me);
+    return out;
 }
 
 bool TeamBotAI::CanResurrectOthers(Player const* player)

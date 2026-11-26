@@ -130,6 +130,56 @@ namespace Commander
             return p;
         }
 
+        // Step 0b (review 2026-11-26): a shield with no mana per absorbed point (Ice Barrier)
+        // while enemies hit the bot, melee or ranged, dangerous or not, when the hits it takes
+        // before they die (HORIZON_SEC at most) are worth more than its mana and GCD. Before,
+        // the mage rotation cast Ice Barrier whenever anything attacked it, unvalued.
+        bool ProposeFreeShield(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self, Proposal& p)
+        {
+            if (FreeAbsorb(bot) > 0.0f)
+                return false;
+            // (TakenDps: melee predicted, spells as measured; Ice Barrier takes every school)
+            float const incoming = Value::TakenDps(world, self.guid);
+            if (incoming <= 0.0f)
+                return false;
+            float horizon = 0.0f;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && !e.crowdControlled && e.victim == self.guid)
+                    horizon = std::max(horizon, Value::EnemyTimeToDie(world, e));
+            horizon = std::min(horizon, EB::HORIZON_SEC);
+            if (horizon <= 0.0f)
+                return false;
+
+            Player* me = bot->me;
+            SpellEntry const* best = nullptr;
+            float bestTaken = 0.0f;
+            for (SpellEntry const* shield : bot->Kit().ReactiveShields())
+            {
+                if (!shield || shield->EffectMultipleValue[EFFECT_INDEX_0] || !bot->CanTryToCastSpell(me, shield))
+                    continue;
+                float const amount = float(std::max(0, shield->CalculateSimpleValue(EFFECT_INDEX_0)));
+                float const taken = std::min(amount, incoming * horizon);
+                if (taken > bestTaken)
+                {
+                    best = shield;
+                    bestTaken = taken;
+                }
+            }
+            if (!best)
+                return false;
+            float const mana = DamageSpells::ManaCost(me, best);
+            float const cost = Value::LostAction(world, self, Value::GCD_SEC) +
+                               (mana > 0.0f ? ManaWorth::Points(world, self, mana) : 0.0f);
+            float const benefit = Value::Points(world, bestTaken);
+            if (benefit <= cost)
+                return false;
+            p = MakeProposal(ProposalTier::Assigned, "hit: free shield up");
+            p.action.type = BotActionType::Cast;
+            p.action.spell = best;
+            p.SetValue(benefit, cost);
+            return true;
+        }
+
         void SetMove(Proposal& p, Position3 const& to, float walkSec)
         {
             p.action.type = BotActionType::MoveTo;
@@ -259,6 +309,13 @@ namespace Commander
         PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
         if (!self || !self->CanAct())
             return;
+
+        // 0b. Hit at all: a free shield when worth it (the urgent steps below still come).
+        {
+            Proposal shield;
+            if (ProposeFreeShield(bot, world, *self, shield))
+                out.push_back(shield);
+        }
 
         Map* map = me->GetMap();
         Position3 here;

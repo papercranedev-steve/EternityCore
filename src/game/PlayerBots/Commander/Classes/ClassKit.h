@@ -177,8 +177,9 @@ namespace Commander
         // Roots / stuns that stop a melee enemy chasing the bot (EscapeBehavior; what each spell
         // does is read from its data there).
         virtual std::vector<SpellEntry const*> HoldSpells() const { return {}; }
-        // Absorb shields on itself the rotation puts up when attacked (EscapeBehavior counts them
-        // into survival before they are cast). Active absorbs are read from auras for every class.
+        // Absorb shields on itself that EscapeBehavior casts: one with no mana per point (Ice
+        // Barrier) when the hits it takes pay for it, any of them in danger (Mana Shield). Active
+        // absorbs are read from auras for every class.
         virtual std::vector<SpellEntry const*> ReactiveShields() const { return {}; }
         // Drops its own threat so an enemy hitting the bot turns to someone else: on every
         // enemy for a while (priest Fade), off every list (rogue Vanish, hunter Feign Death) or
@@ -272,6 +273,10 @@ namespace Commander
         // The single target damage spell the rotation casts most: what an area spell is compared
         // with (AreaDamageBehavior) and how fast mana goes (ManaBudgetBehavior self restore).
         virtual SpellEntry const* Filler() const { return nullptr; }
+        // Filler() first, then what the rotation casts instead on a victim immune to it (a frost
+        // mage on a water elemental: Fireball, then Arcane Missiles). Each of them is cast over
+        // its own aura on the victim (TeamBotAI::IsSpammedOverOwnAura: Fireball's burn).
+        virtual std::vector<SpellEntry const*> Fillers() const { return { Filler() }; }
         // Channelled restore of its own mana (Evocation). Only the Commander casts it
         // (ManaBudgetBehavior): in combat, when the mana would run out long before the fight ends.
         virtual SpellEntry const* SelfManaRestore() const { return nullptr; }

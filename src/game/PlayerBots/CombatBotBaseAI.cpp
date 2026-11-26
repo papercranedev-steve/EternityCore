@@ -22,6 +22,7 @@
 #include "Shared/GivenItems.h"
 #include "Shared/Inventory.h"
 #include "Shared/PetFood.h"
+#include "Shared/TalentSpread.h"
 
 #include <algorithm>
 #include <map>
@@ -752,6 +753,11 @@ void CombatBotBaseAI::PopulateSpellData()
                     // No ranks: Agate 759 < Jade 3552 < Citrine 10053 < Ruby 10054 by id.
                     if (IsHigherRankSpell(m_spells.mage.pConjureManaGem))
                         m_spells.mage.pConjureManaGem = pSpellEntry;
+                }
+                else if (pSpellEntry->SpellName[0].find("Arcane Missiles") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.mage.pArcaneMissiles))
+                        m_spells.mage.pArcaneMissiles = pSpellEntry;
                 }
                 else if (pSpellEntry->SpellName[0].find("Evocation") != std::string::npos)
                 {
@@ -1704,18 +1710,19 @@ void CombatBotBaseAI::PopulateSpellData()
             if (!m_spells.mage.pIceArmor && pFrostArmor)
                 m_spells.mage.pIceArmor = pFrostArmor;
 
-            std::vector<SpellEntry const*> polymorph;
-            if (pPolymorphSheep)
-                polymorph.push_back(pPolymorphSheep);
-            if (pPolymorphCow)
-                polymorph.push_back(pPolymorphCow);
-            if (pPolymorphPig)
-                polymorph.push_back(pPolymorphPig);
-            if (pPolymorphTurtle)
-                polymorph.push_back(pPolymorphTurtle);
-            if (!polymorph.empty())
-                m_spells.mage.pPolymorph = SelectRandomContainerElement(polymorph);
+            // One fixed polymorph (until 2026-11-26 a random one at every spell reset): a
+            // variant learned from a book (the player gave it) before the trained sheep.
+            m_spells.mage.pPolymorph = pPolymorphPig ? pPolymorphPig
+                                     : pPolymorphTurtle ? pPolymorphTurtle
+                                     : pPolymorphCow ? pPolymorphCow : pPolymorphSheep;
 
+            // Fireball for a fire build, else Frostbolt (until 2026-11-26: Fireball whenever
+            // Combustion or Pyroblast was learned, also on a frost build with 11 fire points).
+            // Talent tabs: 0 arcane, 1 fire, 2 frost.
+            BotShared::TalentSpread::Points const points = BotShared::TalentSpread::Of(me);
+            bool const fire = points[1] > points[2];
+            m_spells.mage.pFiller = fire && m_spells.mage.pFireball ? m_spells.mage.pFireball
+                                  : m_spells.mage.pFrostbolt ? m_spells.mage.pFrostbolt : m_spells.mage.pFireball;
             break;
         }
         case CLASS_ROGUE:
@@ -2187,13 +2194,9 @@ namespace
 bool CombatBotBaseAI::IsBuffPendingFromOther(Unit const* pMember, SpellEntry const* pSingleSpellEntry, SpellEntry const* pGroupSpellEntry) const
 {
     Group* pGroup = me->GetGroup();
-    if (!pGroup)
-        return false;
-
-    for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (Player* pCaster : BuffCandidates())
     {
-        Player* pCaster = itr->getSource();
-        if (!pCaster || pCaster == me)
+        if (pCaster == me)
             continue;
 
         Spell const* pSpell = pCaster->GetCurrentSpell(CURRENT_GENERIC_SPELL);
@@ -2207,9 +2210,11 @@ bool CombatBotBaseAI::IsBuffPendingFromOther(Unit const* pMember, SpellEntry con
         SpellEntry const* pPending = pSpell->m_spellInfo;
         if (pGroupSpellEntry && IsSameSpellChain(pGroupSpellEntry, pPending))
         {
+            // (without a WoW group the group version takes its target only)
             Player const* pTargetPlayer = pTarget->ToPlayer();
             Player const* pMemberPlayer = pMember->ToPlayer();
-            if (pTargetPlayer && pMemberPlayer && pGroup->SameSubGroup(pTargetPlayer, pMemberPlayer))
+            if (pTarget == pMember ||
+                (pGroup && pTargetPlayer && pMemberPlayer && pGroup->SameSubGroup(pTargetPlayer, pMemberPlayer)))
                 return true;
         }
         else if (pTarget == pMember &&
@@ -2221,26 +2226,61 @@ bool CombatBotBaseAI::IsBuffPendingFromOther(Unit const* pMember, SpellEntry con
     return false;
 }
 
-Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSpellEntry) const
+std::vector<Player*> CombatBotBaseAI::BuffCandidates() const
 {
-    Group* pGroup = me->GetGroup();
-    if (pGroup)
+    std::vector<Player*> out;
+    if (Group* pGroup = me->GetGroup())
     {
         for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
-        {
             if (Player* pMember = itr->getSource())
-            {
-                if (me->IsValidHelpfulTarget(pMember) &&
-                   !pMember->IsGameMaster() &&
-                    IsValidBuffTarget(pMember, pSpellEntry) &&
-                   !IsBuffPendingFromOther(pMember, pSpellEntry, nullptr) &&
-                    me->IsWithinLOSInMap(pMember) &&
-                    me->IsWithinDist(pMember, 30.0f))
-                    return pMember;
-            }
-        }
+                if (pMember->IsInWorld() && pMember->GetMap() == me->GetMap())
+                    out.push_back(pMember);
     }
+    if (std::find(out.begin(), out.end(), me) == out.end())
+        out.push_back(me);
+    return out;
+}
 
+bool CombatBotBaseAI::BuffNeedsMana(SpellEntry const* pSpellEntry)
+{
+    bool any = false;
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (!pSpellEntry->Effect[i])
+            continue;
+        if (!Spells::IsAreaAuraEffect(pSpellEntry->Effect[i]) && pSpellEntry->Effect[i] != SPELL_EFFECT_APPLY_AURA)
+            return false;
+        AuraType const aura = AuraType(pSpellEntry->EffectApplyAuraName[i]);
+        bool const forMana =
+            (aura == SPELL_AURA_MOD_STAT && pSpellEntry->EffectMiscValue[i] == STAT_INTELLECT) ||
+            (aura == SPELL_AURA_MOD_POWER_REGEN && pSpellEntry->EffectMiscValue[i] == POWER_MANA);
+        if (!forMana)
+            return false;
+        any = true;
+    }
+    return any;
+}
+
+namespace
+{
+    // In reach and sight, can be buffed, not a GM. (BuffNeedsMana: only one with mana.)
+    bool CanBuff(Player const* me, Player const* pMember, SpellEntry const* pSpellEntry)
+    {
+        return me->IsValidHelpfulTarget(pMember) &&
+              !pMember->IsGameMaster() &&
+               me->IsWithinDist(pMember, 30.0f) &&
+               me->IsWithinLOSInMap(pMember) &&
+              (!CombatBotBaseAI::BuffNeedsMana(pSpellEntry) || pMember->GetMaxPower(POWER_MANA) > 0);
+    }
+}
+
+Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSpellEntry) const
+{
+    for (Player* pMember : BuffCandidates())
+        if (CanBuff(me, pMember, pSpellEntry) &&
+            IsValidBuffTarget(pMember, pSpellEntry) &&
+           !IsBuffPendingFromOther(pMember, pSpellEntry, nullptr))
+            return pMember;
     return nullptr;
 }
 
@@ -2263,41 +2303,36 @@ Player* CombatBotBaseAI::SelectBuffTarget(SpellEntry const* pSingleSpellEntry, S
         return SelectBuffTarget(pSingleSpellEntry);
     }
 
-    Player* pFirstMissingMember = nullptr;
-    uint8 missingMemberCount = 0;
+    // The group version covers the target's subgroup only (without a WoW group: the target
+    // only), so it is worth its reagent when two or more of one subgroup miss the buff. Until
+    // 2026-11-26 two missing anywhere in a raid took it, one of them in another subgroup.
     Group* pGroup = me->GetGroup();
+    std::vector<Player*> missing;
+    for (Player* pMember : BuffCandidates())
+        if (CanBuff(me, pMember, pSingleSpellEntry) &&
+            IsValidBuffTarget(pMember, pSingleSpellEntry) &&
+            IsValidBuffTarget(pMember, pGroupSpellEntry) &&
+           !IsBuffPendingFromOther(pMember, pSingleSpellEntry, pGroupSpellEntry))
+            missing.push_back(pMember);
+    if (missing.empty())
+        return nullptr;
+
     if (pGroup)
     {
-        for (GroupReference* itr = pGroup->GetFirstMember(); itr != nullptr; itr = itr->next())
+        for (Player* pMember : missing)
         {
-            if (Player* pMember = itr->getSource())
+            uint32 const sameSubGroup = uint32(std::count_if(missing.begin(), missing.end(),
+                [&](Player const* pOther) { return pGroup->SameSubGroup(pMember, pOther); }));
+            if (sameSubGroup > 1)
             {
-                if (!me->IsValidHelpfulTarget(pMember) ||
-                    pMember->IsGameMaster() ||
-                    !me->IsWithinLOSInMap(pMember) ||
-                    !me->IsWithinDist(pMember, 30.0f) ||
-                    !IsValidBuffTarget(pMember, pSingleSpellEntry) ||
-                    !IsValidBuffTarget(pMember, pGroupSpellEntry) ||
-                     IsBuffPendingFromOther(pMember, pSingleSpellEntry, pGroupSpellEntry))
-                    continue;
-
-                if (!pFirstMissingMember)
-                    pFirstMissingMember = pMember;
-
-                ++missingMemberCount;
-                if (missingMemberCount > 1)
-                {
-                    pSelectedSpellEntry = pGroupSpellEntry;
-                    return pFirstMissingMember;
-                }
+                pSelectedSpellEntry = pGroupSpellEntry;
+                return pMember;
             }
         }
     }
 
-    if (missingMemberCount == 1)
-        pSelectedSpellEntry = pSingleSpellEntry;
-
-    return pFirstMissingMember;
+    pSelectedSpellEntry = pSingleSpellEntry;
+    return missing.front();
 }
 
 Player* CombatBotBaseAI::SelectDispelTarget(SpellEntry const* pSpellEntry) const

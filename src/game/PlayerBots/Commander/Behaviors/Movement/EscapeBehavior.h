@@ -22,9 +22,14 @@
  *
  *  0. Dangerous and nothing absorbs: cast the class kit shield (ClassKit::ReactiveShields)
  *     that absorbs most, tier Urgent; benefit = Points(min(absorb, incoming x DANGER_SEC)),
- *     cost = LostAction(GCD). The mage rotation puts Ice Barrier up by itself when attacked;
- *     Mana Shield (2 mana per point absorbed) only comes from here (user, 2026-11-01: only
- *     when it is really dangerous; strat-20261101-235124 lost a third of its mana to it).
+ *     cost = LostAction(GCD). Mana Shield (2 mana per point absorbed) only comes from here
+ *     (user, 2026-11-01: only when it is really dangerous; strat-20261101-235124 lost a third
+ *     of its mana to it).
+ * 0b. Hit at all (melee or ranged, any danger) and no free absorb up: a shield with no mana per
+ *     point (Ice Barrier), tier Assigned; benefit = Points(min(absorb, TakenDps x H)), H = the
+ *     longest time to die of the enemies on it, at most HORIZON_SEC; cost = LostAction(GCD) +
+ *     ManaWorth(its mana). Not cast when that does not pay. (Until 2026-11-26 the mage
+ *     rotation put Ice Barrier up whenever anything attacked it.)
  *
  * Hold spells (HoldSpells: mage Frost Nova, druid Entangling Roots, paladin Hammer of Justice,
  * priest Shackle Undead on undead). Effect read from the spell: a stun holds for its duration, a
