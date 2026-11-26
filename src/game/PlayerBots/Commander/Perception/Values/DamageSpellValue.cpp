@@ -30,6 +30,52 @@ namespace DamageSpellValue
             }
             return 0.0f;
         }
+
+        // What every rating of this caster on this enemy shares.
+        struct Context
+        {
+            EnemyFacts const* enemy = nullptr;
+            PartyMemberFacts const* self = nullptr;
+            uint32 sinceRefresh = 0;
+            float perDamage = 0.0f;     // points per point of damage (header)
+        };
+
+        bool Prepare(Player* caster, WorldModel const& world, Unit const* target, SpellEntry const* filler,
+                     uint32 nowMs, Context& c)
+        {
+            if (!caster || !target || !filler)
+                return false;
+            c.enemy = world.FindEnemy(target->GetObjectGuid());
+            c.self = world.FindMember(caster->GetObjectGuid());
+            if (!c.enemy || !c.self)
+                return false;
+            c.sinceRefresh = WorldTimer::getMSTimeDiff(world.refreshedAtMs, nowMs);
+            float const fillerDps = DamageSpells::Estimate(caster, target, filler) /
+                                    std::max(0.1f, DamageSpells::BusySec(caster, filler));
+            if (fillerDps <= 0.0f)
+                return false;
+            float const share = 1.0f / float(std::max(1u, world.rates.damageDealers));
+            c.perDamage = Value::Points(world, world.rates.incomingDps) * share / fillerDps;
+            return c.perDamage > 0.0f;
+        }
+
+        // ManaWorth::Points; a caster that taps health into mana (warlock): at most the global
+        // cooldowns of the taps that pay it back (header).
+        float ManaPrice(WorldModel const& world, PartyMemberFacts const& self, float mana)
+        {
+            float const worth = ManaWorth::Points(world, self, mana);
+            if (self.tapManaPerCast <= 0.0f || self.tapManaPerHealth <= 0.0f)
+                return worth;
+            return std::min(worth, Value::LostAction(world, self, Value::GCD_SEC * mana / self.tapManaPerCast));
+        }
+
+        void Finish(Context const& c, Rating& r, float manaWorth)
+        {
+            r.landed = std::min(r.landed, float(c.enemy->health));
+            r.points = r.landed * c.perDamage - manaWorth;
+            r.perSec = r.points / std::max(0.1f, r.busySec);
+            r.known = true;
+        }
     }
 
     uint32 DeathMs(WorldModel const& world, EnemyFacts const& enemy, ObjectGuid self, uint32 selfFromMs,
@@ -46,24 +92,20 @@ namespace DamageSpellValue
     }
 
     Rating Rate(Player* caster, WorldModel const& world, Unit const* target, SpellEntry const* spell,
-                uint32 nowMs, SpellEntry const* consumes)
+                SpellEntry const* filler, uint32 nowMs, SpellEntry const* consumes)
     {
         Rating r;
-        if (!caster || !target || !spell)
-            return r;
-        EnemyFacts const* enemy = world.FindEnemy(target->GetObjectGuid());
-        PartyMemberFacts const* self = world.FindMember(caster->GetObjectGuid());
-        if (!enemy || !self)
+        Context c;
+        if (!spell || !Prepare(caster, world, target, filler, nowMs, c))
             return r;
 
-        uint32 const sinceRefresh = WorldTimer::getMSTimeDiff(world.refreshedAtMs, nowMs);
         uint32 const castMs = uint32(std::max<int32>(0, int32(spell->GetCastTime(caster))));
-        uint32 const landMs = sinceRefresh + castMs + FinishForecast::FlightMs(self->pos, *enemy, spell->speed);
+        uint32 const landMs = c.sinceRefresh + castMs + FinishForecast::FlightMs(c.self->pos, *c.enemy, spell->speed);
         r.busySec = DamageSpells::BusySec(caster, spell);
 
         DamageSpells::Periodic const dot = DamageSpells::EstimatePeriodic(caster, target, spell);
         uint32 const horizon = landMs + dot.ticks * dot.periodMs;
-        uint32 const death = DeathMs(world, *enemy, self->guid, sinceRefresh + uint32(r.busySec * 1000.0f), horizon);
+        uint32 const death = DeathMs(world, *c.enemy, c.self->guid, c.sinceRefresh + uint32(r.busySec * 1000.0f), horizon);
 
         if (!death || death > landMs)
         {
@@ -75,14 +117,27 @@ namespace DamageSpellValue
             }
         }
         if (consumes)
-            r.landed -= OwnDotDamage(*enemy, self->guid, consumes->Id, landMs, death ? death : 0xFFFFFFFFu);
-        r.landed = std::min(r.landed, float(enemy->health));
+            r.landed -= OwnDotDamage(*c.enemy, c.self->guid, consumes->Id, landMs, death ? death : 0xFFFFFFFFu);
 
-        r.points = Value::Points(world, std::max(0.0f, r.landed)) -
-                   ManaWorth::Points(world, *self, DamageSpells::ManaCost(caster, spell));
-        if (r.landed < 0.0f)
-            r.points -= Value::Points(world, -r.landed);
-        r.perSec = r.points / std::max(0.1f, r.busySec);
+        Finish(c, r, ManaPrice(world, *c.self, DamageSpells::ManaCost(caster, spell)));
+        return r;
+    }
+
+    Rating RateWand(Player* caster, WorldModel const& world, Unit const* target, SpellEntry const* shoot,
+                    SpellEntry const* filler, uint32 nowMs)
+    {
+        Rating r;
+        Context c;
+        if (!shoot || !Prepare(caster, world, target, filler, nowMs, c))
+            return r;
+
+        uint32 const landMs = c.sinceRefresh + FinishForecast::FlightMs(c.self->pos, *c.enemy, shoot->speed);
+        r.busySec = std::max(Value::GCD_SEC, float(caster->GetAttackTime(RANGED_ATTACK)) / 1000.0f);
+        uint32 const death = DeathMs(world, *c.enemy, c.self->guid, landMs, landMs);
+        if (!death || death > landMs)
+            r.landed = (caster->GetFloatValue(UNIT_FIELD_MINRANGEDDAMAGE) + caster->GetFloatValue(UNIT_FIELD_MAXRANGEDDAMAGE)) / 2.0f;
+
+        Finish(c, r, 0.0f);
         return r;
     }
 }

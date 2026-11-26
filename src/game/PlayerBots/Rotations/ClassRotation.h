@@ -63,16 +63,23 @@ protected:
         SpellEntry const* spell = nullptr;
         SpellEntry const* consumes = nullptr;
     };
-    // Of the options it can cast now on `pVictim`, the one worth the most per second it is busy
-    // (Commander/Perception/Values/DamageSpellValue.h: damage landed before the victim dies,
-    // less the mana's worth), the next when a cast is refused; worth nothing (the mana is worth
-    // more than the damage it lands): not cast. Without a Commander or facts on the victim:
-    // the first in the list that casts. True = cast.
-    bool CastBestDamage(Unit* pVictim, std::initializer_list<DamageOption> options);
+    // Of the options it can cast now on `pVictim`, and with `withWand` a wand shot (standing,
+    // a wand, not pulling aggro: since 2026-11-27 instead of "below 5% mana"), the one worth the
+    // most per second it is busy (Commander/Perception/Values/DamageSpellValue.h: damage landed
+    // before the victim dies, less the mana's worth), the next when a cast is refused; worth
+    // nothing (the mana is worth more than the damage it lands): not cast. The wand best: kept
+    // going or started (StartWand); a spell best: cast, which ends the wand. Inside a global
+    // cooldown or a cast: nothing chosen (true). Values unknown (DamageSpellValue::Rating::known):
+    // the first in the list that casts, then the wand below 5% mana. True = acted or waiting
+    // (the wand counts); false = nothing to do on it (out of range: the caller walks closer).
+    bool CastBestDamage(Unit* pVictim, std::initializer_list<DamageOption> options, bool withWand = false);
+    // The wand's Shoot runs at `pVictim`.
+    bool IsShootingWandAt(Unit const* pVictim) const;
     // Wand when out of mana (below `manaPct`): StartWand.
     void ShootWandBelowMana(Unit* pVictim, float manaPct);
-    // Starts the wand on `pVictim`: learned with a wand, standing, not already shooting, no
-    // global cooldown or cast running (each shot fired starts one, Spell::cast). True = started.
+    // Starts the wand on `pVictim`: learned with a wand, standing, not already shooting at it
+    // (shooting at another enemy: turned to it), no global cooldown or cast running (each shot
+    // fired starts one, Spell::cast). True = started.
     // (A healer's shot that would pull aggro: ShootWandBelowMana checks it first.)
     bool StartWand(Unit* pVictim);
     // Wand at any mana (a healer's free attack, Commander HEALER_DAMAGE_FREE).

@@ -15,12 +15,14 @@
  * In combat:
  *   1. Shadowburn when it kills the victim (DamageSpells::EstimateDirect, no crit) and the
  *      warlock holds more than SHARD_RESERVE Soul Shards (a kill within 5 s gives it back).
- *   2. The best of Corruption, Siphon Life, Immolate, Conflagrate (ends the Immolate) and Shadow
- *      Bolt (instant with Nightfall's Shadow Trance) on the victim: CastBestDamage, damage landed
- *      before it dies per busy second, less the mana (DamageSpellValue). Since 2026-11-27
- *      (strat-20261127-000359: the periodic spells went first in a fixed order, on every new
- *      enemy, and no Shadow Bolt was cast in a whole fight).
- *   3. Walk closer, wand below 5% mana.
+ *   2. The best of Corruption, Siphon Life, Immolate, Conflagrate (ends the Immolate), Shadow
+ *      Bolt (instant with Nightfall's Shadow Trance) and a wand shot on the victim:
+ *      CastBestDamage, damage landed before it dies per busy second, less the mana
+ *      (DamageSpellValue). Since 2026-11-27 (strat-20261127-000359: the periodic spells went
+ *      first in a fixed order, on every new enemy, and no Shadow Bolt was cast in a whole
+ *      fight; the wand came below 5% mana in any gap). The same while the wand runs
+ *      (UpdateWhileAutoRepeating): a spell worth more ends it.
+ *   3. Nothing castable on it: walk closer.
  * Gone 2026-11-26 (review): Death Coil on a victim in melee reach of the warlock or casting (it
  * is a 3 s fear: it ran the tank's target off the tank, past the doctrine's no-fear stamp).
  * Gone 2026-11-15: Searing Pain below 20% (a fire spell with high threat, worse than Shadow
@@ -50,7 +52,6 @@
 
 namespace
 {
-    float const WAND_MANA_PCT = 5.0f;
     // Shards kept for other uses (Soulstone, Healthstone, summoning); HarvestBehavior::KEEP
     // fills up to 10 (user 2026-11-15: "5-10").
     uint32 const SHARD_RESERVE = 5;
@@ -107,22 +108,36 @@ namespace
 
             KeepPetAside();
 
-            Unit* pVictim = me->GetVictim();
-            if (!pVictim)
-                return;
+            if (Unit* pVictim = me->GetVictim())
+                Damage(pVictim);
+        }
 
+        // The wand runs (TeamBotAI skips UpdateInCombat then): the same choice, a spell worth
+        // more than the next shot ends it (2026-11-27; before, only a Commander action did).
+        void UpdateWhileAutoRepeating() override
+        {
+            if (!m_bot.me->IsInCombat())
+                return;
+            KeepPetAside();
+            if (Unit* pVictim = m_bot.me->GetVictim())
+                Damage(pVictim);
+        }
+
+    private:
+        // Steps 1-3 (header).
+        void Damage(Unit* pVictim)
+        {
+            auto const& s = m_bot.m_spells.warlock;
             if (KillsWithShadowburn(pVictim) && Cast(pVictim, s.pShadowburn))
                 return;
 
             if (CastBestDamage(pVictim, { { s.pCorruption }, { s.pSiphonLife }, { s.pImmolate },
-                                          { s.pConflagrate, s.pImmolate }, { s.pShadowBolt } }))
+                                          { s.pConflagrate, s.pImmolate }, { s.pShadowBolt } }, true))
                 return;
 
             ChaseWhenOutOfRange(pVictim);
-            ShootWandBelowMana(pVictim, WAND_MANA_PCT);
         }
 
-    private:
         // Detect Invisibility only on the tanks (Tanks::IsTank, bots and players) and the real
         // players; not in a raid instance (user 2026-11-25: on every member it wasted mana and
         // GCDs). Without a Commander (no party snapshot): nobody.
