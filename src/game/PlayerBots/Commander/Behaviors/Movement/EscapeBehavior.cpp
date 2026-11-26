@@ -380,7 +380,7 @@ namespace Commander
         {
             Proposal hold = MakeProposal(ProposalTier::Assigned, "running away, keep running");
             hold.score = 0.0f;
-            hold.action.type = BotActionType::Hold;
+            hold.action.type = BotActionType::KeepWalking;
             out.push_back(hold);
             return;
         }

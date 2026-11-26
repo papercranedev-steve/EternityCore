@@ -323,7 +323,7 @@ namespace Commander
             hold.reason = unsafe ? "walking out of an idle creature's reach, keep walking"
                                  : inMelee ? "walking out of the enemies' melee, keep walking"
                                            : "walking to a healing spot, keep walking";
-            hold.action.type = BotActionType::Hold;
+            hold.action.type = BotActionType::KeepWalking;
             out.push_back(hold);
             return;
         }

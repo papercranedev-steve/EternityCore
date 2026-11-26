@@ -70,6 +70,11 @@ namespace Commander
         // The original rotation still runs in the same tick.
         StopChase,
         Hold,       // do nothing this tick and skip the original rotation
+        // A walk (MoveTo) is under way: let it run, skip the original rotation (its first
+        // cast-time spell would stop the walk). Unlike Hold it is in the moving channel: an
+        // instant cast that goes with a walk still executes in the same tick (Arbiter.h "Two
+        // channels"; user 2026-11-26: Life Tap while walking).
+        KeepWalking,
         // Out of combat: eat and / or drink what is missing, or keep sitting (TeamBotAI::
         // StartResting); fails in combat or with nothing missing. Every other action stands a
         // resting bot up first.

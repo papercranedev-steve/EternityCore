@@ -444,7 +444,7 @@ namespace Commander
                 // (any module's walk, not only this one's: the reason said "walking out of an
                 // area" up to 2026-11-25 and read in reviews as a hazard walk)
                 hold.reason = "a walk under way, keep walking";
-                hold.action.type = BotActionType::Hold;
+                hold.action.type = BotActionType::KeepWalking;
                 out.push_back(hold);
             }
             return;

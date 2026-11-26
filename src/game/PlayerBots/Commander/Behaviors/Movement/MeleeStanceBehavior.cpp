@@ -317,7 +317,7 @@ namespace Commander
             char const* owner = bot->Directives().GetMovementOwner(now);
             if (owner && !strcmp(owner, GetId()) && me->IsMoving())
             {
-                Proposal hold = Make(ProposalTier::Assigned, BotActionType::Hold, "walking to the tank, keep walking");
+                Proposal hold = Make(ProposalTier::Assigned, BotActionType::KeepWalking, "walking to the tank, keep walking");
                 hold.score = 0.0f;
                 out.push_back(hold);
             }

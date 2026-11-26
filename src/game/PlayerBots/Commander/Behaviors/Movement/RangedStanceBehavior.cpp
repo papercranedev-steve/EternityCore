@@ -111,7 +111,7 @@ namespace Commander
             hold.score = 0.0f;
             hold.source = "rangedstance";
             hold.reason = "walking to a spot, keep walking";
-            hold.action.type = BotActionType::Hold;
+            hold.action.type = BotActionType::KeepWalking;
             out.push_back(hold);
             return;
         }

@@ -61,7 +61,7 @@ namespace Commander
             // and the rotation keeps fighting.
             if (bot->IsMovementHeld() && me->IsMoving() && !bot->IsBackpedaling())
             {
-                out.push_back(Make(ProposalTier::Assigned, BotActionType::Hold, "moving the fight, keep walking"));
+                out.push_back(Make(ProposalTier::Assigned, BotActionType::KeepWalking, "moving the fight, keep walking"));
                 return;
             }
 

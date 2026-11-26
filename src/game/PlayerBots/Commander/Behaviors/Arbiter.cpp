@@ -54,6 +54,7 @@ namespace Commander
                 case BotActionType::Chase:  return "chase";
                 case BotActionType::StopChase: return "stop-chase";
                 case BotActionType::Hold:   return "hold";
+                case BotActionType::KeepWalking: return "keep-walking";
                 case BotActionType::Rest:   return "rest";
                 case BotActionType::HoldFire: return "holdfire";
                 case BotActionType::DropTarget: return "drop-target";
@@ -121,6 +122,7 @@ namespace Commander
                 case BotActionType::MoveTo:
                 case BotActionType::Backpedal:
                 case BotActionType::Chase:
+                case BotActionType::KeepWalking:
                     return Channel::Move;
                 case BotActionType::Cast:
                 case BotActionType::UseItem:
@@ -721,6 +723,7 @@ namespace Commander
                 return true;
             }
             case BotActionType::Hold:
+            case BotActionType::KeepWalking:
                 return true;
             case BotActionType::HoldFire:
             {

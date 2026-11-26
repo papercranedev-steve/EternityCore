@@ -12,7 +12,8 @@
  * (Attack / Backpedal let the rotation run anyway and stay). From strat-20261102-012937.
  * UseObject (gameobject target) returns true both while walking and on use, so the original
  * rotation and movement stay off until the module stops proposing it.
- * Two channels (2026-11-08, user: "倒退和吼叫可以同时进行"): moving (MoveTo, Backpedal, Chase)
+ * Two channels (2026-11-08, user: "倒退和吼叫可以同时进行"): moving (MoveTo, Backpedal, Chase,
+ * KeepWalking: the ticks after the MoveTo while the stance modules keep the walk going)
  * and acting (Cast, Attack, HoldFire). After the winner above executes, the best proposal of
  * the other channel (its own top tier) executes too when the two go together: an instant cast
  * that needs no standing still (CurrentAction::NeedsStandingStill), no auto shot, and for a

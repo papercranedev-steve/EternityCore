@@ -110,7 +110,7 @@ namespace Commander
             {
                 Proposal hold = Make("out of the dead zone, keep running");
                 hold.score = 0.0f;
-                hold.action.type = BotActionType::Hold;
+                hold.action.type = BotActionType::KeepWalking;
                 out.push_back(hold);
             }
             return;
