@@ -4,8 +4,8 @@
  *
  * Only this module controls: the rotations' own controls (marked targets, the mage's sheep on
  * a second attacker, Blind, Hibernate, Shackle, Banish, Fear, Howl of Terror, Intimidating
- * Shout) are gone since 2026-11-14. Spells not in a ClassKit::Controls list (hunters: Scare
- * Beast, paladins: Turn Evil) are still the rotations'.
+ * Shout) are gone since 2026-11-14, the paladin's Turn Undead since 2026-11-26. Spells not in
+ * a ClassKit::Controls list (hunters: Scare Beast) are still the rotations'.
  *
  * Propose, for this bot's ControlDuty (TeamPlan::FindControlFor), checked live: the target is
  * alive and not under the same spell any more, in sight, CanTryToCastSpell (range, power,

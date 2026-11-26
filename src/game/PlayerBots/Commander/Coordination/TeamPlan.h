@@ -1596,7 +1596,7 @@ namespace Commander
 
     struct BlessingPlan
     {
-        bool active = false;    // the module ran (off: the rotation picks on its own)
+        bool active = false;    // the module ran (off: no aura, no blessings)
         std::vector<BlessingDuty> blessings;
         std::vector<PaladinAuraDuty> auras;
 

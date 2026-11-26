@@ -1,30 +1,36 @@
 /*
- * Paladin rotation (moved out of PartyBotAI.cpp 2026-11-14, same steps).
+ * Paladin rotation (moved out of PartyBotAI.cpp 2026-11-14).
  *
- * Out of combat: aura, Righteous Fury (tank), blessings on the party, heals (healer).
+ * Out of combat: aura, Righteous Fury (tank; cancelled on anyone else), blessings on the
+ * party, the heal step (healer: Commander RestTopUp).
  * Aura and blessings: the brain says which (Commander/Coordination/Duties/BlessingAssigner.h,
- * TeamPlan::blessings, user 2026-11-15); while that module is off, the same lists without the
- * other paladins (BlessingAssigner::Order / AuraOrder). Until 2026-11-15 one random blessing
- * for everyone and one random aura.
+ * TeamPlan::blessings, user 2026-11-15); none without that plan.
  *
  * In combat:
- *   1. Attacked: Holy Shield; Turn Evil on a second undead attacker (not a tank).
- *   2. Healer: heals (the Commander heal module while the party fights).
- *      Others: the judgement the brain gave it (Commander/Coordination/Duties/
- *      JudgementAssigner.h: Seal of Wisdom / Light, Judgement, then its own seal again; on a
- *      victim living JUDGEMENT_MIN_TTD_SEC+ without one of that kind), seal, Judgement, Hammer of Justice below 20% health, Hammer of Wrath on a victim
- *      below 20%, Consecration (not a tank), Holy Shock (+ Divine Favor), Exorcism on undead,
- *      Holy Wrath on undead / demons.
- *   3. Blessing of Freedom when rooted or slowed; a self heal below 30% (not a healer).
+ *   1. Righteous Fury as above (made the tank in the fight: Commander CrisisAssigner).
+ *   2. Attacked: Holy Shield.
+ *   3. Heals the team: the heal step (the Commander heal module's order, none = rest), then its
+ *      damage step (a healer: its tier, HealerDamage; a side healer that also deals damage for
+ *      the team: Damage). Others: Damage: the judgement the brain gave it
+ *      (Commander/Coordination/Duties/JudgementAssigner.h: Seal of Wisdom / Light, Judgement,
+ *      then its own seal again; on a victim living JUDGEMENT_MIN_TTD_SEC+ without one of that
+ *      kind), seal, Judgement, Hammer of Wrath on a victim below 20%, Consecration (not a
+ *      tank), Holy Shock (not with the heal function), Exorcism on undead and demons, Holy
+ *      Wrath on undead / demons.
+ *   4. Blessing of Freedom when rooted or slowed.
  * Blessing of Sacrifice is not cast (user 2026-11-15: it took a GCD before any heal, even in an
  * emergency, and moved the damage onto the paladin).
  *
  * The Commander decides: Divine Shield, Blessing of Protection, Lay on Hands (team rescue),
- * Hammer of Justice on a cast (InterruptBehavior), Consecration for a tank (ThreatBehavior,
- * ClassKit::AreaThreat; the rotation cast it on "3 attackers" too until 2026-11-14), dispels
- * in combat (DispelBehavior), a healer's Divine Favor and Holy Shock heals (heal module).
- * Still the rotation's own (no Commander module yet, doc 2026-11-14-hands-cleanup.md 3):
- * Turn Evil, Hammer of Justice at low health.
+ * Hammer of Justice on a cast (InterruptBehavior), as a hold (EscapeBehavior) and on a fleeing
+ * enemy (FleeStopBehavior), Turn Undead (crowd control, ClassKit::Controls), Consecration for
+ * a tank (ThreatBehavior, ClassKit::AreaThreat), dispels in combat (DispelBehavior), Divine
+ * Favor and Holy Shock heals (heal module), every heal (self heals included).
+ * Removed 2026-11-26 (decisions the rotation made on its own): a self heal below 30% health,
+ * Hammer of Justice below 20% health (on its victim, not on what hit it), Turn Evil on a
+ * second undead attacker (the 2.0 name: it never matched a 1.12 spell), Divine Favor spent on
+ * a damage Holy Shock outside a healer's full damage tier, the pre-heal, percent heal
+ * thresholds, and the aura and blessing choice without the brain.
  */
 
 #include "Rotations/ClassRotation.h"
@@ -43,9 +49,6 @@
 
 namespace
 {
-    using Commander::BlessingKind;
-    using Commander::PaladinAuraKind;
-
     class PaladinRotation : public ClassRotation
     {
     public:
@@ -59,12 +62,11 @@ namespace
         {
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
-            auto const& s = bot.m_spells.paladin;
 
             if (Cast(me, ChosenAura()))
                 return;
 
-            if (bot.m_role == ROLE_TANK && Cast(me, s.pRighteousFury))
+            if (KeepRighteousFury())
                 return;
 
             if (BlessParty())
@@ -82,31 +84,17 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
 
-            // Made the tank in the fight (a stand-in: Commander CrisisAssigner): Righteous Fury
-            // was only cast out of combat.
-            if (bot.m_role == ROLE_TANK && Cast(me, s.pRighteousFury))
+            if (KeepRighteousFury())
                 return;
 
-            if (!me->GetAttackers().empty())
-            {
-                if (Cast(me, s.pHolyShield))
-                    return;
-
-                if (s.pTurnEvil && bot.m_role != ROLE_TANK)
-                {
-                    Unit* pAttacker = bot.SelectAttackerDifferentFrom(me->GetVictim());
-                    if (pAttacker && pAttacker->GetCreatureType() == CREATURE_TYPE_UNDEAD && Cast(pAttacker, s.pTurnEvil))
-                        return;
-                }
-            }
+            if (!me->GetAttackers().empty() && Cast(me, s.pHolyShield))
+                return;
 
             // Heals the team (a healer, or nobody else heals): the heal step first, the damage
             // step only when it also deals damage for the team (nobody else does).
             if (bot.HealsForTeam())
             {
-                if (bot.FindAndHealInjuredAlly(80.0f, 90.0f))
-                    return;
-                if (bot.FindAndPreHealTarget())
+                if (bot.FindAndHealInjuredAlly())
                     return;
                 if (bot.GetRole() == ROLE_HEALER)
                 {
@@ -122,88 +110,39 @@ namespace
             if ((me->HasUnitState(UNIT_STATE_ROOT) || me->HasAuraType(SPELL_AURA_MOD_DECREASE_SPEED)) &&
                 Cast(me, s.pBlessingOfFreedom))
                 return;
-
-            if (!bot.HealsForTeam() && me->GetHealthPercent() < 30.0f)
-                bot.HealInjuredTarget(me);
         }
 
     private:
         SpellEntry const* m_lastBlessing = nullptr;     // EndBuffing
 
-        SpellEntry const* KnownBlessing(BlessingKind kind) const
+        // Righteous Fury (holy threat +60%) only on a tank: put up, and cancelled on anyone else
+        // (until 2026-11-26 a paladin no longer the tank kept it for its 30 min and pulled
+        // aggro; the Commander also counts it as a tank stance, PartyMemberFacts::tankStance).
+        // True = cast.
+        bool KeepRighteousFury()
         {
-            auto const& s = m_bot.m_spells.paladin;
-            switch (kind)
-            {
-                case BlessingKind::Wisdom:    return s.pBlessingOfWisdom;
-                case BlessingKind::Might:     return s.pBlessingOfMight;
-                case BlessingKind::Kings:     return s.pBlessingOfKings;
-                case BlessingKind::Salvation: return s.pBlessingOfSalvation;
-                case BlessingKind::Light:     return s.pBlessingOfLight;
-                case BlessingKind::Sanctuary: return s.pBlessingOfSanctuary;
-                default:                      return nullptr;
-            }
+            SpellEntry const* pFury = m_bot.m_spells.paladin.pRighteousFury;
+            if (!pFury)
+                return false;
+            if (m_bot.m_role == ROLE_TANK)
+                return Cast(m_bot.me, pFury);
+            if (m_bot.me->HasAura(pFury->Id))
+                m_bot.me->RemoveAurasDueToSpellByCancel(pFury->Id);
+            return false;
         }
 
-        SpellEntry const* KnownAura(PaladinAuraKind kind) const
+        std::shared_ptr<Commander::PartyCommander> TeamCommander() const
         {
-            auto const& s = m_bot.m_spells.paladin;
-            switch (kind)
-            {
-                case PaladinAuraKind::Devotion:         return s.pDevotionAura;
-                case PaladinAuraKind::Concentration:    return s.pConcentrationAura;
-                case PaladinAuraKind::Retribution:      return s.pRetributionAura;
-                case PaladinAuraKind::Sanctity:         return s.pSanctityAura;
-                case PaladinAuraKind::ShadowResistance: return s.pShadowResistanceAura;
-                case PaladinAuraKind::FrostResistance:  return s.pFrostResistanceAura;
-                case PaladinAuraKind::FireResistance:   return s.pFireResistanceAura;
-                default:                                return nullptr;
-            }
-        }
-
-        // The brain's blessing plan, nullptr while the module (or the Commander) is off.
-        std::shared_ptr<Commander::PartyCommander> PlanOwner() const
-        {
-            if (!sCommanderMgr.IsEnabled())
-                return nullptr;
-            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(m_bot.me);
-            return commander && commander->GetPlan().blessings.active ? commander : nullptr;
+            return sCommanderMgr.FindCommander(m_bot.me);
         }
 
         SpellEntry const* ChosenAura() const
         {
-            if (std::shared_ptr<Commander::PartyCommander> owner = PlanOwner())
-            {
-                uint32 const spellId = owner->GetPlan().blessings.AuraFor(m_bot.me->GetObjectGuid());
-                return spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
-            }
-            for (PaladinAuraKind kind : Commander::BlessingAssigner::AuraOrder())
-                if (SpellEntry const* spell = KnownAura(kind))
-                    return spell;
-            return nullptr;
-        }
-
-        // Module off: the first of the member's list that I know and nobody else gave it.
-        SpellEntry const* OwnBlessingChoice(Player* pMember) const
-        {
-            uint8 role = ROLE_INVALID;
-            if (TeamBotAI const* ai = dynamic_cast<TeamBotAI const*>(pMember->AI()))
-                role = uint8(ai->m_role);
-            ObjectGuid const self = m_bot.me->GetObjectGuid();
-            for (BlessingKind kind : Commander::BlessingAssigner::Order(pMember->GetClass(), role))
-            {
-                SpellEntry const* spell = KnownBlessing(kind);
-                if (!spell)
-                    continue;
-                bool fromOther = false;
-                for (auto const& itr : pMember->GetSpellAuraHolderMap())
-                    if (itr.second->GetCasterGuid() != self &&
-                        Commander::PaladinBuffs::BlessingOf(itr.second->GetSpellProto()) == kind)
-                        fromOther = true;
-                if (!fromOther)
-                    return spell;
-            }
-            return nullptr;
+            std::shared_ptr<Commander::PartyCommander> const commander = TeamCommander();
+            if (!commander)
+                return nullptr;
+            uint32 const spellId = commander->GetPlan().blessings.AuraFor(m_bot.me->GetObjectGuid());
+            return spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
         }
 
         // One blessing cast (true) on the first member that misses the one it gets from me.
@@ -211,11 +150,13 @@ namespace
         // on a member of it that gets another one from me (a tank among warriors).
         bool BlessParty()
         {
-            std::shared_ptr<Commander::PartyCommander> const owner = PlanOwner();
-            return BlessParty(owner, true) || BlessParty(owner, false);
+            std::shared_ptr<Commander::PartyCommander> const commander = TeamCommander();
+            if (!commander)
+                return false;
+            return BlessParty(commander->GetPlan(), true) || BlessParty(commander->GetPlan(), false);
         }
 
-        bool BlessParty(std::shared_ptr<Commander::PartyCommander> const& owner, bool greater)
+        bool BlessParty(Commander::TeamPlan const& plan, bool greater)
         {
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
@@ -224,14 +165,8 @@ namespace
                 if (!pMember || !me->IsValidHelpfulTarget(pMember) || pMember->IsGameMaster() ||
                     !me->IsWithinLOSInMap(pMember) || !me->IsWithinDist(pMember, 30.0f))
                     continue;
-                SpellEntry const* spell = nullptr;
-                if (owner)
-                {
-                    if (uint32 const spellId = owner->GetPlan().blessings.BlessingFor(me->GetObjectGuid(), pMember->GetObjectGuid()))
-                        spell = sSpellMgr.GetSpellEntry(spellId);
-                }
-                else
-                    spell = OwnBlessingChoice(pMember);
+                uint32 const spellId = plan.blessings.BlessingFor(me->GetObjectGuid(), pMember->GetObjectGuid());
+                SpellEntry const* spell = spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
                 if (!spell || Commander::PaladinBuffs::IsGreaterBlessing(spell) != greater ||
                     !bot.IsValidBuffTarget(pMember, spell) || bot.IsBuffPendingFromOther(pMember, spell, nullptr))
                     continue;
@@ -255,9 +190,9 @@ namespace
             TeamBotAI& bot = m_bot;
             Player* me = bot.me;
             auto const& s = bot.m_spells.paladin;
-            if (!pVictim || !s.pJudgement || !sCommanderMgr.IsEnabled())
+            if (!pVictim || !s.pJudgement)
                 return JudgeStep::None;
-            std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+            std::shared_ptr<Commander::PartyCommander> const commander = TeamCommander();
             if (!commander)
                 return JudgeStep::None;
             uint32 const sealId = commander->GetPlan().judgements.SealFor(me->GetObjectGuid());
@@ -283,9 +218,18 @@ namespace
             return Cast(pVictim, s.pJudgement) ? JudgeStep::Cast : JudgeStep::Waiting;
         }
 
+        // What Exorcism and Holy Wrath hit (until 2026-11-26 Exorcism only on undead).
+        static bool IsUndeadOrDemon(Unit const* pVictim)
+        {
+            if (!pVictim->IsCreature())
+                return false;
+            uint32 const type = pVictim->GetCreatureType();
+            return type == CREATURE_TYPE_UNDEAD || type == CREATURE_TYPE_DEMON;
+        }
+
         // A healer's damage step by its tier this tick (healer damage tiers doc 2026-11-21,
         // section 6). True = cast. Its melee swings (FREE) need it next to the victim (step 5).
-        //   SPARE  its seal while in melee reach (the swings use it), Exorcism on undead
+        //   SPARE  its seal while in melee reach (the swings use it), Exorcism on undead / demons
         //   FULL   + the brain's judgement seal, Judgement, Hammer of Wrath, Divine Favor +
         //          Holy Shock (a healing cooldown spent on damage: FULL only)
         bool HealerDamage(uint8 tier)
@@ -326,8 +270,7 @@ namespace
                         return true;
                 }
             }
-            bool const undead = pVictim->IsCreature() && pVictim->GetCreatureType() == CREATURE_TYPE_UNDEAD;
-            return undead && Cast(pVictim, s.pExorcism);
+            return IsUndeadOrDemon(pVictim) && Cast(pVictim, s.pExorcism);
         }
 
         // True = cast.
@@ -344,17 +287,15 @@ namespace
             // Its seal is up for the judgement still to come: not replaced by the own one.
             bool const holdSeal = kept == JudgeStep::Waiting;
 
+            // (until 2026-11-26 cast without returning: the same tick tried Judgement in its GCD)
             bool const hasSeal = s.pSeal && me->HasAura(s.pSeal->Id);
-            if (!holdSeal && !hasSeal && s.pSeal && bot.CanTryToCastSpell(me, s.pSeal))
-                me->CastSpell(me, s.pSeal, false);
+            if (!holdSeal && !hasSeal && Cast(me, s.pSeal))
+                return true;
 
             if (!pVictim)
                 return false;
 
             if (!holdSeal && hasSeal && me->GetPowerPercent(POWER_MANA) > 30.0f && Cast(pVictim, s.pJudgement))
-                return true;
-
-            if (me->GetHealthPercent() < 20.0f && !me->GetAttackers().empty() && Cast(pVictim, s.pHammerOfJustice))
                 return true;
 
             if (pVictim->GetHealthPercent() < 20.0f && Cast(pVictim, s.pHammerOfWrath))
@@ -363,22 +304,17 @@ namespace
             if (bot.m_role != ROLE_TANK && bot.GetAttackersInRangeCount(10.0f) > 2 && Cast(me, s.pConsecration))
                 return true;
 
-            if (s.pHolyShock && bot.CanTryToCastSpell(pVictim, s.pHolyShock))
-            {
-                if (s.pDivineFavor && bot.CanTryToCastSpell(me, s.pDivineFavor))
-                    bot.DoCastSpell(me, s.pDivineFavor);
-                if (bot.DoCastSpell(pVictim, s.pHolyShock) == SPELL_CAST_OK)
-                    return true;
-            }
+            // Holy Shock is the heal module's emergency heal (ClassKit::CombatHealUse) and Divine
+            // Favor its heal boost: a bot with the heal function keeps both, the others spend
+            // Holy Shock on damage without the boost (it is worth more on a heal).
+            if (!bot.HealsForTeam() && Cast(pVictim, s.pHolyShock))
+                return true;
 
-            bool const undead = pVictim->IsCreature() && pVictim->GetCreatureType() == CREATURE_TYPE_UNDEAD;
-            bool const demon = pVictim->IsCreature() && pVictim->GetCreatureType() == CREATURE_TYPE_DEMON;
-
-            if (undead && Cast(pVictim, s.pExorcism))
+            if (IsUndeadOrDemon(pVictim) && Cast(pVictim, s.pExorcism))
                 return true;
 
             // (fewer than 3 attackers: too much pushback)
-            if ((undead || demon) && me->GetAttackers().size() < 3 && Cast(pVictim, s.pHolyWrath))
+            if (IsUndeadOrDemon(pVictim) && me->GetAttackers().size() < 3 && Cast(pVictim, s.pHolyWrath))
                 return true;
 
             // (the chase: UpdateAI restarts an idle one before the rotation, or the Commander

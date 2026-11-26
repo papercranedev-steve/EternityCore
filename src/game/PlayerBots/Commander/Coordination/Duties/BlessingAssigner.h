@@ -29,7 +29,7 @@
  *
  * Not a Duties module: DutyAllocator gives a bot one primary duty, a paladin blesses everyone.
  * Runs every refresh (pure function of the world model); the rotation casts out of combat
- * (PaladinRotation), and picks with Order() on its own while the module is off.
+ * (PaladinRotation; no aura or blessing without this plan since 2026-11-26).
  */
 
 #ifndef MANGOS_COMMANDER_BLESSING_ASSIGNER_H

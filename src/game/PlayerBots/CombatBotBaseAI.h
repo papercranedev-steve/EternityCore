@@ -423,7 +423,7 @@ public:
             SpellEntry const* pHolyShock;
             SpellEntry const* pDivineFavor;
             SpellEntry const* pHolyWrath;
-            SpellEntry const* pTurnEvil;
+            SpellEntry const* pTurnUndead;  // Turn Evil from 2.0; crowd control (ClassKit::Controls)
             SpellEntry const* pHolyShield;
             SpellEntry const* pPurify; // fallback dispel when Cleanse is not learned
             SpellEntry const* pDivineProtection;

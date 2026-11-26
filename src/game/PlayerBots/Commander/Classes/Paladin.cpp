@@ -23,6 +23,13 @@ namespace Commander
                 return { s.pCleanse ? s.pCleanse : s.pPurify };
             }
 
+            // Turn Undead: a fear on undead (until 2026-11-26 the rotation's own, on a second
+            // undead attacker, without the plan's stamps).
+            std::vector<SpellEntry const*> Controls() const override
+            {
+                return { m_bot.m_spells.paladin.pTurnUndead };
+            }
+
             std::vector<AreaThreatSpell> AreaThreat() const override
             {
                 return { { m_bot.m_spells.paladin.pConsecration, 0.5f, false, false, true } };
