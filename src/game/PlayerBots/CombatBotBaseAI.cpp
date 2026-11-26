@@ -46,7 +46,6 @@ enum CombatBotSpells
     SPELL_SUMMON_FELHUNTER = 691,
     SPELL_SUMMON_SUCCUBUS = 712,
     SPELL_TAME_BEAST = 13481,           // the triggered tame the bot casts on its summoned beast
-    SPELL_TAME_BEAST_PLAYER = 1515,     // the hunter's own Tame Beast (class quest "Taming the Beast")
     SPELL_REVIVE_PET = 982,
     SPELL_CALL_PET = 883,
     SPELL_FEED_PET = 6991,
@@ -2360,7 +2359,10 @@ void CombatBotBaseAI::SummonPetIfNeeded()
             return;
         }
 
-        if (!freeAbilities && !me->HasSpell(SPELL_TAME_BEAST_PLAYER))
+        // No pet: a companion goes without one, even with Tame Beast learned (user 2026-11-26:
+        // no beast conjured at its feet; it tames a real one, not yet built). Only bots with free
+        // abilities get the summoned and tamed beast below.
+        if (!freeAbilities)
             return;
 
         // A sturdy family (user 2026-11-15): the pet holds enemies for the party besides

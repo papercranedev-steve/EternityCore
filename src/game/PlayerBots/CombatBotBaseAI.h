@@ -216,9 +216,9 @@ public:
     // are created for free. PartyBotAI: not for companions, they buy them.
     virtual bool GetsFreeSupplies() const { return true; }
     // What a class quest gives a player is given for free: totem tools (AddAllSpellReagents),
-    // a hunter pet without Tame Beast, Call Pet and Revive Pet without the spells
+    // a summoned and tamed hunter pet, Call Pet and Revive Pet without the spells
     // (SummonPetIfNeeded). PartyBotAI: not for companions, they do the quests
-    // (Shared/ClassQuestAbilities).
+    // (Shared/ClassQuestAbilities) and have no pet until they own one.
     virtual bool GetsFreeAbilities() const { return true; }
     void AddItemToInventory(uint32 itemId, uint32 count = 1);
     void AddHunterAmmo();
