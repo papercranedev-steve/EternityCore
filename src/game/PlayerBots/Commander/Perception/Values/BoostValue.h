@@ -3,7 +3,8 @@
  * allyBoosts, ClassKit::AllyBoosts) is worth on one target, in points (cooldown doc
  * .kiro/docs/2026-11-14-cooldowns.md 4). Consequences only; BoostAssigner picks.
  *
- *   Mana (Innervate) on a member with a mana pool, not boosted already, in range:
+ *   Mana (Innervate) on a healer (HealerManaValue::Counts: a bot that heals the team, or a
+ *     player in the healer role; user 2026-11-26), not boosted already, in range:
  *     gain = (manaRegen x INNERVATE_REGEN_MULT + manaRegen - manaRegenCasting) x duration
  *            (+400% regeneration, all of it while casting: spell 29166 auras 110 / 134)
  *     only when the mana it misses is at least the gain (nothing is wasted: the boost waits

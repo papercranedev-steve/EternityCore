@@ -50,7 +50,7 @@ namespace BoostValue
         {
             case MANA:
             {
-                if (!target.maxMana || target.manaBoosted ||
+                if (!target.maxMana || target.manaBoosted || !HealerManaValue::Counts(target) ||
                     (target.guid != caster.guid && PackResolver::Distance(caster.pos, target.pos) > a.maxRange))
                     return o;
                 float const gain = std::max(0.0f, target.manaRegen * INNERVATE_REGEN_MULT +
