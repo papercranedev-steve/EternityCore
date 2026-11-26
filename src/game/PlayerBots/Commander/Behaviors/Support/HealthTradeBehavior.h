@@ -16,7 +16,9 @@
  *
  * Cycle on (CycleOf): the mana and every tap its health still gives, (M + H x k) / S, do not
  * last the fight (Value::FightRemainingSec). S = filler mana per second - regeneration while
- * casting, k = Life Tap mana per health.
+ * casting, k = Life Tap mana per health. M everywhere here is the bot's live mana, not the
+ * refresh's (since 2026-11-27: the rotation sees the live one, and a refresh up to a few hundred
+ * ms old let it start the wand before the tap).
  *
  * Life Tap, in combat:
  *   gates    the mana it gives fits (nothing wasted); health above its cost; safe; not in

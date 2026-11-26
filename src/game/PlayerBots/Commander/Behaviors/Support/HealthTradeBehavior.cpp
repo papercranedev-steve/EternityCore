@@ -13,6 +13,14 @@ namespace Commander
 {
     namespace
     {
+        // Its own mana now, not at the refresh (2026-11-27, strat-20261127-001754: a Shadow Bolt
+        // left 145 mana, the rotation saw it and started the wand, the tap saw the refresh's 506
+        // and came 0.2 s later, cancelling the wand before its first shot, eight times a fight).
+        float LiveMana(Player const* me)
+        {
+            return float(me->GetPower(POWER_MANA));
+        }
+
         // Nothing hurts it and nothing is about to: no enemy on it or casting at it, no damage
         // taken within DamageIntake's window (damage over time, area spells, a hit just now).
         bool Safe(WorldModel const& world, PartyMemberFacts const& self)
@@ -71,9 +79,9 @@ namespace Commander
             SpellEntry const* filler = bot->Kit().Filler();
             if (!tap || !filler || !self.UsesMana() || self.tapManaPerCast <= 0.0f || self.tapManaPerHealth <= 0.0f)
                 return;
-            float const mana = float(self.mana);
+            float const mana = LiveMana(me);
             float const gain = self.tapManaPerCast;
-            if (float(self.maxMana) - mana < gain)
+            if (float(me->GetMaxPower(POWER_MANA)) - mana < gain)
                 return;
             if (!HealthPaysTap(world, self))
                 return;
@@ -157,7 +165,7 @@ namespace Commander
             // tapped into Shadow Bolts again. Not while its health still pays a tap: taps just
             // in time keep the mana low all fight, the drain would take the Shadow Bolts' place.
             HealthTradeBehavior::Cycle const cycle = HealthTradeBehavior::CycleOf(bot, world, self);
-            float const mana = float(self.mana);
+            float const mana = LiveMana(me);
             if (cycle.on && mana < drainCost + cycle.fillerCost && missing >= drained &&
                 !(bot->Kit().HealthToMana() && HealthPaysTap(world, self)))
             {
@@ -196,7 +204,7 @@ namespace Commander
         if (c.spend <= 0.0f)
             return c;
         // Mana and every tap its health still gives: short of the fight, the cycle is on.
-        float const bank = float(self.mana) + float(self.health) * self.tapManaPerHealth;
+        float const bank = LiveMana(me) + float(self.health) * self.tapManaPerHealth;
         c.on = bank / c.spend < Value::FightRemainingSec(world);
         return c;
     }
