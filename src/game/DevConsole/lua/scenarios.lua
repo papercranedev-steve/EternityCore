@@ -23,6 +23,17 @@
 --   cleared            `creature` guids killed on load and never respawned (mobs the party is
 --                      assumed to have cleared on the way, e.g. one standing on the spot)
 --   commands           GM commands the leader runs once the party is in place (event triggers)
+--   setup              function(leader, s) run after 'commands' (instance state that needs a check)
+--
+-- Boss tests (kind = "boss", bosses.lua; the addon's Boss 测试 window, not the scenario list):
+--   bosses             `creature` guids of the boss and its linked adds: respawned on load, never cleared
+--   bossEntries        creature entries never cleared (summoned bosses, e.g. Gandling)
+--   clearRadius        on load every other living creature within this many yards of 'pack' is
+--                      killed (the leader is still in GM mode), so the party walks straight in
+--   entry              the boss's own position: the leader lands there in GM mode, clears, and the
+--                      spot is searched on a ring around the boss (ringSpot) unless one is recorded
+--   from               {x, y} optional: prefer ring spots on this side (the room's door)
+--   hint               one line of mechanics / lineup notes for the window's tooltip (no ';')
 --
 -- Lineup: ".scenario <id> [class:role ...]" replaces the default bots, e.g.
 -- ".scenario stockade paladin:tank rogue:meleedps hunter:rangedps druid:healer". The last lineup is
@@ -204,68 +215,7 @@ scenario.list = {
             { class = "priest",  role = "healer" },
         },
     },
-    {
-        -- 21: VanCleef is 21, the Blackguards 19-20 (premade = the 19 templates)
-        -- Pack = the boss: creature_groups 79336 (VanCleef 79336 + stealthed Blackguards 79383, 79368).
-        -- The ship is at the far end (entrance = areatrigger 78). Clear the deck by hand first:
-        -- Greenskin patrol 79333 (+79334, 79335), group 79309 (+79327), Pirates 79321, 79328, 79329,
-        -- Shipbuilder 79319 on the lower deck. Only the boss group is respawned, the deck stays clear.
-        id = "vancleef", title = "死亡矿井 范克里夫（场景 6）", level = 21,
-        entry = { map = 36, x = -14.57, y = -385.48, z = 62.46, o = 1.571 },
-        pack = { x = -87.4, y = -819.9, z = 39.3 },
-        respawn = { 79336, 79383, 79368 },
-        -- No computed spot: the deck is tight and the Greenskin patrol is inside 12-31 yd. Record one.
-        needsRecordedSpot = true,
-        approach = { min = 22, max = 30, clear = 20 },
-        bots = {
-            -- rogue: a stun at 50% stops the add summon (spell 5200)
-            { class = "warrior", role = "tank" },
-            { class = "rogue",   role = "meleedps" },
-            { class = "mage",    role = "rangedps" },
-            { class = "priest",  role = "healer" },
-        },
-    },
-    {
-        -- 42 = both bosses (hall trash 34-39; premade = the 39 templates)
-        -- Mograine 40029 (1153.9, 1398.4); Whitemane 39946 behind door GO 104600, joins in phase 1.
-        -- Entry: areatrigger 610. The courtyard (~30 elites) and the hall (49 mobs within 100 yd,
-        -- none grouped, some patrol) are in the way, and the pull sends every live chaplain / wizard /
-        -- centurion / champion / abbot / monk within 82 yd at the party: clear the hall first. Only
-        -- the two bosses are respawned. The event runs once per instance: rerun = .instance unbind.
-        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩（场景 7）", level = 42,
-        entry = { map = 189, x = 853.18, y = 1319.18, z = 18.67, o = 1.571 },
-        pack = { x = 1153.9, y = 1398.4, z = 32.6 },
-        respawn = { 40029, 39946 },
-        -- No computed spot: clear the hall, then record one (e.g. the hall door, ~1100, 1398).
-        needsRecordedSpot = true,
-        approach = { min = 30, max = 45, clear = 22 },
-        bots = {
-            -- priest: Dispel Magic (Hammer of Justice, Mind Control on a party member)
-            { class = "warrior", role = "tank" },
-            { class = "rogue",   role = "meleedps" },
-            { class = "mage",    role = "rangedps" },
-            { class = "priest",  role = "healer" },
-        },
-    },
-    {
-        -- 34 = Thermaplugg (bombs 30; premade = the 29 templates)
-        -- Thermaplugg 30139 (boss_thermaplugg); the door GO 142207 locks when the fight starts.
-        -- 5 Leprous Machinesmiths, a Guardian and a Nullifier wander 60 yd west, inside the door.
-        -- Entry: inside the room on the east side, between bomb buttons 3 and 4, 32 yd from the boss
-        -- (both instance entrances are ~700 yd away). Untested ground: setspot if it fails.
-        id = "thermaplugg", title = "诺莫瑞根 瑟玛普拉格（场景 8）", level = 34,
-        entry = { map = 90, x = -499.3, y = 664.6, z = -325.2, o = 2.968 },
-        pack = { x = -531.3, y = 670.2, z = -325.2 },
-        respawn = { 30139 },
-        approach = { min = 26, max = 34, clear = 24 },
-        bots = {
-            -- mage: Frost Nova / Cone of Cold to stop bombs; rogue: Kidney Shot
-            { class = "warrior", role = "tank" },
-            { class = "rogue",   role = "meleedps" },
-            { class = "mage",    role = "rangedps" },
-            { class = "priest",  role = "healer" },
-        },
-    },
+
     {
         -- 49: waves are 42-47 (Sezz'ziz 47 elite); 49 for the 49 premade gear, 39 gear is too weak
         -- for ~55 mobs in a row.
@@ -290,33 +240,7 @@ scenario.list = {
             { class = "priest",  role = "healer" },
         },
     },
-    {
-        -- 60 = max level (Gandling 61)
-        -- Gandling is summoned at (180.8, -5.4, 75.6) once the six room bosses are DONE; 'commands'
-        -- sets them, the last one summons him at once. Wipe: he walks home (data 0 = FAIL), stays.
-        -- Rerun after a kill: .instance setdata 0 0 by hand, never while he is alive (two Gandlings).
-        -- Entry: the hall itself (the instance entrance is several floors up, full of packs).
-        id = "gandling", title = "通灵学院 黑暗院长加丁（场景 10）", level = 60,
-        entry = { map = 289, x = 180.8, y = -5.4, z = 75.6, o = 1.292 },
-        pack = { x = 180.8, y = -5.4, z = 75.6 },
-        respawn = {},
-        commands = {
-            ".instance setdata 1 3", ".instance setdata 2 3", ".instance setdata 3 3",
-            ".instance setdata 4 3", ".instance setdata 5 3", ".instance setdata 6 3",
-        },
-        -- No computed spot: rats 16-20 yd from the centre count as live units, the hall is ~45 yd
-        -- across. Record one in the hall.
-        needsRecordedSpot = true,
-        approach = { min = 22, max = 30, clear = 20 },
-        bots = {
-            -- Risen Guardians are undead (no Polymorph): priest Shackle Undead, Dispel Magic
-            -- (Shadow Shield). Gandling is immune to interrupts.
-            { class = "warrior", role = "tank" },
-            { class = "rogue",   role = "meleedps" },
-            { class = "mage",    role = "rangedps" },
-            { class = "priest",  role = "healer" },
-        },
-    },
+
     {
         -- 44: party level of the doc (premade = the 39 templates)
         -- Stranglethorn, Mosh'Ogg camp. Pack: Shaman 624 + Spellcrafter 628 (9.8 yd apart, no
@@ -439,8 +363,14 @@ local function say(p, text)
     p:tell("|cff66ccff[场景]|r " .. text)
 end
 
-local function status(p, state, text)
-    p:tell("PBSCN;S;" .. state .. ";" .. (text or ""))
+-- addon message prefix of a scenario's window: boss tests have their own (PBBOSS)
+local function prefixOf(s)
+    return (s and s.kind == "boss") and "PBBOSS" or "PBSCN"
+end
+
+-- id: the scenario the state is about (default: the one loading, else the current one)
+local function status(p, state, text, id)
+    p:tell(prefixOf(scenario.find(id or scenario.running or scenario.current)) .. ";S;" .. state .. ";" .. (text or ""))
 end
 
 -- best premade template: same class, highest level <= level, preferring the role
@@ -553,8 +483,9 @@ end
 -- s.respawn: radius around the pack (default 120) or a list of `creature` guids; s.cleared stays dead
 local function respawnPack(leader, s)
     local cleared = guidSet(s.cleared)
-    local only = type(s.respawn) == "table" and guidSet(s.respawn)
-    local radius = type(s.respawn) == "number" and s.respawn or 120
+    local respawn = s.respawn or s.bosses
+    local only = type(respawn) == "table" and guidSet(respawn)
+    local radius = type(respawn) == "number" and respawn or 120
     local n = 0
     for _, c in ipairs(leader:nearby(only and 250 or radius, "dead")) do
         if not c:isplayer() and not cleared[c:dbguid()] then
@@ -586,6 +517,75 @@ local function killCleared(leader, s)
         end
     end
     return n
+end
+
+local function isBoss(s, c, guids)
+    if guids[c:dbguid()] then return true end
+    for _, e in ipairs(s.bossEntries or {}) do
+        if c:entry() == e then return true end
+    end
+    return false
+end
+
+-- s.clearRadius: kill every living creature within that radius of the pack except the bosses
+-- (the leader is in GM mode and stands near the pack: its grids are loaded)
+local function clearAround(leader, s)
+    if not s.clearRadius then return 0 end
+    local guids = guidSet(s.bosses)
+    local here = leader:pos()
+    local off = math.sqrt((here.x - s.pack.x) ^ 2 + (here.y - s.pack.y) ^ 2 + (here.z - s.pack.z) ^ 2)
+    local n = 0
+    for _, c in ipairs(leader:nearby(math.min(200, s.clearRadius + off), "alive")) do
+        local p = c:pos()
+        local d = math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2 + (p.z - s.pack.z) ^ 2)
+        if not c:isplayer() and d <= s.clearRadius and not isBoss(s, c, guids) then
+            c:kill()
+            n = n + 1
+        end
+    end
+    return n
+end
+
+-- Boss tests: a spot on a ring around the boss (the leader stands on the boss spawn, 'entry').
+-- A candidate has ground near the boss's floor, a straight-ish navmesh path and line of sight to
+-- the boss, and no living non-boss creature within approach.clear. Best: on the 'from' side if
+-- given, else the floor closest to the boss's, at the middle distance.
+local function ringSpot(leader, s)
+    local a = s.approach
+    local guids = guidSet(s.bosses)
+    local others = filter(leader:nearby(math.min(200, a.max + a.clear + 10), "alive"), function(c)
+        return not c:isplayer() and not isBoss(s, c, guids)
+    end)
+    local function clearOf(x, y, z)
+        for _, c in ipairs(others) do
+            local p = c:pos()
+            if math.sqrt((p.x - x) ^ 2 + (p.y - y) ^ 2 + (p.z - z) ^ 2) < a.clear then return false end
+        end
+        return true
+    end
+    local mid = (a.min + a.max) / 2
+    local best, bestScore
+    for _, d in ipairs({ a.min, mid, a.max }) do
+        for k = 0, 15 do
+            local ang = k * math.pi / 8
+            local x, y = s.pack.x + math.cos(ang) * d, s.pack.y + math.sin(ang) * d
+            local g = leader:height(x, y, s.pack.z + 4)
+            local dz = g and math.abs(g - s.pack.z)
+            if dz and g > -100000 and dz < 8 and clearOf(x, y, g) and leader:lospoint(x, y, g) then
+                local path = leader:path(x, y, g)
+                if path and path.normal and path.length < d * 1.4 then
+                    local score = dz * 3 + math.abs(d - mid)
+                    if s.from then
+                        score = score + math.sqrt((x - s.from.x) ^ 2 + (y - s.from.y) ^ 2)
+                    end
+                    if not best or score < bestScore then
+                        best, bestScore = { x = x, y = y, z = g + 1.0, o = math.atan(s.pack.y - y, s.pack.x - x), navz = g }, score
+                    end
+                end
+            end
+        end
+    end
+    return best
 end
 
 local function fail(p, msg)
@@ -660,6 +660,9 @@ local function finish(leader, s)
         leader:select(leader)
         leader:cmd(c)
     end
+    if s.setup then s.setup(leader, s) end
+    local killed = scenario.killed
+    scenario.killed = nil
     scenario.running = nil
     scenario.current = s.id
     local names = map(bots, function(b)
@@ -667,8 +670,9 @@ local function finish(leader, s)
         local aff = a.temporary and ("，好感 " .. a.value) or ""
         return b:name() .. "(" .. ((b:ai() and b:ai().role) or "?") .. aff .. ")"
     end)
-    say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪。%s",
+    say(leader, string.format("%s 就绪：%d 级，队友 %s，刷新了 %d 只怪%s。%s",
         s.title, s.level, table.concat(names, " "), respawned,
+        killed and string.format("，清掉了周围 %d 只", killed) or "",
         rec.enabled and ("战斗会自动录制（级别 " .. rec.level .. "）。") or "战斗录制已关闭（/pbr 里打开）。"))
     for _, w in ipairs(warnings) do say(leader, "|cffffcc00注意|r：" .. w) end
     status(leader, "ready", s.id)
@@ -710,6 +714,17 @@ end
 local function placeLeader(leader, s, hops)
     hops = hops or 0
     local spot = scenario.spots[s.spotOf or s.id] or s.spot
+    if s.clearRadius then
+        -- boss test: the leader stands on the boss spawn; clear first, then the ring spot sees
+        -- only what is left
+        scenario.killed = clearAround(leader, s)
+        if not spot then
+            spot = ringSpot(leader, s)
+            if not spot then
+                return fail(leader, "boss 周围找不到站位：走到想开打的位置，输入 .scenario setspot " .. s.id .. "，再点一次")
+            end
+        end
+    end
     if not spot and s.needsRecordedSpot then
         return fail(leader, "这个场景还没有站位：走到想开怪的位置，输入 .scenario setspot " .. s.id .. "，再点一次场景")
     end
@@ -807,9 +822,24 @@ end
 function scenario.stop(leader)
     rec.stop()
     for _, b in ipairs(botsOf(leader)) do b:removebot() end
+    local id = scenario.current
     scenario.current = nil
     say(leader, "场景已结束，队友已移除")
-    status(leader, "stopped", "")
+    status(leader, "stopped", "", id)
+end
+
+-- list replies for one window: prefix;L;<id>;<title>;<level>  prefix;B;<id>;<lineup>
+-- [prefix;H;<id>;<hint>]  ...  prefix;E;<current id>
+local function sendList(leader, boss)
+    local prefix = boss and "PBBOSS" or "PBSCN"
+    for _, s in ipairs(scenario.list) do
+        if (s.kind == "boss") == boss then
+            leader:tell(prefix .. ";L;" .. s.id .. ";" .. s.title .. ";" .. s.level)
+            leader:tell(prefix .. ";B;" .. s.id .. ";" .. lineupText(s.bots))
+            if s.hint then leader:tell(prefix .. ";H;" .. s.id .. ";" .. (s.hint:gsub(";", ","))) end
+        end
+    end
+    leader:tell(prefix .. ";E;" .. (scenario.current or ""))
 end
 
 -- .scenario [list | <id> [lineup] | reset [lineup] | stop | status | setspot <id> | mark [text]
@@ -818,16 +848,16 @@ end
 -- list replies: PBSCN;L;<id>;<title>;<level>  PBSCN;B;<id>;<default lineup>  ...  PBSCN;E;<current id>
 function scenario.command(leader, args)
     args = (args or ""):match("^%s*(.-)%s*$")
-    if args == "" or args == "list" then
-        for _, s in ipairs(scenario.list) do
-            leader:tell("PBSCN;L;" .. s.id .. ";" .. s.title .. ";" .. s.level)
-            leader:tell("PBSCN;B;" .. s.id .. ";" .. lineupText(s.bots))
-        end
-        leader:tell("PBSCN;E;" .. (scenario.current or ""))
+    if args == "bosses" then
+        -- the addon's Boss 测试 window (/pbboss); loading, reset, stop, mark are the same commands
+        sendList(leader, true)
+    elseif args == "" or args == "list" then
+        sendList(leader, false)
         if args == "" then
             for _, s in ipairs(scenario.list) do
                 say(leader, ".scenario " .. s.id .. "  " .. s.title .. "（默认 " .. lineupText(s.bots) .. "）")
             end
+            say(leader, ".scenario bosses  Boss 测试列表（插件 /pbboss）：清掉 boss 周围的怪，传到 boss 跟前")
             say(leader, ".scenario <id> 职业:职责 ...  换阵容，例如 .scenario stockade paladin:tank rogue hunter druid:healer")
             say(leader, "职业:职责:好感度  设成这个好感度的同伴（只在内存里），例如 rogue:meleedps:60")
             say(leader, ".scenario reset [阵容]  重开当前场景    .scenario stop  结束")
@@ -873,7 +903,7 @@ function scenario.command(leader, args)
         if err then
             -- not fail(): a scenario that is still loading must keep its 'running' flag
             say(leader, "阵容不对：" .. err)
-            return status(leader, "error", err)
+            return status(leader, "error", err, id ~= "reset" and id or nil)
         end
         if id == "reset" then
             scenario.reset(leader, lineup)
