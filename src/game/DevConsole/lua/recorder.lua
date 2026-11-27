@@ -42,7 +42,10 @@
 --   end     {type, t, duration, result, stats={id={...}}, names={id=name}, guids={id=guid without 0x},
 --           spells={id=name} (every spell in the ev lines), anomalies={kind=count}, dropped}
 --
--- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin.
+-- Timestamps are server ms (now()). Events from the 3 s before the fight are written after begin;
+-- so are the last rec.preMs before it of party snaps (enemies = {}), bot decisions and plan
+-- changes (times before begin: negative seconds in the review), to see how the bots got where
+-- the fight began.
 -- Since 2026-11-14 the lines are compacted (see "compact output" below): units are short ids of
 -- the file (a party member's name, "#134BB" for a creature), false / "" / empty-guid fields are
 -- left out, numbers have at most 2 decimals, and a dec line equal to the bot's previous one is
@@ -65,6 +68,10 @@ rec.traceKeepMs = rec.traceKeepMs or 6000
 rec.traceBeforeMs = rec.traceBeforeMs or 4000
 rec.traceAfterMs = rec.traceAfterMs or 1000
 rec.traceStartMs = rec.traceStartMs or 2000
+-- Before the fight (2026-11-27): how much of the party's movement, the bots' decisions and the
+-- plan is kept and written once a fight begins (anastari-20261127-224529: the tank and the mage
+-- began the fight 40 yd from the leader on a trap, and nothing showed how they got there).
+rec.preMs = rec.preMs or 15000
 
 -- Recording level (2026-11-14): how much of the calculation trace goes in the file. snap / ev /
 -- dec / plan / anomaly lines are written at every level (the review needs them).
@@ -411,6 +418,65 @@ local function fightLabel(w, leader)
     return "fight"
 end
 
+-- No fight: the party's positions, the bots' decisions and plan changes of the last rec.preMs
+-- (w.preState.lines; the plan in force at the window's start in w.preState.basePlan).
+local function collectPre(w, leader, members)
+    local t = now()
+    w.preState = w.preState or { lines = {} }
+    w.lastDec = w.lastDec or {}
+    local pre = w.preState
+    local lines = pre.lines
+    local party = {}
+    for _, m in ipairs(members) do party[#party + 1] = m:info() end
+    lines[#lines + 1] = { kind = "snap", t = t, party = party }
+    for _, m in ipairs(members) do
+        local log = m:decisions(w.lastDec[m:guid()] or 0)
+        if log then
+            for _, d in ipairs(log) do
+                lines[#lines + 1] = { kind = "dec", t = d.t, bot = m:guid(), cands = d.cands }
+                w.lastDec[m:guid()] = d.t
+            end
+        end
+    end
+    local plan = leader.plan and leader:plan()
+    if plan then
+        local text = json(plan)
+        if text ~= pre.planText then
+            lines[#lines + 1] = { kind = "plan", t = t, plan = plan }
+            pre.planText = text
+        end
+    end
+    local cutoff = t - rec.preMs
+    if #lines > 0 and lines[1].t < cutoff then
+        local keep = {}
+        for _, r in ipairs(lines) do
+            if r.t >= cutoff then keep[#keep + 1] = r
+            elseif r.kind == "plan" then pre.basePlan = r end
+        end
+        pre.lines = keep
+    end
+end
+
+-- Written after begin (beginFight): the kept lines in time order.
+local function writePre(w)
+    local pre = w.preState or { lines = {} }
+    local list = {}
+    if pre.basePlan then list[1] = pre.basePlan end
+    for _, r in ipairs(pre.lines) do list[#list + 1] = r end
+    table.sort(list, function(a, b) return a.t < b.t end)
+    for _, r in ipairs(list) do
+        if r.kind == "snap" then
+            write(w, { type = "snap", t = r.t, party = snapRows(w, r.party), enemies = {} })
+        elseif r.kind == "dec" then
+            writeDec(w, { type = "dec", t = r.t, bot = r.bot, cands = r.cands })
+        else
+            write(w, { type = "plan", t = r.t, plan = r.plan })
+        end
+    end
+    w.lastPlan = pre.planText
+    w.preState = { lines = {} }
+end
+
 local function beginFight(w, members)
     ensureDir(rec.dir)
     local leader = unit(w.leader)
@@ -429,9 +495,9 @@ local function beginFight(w, members)
     w.stats = {}
     w.names = {}
     w.spellNames = {}
-    w.lastDec = {}
-    -- notes from the 3 s before the fight are kept (the patrol / pull judgement comes first)
-    w.lastNote = w.fightStart - 3000
+    -- (w.lastDec: the decisions before the fight are in w.preState already)
+    -- notes from before the fight are kept (the patrol / pull judgement comes first)
+    w.lastNote = w.fightStart - rec.preMs
     w.lastPlan = nil
     w.lastPull = nil
     w.traceInputs = {}
@@ -461,6 +527,7 @@ local function beginFight(w, members)
         w.review.recent[#w.review.recent + 1] = e
     end
     w.pre = {}
+    writePre(w)
     rec.last = path
     rec.pushState(leader)
 end
@@ -541,6 +608,7 @@ local function tick(w)
         local keep = {}
         for _, e in ipairs(w.pre) do if e.t >= cutoff then keep[#keep + 1] = e end end
         w.pre = keep
+        collectPre(w, leader, members)
         -- A fight begins with an engaged enemy, not with a combat flag alone: the hunter bot's
         -- Tame Beast on its new pet (SummonPetIfNeeded, after login or a death) flags it in
         -- combat for a moment, and buffing that pet pulls the buffer in too (Spell.cpp assist
@@ -666,7 +734,8 @@ end
 function rec.watch(leader, label)
     rec.stop()
     if not rec.enabled then return nil end
-    local w = { leader = leader:guid(), label = label, pre = {}, traceBuf = { list = {}, byId = {} },
+    local w = { leader = leader:guid(), label = label, pre = {}, preState = { lines = {} }, lastDec = {},
+                traceBuf = { list = {}, byId = {} },
                 traceWindows = {}, traceDone = {}, traceInputs = {}, pinVersion = {} }
     rec.watcher = w
     combatlog.enable(true)
