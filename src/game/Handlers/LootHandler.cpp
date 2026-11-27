@@ -34,6 +34,7 @@
 #include "Object.h"
 #include "Group.h"
 #include "Map.h"
+#include "MapPause.h"
 #include "World.h"
 #include "ScriptMgr.h"
 #include "Util.h"
@@ -356,6 +357,12 @@ void WorldSession::HandleLootOpcode(WorldPackets::Loot::LootUnit const& packet)
     if (!_player->IsAlive() || !_player->IsInWorld())
     {
         _player->SendLootError(packet.guid, LOOT_ERROR_PLAYER_NOT_FOUND);
+        return;
+    }
+
+    if (IsRefusedWhilePaused(_player))
+    {
+        _player->SendLootRelease(packet.guid);
         return;
     }
 

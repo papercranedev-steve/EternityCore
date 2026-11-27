@@ -50,7 +50,10 @@ inline void MaNGOS::ObjectUpdater::Visit(CreatureMapType &m)
     {
         WorldObject::UpdateHelper helper(iter->getSource());
         ++iter;
-        helper.UpdateRealTime(i_now, i_timeDiff);
+        if (i_paused)
+            helper.SkipRealTime(i_now);
+        else
+            helper.UpdateRealTime(i_now, i_timeDiff);
     }
 }
 

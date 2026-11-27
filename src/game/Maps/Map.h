@@ -71,6 +71,14 @@ namespace VMAP
     class ModelInstance;
 };
 
+// Map::Pause (Maps/MapPause.cpp)
+enum class MapPauseResult
+{
+    Ok,
+    OtherPlayers,   // another real player is on the map
+    Taxi,           // the player is on a flight path
+};
+
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push,N), also any gcc version not support it at some platform
 #if defined(__GNUC__)
 #pragma pack(1)
@@ -583,6 +591,13 @@ class Map : public GridRefManager<NGridType>
         void SetUpdateDiffMod(int32 d) { m_updateDiffMod = d; }
         uint32 GetUpdateDiffMod() const { return m_updateDiffMod; }
         TimePoint GetCurrentClockTime() const { return m_currentTime; }
+
+        // Single-player pause (Maps/MapPause.cpp, .pause): nothing on a paused map updates, the
+        // players' packets are still read.
+        bool IsPaused() const { return !m_pausedBy.IsEmpty(); }
+        MapPauseResult Pause(Player* by);
+        void Resume();
+
         void BindToInstanceOrRaid(Player* player, time_t objectResetTime, bool permBindToRaid);
 
         // WeatherSystem
@@ -708,6 +723,8 @@ class Map : public GridRefManager<NGridType>
         uint32 m_updateDiffMod;
         TimePoint m_currentTime;
         uint32 m_lastMvtSpellsUpdate = 0;
+        ObjectGuid m_pausedBy;          // Pause: the player who paused, empty = running
+        TimePoint m_pausedSince;
     private:
         time_t m_createTime; // time when map was created
         time_t m_gridExpiry;

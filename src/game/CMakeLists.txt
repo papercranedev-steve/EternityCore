@@ -138,6 +138,7 @@ set (game_SRCS
     Maps/InstanceData.cpp
     Maps/Map.cpp
     Maps/MapManager.cpp
+    Maps/MapPause.cpp
     Maps/MapPersistentStateMgr.cpp
     Maps/MapReference.cpp
     Maps/MoveMap.cpp
@@ -379,6 +380,7 @@ set (game_SRCS
     Maps/InstanceData.h
     Maps/Map.h
     Maps/MapManager.h
+    Maps/MapPause.h
     Maps/MapPersistentStateMgr.h
     Maps/MapReference.h
     Maps/MapRefManager.h

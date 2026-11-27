@@ -247,6 +247,8 @@ class Spell
         bool HaveTargetsForEffect(SpellEffectIndex effect) const;
         void Delayed();
         void DelayedChannel();
+        // Map::Resume: the caster's cast or channel bar kept running on the client while paused
+        void SendCastBarAfterPause(uint32 pausedMs) const;
         uint32 getState() const { return m_spellState; }
         void setState(uint32 state) { m_spellState = state; }
 

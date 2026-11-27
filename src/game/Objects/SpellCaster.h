@@ -228,6 +228,21 @@ class CooldownContainer
             return itr != m_categoryMap.end() ? itr->second : end();
         }
 
+        // every running cooldown ends 'delay' later (Map::Resume after a pause)
+        void Delay(std::chrono::milliseconds delay)
+        {
+            for (auto& itr : m_spellIdMap)
+            {
+                CooldownData& cd = *itr.second;
+                if (cd.m_typePermanent)
+                    continue;
+                if (cd.m_expireTime != TimePoint())
+                    cd.m_expireTime += delay;
+                if (cd.m_catExpireTime != TimePoint())
+                    cd.m_catExpireTime += delay;
+            }
+        }
+
         void clear() { m_spellIdMap.clear(); m_categoryMap.clear(); }
 
         ConstIterator begin() const { return m_spellIdMap.begin(); }
@@ -387,6 +402,8 @@ public:
     void PrintCooldownList(ChatHandler& chat) const;
     bool CheckLockout(SpellSchoolMask schoolMask) const;
     void UpdateCooldowns(TimePoint const& now);
+    // Map::Resume: cooldowns, GCDs and school lockouts end 'delay' later (they run on wall time)
+    void DelayCooldowns(std::chrono::milliseconds delay);
 
     // Event handler
     EventProcessor m_Events;

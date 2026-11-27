@@ -30,10 +30,14 @@
 #include "CreatureAI.h"
 #include "Pet.h"
 #include "Group.h"
+#include "MapPause.h"
 #include "Utilities/Random.h"
 
 void WorldSession::HandlePetAction(WorldPackets::Pet::PetAction const& packet)
 {
+    if (IsRefusedWhilePaused(_player))
+        return;
+
     uint32 spellid = UNIT_ACTION_BUTTON_ACTION(packet.data);
     uint8 flag = UNIT_ACTION_BUTTON_TYPE(packet.data);             // delete = 0x07 CastSpell = C1
 
@@ -481,6 +485,9 @@ void WorldSession::HandlePetSpellAutocastOpcode(WorldPackets::Pet::PetSpellAutoc
 #if SUPPORTED_CLIENT_BUILD > CLIENT_BUILD_1_8_4
 void WorldSession::HandlePetCastSpellOpcode(WorldPackets::Pet::PetCastSpell const& packet)
 {
+    if (IsRefusedWhilePaused(_player))
+        return;
+
     Creature* pet = _player->GetMap()->GetAnyTypeCreature(packet.petGuid);
 
     if (!pet || (packet.petGuid != _player->GetPetGuid() && packet.petGuid != _player->GetCharmGuid()))

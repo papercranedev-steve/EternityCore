@@ -480,6 +480,12 @@ class WorldObject : public Object
                     m_obj->m_updateTracker.ResetTo(now);
                 }
 
+                // paused map (Map::Pause): no update, and the time up to now never reaches it
+                void SkipRealTime(uint32 now)
+                {
+                    m_obj->m_updateTracker.ResetTo(now);
+                }
+
             private:
                 UpdateHelper(UpdateHelper const&);
                 UpdateHelper& operator=(UpdateHelper const&) = delete;

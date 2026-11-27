@@ -30,6 +30,7 @@
 #include "SpellAuras.h"
 #include "GameObject.h"
 #include "Map.h"
+#include "MapPause.h"
 
 using namespace Spells;
 
@@ -45,6 +46,12 @@ void WorldSession::HandleUseItemOpcode(WorldPackets::Spell::UseItem const& packe
     if (!pItem)
     {
         pUser->SendEquipError(EQUIP_ERR_ITEM_NOT_FOUND, nullptr, nullptr);
+        return;
+    }
+
+    if (IsRefusedWhilePaused(pUser))
+    {
+        pUser->SendEquipError(EQUIP_ERR_CANT_DO_RIGHT_NOW, pItem, nullptr);
         return;
     }
 
@@ -161,7 +168,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPackets::Spell::OpenItem const& pac
         return;
     }
 
-    if (pUser->IsTaxiFlying())
+    if (pUser->IsTaxiFlying() || IsRefusedWhilePaused(pUser))
     {
         pUser->SendEquipError(EQUIP_ERR_CANT_DO_RIGHT_NOW, pItem, nullptr);
         return;
@@ -233,6 +240,9 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPackets::Misc::GameObjectUse c
     if (!_player->IsSelfMover())
         return;
 
+    if (IsRefusedWhilePaused(_player))
+        return;
+
     GameObject* obj = GetPlayer()->GetMap()->GetGameObject(packet.guid);
     if (!obj || obj->IsDeleted())
         return;
@@ -261,6 +271,16 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPackets::Misc::GameObjectUse c
 
 void WorldSession::HandleCastSpellOpcode(WorldPackets::Spell::CastSpell const& packet)
 {
+    if (IsRefusedWhilePaused(_player))
+    {
+        auto castPacket = std::make_unique<WorldPackets::Spell::CastResult>();
+        castPacket->spellId = packet.spellId;
+        castPacket->result = static_cast<uint8>(SPELL_RESULT_STATUS_FAIL);
+        castPacket->failureReason = static_cast<uint8>(SPELL_FAILED_DONT_REPORT);
+        SendPacket(std::move(castPacket));
+        return;
+    }
+
     // Sent early inside the client's spell queue window: held until the current cast / GCD ends.
     if (_player->GetSpellQueue().Offer(_player, packet.spellId, packet.targets))
         return;

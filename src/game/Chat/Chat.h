@@ -439,6 +439,7 @@ class ChatHandler
         bool HandleSpellSearchCommand(char *args);
         // Other
         bool HandleFreezeCommand(char *args);
+        bool HandlePauseCommand(char *args);                // Maps/MapPause.cpp
         bool HandleUnfreezeCommand(char *args);
         bool HandleSpellIconFixCommand(char *args);
         bool HandleUnitStatCommand(char *args);

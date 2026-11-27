@@ -714,7 +714,7 @@ inline void Map::UpdateCellsAroundObject(uint32 now, uint32 diff, WorldObject co
     if (!object || !object->IsInWorld() || !object->IsPositionValid())
         return;
 
-    MaNGOS::ObjectUpdater updater(diff, now);
+    MaNGOS::ObjectUpdater updater(diff, now, IsPaused());
     TypeContainerVisitor<MaNGOS::ObjectUpdater, GridTypeMapContainer  > grid_object_update(updater);
     TypeContainerVisitor<MaNGOS::ObjectUpdater, WorldTypeMapContainer > world_object_update(updater);
 
@@ -761,7 +761,7 @@ inline void Map::MarkCellsAroundObject(WorldObject const* object)
 
 inline void Map::UpdateActiveCellsCallback(uint32 diff, uint32 now, uint32 threadId, uint32 totalThreads, uint32 step)
 {
-    MaNGOS::ObjectUpdater updater(diff, now);
+    MaNGOS::ObjectUpdater updater(diff, now, IsPaused());
     TypeContainerVisitor<MaNGOS::ObjectUpdater, GridTypeMapContainer  > grid_object_update(updater);
     TypeContainerVisitor<MaNGOS::ObjectUpdater, WorldTypeMapContainer > world_object_update(updater);
 
@@ -877,7 +877,8 @@ void Map::ProcessSessionPackets(PacketProcessing type)
         Player* plr = m_mapRefIter->getSource();
         if (plr && plr->IsInWorld())
         {
-            if (type == PACKET_PROCESS_SPELLS)
+            // paused: cooldowns are pushed back on resume (Map::Resume), none may end before
+            if (type == PACKET_PROCESS_SPELLS && !IsPaused())
                 plr->UpdateCooldowns(beginTime);
 
             WorldSession* pSession = plr->GetSession();
@@ -924,6 +925,12 @@ void Map::UpdatePlayers()
         Player* plr = m_mapRefIter->getSource();
         if (!plr || !plr->IsInWorld())
             continue;
+        if (IsPaused())
+        {
+            WorldObject::UpdateHelper(plr).SkipRealTime(now);
+            plr->ResetSkippedUpdateTime();
+            continue;
+        }
         if (!updateInactivePlayers && (!plr->IsInCombat() && !plr->GetSession()->HasRecentPacket(PACKET_PROCESS_SPELLS) && !plr->HasScheduledEvent()))
         {
             plr->AddSkippedUpdateTime(diff);
@@ -1025,19 +1032,22 @@ void Map::Update(uint32 t_diff)
         }
     }
 
-    // Process necessary scripts
-    if (m_uiScriptedEventsTimer <= t_diff)
+    // Process necessary scripts (they wait while paused, Map::Pause)
+    if (!IsPaused())
     {
-        UpdateScriptedEvents();
-        m_uiScriptedEventsTimer = 1000u;
+        if (m_uiScriptedEventsTimer <= t_diff)
+        {
+            UpdateScriptedEvents();
+            m_uiScriptedEventsTimer = 1000u;
+        }
+        else
+            m_uiScriptedEventsTimer -= t_diff;
+
+        ScriptsProcess();
+
+        if (m_data)
+            m_data->Update(t_diff);
     }
-    else
-        m_uiScriptedEventsTimer -= t_diff;
-
-    ScriptsProcess();
-
-    if (m_data)
-        m_data->Update(t_diff);
 
     m_weatherSystem->UpdateWeathers(t_diff);
 
@@ -1215,6 +1225,10 @@ void ScriptedEvent::SendEventToAllTargets(uint32 uiData)
 
 void Map::Remove(Player* player, bool remove)
 {
+    // the one who paused leaves (logout, teleport): the map runs again
+    if (m_pausedBy == player->GetObjectGuid())
+        Resume();
+
     if (m_data)
         m_data->OnPlayerLeave(player);
 

@@ -28,11 +28,18 @@
 #include "ObjectGuid.h"
 #include "Player.h"
 #include "Map.h"
+#include "MapPause.h"
 
 void WorldSession::HandleAttackSwingOpcode(WorldPackets::Combat::AttackSwing const& packet)
 {
     if (!packet.targetGuid.IsUnit())
         return;
+
+    if (IsRefusedWhilePaused(_player))
+    {
+        SendAttackStop(nullptr);
+        return;
+    }
 
     Unit* pEnemy = _player->GetMap()->GetUnit(packet.targetGuid);
 

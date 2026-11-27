@@ -1338,6 +1338,8 @@ class Player final: public Unit
         void SendInitialSpells() const;
         bool AddSpell(uint32 spellId, bool active, bool learning, bool dependent, bool disabled);
     public:
+        // the time left on every running cooldown, again (Map::Resume: the client kept counting)
+        void SendCooldownsLeft() const;
         bool HasSpell(uint32 spell) const override;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
         TrainerSpellState GetTrainerSpellState(TrainerSpell const* pTrainerSpell) const;

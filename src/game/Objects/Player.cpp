@@ -3470,6 +3470,33 @@ void Player::SendInitialSpells() const
     sLog.Out(LOG_BASIC, LOG_LVL_DETAIL, "CHARACTER: Sent Initial Spells");
 }
 
+void Player::SendCooldownsLeft() const
+{
+    auto packet = std::make_unique<WorldPackets::Spell::SpellCooldown>();
+    packet->casterGuid = GetObjectGuid();
+
+    TimePoint const now = sWorld.GetCurrentClockTime();
+    for (auto const& cdItr : m_cooldownMap)
+    {
+        auto const& cdData = cdItr.second;
+        TimePoint spellEnd = now;
+        TimePoint catEnd = now;
+        if (!cdData->GetSpellCDExpireTime(spellEnd) || !cdData->GetCatCDExpireTime(catEnd))
+            continue;                                       // permanent: shown until its event
+        TimePoint const end = std::max(spellEnd, catEnd);
+        if (end <= now)
+            continue;
+
+        WorldPackets::Spell::SpellCooldownEntry entry;
+        entry.spellId = cdData->GetSpellEntry()->Id;
+        entry.cooldown = std::chrono::duration_cast<Milliseconds>(end - now);
+        packet->cooldownEntries.emplace_back(entry);
+    }
+
+    if (!packet->cooldownEntries.empty())
+        GetSession()->SendPacket(std::move(packet));
+}
+
 bool Player::AddSpell(uint32 spellId, bool active, bool learning, bool dependent, bool disabled)
 {
     SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(spellId);

@@ -7556,6 +7556,24 @@ void Spell::Delayed()
     ((Player*)m_caster)->GetSession()->SendPacket(std::move(packet));
 }
 
+void Spell::SendCastBarAfterPause(uint32 pausedMs) const
+{
+    if (!m_caster || !m_caster->IsPlayer())
+        return;
+    Player* player = static_cast<Player*>(m_caster);
+
+    if (m_spellState == SPELL_STATE_PREPARING && m_casttime > 0)
+    {
+        // the bar moves on by the paused time, like a pushback
+        auto packet = std::make_unique<WorldPackets::Spell::SpellDelayed>();
+        packet->casterGuid = player->GetObjectGuid();
+        packet->delayTime = pausedMs;
+        player->GetSession()->SendPacket(std::move(packet));
+    }
+    else if (m_spellState == SPELL_STATE_CASTING && m_spellInfo->IsChanneledSpell())
+        player->SendChannelUpdate(m_timer);
+}
+
 void Spell::DelayedChannel()
 {
     if (!m_caster || !m_caster->IsPlayer() || getState() != SPELL_STATE_CASTING)

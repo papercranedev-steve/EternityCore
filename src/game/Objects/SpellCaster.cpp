@@ -2468,6 +2468,15 @@ void SpellCaster::UpdateCooldowns(TimePoint const& now)
     }
 }
 
+void SpellCaster::DelayCooldowns(std::chrono::milliseconds delay)
+{
+    for (auto& gcd : m_GCDCatMap)
+        gcd.second += delay;
+    m_cooldownMap.Delay(delay);
+    for (auto& lockout : m_lockoutMap)
+        lockout.second += delay;
+}
+
 bool SpellCaster::CheckLockout(SpellSchoolMask schoolMask) const
 {
     for (auto& lockoutItr : m_lockoutMap)

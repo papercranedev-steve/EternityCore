@@ -119,7 +119,8 @@ namespace MaNGOS
     {
         uint32 i_timeDiff;
         uint32 i_now;
-        explicit ObjectUpdater(uint32 const& diff, uint32 now) : i_timeDiff(diff), i_now(now) {}
+        bool i_paused;                  // Map::Pause: skip the objects
+        explicit ObjectUpdater(uint32 const& diff, uint32 now, bool paused) : i_timeDiff(diff), i_now(now), i_paused(paused) {}
         template<class T> void Visit(GridRefManager<T>& m);
         void Visit(PlayerMapType&) {}
         void Visit(CorpseMapType&) {}
