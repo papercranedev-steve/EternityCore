@@ -834,6 +834,23 @@ namespace Commander
         float threatPerSec = 0.0f;  // over the last few seconds (ThreatHistory); includes taunt jumps
     };
 
+    // An area around a point or an enemy where a spell will land (WorldModel::scriptedHazards).
+    // HazardZones::Compute makes a Burst zone of it, with the amounts of `spellId` at `level`,
+    // so positioning, spots and following treat it like the zones it derives itself.
+    struct ScriptedHazard
+    {
+        uint32 spellId = 0;         // the spell that lands
+        // Centred on this enemy while it is in world.enemies (and gated like the derived zones:
+        // not while it is controlled or silenced); otherwise on `center`.
+        ObjectGuid source;
+        Position3 center;
+        bool hasCenter = false;
+        float radius = 0.0f;        // 0 = the spell's own radius
+        uint32 level = 0;           // caster level for the amounts
+        // Repeat delay, or the expected time to the next one: what positioning weighs it by.
+        float intervalSec = 0.0f;
+    };
+
     // One creature_spells row of an enemy with its live timer (CreatureAI::GetSpellsListTimers),
     // EnemyFacts::spellList. Perception/Forecast/IncomingTimeline.h turns it into hits.
     struct ListSpellFacts
@@ -1271,6 +1288,9 @@ namespace Commander
         std::vector<EnemyFacts> targeted;
         // Friendly non-party creatures in combat near the leader (at most MAX_ALLIES, nearest first).
         std::vector<AllyFacts> allies;
+        // Hazards a boss module knows of (IEncounter::AddFacts; cleared by RefreshCombat): C++
+        // scripted bosses have no spell list for HazardZones to derive them from.
+        std::vector<ScriptedHazard> scriptedHazards;
         // Builder bookkeeping: friendly creatures in combat found by the last grid scan
         // (RefreshPacks, once a second), re-read by every RefreshCombat. Not a fact to act on.
         std::vector<ObjectGuid> allyCandidates;

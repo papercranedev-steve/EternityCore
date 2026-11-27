@@ -20,9 +20,14 @@
  *     turned off: she cannot be killed meanwhile, and a control only drags it out.
  * Healers already leave a charmed member alone (HealPlanBehavior).
  *
- * Known limits: the silence she casts when the possession ends (18327, 13 yd around her) is
- * not avoided yet (step 3 of the design doc: hazard zones from boss modules); the player's
- * own damage is not limited; a pet's melee is called back only at the stop line.
+ * Facts (AddFacts): her Silence (18327, around her, at once when a possession ends and every
+ * 13-18 s) as a hazard zone (WorldModel::scriptedHazards): around her while she is there,
+ * around the spot the script brings her back to while someone is possessed (she stands next
+ * to the possessed member then, invisible). Healers and ranged stand clear (positioning).
+ *
+ * Known limits: the player's own damage is not limited; a pet's melee is called back only at
+ * the stop line; the spot she returns to is where she stood on the refresh before her first
+ * possession (the script remembers it at the cast).
  */
 
 #ifndef MANGOS_COMMANDER_ENCOUNTER_STRATHOLME_ANASTARI_H
@@ -50,8 +55,16 @@ namespace Commander
         // The script checks every 1 s; the bots see the line on their next tick.
         static constexpr float WINDOW_SEC = 1.5f;
 
+        // Silence (18327): self cast every 13-18 s, and at once when a possession ends.
+        static constexpr uint32 SPELL_SILENCE = 18327;
+        static constexpr float SILENCE_REPEAT_SEC = 15.5f;
+        // While someone is possessed the silence comes as soon as the member is freed: weighed
+        // as this close, so casters already stand clear of her spot.
+        static constexpr float SILENCE_SOON_SEC = 2.0f;
+
         char const* GetId() const override { return "anastari"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
+        void AddFacts(WorldModel& world) override;
         void ShapeDoctrine(WorldModel const& world, TeamPlan& plan) override;
         void OnReset() override;
 
@@ -59,6 +72,14 @@ namespace Commander
         static bool IsPossessed(PartyMemberFacts const& m);
 
         std::vector<ObjectGuid> m_noted;    // members whose possession was noted this fight
+        // Where she stood before her first possession: the script brings her back there every
+        // time (it remembers the spot once), and silences around it.
+        ObjectGuid m_boss;
+        Position3 m_lastPos;
+        Position3 m_home;
+        bool m_seen = false;
+        bool m_homeKnown = false;
+        uint32 m_level = 0;
     };
 }
 

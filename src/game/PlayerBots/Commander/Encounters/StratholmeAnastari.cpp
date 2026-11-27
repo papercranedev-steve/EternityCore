@@ -28,6 +28,47 @@ namespace Commander
         *this = StratholmeAnastari();
     }
 
+    void StratholmeAnastari::AddFacts(WorldModel& world)
+    {
+        bool const possessing = std::any_of(world.party.begin(), world.party.end(), &IsPossessed);
+        EnemyFacts const* boss = EncounterHelpers::FindEnemyByEntry(world, NPC_ANASTARI);
+        if (boss)
+        {
+            m_boss = boss->guid;
+            m_level = boss->level;
+        }
+        if (possessing && m_seen && !m_homeKnown)
+        {
+            m_home = m_lastPos;
+            m_homeKnown = true;
+        }
+        if (boss && !possessing)
+        {
+            m_lastPos = boss->pos;
+            m_seen = true;
+        }
+
+        ScriptedHazard h;
+        h.spellId = SPELL_SILENCE;
+        h.level = m_level;
+        if (possessing)
+        {
+            if (!m_homeKnown)
+                return;
+            h.center = m_home;
+            h.hasCenter = true;
+            h.intervalSec = SILENCE_SOON_SEC;
+        }
+        else
+        {
+            if (!boss)
+                return;
+            h.source = boss->guid;
+            h.intervalSec = SILENCE_REPEAT_SEC;
+        }
+        world.scriptedHazards.push_back(h);
+    }
+
     void StratholmeAnastari::ShapeDoctrine(WorldModel const& world, TeamPlan& plan)
     {
         for (PartyMemberFacts const& m : world.party)

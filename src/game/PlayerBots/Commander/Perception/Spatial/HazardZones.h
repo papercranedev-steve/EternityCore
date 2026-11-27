@@ -45,6 +45,9 @@
  * being hit lasts CastValues::WAKE_ON_DAMAGE_SEC. Death penalties are left to the caller,
  * which knows how many hits it adds up.
  *
+ * Boss modules add what the data does not show (WorldModel::scriptedHazards, IEncounter::AddFacts):
+ * a Burst zone of a spell around an enemy or a fixed point, with the module's repeat delay.
+ *
  * Known limits: the profile lists what a creature can cast, not what it will cast this fight
  * (EventAI health events count only near their threshold); C++ scripted bosses have no
  * profile spells; the centre is the enemy position at the last refresh (a moving enemy takes

@@ -299,6 +299,41 @@ namespace HazardZones
                     zones.push_back(z);
             }
         }
+        // A boss module's (WorldModel::scriptedHazards): the same zone from its spell.
+        for (ScriptedHazard const& h : world.scriptedHazards)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(h.spellId);
+            if (!spell)
+                continue;
+            EnemyFacts const* source = h.source.IsEmpty() ? nullptr : world.FindEnemy(h.source);
+            if (source && !source->acting)
+                continue;
+            if (!source && !h.hasCenter)
+                continue;
+            EnemyFacts at;
+            if (source)
+                at = *source;
+            else
+            {
+                at.guid = h.source;
+                at.pos = h.center;
+                at.level = h.level;
+                at.acting = true;
+            }
+            HazardSource s;
+            s.spellId = spell->Id;
+            s.hitSpellId = spell->Id;
+            s.kind = HazardKind::Burst;
+            s.rawRadius = h.radius > 0.0f ? h.radius : CasterAreaRadius(spell);
+            // (not caster-centred by its targets, a scripted self cast: its widest effect radius)
+            for (uint32 i = 0; s.rawRadius <= 0.0f && i < MAX_SPELL_EFFECTS; ++i)
+                if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                    s.rawRadius = std::max(s.rawRadius, r->Radius);
+            s.intervalSec = h.intervalSec;
+            HazardZone z;
+            if (s.rawRadius > 0.0f && MakeZone(world, at, s, z))
+                zones.push_back(z);
+        }
         return zones;
     }
 
