@@ -4,8 +4,11 @@
  * the form picks the steps.
  *
  * Out of combat: healer leaves its form; Mark / Gift of the Wild, Thorns (only tanks, hunter
- * pets and taunting pets, user 2026-11-15), Nature's Grasp;
- * caster form: into the combat form, heals above 80% mana; cat: a Prowl no module wants is
+ * pets and taunting pets, user 2026-11-15), Nature's Grasp; in bear or cat form it leaves the
+ * form for a buff only when it pays the buff and the form back and nothing would catch it
+ * (user 2026-11-27, TeamBotAI::MayLeaveFormOutOfCombat; eating: TeamBotAI::StartResting);
+ * caster form: into the combat form unless the rest goes on (TeamBotAI::HoldsFormForRest:
+ * self-heals, eating and drinking first), heals above 80% mana; cat: a Prowl no module wants is
  * cancelled (ClassRotation::DropUnwantedStealth; the hunt's opener prowls, HuntBehavior); with
  * a victim (an opener): the combat steps.
  *
@@ -44,6 +47,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Classes/ClassKit.h"
 
 namespace
 {
@@ -70,14 +74,16 @@ namespace
                 return;
             }
 
-            SpellEntry const* pBuffSpell = nullptr;
-            if (Player* pTarget = bot.SelectBuffTarget(s.pMarkoftheWild, s.pGiftoftheWild, pBuffSpell))
-                if (Buff(pTarget, pBuffSpell))
-                    return;
-
+            // Bear or cat form: the buffs need caster form. Out of it only for a buff it can
+            // cast there, paying the buff and the form back (LeavesFormToBuff); the rest
+            // (eating) leaves it in TeamBotAI::StartResting.
+            SpellEntry const* pMark = nullptr;
+            Unit* pMarkTarget = bot.SelectBuffTarget(s.pMarkoftheWild, s.pGiftoftheWild, pMark);
+            if (pMarkTarget && (Buff(pMarkTarget, pMark) || LeavesFormToBuff(pMarkTarget, pMark)))
+                return;
             if (s.pThorns)
                 if (Unit* pTarget = SelectThornsTarget(s.pThorns))
-                    if (Buff(pTarget, s.pThorns))
+                    if (Buff(pTarget, s.pThorns) || LeavesFormToBuff(pTarget, s.pThorns))
                         return;
 
             if (Cast(me, s.pNaturesGrasp))
@@ -87,7 +93,9 @@ namespace
 
             if (me->GetShapeshiftForm() == FORM_NONE)
             {
-                if (EnterCombatForm())
+                // Back to the combat form at once when nothing is left to do out of it; not
+                // while the rest goes on (self-heals, eating and drinking, HoldsFormForRest).
+                if (!bot.HoldsFormForRest() && EnterCombatForm())
                     return;
                 if (me->GetPowerPercent(POWER_MANA) > 80.0f && bot.FindAndHealInjuredAlly())
                     return;
@@ -189,6 +197,22 @@ namespace
                 return pTarget;
             }
             return nullptr;
+        }
+
+        bool LeavesFormToBuff(Unit* pTarget, SpellEntry const* pSpell)
+        {
+            Player* me = m_bot.me;
+            ShapeshiftForm const form = me->GetShapeshiftForm();
+            if (form == FORM_NONE || form == FORM_MOONKIN || !me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT) ||
+                !m_bot.Kit().CombatForm())
+                return false;
+            uint32 const mana = me->GetPower(POWER_MANA);
+            if (!m_bot.CanTryToCastSpellAs(pTarget, pSpell, FORM_NONE, mana))
+                return false;
+            if (!m_bot.MayLeaveFormOutOfCombat(uint32(Spell::CalculatePowerCost(pSpell, me)), false))
+                return false;
+            me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+            return true;
         }
 
         // Cat for melee damage, bear for a tank (or melee without cat), moonkin for ranged damage.

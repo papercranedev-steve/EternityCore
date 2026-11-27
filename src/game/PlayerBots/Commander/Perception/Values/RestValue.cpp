@@ -103,15 +103,37 @@ namespace RestValue
         return member.foodHealthPerSec > 0.0f ? gap / member.foodHealthPerSec : -1.0f;
     }
 
+    namespace
+    {
+        // A cast before sitting down can shorten the rest: no fight on (no eating then), not
+        // sitting with a food or a drink on (the cast stands it up and throws the item away),
+        // both rates known (eating and drinking run at once).
+        bool TradeBeforeRest(WorldModel const& world, PartyMemberFacts const& member)
+        {
+            if (!member.alive || member.inCombat || world.HasPartyEnemy() || !world.targeted.empty())
+                return false;
+            if (member.eating || member.drinking)
+                return false;
+            return member.UsesMana() && member.drinkManaPerSec > 0.0f && member.foodHealthPerSec > 0.0f;
+        }
+    }
+
+    float SelfHealSavesSec(WorldModel const& world, PartyMemberFacts const& member, float heal, float mana)
+    {
+        if (!TradeBeforeRest(world, member) || heal <= 0.0f)
+            return 0.0f;
+        float const health = float(member.health);
+        float const manaNow = float(member.mana);
+        float const gain = std::min(heal, float(member.maxHealth) - health);
+        if (gain <= 0.0f || manaNow < mana)
+            return 0.0f;
+        return std::max(0.0f, SecondsToFull(member, health, manaNow) -
+                              SecondsToFull(member, health + gain, manaNow - mana));
+    }
+
     float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member)
     {
-        if (!member.alive || member.inCombat || world.HasPartyEnemy() || !world.targeted.empty())
-            return 0.0f;
-        // Sitting with a food or a drink on: the cast stands it up and throws the item away.
-        if (member.eating || member.drinking)
-            return 0.0f;
-        if (!member.UsesMana() || member.drinkManaPerSec <= 0.0f || member.foodHealthPerSec <= 0.0f ||
-            member.tapManaPerCast <= 0.0f || member.tapManaPerHealth <= 0.0f)
+        if (!TradeBeforeRest(world, member) || member.tapManaPerCast <= 0.0f || member.tapManaPerHealth <= 0.0f)
             return 0.0f;
         float const health = float(member.health);
         float const mana = float(member.mana);

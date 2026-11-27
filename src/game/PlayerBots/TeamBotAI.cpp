@@ -1100,6 +1100,19 @@ bool TeamBotAI::StartResting()
         float(me->GetHealth()) < float(me->GetMaxHealth()) * start;
     bool const startDrink = needToDrink && !ActiveRest(Kind::Drink) &&
         float(me->GetPower(POWER_MANA)) < float(me->GetMaxPower(POWER_MANA)) * DrinkBelowShareNow();
+
+    // In a form nothing is eaten (bag items are refused shapeshifted, HandleUseItemOpcode; the
+    // free food went down in bear form until 2026-11-27): out of it first, for eating only
+    // (no drink counted in bear or cat form, DrinkManaPerSec). Caster form from the next tick:
+    // the rest's self-heals, then eating and drinking together (HoldsFormForRest).
+    if (me->IsShapeShifted() && me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT))
+    {
+        if (!startEat || !MayLeaveFormOutOfCombat(0, NextRest(Kind::Drink) != nullptr))
+            return false;
+        me->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT);
+        return true;
+    }
+
     if (startEat || startDrink)
     {
         if (me->IsMounted())
@@ -2040,6 +2053,96 @@ bool TeamBotAI::ContinueFormReturn()
         return false;
     m_formReturn = FormReturn();
     return DoCastSpell(me, pForm) == SPELL_CAST_OK;
+}
+
+bool TeamBotAI::MayLeaveFormOutOfCombat(uint32 extraMana, bool drinksAfter) const
+{
+    if (me->IsInCombat() || me->GetVictim() || me->IsMounted() || me->IsNonMeleeSpellCasted(false, false, true))
+        return false;
+    if (m_formRest.pauseSinceMs &&
+        WorldTimer::getMSTimeDiff(m_formRest.pauseSinceMs, WorldTimer::getMSTime()) < FORM_REST_LEAVE_PAUSE_MS)
+        return false;
+    SpellEntry const* pForm = CurrentFormSpell();
+    if (!pForm)
+        return false;
+    uint32 const need = uint32(Spell::CalculatePowerCost(pForm, me)) + extraMana;
+    if (me->GetPower(POWER_MANA) < need && !(drinksAfter && extraMana == 0))
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return !Commander::AggroRange::SeenOnRise(me, commander ? &commander->GetWorld() : nullptr);
+}
+
+bool TeamBotAI::HoldsFormForRest()
+{
+    using BotShared::FoodAndDrink::Kind;
+    uint32 const now = WorldTimer::getMSTime();
+    if (me->IsInCombat() || !me->IsAlive() || me->GetShapeshiftForm() != FORM_NONE)
+    {
+        m_formRest.waitSinceMs = 0;
+        return false;
+    }
+    if (IsResting() || IsRestPending() || me->IsNonMeleeSpellCasted(false, false, true))
+    {
+        m_formRest.waitSinceMs = 0;
+        return true;
+    }
+    bool const eatToStart = FoodHealthPerSec() > 0.0f &&
+        float(me->GetHealth()) < float(me->GetMaxHealth()) * Commander::RestValue::START_SHARE;
+    bool const paused = m_formRest.pauseSinceMs &&
+        WorldTimer::getMSTimeDiff(m_formRest.pauseSinceMs, now) < FORM_REST_LEAVE_PAUSE_MS;
+    if (!eatToStart || paused)
+    {
+        m_formRest.waitSinceMs = 0;
+        return false;
+    }
+    if (!m_formRest.waitSinceMs)
+        m_formRest.waitSinceMs = now;
+    if (WorldTimer::getMSTimeDiff(m_formRest.waitSinceMs, now) <= FORM_REST_WAIT_MS)
+        return true;
+    m_formRest.waitSinceMs = 0;
+    m_formRest.pauseSinceMs = now;
+    return false;
+}
+
+void TeamBotAI::RestSelfHeals(std::vector<HealSpells::Option>& out) const
+{
+    out.clear();
+    uint32 const mana = me->GetPower(POWER_MANA);
+    auto ownHot = [&](SpellEntry const* spell)
+    {
+        uint32 const first = sSpellMgr.GetFirstSpellInChain(spell->Id);
+        for (auto const& itr : me->GetSpellAuraHolderMap())
+            if (itr.second->GetCasterGuid() == me->GetObjectGuid() &&
+                sSpellMgr.GetFirstSpellInChain(itr.second->GetId()) == first)
+                return true;
+        return false;
+    };
+    auto add = [&](SpellEntry const* spell)
+    {
+        if (!spell || Powers(spell->powerType) != POWER_MANA || !HealSpells::IsSingleTargetHeal(spell))
+            return;
+        for (HealSpells::Option const& o : out)
+            if (o.spell == spell)
+                return;
+        if (!CanTryToCastSpellBesidesTimers(me, spell, me->GetShapeshiftForm(), mana))
+            return;
+        HealSpells::Option o;
+        o.spell = spell;
+        o.amount = HealSpells::Estimate(me, me, spell);
+        if (o.amount.periodic > 0.0f && ownHot(spell))
+            o.amount.periodic = 0.0f;
+        if (o.amount.direct <= 0.0f && o.amount.periodic <= 0.0f)
+            return;
+        o.mana = HealSpells::ManaCost(me, spell);
+        o.castSec = float(spell->GetCastTime(me)) / 1000.0f;
+        out.push_back(o);
+    };
+    for (SpellEntry const* spell : m_spellListDirectHeal)
+        add(spell);
+    for (SpellEntry const* spell : m_spellListIndirectHeal)
+        add(spell);
+    for (SpellEntry const* spell : m_spellListPeriodicHeal)
+        add(spell);
 }
 
 float TeamBotAI::StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const

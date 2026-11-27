@@ -243,6 +243,29 @@ public:
     bool CanTryToCastHeal(Unit const* pTarget, SpellEntry const* pSpellEntry) const override;
     static constexpr uint32 PB_FORM_RETURN_TIMEOUT_MS = 4000;
 
+    // Out of combat in a form (user 2026-11-27: a bear or cat druid stayed in its form after
+    // every fight; Mark of the Wild and Thorns cannot be cast in it, bag food cannot be eaten,
+    // the free food was eaten in it). The form is left only for something to do in caster
+    // form (the rotation's buffs, StartResting's eating; mana alone is no reason) and taken
+    // back as soon as that is done (HoldsFormForRest), never for nothing: each shift costs
+    // mana (Dire Bear Form ~55% base mana).
+    // May leave it now: out of combat, no victim, not casting, its mana pays `extraMana` and
+    // the form back (`drinksAfter`: or a drink waits, the rest fills it), and no idle enemy or
+    // coming patrol would catch it out of form (AggroRange::SeenOnRise, as a rise).
+    bool MayLeaveFormOutOfCombat(uint32 extraMana, bool drinksAfter) const;
+    // The rotation keeps caster form out of combat (does not take its combat form back) while
+    // the rest goes on: eating or drinking, a rest spell on its way, a cast running (the rest's
+    // self-heals), or eating still to start (health below RestValue::START_SHARE with food).
+    // Not after FORM_REST_WAIT_MS of waiting without any of that (the rest did not come: a pull,
+    // the leader walking away): the form back, no leaving for a rest for FORM_REST_LEAVE_PAUSE_MS.
+    bool HoldsFormForRest();
+    static constexpr uint32 FORM_REST_WAIT_MS = 15000;
+    static constexpr uint32 FORM_REST_LEAVE_PAUSE_MS = 60000;
+    // Self-heals castable in its current form, valued on itself (HealSpells::Estimate, mana,
+    // cast time), cooldowns and the global cooldown not checked: RestBehavior's heals before
+    // sitting down (RestValue::SelfHealSavesSec).
+    void RestSelfHeals(std::vector<HealSpells::Option>& out) const;
+
     bool AttackStart(Unit* pVictim);
     // Shoot (5019) is learned and an unbroken wand is equipped (the server's own item rule,
     // Player::HasItemFitToSpellReqirements). Shoot has no global cooldown (spell_template:
@@ -553,6 +576,13 @@ public:
     };
     FormReturn m_formReturn;
     bool m_leftFormThisFight = false;   // LeftFormThisFight
+    // HoldsFormForRest.
+    struct FormRest
+    {
+        uint32 waitSinceMs = 0;     // 0 = not waiting for the rest
+        uint32 pauseSinceMs = 0;    // no leaving for a rest for FORM_REST_LEAVE_PAUSE_MS; 0 = none
+    };
+    FormRest m_formRest;
     // shared_ptr (not unique_ptr) so the type can stay incomplete in this header.
     std::shared_ptr<Commander::BotDirectives> m_directives;
     // Class kit (Commander/Classes/ClassKit.h); mutable for the on-first-use fallback in Kit().

@@ -10,6 +10,9 @@
 #include "Commander/Perception/Tanks.h"
 #include "TeamBotAI.h"
 #include "Map.h"
+#include "HealSpells.h"
+#include <algorithm>
+#include <vector>
 
 namespace Commander
 {
@@ -76,6 +79,11 @@ namespace Commander
             return;
         if (!w.free && !PlaceOk(bot, world, plan, *self))
             return;
+        // In bear or cat form only eating counts (no drink there); StartResting leaves the form
+        // for it when it may (TeamBotAI::MayLeaveFormOutOfCombat), else no rest is proposed.
+        bool const shifted = me->IsShapeShifted() && me->HasAuraType(SPELL_AURA_MOD_SHAPESHIFT);
+        if (shifted && (!w.eat || !bot->MayLeaveFormOutOfCombat(0, self->hasDrink)))
+            return;
 
         Proposal p;
         p.source = "rest";
@@ -90,6 +98,12 @@ namespace Commander
             p.tier = ProposalTier::Assigned;
             p.reason = bot->IsResting() ? "keep resting, mana for this fight" : "rest, mana for this fight";
             p.SetValue(w.benefit, w.cost);
+        }
+        if (shifted)
+        {
+            p.reason = "rest: out of the form to eat";
+            out.push_back(p);
+            return;
         }
 
         // Health to mana first while that shortens the rest by more than the cast's global
@@ -114,6 +128,47 @@ namespace Commander
                     p.action.type = BotActionType::Hold;
                     p.reason = "rest: health to mana first, the next tap after the global cooldown";
                 }
+            }
+        }
+
+        // Mana to health first (user 2026-11-27, every class with a self-heal; the tap's
+        // reverse): the heal that shortens the rest by the most beyond its busy time
+        // (RestValue::SelfHealSavesSec), cast in the rest's place; its global cooldown waited
+        // out standing, as the tap's.
+        if (p.action.type == BotActionType::Rest)
+        {
+            std::vector<HealSpells::Option> heals;
+            bot->RestSelfHeals(heals);
+            // (its live health and mana: the snapshot may not have the last heal yet)
+            PartyMemberFacts live = *self;
+            if (!heals.empty())
+            {
+                live.health = me->GetHealth();
+                live.mana = me->GetPower(POWER_MANA);
+            }
+            HealSpells::Option const* best = nullptr;
+            float bestGain = 0.0f;
+            for (HealSpells::Option const& o : heals)
+            {
+                float const busy = std::max(o.castSec, Value::GCD_SEC);
+                float const gain = RestValue::SelfHealSavesSec(world, live, o.amount.direct + o.amount.periodic, o.mana) - busy;
+                if (gain > bestGain)
+                {
+                    bestGain = gain;
+                    best = &o;
+                }
+            }
+            if (best && bot->CanTryToCastSpell(me, best->spell))
+            {
+                p.action.type = BotActionType::Cast;
+                p.action.spell = best->spell;
+                p.action.target = self->guid;
+                p.reason = "rest: mana to health first, eat and drink together";
+            }
+            else if (best && me->HasGCD(best->spell))
+            {
+                p.action.type = BotActionType::Hold;
+                p.reason = "rest: mana to health first, the next heal after the global cooldown";
             }
         }
         out.push_back(p);

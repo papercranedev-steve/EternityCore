@@ -102,6 +102,13 @@ namespace Commander
         // not pay it, already eating or drinking (user 2026-11-26: it sat down in each tap's
         // global cooldown and stood up for the next tap, a drink thrown away each time).
         float TapSavesSec(WorldModel const& world, PartyMemberFacts const& member);
+
+        // The reverse (user 2026-11-27, every class with a self-heal): seconds of resting one
+        // heal of `heal` on itself for `mana` saves before sitting down (mana full, health low
+        // -> heal until the two take about as long, then eat and drink together). The heal
+        // counts up to the missing health. Same conditions as TapSavesSec; the caller weighs it
+        // against the cast's busy time (max(cast, global cooldown)).
+        float SelfHealSavesSec(WorldModel const& world, PartyMemberFacts const& member, float heal, float mana);
     }
 }
 

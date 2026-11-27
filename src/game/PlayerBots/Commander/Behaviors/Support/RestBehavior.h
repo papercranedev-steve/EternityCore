@@ -36,6 +36,16 @@
  * rest's place (same tier and value), waiting out each tap's global cooldown standing (Hold);
  * then it sits down. Only with no fight on (no eating then), and never once a food or a drink
  * is on (the tap would stand it up and waste the item).
+ * Mana to health first, the tap's reverse (user 2026-11-27, every class with a self-heal):
+ * of its self-heals (TeamBotAI::RestSelfHeals) the one whose saved rest time
+ * (RestValue::SelfHealSavesSec, on its live health and mana) beats its busy time by the most,
+ * cast in the rest's place, each global cooldown waited out standing; then it sits down and
+ * eats and drinks together. Same conditions as the tap.
+ * In bear or cat form (user 2026-11-27): only eating counts (no drink there; mana alone is no
+ * reason to leave the form). The rest is proposed only when it may leave the form
+ * (TeamBotAI::MayLeaveFormOutOfCombat: its mana pays the form back or a drink waits, nothing
+ * would catch it out of form); StartResting leaves it, and the rotation keeps caster form until
+ * the rest is over (TeamBotAI::HoldsFormForRest).
  * Not while the retreat runs, while casting, or in combat (a hit stands the bot up and puts it
  * in combat; the game does not allow eating or drinking then).
  */
