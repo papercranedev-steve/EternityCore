@@ -223,10 +223,10 @@ namespace Commander
         if ((m_phase == Phase::PreWave3 || m_phase == Phase::Wave3) && !m_wave3Noted)
         {
             m_wave3Noted = true;
-            m_pendingNotes.push_back("Pyramid: wave 3 (two elite bosses) waits at the bottom of the stairs; "
+            Note("Pyramid: wave 3 (two elite bosses) waits at the bottom of the stairs; "
                                      "the prisoners walk down 5 s after it spawns. Go down with them, the bots follow you. "
                                      "Healers drink until the fight starts.");
-            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.zf.wave3", VoiceTier::Essential));
+            Say(EncounterHelpers::Line("voice.boss.zf.wave3", VoiceTier::Essential));
         }
     }
 
@@ -241,13 +241,6 @@ namespace Commander
 
     void ZulFarrakPyramid::AdjustPlan(WorldModel const& world, TeamPlan& plan)
     {
-        for (std::string& note : m_pendingNotes)
-            plan.notes.push_back(std::move(note));
-        m_pendingNotes.clear();
-        for (VoiceEvent& line : m_pendingVoice)
-            plan.voice.push_back(std::move(line));
-        m_pendingVoice.clear();
-
         if (!HoldsTheStairs())
             return;     // wave 3: FocusAssigner (the Shadowpriest's heals are scored there)
 

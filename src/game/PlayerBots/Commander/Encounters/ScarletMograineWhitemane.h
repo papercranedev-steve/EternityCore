@@ -115,10 +115,6 @@ namespace Commander
         ObjectGuid m_mograine;
         ObjectGuid m_whitemane;
         ObjectGuid m_tank;
-
-        std::vector<std::string> m_pendingNotes;
-
-        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

@@ -168,8 +168,8 @@ namespace Commander
                 char buf[200];
                 snprintf(buf, sizeof(buf), "Gandling sent healer %s to the %s room: no heals in the hall until the room is cleared.",
                     healer ? healer->GetName() : "?", ROOMS[room].name);
-                m_pendingNotes.push_back(buf);
-                m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.gandling.healer", VoiceTier::Urgent, m.guid));
+                Note(buf);
+                Say(EncounterHelpers::Line("voice.boss.gandling.healer", VoiceTier::Urgent, m.guid));
             }
         }
         m_lastPos.swap(positions);
@@ -197,25 +197,34 @@ namespace Commander
         }
     }
 
+    void ScholomanceGandling::OfferDuties(WorldModel const& /*world*/, TeamPlan const& /*plan*/,
+                                          std::vector<DutyNeed>& needs) const
+    {
+        // Guardian intercepts only for someone in the same room: taken off before the
+        // allocation, so a bot left out can still get another duty.
+        for (DutyNeed& n : needs)
+        {
+            if (n.kind != DutyKind::Intercept || !IsGuardian(n.target))
+                continue;
+            int32 const room = GuardianRoom(n.target);
+            auto const elsewhere = [this, room](DutyCandidate const& c)
+            {
+                return room == NO_ROOM || TeleportedRoom(c.bot) != room;
+            };
+            for (DutyCandidate const& c : n.candidates)
+            {
+                if (!elsewhere(c))
+                    continue;
+                n.rejected.push_back(c);
+                n.rejected.back().why = "gandling: not in the guardian's room";
+            }
+            n.candidates.erase(std::remove_if(n.candidates.begin(), n.candidates.end(), elsewhere),
+                               n.candidates.end());
+        }
+    }
+
     void ScholomanceGandling::AdjustPlan(WorldModel const& world, TeamPlan& plan)
     {
-        for (std::string& note : m_pendingNotes)
-            plan.notes.push_back(std::move(note));
-        m_pendingNotes.clear();
-        for (VoiceEvent& line : m_pendingVoice)
-            plan.voice.push_back(std::move(line));
-        m_pendingVoice.clear();
-
-        // Guardian intercepts only for someone in the same room.
-        plan.intercepts.erase(std::remove_if(plan.intercepts.begin(), plan.intercepts.end(),
-            [this](InterceptDuty const& d)
-            {
-                if (!IsGuardian(d.enemy))
-                    return false;
-                int32 const room = GuardianRoom(d.enemy);
-                return room == NO_ROOM || TeleportedRoom(d.bot) != room;
-            }), plan.intercepts.end());
-
         // The party focus stays on Gandling while he can be fought; guardians are the
         // teleported bot's job (Propose).
         if (m_gandlingAlive && !plan.focus.enemy.IsEmpty() && IsGuardian(plan.focus.enemy))

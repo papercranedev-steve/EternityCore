@@ -53,7 +53,6 @@
 #include <cmath>
 #include <cstdio>
 #include <list>
-#include <set>
 
 namespace Commander
 {
@@ -273,15 +272,15 @@ namespace Commander
 
         if (m_phase == Phase::PhaseTwo && previous != Phase::PhaseTwo)
         {
-            m_pendingNotes.push_back("Thermaplugg below 50%: area Knock Away every 12 s, faces light up faster.");
-            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.phase2", VoiceTier::Urgent));
+            Note("Thermaplugg below 50%: area Knock Away every 12 s, faces light up faster.");
+            Say(EncounterHelpers::Line("voice.boss.thermaplugg.phase2", VoiceTier::Urgent));
         }
         if (m_phase == Phase::BossDead && wasAlive && m_bombCount)
         {
             char buf[160];
             snprintf(buf, sizeof(buf), "Thermaplugg dead, %u walking bomb(s) left: ranged kill them, melee stay off.", m_bombCount);
-            m_pendingNotes.push_back(buf);
-            m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.bombs", VoiceTier::Urgent));
+            Note(buf);
+            Say(EncounterHelpers::Line("voice.boss.thermaplugg.bombs", VoiceTier::Urgent));
         }
 
         FindObjects(bot, now);
@@ -297,94 +296,72 @@ namespace Commander
                 Player* presser = bot->me->GetMap()->GetPlayer(m_presser);
                 snprintf(buf, sizeof(buf), "Thermaplugg: %s presses the buttons of lit gnome faces.",
                     presser ? presser->GetName() : "a damage dealer");
-                m_pendingNotes.push_back(buf);
-                m_pendingVoice.push_back(EncounterHelpers::Line("voice.boss.thermaplugg.presser", VoiceTier::Essential, m_presser));
+                Note(buf);
+                Say(EncounterHelpers::Line("voice.boss.thermaplugg.presser", VoiceTier::Essential, m_presser));
             }
         }
         else
             m_presser = ObjectGuid();
     }
 
-    void GnomereganThermaplugg::AddBombIntercepts(WorldModel const& world, TeamPlan& plan) const
+    void GnomereganThermaplugg::OfferDuties(WorldModel const& world, TeamPlan const& /*plan*/,
+                                            std::vector<DutyNeed>& needs) const
     {
-        std::vector<EnemyFacts const*> bombs;
+        float const points = ExplosionLoss(world);
+        auto addKey = [](std::vector<DutyKey>& keys, DutyKey const& key)
+        {
+            if (std::find(keys.begin(), keys.end(), key) == keys.end())
+                keys.push_back(key);
+        };
+
         for (EnemyFacts const& e : world.enemies)
         {
             // Crowd-controlled bombs count too: whether a stunned bomb still explodes is not
             // known (scenario 8, 1.3), it has to die either way.
             if (e.entry != NPC_WALKING_BOMB || !e.acting || !e.health)
                 continue;
-            bool const covered = std::any_of(plan.intercepts.begin(), plan.intercepts.end(),
-                [&e](InterceptDuty const& d) { return d.enemy == e.guid; });
-            if (!covered)
-                bombs.push_back(&e);
-        }
-        if (bombs.empty())
-            return;
 
-        // Closest to its victim first (same order as FocusAssigner).
-        auto toVictim = [&world](EnemyFacts const* e)
-        {
-            PartyMemberFacts const* v = world.FindMember(e->victim);
-            return v ? PackResolver::Distance(e->pos, v->pos) : 0.0f;
-        };
-        std::stable_sort(bombs.begin(), bombs.end(), [&toVictim](EnemyFacts const* a, EnemyFacts const* b)
-        {
-            return toVictim(a) < toVictim(b);
-        });
-
-        std::set<ObjectGuid> busy;
-        for (InterceptDuty const& d : plan.intercepts)
-            busy.insert(d.bot);
-        busy.insert(m_presser);
-
-        for (EnemyFacts const* bomb : bombs)
-        {
-            PartyMemberFacts const* chosen = nullptr;
-            for (uint8 role : { uint8(ROLE_RANGE_DPS), uint8(ROLE_MELEE_DPS) })
+            // FocusAssigner may intercept the same bomb (a self-destruct): one bot kills it,
+            // whichever of the two needs is answered first.
+            DutyKey const handled{ DutyKeyKind::EnemyHandled, e.guid };
+            for (DutyNeed& n : needs)
             {
-                float const range = role == ROLE_RANGE_DPS ? FocusAssigner::INTERCEPT_RANGE
-                                                           : FocusAssigner::MELEE_INTERCEPT_RANGE;
-                float bestDistance = 0.0f;
-                for (PartyMemberFacts const& m : world.party)
-                {
-                    if (!IsDamageDealerBot(m, role) || busy.count(m.guid))
-                        continue;
-                    float const d = PackResolver::Distance(m.pos, bomb->pos);
-                    if (d > range)
-                        continue;
-                    if (!chosen || d < bestDistance)
-                    {
-                        chosen = &m;
-                        bestDistance = d;
-                    }
-                }
-                if (chosen)
-                    break;
+                if (n.kind != DutyKind::Intercept || n.target != e.guid)
+                    continue;
+                addKey(n.blockedBy, handled);
+                addKey(n.marks, handled);
             }
-            if (!chosen)
-                continue;
 
-            InterceptDuty d;
-            d.enemy = bomb->guid;
-            d.bot = chosen->guid;
-            d.points = ExplosionLoss(world);
-            d.reason = "thermaplugg: walking bomb";
-            busy.insert(chosen->guid);
-            plan.intercepts.push_back(d);
+            DutyNeed need;
+            need.kind = DutyKind::Intercept;
+            need.target = e.guid;
+            need.now = true;
+            need.points = points;
+            need.reason = "thermaplugg: walking bomb";
+            need.blockedBy.push_back(handled);
+            need.marks.push_back(handled);
+            // Equal points: closest to its victim first (same order as FocusAssigner).
+            if (PartyMemberFacts const* victim = world.FindMember(e.victim))
+                need.tieMs = uint32(PackResolver::Distance(e.pos, victim->pos) * 1000.0f);
+
+            // Ranged first, then melee close to the bomb, the closest first; never the presser.
+            for (PartyMemberFacts const& m : world.party)
+            {
+                bool const ranged = IsDamageDealerBot(m, ROLE_RANGE_DPS);
+                if ((!ranged && !IsDamageDealerBot(m, ROLE_MELEE_DPS)) || m.guid == m_presser)
+                    continue;
+                float const range = ranged ? FocusAssigner::INTERCEPT_RANGE : FocusAssigner::MELEE_INTERCEPT_RANGE;
+                float const d = PackResolver::Distance(m.pos, e.pos);
+                if (d > range)
+                    continue;
+                DutyCandidate c;
+                c.bot = m.guid;
+                c.rank = (ranged ? RANGED_FIRST_RANK : 0.0f) - d;
+                need.candidates.push_back(c);
+            }
+            if (!need.candidates.empty())
+                needs.push_back(std::move(need));
         }
-    }
-
-    void GnomereganThermaplugg::AdjustPlan(WorldModel const& world, TeamPlan& plan)
-    {
-        for (std::string& note : m_pendingNotes)
-            plan.notes.push_back(std::move(note));
-        m_pendingNotes.clear();
-        for (VoiceEvent& line : m_pendingVoice)
-            plan.voice.push_back(std::move(line));
-        m_pendingVoice.clear();
-
-        AddBombIntercepts(world, plan);
     }
 
     void GnomereganThermaplugg::Propose(TeamBotAI const* bot, WorldModel const& world,

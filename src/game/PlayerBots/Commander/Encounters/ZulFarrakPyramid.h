@@ -149,10 +149,6 @@ namespace Commander
         bool m_inGap = false;
         bool m_noRest = false;
         bool m_wave3Noted = false;
-
-        std::vector<std::string> m_pendingNotes;    // flushed into plan.notes by AdjustPlan
-
-        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

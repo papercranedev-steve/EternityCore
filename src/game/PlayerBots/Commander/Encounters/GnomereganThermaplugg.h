@@ -13,10 +13,11 @@
  * Gnome faces (scenario 8, 1.4): Refresh reads the six face gameobjects. Lit (spawning bombs)
  * = GO_STATE_ACTIVE, dark = GO_STATE_READY; why, see FaceIsLit in the .cpp.
  *
- * Plan (AdjustPlan):
- *   - Every bomb in world.enemies gets an intercept. FocusAssigner already intercepts
- *     self-destructing enemies; this only adds the bombs it left out (ranged first, then melee
- *     close to the bomb, never the button presser).
+ * Duties (OfferDuties, into the one DutyAllocator run):
+ *   - Every bomb in world.enemies gets an intercept need (points = one explosion): ranged
+ *     first, then melee close to the bomb, the closest first, never the button presser.
+ *     FocusAssigner may offer its own intercept of the same bomb (a self-destruct): both
+ *     share the key EnemyHandled(bomb), so one bot is sent.
  *
  * Proposals:
  *   Button presser (one melee damage dealer, else one ranged; picked in Refresh at
@@ -74,6 +75,9 @@ namespace Commander
         static constexpr float PRESSER_STAY_HEALTH_PCT = 40.0f;
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
         static constexpr float USE_SEC = 1.0f;          // stop, use, turn around
+        // Bomb intercept candidates: rank = this for ranged (0 for melee) minus the distance,
+        // so any ranged in reach comes before any melee.
+        static constexpr float RANGED_FIRST_RANK = 1000.0f;
 
         // Faces are ~50 yd and buttons ~40 yd from the boss.
         static constexpr float OBJECT_SEARCH_RADIUS = 80.0f;
@@ -97,7 +101,7 @@ namespace Commander
         char const* GetId() const override { return "thermaplugg"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(TeamBotAI* bot, WorldModel const& world) override;
-        void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
+        void OfferDuties(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& needs) const override;
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
@@ -123,7 +127,6 @@ namespace Commander
         // The presser is within INTERACTION_DISTANCE of the face's button.
         bool PresserAtButton(TeamBotAI* bot, Face const& f) const;
         void PickPresser(WorldModel const& world);
-        void AddBombIntercepts(WorldModel const& world, TeamPlan& plan) const;
 
         void ProposePresser(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeMelee(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
@@ -146,10 +149,6 @@ namespace Commander
 
         ObjectGuid m_presser;
         bool m_presserNoted = false;
-
-        std::vector<std::string> m_pendingNotes;    // flushed into plan.notes by AdjustPlan
-
-        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 

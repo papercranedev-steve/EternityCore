@@ -63,7 +63,10 @@ namespace Commander
         m_plan.noRest = m_activeEncounter && m_activeEncounter->ForbidsRest();
         RunAssigners(assigners);
         if (m_activeEncounter)
+        {
             m_activeEncounter->AdjustPlan(m_world, m_plan);
+            m_activeEncounter->FlushMessages(m_plan);
+        }
         PatrolPlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op unless guarding off a patrol
         CasterLurePlanner::Step(m_plan, m_world, bot->me->GetMap(), nowMs);    // no-op without a lure searching
         ApplyEmergencyRoles(bot);
@@ -253,7 +256,8 @@ namespace Commander
 
     void PartyCommander::RunAssigners(AssignerList const& assigners)
     {
-        // 1. Situation, then the task modules that still assign directly (IAssigner.h).
+        // 1. Situation, then the task modules that still assign directly (IAssigner.h). The
+        // boss module shapes the doctrine in between (IEncounter::ShapeDoctrine).
         for (AssignStage stage : { AssignStage::Situation, AssignStage::Tasks })
         {
             for (auto const& slot : assigners)
@@ -266,6 +270,12 @@ namespace Commander
                     slot->module->Assign(m_world, m_plan);
                 else
                     slot->module->Clear(m_plan);
+            }
+            if (stage == AssignStage::Situation && m_activeEncounter)
+            {
+                Trace::Scope scope("encounter");
+                scope.Label("%s doctrine", m_activeEncounter->GetId());
+                m_activeEncounter->ShapeDoctrine(m_world, m_plan);
             }
         }
 
@@ -285,6 +295,13 @@ namespace Commander
             }
             else
                 slot->module->Clear(m_plan);
+        }
+        // The boss module's needs, and its limits on the others' (IEncounter::OfferDuties).
+        if (m_activeEncounter)
+        {
+            Trace::Scope scope("encounter");
+            scope.Label("%s offer", m_activeEncounter->GetId());
+            m_activeEncounter->OfferDuties(m_world, m_plan, needs);
         }
         // Shared cooldowns (the shocks): the allocator sees spending one as spending the others.
         auto const cooldownCategory = [](uint32 spellId) -> uint32

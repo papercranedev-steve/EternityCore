@@ -18,12 +18,15 @@
  *   door, not farther from the landing point than the door plus ROOM_MARGIN) and alive.
  *   Guardians are put in a room by the same test (or by the room of the marked member they hit).
  *
- * Plan (AdjustPlan):
- *   - A note for the leader when a healer is teleported (once per teleport).
- *   - Intercepts on guardians are dropped unless the interceptor is in the guardian's room:
- *     FocusAssigner intercepts "summon on a non-tank bot" by distance only, so a ranged bot in
- *     the hall within 40 yd of a guardian behind a closed door would be sent after it.
- *   - While Gandling is alive and acting, a party focus on a guardian is moved back to him.
+ * Plan:
+ *   - A note for the leader when a healer is teleported (once per teleport, Refresh).
+ *   - OfferDuties: intercept candidates on guardians are taken off unless the bot is in the
+ *     guardian's room (kept in `rejected` for the log): FocusAssigner intercepts "summon on a
+ *     non-tank bot" by distance only, so a ranged bot in the hall within 40 yd of a guardian
+ *     behind a closed door would be sent after it. Before the allocation, so that bot can
+ *     still get another duty.
+ *   - AdjustPlan: while Gandling is alive and acting, a party focus on a guardian is moved
+ *     back to him.
  *
  * Proposals:
  *   Teleported bot (not healer), Urgent, Attack the closest guardian that hits it or is in its
@@ -86,6 +89,7 @@ namespace Commander
         char const* GetId() const override { return "gandling"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(TeamBotAI* bot, WorldModel const& world) override;
+        void OfferDuties(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& needs) const override;
         void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
@@ -126,10 +130,6 @@ namespace Commander
         std::vector<LastPos> m_lastPos;         // party positions of the previous refresh
         std::vector<Teleported> m_teleported;
         std::vector<Guardian> m_guardians;      // alive, this refresh
-
-        std::vector<std::string> m_pendingNotes;    // flushed into plan.notes by AdjustPlan
-
-        std::vector<VoiceEvent> m_pendingVoice;      // flushed into plan.voice by AdjustPlan (the party voice)
     };
 }
 
