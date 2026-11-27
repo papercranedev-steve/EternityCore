@@ -145,6 +145,9 @@ bool TeamBotAI::RunCommanderHook(bool outOfCombatControl, bool needsRest, bool r
     if (Unit* pOld = me->GetVictim())
         if (!IsValidHostileTarget(pOld))
             me->AttackStop();
+    // The same for a victim the doctrine says hands off (a damage limit reached, no melee).
+    if (me->IsInCombat() && sCommanderMgr.IsEnabled())
+        StopHandsOffVictims();
     CancelSplashNearKeptControl();
 
     // Commander behaviors run before movement, so they can pick a target or a position
@@ -901,7 +904,47 @@ bool TeamBotAI::IsValidHostileTarget(Unit const* pTarget) const
     // (Coordination/Doctrine/ControlledEnd.h); everyone else leaves a breakable control alone.
     bool const valid = CombatBotBaseAI::IsValidHostileTarget(pTarget) ||
                       (CombatBotBaseAI::IsValidHostileTargetIgnoringControl(pTarget) && IsAssignedToBreakControl(pTarget));
-    return valid && !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget);
+    if (!valid)
+        return false;
+    // A member mind controlled by a creature is left alone, unless the Commander sent this
+    // bot to hit it free (MEMBER_HIT_TO_FREE: Anastari's Possess ends below 25%).
+    return !Commander::VetoChecks::IsCharmedPartyMember(this, pTarget) || IsSentToFree(pTarget);
+}
+
+bool TeamBotAI::IsSentToFree(Unit const* pTarget) const
+{
+    if (!pTarget || !me->IsInCombat())
+        return false;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    return commander && commander->GetPlan().SentToFree(me->GetObjectGuid(), pTarget->GetObjectGuid());
+}
+
+void TeamBotAI::StopHandsOffVictims()
+{
+    Unit* pVictim = me->GetVictim();
+    Pet* pPet = me->GetPet();
+    Unit* pPetVictim = pPet && pPet->IsAlive() && pPet->GetCharmInfo() ? pPet->GetVictim() : nullptr;
+    if (!pVictim && !pPetVictim)
+        return;
+    std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me);
+    if (!commander)
+        return;
+    Commander::TeamPlan const& plan = commander->GetPlan();
+    // Swings and auto shots are no casts: the cast checks do not see them.
+    if (pVictim && Commander::Constraints::HandsOff(this, plan, pVictim, nullptr))
+    {
+        me->AttackStop();
+        if (me->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+            me->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    }
+    // The pet at its stop line: back to the bot (the Follow button, as Arbiter's PetFollow).
+    if (pPetVictim)
+    {
+        Unit const* pTheirVictim = pPetVictim->GetVictim();
+        if (plan.DamageHeld(ObjectGuid(), pPetVictim->GetObjectGuid(), pPetVictim->GetHealthPercent(),
+                            pTheirVictim ? pTheirVictim->GetObjectGuid() : ObjectGuid()))
+            pPet->HandlePetCommand(COMMAND_FOLLOW, nullptr);
+    }
 }
 
 bool TeamBotAI::IsAssignedToBreakControl(Unit const* pTarget) const

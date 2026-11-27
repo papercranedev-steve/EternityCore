@@ -396,7 +396,15 @@ review.detectors[#review.detectors + 1] = { kind = "healgap", run = function(rs,
     for k, i in ipairs(ctx.party) do
         local u = ctx.members[k]
         local hp = pct(i.hp, i.maxhp)
-        if not i.alive or hp >= LOW_HP_CLEAR_PCT then
+        -- A member an enemy controls (Possess, Dominate Mind) is hostile to the others: not
+        -- healed on purpose (strat-20261127-002326 #23 was one).
+        local controlled = false
+        if u and u:exists() then
+            for kk, other in ipairs(ctx.members) do
+                if kk ~= k and other:exists() and u:hostile(other) then controlled = true break end
+            end
+        end
+        if not i.alive or controlled or hp >= LOW_HP_CLEAR_PCT then
             rs.lowSince[i.guid] = nil
             rs.lowReported[i.guid] = nil
         elseif hp < LOW_HP_PCT then

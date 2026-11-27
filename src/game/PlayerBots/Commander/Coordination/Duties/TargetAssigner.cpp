@@ -11,6 +11,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Timer.h"
 #include <algorithm>
+#include <limits>
 
 namespace Commander
 {
@@ -63,6 +64,9 @@ namespace Commander
         for (Pending const& p : m_pendingControls)
             if (p.enemy == e.guid && p.controller != bot.guid)
                 return false;
+        // A boss module's marks: a damage limit reached, no melee on it (Constraints::HandsOff).
+        if (plan.DamageHeld(bot.guid, e.guid, e.healthPct, e.victim) || plan.MeleeBlock(bot.guid, bot.role, e.guid))
+            return false;
         // Patrol path (unless it is this bot's intercept), the player's "leave it alone".
         return plan.MayEngage(bot.guid, e.guid);
     }
@@ -145,8 +149,10 @@ namespace Commander
                 // (party-wide: no bot's intercept exception)
                 // A melee straggler on its way is the tank's (Stragglers.h).
                 // An off-tank's enemy is killed last (OffTank.h).
+                // A boss module's damage limit reached (VanCleef held at his summon line).
                 return FocusAssigner::IsEligible(world, e) && !excluded(e.guid) && plan.MayEngage(ObjectGuid(), e.guid) &&
-                       !plan.doctrine.Has(e.guid, STAMP_STRAGGLER | STAMP_OFF_TANK);
+                       !plan.doctrine.Has(e.guid, STAMP_STRAGGLER | STAMP_OFF_TANK | STAMP_NO_MELEE) &&
+                       !plan.DamageHeld(ObjectGuid(), e.guid, e.healthPct, e.victim);
             };
 
             // Doctrine (TacticalDoctrine.h, OutlierTactic::KillFirst): the pile is left to area
@@ -327,11 +333,64 @@ namespace Commander
         }
     }
 
+    std::vector<std::pair<ObjectGuid, ObjectGuid>> TargetAssigner::ChooseFreeing(
+        WorldModel const& world, TeamPlan const& plan, std::vector<PartyMemberFacts const*> const& attackers)
+    {
+        std::vector<std::pair<ObjectGuid, ObjectGuid>> sent;
+        auto taken = [&sent](ObjectGuid bot)
+        {
+            return std::any_of(sent.begin(), sent.end(), [bot](auto const& s) { return s.first == bot; });
+        };
+        for (DoctrineMember const& dm : plan.doctrine.members)
+        {
+            if (!(dm.stamps & MEMBER_HIT_TO_FREE))
+                continue;
+            PartyMemberFacts const* ally = world.FindMember(dm.guid);
+            if (!ally || !ally->alive || !ally->charmed)
+                continue;
+            DamageLimit const* limit = plan.doctrine.LimitOn(dm.guid);
+            if (limit && ally->healthPct <= limit->stopPct)
+                continue;   // at its line: the game frees it, nobody hits it more
+            float budget = std::numeric_limits<float>::infinity();
+            float window = 0.0f;
+            if (limit)
+            {
+                budget = float(ally->health) - limit->keepPct / 100.0f * float(ally->maxHealth);
+                window = limit->windowSec;
+            }
+
+            std::vector<PartyMemberFacts const*> pool;
+            for (PartyMemberFacts const* m : attackers)
+                if (m->guid != dm.guid && !taken(m->guid))
+                    pool.push_back(m);
+            // Hardest hitters first, as many as the window allows; at least the softest one.
+            std::stable_sort(pool.begin(), pool.end(), [](PartyMemberFacts const* a, PartyMemberFacts const* b)
+            {
+                return a->soloDps > b->soloDps;
+            });
+            float burst = 0.0f;
+            bool any = false;
+            for (PartyMemberFacts const* m : pool)
+            {
+                float const add = m->soloDps * window;
+                if (burst + add > budget)
+                    continue;
+                burst += add;
+                sent.emplace_back(m->guid, dm.guid);
+                any = true;
+            }
+            if (!any && !pool.empty())
+                sent.emplace_back(pool.back()->guid, dm.guid);
+        }
+        return sent;
+    }
+
     void TargetAssigner::Distribute(WorldModel const& world, TeamPlan& plan)
     {
         std::vector<TargetDuty> targets;
         {
             TargetContext const ctx(world, plan);
+            std::vector<PartyMemberFacts const*> attackers;
             for (PartyMemberFacts const& m : world.party)
             {
                 // By function, not role (PartyMemberFacts::functions, TeamPlan::coverage); a
@@ -342,6 +401,27 @@ namespace Commander
                     continue;
                 if (HeldOut(world, plan, m))
                     continue;
+                attackers.push_back(&m);
+            }
+            // Members a boss module marks to hit free (MEMBER_HIT_TO_FREE): before every enemy.
+            std::vector<std::pair<ObjectGuid, ObjectGuid>> const freeing = ChooseFreeing(world, plan, attackers);
+
+            for (PartyMemberFacts const* pm : attackers)
+            {
+                PartyMemberFacts const& m = *pm;
+                auto const f = std::find_if(freeing.begin(), freeing.end(), [&m](auto const& s) { return s.first == m.guid; });
+                if (f != freeing.end())
+                {
+                    TargetDuty d;
+                    d.bot = m.guid;
+                    d.enemy = f->second;
+                    d.forced = true;
+                    d.reason = "hit the controlled member free";
+                    TargetDuty const* previous = plan.FindTargetFor(m.guid);
+                    d.sinceMs = previous && previous->enemy == d.enemy ? previous->sinceMs : world.refreshedAtMs;
+                    targets.push_back(d);
+                    continue;
+                }
                 EnemyFacts const* current = ctx.Find(m.victim);
                 if (current && !ctx.Hittable(*current, m))
                     current = nullptr;

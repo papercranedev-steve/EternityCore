@@ -1265,6 +1265,46 @@ namespace Commander
         // 2026-11-15): not loose while on it (no rescue, the main tank leaves it), damage dealers
         // kill it last and leave room under the off-tank's threat, no control on it.
         STAMP_OFF_TANK      = 1 << 21,
+        // Boss modules (Encounters/IEncounter.h ShapeDoctrine, encounter layers doc 2.2-2.3):
+        // damage on it only down to DoctrineEnemy::limit (VanCleef held at his summon line).
+        STAMP_DAMAGE_LIMIT  = 1 << 22,
+        // Nobody fights it in melee (it blows up next to whoever hits it: Walking Bomb), except
+        // the bot sent to intercept it (TeamPlan::MeleeBlock).
+        STAMP_NO_MELEE      = 1 << 23,
+    };
+
+    // Damage on a unit only down to a line (STAMP_DAMAGE_LIMIT, MEMBER_DAMAGE_LIMIT). Read live
+    // (the unit's health now, not the refresh's) by Constraints and TeamBotAI: at or below
+    // `stopPct` nobody hits it any more (attacks, swings, pets: TeamPlan::DamageHeld); a damage
+    // spell whose hit (DamageSpells::Estimate x Constraints::LIMIT_HIT_MARGIN) would take it below
+    // `keepPct` is refused, and so is every periodic damage spell (it keeps ticking past the line).
+    struct DamageLimit
+    {
+        float stopPct = 0.0f;
+        float keepPct = 0.0f;
+        // How late the game reacts to the line (a script's check interval): damage the attackers
+        // deal in this long must not take it below keepPct, which caps how many hit it at once
+        // (TargetAssigner, members to free). 0 = not used.
+        float windowSec = 0.0f;
+        // The enemy's own victim keeps hitting it (the tank holding it keeps its threat).
+        bool holderKeepsHitting = false;
+    };
+
+    // Doctrine marks on a party member (DoctrineMember::stamps).
+    enum MemberStamp : uint32
+    {
+        // Controlled by an enemy, freed by damage (Anastari's Possess ends below 25%): the bots
+        // TargetAssigner sends may attack it (TeamPlan::SentToFree, TeamBotAI::IsValidHostileTarget).
+        MEMBER_HIT_TO_FREE  = 1 << 0,
+        MEMBER_DAMAGE_LIMIT = 1 << 1,   // DoctrineMember::limit applies
+    };
+
+    struct DoctrineMember
+    {
+        ObjectGuid guid;
+        uint32 stamps = 0;
+        DamageLimit limit;
+        std::string why;
     };
 
     // An enemy an off-tank holds for the party (OffTank.h): kept until the enemy dies, the
@@ -1370,6 +1410,7 @@ namespace Commander
         uint8 source = 0;           // Tags::Source
         uint16 roles = 0;           // Tags::RolesOf bits
         std::string noMezWhy;       // why STAMP_NO_MEZ ("area pile", "fodder", "cleanup", "player hits it")
+        DamageLimit limit;          // STAMP_DAMAGE_LIMIT
     };
 
     struct DoctrinePlan
@@ -1448,6 +1489,43 @@ namespace Commander
         {
             DoctrineEnemy const* d = Find(enemy);
             return d && (d->stamps & stamp) != 0;
+        }
+        // The entry of `enemy`, added when the doctrine left it out (a boss module stamping an
+        // enemy that is not acting: IEncounter::ShapeDoctrine).
+        DoctrineEnemy& Enemy(ObjectGuid enemy)
+        {
+            for (DoctrineEnemy& d : enemies)
+                if (d.guid == enemy)
+                    return d;
+            enemies.emplace_back();
+            enemies.back().guid = enemy;
+            return enemies.back();
+        }
+
+        // Party members the boss module marked (IEncounter::ShapeDoctrine); rebuilt every refresh.
+        std::vector<DoctrineMember> members;
+        DoctrineMember const* FindMember(ObjectGuid member) const
+        {
+            for (DoctrineMember const& m : members)
+                if (m.guid == member)
+                    return &m;
+            return nullptr;
+        }
+        bool MemberHas(ObjectGuid member, uint32 stamp) const
+        {
+            DoctrineMember const* m = FindMember(member);
+            return m && (m->stamps & stamp) != 0;
+        }
+        // The damage limit on `unit` (an enemy or a member), or null.
+        DamageLimit const* LimitOn(ObjectGuid unit) const
+        {
+            if (DoctrineEnemy const* e = Find(unit))
+                if (e->stamps & STAMP_DAMAGE_LIMIT)
+                    return &e->limit;
+            if (DoctrineMember const* m = FindMember(unit))
+                if (m->stamps & MEMBER_DAMAGE_LIMIT)
+                    return &m->limit;
+            return nullptr;
         }
         // The planned area output on `enemy`: `areaThreat` on the pile, nothing elsewhere.
         std::vector<PlannedThreat> const& AreaThreatOn(ObjectGuid enemy) const
@@ -2085,6 +2163,42 @@ namespace Commander
             return nullptr;
         }
         bool MayEngage(ObjectGuid bot, ObjectGuid enemy) const { return !EngageBlock(bot, enemy); }
+
+        // `bot` (its role: CombatBotRoles) fights in melee: melee damage, tank, a healer whose
+        // damage tier is melee (Doctrine/HealerDamage.h).
+        bool InMelee(ObjectGuid bot, uint8 role) const
+        {
+            return role == ROLE_MELEE_DPS || role == ROLE_TANK || (role == ROLE_HEALER && healerDamage.Melee(bot));
+        }
+        // Why `bot` must not fight `enemy` in melee (STAMP_NO_MELEE), or null. Its interceptor may.
+        char const* MeleeBlock(ObjectGuid bot, uint8 role, ObjectGuid enemy) const
+        {
+            if (!doctrine.Has(enemy, STAMP_NO_MELEE) || !InMelee(bot, role))
+                return nullptr;
+            InterceptDuty const* d = FindInterceptFor(bot);
+            if (d && d->enemy == enemy)
+                return nullptr;
+            return "no melee on it";
+        }
+        // Why nobody but its holder hits `unit` (health `healthPct`, hitting `victim`) any more:
+        // its damage limit's stop line is reached (DamageLimit). Empty bot = a party-wide choice.
+        char const* DamageHeld(ObjectGuid bot, ObjectGuid unit, float healthPct, ObjectGuid victim) const
+        {
+            DamageLimit const* l = doctrine.LimitOn(unit);
+            if (!l || healthPct > l->stopPct)
+                return nullptr;
+            if (l->holderKeepsHitting && !bot.IsEmpty() && victim == bot)
+                return nullptr;
+            return "damage held at its limit";
+        }
+        // `bot` was sent to hit the party member `member` free (MEMBER_HIT_TO_FREE, TargetAssigner).
+        bool SentToFree(ObjectGuid bot, ObjectGuid member) const
+        {
+            if (!doctrine.MemberHas(member, MEMBER_HIT_TO_FREE) || bot == member)
+                return false;
+            TargetDuty const* d = FindTargetFor(bot);
+            return d && d->enemy == member;
+        }
 
         // No Charge / Intercept / Feral Charge for `bot`: the pull's tank going out to bring the
         // pack back or to a corner, walking back, or waiting where it shot for the pack to come.

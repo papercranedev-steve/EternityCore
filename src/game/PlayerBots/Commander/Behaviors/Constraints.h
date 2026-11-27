@@ -24,6 +24,9 @@
  *   Cast with a cast or        TeamPlan::ForbidsLongCast (the area phase's reserved caster,
  *   channel time               AreaPhase.h "Reservation"), except its area spells: LongCastHeld
  *   Rest                       TeamPlan::ForbidsRest
+ *   Attack, Chase, damage cast HandsOff below: a boss module's damage limit (stop line, keep
+ *                              line, no periodic damage) and no-melee mark (PetAttack: the
+ *                              stop line only)
  *   Cast time / periodic       WastedCast below: not at an enemy the others kill before it lands,
  *   damage spell               no periodic damage on one dying before it pays
  *                              (every cast of the bot, TeamBotAI::PassesPartyCastChecks)
@@ -110,6 +113,20 @@ namespace Commander
                                SpellEntry const* spell, uint32 nowMs);
         // Cheap test before the commander lookup: WastedCast may answer for `spell`.
         bool MayBeWasted(TeamBotAI const* bot, SpellEntry const* spell);
+
+        // A hit's estimate (DamageSpells::Estimate, no crit) times this against a damage limit:
+        // a crit, and the others' hits landing in the same moment.
+        static constexpr float LIMIT_HIT_MARGIN = 2.0f;
+
+        // The doctrine's hands-off marks for `bot` hitting `target` now (live health), or null:
+        //   TeamPlan::DamageHeld  its damage limit's stop line is reached;
+        //   TeamPlan::MeleeBlock  STAMP_NO_MELEE and the bot fights in melee (`spell` null: an
+        //                         attack or a swing) or `spell` is a melee ability.
+        // With a damage `spell` also (DamageLimit): no periodic damage on a limited unit, and
+        // no hit that would take it below the limit's keep line. Used by Broken (Attack, Chase,
+        // PetAttack), CastForbidden (every cast of the bot) and TeamBotAI (a victim it already
+        // fights is dropped, its pet called back).
+        char const* HandsOff(TeamBotAI const* bot, TeamPlan const& plan, Unit const* target, SpellEntry const* spell);
     }
 }
 

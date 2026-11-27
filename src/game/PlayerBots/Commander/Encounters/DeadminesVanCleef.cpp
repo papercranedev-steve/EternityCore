@@ -6,11 +6,6 @@
  *                    healer for LOOSE_SEC (death penalty included if the healer would not last).
  *                    Blackguard melee comes from the last Blackguard seen this fight (the
  *                    originals fight first), else GUARD_DPS_SHARE x VanCleef's melee.
- *   Hold benefit   = risk x SummonLoss(2 + original guards alive). risk is in 0..1:
- *                    1 while an original guard is alive (four elites at once), else the larger of
- *                    the tank-health and healer-mana shortfalls, each ramping from 0 at the
- *                    ready threshold to 1 at RISK_RAMP_PCT below it.
- *   Hold cost      = Value::LostAction for one bot tick (same as ThreatBehavior's "near aggro, stop").
  *   Area threat    = GROUP_THREAT_SHARE x SummonLoss(2) (Demoralizing: FALLBACK_THREAT_SHARE),
  *                    cost one global cooldown of the tank.
  *   Heal veto      = SummonLoss(2), cost EncounterHelpers::HealDelayCost (two bot ticks).
@@ -32,7 +27,6 @@
 #include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Classes/ClassKit.h"
 #include "Commander/Behaviors/Combat/ThreatBehavior.h"
-#include "Commander/Behaviors/Combat/TargetBehavior.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Map.h"
@@ -58,11 +52,6 @@ namespace Commander
         bool IsOriginalGuard(EnemyFacts const& e)
         {
             return e.entry == DeadminesVanCleef::NPC_BLACKGUARD && !e.summoned;
-        }
-
-        float Ramp(float ready, float value, float span)
-        {
-            return std::min(1.0f, std::max(0.0f, (ready - value) / span));
         }
     }
 
@@ -203,37 +192,28 @@ namespace Commander
             Say(EncounterHelpers::Line("voice.boss.vancleef.push", VoiceTier::Essential));
         }
 
-        m_holdRisk = guardsUp ? 1.0f : std::max(Ramp(TANK_READY_PCT, m_tankPct, RISK_RAMP_PCT),
-                                                Ramp(HEALER_READY_MANA_PCT, m_healerManaPct, RISK_RAMP_PCT));
-        m_pushLoss = SummonLoss(world, boss, SUMMON_COUNT + m_originalsAlive);
         m_summonLoss = SummonLoss(world, boss, SUMMON_COUNT);
     }
 
-    void DeadminesVanCleef::AdjustPlan(WorldModel const& world, TeamPlan& plan)
+    void DeadminesVanCleef::ShapeDoctrine(WorldModel const& /*world*/, TeamPlan& plan)
     {
-        // While damage on the boss is held, the original guards are what the damage dealers
-        // should be doing anyway: point the focus at the weakest one.
-        if (m_holdDamage && !m_originals.empty() && (plan.focus.enemy.IsEmpty() || plan.focus.enemy == m_boss))
-        {
-            EnemyFacts const* weakest = nullptr;
-            for (ObjectGuid const& guid : m_originals)
-                if (EnemyFacts const* e = world.FindEnemy(guid))
-                    if (e->acting && (!weakest || e->health < weakest->health))
-                        weakest = e;
-            if (weakest)
-                EncounterHelpers::SetFocus(world, plan, *weakest, "vancleef: guards first while holding the boss");
-        }
+        // Holding before the summon: damage on the boss stops at the band, no hit may take him
+        // past the summon line, his tank keeps its threat. The focus and the targets then go
+        // to the guards by themselves (TargetAssigner leaves an enemy at its stop line).
+        if (!m_holdDamage || m_boss.IsEmpty())
+            return;
+        DoctrineEnemy& boss = plan.doctrine.Enemy(m_boss);
+        boss.stamps |= STAMP_DAMAGE_LIMIT;
+        boss.limit.stopPct = HOLD_BAND_PCT;
+        boss.limit.keepPct = SUMMON_PCT;
+        boss.limit.holderKeepsHitting = true;
     }
 
     void DeadminesVanCleef::Propose(TeamBotAI const* bot, WorldModel const& world,
-                                    TeamPlan const& plan, std::vector<Proposal>& out) const
+                                    TeamPlan const& /*plan*/, std::vector<Proposal>& out) const
     {
         switch (bot->GetRole())
         {
-            case ROLE_MELEE_DPS:
-            case ROLE_RANGE_DPS:
-                ProposeDamage(bot, world, plan, out);
-                break;
             case ROLE_TANK:
                 ProposeTank(bot, world, out);
                 break;
@@ -243,51 +223,6 @@ namespace Commander
             default:
                 break;
         }
-    }
-
-    void DeadminesVanCleef::ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                          std::vector<Proposal>& out) const
-    {
-        if (!m_holdDamage)
-            return;
-        Unit const* victim = bot->me->GetVictim();
-        if (!victim || victim->GetObjectGuid() != m_boss)
-            return;
-        PartyMemberFacts const* myFacts = world.FindMember(bot->me->GetObjectGuid());
-        if (!myFacts)
-            return;
-
-        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
-        float const holdBenefit = m_holdRisk * m_pushLoss;
-
-        // Fix: AdjustPlan points the focus at an original guard while the boss is held, but this
-        // HoldFire (same tier, benefit = the whole push loss) outscored the focus switch,
-        // so damage dealers stood idle on the boss for up to MAX_HOLD_MS instead of killing the
-        // guards. Switching avoids the push as well and keeps the damage HoldFire throws away;
-        // if the switch cannot execute (target invalid), the arbiter falls back to HoldFire.
-        if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != m_boss &&
-            std::find(m_originals.begin(), m_originals.end(), plan.focus.enemy) != m_originals.end())
-        {
-            Unit* guard = bot->me->GetMap()->GetUnit(plan.focus.enemy);
-            if (guard && guard->IsAlive() && bot->me->IsWithinDistInMap(guard, TargetBehavior::FOCUS_RANGE))
-            {
-                float walkSec = 0.0f;
-                if (bot->GetRole() == ROLE_MELEE_DPS && !bot->me->CanReachWithMeleeAutoAttack(guard))
-                    walkSec = std::max(0.0f, bot->me->GetDistance(guard) - TargetBehavior::MELEE_REACH) /
-                              TargetBehavior::RUN_YARDS_PER_SEC;
-                Proposal attack = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack,
-                                                                plan.focus.enemy);
-                attack.reason = "boss near 50% summon, kill the guards first";
-                attack.SetValue(holdBenefit + Value::LostAction(world, *myFacts, tickSec),
-                                Value::LostAction(world, *myFacts, ThreatBehavior::SWITCH_TARGET_SEC + walkSec));
-                out.push_back(attack);
-            }
-        }
-
-        Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::HoldFire);
-        p.reason = "boss near 50% summon, not ready";
-        p.SetValue(holdBenefit, Value::LostAction(world, *myFacts, tickSec));
-        out.push_back(p);
     }
 
     void DeadminesVanCleef::ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const

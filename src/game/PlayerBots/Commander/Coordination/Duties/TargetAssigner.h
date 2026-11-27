@@ -26,7 +26,11 @@
  * Nobody gets a target: healers; during a retreat; out of combat while a pull holds them
  *   (non-tanks in Approach / Return / Settle, the pull's tank in WaitReady / Approach: PullBehavior
  *   opens).
+ *   A boss module's marks (Constraints::HandsOff): an enemy at its damage limit's stop line
+ *   (not for its own holder when the limit lets it keep hitting), no melee on a STAMP_NO_MELEE
+ *   enemy (its interceptor may); neither is the focus.
  * Per bot, first that applies:
+ *   hit a mind controlled member free (ChooseFreeing)  forced; the target is a party member
  *   intercept (DutyKind::Intercept primary)          urgent, benefit = its points
  *   player order `.partybot attackstart` / pull     forced
  *   ControlledEnd: this bot wakes the last control  forced
@@ -46,9 +50,13 @@
 #define MANGOS_COMMANDER_TARGET_ASSIGNER_H
 
 #include "Commander/Coordination/IAssigner.h"
+#include <utility>
+#include <vector>
 
 namespace Commander
 {
+    struct PartyMemberFacts;
+
     class TargetAssigner : public IAssigner
     {
     public:
@@ -65,6 +73,15 @@ namespace Commander
 
         // Step 3 above, from plan.focus and plan.duties as they are now.
         static void Distribute(WorldModel const& world, TeamPlan& plan);
+
+        // Who hits which mind controlled member free (DoctrineMember MEMBER_HIT_TO_FREE), as
+        // (bot, member) pairs, before any enemy is chosen. Per member above its damage limit's
+        // stop line: the hardest hitters of `attackers` first, as long as their damage over the
+        // limit's window (PartyMemberFacts::soloDps x DamageLimit::windowSec) fits in the health
+        // above its keep line; at least the softest hitter. Forced duties (Urgent, not valued);
+        // the member's limit then stops every hit at the line (Constraints::HandsOff).
+        static std::vector<std::pair<ObjectGuid, ObjectGuid>> ChooseFreeing(
+            WorldModel const& world, TeamPlan const& plan, std::vector<PartyMemberFacts const*> const& attackers);
     };
 }
 

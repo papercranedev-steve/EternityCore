@@ -6,8 +6,6 @@
  *   Press a button = BOMBS_PER_FACE_WINDOW x Explosion, against Value::LostAction for
  *                    (presser -> button + button -> boss) / RUN_YARDS_PER_SEC + USE_SEC.
  *                    Value::LostAction already turns time away from the boss into points.
- *   Melee off bomb = Explosion, against a target switch (ThreatBehavior::SWITCH_TARGET_SEC)
- *                    plus the walk back to the boss, or one tick for HoldFire.
  *   Bomb intercept = Explosion (InterceptDuty::points, TargetBehavior's switch benefit).
  *
  * Known limits:
@@ -15,8 +13,7 @@
  *     world.enemies (WorldModelBuilder takes creatures with us on their threat list), so
  *     nobody intercepts them until they pick a target (scenario 8, 3.4 item 2). They usually
  *     do that 14 yd from someone, about 2 s before they explode.
- *   - Melee on a bomb with no boss left only holds fire: HoldFire keeps the victim and does
- *     not stop a chase already running, so a melee walking up to a bomb keeps walking.
+ *   - A pet's melee on a bomb is not stopped (STAMP_NO_MELEE judges the bots only).
  *   - No kiting, no dodging the blast, no crowd control of bombs, no pre-positioning of the
  *     tank before Knock Away, no top-up before the threat wipe (scenario 8, 3.2).
  *   - One presser at a time, sticky while alive, on this map, a damage dealer bot and at
@@ -369,8 +366,6 @@ namespace Commander
     {
         if (!m_presser.IsEmpty() && bot->me->GetObjectGuid() == m_presser)
             ProposePresser(bot, world, out);
-        if (bot->GetRole() == ROLE_MELEE_DPS)
-            ProposeMelee(bot, world, plan, out);
     }
 
     void GnomereganThermaplugg::ProposePresser(TeamBotAI const* bot, WorldModel const& world,
@@ -428,41 +423,13 @@ namespace Commander
         out.push_back(p);
     }
 
-    void GnomereganThermaplugg::ProposeMelee(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                                             std::vector<Proposal>& out) const
+    void GnomereganThermaplugg::ShapeDoctrine(WorldModel const& world, TeamPlan& plan)
     {
-        Player* me = bot->me;
-        Unit const* victim = me->GetVictim();
-        if (!victim || victim->GetEntry() != NPC_WALKING_BOMB)
-            return;
-        ObjectGuid const self = me->GetObjectGuid();
-        if (InterceptDuty const* duty = plan.FindInterceptFor(self))
-            if (duty->enemy == victim->GetObjectGuid())
-                return;     // assigned to it (it is already close): kill it
-        PartyMemberFacts const* myFacts = world.FindMember(self);
-        if (!myFacts || !myFacts->CanAct())
-            return;
-
-        float const loss = ExplosionLoss(world);
-        if (m_bossAlive)
-        {
-            Unit* boss = me->GetMap()->GetUnit(m_boss);
-            if (boss && boss->IsAlive() && bot->IsValidHostileTarget(boss))
-            {
-                float const walkSec = me->CanReachWithMeleeAutoAttack(boss) ? 0.0f :
-                    me->GetDistance(boss) / RUN_YARDS_PER_SEC;
-                Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Attack, m_boss);
-                p.reason = "melee off the walking bomb, back on the boss";
-                p.SetValue(loss, Value::LostAction(world, *myFacts, ThreatBehavior::SWITCH_TARGET_SEC + walkSec));
-                out.push_back(p);
-                return;
-            }
-        }
-
-        float const tickSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f;
-        Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::HoldFire);
-        p.reason = "melee does not hit walking bombs, ranged kill them";
-        p.SetValue(loss, Value::LostAction(world, *myFacts, tickSec));
-        out.push_back(p);
+        // A bomb blows up next to whoever hits it in melee, and the blast takes the whole melee
+        // pile: ranged kill them (their intercepts: OfferDuties). A melee bot on one drops it
+        // and gets another target (TeamBotAI::StopHandsOffVictims, TargetAssigner).
+        for (EnemyFacts const& e : world.enemies)
+            if (e.entry == NPC_WALKING_BOMB && e.health)
+                plan.doctrine.Enemy(e.guid).stamps |= STAMP_NO_MELEE;
     }
 }

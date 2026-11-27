@@ -13,11 +13,14 @@
  * The 50% summon (creature_ai_events 63904, spell 5200: two 0-threat elite guardians next to
  * the boss) happens once per fight; m_summonAtMs remembers when the first summon was seen.
  *
+ * Doctrine (ShapeDoctrine): the hold. While 50% < boss <= 53%, no summon yet, and (an original
+ *   guard alive || tank < 80% || lowest healer mana < 40%), capped at MAX_HOLD_MS, the boss gets
+ *   STAMP_DAMAGE_LIMIT: stop at HOLD_BAND_PCT, no hit past SUMMON_PCT, his tank keeps hitting.
+ *   Nobody else attacks him (TargetAssigner: the focus and targets go to the guards; a bot on
+ *   him drops him, TeamBotAI::StopHandsOffVictims), no cast takes him past the line, no DoTs
+ *   (Constraints::HandsOff).
+ *
  * Proposals:
- *   Damage dealers, Assigned, HoldFire on the boss while 50% < boss <= 53%, no summon yet,
- *     and (an original guard alive || tank < 80% || lowest healer mana < 40%).
- *     benefit = risk * loss of the summon going wrong (see SummonLoss in the .cpp),
- *     cost    = one tick of this bot's damage (Value::LostAction). Capped at MAX_HOLD_MS.
  *   Tank, Assigned, area threat (Thunder Clap / Consecration / Swipe, Demoralizing as a
  *     fallback) within GROUP_THREAT_WINDOW_MS of the summon while a summon is within
  *     ThreatBehavior::GROUP_THREAT_RADIUS. ThreatBehavior proposes area threat as well; this
@@ -56,8 +59,6 @@ namespace Commander
         // Give up holding after this long (healer mana barely regenerates in combat; the boss
         // keeps hitting the tank while we wait, and the player may push anyway).
         static constexpr uint32 MAX_HOLD_MS = 15000;
-        // Risk ramps from 0 at the ready threshold to 1 this many percent below it.
-        static constexpr float RISK_RAMP_PCT = 30.0f;
 
         static constexpr uint32 SUMMON_COUNT = 2;               // spell 5200: base 1 + die 1
         // Blackguard melee as a share of VanCleef's when no Blackguard was seen yet
@@ -87,7 +88,7 @@ namespace Commander
         char const* GetId() const override { return "vancleef"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(TeamBotAI* bot, WorldModel const& world) override;
-        void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
+        void ShapeDoctrine(WorldModel const& world, TeamPlan& plan) override;
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         void OnReset() override;
@@ -95,9 +96,6 @@ namespace Commander
         Phase GetPhase() const { return m_phase; }
 
     private:
-        // `plan`: the focus AdjustPlan set on an original guard (switch instead of holding fire).
-        void ProposeDamage(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                           std::vector<Proposal>& out) const;
         void ProposeTank(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         void ProposeHealer(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
         // Points lost when `guards` Blackguards hit the healer for LOOSE_SEC.
@@ -124,8 +122,6 @@ namespace Commander
         bool m_holdDamage = false;
         bool m_holdGivenUp = false;             // MAX_HOLD_MS reached: no more holds this fight
         uint32 m_holdSinceMs = 0;
-        float m_holdRisk = 0.0f;                // 0..1
-        float m_pushLoss = 0.0f;                // points, summon going wrong now (originals included)
         float m_summonLoss = 0.0f;              // points, the two summons alone
     };
 }

@@ -496,6 +496,14 @@ public:
     // In combat: the Commander plan sends this bot to wake `pTarget`, the first of the
     // controlled enemies that are all that is left (Commander/Coordination/Doctrine/ControlledEnd.h).
     bool IsAssignedToBreakControl(Unit const* pTarget) const;
+    // In combat: the Commander sent this bot to hit the mind controlled member `pTarget` free
+    // (TeamPlan::SentToFree, MEMBER_HIT_TO_FREE).
+    bool IsSentToFree(Unit const* pTarget) const;
+    // In combat: drop a victim the doctrine says hands off (Constraints::HandsOff without a
+    // spell: a damage limit's stop line, no melee on it), stop the auto shot on it; call the pet
+    // back from one at its stop line. Swings and auto shots are no casts, so the cast checks
+    // never see them.
+    void StopHandsOffVictims();
 
     std::vector<RaidTargetIcon> m_marksToFocus;
     // Healer damage tier the user set (`.partybot healdps 0-3`), -1 = automatic (Commander

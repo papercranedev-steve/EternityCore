@@ -118,8 +118,45 @@ namespace Commander
                 // Its damage shield / reflection is up (RoleStamps.h HoldFire).
                 if (plan.doctrine.Has(target->GetObjectGuid(), STAMP_HOLD_FIRE))
                     return "it reflects damage: hands off";
+                // A boss module's marks (damage limit, no melee).
+                if (target != me)
+                    if (char const* off = HandsOff(bot, plan, target, spell))
+                        return off;
             }
             return WakesControl(bot, world, plan, target, spell, nowMs);
+        }
+
+        char const* HandsOff(TeamBotAI const* bot, TeamPlan const& plan, Unit const* target, SpellEntry const* spell)
+        {
+            if (!target)
+                return nullptr;
+            Player* me = bot->me;
+            ObjectGuid const self = me->GetObjectGuid();
+            ObjectGuid const guid = target->GetObjectGuid();
+            Unit const* victim = target->GetVictim();
+            if (char const* held = plan.DamageHeld(self, guid, target->GetHealthPercent(),
+                                                   victim ? victim->GetObjectGuid() : ObjectGuid()))
+                return held;
+            // An attack: by the bot's way of fighting. A melee ability: by anyone.
+            if (!spell)
+                return plan.MeleeBlock(self, uint8(bot->GetRole()), guid);
+            if (spell->DmgClass == SPELL_DAMAGE_CLASS_MELEE)
+                if (char const* melee = plan.MeleeBlock(self, uint8(ROLE_MELEE_DPS), guid))
+                    return melee;
+
+            DamageLimit const* limit = plan.doctrine.LimitOn(guid);
+            if (!limit)
+                return nullptr;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (spell->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                    (spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE ||
+                     spell->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_LEECH))
+                    return "no periodic damage on it (damage limit)";
+            float const keep = limit->keepPct / 100.0f * float(target->GetMaxHealth());
+            float const hit = DamageSpells::Estimate(me, target, spell) * LIMIT_HIT_MARGIN;
+            if (float(target->GetHealth()) - hit < keep)
+                return "the hit would take it past its damage limit";
+            return nullptr;
         }
 
         char const* LongCastHeld(TeamBotAI const* bot, TeamPlan const& plan, SpellEntry const* spell)
@@ -266,8 +303,21 @@ namespace Commander
             {
                 case BotActionType::Attack:
                 case BotActionType::Chase:
+                {
+                    if (char const* block = plan.EngageBlock(self, p.action.target))
+                        return block;
+                    return HandsOff(bot, plan, bot->me->GetMap()->GetUnit(p.action.target), nullptr);
+                }
                 case BotActionType::PetAttack:
-                    return plan.EngageBlock(self, p.action.target);
+                {
+                    if (char const* block = plan.EngageBlock(self, p.action.target))
+                        return block;
+                    // (a pet's melee near a bomb is not judged: only the damage limit)
+                    Unit const* target = bot->me->GetMap()->GetUnit(p.action.target);
+                    Unit const* victim = target ? target->GetVictim() : nullptr;
+                    return target ? plan.DamageHeld(ObjectGuid(), p.action.target, target->GetHealthPercent(),
+                                                    victim ? victim->GetObjectGuid() : ObjectGuid()) : nullptr;
+                }
                 case BotActionType::Cast:
                     return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:

@@ -28,10 +28,11 @@
  *     lit while the presser is not at the button is dropped (the use did not happen).
  *     benefit = BOMBS_PER_FACE_WINDOW x explosion loss (BOMB_VICTIMS x BOMB_DAMAGE, in points),
  *     cost    = Value::LostAction for walking to the button, using it and walking back to the boss.
- *   Melee damage dealers whose target is a bomb they were not assigned to intercept, Assigned:
- *     Attack the boss if alive (benefit = one explosion, cost = a target switch plus the walk),
- *     else HoldFire (benefit = one explosion, cost = one tick of damage). Their swings put them
- *     within the 5 yd trigger range and the blast hits the whole melee pile.
+ * Doctrine (ShapeDoctrine): every bomb is stamped STAMP_NO_MELEE. Melee swings put a bot within
+ *   the 5 yd trigger range and the blast hits the whole melee pile, so no bot fighting in melee
+ *   attacks one but its interceptor (TeamPlan::MeleeBlock): TargetAssigner gives it another
+ *   target, a melee bot already on one drops it (TeamBotAI::StopHandsOffVictims, which also ends
+ *   its chase), melee abilities at a bomb are refused (Constraints::HandsOff).
  *   Tank: nothing. After Knock Away the tank's victim is still the boss, so an Attack on the boss
  *     would fail (Arbiter: same victim) and the original chase already walks it back;
  *     the team rescue (RescueAssigner) has it taunted once it is in range (scenario 8, T+17s).
@@ -101,6 +102,7 @@ namespace Commander
         char const* GetId() const override { return "thermaplugg"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(TeamBotAI* bot, WorldModel const& world) override;
+        void ShapeDoctrine(WorldModel const& world, TeamPlan& plan) override;
         void OfferDuties(WorldModel const& world, TeamPlan const& plan, std::vector<DutyNeed>& needs) const override;
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
@@ -129,8 +131,6 @@ namespace Commander
         void PickPresser(WorldModel const& world);
 
         void ProposePresser(TeamBotAI const* bot, WorldModel const& world, std::vector<Proposal>& out) const;
-        void ProposeMelee(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
-                          std::vector<Proposal>& out) const;
         // Points lost to one explosion.
         float ExplosionLoss(WorldModel const& world) const;
 
