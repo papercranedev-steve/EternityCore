@@ -4,7 +4,8 @@
  * "fightspot"). Until 2026-11-14 PatrolAssigner did this every CHECK_MS, as its move phase.
  *
  * While the party fights, the main tank (a bot) can act and holds most enemies (at least half
- * of the acting, uncontrolled ones fighting the party hit it): FightSpot::Choose, the tank's
+ * of the acting, uncontrolled ones fighting the party hit it) and most of those can follow it
+ * (not rooted: HeldMostlyRooted): FightSpot::Choose, the tank's
  * place against the field cells around it (FightSpot.h: patrols walking in, controls that
  * break on damage next to the pile, the walk). Nothing to gain there, no search (cheap every
  * refresh). A better cell: TeamPlan::fightSpot moves, with its spots (TankStanceBehavior walks
@@ -16,7 +17,7 @@
  *
  * The move ends when the tank arrived (ARRIVED_DISTANCE of the chosen spot), after
  * MOVE_TIMEOUT_MS, when no spot passed the live checks, when the tank lost most enemies on the
- * way (it takes them back first), the tank changed, or the retreat or the pull's walk out /
+ * way (it takes them back first), when most enemies on it got rooted, the tank changed, or the retreat or the pull's walk out /
  * back took over. From the new place the next refresh judges again.
  *
  * Before the fight (PlanAhead, doc step 2): a pull fought "here" (a walk-in where the pack
@@ -63,6 +64,9 @@ namespace Commander
 
         // At least half of the acting, uncontrolled enemies fighting the party hit `tank`.
         static bool HoldsMost(WorldModel const& world, ObjectGuid tank);
+        // More than half of the acting, uncontrolled enemies hitting `tank` are rooted
+        // (EnemyFacts::rooted): they would not follow a move.
+        static bool HeldMostlyRooted(WorldModel const& world, ObjectGuid tank);
 
     private:
         void PlanAhead(WorldModel const& world, TeamPlan& plan) const;

@@ -107,12 +107,15 @@ namespace Commander
         // forth beside its route, 2026-11-22).
         std::vector<ObjectGuid> const hunted = HuntedPack(world, plan);
 
-        // A whole fight on the route is PatrolAssigner's (header).
+        // A whole fight on the route is PatrolAssigner's (header): the main tank stands there or
+        // walks there (to an enemy of the fight on the route: anastari-20261127-224529, the tank
+        // went back and forth for 10 s between the chase to a Gargoyle and stepping off the route).
         if (world.HasPartyEnemy())
         {
             float tankArrive = 0.0f;
             if (PartyMemberFacts const* tank = Tanks::Main(world))
-                if (OnRoute(world, tank->pos, g.staySec, hunted, tankArrive))
+                if (OnRoute(world, tank->pos, g.staySec, hunted, tankArrive) ||
+                    OnRoute(world, tank->standAt, g.staySec, hunted, tankArrive))
                     return;
         }
 

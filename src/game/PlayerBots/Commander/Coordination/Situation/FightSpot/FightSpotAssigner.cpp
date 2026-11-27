@@ -82,6 +82,21 @@ namespace Commander
         return onTank * 2 >= total;
     }
 
+    bool FightSpotAssigner::HeldMostlyRooted(WorldModel const& world, ObjectGuid tank)
+    {
+        uint32 onTank = 0;
+        uint32 rooted = 0;
+        for (EnemyFacts const& e : world.enemies)
+        {
+            if (!e.acting || !e.health || e.crowdControlled || e.onAllyOnly || e.victim != tank)
+                continue;
+            ++onTank;
+            if (e.rooted)
+                ++rooted;
+        }
+        return rooted * 2 > onTank;
+    }
+
     void FightSpotAssigner::Clear(TeamPlan& plan) const
     {
         plan.fightSpot = FightSpotPlan();
@@ -96,6 +111,13 @@ namespace Commander
         std::string const name = patrol ? NameOf(patrol->entry) : std::string("The fight");
         if (m.tank != tank.guid)
         {
+            End(m);
+            return;
+        }
+        // Rooted on the way (a Frost Nova): the pile stays, the tank would walk out of it.
+        if (HeldMostlyRooted(world, tank.guid))
+        {
+            plan.notes.push_back(name + ": the enemies on the tank are rooted and would not follow; fighting here.");
             End(m);
             return;
         }
@@ -203,6 +225,11 @@ namespace Commander
         // hitting their victims (strat-20261108-200046: the move began with one of six enemies
         // on the tank).
         if (!HoldsMost(world, tank->guid))
+            return;
+        // Most of them rooted (a Frost Nova) cannot follow the tank: they turn to whoever is in
+        // reach once it walks off (anastari-20261127-224529: 7 moves in 15 s, 3 ended at once
+        // with the pile on the mage). Judged again when the root ends.
+        if (HeldMostlyRooted(world, tank->guid))
             return;
 
         // The pull's plan (PlanAhead): the move starts once the pull no longer places the tank.

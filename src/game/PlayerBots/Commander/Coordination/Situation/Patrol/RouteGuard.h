@@ -30,8 +30,9 @@
  * walk), the opening controller walking to its spot (PullControl, its spot checks patrols),
  * line of sight hiders; the tank while it moves the fight (TeamPlan::fightSpot). Not against
  * the patrols of the pack the team hunts (TeamPlan::hunt): that fight is the one we walk to. In a fight a
- * member whose main tank stands on the route too: the whole fight is on it, the fight spot's
- * question (FightSpotAssigner), not one member's.
+ * member whose main tank stands on the route too, or walks to a spot on it (standAt: the chase
+ * to an enemy there): the whole fight is on it, the fight spot's question (FightSpotAssigner),
+ * not one member's.
  *
  * Reads the pull plan and fightSpot as this refresh's earlier assigners left them (or the
  * last refresh's): only who is exempt depends on it, a refresh later at worst.
