@@ -19,6 +19,10 @@
  * Stratholme's street the navmesh walks over (1 yd above the floor, flat enough); no caster saw
  * it because nobody did, from any side. The tank stood there for the fight, the healer found
  * no spot in sight of it (343 cells) and stayed, the tank died.
+ * A hidden point against a wall (less than WallClearance::BODY_ROOM_YD to the navmesh edge: the
+ * first hidden point of a ray is just past the corner) is stepped off it (WallClearance::
+ * StepClear) when the step stays hidden, else the ray goes on. User 2026-11-28: the tank stood
+ * half inside the wall at its corner.
  * At most MAX_LOS_CHECKS caster checks per search.
  * The candidates, nearest to the center first, are then checked for the walk (at most
  * MAX_PATHS): every watcher sees the point, the point sees every `sees` place, the mover gets

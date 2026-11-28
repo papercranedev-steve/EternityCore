@@ -1,13 +1,13 @@
 /*
- * PartyBot Commander layer 1 (eyes): how far a bot stands from the nearest wall, and a short
+ * PartyBot Commander layer 1 (eyes): how far a place is from the nearest wall, and a short
  * step that takes it clear of one.
  *
  * A bot's movement is the server's: it walks the navmesh, nothing stops its body at a wall. The
  * mesh keeps only the build's agent radius (0.2 yd on continents, 0.3 yd in dungeons,
  * contrib/mmap TileWorker) between its edge and the wall, less than a character's half width:
- * a bot that stops at the mesh edge (a path round a corner, a follow point inside the wall) and
- * sits down to eat or drink shows half its body inside the wall. A player cannot get there, his
- * client collides with the wall model.
+ * a bot that stops at the mesh edge (a path round a corner, a follow point or a hiding point
+ * inside the wall) shows half its body inside the wall. A player cannot get there, his client
+ * collides with the wall model.
  *
  * Distances are to the navmesh edge (a wall, a ledge, a fence: whatever bounds the ground).
  * Facts only, no decisions. Map thread (the navmesh query is per thread).
@@ -24,9 +24,10 @@ namespace Commander
 {
     namespace WallClearance
     {
-        // Wanted room between a seated character and the mesh edge (about 1 yd to the wall).
-        constexpr float SEATED_YD = 0.8f;
-        // Steps tried around the bot, shortest first; no step longer than the last.
+        // Wanted room between a character (standing or seated) and the mesh edge, about 1 yd
+        // to the wall.
+        constexpr float BODY_ROOM_YD = 0.8f;
+        // Steps tried around a place, shortest first; no step longer than the last.
         constexpr float STEP_YD[] = { 0.5f, 1.0f, 1.5f };
         constexpr uint32 STEP_DIRS = 8;
 
@@ -35,13 +36,16 @@ namespace Commander
             float x = 0.0f, y = 0.0f, z = 0.0f;
         };
 
-        // Distance from the bot to the nearest mesh edge, up to `maxYd`. < 0: unknown (no
-        // navmesh, not on the mesh, on a transport).
-        float Of(Player const* me, float maxYd);
+        // Distance from `at` (snapped to the ground mesh within a yard) to the nearest mesh
+        // edge, up to `maxYd`. < 0: unknown (no navmesh, not near the mesh).
+        float RoomAt(uint32 mapId, Spot const& at, float maxYd);
 
-        // A spot at most STEP_YD's last from the bot with `wantYd` room (the shortest step that
-        // has it, else the step with the most room). False: the bot has the room already, no
-        // step gains any, or unknown (Of < 0, in water).
+        // A spot at most STEP_YD's last from `from`, along the mesh (no step through a wall),
+        // with `wantYd` room: the shortest step that has it, else the step with the most room.
+        // False: `from` has the room already, no step gains any, or unknown (RoomAt < 0).
+        bool StepClear(uint32 mapId, Spot const& from, float wantYd, Spot& out);
+
+        // The same for where a bot stands (unknown on a transport or in water).
         bool StepClear(Player const* me, float wantYd, Spot& out);
     }
 }

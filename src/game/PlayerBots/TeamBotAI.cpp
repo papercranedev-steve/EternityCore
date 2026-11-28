@@ -1231,7 +1231,7 @@ bool TeamBotAI::StepOffWallToRest()
     m_restStep.done = false;
 
     Commander::WallClearance::Spot to;
-    if (!Commander::WallClearance::StepClear(me, Commander::WallClearance::SEATED_YD, to))
+    if (!Commander::WallClearance::StepClear(me, Commander::WallClearance::BODY_ROOM_YD, to))
         return false;
     me->StopMoving();
     mm->Clear(false, true);

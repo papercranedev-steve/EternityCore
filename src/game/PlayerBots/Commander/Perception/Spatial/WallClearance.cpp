@@ -1,5 +1,4 @@
 #include "Commander/Perception/Spatial/WallClearance.h"
-#include "Map.h"
 #include "MoveMap.h"
 #include "MoveMapSharedDefines.h"
 #include "Player.h"
@@ -24,11 +23,9 @@ namespace WallClearance
             dtQueryFilter filter;
         };
 
-        bool QueryOf(Player const* me, Query& q)
+        bool QueryOf(uint32 mapId, Query& q)
         {
-            if (me->GetTransport())
-                return false;
-            q.query = MMAP::MMapFactory::createOrGetMMapManager()->GetNavMeshQuery(me->GetMapId());
+            q.query = MMAP::MMapFactory::createOrGetMMapManager()->GetNavMeshQuery(mapId);
             if (!q.query)
                 return false;
             q.filter.setIncludeFlags(NAV_GROUND);
@@ -37,7 +34,7 @@ namespace WallClearance
         }
 
         // The room at a mesh point `pos` (Detour order) on polygon `ref`, up to `maxYd`.
-        float RoomAt(Query const& q, dtPolyRef ref, float const* pos, float maxYd)
+        float RoomOn(Query const& q, dtPolyRef ref, float const* pos, float maxYd)
         {
             float dist = 0.0f, hitPos[3], hitNormal[3];
             if (dtStatusFailed(q.query->findDistanceToWall(ref, pos, maxYd, &q.filter, &dist, hitPos, hitNormal)))
@@ -45,38 +42,36 @@ namespace WallClearance
             return dist;
         }
 
-        bool OnMesh(Query const& q, Player const* me, dtPolyRef& ref, float* pos)
+        bool OnMesh(Query const& q, Spot const& s, dtPolyRef& ref, float* pos)
         {
-            float const at[3] = { me->GetPositionY(), me->GetPositionZ(), me->GetPositionX() };
+            float const at[3] = { s.y, s.z, s.x };
             return !dtStatusFailed(q.query->findNearestPoly(at, EXTENTS, &q.filter, &ref, pos)) && ref;
         }
     }
 
-    float Of(Player const* me, float maxYd)
+    float RoomAt(uint32 mapId, Spot const& at, float maxYd)
     {
         Query q;
         dtPolyRef ref = 0;
         float pos[3];
-        if (!QueryOf(me, q) || !OnMesh(q, me, ref, pos))
+        if (!QueryOf(mapId, q) || !OnMesh(q, at, ref, pos))
             return -1.0f;
-        return RoomAt(q, ref, pos, maxYd);
+        return RoomOn(q, ref, pos, maxYd);
     }
 
-    bool StepClear(Player const* me, float wantYd, Spot& out)
+    bool StepClear(uint32 mapId, Spot const& from, float wantYd, Spot& out)
     {
-        if (me->IsInWater())
-            return false;
         Query q;
         dtPolyRef ref = 0;
         float pos[3];
-        if (!QueryOf(me, q) || !OnMesh(q, me, ref, pos))
+        if (!QueryOf(mapId, q) || !OnMesh(q, from, ref, pos))
             return false;
-        float const here = RoomAt(q, ref, pos, wantYd);
+        float const here = RoomOn(q, ref, pos, wantYd);
         if (here < 0.0f || here >= wantYd)
             return false;
 
-        // Around the bot along the mesh (moveAlongSurface stops at its edge: no step through
-        // the wall), the shortest step with the room, else the most room.
+        // Around it along the mesh (moveAlongSurface stops at its edge), the shortest step
+        // with the room, else the most room.
         float best = here + MIN_GAIN_YD;
         bool found = false;
         for (float step : STEP_YD)
@@ -95,7 +90,7 @@ namespace WallClearance
                 float h = result[1];
                 q.query->getPolyHeight(at, result, &h);
                 result[1] = h;
-                float const room = RoomAt(q, at, result, wantYd);
+                float const room = RoomOn(q, at, result, wantYd);
                 if (room < best)
                     continue;
                 best = room;
@@ -108,6 +103,14 @@ namespace WallClearance
                 return true;
         }
         return found;
+    }
+
+    bool StepClear(Player const* me, float wantYd, Spot& out)
+    {
+        if (me->GetTransport() || me->IsInWater())
+            return false;
+        Spot const here{ me->GetPositionX(), me->GetPositionY(), me->GetPositionZ() };
+        return StepClear(me->GetMapId(), here, wantYd, out);
     }
 }
 }

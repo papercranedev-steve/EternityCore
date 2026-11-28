@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Situation/Los/LosBreak.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Spatial/WallClearance.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
@@ -85,6 +86,42 @@ namespace Commander
                 return bend;
             }
 
+            // Spell line of sight is checked from the caster's eyes to the target's position
+            // + 1 yd (WorldObject::IsWithinLOSInMap, GetLosCheckPosition): same here.
+            bool SeenByCaster(Search const& search, Position3 const& p, uint32& losChecks)
+            {
+                for (Creature const* c : search.casters)
+                {
+                    ++losChecks;
+                    if (c->IsWithinLOS(p.x, p.y, p.z, true, 1.0f))
+                        return true;
+                }
+                return false;
+            }
+
+            // `p` with WallClearance::BODY_ROOM_YD to the wall, or moved off it (still hidden,
+            // ground near the center's, not rejected). False: against the wall and no such step.
+            // Off the mesh (room unknown): as it is, the ranking tries it last.
+            bool ClearOfWall(Map* map, Search const& search, Position3 const& center, Position3& p, uint32& losChecks)
+            {
+                WallClearance::Spot const at{ p.x, p.y, p.z };
+                WallClearance::Spot to;
+                float const room = WallClearance::RoomAt(map->GetId(), at, WallClearance::BODY_ROOM_YD);
+                if (room < 0.0f || room >= WallClearance::BODY_ROOM_YD)
+                    return true;
+                if (!WallClearance::StepClear(map->GetId(), at, WallClearance::BODY_ROOM_YD, to))
+                    return false;
+                Position3 q;
+                q.x = to.x;
+                q.y = to.y;
+                q.z = to.z;
+                if (std::fabs(q.z - center.z) > MAX_HEIGHT_DIFF || (search.rejects && search.rejects(q)) ||
+                    SeenByCaster(search, q, losChecks))
+                    return false;
+                p = q;
+                return true;
+            }
+
             // Lower is better (LosBreak.h, "ranking").
             uint32 Rank(PointQuality const& q)
             {
@@ -122,22 +159,15 @@ namespace Commander
                     p.z = ground;
                     if (search.rejects && search.rejects(p))
                         continue;
-                    // Spell line of sight is checked from the caster's eyes to the target's
-                    // position + 1 yd (WorldObject::IsWithinLOSInMap, GetLosCheckPosition): same here.
-                    bool seen = false;
-                    for (Creature const* c : search.casters)
-                    {
-                        ++losChecks;
-                        if (c->IsWithinLOS(p.x, p.y, p.z, true, 1.0f))
-                        {
-                            seen = true;
-                            break;
-                        }
-                    }
-                    if (seen)
+                    if (SeenByCaster(search, p, losChecks))
                         continue;
                     // Hidden because nobody sees it: inside an object, the ray goes on.
                     if (Enclosed(map, p))
+                        continue;
+                    // The first hidden point of a ray is just past the corner, against the wall:
+                    // the tank stood half inside it. A step off the wall when it stays hidden,
+                    // else further along the ray.
+                    if (!ClearOfWall(map, search, center, p, losChecks))
                         continue;
                     Candidate cand;
                     cand.pos = p;
