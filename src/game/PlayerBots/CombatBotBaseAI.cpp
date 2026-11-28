@@ -3454,6 +3454,13 @@ bool CombatBotBaseAI::UseTrinketEffects(bool onlyToBreakCC)
 
 bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
 {
+    // Fix: tried every update during the bot's own casts (SPELL_IN_PROGRESS) and, for a
+    // minimum range trinket (Linken's Boomerang), 900 times in melee in one fight (TOO_CLOSE,
+    // rivendare-20261128-210517). Now only when the cast can go through: not while casting, no
+    // GCD, the target in range and not immune (CanTryToCastSpellBesidesTimers).
+    if (me->IsNonMeleeSpellCasted(false))
+        return false;
+
     ItemPrototype const* pProto = pItem->GetProto();
     for (auto const& itr : pProto->Spells)
     {
@@ -3461,17 +3468,20 @@ bool CombatBotBaseAI::UseItemEffect(Item* pItem, bool onlyToBreakCC)
         {
             if (SpellEntry const* pSpellEntry = sSpellMgr.GetSpellEntry(itr.SpellId))
             {
-                if (me->IsSpellReady(pSpellEntry, pProto))
+                if (me->IsSpellReady(pSpellEntry, pProto) && !me->HasGCD(pSpellEntry))
                 {
                     // A trinket that breaks crowd control (PvP insignia) is kept for that:
                     // used on the first victim, it was on cooldown when the bot got stunned.
                     if (onlyToBreakCC != pSpellEntry->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
                         continue;
 
-                    if (pSpellEntry->IsPositiveSpell())
-                        return me->CastSpell(me, pSpellEntry, false, pItem) == SPELL_CAST_OK;
-                    else if (me->GetVictim())
-                        return me->CastSpell(me->GetVictim(), pSpellEntry, false, pItem) == SPELL_CAST_OK;
+                    Unit* pTarget = pSpellEntry->IsPositiveSpell() ? me : me->GetVictim();
+                    if (!pTarget)
+                        continue;
+                    uint32 const power = me->GetPower(Powers(pSpellEntry->powerType));
+                    if (!CanTryToCastSpellBesidesTimers(pTarget, pSpellEntry, me->GetShapeshiftForm(), power))
+                        continue;
+                    return me->CastSpell(pTarget, pSpellEntry, false, pItem) == SPELL_CAST_OK;
                 }
             }
         }
