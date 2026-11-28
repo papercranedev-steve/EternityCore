@@ -1104,6 +1104,13 @@
   "voice.boss.flamelash.spirits": "燃烧之魂来了！别让它们碰到他，路上打掉！",
   "voice.boss.herod.trainees": "先别坐下，他的新兵冲过来了！",
   "voice.boss.hakkar.suppressors": "镇压者来了！先杀它们，别让它们走到哈卡之影那儿！",
+  "voice.boss.belnistrasz.ritual": "保护贝尼斯特拉兹。接下来几分钟每 40 秒一波，趁空喝水。",
+  "voice.boss.naralex.ritual": "护住信徒。两波小怪之后是穆坦努斯，留点蓝。",
+  "voice.event.ready": {
+    "default": ["好了，开下一波吧。", "我们准备好了，来吧。"],
+    "chatty": "蓝都喝满了，下一波放马过来！",
+    "quiet": "好了。"
+  },
   "//43": "Quests in the party voice (Commander/Commands/Voice/QuestMoments.cpp; a hand-in: PartyBotAI::UpdateQuestTurnIn). {quest}: its title; {giver}: who it goes back to; {left}: voice.quest.part pieces joined by voice.quest.sep; {names}: bots not done; {name}: the player; {item}: a reward it put on.",
   "voice.quest.alldone": {
     "default": ["「{quest}」都齐了，回去找{giver}交吧。", "「{quest}」搞定了，去找{giver}交任务。"],
