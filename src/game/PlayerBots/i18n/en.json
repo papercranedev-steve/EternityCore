@@ -1007,6 +1007,79 @@
     "chatty": ["Ha! Down it goes!","Beautiful! Not so tough after all!"],
     "quiet": "Down."
   },
+  "//voice.player": "About the human himself (Commander/Commands/Voice/PlayerMoments.cpp, doc 2026-11-28-player-voice.md). {name}: the human. Never blame him. saved_me, control, boss.kill.player_*: praise, rare.",
+  "voice.boss.kill.player_tank": {
+    "default": ["Down! Solid tanking, {name}.","Done! {name} held it all together."],
+    "chatty": "Down! {name}, with you tanking like that I barely got scratched!",
+    "quiet": "Down. Good tanking, {name}."
+  },
+  "voice.boss.kill.player_healer": {
+    "default": ["Down! Thanks to {name}'s heals.","Done! Great healing, {name}."],
+    "chatty": "Down! {name}, with you healing back there I could swing without a care!",
+    "quiet": "Down. Good heals, {name}."
+  },
+  "voice.player.down": {
+    "default": ["{name} is down!","{name}!"],
+    "quiet": "{name} is down."
+  },
+  "voice.player.res.wait": {
+    "default": ["{name}, don't release, I'll res you.","Stay down, {name}, I'll bring you back."],
+    "chatty": "{name}, don't release! I'm coming to res you!",
+    "quiet": "{name}, don't release. I'll res."
+  },
+  "voice.player.res.run": {
+    "default": ["{name}, run back to your body, I'll res you.","Come on back, {name}, I'll res you there."],
+    "quiet": "{name}, back to your body. I'll res."
+  },
+  "voice.player.res.none": {
+    "default": ["{name}, none of us can res you... run back, we'll wait right here.","Sorry {name}, no res here. We'll wait for you."],
+    "quiet": "{name}, no res. We'll wait."
+  },
+  "voice.player.back": {
+    "default": ["Welcome back, {name}.","There you are, {name}."],
+    "chatty": "{name}'s back! That one was rough.",
+    "quiet": "Back."
+  },
+  "voice.player.rescue": {
+    "default": ["{name}, I've got it!","Leave it to me, {name}!"],
+    "chatty": "{name}, come my way, I'll pull it off you!",
+    "quiet": "{name}, mine."
+  },
+  "voice.player.hazard": {
+    "default": ["{name}, your feet!","{name}, get out of that!"],
+    "quiet": "{name}, move."
+  },
+  "voice.player.buffed": {
+    "default": ["Thanks {name}, I feel better already.","Thanks for the buff, {name}!"],
+    "chatty": "Ooh, thank you {name}! I feel unstoppable!",
+    "quiet": "Thanks, {name}."
+  },
+  "voice.death.thanks.player": {
+    "default": ["Thanks {name}, I'm back.","Thanks for the res, {name}!"],
+    "chatty": "{name}! I'm alive! Thank you, thank you!",
+    "quiet": "Thanks, {name}."
+  },
+  "voice.player.saved_me": {
+    "default": ["That heal from {name} saved me back there.","Thanks {name}, I was nearly gone."],
+    "chatty": "{name}! That heal was just in time, I could already see the spirit healer!",
+    "quiet": "Thanks back there, {name}."
+  },
+  "voice.player.control": {
+    "default": ["Nice control, {name}.","Good thing {name} locked that one down."],
+    "chatty": "{name}, that was slick, you shut it down in one go!",
+    "quiet": "Good control, {name}."
+  },
+  "voice.gift.gear": {
+    "default": ["Thanks {name}! The {item} fits right on.","{name}, wearing the {item} now, thank you!"],
+    "chatty": "Whoa, {item}! {name}, you're the best, putting it on right now!",
+    "frugal": "{name}, the {item}, for me? I won't say no. Thank you!",
+    "quiet": "Thanks, {name}. Wearing it."
+  },
+  "voice.gift.bag": {
+    "default": ["Thanks {name}, finally some room in my bags.","{name}, the bag's on, thank you!"],
+    "chatty": "A bigger bag! Thanks {name}, I can carry so much more now!",
+    "quiet": "Thanks, {name}."
+  },
   "voice.enter.dungeon": {
     "default": ["We are in. Stay close.","Watch your step in here."],
     "chatty": "Finally in! Let's see what treasure we find today!"

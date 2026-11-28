@@ -1054,6 +1054,79 @@
     "chatty": ["哈哈，倒了倒了！","漂亮！也不过如此嘛！"],
     "quiet": "倒了。"
   },
+  "//voice.player": "About the human himself (Commander/Commands/Voice/PlayerMoments.cpp, doc 2026-11-28-player-voice.md). {name}: the human. Never blame him. saved_me, control, boss.kill.player_*: praise, rare.",
+  "voice.boss.kill.player_tank": {
+    "default": ["倒了！{name}这把坦得稳。","搞定！{name}拉得好，一点没乱。"],
+    "chatty": "倒了！{name}你这坦克当得，我都没怎么掉血！",
+    "quiet": "倒了。{name}，坦得好。"
+  },
+  "voice.boss.kill.player_healer": {
+    "default": ["倒了！多亏{name}奶得住。","搞定！{name}这奶，稳。"],
+    "chatty": "倒了！{name}，有你在后面奶着，我打得可放心了！",
+    "quiet": "倒了。{name}，奶得好。"
+  },
+  "voice.player.down": {
+    "default": ["{name}倒了！","{name}！"],
+    "quiet": "{name}倒了。"
+  },
+  "voice.player.res.wait": {
+    "default": ["{name}，别释放，打完我拉你。","{name}先躺着，我来拉你。"],
+    "chatty": "{name}别急着释放！我这就来拉你！",
+    "quiet": "{name}，别释放。我拉你。"
+  },
+  "voice.player.res.run": {
+    "default": ["{name}，跑回尸体那儿，我拉你。","{name}，回来吧，到了我拉你。"],
+    "quiet": "{name}，回尸体，我拉你。"
+  },
+  "voice.player.res.none": {
+    "default": ["{name}，我们没人能拉你……跑尸回来吧，我们在这儿等你。","{name}，没人会复活，辛苦跑一趟，我们等你。"],
+    "quiet": "{name}，没人能拉。我们等你。"
+  },
+  "voice.player.back": {
+    "default": ["{name}回来啦。","欢迎回来，{name}。"],
+    "chatty": "{name}回来了！刚才那下可真够呛的。",
+    "quiet": "回来了。"
+  },
+  "voice.player.rescue": {
+    "default": ["{name}别慌，我来拉！","{name}，交给我！"],
+    "chatty": "{name}往我这边走，我把它拉过来！",
+    "quiet": "{name}，我来。"
+  },
+  "voice.player.hazard": {
+    "default": ["{name}，脚下！","{name}，快出来，那儿有东西！"],
+    "quiet": "{name}，脚下。"
+  },
+  "voice.player.buffed": {
+    "default": ["谢了{name}，精神多了。","多谢{name}的祝福！"],
+    "chatty": "哇，谢谢{name}！浑身是劲儿！",
+    "quiet": "谢了，{name}。"
+  },
+  "voice.death.thanks.player": {
+    "default": ["谢了{name}，活过来了。","多谢{name}拉我起来！"],
+    "chatty": "{name}！活过来了，谢谢你谢谢你！",
+    "quiet": "谢谢，{name}。"
+  },
+  "voice.player.saved_me": {
+    "default": ["刚才多亏{name}那口奶，不然我就没了。","{name}，刚才谢了，差点就倒了。"],
+    "chatty": "{name}！刚才那口奶太及时了，我都看见灵魂医者了！",
+    "quiet": "{name}，刚才谢了。"
+  },
+  "voice.player.control": {
+    "default": ["{name}刚才那下控得漂亮。","多亏{name}把它控住了。"],
+    "chatty": "{name}刚才那一下太帅了，一下就把它按住了！",
+    "quiet": "{name}，控得好。"
+  },
+  "voice.gift.gear": {
+    "default": ["谢了{name}！{item}正好换上。","{name}，这件{item}我穿上了，谢谢！"],
+    "chatty": "哇，{item}！{name}你太好了，我这就换上！",
+    "frugal": "{name}，{item}这么好的东西给我？那我就不客气了，谢谢！",
+    "quiet": "谢了，{name}。换上了。"
+  },
+  "voice.gift.bag": {
+    "default": ["谢了{name}，包终于宽敞了。","{name}，包换上了，谢谢！"],
+    "chatty": "大包！{name}谢谢，这下能装好多东西了！",
+    "quiet": "谢了，{name}。"
+  },
   "voice.enter.dungeon": {
     "default": ["进来了，都跟紧点。","这里不太平，小心点。"],
     "chatty": "终于进来了，看看今天能捞到什么好东西！"
