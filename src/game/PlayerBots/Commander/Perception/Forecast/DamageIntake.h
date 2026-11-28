@@ -33,6 +33,7 @@ namespace DamageIntake
     {
         float dps = 0.0f;
         float burst = 0.0f;
+        float hitsPerSec = 0.0f;    // hits of the last RATE_WINDOW_MS / RATE_WINDOW_MS (cast pushback)
     };
 
     // Unit::DealDamage hook (any map thread).

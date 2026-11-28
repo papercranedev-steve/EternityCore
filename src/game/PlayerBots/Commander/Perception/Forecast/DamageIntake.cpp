@@ -80,7 +80,10 @@ namespace DamageIntake
                 continue;
             }
             if (age <= RATE_WINDOW_MS)
+            {
                 recent += float(hits[i].amount);
+                s.hitsPerSec += 1.0f;
+            }
 
             // Hits within BURST_WINDOW_MS ending at hit i.
             window += float(hits[i].amount);
@@ -89,6 +92,7 @@ namespace DamageIntake
             s.burst = std::max(s.burst, window);
         }
         s.dps = recent * 1000.0f / float(RATE_WINDOW_MS);
+        s.hitsPerSec = s.hitsPerSec * 1000.0f / float(RATE_WINDOW_MS);
         return s;
     }
 }

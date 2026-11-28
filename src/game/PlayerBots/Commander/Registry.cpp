@@ -24,6 +24,7 @@
 #include "Commander/Behaviors/Combat/CrowdControlBehavior.h"
 #include "Commander/Behaviors/Combat/RescueBehavior.h"
 #include "Commander/Behaviors/Combat/FleeStopBehavior.h"
+#include "Commander/Behaviors/Combat/SelfShieldBehavior.h"
 #include "Commander/Behaviors/Combat/BurstBehavior.h"
 #include "Commander/Behaviors/Combat/HarvestBehavior.h"
 #include "Commander/Behaviors/Support/HealthTradeBehavior.h"
@@ -93,6 +94,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FearBreakAheadBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FearWardBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FleeStopBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<SelfShieldBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BoostBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<ResurrectBehavior>()));

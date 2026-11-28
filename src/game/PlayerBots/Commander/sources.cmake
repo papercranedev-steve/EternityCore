@@ -378,6 +378,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Forecast/HealCapacity.cpp
   ${COMMANDER_DIR}/Perception/Forecast/ChainHealForecast.h
   ${COMMANDER_DIR}/Perception/Forecast/ChainHealForecast.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/CastPushback.h
+  ${COMMANDER_DIR}/Perception/Forecast/CastPushback.cpp
+  ${COMMANDER_DIR}/Perception/Values/ShieldValue.h
+  ${COMMANDER_DIR}/Perception/Values/ShieldValue.cpp
   ${COMMANDER_DIR}/Perception/Forecast/PartyHealForecast.h
   ${COMMANDER_DIR}/Perception/Forecast/PartyHealForecast.cpp
   ${COMMANDER_DIR}/Perception/Forecast/FightLoad.h
@@ -422,6 +426,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Duties/FleeStopAssigner.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/FleeStopBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/FleeStopBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Combat/SelfShieldBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Combat/SelfShieldBehavior.cpp
   ${COMMANDER_DIR}/Perception/Spatial/AggroRange.h
   ${COMMANDER_DIR}/Perception/Spatial/AggroRange.cpp
   ${COMMANDER_DIR}/Perception/Spatial/ShotSpot.h

@@ -237,6 +237,7 @@ namespace WorldModelBuilder
             DamageIntake::Stats const taken = DamageIntake::Query(f.guid, WorldTimer::getMSTime());
             f.takenDps = taken.dps;
             f.takenBurst = taken.burst;
+            f.takenHitsPerSec = taken.hitsPerSec;
             if (Player const* player = unit->ToPlayer())
             {
                 float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_MANA);

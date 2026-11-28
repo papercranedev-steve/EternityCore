@@ -66,11 +66,18 @@
  * that pulls aggro only when no other lands in time. Below ThreatBehavior::HEAL_IGNORE_THREAT_PCT
  * aggro is not checked.
  *
- * Power Word: Shield (2026-11-03, taken over from the rotation with the heals): ordered instead
- * of the picked heal when the target is the healer itself, being hit below SHIELD_SELF_PCT, and
- * the heal has a cast time (no pushback under the shield). Not on Weakened Soul or an active
- * shield. Benefit = the hits it absorbs over its duration; cost = absorb left unused. The
- * rotation's own shield casts stand down. A shield for someone about to die is the team
+ * Power Word: Shield (2026-11-03, taken over from the rotation with the heals; valued since
+ * 2026-11-28, party heal doc "Pushback"): on the member that casts (ShieldValue::TypicalCastSec:
+ * the healer itself, a caster) where it pays most: benefit = ShieldValue::Of (the hits it takes
+ * within its horizon + Value::LostAction of the casting time their pushback would cost), cost =
+ * its mana (ManaWorth; heals are not charged their cast time either). A heal order next to the
+ * heal of the tick, the arbiter takes the better; not while the pull holds. Not on Weakened Soul
+ * or an active shield. (Until 2026-11-28: only on itself below 50% health before a cast heal,
+ * valued by the absorb alone.) The rotation's own shield casts stand down.
+ *
+ * Pushback (same doc): the hits on the healer (CastPushback::Hits) lengthen its cast heals: each
+ * option's cast time is the time it takes to land with them (the landing, the emergency's "in
+ * time", the heal per second, the party heal's landing). A shield for someone about to die is the team
  * rescue's (2026-11-07: RescueAssigner compares it with Shield Wall, Lay on Hands and the rest,
  * so a priest does not shield a tank that walls); until then this module also shielded an
  * emergency its heal would not reach in time.
@@ -113,8 +120,6 @@ namespace Commander
         // A chain goes on when the next heal starts within the bot interval + this after the
         // previous one ended.
         static constexpr uint32 CHAIN_GAP_MS = 500;
-        // The healer shields itself before a cast-time heal when hit below this (no pushback).
-        static constexpr float SHIELD_SELF_PCT = 50.0f;
         // A pet that holds no enemy gets no HoT from this mana weight on (HealPlan::ManaWeight,
         // 0 plentiful .. 1 scarce).
         static constexpr float PET_HOT_MAX_MANA_WEIGHT = 0.5f;

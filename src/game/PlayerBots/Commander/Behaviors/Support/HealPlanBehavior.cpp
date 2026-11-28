@@ -9,6 +9,8 @@
 #include "Commander/Perception/Forecast/ChainHealForecast.h"
 #include "Commander/Perception/Forecast/IncomingTimeline.h"
 #include "Commander/Perception/Forecast/PartyHealForecast.h"
+#include "Commander/Perception/Forecast/CastPushback.h"
+#include "Commander/Perception/Values/ShieldValue.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
@@ -22,6 +24,7 @@
 #include "Timer.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace Commander
 {
@@ -281,7 +284,8 @@ namespace Commander
 
         // A party heal around the healer (Prayer of Healing, every rank; header "Party heal").
         bool ProposePartyHeal(TeamBotAI const* bot, WorldModel const& world, HealPlan::Healer const& healer,
-                              std::vector<Candidate> const& all, bool checkAggro, std::vector<Proposal>& out)
+                              std::vector<Candidate> const& all, bool checkAggro,
+                              std::function<float(float)> const& landSec, std::vector<Proposal>& out)
         {
             Player* me = bot->me;
             ClassKit const& kit = bot->Kit();
@@ -299,7 +303,7 @@ namespace Commander
                     continue;
                 PartyRank k;
                 k.spell = spell;
-                k.cast.castSec = float(spell->GetCastTime(me)) / 1000.0f;
+                k.cast.castSec = landSec(float(spell->GetCastTime(me)) / 1000.0f);     // with the pushback
                 k.cast.mana = HealSpells::ManaCost(me, spell);
                 k.r = PartyHealForecast::Of(bot, world, spell, k.cast.castSec);
                 if (k.r.targets.empty())
@@ -443,46 +447,60 @@ namespace Commander
             return a.healthPct < b.healthPct;
         }
 
-        // Power Word: Shield instead of the picked heal (see the header): an emergency the heal
-        // does not reach in time, or the healer itself being hit below SHIELD_SELF_PCT before a
-        // heal with a cast time (no pushback under the shield). A heal order like the heals.
-        bool ProposeShield(TeamBotAI const* bot, WorldModel const& world,
-                           Unit* unit, ObjectGuid targetGuid, HealPlan::Target const& target,
-                           HealPlan::Assessment const& assessment, HealPlan::Option const* heal,
+        // Power Word: Shield on a member that casts (header "Shield"): the healer itself or a
+        // caster being hit, valued by ShieldValue (the hits it takes + the casting time their
+        // pushback would cost); cost: its mana. The best one, a heal order next to the heals
+        // (the arbiter takes the better). False = none pays.
+        bool ProposeShield(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
                            std::vector<Proposal>& out)
         {
             SpellEntry const* shield = bot->Kit().AllyShield();
             if (!shield)
                 return false;
-
-            // Someone about to die: the team rescue's choice (RescueAssigner, Takeover::Survival).
-            bool const emergency = assessment.need == HealPlan::Need::Emergency;
-            bool const self = unit == bot->me;
-            bool const pushback = self && target.intake > 0.0f && heal && heal->castSec > 0.0f &&
-                                  unit->GetHealthPercent() < HealPlanBehavior::SHIELD_SELF_PCT;
-            if (!pushback)
+            Player* me = bot->me;
+            // The spell's base amount (as SelfShieldFacts; +healing on it is not counted).
+            float absorb = 0.0f;
+            for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (shield->EffectApplyAuraName[i] == SPELL_AURA_SCHOOL_ABSORB)
+                    absorb = float(std::max(0, shield->CalculateSimpleValue(SpellEffectIndex(i))));
+            if (absorb <= 0.0f)
                 return false;
-            // Weakened Soul gives shield immunity; one shield at a time.
-            if (unit->IsImmuneToMechanic(MECHANIC_SHIELD) || unit->HasAura(shield->Id) ||
-                !bot->CanTryToCastSpell(unit, shield))
-                return false;
+            float const cost = ManaWorth::Points(world, self, HealSpells::ManaCost(me, shield));
 
-            float const absorb = float(std::max(0, shield->CalculateSimpleValue(EFFECT_INDEX_0)));
-            float const durationSec = std::max(0, shield->GetDuration()) / 1000.0f;
-            float const taken = std::min(absorb, target.intake * durationSec);
-            // Benefit: the hits it takes.
-            float const benefit = Value::Points(world, taken);
+            PartyMemberFacts const* best = nullptr;
+            float bestNet = 0.0f;
+            ShieldValue::Result bestValue;
+            for (PartyMemberFacts const& m : world.party)
+            {
+                if (m.isPet || !m.alive || m.charmed || ShieldValue::TypicalCastSec(m) <= 0.0f)
+                    continue;
+                Unit* unit = me->GetMap()->GetUnit(m.guid);
+                // Weakened Soul gives shield immunity; one shield at a time.
+                if (!unit || unit->IsImmuneToMechanic(MECHANIC_SHIELD) || unit->HasAura(shield->Id) ||
+                    !bot->CanTryToCastSpell(unit, shield))
+                    continue;
+                ShieldValue::Result const v = ShieldValue::Of(world, m, absorb);
+                float const net = v.benefit - cost;
+                if (net > bestNet)
+                {
+                    best = &m;
+                    bestNet = net;
+                    bestValue = v;
+                }
+            }
+            if (!best)
+                return false;
 
             Proposal p;
             p.kind = ProposalKind::HealOrder;
-            p.tier = emergency ? ProposalTier::Urgent : ProposalTier::Assigned;
+            p.tier = ProposalTier::Assigned;
             p.source = "heal";
-            p.reason = "hit while casting: shield";
+            p.reason = best->guid == self.guid ? "hits push my casts back: shield myself"
+                                               : "hits push a caster back: shield it";
             p.action.type = BotActionType::Cast;
-            p.action.target = targetGuid;
+            p.action.target = best->guid;
             p.action.spell = shield;
-            // Cost: absorb left over when it runs out (like overheal).
-            p.SetValue(benefit, Value::Points(world, absorb - taken));
+            p.SetValue(bestValue.benefit, cost);
             out.push_back(p);
             return true;
         }
@@ -658,6 +676,14 @@ namespace Commander
 
         BotDirectives const& directives = bot->Directives();
         ClassKit const& kit = bot->Kit();
+        // The hits on the healer push its casts back (CastPushback.h, user 2026-11-28): a heal's
+        // cast time is the time it takes to land with them (its absorbs take hits first).
+        std::vector<CastPushback::Hit> const myHits = CastPushback::Hits(world, *myFacts, IncomingTimeline::HORIZON_SEC);
+        auto const landSec = [&myHits, myFacts](float castSec)
+        {
+            float absorb = myFacts->absorb;
+            return castSec + CastPushback::DelaySec(myHits, 0.0f, castSec, absorb);
+        };
         std::vector<Candidate> all;
         // Castable heals on `c` (ChooseHeal's options): direct heals into options, pure HoTs into
         // hots. `m`: the member (Chain Heal's jumps), null for an ally.
@@ -706,7 +732,7 @@ namespace Commander
                     p.heal += std::min(o.amount.periodic,
                                        c.target.intake * o.amount.periodicSec * HealSpells::HOT_INCOMING_SHARE);
                 p.mana = o.mana;
-                p.castSec = o.castSec;
+                p.castSec = landSec(o.castSec);
                 p.emergencyOnly = use == HealUse::EmergencyOnly;
                 // Chain Heal: what its jumps heal on the others (2026-11-15).
                 if (m)
@@ -845,9 +871,13 @@ namespace Commander
             return;
 
         bool const checkAggro = sCommanderMgr.IsModuleEnabled("threat");
+        // A shield on a member whose casts the hits push back (the healer itself first of all):
+        // next to the heal below, the arbiter takes the better order.
+        if (!heldByPull)
+            ProposeShield(bot, world, *myFacts, out);
         // A party heal before the single-target heals, also when no single gap reached its
         // deficit yet (several small gaps together).
-        if (!heldByPull && ProposePartyHeal(bot, world, healer, all, checkAggro, out))
+        if (!heldByPull && ProposePartyHeal(bot, world, healer, all, checkAggro, landSec, out))
             return;
         for (Candidate* pc : candidates)
         {
@@ -872,9 +902,6 @@ namespace Commander
                     c.options[i].pulls = ThreatBehavior::HealPullLoss(bot, world, c.unit, c.spells[i]) > 0.0f;
 
             int index = HealPlan::Pick(c.target, healer, c.assessment, c.options);
-            if (ProposeShield(bot, world, c.unit, c.guid, c.target, c.assessment,
-                              index >= 0 ? &c.options[index] : nullptr, out))
-                return;
 
             // A ready heal boost that suits this heal: cast with the heal it waits for.
             SpellEntry const* boostSpell = nullptr;

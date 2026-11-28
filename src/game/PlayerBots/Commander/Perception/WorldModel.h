@@ -797,6 +797,8 @@ namespace Commander
         // rate with the prediction from enemy melee.
         float takenDps = 0.0f;
         float takenBurst = 0.0f;
+        float takenHitsPerSec = 0.0f;   // hits of the same window (DamageIntake): cast pushback
+
         // Players: mana regenerated per second outside / inside the five second rule (world
         // rate included), and ms left in the rule (0 = outside, spirit regeneration runs).
         float manaRegen = 0.0f;
