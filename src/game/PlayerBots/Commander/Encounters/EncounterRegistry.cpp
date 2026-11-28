@@ -1,5 +1,6 @@
 #include "Commander/Encounters/EncounterRegistry.h"
 #include "Commander/Encounters/BlackrockDepthsAngerforge.h"
+#include "Commander/Encounters/BlackrockDepthsFlamelash.h"
 #include "Commander/Encounters/DeadminesVanCleef.h"
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
 #include "Commander/Encounters/GnomereganThermaplugg.h"
@@ -27,6 +28,7 @@ namespace Commander
         EncounterFactory const FACTORIES[] =
         {
             { BlackrockDepthsAngerforge::MAP_ID, &Make<BlackrockDepthsAngerforge> },
+            { BlackrockDepthsFlamelash::MAP_ID, &Make<BlackrockDepthsFlamelash> },
             { DeadminesVanCleef::MAP_ID,        &Make<DeadminesVanCleef> },
             { ScarletMograineWhitemane::MAP_ID, &Make<ScarletMograineWhitemane> },
             { GnomereganThermaplugg::MAP_ID,    &Make<GnomereganThermaplugg> },

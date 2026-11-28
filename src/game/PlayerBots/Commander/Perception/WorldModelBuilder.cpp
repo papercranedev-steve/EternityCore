@@ -2257,6 +2257,43 @@ namespace WorldModelBuilder
         UpdateCastStarts(world, WorldTimer::getMSTime());
     }
 
+    void AddListedEnemies(TeamBotAI* bot, WorldModel& world, std::vector<Creature*> const& creatures)
+    {
+        if (creatures.empty())
+            return;
+        Player* me = bot->me;
+        Map* map = me->GetMap();
+        std::vector<Unit*> partyUnits;
+        for (Player* member : Team::Members(me))
+        {
+            if (!member || !member->IsInWorld() || member->GetMap() != map)
+                continue;
+            partyUnits.push_back(member);
+            if (Pet* pet = member->GetPet())
+                if (pet->IsInWorld() && pet->GetMap() == map)
+                    partyUnits.push_back(pet);
+        }
+        for (Creature* c : creatures)
+        {
+            if (!c || !c->IsInWorld() || c->GetMap() != map || !c->IsAlive() || !me->IsValidAttackTarget(c))
+                continue;
+            ObjectGuid const guid = c->GetObjectGuid();
+            if (world.FindEnemy(guid))
+                continue;   // fighting us already: a plain enemy
+            auto const known = std::find_if(world.targeted.begin(), world.targeted.end(),
+                [guid](EnemyFacts const& t) { return t.guid == guid; });
+            if (known != world.targeted.end())
+            {
+                known->listed = true;
+                continue;
+            }
+            EnemyFacts e;
+            FillEnemy(c, partyUnits, e);
+            e.listed = true;
+            world.targeted.push_back(std::move(e));
+        }
+    }
+
     namespace
     {
         void FillPatrolTrack(Creature* creature, PatrolFacts& pf)

@@ -225,6 +225,9 @@ namespace Commander
             return;
 
         m_activeEncounter->Refresh(bot, m_world);
+        std::vector<Creature*> listed;
+        m_activeEncounter->ListEnemies(bot, m_world, listed);
+        WorldModelBuilder::AddListedEnemies(bot, m_world, listed);
         m_activeEncounter->AddFacts(m_world);
     }
 

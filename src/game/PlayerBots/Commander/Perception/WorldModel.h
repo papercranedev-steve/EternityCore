@@ -1010,6 +1010,9 @@ namespace Commander
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.
         bool onAllyOnly = false;
+        // In WorldModel::targeted because the boss module listed it (IEncounter::ListEnemies):
+        // the party must kill it though it does not fight us (Flamelash's Burning Spirits).
+        bool listed = false;
         FleeFacts flee;
 
         // Every spell (interruptible or not) seen cast by it since it joined our lists, with the

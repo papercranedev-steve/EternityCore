@@ -56,6 +56,12 @@ namespace WorldModelBuilder
     // `coverage`: the last RoleAssigner result, for PartyMemberFacts::functions.
     void RefreshCombat(TeamBotAI* bot, WorldModel& world, CoveragePlan const& coverage);
 
+    // Creatures a boss module says the party must kill though none of them fights us
+    // (IEncounter::ListEnemies): into WorldModel::targeted with EnemyFacts::listed, like the
+    // creatures one of us targets. Ones already on our lists are skipped (a targeted one is
+    // marked listed). After RefreshCombat on the same refresh.
+    void AddListedEnemies(TeamBotAI* bot, WorldModel& world, std::vector<Creature*> const& creatures);
+
     // Out-of-combat creatures near the party, grouped into packs, and the ally candidate scan.
     // Grid searches, run less often. Packs and their walks (PackRoutes) are around `guide` when
     // the party follows one (Guide::Current, null = none), else around the leader.

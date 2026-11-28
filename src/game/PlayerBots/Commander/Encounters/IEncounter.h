@@ -9,7 +9,7 @@
  *
  * Call order on a perception refresh (PartyCommander::Update, map thread):
  *   WorldModel refresh
- *   -> pick the active module (Matches), Refresh (live objects allowed), AddFacts
+ *   -> pick the active module (Matches), Refresh (live objects allowed), ListEnemies, AddFacts
  *   -> assigners, situation stage (the doctrine: stamps)
  *   -> ShapeDoctrine
  *   -> assigners, tasks stage; duty modules offer their needs
@@ -37,6 +37,7 @@
 #include <vector>
 
 class TeamBotAI;
+class Creature;
 
 namespace Commander
 {
@@ -58,6 +59,14 @@ namespace Commander
         // Map thread, once per refresh while active. The only place a module may read live
         // game objects (instance data, auras); `bot` is whichever party bot triggered the refresh.
         virtual void Refresh(TeamBotAI* /*bot*/, WorldModel const& /*world*/) {}
+
+        // After Refresh, map thread (live objects allowed): creatures the party must kill though
+        // none of them fights us (no party member on their threat lists, so the eyes do not see
+        // them as enemies: Flamelash's Burning Spirits walking to him). The eyes fill their facts
+        // into WorldModel::targeted (EnemyFacts::listed, WorldModelBuilder::AddListedEnemies),
+        // so duty needs (OfferDuties) and targets can name them. Not a fight on their own
+        // (WorldModel::HasPartyEnemy ignores targeted).
+        virtual void ListEnemies(TeamBotAI* /*bot*/, WorldModel const& /*world*/, std::vector<Creature*>& /*out*/) const {}
 
         // Optional: add facts to the world model before the assigners run.
         virtual void AddFacts(WorldModel& /*world*/) {}
