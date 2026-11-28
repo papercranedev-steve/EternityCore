@@ -250,9 +250,43 @@ namespace BossSheets
                 { 10508, {
                     Row(26070, SELF, 45000, 45000, 30000, 30000),       // Fear, area
                 } },
-                // Captain Kromcrush (instance_dire_maul.cpp boss_kromcrush).
+                // Captain Kromcrush (instance_dire_maul.cpp boss_kromcrush). Reavers at 50% are
+                // summons; Retaliation (below 25%): the boss module stops melee on him.
                 { 14325, {
                     Row(19134, SELF, 10000, 10000, 30000, 35000),       // Intimidating Shout, area fear
+                    Row(22859, VICTIM, 7000, 13000, 15000, 20000),      // Mortal Cleave
+                    Row(22857, SELF, 0, 0, 0, 0, 25.0f),                // Retaliation, once
+                } },
+
+                // Remaining P2 bosses (boss doc 2.2), from their scripts, read 2026-11-28.
+                // Overlord Wyrmthalak (boss_overlord_wyrmthalak.cpp; its "BLASTWAVE" 11130 is a
+                // Knock Away). Adds below 51%: summons, the generic modules'.
+                { 9568, {
+                    Row(11130, SELF, 20000, 20000, 20000, 20000),       // Knock Away, area
+                    Row(23511, SELF, 2000, 2000, 10000, 10000),         // Demoralizing Shout
+                    Row(20691, VICTIM, 6000, 6000, 7000, 7000),         // Cleave
+                    Row(20686, SELF, 12000, 12000, 14000, 14000),       // Knock Away, area
+                } },
+                // King Gordok (boss_gordok_king.cpp). Cho'Rush the Observer's spells depend on the
+                // gear the instance rolls (mage, shaman, priest): no sheet; the boss module.
+                { 11501, {
+                    Row(15572, VICTIM, 4000, 8000, 5000, 15000),        // Sunder Armor
+                    Row(15708, VICTIM, 15000, 25000, 12000, 20000),     // Mortal Strike
+                    Row(16727, SELF, 7000, 8000, 20000, 30000),         // War Stomp, area stun
+                    Row(22886, TARGET_T_HOSTILE_RANDOM, 9000, 12000, 25000, 30000), // Berserker Charge
+                } },
+                // Immol'thar (boss_immol_thar.cpp). Eyes are summons; the portal (a random member
+                // pulled in front of him, its threat wiped) is not a spell; Enrage at 50 s is timed.
+                { 11496, {
+                    Row(5568, SELF, 5000, 9000, 9000, 14000),           // Trample, area
+                    Row(16128, VICTIM, 2000, 4000, 8000, 12000),        // Infected Bite
+                } },
+                // Prince Tortheldrin (instance_dire_maul.cpp boss_prince_tortheldrin; Counterspell
+                // is on his spell list). The script resets all threat after each Arcane Blast.
+                { 11486, {
+                    Row(15589, SELF, 14000, 22000, 10000, 20000),       // Whirlwind (melee within 7 yd)
+                    Row(22920, VICTIM, 15000, 20000, 10000, 15000, 0.0f, BOSS_ABILITY_THREAT_WIPE), // Arcane Blast
+                    Row(22995, VICTIM, 0, 3000, 13000, 20000),          // Summon (pulls to him)
                 } },
             };
         }

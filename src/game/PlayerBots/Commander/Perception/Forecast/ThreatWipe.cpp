@@ -1,6 +1,7 @@
 #include "Commander/Perception/Forecast/ThreatWipe.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/CreatureProfile.h"
+#include "Commander/Perception/Profiles/BossSheets.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Profiles/Tags.h"
 #include "ScriptMgr.h"          // ScriptCommands.h: TARGET_T_x (creature_spells)
@@ -15,9 +16,17 @@ namespace ThreatWipe
 {
     namespace
     {
-        bool Wipes(uint32 spellId)
+        // The spell wipes threat by its data, or an ability sheet row of `profile` says its
+        // script does (BOSS_ABILITY_THREAT_WIPE).
+        bool Wipes(CreatureProfile const* profile, uint32 spellId)
         {
-            return SpellTags::WipesTargetThreat(sSpellMgr.GetSpellEntry(spellId));
+            if (SpellTags::WipesTargetThreat(sSpellMgr.GetSpellEntry(spellId)))
+                return true;
+            if (profile)
+                for (CreatureSpellRef const& ref : profile->spells)
+                    if (ref.spellId == spellId && (ref.sheetFlags & BOSS_ABILITY_THREAT_WIPE))
+                        return true;
+            return false;
         }
 
         void Keep(Next& best, uint32 spellId, float minSec, float maxSec)
@@ -36,12 +45,13 @@ namespace ThreatWipe
         Next best;
         if (!(Tags::RolesOf(e.entry) & TAG_THREAT_WIPE))
             return best;
+        std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
 
         // The live creature_spells timers.
         bool listed = false;
         for (ListSpellFacts const& s : e.spellList)
         {
-            if (!Wipes(s.spellId))
+            if (!Wipes(p.get(), s.spellId))
                 continue;
             listed = true;
             if (s.castTarget != TARGET_T_HOSTILE || s.probability < 100)
@@ -53,12 +63,11 @@ namespace ThreatWipe
             return best;
 
         // EventAI (no live timer): the profile's delays from its last cast or the fight's start.
-        std::shared_ptr<CreatureProfile const> p = sProfileStore.GetCreature(e.entry);
         if (!p)
             return best;
         for (CreatureSpellRef const& ref : p->spells)
         {
-            if (ref.source == SpellSource::OnHit || !Wipes(ref.spellId))
+            if (ref.source == SpellSource::OnHit || !Wipes(p.get(), ref.spellId))
                 continue;
             if (ref.castTarget != 0xFF && ref.castTarget != TARGET_T_HOSTILE)
                 continue;

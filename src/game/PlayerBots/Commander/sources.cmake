@@ -277,6 +277,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/BlackrockDepthsThaurissan.cpp
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.h
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
+  ${COMMANDER_DIR}/Encounters/DireMaulGordok.h
+  ${COMMANDER_DIR}/Encounters/DireMaulGordok.cpp
+  ${COMMANDER_DIR}/Encounters/DireMaulKromcrush.h
+  ${COMMANDER_DIR}/Encounters/DireMaulKromcrush.cpp
   ${COMMANDER_DIR}/Encounters/BlackfathomFires.h
   ${COMMANDER_DIR}/Encounters/BlackfathomFires.cpp
   ${COMMANDER_DIR}/Encounters/BlackrockSpireUrok.h

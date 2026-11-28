@@ -8,6 +8,8 @@
 #include "Commander/Encounters/BlackrockDepthsThaurissan.h"
 #include "Commander/Encounters/BlackrockSpireUrok.h"
 #include "Commander/Encounters/DeadminesVanCleef.h"
+#include "Commander/Encounters/DireMaulGordok.h"
+#include "Commander/Encounters/DireMaulKromcrush.h"
 #include "Commander/Encounters/GnomereganGrubbis.h"
 #include "Commander/Encounters/ScarletHerod.h"
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
@@ -49,6 +51,8 @@ namespace Commander
             { BlackrockDepthsThaurissan::MAP_ID, &Make<BlackrockDepthsThaurissan> },
             { BlackrockSpireUrok::MAP_ID,       &Make<BlackrockSpireUrok> },
             { DeadminesVanCleef::MAP_ID,        &Make<DeadminesVanCleef> },
+            { DireMaulGordok::MAP_ID,           &Make<DireMaulGordok> },
+            { DireMaulKromcrush::MAP_ID,        &Make<DireMaulKromcrush> },
             { GnomereganGrubbis::MAP_ID,        &Make<GnomereganGrubbis> },
             { ScarletHerod::MAP_ID,             &Make<ScarletHerod> },
             { ScarletMograineWhitemane::MAP_ID, &Make<ScarletMograineWhitemane> },

@@ -1,6 +1,7 @@
 #include "Commander/Perception/Profiles/Tags.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/SpawnSources.h"
+#include "Commander/Perception/Profiles/BossSheets.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -133,7 +134,7 @@ namespace Tags
                 continue;
             if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(ref.spellId))
             {
-                if (SpellTags::WipesTargetThreat(spell))
+                if (SpellTags::WipesTargetThreat(spell) || (ref.sheetFlags & BOSS_ABILITY_THREAT_WIPE))
                     roles |= TAG_THREAT_WIPE;
                 for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
                 {

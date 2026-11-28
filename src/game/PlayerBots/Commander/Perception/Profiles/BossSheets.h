@@ -47,6 +47,9 @@ namespace Commander
     {
         // Every member leaves its area, the tank too while it is being cast (HazardZones).
         BOSS_ABILITY_EVERYONE_LEAVES = 0x1,
+        // The script wipes threat with it (DoResetThreat after Tortheldrin's Arcane Blast): a
+        // threat wipe like SpellTags::WipesTargetThreat (Tags TAG_THREAT_WIPE, ThreatWipe).
+        BOSS_ABILITY_THREAT_WIPE = 0x2,
     };
 
     struct BossAbility
