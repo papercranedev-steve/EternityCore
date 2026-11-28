@@ -361,6 +361,13 @@ namespace Commander
         float const manaPct = myFacts->maxMana ? float(myFacts->mana) * 100.0f / float(myFacts->maxMana) : 100.0f;
         healer.manaWeight = HealPlan::ManaWeight(tension, manaPct);
         healer.steady = bot->Kit().HealsSteadily();
+        // The healer's own coming lockout (an area stun on the party): the last heal before it
+        // must carry its targets through it (HealPlan::Healer::NextChanceSec).
+        if (IncomingTimeline::Lockout const* lockout = IncomingTimeline::Of(world, *myFacts).NextLockout())
+        {
+            healer.lockoutStartSec = lockout->startSec;
+            healer.lockoutEndSec = lockout->endSec;
+        }
 
         BotDirectives const& directives = bot->Directives();
         ClassKit const& kit = bot->Kit();
@@ -541,7 +548,10 @@ namespace Commander
             heal += o.otherHeal;
             effective += o.otherEffective;
             float benefit = Value::Points(world, effective);
-            if (emergency && c.assessment.timeToDie < std::max(HealPlan::GCD_SEC, castSec) + healer.tickSec * 2.0f)
+            float nextChanceSec = std::max(HealPlan::GCD_SEC, castSec) + healer.tickSec * 2.0f;
+            if (healer.lockoutStartSec >= 0.0f)     // the last heal before the healer's lockout
+                nextChanceSec = std::max(nextChanceSec, healer.NextChanceSec(castSec));
+            if (emergency && c.assessment.timeToDie < nextChanceSec)
                 benefit += Value::DeathPenalty(*c.facts);
             if (boostSpell && boost.free)
                 benefit += ManaWorth::Points(world, *myFacts, o.mana);

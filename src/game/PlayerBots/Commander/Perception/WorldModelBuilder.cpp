@@ -812,33 +812,67 @@ namespace WorldModelBuilder
         // The start of each enemy's current cast goes into world.castStartLog (kept across
         // refreshes); entries of enemies no longer on the lists are dropped. Then every enemy
         // gets its own entries in castStarts.
-        void UpdateCastStarts(WorldModel& world, uint32 nowMs)
+        WorldModel::CastStartRecord& CastStartOf(std::vector<WorldModel::CastStartRecord>& log, ObjectGuid enemy,
+                                                 uint32 spellId)
+        {
+            auto itr = std::find_if(log.begin(), log.end(), [enemy, spellId](WorldModel::CastStartRecord const& r)
+            {
+                return r.enemy == enemy && r.cast.spellId == spellId;
+            });
+            if (itr == log.end())
+            {
+                WorldModel::CastStartRecord r;
+                r.enemy = enemy;
+                r.cast.spellId = spellId;
+                itr = log.insert(log.end(), r);
+            }
+            return *itr;
+        }
+
+        // An instant cast is never seen as a cast: its aura on one of us tells when it came
+        // (applied at max duration - time left). Ground Tremor, Psychic Scream, Banshee Curse
+        // of C++ bosses: their ability sheet timers run from it (SheetTimers).
+        void NoteInstantCasts(WorldModel& world, std::vector<Unit*> const& partyUnits, uint32 nowMs)
+        {
+            for (Unit* unit : partyUnits)
+            {
+                for (auto const& itr : unit->GetSpellAuraHolderMap())
+                {
+                    SpellAuraHolder const* holder = itr.second;
+                    if (!holder || holder->GetAuraMaxDuration() <= 0 || holder->GetAuraDuration() < 0 ||
+                        holder->GetAuraDuration() > holder->GetAuraMaxDuration())
+                        continue;
+                    ObjectGuid const caster = holder->GetCasterGuid();
+                    if (!caster.IsCreature() || !world.FindEnemy(caster))
+                        continue;
+                    SpellEntry const* spell = holder->GetSpellProto();
+                    if (!spell || spell->GetCastTime(nullptr) > 0 || spell->IsChanneledSpell())
+                        continue;   // cast or channelled: seen as a cast
+                    uint32 const start = nowMs - uint32(holder->GetAuraMaxDuration() - holder->GetAuraDuration());
+                    CastStart& cast = CastStartOf(world.castStartLog, caster, holder->GetId()).cast;
+                    // Several members hit by the same cast: one start (the latest).
+                    if (!cast.lastStartMs || int32(start - cast.lastStartMs) > 0)
+                        cast.lastStartMs = start;
+                }
+            }
+        }
+
+        void UpdateCastStarts(WorldModel& world, std::vector<Unit*> const& partyUnits, uint32 nowMs)
         {
             std::vector<WorldModel::CastStartRecord>& log = world.castStartLog;
             log.erase(std::remove_if(log.begin(), log.end(), [&world](WorldModel::CastStartRecord const& r)
             {
                 return !world.FindEnemy(r.enemy);
             }), log.end());
+            NoteInstantCasts(world, partyUnits, nowMs);
 
             for (EnemyFacts& e : world.enemies)
             {
                 if (e.castingSpellId)
                 {
                     uint32 const elapsed = e.castTotalMs > e.castRemainingMs ? e.castTotalMs - e.castRemainingMs : 0;
-                    uint32 const start = nowMs - elapsed;
-                    auto itr = std::find_if(log.begin(), log.end(), [&e](WorldModel::CastStartRecord const& r)
-                    {
-                        return r.enemy == e.guid && r.cast.spellId == e.castingSpellId;
-                    });
-                    if (itr == log.end())
-                    {
-                        WorldModel::CastStartRecord r;
-                        r.enemy = e.guid;
-                        r.cast.spellId = e.castingSpellId;
-                        itr = log.insert(log.end(), r);
-                    }
                     // Same cast seen again: same start (up to timer steps). A new cast: later start.
-                    itr->cast.lastStartMs = start;
+                    CastStartOf(log, e.guid, e.castingSpellId).cast.lastStartMs = nowMs - elapsed;
                 }
                 for (WorldModel::CastStartRecord const& r : log)
                     if (r.enemy == e.guid)
@@ -2254,7 +2288,7 @@ namespace WorldModelBuilder
             world.targeted.push_back(std::move(e));
         }
 
-        UpdateCastStarts(world, WorldTimer::getMSTime());
+        UpdateCastStarts(world, partyUnits, WorldTimer::getMSTime());
     }
 
     void AddListedEnemies(TeamBotAI* bot, WorldModel& world, std::vector<Creature*> const& creatures)

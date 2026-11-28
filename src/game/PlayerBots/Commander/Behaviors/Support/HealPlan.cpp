@@ -79,6 +79,20 @@ namespace HealPlan
         return std::min(reserve, t.maxHealth * MAX_RESERVE_PCT / 100.0f);
     }
 
+    float Healer::NextChanceSec(float castSec) const
+    {
+        float const now = castSec + LANDING_MARGIN_SEC + tickSec;
+        if (lockoutStartSec < 0.0f || lockoutEndSec <= lockoutStartSec)
+            return now;
+        // A heal started now is cut by the lockout: nothing to plan around it.
+        if (castSec + LANDING_MARGIN_SEC > lockoutStartSec)
+            return now;
+        // Another heal after this one still lands before the lockout: not the last chance yet.
+        if (std::max(castSec, GCD_SEC) + now <= lockoutStartSec)
+            return now;
+        return lockoutEndSec + now;
+    }
+
     Assessment Assess(Target const& t, Healer const& h, std::vector<Option> const& options)
     {
         Assessment a;
@@ -106,7 +120,7 @@ namespace HealPlan
         for (Option const& o : options)
             if (o.heal > 0.0f)
                 fastest = std::min(fastest, o.castSec);
-        bool const outrun = fastest < NO_LIMIT && a.worstTimeToDie < fastest + LANDING_MARGIN_SEC + h.tickSec;
+        bool const outrun = fastest < NO_LIMIT && a.worstTimeToDie < h.NextChanceSec(fastest);
         if (hit && (t.health <= a.reserve || a.timeToDie < EMERGENCY_TTD_SEC || outrun))
         {
             a.need = Need::Emergency;

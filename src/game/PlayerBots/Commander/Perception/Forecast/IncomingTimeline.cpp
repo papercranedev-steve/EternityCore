@@ -344,6 +344,26 @@ namespace IncomingTimeline
             return e.mana >= spell->manaCost + spell->ManaCostPercentage * e.createMana / 100;
         }
 
+        // A control spell sure to reach the member, landing at `landSec` (header: Lockout).
+        void AddLockout(Timeline& t, EnemyFacts const& e, SpellEntry const* spell, SpellProfile const& p, float landSec)
+        {
+            if (!p.controls || landSec >= HORIZON_SEC)
+                return;
+            float sec = SpellProfiles::Estimate(spell, e.level, e.meleeHit).controlSec;
+            if (sec <= 0.0f)
+                sec = p.durationMs / 1000.0f;
+            if (sec <= 0.0f)
+                return;
+            Lockout l;
+            l.startSec = landSec;
+            l.endSec = landSec + sec;
+            l.spellId = spell->Id;
+            l.source = e.guid;
+            auto const at = std::upper_bound(t.lockouts.begin(), t.lockouts.end(), l,
+                                             [](Lockout const& a, Lockout const& b) { return a.startSec < b.startSec; });
+            t.lockouts.insert(at, l);
+        }
+
         // The spell `e` is casting now, if it reaches `m`.
         void AddCurrentCast(Timeline& t, WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& m)
         {
@@ -372,7 +392,9 @@ namespace IncomingTimeline
                 return;
             }
             float const duration = p->durationMs / 1000.0f;
-            AddSpellHits(t, e, e.castingSpellId, s, leftSec + FlightSec(spell, e, m.pos), duration, 1.0f);
+            float const landSec = leftSec + FlightSec(spell, e, m.pos);
+            AddSpellHits(t, e, e.castingSpellId, s, landSec, duration, 1.0f);
+            AddLockout(t, e, spell, *p, landSec);
         }
 
         // creature_spells rows (CreatureAI::DoSpellsListCasts) over the horizon. Every row
@@ -445,6 +467,9 @@ namespace IncomingTimeline
                                      (channelMs ? channelMs : r.profile->durationMs) / 1000.0f, r.share);
                         for (size_t i = first; i < t.events.size(); ++i)
                             t.events[i].expected *= chance;
+                        // Sure to reach it and sure to be cast: a lockout.
+                        if (r.share >= 1.0f && r.f->probability >= 100)
+                            AddLockout(t, e, r.spell, *r.profile, landSec);
                     }
                     uint32 const repeat = (r.f->repeatMinMs + r.f->repeatMaxMs) / 2;
                     r.readyMs = r.f->once ? HORIZON_MS :
@@ -488,6 +513,14 @@ namespace IncomingTimeline
             for (uint32 at = h.nextTickMs; at <= h.remainingMs && at < HORIZON_MS; at += h.periodMs)
                 AddHeal(at / 1000.0f, h.perTick, h.spellId, h.caster);
         }
+    }
+
+    Lockout const* Timeline::NextLockout() const
+    {
+        for (Lockout const& l : lockouts)
+            if (l.startSec > 0.0f)
+                return &l;
+        return nullptr;
     }
 
     float Timeline::TimeToLose(float amount, bool worst, Relief const& relief) const

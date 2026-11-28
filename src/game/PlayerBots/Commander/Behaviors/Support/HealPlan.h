@@ -7,7 +7,9 @@
  *             at most MAX_RESERVE_PCT of max health
  *   emergency being hit and (health <= reserve, or time to die < EMERGENCY_TTD_SEC, or the
  *             worst case time to die before the fastest heal started now lands: its cast +
- *             LANDING_MARGIN_SEC + one bot tick; 2026-11-17, the hits one by one):
+ *             LANDING_MARGIN_SEC + one bot tick; 2026-11-17, the hits one by one; or, with a
+ *             lockout of the healer ahead that a heal started now still lands before, before
+ *             the first heal after the lockout lands: Healer::NextChanceSec, boss doc G7):
  *             the biggest heal that lands in time, mana ignored; one that does not pull aggro
  *             if any lands in time
  *   deficit   missing health at which a lift starts:
@@ -120,6 +122,14 @@ namespace HealPlan
         float manaWeight = 0.0f;    // ManaWeight: 0 plentiful .. 1 scarce
         // Heals steadily, no lift + rest rhythm (ClassKit::HealsSteadily, paladin; see header).
         bool steady = false;
+        // The healer will be controlled from lockoutStartSec to lockoutEndSec (IncomingTimeline
+        // Lockout: Ground Tremor, an area fear), < 0 = none: no heal of its lands in between.
+        float lockoutStartSec = -1.0f;
+        float lockoutEndSec = -1.0f;
+
+        // When a heal of `castSec` started now, or the first one after the lockout, can land
+        // last: the next chance to save a target (Assess's outrun, the death penalty).
+        float NextChanceSec(float castSec) const;
     };
 
     struct Option

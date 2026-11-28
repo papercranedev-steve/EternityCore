@@ -119,9 +119,22 @@ namespace BossSheets
                     Row(15496, VICTIM, 12000, 12000, 12000, 12000),     // Cleave
                     Row(8269, SELF, 0, 0, 0, 0, 50.0f),                 // Frenzy
                 } },
-                // Archaedas (boss_archaedas.cpp). The awakenings are summons, not on the sheet.
+                // Archaedas (boss_archaedas.cpp). The awakenings are summons, not on the sheet;
+                // Awaken Vault Warder (10258, 5 s) cannot be interrupted. Ground Tremor is a
+                // lockout for the healers (IncomingTimeline::Lockout): the last heal before it
+                // carries the tank through it. It is instant: its timer runs from the stun seen
+                // on us (WorldModelBuilder NoteInstantCasts).
                 { 2748, {
                     Row(6524, SELF, 60000, 60000, 45000, 45000),        // Ground Tremor, area stun
+                } },
+                // His minions (mob_archaedas_minions). Earthen Custodian: heals him below 50%
+                // (only that the sheet cannot say): a healer, the kill order's.
+                { 7309, {
+                    Row(10260, TARGET_T_FRIENDLY_INJURED, 4000, 10000, 10000, 10000),    // Reconstruct
+                } },
+                // Vault Warder (woken at 33%, elite).
+                { 10120, {
+                    Row(5568, SELF, 4000, 10000, 10000, 10000),         // Trample, area
                 } },
                 // Grand Crusader Dathrohan (boss_dathrohan_balnazzar.cpp); below 40% he becomes
                 // Balnazzar (10813, same script).

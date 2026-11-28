@@ -32,6 +32,8 @@
  * explain (DamageIntake rate above the model's steady rate: area damage of scripts, DoTs of
  * C++ boss scripts) is a steady residual rate. Beyond the horizon the steady rate goes on.
  *
+ * Lockouts: the same casts, when they control the member (Lockout below), not as damage.
+ *
  * Worst case = every hit lands at its maximum and the biggest hit so far crits (one bad roll).
  * Heals are added by the caller (AddHeal, AddHots): HealPlan counts the HoTs on the target,
  * SurvivalValue also the pending heals and the healers' rate.
@@ -79,9 +81,23 @@ namespace IncomingTimeline
         float factorSec = 0.0f;
     };
 
+    // The member will lose control (stun, fear, sleep, silence, ...: SpellProfile::controls)
+    // from startSec to endSec: a spell sure to reach it (its victim, a sure target, or in the
+    // radius of an area spell around the caster; random targets do not count). From the
+    // current cast and the spell list rows like the hits, within HORIZON_SEC (Ground Tremor:
+    // boss doc G7). A healer cannot heal meanwhile (HealPlan::Healer::lockout*).
+    struct Lockout
+    {
+        float startSec = 0.0f;
+        float endSec = 0.0f;
+        uint32 spellId = 0;
+        ObjectGuid source;
+    };
+
     struct Timeline
     {
         std::vector<Event> events;  // sorted by atSec, within HORIZON_SEC
+        std::vector<Lockout> lockouts;  // sorted by startSec
         float steadyDps = 0.0f;     // modelled expected damage per second (beyond the horizon)
         float residualDps = 0.0f;   // measured damage the model does not explain
         float headroom = 0.0f;      // max health - health: heals beyond it are overheal
@@ -92,6 +108,8 @@ namespace IncomingTimeline
 
         // Seconds until `amount` health is lost (health + absorb = time to die). NO_LIMIT = never.
         float TimeToLose(float amount, bool worst, Relief const& relief = Relief()) const;
+        // The first lockout still to come (startSec > 0), null = none.
+        Lockout const* NextLockout() const;
     };
 
     Timeline Of(WorldModel const& world, PartyMemberFacts const& member);
