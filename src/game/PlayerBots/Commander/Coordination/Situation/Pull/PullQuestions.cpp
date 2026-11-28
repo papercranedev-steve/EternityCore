@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/Pull/PullQuestions.h"
+#include "Commander/Coordination/Situation/Pull/BossWaits.h"
 #include "Commander/Coordination/Situation/Pull/Camps.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/TeamPlan.h"
@@ -6,6 +7,8 @@
 #include "Creature.h"
 #include "Map.h"
 #include "Timer.h"
+#include <algorithm>
+#include <string>
 
 namespace Commander
 {
@@ -60,8 +63,23 @@ namespace PullQuestions
             ClearPlan& clear = plan.clear;
             if (clear.ask.first == q.first)
                 clear.ask = ClearAsk();
+            if (q.kind == PullAskKind::Boss)
+                BossWaits::Forget(plan.autoClear, q.pack);
             if (yes)
                 clear.approved.insert(clear.approved.end(), q.pack.begin(), q.pack.end());
+            else if (q.kind == PullAskKind::Boss)
+            {
+                // "Wait", not "never": asked again once he comes closer or selects it.
+                float approachYd = 0.0f;
+                for (PackFacts const& p : world.packs)
+                    if (std::any_of(p.members.begin(), p.members.end(), [&q](PackCreature const& c) { return c.guid == q.first; }))
+                        approachYd = p.ApproachYd();
+                BossWaits::Remember(plan.autoClear, q.pack, approachYd);
+                plan.autoClear.bossStartFor = ObjectGuid();
+                Note(plan, "You said wait: asking again when you come " +
+                    std::to_string(int(BossWaits::CLOSER_YD)) + " yd closer or select it.");
+                return;
+            }
             else
             {
                 clear.skipped.insert(clear.skipped.end(), q.pack.begin(), q.pack.end());

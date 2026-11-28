@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/Pull/BossWaits.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -140,12 +141,14 @@ namespace ClearPlanner
             return !mutual || other->ApproachYd() < pack.ApproachYd();
         }
 
-        bool IsInFront(WorldModel const& world, PackFacts const& pack)
+        // Any of `guids` is in a pack with a boss.
+        bool HasBoss(WorldModel const& world, std::vector<ObjectGuid> const& guids)
         {
-            if (!pack.route.blocker.IsEmpty() && BlockedByNearerPack(world, pack))
-                return false;
-            return pack.route.leaderSees ||
-                (pack.route.state == PackRouteState::Walk && pack.route.walkYd <= FRONT_UNSEEN_WALK_YD);
+            for (PackFacts const& pack : world.packs)
+                if (AnyMember(pack, [](PackCreature const& c) { return c.boss; }) &&
+                    AnyMember(pack, [&guids](PackCreature const& c) { return Contains(guids, c.guid); }))
+                    return true;
+            return false;
         }
 
         // A bot that can pull (Perception/Tanks.h).
@@ -383,9 +386,33 @@ namespace ClearPlanner
                 patrol->GetName(), plan.pull.ambushWaitSec, packName.c_str()));
         }
 
+        // A boss in a clear that asks: put to the player when the tank would go, everyone ready
+        // and nothing else in front left (user 2026-11-28: "boss next, start it?"; a yes then
+        // means the tank goes at once). True: put up, the pull is reset.
+        bool AskBossBeforeGoing(TeamPlan& plan, WorldModel const& world)
+        {
+            PullPlan const& pull = plan.pull;
+            ClearPlan& clear = plan.clear;
+            if (pull.phase != PullPhase::Approach || !pull.recheckOnApproach || pull.rechecked || pull.patrolFirst ||
+                !clear.asks || clear.chosenOnly)
+                return false;
+            std::vector<ObjectGuid> creatures = pull.expected;
+            if (!Contains(creatures, pull.target))
+                creatures.push_back(pull.target);
+            if (!HasBoss(world, creatures) || KeyIn(world, creatures, clear.approved))
+                return false;
+            // (another question waiting: planned again after it)
+            if (PutUp(clear, PackKey(world, creatures), pull.target, PullAskKind::Boss, 0))
+                Note(plan, "Everyone is ready for the boss: asking you whether to start it.");
+            plan.pull = PullPlan();
+            return true;
+        }
+
         void RecheckBeforeApproach(TeamPlan& plan, PartyCommander& commander, WorldModel const& world, Map* map,
                                    Player* leader, uint32 nowMs)
         {
+            if (AskBossBeforeGoing(plan, world))
+                return;
             std::string why;
             ObjectGuid patrolFirst;
             PullPlanner::RecheckResult const result = PullPlanner::RecheckBeforeApproach(plan, world, map, nowMs, why, &patrolFirst);
@@ -490,6 +517,14 @@ namespace ClearPlanner
     {
         std::vector<ObjectGuid> const key = PackKey(world, guids);
         return std::any_of(key.begin(), key.end(), [&list](ObjectGuid g) { return Contains(list, g); });
+    }
+
+    bool IsInFront(WorldModel const& world, PackFacts const& pack)
+    {
+        if (!pack.route.blocker.IsEmpty() && BlockedByNearerPack(world, pack))
+            return false;
+        return pack.route.leaderSees ||
+            (pack.route.state == PackRouteState::Walk && pack.route.walkYd <= FRONT_UNSEEN_WALK_YD);
     }
 
     void Start(Player* anchor, PartyCommander& commander, float radius, uint32 maxMobs, bool followsLeader)
@@ -644,6 +679,10 @@ namespace ClearPlanner
             return;
         }
 
+        // A boss question waiting: nothing else is pulled before his answer.
+        if (clear.ask.kind == PullAskKind::Boss && !clear.ask.pack.empty())
+            return;
+
         // Next pack, in PullOrder: open way first, nearest walk first, patrols last.
         bool passedOver = false;    // a pack is left for later (someone else is fighting it)
         uint32 stealthOnly = 0;     // packs whose hostile members are all stealthed now
@@ -690,12 +729,13 @@ namespace ClearPlanner
                 // (chosen packs: AutoClear decided, e.g. a neutral creature a quest needs)
                 bool const boss = !approved && !clear.chosenOnly && AnyMember(pack, [](PackCreature const& c) { return c.boss; });
                 bool const passive = !clear.chosenOnly && !AnyMember(pack, [](PackCreature const& c) { return c.aggressive && !c.noAggro; });
-                if (boss && !passive && clear.asks)
-                {
-                    PutUp(clear, pack, first, PullAskKind::Boss, 0);
+                // A clear that asks plans a boss like any pack and asks when the tank would go
+                // (AskBossBeforeGoing); one he said "wait" to is passed over (BossWaits.h).
+                bool const askBoss = boss && !passive && clear.asks;
+                // (another question waiting: the boss after it)
+                if (askBoss && (!clear.ask.pack.empty() || BossWaits::Holds(plan.autoClear, pack, leader->GetSelectionGuid())))
                     continue;
-                }
-                if (boss || passive)
+                if ((boss && !askBoss) || passive)
                 {
                     Skip(clear, pack);
                     Note(plan, std::string("Skipping ") + first->GetName() + "'s pack: " +
@@ -753,7 +793,8 @@ namespace ClearPlanner
                 // asked about when the clear asks, else skipped. A yes lets it through.
                 uint32 const count = uint32(plan.pull.expected.size());
                 bool const overLimit = clear.maxMobs && count > clear.maxMobs;
-                if (!approved && (plan.pull.hard || overLimit))
+                // (a boss: its own question covers it)
+                if (!approved && !askBoss && (plan.pull.hard || overLimit))
                 {
                     if (!overLimit && clear.asks)
                     {

@@ -1,4 +1,5 @@
 #include "Commander/Coordination/Situation/Pull/AutoClear.h"
+#include "Commander/Coordination/Situation/Pull/BossWaits.h"
 #include "Commander/Coordination/Situation/Pull/Camps.h"
 #include "Commander/Coordination/Situation/Pull/PackJudge.h"
 #include "Commander/Coordination/Situation/Pull/PullQuestions.h"
@@ -95,13 +96,50 @@ namespace AutoClear
             return WorldTimer::getMSTimeDiff(autoClear.leaderStillSinceMs, nowMs) >= LEADER_STILL_MS;
         }
 
+        template <class Pred>
+        bool AnyMember(PackFacts const& pack, Pred pred)
+        {
+            return std::any_of(pack.members.begin(), pack.members.end(), pred);
+        }
+
+        // A boss in front of him the clear would ask about now (header: no "wait" of his holds).
+        PackFacts const* BossToAsk(AutoClearPlan& autoClear, WorldModel const& world, Player* leader)
+        {
+            for (PackFacts const& pack : world.packs)
+            {
+                if (!AnyMember(pack, [](PackCreature const& c) { return c.boss; }) ||
+                    !AnyMember(pack, [](PackCreature const& c) { return c.aggressive && !c.noAggro; }))
+                    continue;
+                if (pack.route.state == PackRouteState::NoWay || pack.ApproachYd() > FRONT_WALK_YD ||
+                    !ClearPlanner::IsInFront(world, pack))
+                    continue;
+                if (BossWaits::Holds(autoClear, pack, leader->GetSelectionGuid()))
+                    continue;
+                return &pack;
+            }
+            return nullptr;
+        }
+
         void StepDungeon(TeamPlan& plan, PartyCommander& commander, WorldModel const& world, Player* leader, uint32 nowMs)
         {
             AutoClearPlan& autoClear = plan.autoClear;
             bool const idle = !plan.clear.active && plan.pull.phase == PullPhase::None && !TeamBusy(plan, world) &&
                 !world.HasPartyEnemy();
-            if (!idle || !LeaderSettled(autoClear, leader, nowMs) || !MayStartAgain(autoClear, leader, nowMs))
+            if (!idle)
                 return;
+            bool const settled = LeaderSettled(autoClear, leader, nowMs);
+            // A boss in front not asked about yet: no wait after the last clear; selecting it:
+            // not even the settle (once per boss, again after a "wait").
+            PackFacts const* boss = BossToAsk(autoClear, world, leader);
+            ObjectGuid const bossKey = boss ? ClearPlanner::PackKey(*boss).front() : ObjectGuid();
+            bool const fresh = boss && bossKey != autoClear.bossStartFor;
+            ObjectGuid const selection = leader->GetSelectionGuid();
+            bool const selected = boss && !LeaderBusy(leader) && !leader->IsInCombat() &&
+                AnyMember(*boss, [selection](PackCreature const& c) { return c.guid == selection; });
+            if (!(fresh && (settled || selected)) && !(settled && MayStartAgain(autoClear, leader, nowMs)))
+                return;
+            if (fresh)
+                autoClear.bossStartFor = bossKey;
             ClearPlanner::Start(leader, commander, FRONT_WALK_YD, 0);
             plan.clear.frontOnly = true;
             plan.clear.asks = true;
@@ -233,7 +271,12 @@ namespace AutoClear
 
         PackFacts const* askPack = nullptr;
         if (world.mapKind == MapKind::World)
+        {
+            // (out of the dungeon: its "wait" answers are gone with it)
+            autoClear.bossWaits.clear();
+            autoClear.bossStartFor = ObjectGuid();
             askPack = StepWorld(plan, commander, world, map, leader, nowMs);
+        }
         else
             StepDungeon(plan, commander, world, leader, nowMs);
         PullQuestions::Step(plan, world, map, askPack, nowMs);

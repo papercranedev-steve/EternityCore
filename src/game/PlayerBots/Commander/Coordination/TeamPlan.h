@@ -160,9 +160,10 @@ namespace Commander
         // never-starts-a-fight checks are AutoClear's then.
         bool chosenOnly = false;
         std::vector<ObjectGuid> chosen;
-        // A boss or a pack the fight estimate says is too hard (PullPlan::hard) is not skipped
-        // but put in `ask` (one at a time) and the clear does not end while it waits; the
-        // player's yes puts it in `approved` (no estimate or limit stops it then).
+        // A boss (when the tank would go) or a pack the fight estimate says is too hard
+        // (PullPlan::hard) is not skipped but put in `ask` (one at a time) and the clear does
+        // not end while it waits (a boss's: nothing else is pulled meanwhile); the player's yes
+        // puts it in `approved` (no estimate or limit stops it then).
         bool asks = false;
         ClearAsk ask;
         std::vector<ObjectGuid> approved;
@@ -256,10 +257,22 @@ namespace Commander
         uint32 untilMs = 0;
     };
 
+    // The player said "wait" to a boss question in a dungeon (or did not answer): not asked again
+    // until he walks closer or selects it (Situation/Pull/BossWaits.h).
+    struct BossWait
+    {
+        std::vector<ObjectGuid> pack;   // ClearPlanner::PackKey of the boss's pack
+        float approachYd = 0.0f;        // his walk to it when he answered (PackFacts::ApproachYd)
+    };
+
     // The player's active pull stance (PullStance.h): AutoClear starts clears on its own.
     struct AutoClearPlan
     {
         std::vector<CampMemory> camps;  // newest first: the first that matches counts (Situation/Pull/Camps.h)
+        std::vector<BossWait> bossWaits;
+        // The boss whose question a clear was last started for without the usual waits (once
+        // per boss, again after a "wait"; AutoClear.h). Empty: none.
+        ObjectGuid bossStartFor;
         uint32 nextQuestionId = 1;
         bool started = false;           // the running clear was started by AutoClear
         bool wasActive = false;         // a clear ran on the last refresh (any: also `.partybot ai clear`)

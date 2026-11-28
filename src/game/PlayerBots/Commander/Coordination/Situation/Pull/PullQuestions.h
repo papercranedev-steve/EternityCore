@@ -6,7 +6,9 @@
  * shows it (Companions/Fight/PullQuestion: popup and party chat; MarkShown), the answer comes
  * back through CommanderMgr (Answer). Then:
  *   Area     (the open world, PackJudge Ask) the answer is kept for the pack's camp (Camps.h)
- *   Boss / Hard  (a clear put the pack up, ClearPlan::ask) yes: ClearPlan::approved; no: skipped
+ *   Boss     (a clear asks when the tank would go, ClearPlan::ask) yes: ClearPlan::approved;
+ *            no ("wait"): BossWaits.h (asked again once he comes closer or selects it)
+ *   Hard     (a clear put the pack up, ClearPlan::ask) yes: ClearPlan::approved; no: skipped
  *   NotReady (any waiting pull, any stance: bots short of mana with nothing to drink,
  *            PullPlan::noDrink) yes: TeamPlan::readyWaiver (the pull goes without waiting for
  *            their mana; a clear's pack is approved too, so the estimate with their low mana

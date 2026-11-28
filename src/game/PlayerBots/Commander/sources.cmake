@@ -130,6 +130,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/Pull/Camps.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullQuestions.h
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullQuestions.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/BossWaits.h
+  ${COMMANDER_DIR}/Coordination/Situation/Pull/BossWaits.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Guide.h
   ${COMMANDER_DIR}/Coordination/Situation/Guide.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Stay.h

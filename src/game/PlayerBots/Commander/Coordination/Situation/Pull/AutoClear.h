@@ -13,6 +13,11 @@
  * later; any other end (deaths, a failed pull, stopped) -> once he moved MOVED_YD. No count
  * limit: a boss or a pack the fight estimate says is too hard (PullPlan::hard) is asked about
  * (ClearPlan::asks) instead of skipped.
+ * Bosses (user 2026-11-28): planned like any pack and asked about when the tank would go
+ * (everyone ready, nothing else in front); no other pack is pulled while that question waits.
+ * A boss in front not asked about yet starts a clear without the MOVED_YD / RETRY_MS wait, and
+ * at once (no settle) when he selects it; once per boss (AutoClearPlan::bossStartFor), again
+ * after a "wait" (BossWaits.h). Selecting it never pulls it: it is only asked sooner.
  *
  * Open world: a standing clear (ClearPlan::standing, chosenOnly) of the packs within
  * WORLD_RADIUS that PackJudge says Pull, chosen again every refresh; the nearest Ask pack is

@@ -15,6 +15,9 @@
  * resurrected in time, or somebody dies a second time (members already dead at the start
  * are waited for but do not count as a death).
  * Packs whose hostile members are all stealthed are passed over each round, not skipped.
+ * Bosses: skipped, or in a clear that asks (ClearPlan::asks) planned like any pack and put to
+ * the player when the tank would go (everyone ready); nothing else is pulled while that
+ * question waits; one he said "wait" to is passed over (Pull/BossWaits.h).
  *
  * A standing clear (the pull stance in the open world, Pull/AutoClear.h) never ends with nothing
  * left, follows the leader, calls a pull off when he walks away from the pack before the tank
@@ -78,6 +81,9 @@ namespace Commander
         std::vector<ObjectGuid> PackKey(PackFacts const& pack);
         // A guid of PackKey(world, guids) is in `list`.
         bool KeyIn(WorldModel const& world, std::vector<ObjectGuid> const& guids, std::vector<ObjectGuid> const& list);
+        // ClearPlan::frontOnly's "in front of the leader": nothing in between on the walk, and in
+        // his sight or a walk of at most FRONT_UNSEEN_WALK_YD.
+        bool IsInFront(WorldModel const& world, PackFacts const& pack);
 
         // `anchor`: where the clear is centred (the leader; the guide in the push mode).
         // `followsLeader`: pause while the leader walks away (false: the push planner moves the party).
