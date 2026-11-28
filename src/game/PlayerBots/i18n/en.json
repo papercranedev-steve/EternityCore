@@ -1045,6 +1045,15 @@
   "voice.boss.mograine.revived": "He's back up! I've got him, stay on Whitemane!",
   "voice.boss.gandling.healer": "I got teleported! Hold on, I'll be back once the room is clear!",
   "voice.boss.zf.wave3": "Two elites below. Go down with the prisoners, we will follow you.",
+  "voice.boss.angerforge.adds": "He called his reserves! Medics first, area spells on the rest!",
+  "voice.boss.angerforge.hold": [
+    "Don't push Angerforge under 30% yet, he calls reserves!",
+    "Hold damage until we're ready."
+  ],
+  "voice.boss.angerforge.push": [
+    "Ready, burn him!",
+    "Go, push him!"
+  ],
   "voice.quest.alldone": {
     "default": ["\"{quest}\" is done for all of us. Back to {giver}.", "We're done with \"{quest}\", let's hand it in to {giver}."],
     "chatty": "All done with \"{quest}\"! Come on, {giver} owes us a reward!",

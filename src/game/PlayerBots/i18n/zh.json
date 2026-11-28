@@ -1092,6 +1092,15 @@
   "voice.boss.mograine.revived": "他又站起来了！我拉住他，继续打怀特迈恩！",
   "voice.boss.gandling.healer": "我被传走了！先顶住，我清完房间就回来！",
   "voice.boss.zf.wave3": "下面那波有两个精英，跟着囚犯一起下去，我们跟着你。",
+  "voice.boss.angerforge.adds": "他叫援兵了！先打医师，预备兵用群攻！",
+  "voice.boss.angerforge.hold": [
+    "先别把安格弗打到三成，他会叫援兵！",
+    "停一停，等我们准备好再压他的血。"
+  ],
+  "voice.boss.angerforge.push": [
+    "可以了，打！",
+    "准备好了，压过去！"
+  ],
   "//43": "Quests in the party voice (Commander/Commands/Voice/QuestMoments.cpp; a hand-in: PartyBotAI::UpdateQuestTurnIn). {quest}: its title; {giver}: who it goes back to; {left}: voice.quest.part pieces joined by voice.quest.sep; {names}: bots not done; {name}: the player; {item}: a reward it put on.",
   "voice.quest.alldone": {
     "default": ["「{quest}」都齐了，回去找{giver}交吧。", "「{quest}」搞定了，去找{giver}交任务。"],
