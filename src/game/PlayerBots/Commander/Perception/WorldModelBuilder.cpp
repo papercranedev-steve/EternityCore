@@ -689,6 +689,9 @@ namespace WorldModelBuilder
                     }))
                     e.beingTamed = true;
             }
+            for (Aura const* aura : creature->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL))
+                if (std::find(e.periodicAuras.begin(), e.periodicAuras.end(), aura->GetId()) == e.periodicAuras.end())
+                    e.periodicAuras.push_back(aura->GetId());
             e.meleePhysical = creature->GetCreatureInfo()->damage_school == SPELL_SCHOOL_NORMAL;
             FillAttackPower(creature, e);
             e.armor = creature->GetArmor();
@@ -701,10 +704,11 @@ namespace WorldModelBuilder
                 // Standing back with melee off: it hurts with its main ranged spell instead.
                 if (profile->mainRangedSpellId && !e.meleeEnabled)
                     e.rangedDps = RangedSpellDps(*profile, e.level, e.meleeHit);
-                // EventAI low health enrages not up yet (IncomingTimeline).
+                // EventAI (and ability sheet) low health enrages not up yet (IncomingTimeline).
                 for (CreatureSpellRef const& ref : profile->spells)
                 {
-                    if (ref.source != SpellSource::EventAI || ref.healthPct <= 0.0f || creature->HasAura(ref.spellId))
+                    if ((ref.source != SpellSource::EventAI && ref.source != SpellSource::Sheet) ||
+                        ref.healthPct <= 0.0f || creature->HasAura(ref.spellId))
                         continue;
                     EnrageFacts f = EnrageOf(ref.spellId);
                     if (!f.spellId)

@@ -155,6 +155,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Profiles/SpellProfile.cpp
   ${COMMANDER_DIR}/Perception/Profiles/CreatureProfile.h
   ${COMMANDER_DIR}/Perception/Profiles/CreatureProfile.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/BossSheets.h
+  ${COMMANDER_DIR}/Perception/Profiles/BossSheets.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/SheetTimers.h
+  ${COMMANDER_DIR}/Perception/Forecast/SheetTimers.cpp
   ${COMMANDER_DIR}/Perception/Profiles/ProfileStore.h
   ${COMMANDER_DIR}/Perception/Profiles/ProfileStore.cpp
   ${COMMANDER_DIR}/Perception/Forecast/CombatRates.h

@@ -1,7 +1,8 @@
 /*
  * PartyBot Commander layer 1: what a creature can do, derived from world data.
  * Design: .kiro/docs/2026-11-01-value-scoring.md sections 4.2 and 4.3.
- * Built from static data only (creature_template, creature_spells, creature_ai_events).
+ * Built from static data only (creature_template, creature_spells, creature_ai_events, and the
+ * hand-written boss list and ability sheets of Profiles/BossSheets.h).
  */
 
 #ifndef MANGOS_COMMANDER_CREATURE_PROFILE_H
@@ -21,6 +22,7 @@ namespace Commander
         SpellList,  // creature_spells (spell_list_id)
         EventAI,    // cast action in creature_ai_events / creature_ai_scripts
         OnHit,      // triggered by a passive "proc trigger spell" aura in creature_template.auras
+        Sheet,      // a C++ boss script's own timer, from its ability sheet (Profiles/BossSheets.h)
     };
 
     struct CreatureSpellRef
@@ -37,10 +39,16 @@ namespace Commander
         uint32 targetParam2 = 0;
         uint32 initialMinMs = 0;        // first cast after the fight starts
         uint32 initialMaxMs = 0;
-        float healthPct = 0.0f;         // EventAI HP event: cast when health drops to this (0 = not HP-bound)
+        // EventAI HP event: cast when health drops to this; Sheet: cast only at or below it
+        // (0 = not HP-bound).
+        float healthPct = 0.0f;
         // Put back on the target soon after a dispel: on-hit procs, and spell list
         // entries that repeat every few seconds.
         bool reapplies = false;
+        uint8 sheetFlags = 0;           // Sheet: BossAbilityFlags
+
+        // A sheet row with no repeat delay: cast once a fight.
+        bool OncePerFight() const { return source == SpellSource::Sheet && repeatMaxMs == 0; }
     };
 
     struct SummonTimer
@@ -102,8 +110,8 @@ namespace Commander
         // Stands back and casts its main ranged spell; only walks in when that cast fails
         // (no line of sight, out of range, school locked, silenced). CreatureAI.cpp DoSpellsListCasts.
         uint32 mainRangedSpellId = 0;
-        // Boss or scripted encounter: world boss rank, C++ boss_ script, EventAI that sets
-        // instance data, or the override table. Pull/clear do not pick it on their own.
+        // Boss: world boss rank, C++ boss_ script, or the hand-written boss list
+        // (Profiles/BossSheets.h). Pull/clear do not pick it on their own.
         bool boss = false;
         // EventAI data is used only when ai_name is EventAI; a C++ script ignores those rows.
         bool scripted = false;

@@ -1,6 +1,7 @@
 #include "Commander/PartyCommander.h"
 #include "Commander/Behaviors/Arbiter.h"
 #include "Commander/Perception/WorldModelBuilder.h"
+#include "Commander/Perception/Forecast/SheetTimers.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/Coordination/Situation/Pull/AutoClear.h"
 #include "Commander/Coordination/Situation/Guide.h"
@@ -335,6 +336,8 @@ namespace Commander
         previous.enemies = std::move(m_world.enemies);
         WorldModelBuilder::RefreshCombat(bot, m_world, m_plan.coverage);
         m_threatHistory.Annotate(m_world, previous, nowMs);
+        // (after the history: the fight's age from EnemyFacts::firstSeenMs)
+        SheetTimers::Annotate(m_world, nowMs);
         m_combatRates.Annotate(m_world, nowMs);
         m_leaderRun.Annotate(m_world, nowMs);
 

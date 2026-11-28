@@ -48,24 +48,16 @@ namespace Commander
             m_seen = true;
         }
 
+        // Around her while she is there: her ability sheet (BossSheets.h). Here only the spot
+        // she comes back to while someone is possessed (she is not acting then, no sheet zone).
+        if (!possessing || !m_homeKnown)
+            return;
         ScriptedHazard h;
         h.spellId = SPELL_SILENCE;
         h.level = m_level;
-        if (possessing)
-        {
-            if (!m_homeKnown)
-                return;
-            h.center = m_home;
-            h.hasCenter = true;
-            h.intervalSec = SILENCE_SOON_SEC;
-        }
-        else
-        {
-            if (!boss)
-                return;
-            h.source = boss->guid;
-            h.intervalSec = SILENCE_REPEAT_SEC;
-        }
+        h.center = m_home;
+        h.hasCenter = true;
+        h.intervalSec = SILENCE_SOON_SEC;
         world.scriptedHazards.push_back(h);
     }
 

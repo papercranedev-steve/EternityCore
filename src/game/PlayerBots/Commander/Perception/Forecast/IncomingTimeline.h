@@ -15,7 +15,9 @@
  *             worst     maximum weapon damage x armor, never avoided
  *   cast    the spell it is casting now on this member (or an area spell reaching it): lands at
  *           cast end + flight; a channel spreads over its time left.
- *   list    creature_spells rows (EnemyFacts::spellList) simulated on the 1.2 s list check:
+ *   list    creature_spells rows (EnemyFacts::spellList; for a C++ boss its ability sheet rows
+ *           with estimated timers, Forecast/SheetTimers.h; a row once a fight fires at most
+ *           once and adds no steady rate) simulated on the 1.2 s list check:
  *           a row fires at the first check after its cooldown, one non triggered cast per check
  *           and none while casting (CreatureAI::DoSpellsListCasts), then waits its average
  *           repeat delay. Its target from castTarget: the victim, second / last on the threat

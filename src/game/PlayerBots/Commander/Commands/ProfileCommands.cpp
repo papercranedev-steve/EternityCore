@@ -3,6 +3,7 @@
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Profiles/BossSheets.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Values/CastValue.h"
 #include "Commander/Perception/Values/ControlValue.h"
@@ -148,6 +149,10 @@ namespace ProfileCommands
                     snprintf(buf, sizeof(buf), ", flags 0x%X %s", s.castFlags, CastFlagNames(s.castFlags).c_str());
                     head += buf;
                 }
+                if (s.OncePerFight())
+                    head += ", once";
+                if (s.sheetFlags & BOSS_ABILITY_EVERYONE_LEAVES)
+                    head += ", everyone leaves";
             }
             if (s.reapplies)
                 head += ", reapplies";
@@ -225,7 +230,7 @@ namespace ProfileCommands
                 p->override.interruptMult, p->override.tauntMult, p->override.comment.c_str());
 
         if (p->spells.empty())
-            handler->SendSysMessage("  spells: none known (C++ script creatures are not covered)");
+            handler->SendSysMessage("  spells: none known (a C++ script creature without an ability sheet, Profiles/BossSheets.h)");
         for (CreatureSpellRef const& s : p->spells)
             ShowSpellLine(handler, s.spellId, level, liveHit, SpellRefHead(s).c_str(), "    ");
         return true;

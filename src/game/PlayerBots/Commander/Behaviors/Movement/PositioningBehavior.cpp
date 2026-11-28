@@ -52,6 +52,13 @@ namespace Commander
             return HazardZones::DistanceTo(z, p) <= z.radius - margin;
         }
 
+        // Fights next to its victim: melee damage, and a tank (it only has zones that everyone
+        // leaves while they are cast, HAZARD_TANK).
+        bool MeleeLike(uint8 roleBit)
+        {
+            return roleBit == HAZARD_MELEE || roleBit == HAZARD_TANK;
+        }
+
         float HorizonSec(WorldModel const& world, HazardZone const& z)
         {
             // Copies: std::max takes references, and C++14 class constants have no definition.
@@ -129,7 +136,7 @@ namespace Commander
         // The zone's enemy is chasing the bot in melee and is free to follow (not rooted).
         bool ChasesMe(Context const& ctx, WorldModel const& world, HazardZone const& z)
         {
-            if (ctx.roleBit == HAZARD_MELEE)
+            if (MeleeLike(ctx.roleBit))
                 return false;   // melee stands next to it on purpose
             EnemyFacts const* e = world.FindEnemy(z.enemy);
             if (!e || e->victim != ctx.self->guid || !e->meleeEnabled || e->crowdControlled)
@@ -140,7 +147,7 @@ namespace Commander
 
         bool KeepsReach(Context const& ctx, Position3 const& p)
         {
-            return ctx.roleBit == HAZARD_MELEE && ctx.victim &&
+            return MeleeLike(ctx.roleBit) && ctx.victim &&
                    ctx.me->CanReachWithMeleeAutoAttackAtPosition(ctx.victim, p.x, p.y, p.z, -0.5f);
         }
 
@@ -163,7 +170,7 @@ namespace Commander
             // Field cells in a band just outside the zone (PositionField.h, FieldSpots.h).
             FieldSpots::Query q;
             q.center = zone.center;
-            q.minYd = zone.radius + (ctx.roleBit == HAZARD_MELEE ? PB::MELEE_RING_EXTRA : PB::RING_EXTRA);
+            q.minYd = zone.radius + (MeleeLike(ctx.roleBit) ? PB::MELEE_RING_EXTRA : PB::RING_EXTRA);
             q.maxYd = zone.radius + PB::RING_EXTRA + PB::SEARCH_BAND_YD;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
             std::vector<Spot> spots;
@@ -301,7 +308,7 @@ namespace Commander
             if (dodgeUntil > 0.0f)
                 holdSec = std::max(holdSec, dodgeUntil + SpotCost::DODGE_SLACK_SEC);
             float cost;
-            if (ctx.roleBit == HAZARD_MELEE && !spot.keepsReach)
+            if (MeleeLike(ctx.roleBit) && !spot.keepsReach)
             {
                 // Out of melee until the dodged cast ends, or for the horizon.
                 float const away = allDodges ? dodgeUntil : awaySec;
@@ -462,7 +469,7 @@ namespace Commander
         ctx.here.z = me->GetPositionZ();
 
         uint32 const nowMs = WorldTimer::getMSTime();
-        bool const gaveUp = ctx.roleBit == HAZARD_MELEE && MeleeGaveUp(bot->m_hazardGiveUp, zones, ctx.here, nowMs);
+        bool const gaveUp = MeleeLike(ctx.roleBit) && MeleeGaveUp(bot->m_hazardGiveUp, zones, ctx.here, nowMs);
         if (zones.empty())
             return;
 

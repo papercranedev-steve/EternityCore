@@ -20,10 +20,12 @@
  *     turned off: she cannot be killed meanwhile, and a control only drags it out.
  * Healers already leave a charmed member alone (HealPlanBehavior).
  *
- * Facts (AddFacts): her Silence (18327, around her, at once when a possession ends and every
- * 13-18 s) as a hazard zone (WorldModel::scriptedHazards): around her while she is there,
+ * Facts: her Silence (18327, around her, at once when a possession ends and every 13-18 s) is
+ * a hazard zone. Around her while she is there it comes from her ability sheet
+ * (Profiles/BossSheets.h, since 2026-11-28); AddFacts adds (WorldModel::scriptedHazards) the one
  * around the spot the script brings her back to while someone is possessed (she stands next
- * to the possessed member then, invisible). Healers and ranged stand clear (positioning).
+ * to the possessed member then, invisible and not acting). Healers and ranged stand clear
+ * (positioning).
  *
  * Known limits: the player's own damage is not limited; a pet's melee is called back only at
  * the stop line; the spot she returns to is where she stood on the refresh before her first
@@ -55,9 +57,9 @@ namespace Commander
         // The script checks every 1 s; the bots see the line on their next tick.
         static constexpr float WINDOW_SEC = 1.5f;
 
-        // Silence (18327): self cast every 13-18 s, and at once when a possession ends.
+        // Silence (18327): self cast every 13-18 s (her ability sheet), and at once when a
+        // possession ends.
         static constexpr uint32 SPELL_SILENCE = 18327;
-        static constexpr float SILENCE_REPEAT_SEC = 15.5f;
         // While someone is possessed the silence comes as soon as the member is freed: weighed
         // as this close, so casters already stand clear of her spot.
         static constexpr float SILENCE_SOON_SEC = 2.0f;

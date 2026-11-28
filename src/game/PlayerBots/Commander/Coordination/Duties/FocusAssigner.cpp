@@ -38,6 +38,8 @@ namespace Commander
         {
             if (ref.source == SpellSource::OnHit)
                 return false;
+            if (ref.OncePerFight() && enemy.castingSpellId != ref.spellId && enemy.LastCastStartMs(ref.spellId))
+                return false;
             return ref.healthPct <= 0.0f || enemy.healthPct <= ref.healthPct + CastValues::HP_EVENT_WINDOW_PCT;
         }
 

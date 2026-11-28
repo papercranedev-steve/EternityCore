@@ -2,6 +2,7 @@
 #include "Commander/Perception/Values/CastValue.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
+#include "Commander/Perception/Profiles/BossSheets.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Creature.h"            // CreatureInfo::auras
 #include "DBCStores.h"
@@ -28,6 +29,8 @@ namespace HazardZones
             float intervalSec = 0.0f;
             uint8 castTarget = 0xFF;
             float healthPct = 0.0f;     // EventAI health event threshold, 0 = none
+            bool once = false;          // ability sheet: once a fight (gone once seen cast)
+            bool everyone = false;      // ability sheet: BOSS_ABILITY_EVERYONE_LEAVES
         };
 
         // Effect targets that select "enemies around the caster's position". The source
@@ -103,7 +106,7 @@ namespace HazardZones
         // Single target control at a random member: the spell range is the zone.
         bool RangeOf(SpellEntry const* spell, CreatureSpellRef const& ref, HazardSource& out)
         {
-            if (ref.source != SpellSource::SpellList || !IsSpreadTarget(ref.castTarget))
+            if ((ref.source != SpellSource::SpellList && ref.source != SpellSource::Sheet) || !IsSpreadTarget(ref.castTarget))
                 return false;
             std::shared_ptr<SpellProfile const> sp = sProfileStore.GetSpell(spell->Id);
             if (!sp || !sp->controls || sp->radius > 0.0f)
@@ -163,6 +166,8 @@ namespace HazardZones
                         s.intervalSec = RepeatSec(ref);
                     s.castTarget = ref.castTarget;
                     s.healthPct = ref.healthPct;
+                    s.once = ref.OncePerFight();
+                    s.everyone = (ref.sheetFlags & BOSS_ABILITY_EVERYONE_LEAVES) != 0;
                     AddSource(out, s);
                 }
             }
@@ -213,10 +218,23 @@ namespace HazardZones
 
         bool MakeZone(WorldModel const& world, EnemyFacts const& e, HazardSource const& s, HazardZone& z)
         {
+            bool const castingIt = s.kind != HazardKind::Pulse && e.castingSpellId == s.spellId;
+            // A periodic trigger aura hurts while it is on the creature (a cast one like Herod's
+            // Whirlwind comes and goes; a template one can be dispelled or run out).
+            bool const pulseUp = s.kind == HazardKind::Pulse && e.HasPeriodicAura(s.spellId);
+            if (s.kind == HazardKind::Pulse && !pulseUp)
+                return false;
+            // Not acting (immune, unselectable): only what it is doing right now (Doan's
+            // Detonation in his bubble, a Whirlwind with an immunity on it).
+            if (!e.acting && !castingIt && !pulseUp)
+                return false;
             // Casts need a creature that can cast; periodic triggers tick regardless.
             if (s.kind != HazardKind::Pulse && (e.crowdControlled || e.silenced))
                 return false;
             if (s.healthPct > 0.0f && e.healthPct > s.healthPct + CastValues::HP_EVENT_WINDOW_PCT)
+                return false;
+            // Once a fight and already cast.
+            if (s.once && !castingIt && e.LastCastStartMs(s.spellId))
                 return false;
             if (s.kind != HazardKind::Pulse && !CanAfford(e, s.spellId))
                 return false;
@@ -239,7 +257,7 @@ namespace HazardZones
             z.damage = amounts.TotalDamage();
             z.periodic = amounts.periodicDamage > amounts.damage;
             z.intervalSec = std::max(0.5f, s.intervalSec);
-            z.casting = s.kind != HazardKind::Pulse && e.castingSpellId == s.spellId;
+            z.casting = castingIt;
             z.castRemainingSec = z.casting ? e.castRemainingMs / 1000.0f : 0.0f;
 
             z.roles = 0;
@@ -256,6 +274,14 @@ namespace HazardZones
                 z.roles |= HAZARD_HEALER | HAZARD_RANGED;
                 if (s.kind == HazardKind::Pulse || z.periodic)
                     z.roles |= HAZARD_MELEE;
+            }
+            // The sheet says everyone gets out: melee always, the tank while it is being cast
+            // (the caster stands still; at other times the boss would follow its tank).
+            if (s.everyone && z.damage > 0.0f)
+            {
+                z.roles |= HAZARD_MELEE;
+                if (z.casting)
+                    z.roles |= HAZARD_TANK;
             }
             return z.roles != 0;
         }
@@ -280,6 +306,7 @@ namespace HazardZones
             case ROLE_HEALER:    return HAZARD_HEALER;
             case ROLE_RANGE_DPS: return HAZARD_RANGED;
             case ROLE_MELEE_DPS: return HAZARD_MELEE;
+            case ROLE_TANK:      return HAZARD_TANK;
             default:             return 0;
         }
     }
@@ -289,8 +316,9 @@ namespace HazardZones
         std::vector<HazardZone> zones;
         for (EnemyFacts const& e : world.enemies)
         {
-            // Feigning death, divine shield, evading: does nothing.
-            if (!e.acting)
+            // Feigning death, divine shield, evading: does nothing, except a cast or a periodic
+            // aura it has going right now (MakeZone).
+            if (!e.acting && !e.castingSpellId && e.periodicAuras.empty())
                 continue;
             for (HazardSource const& s : SourcesOf(e.entry))
             {

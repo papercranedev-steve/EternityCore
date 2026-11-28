@@ -3,7 +3,9 @@
  * Design: .kiro/docs/2026-11-01-positioning.md. Zones: Perception/Spatial/HazardZones.h.
  *
  * Who: healers and ranged damage (control and damage areas), melee damage (only Pulse areas
- * and Burst spells whose damage is a periodic aura, e.g. Melt Ore). Not tanks.
+ * and Burst spells whose damage is a periodic aura, e.g. Melt Ore). Tanks only for the areas
+ * an ability sheet says everyone leaves, while they are cast (HAZARD_TANK, Doan's Detonation);
+ * they move like melee (reach first, the melee out-of-reach record).
  *
  * When: the bot stands at least ENTER_MARGIN inside a zone dangerous to its role. Nothing while
  * the retreat runs (RetreatBehavior owns movement at Override tier), during the pull's

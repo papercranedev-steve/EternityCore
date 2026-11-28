@@ -27,6 +27,9 @@ namespace CastValues
         {
             if (ref.source == SpellSource::OnHit)
                 return false;
+            // An ability sheet row cast once a fight, already cast.
+            if (ref.OncePerFight() && enemy.castingSpellId != ref.spellId && enemy.LastCastStartMs(ref.spellId))
+                return false;
             return ref.healthPct <= 0.0f || enemy.healthPct <= ref.healthPct + HP_EVENT_WINDOW_PCT;
         }
 

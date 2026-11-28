@@ -1,4 +1,5 @@
 #include "Commander/Perception/Profiles/CreatureProfile.h"
+#include "Commander/Perception/Profiles/BossSheets.h"
 #include "Creature.h"
 #include "CreatureEventAIMgr.h"
 #include "ScriptMgr.h"
@@ -62,6 +63,26 @@ namespace CreatureProfiles
                 ref.initialMaxMs = e.delayInitialMax;
                 if ((e.castFlags & CF_MAIN_RANGED_SPELL) && !p.mainRangedSpellId)
                     p.mainRangedSpellId = e.spellId;
+                Add(p, ref);
+            }
+        }
+
+        // A C++ boss script's own timers, written down by hand (BossSheets.h).
+        void AddSheet(CreatureProfile& p, BossSheet const& sheet)
+        {
+            for (BossAbility const& a : sheet.abilities)
+            {
+                CreatureSpellRef ref;
+                ref.spellId = a.spellId;
+                ref.source = SpellSource::Sheet;
+                ref.castTarget = a.castTarget;
+                ref.initialMinMs = a.initialMinMs;
+                ref.initialMaxMs = std::max(a.initialMinMs, a.initialMaxMs);
+                ref.repeatMinMs = a.repeatMinMs;
+                ref.repeatMaxMs = std::max(a.repeatMinMs, a.repeatMaxMs);
+                ref.reapplies = RepeatsSoon(ref.repeatMinMs, ref.repeatMaxMs);
+                ref.healthPct = a.belowPct;
+                ref.sheetFlags = a.flags;
                 Add(p, ref);
             }
         }
@@ -240,9 +261,8 @@ namespace CreatureProfiles
                         ScriptInfo const& info = step.second;
                         if (info.command == SCRIPT_COMMAND_FLEE && ev.event_type == EVENT_T_HP)
                             p.fleeAtHealthPct = std::max(p.fleeAtHealthPct, float(ev.percent_range.percentMax));
-                        // Drives an instance encounter (Mograine / Whitemane style EventAI bosses).
-                        if (info.command == SCRIPT_COMMAND_SET_INST_DATA)
-                            p.boss = true;
+                        // (Setting instance data no longer makes it a boss: trash does it too,
+                        // the boss list does it now, BossSheets.h.)
 
                         if (info.command != SCRIPT_COMMAND_CAST_SPELL)
                             continue;
@@ -308,9 +328,12 @@ namespace CreatureProfiles
 
         std::string const scriptName = info->script_id ? sScriptMgr.GetScriptName(info->script_id) : "";
         p.scripted = !scriptName.empty();
-        p.boss = info->rank == CREATURE_ELITE_WORLDBOSS || scriptName.compare(0, 5, "boss_") == 0;
+        p.boss = info->rank == CREATURE_ELITE_WORLDBOSS || scriptName.compare(0, 5, "boss_") == 0 ||
+                 BossSheets::IsListedBoss(info->entry);
 
         AddSpellList(p, info->spell_list_id);
+        if (BossSheet const* sheet = BossSheets::Find(info->entry))
+            AddSheet(p, *sheet);
         AddOnHitProcs(p, info->auras);
         if (info->auras)
             for (uint32 const* aura = info->auras; *aura; ++aura)
@@ -351,6 +374,7 @@ namespace CreatureProfiles
             case SpellSource::SpellList: return "list";
             case SpellSource::EventAI:   return "eai";
             case SpellSource::OnHit:     return "on-hit";
+            case SpellSource::Sheet:     return "sheet";
         }
         return "?";
     }

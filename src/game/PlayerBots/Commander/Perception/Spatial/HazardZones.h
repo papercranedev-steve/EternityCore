@@ -21,16 +21,23 @@
  *  Pulse  - an aura on the creature itself (creature_template.auras, or a self-cast spell list
  *           entry) of type SPELL_AURA_PERIODIC_TRIGGER_SPELL whose triggered spell is a Burst
  *           shape: Fire Shield 11966 -> 11968 every 3 s, 5 yd (Fireguard), 11350 -> 11351
- *           (Blazing Fireguard, Fireguard Destroyer). Ticks while the creature lives, also when
- *           it is controlled or silenced (periodic triggers ignore both).
+ *           (Blazing Fireguard, Fireguard Destroyer). Ticks while the aura is on the creature
+ *           (EnemyFacts::periodicAuras, since 2026-11-28: a cast one like Herod's Whirlwind
+ *           comes and goes, a template one can be dispelled or run out), also when it is
+ *           controlled or silenced (periodic triggers ignore both).
  *  Range  - (second priority) single target control with a random / not-top target
  *           (creature_spells castTarget 2, 3, 4, 5, 7): Druid's Slumber 8040, 30 yd. Standing
- *           outside the spell range takes the member out of the random pick. Only spell list
- *           entries: EventAI and C++ scripts (Whitemane's Dominate Mind) have no castTarget.
+ *           outside the spell range takes the member out of the random pick. Spell list and
+ *           ability sheet entries only: EventAI has no castTarget.
+ *
+ * C++ scripted bosses: their ability sheet rows (Profiles/BossSheets.h) are profile spells like
+ * a spell list. A sheet row once a fight is gone once it was seen cast.
  *
  * Burst and Range zones need a creature that can cast the spell now: not controlled, not
  * silenced, and with the mana for it (EnemyFacts::mana; a caster that ran dry chases in melee
  * and its Arcane Explosion area kept a mage walking away for 30 s, strat-20261101-224637).
+ * An enemy that is not acting (immune, unselectable) only has the zones of what it does right
+ * now: the spell it is casting, a periodic aura that is up (Doan's Detonation in his bubble).
  *
  * Who is in danger (roles bit mask)
  *  - control (silence, fear, stun, ... SpellProfile::controls): healers and ranged damage.
@@ -38,7 +45,9 @@
  *  - damage: healers and ranged; melee only for Pulse areas and Burst spells whose damage is
  *    mostly a periodic aura (Melt Ore: 7 fire per second for 20 s). Direct bursts such as
  *    Fireball Volley hit melee wherever they stand inside the 20 yd, nothing to gain.
- *  - tanks never: they hold the enemy where it is.
+ *  - tanks never: they hold the enemy where it is. Except an ability sheet row with
+ *    BOSS_ABILITY_EVERYONE_LEAVES: melee always, the tank while it is being cast (the caster
+ *    stands still for it).
  *
  * Value of one hit on a member (points, Value::Points): damage before resistances, plus for
  * control Value::LostAction(member, control seconds); control that breaks on damage on a member
@@ -49,10 +58,10 @@
  * a Burst zone of a spell around an enemy or a fixed point, with the module's repeat delay.
  *
  * Known limits: the profile lists what a creature can cast, not what it will cast this fight
- * (EventAI health events count only near their threshold); C++ scripted bosses have no
- * profile spells; the centre is the enemy position at the last refresh (a moving enemy takes
- * its area along between refreshes); Pulse auras are assumed present (an aura that was
- * dispelled or expired, like the 15 s Fire Shield 11350, still counts); resistances, spell
+ * (EventAI health events count only near their threshold); C++ scripted bosses without an
+ * ability sheet have no profile spells; the centre is the enemy position at the last refresh
+ * (a moving enemy takes its area along between refreshes); a Pulse aura cast by a C++ script
+ * counts only once it is up (no warning before it); resistances, spell
  * immunities and the spell leeway of moving casters are not modelled (RADIUS_MARGIN covers
  * the leeway in part).
  */
@@ -80,6 +89,8 @@ namespace Commander
         HAZARD_HEALER = 0x1,
         HAZARD_RANGED = 0x2,
         HAZARD_MELEE  = 0x4,
+        // Only ability sheet areas everyone leaves, while being cast (BOSS_ABILITY_EVERYONE_LEAVES).
+        HAZARD_TANK   = 0x8,
     };
 
     struct HazardZone
@@ -112,7 +123,7 @@ namespace Commander
         static constexpr float RANGE_ZONE_MIN = 8.0f;
         static constexpr float RANGE_ZONE_MAX = 36.0f;
 
-        // HAZARD_x bit for a CombatBotRoles value, 0 for tanks and unknown roles.
+        // HAZARD_x bit for a CombatBotRoles value, 0 for unknown roles.
         uint8 RoleBit(uint8 role);
 
         // All zones of all enemies in `world`. Pure, uncached.

@@ -447,13 +447,14 @@ namespace IncomingTimeline
                             t.events[i].expected *= chance;
                     }
                     uint32 const repeat = (r.f->repeatMinMs + r.f->repeatMaxMs) / 2;
-                    r.readyMs = check + std::max(1u, (repeat + SPELL_CHECK_MS - 1) / SPELL_CHECK_MS) * SPELL_CHECK_MS;
+                    r.readyMs = r.f->once ? HORIZON_MS :
+                        check + std::max(1u, (repeat + SPELL_CHECK_MS - 1) / SPELL_CHECK_MS) * SPELL_CHECK_MS;
                 }
             }
 
             for (Row const& r : rows)
             {
-                if (r.share <= 0.0f)
+                if (r.share <= 0.0f || r.f->once)
                     continue;
                 float const repeatSec = (r.f->repeatMinMs + r.f->repeatMaxMs) / 2000.0f;
                 float const cycle = std::max({ repeatSec, r.profile->castMs / 1000.0f + SPELL_CHECK_MS / 2000.0f,

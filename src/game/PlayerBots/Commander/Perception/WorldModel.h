@@ -862,6 +862,7 @@ namespace Commander
         uint8 probability = 100;
         uint8 castTarget = 0;       // ScriptTarget (TARGET_T_*)
         uint16 castFlags = 0;       // CF_*
+        bool once = false;          // ability sheet row cast once a fight (SheetTimers.h)
     };
 
     // A low health boost an EventAI creature casts on itself (Enrage 8269 / 8599: a
@@ -919,7 +920,13 @@ namespace Commander
         // boss scripts: their own timers are not readable).
         std::vector<ListSpellFacts> spellList;
         uint32 spellCheckInMs = 0;
-        std::vector<EnrageFacts> enrages;   // low health melee boosts still to come (EventAI)
+        // spellList holds the rows of its ability sheet with estimated timers (C++ boss
+        // script, Perception/Forecast/SheetTimers.h), not live ones.
+        bool spellListEstimated = false;
+        // Periodic trigger auras on it now (SPELL_AURA_PERIODIC_TRIGGER_SPELL: Fire Shield,
+        // Herod's Whirlwind): HazardZones' Pulse zones exist while theirs is up.
+        std::vector<uint32> periodicAuras;
+        std::vector<EnrageFacts> enrages;   // low health melee boosts still to come (EventAI, ability sheets)
         Position3 pos;
         // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
         float boundingRadius = 0.0f;
@@ -1015,6 +1022,10 @@ namespace Commander
         // of sight not checked.
         std::vector<ObjectGuid> outOfSight;
 
+        bool HasPeriodicAura(uint32 spellId) const
+        {
+            return std::find(periodicAuras.begin(), periodicAuras.end(), spellId) != periodicAuras.end();
+        }
         // 0 = not seen casting `spellId`.
         uint32 LastCastStartMs(uint32 spellId) const
         {
