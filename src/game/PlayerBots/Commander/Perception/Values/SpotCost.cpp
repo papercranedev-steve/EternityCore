@@ -28,6 +28,9 @@ namespace SpotCost
 
     float ZoneHits(HazardZone const& zone, float horizonSec, float leaveSec)
     {
+        // An area that ends (on the ground) hits only until then.
+        if (zone.endsInSec > 0.0f)
+            horizonSec = std::min(horizonSec, zone.endsInSec);
         if (!zone.casting)
             return horizonSec / zone.intervalSec;
         float const later = std::max(0.0f, horizonSec - zone.castRemainingSec) / zone.intervalSec;

@@ -23,8 +23,17 @@
  *           turns is not known before). Dangerous to everyone but tanks (TankStanceBehavior
  *           turns the enemy instead), melee too; the unit it points at (HazardZone::aim)
  *           cannot leave it. Crystallize 16104 (Mother Smolderweb, 10 yd stun), breaths.
- *           Not counted: AT_DEST_LOC (16, centred on the victim or a point), dynamic objects
- *           (28, placed once), script targets (7, creatures).
+ *           At a destination (boss doc G2, 2026-11-28): an effect at TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC
+ *           (16) or AT_DYNOBJ_LOC (28) of a spell with TARGET_FLAG_DEST_LOCATION: Flamestrike
+ *           12468 (Jammal'an, 16 + a persistent fire at 28). Only while it is read, centred on
+ *           EnemyFacts::castDest (SpellCaster::CastSpell gives it its target's position when it
+ *           starts); before that where it lands is not known (random targets). Channels
+ *           (Volley 22908) place their area at once: the Ground zone counts it.
+ *           Not counted: script targets (7, creatures).
+ *  Ground - a spell area on the ground (WorldModel::groundAreas: the dynamic object of a harmful
+ *           persistent area aura, placed by something hostile): Flamestrike's fire after it
+ *           lands, Volley, Blizzard. Its tick (the aura's periodic damage per amplitude) every
+ *           amplitude until it ends (HazardZone::endsInSec).
  *  Pulse  - an aura on the creature itself (creature_template.auras, or a self-cast spell list
  *           entry) of type SPELL_AURA_PERIODIC_TRIGGER_SPELL whose triggered spell is a Burst
  *           shape: Fire Shield 11966 -> 11968 every 3 s, 5 yd (Fireguard), 11350 -> 11351
@@ -55,6 +64,10 @@
  *  - tanks never: they hold the enemy where it is. Except an ability sheet row with
  *    BOSS_ABILITY_EVERYONE_LEAVES: melee always, the tank while it is being cast (the caster
  *    stands still for it).
+ *  - areas on the ground and at a cast's destination (HazardZone::onGround) with damage:
+ *    everyone, the tank too. The area stays where it is and the enemy follows its tank out.
+ *    Control only: healers and ranged, as above.
+ *  - a boss module zone with ScriptedHazard::roles: those roles.
  *
  * Value of one hit on a member (points, Value::Points): damage before resistances, plus for
  * control Value::LostAction(member, control seconds); control that breaks on damage on a member
@@ -62,7 +75,8 @@
  * which knows how many hits it adds up.
  *
  * Boss modules add what the data does not show (WorldModel::scriptedHazards, IEncounter::AddFacts):
- * a Burst zone of a spell around an enemy or a fixed point, with the module's repeat delay.
+ * a Burst zone of a spell around an enemy or a fixed point (onGround), with the module's repeat
+ * delay, dangerous to the roles derived from the spell or to the module's own (ScriptedHazard::roles).
  *
  * Known limits: the profile lists what a creature can cast, not what it will cast this fight
  * (EventAI health events count only near their threshold); C++ scripted bosses without an
@@ -88,6 +102,7 @@ namespace Commander
         Burst,      // area around the caster when it casts the spell
         Pulse,      // area around the caster every few seconds (periodic trigger aura)
         Range,      // single target control: anyone within spell range may be picked
+        Ground,     // a spell area on the ground (WorldModel::groundAreas), every tick until it ends
     };
 
     // Roles a zone is dangerous to (bit mask).
@@ -96,7 +111,9 @@ namespace Commander
         HAZARD_HEALER = 0x1,
         HAZARD_RANGED = 0x2,
         HAZARD_MELEE  = 0x4,
-        // Only ability sheet areas everyone leaves, while being cast (BOSS_ABILITY_EVERYONE_LEAVES).
+        // Areas that do not move with the enemy the tank holds: ability sheet areas everyone leaves
+        // while being cast (BOSS_ABILITY_EVERYONE_LEAVES), areas on the ground and at a cast's
+        // destination, and boss module zones that say so (ScriptedHazard::roles).
         HAZARD_TANK   = 0x8,
     };
 
@@ -124,6 +141,11 @@ namespace Commander
         float arc = 0.0f;
         float facing = 0.0f;
         ObjectGuid aim;
+        // The centre is a place, not the enemy (Ground zones, casts at a destination, boss module
+        // zones at a fixed point): it does not follow anyone, stepping out of it holds.
+        bool onGround = false;
+        // Seconds until it is gone (Ground: the dynamic object's time left), 0 = not known.
+        float endsInSec = 0.0f;
 
         bool DangerousTo(uint8 roleBit) const { return (roles & roleBit) != 0; }
         bool Cone() const { return arc != 0.0f; }

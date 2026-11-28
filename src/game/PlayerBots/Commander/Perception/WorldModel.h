@@ -907,6 +907,26 @@ namespace Commander
         uint32 level = 0;           // caster level for the amounts
         // Repeat delay, or the expected time to the next one: what positioning weighs it by.
         float intervalSec = 0.0f;
+        // Who must leave it (HazardRoles bit mask, HazardZones.h); 0 = derived from the spell like
+        // the other zones. HAZARD_TANK on a zone around an enemy only helps while that enemy stands
+        // still (it follows its tank otherwise): the module's call.
+        uint8 roles = 0;
+    };
+
+    // A spell area on the ground (a DynamicObject of a persistent area aura: Flamestrike's fire
+    // after it lands, Volley, Blizzard, poison clouds), placed by a creature hostile to the party
+    // (WorldModel::groundAreas, boss doc G2). HazardZones makes a Ground zone of it: it stays
+    // where it is, whoever moves.
+    struct GroundAreaFacts
+    {
+        ObjectGuid guid;
+        ObjectGuid caster;
+        uint32 spellId = 0;
+        uint8 effIndex = 0;         // the persistent area aura effect
+        Position3 pos;
+        float radius = 0.0f;
+        uint32 msLeft = 0;          // DynamicObject::GetDuration (a channel's lasts while the channel runs)
+        uint32 casterLevel = 0;     // for the tick amounts
     };
 
     // One creature_spells row of an enemy with its live timer (CreatureAI::GetSpellsListTimers),
@@ -1024,6 +1044,11 @@ namespace Commander
         uint32 victimSinceMs = 0;       // WorldTimer ms when it started hitting `victim`
         uint32 castingSpellId = 0;
         ObjectGuid castTarget;          // unit target of the current cast, empty = none / area
+        // Where the current cast lands: its destination (TARGET_FLAG_DEST_LOCATION: Flamestrike is
+        // given its target's position when it starts), else its unit target's position. A spell
+        // area at the destination is there (HazardZones, IncomingTimeline). False: neither.
+        bool hasCastDest = false;
+        Position3 castDest;
         bool castChanneled = false;
         bool castInterruptible = false;
         uint8 castCategory = 0;         // CastCategory (SpellTags.h)
@@ -1402,6 +1427,9 @@ namespace Commander
         // Hazards a boss module knows of (IEncounter::AddFacts; cleared by RefreshCombat): C++
         // scripted bosses have no spell list for HazardZones to derive them from.
         std::vector<ScriptedHazard> scriptedHazards;
+        // Spell areas on the ground placed by creatures hostile to us (GroundAreaFacts), within
+        // ALLY_RANGE of the leader; only while the party fights. Cleared by RefreshCombat.
+        std::vector<GroundAreaFacts> groundAreas;
         // An event with waves going on (boss doc 2.3), told by the boss module
         // (IEncounter::DescribeWaves) each refresh; inactive otherwise. Forecast/WaveEvent.h.
         WaveEventFacts waves;

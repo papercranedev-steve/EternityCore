@@ -36,6 +36,9 @@ namespace WorldModelBuilder
     // the leader, at most MAX_ALLIES (nearest first). Enemies fighting them only are added up
     // to MAX_ALLY_ENEMIES (a town guard fight must not flood the enemy list).
     float const ALLY_RANGE = 40.0f;
+    // WorldModel::groundAreas: scanned out to ALLY_RANGE + this (a margin for the area's own
+    // radius), kept within ALLY_RANGE + their radius.
+    float const GROUND_AREA_MAX_RADIUS = 15.0f;
     size_t const MAX_ALLIES = 10;
     size_t const MAX_ALLY_ENEMIES = 20;
     // AllyFacts::tankLike: elite and max health >= this x the party tank's max health.

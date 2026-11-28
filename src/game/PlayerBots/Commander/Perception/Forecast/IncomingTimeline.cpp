@@ -408,6 +408,9 @@ namespace IncomingTimeline
             bool reaches = e.castTarget == m.guid;
             if (p->coneArc != 0.0f)
                 reaches = InConeOf(world, e, *p, e.castTarget == e.guid ? ObjectGuid() : e.castTarget, m);
+            else if (!reaches && e.castTarget.IsEmpty() && e.hasCastDest)
+                // At a destination (Flamestrike: no unit target, the point it was given).
+                reaches = p->radius > 0.0f && PackResolver::Distance(e.castDest, m.pos) <= p->radius;
             else if (!reaches && (e.castTarget.IsEmpty() || e.castTarget == e.guid))
                 reaches = p->radius > 0.0f && PackResolver::Distance(e.pos, m.pos) <= p->radius + e.boundingRadius;
             else if (!reaches)

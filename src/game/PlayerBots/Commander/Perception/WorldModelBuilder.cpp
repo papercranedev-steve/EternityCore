@@ -36,6 +36,7 @@
 #include "ScriptedEscortAI.h"
 #include "Player.h"
 #include "Corpse.h"
+#include "DynamicObject.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
@@ -363,6 +364,16 @@ namespace WorldModelBuilder
             SpellEntry const* info = spell->m_spellInfo;
             e.castingSpellId = info->Id;
             e.castTarget = spell->m_targets.getUnitTargetGuid();
+            if (spell->m_targets.m_targetMask & TARGET_FLAG_DEST_LOCATION)
+            {
+                spell->m_targets.getDestination(e.castDest.x, e.castDest.y, e.castDest.z);
+                e.hasCastDest = true;
+            }
+            else if (Unit const* target = spell->m_targets.getUnitTarget())
+            {
+                e.castDest = Position3{ target->GetPositionX(), target->GetPositionY(), target->GetPositionZ() };
+                e.hasCastDest = true;
+            }
             e.castChanneled = channeled;
             e.castCategory = uint8(SpellTags::Categorize(info));
             e.castInterruptible = SpellTags::IsInterruptible(info, channeled, spell->GetCastTime());
@@ -522,6 +533,54 @@ namespace WorldModelBuilder
             if (!center->IsWithinDistInMap(c, ALLY_RANGE))
                 return false;
             return c->IsFriendlyTo(reference);
+        }
+
+        // Grid visitor: the dynamic objects of harmful persistent area auras (GroundAreaFacts).
+        struct GroundAreaCollector
+        {
+            std::vector<DynamicObject*>& found;
+
+            void Visit(DynamicObjectMapType& m)
+            {
+                for (auto& itr : m)
+                {
+                    DynamicObject* d = itr.getSource();
+                    if (!d->IsInWorld() || d->GetType() != DYNAMIC_OBJECT_AREA_SPELL || d->GetRadius() <= 0.0f)
+                        continue;
+                    SpellEntry const* spell = sSpellMgr.GetSpellEntry(d->GetSpellId());
+                    if (!spell || spell->Effect[d->GetEffIndex()] != SPELL_EFFECT_PERSISTENT_AREA_AURA ||
+                        spell->IsPositiveEffect(d->GetEffIndex()))
+                        continue;
+                    found.push_back(d);
+                }
+            }
+            template<class T> void Visit(GridRefManager<T>&) {}
+        };
+
+        // WorldModel::groundAreas: spell areas on the ground placed by something hostile to `me`,
+        // within ALLY_RANGE (plus their radius) of `reference`.
+        void FillGroundAreas(Player* me, Unit const* reference, WorldModel& world)
+        {
+            std::vector<DynamicObject*> found;
+            GroundAreaCollector collector{ found };
+            float const scan = ALLY_RANGE + GROUND_AREA_MAX_RADIUS;
+            Cell::VisitGridObjects(reference, collector, scan);
+            for (DynamicObject* d : found)
+            {
+                if (!d->IsHostileTo(me) || reference->GetDistance(d) > ALLY_RANGE + d->GetRadius())
+                    continue;
+                GroundAreaFacts g;
+                g.guid = d->GetObjectGuid();
+                g.caster = d->GetCasterGuid();
+                g.spellId = d->GetSpellId();
+                g.effIndex = uint8(d->GetEffIndex());
+                g.pos = Position3{ d->GetPositionX(), d->GetPositionY(), d->GetPositionZ() };
+                g.radius = d->GetRadius();
+                g.msLeft = d->GetDuration();
+                Unit const* caster = d->GetUnitCaster();
+                g.casterLevel = caster ? caster->GetLevel() : me->GetLevel();
+                world.groundAreas.push_back(g);
+            }
         }
 
         // AllyFacts::protect, the builder's rule: an escort on its way (npc_escortAI escorting,
@@ -2139,6 +2198,7 @@ namespace WorldModelBuilder
         world.enemies.clear();
         world.targeted.clear();
         world.scriptedHazards.clear();
+        world.groundAreas.clear();
         world.leader = Team::LeaderOf(me);
         world.humanInTeam = std::any_of(members.begin(), members.end(), [](Player* p)
             { return p && !(p->AI() && dynamic_cast<TeamBotAI const*>(p->AI())); });
@@ -2410,6 +2470,9 @@ namespace WorldModelBuilder
             FillEnemy(c, partyUnits, e);
             world.targeted.push_back(std::move(e));
         }
+
+        if (!world.enemies.empty())
+            FillGroundAreas(me, reference, world);
 
         UpdateCastStarts(world, partyUnits, WorldTimer::getMSTime());
     }

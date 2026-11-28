@@ -64,7 +64,8 @@ namespace Commander
             // Copies: std::max takes references, and C++14 class constants have no definition.
             float const base = PB::HORIZON_SEC;
             float const maxH = PB::MAX_HORIZON_SEC;
-            float h = z.kind == HazardKind::Pulse ? base : std::max(base, z.intervalSec);
+            bool const ticks = z.kind == HazardKind::Pulse || z.kind == HazardKind::Ground;
+            float h = ticks ? base : std::max(base, z.intervalSec);
             h = std::min(h, maxH);
             return std::max(1.0f, std::min(h, Value::FightRemainingSec(world)));
         }
@@ -139,6 +140,8 @@ namespace Commander
             // A cone pointed at the bot turns with it (HazardZone::aim).
             if (z.aim == ctx.self->guid)
                 return true;
+            if (z.onGround)
+                return false;   // a place: the chase does not bring it along
             if (MeleeLike(ctx.roleBit))
                 return false;   // melee stands next to it on purpose
             EnemyFacts const* e = world.FindEnemy(z.enemy);
@@ -148,8 +151,19 @@ namespace Commander
             return unit && !unit->HasUnitState(UNIT_STATE_ROOT);
         }
 
+        // A tank's victim that hits it and is free to walk comes along wherever it steps (out of
+        // an area on the ground): no melee is lost but the walk. Not while it casts (it stands).
+        bool FollowsTank(Context const& ctx)
+        {
+            return ctx.roleBit == HAZARD_TANK && ctx.victim && ctx.victim->GetVictim() == ctx.me &&
+                   !ctx.victim->HasUnitState(UNIT_STATE_ROOT | UNIT_STATE_CAN_NOT_REACT_OR_LOST_CONTROL) &&
+                   !ctx.victim->IsNonMeleeSpellCasted(false);
+        }
+
         bool KeepsReach(Context const& ctx, Position3 const& p)
         {
+            if (FollowsTank(ctx))
+                return true;
             return MeleeLike(ctx.roleBit) && ctx.victim &&
                    ctx.me->CanReachWithMeleeAutoAttackAtPosition(ctx.victim, p.x, p.y, p.z, -0.5f);
         }

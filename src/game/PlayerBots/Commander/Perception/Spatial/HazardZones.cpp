@@ -34,6 +34,9 @@ namespace HazardZones
             bool once = false;          // ability sheet: once a fight (gone once seen cast)
             bool everyone = false;      // ability sheet: BOSS_ABILITY_EVERYONE_LEAVES
             float arc = 0.0f;           // a cone (SpellTags::ConeArc), 0 = a circle
+            bool atDest = false;        // lands at the cast's destination (DestAreaRadius)
+            bool onGround = false;      // centred on a place (a boss module's fixed point)
+            uint8 roles = 0;            // HazardRoles set by a boss module, 0 = derived
         };
 
         // Effect targets that select "enemies around the caster's position". The source
@@ -53,6 +56,29 @@ namespace HazardZones
             for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
                 if (!spell->Effect[i] || !IsCasterCentred(spell->EffectImplicitTargetA[i], spell->EffectImplicitTargetB[i]))
+                    continue;
+                if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                    radius = std::max(radius, r->Radius);
+            }
+            return radius;
+        }
+
+        // Largest radius of the effects that land at the cast's destination (header: At a
+        // destination), 0 = none.
+        float DestAreaRadius(SpellEntry const* spell)
+        {
+            if (!(spell->Targets & TARGET_FLAG_DEST_LOCATION))
+                return 0.0f;
+            float radius = 0.0f;
+            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+            {
+                if (!spell->Effect[i])
+                    continue;
+                uint32 const a = spell->EffectImplicitTargetA[i];
+                uint32 const b = spell->EffectImplicitTargetB[i];
+                bool const atDest = a == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC || b == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC ||
+                                    a == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC || b == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC;
+                if (!atDest)
                     continue;
                 if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                     radius = std::max(radius, r->Radius);
@@ -158,7 +184,16 @@ namespace HazardZones
                     float const radius = CasterAreaRadius(spell);
                     float coneRadius = 0.0f;
                     float const arc = SpellTags::ConeArc(spell, &coneRadius);
-                    if (radius > 0.0f)
+                    float const destRadius = radius > 0.0f ? 0.0f : DestAreaRadius(spell);
+                    if (destRadius > 0.0f)
+                    {
+                        s.spellId = spell->Id;
+                        s.hitSpellId = spell->Id;
+                        s.kind = HazardKind::Burst;
+                        s.rawRadius = destRadius;
+                        s.atDest = true;
+                    }
+                    else if (radius > 0.0f)
                     {
                         s.spellId = spell->Id;
                         s.hitSpellId = spell->Id;
@@ -254,6 +289,9 @@ namespace HazardZones
             // A front cone at a random target: where it turns is only known while it is cast.
             if (s.arc > 0.0f && IsSpreadTarget(s.castTarget) && !castingIt)
                 return false;
+            // At a destination: only while it is read (a channel's area is a Ground zone).
+            if (s.atDest && (!castingIt || !e.hasCastDest || e.castChanneled))
+                return false;
 
             SpellEntry const* hit = sSpellMgr.GetSpellEntry(s.hitSpellId);
             std::shared_ptr<SpellProfile const> hp = sProfileStore.GetSpell(s.hitSpellId);
@@ -265,7 +303,8 @@ namespace HazardZones
             z.spellId = s.spellId;
             z.hitSpellId = s.hitSpellId;
             z.kind = s.kind;
-            z.center = e.pos;
+            z.center = s.atDest ? e.castDest : e.pos;
+            z.onGround = s.atDest || s.onGround;
             z.radius = s.rawRadius + RADIUS_MARGIN;
             z.control = hp->controls && amounts.controlSec > 0.0f;
             z.breaksOnDamage = hp->breaksOnDamage;
@@ -307,6 +346,50 @@ namespace HazardZones
                 if (z.casting)
                     z.roles |= HAZARD_TANK;
             }
+            // At a destination: it stays where it lands, the enemy follows its tank out (header).
+            if (s.atDest && z.damage > 0.0f)
+                z.roles |= HAZARD_MELEE | HAZARD_TANK;
+            // A boss module says who leaves.
+            if (s.roles)
+                z.roles = s.roles;
+            return z.roles != 0;
+        }
+
+        // A Ground zone of a spell area on the ground (header: Ground).
+        bool MakeGroundZone(GroundAreaFacts const& g, HazardZone& z)
+        {
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(g.spellId);
+            std::shared_ptr<SpellProfile const> profile = sProfileStore.GetSpell(g.spellId);
+            if (!spell || !profile || g.effIndex >= MAX_SPELL_EFFECTS)
+                return false;
+            uint32 const amplitudeMs = spell->EffectAmplitude[g.effIndex];
+            int32 const durationMs = spell->GetDuration();
+            if (!amplitudeMs || durationMs <= 0)
+                return false;
+            SpellAmounts const amounts = SpellProfiles::Estimate(spell, g.casterLevel, 0.0f);
+            float const ticks = std::max(1.0f, float(durationMs) / float(amplitudeMs));
+
+            z.enemy = g.caster;
+            z.spellId = g.spellId;
+            z.hitSpellId = g.spellId;
+            z.kind = HazardKind::Ground;
+            z.center = g.pos;
+            z.onGround = true;
+            z.radius = g.radius + RADIUS_MARGIN;
+            // Per tick: the periodic part (the direct part of Flamestrike landed already).
+            z.damage = amounts.periodicDamage / ticks;
+            z.periodic = true;
+            z.control = profile->controls && amounts.controlSec > 0.0f;
+            z.breaksOnDamage = profile->breaksOnDamage;
+            z.controlSec = amounts.controlSec;
+            z.intervalSec = std::max(0.5f, amplitudeMs / 1000.0f);
+            z.endsInSec = std::max(0.1f, g.msLeft / 1000.0f);
+
+            z.roles = 0;
+            if (z.control)
+                z.roles |= HAZARD_HEALER | HAZARD_RANGED;
+            if (z.damage > 0.0f)
+                z.roles |= HAZARD_HEALER | HAZARD_RANGED | HAZARD_MELEE | HAZARD_TANK;
             return z.roles != 0;
         }
 
@@ -382,8 +465,17 @@ namespace HazardZones
                 if (SpellRadiusEntry const* r = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
                     s.rawRadius = std::max(s.rawRadius, r->Radius);
             s.intervalSec = h.intervalSec;
+            s.onGround = !source;
+            s.roles = h.roles;
             HazardZone z;
             if (s.rawRadius > 0.0f && MakeZone(world, at, s, z))
+                zones.push_back(z);
+        }
+        // Spell areas on the ground.
+        for (GroundAreaFacts const& g : world.groundAreas)
+        {
+            HazardZone z;
+            if (MakeGroundZone(g, z))
                 zones.push_back(z);
         }
         return zones;
@@ -466,6 +558,7 @@ namespace HazardZones
             case HazardKind::Burst: return "burst";
             case HazardKind::Pulse: return "pulse";
             case HazardKind::Range: return "range";
+            case HazardKind::Ground: return "ground";
         }
         return "?";
     }
