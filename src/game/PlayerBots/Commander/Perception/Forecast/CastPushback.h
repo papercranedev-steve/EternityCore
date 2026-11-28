@@ -9,7 +9,8 @@
  * (Spell::GetNextDelayAtDamageMsTime, counted per cast), never back past the cast's start;
  * a fully absorbed hit delays nothing. (A trait's PushbackRate is not counted.)
  *
- * Hits: IncomingTimeline::Of (enemy swings, casts, spell list rows) within its horizon, plus
+ * Hits: IncomingTimeline::Of (enemy swings, casts, spell list rows; not its periodic ticks,
+ * Event::periodic: a channel's damage too, spread as ticks there) within its horizon, plus
  * the measured damage the model does not explain (Timeline::residualDps: an aura's pulses, a
  * script's area damage) as evenly spaced hits at the measured hit rate's share of it
  * (PartyMemberFacts::takenHitsPerSec x residual / measured dps). Periodic ticks among the

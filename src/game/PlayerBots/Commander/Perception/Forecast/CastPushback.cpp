@@ -12,7 +12,7 @@ namespace CastPushback
         std::vector<Hit> out;
         IncomingTimeline::Timeline const timeline = IncomingTimeline::Of(world, member);
         for (IncomingTimeline::Event const& e : timeline.events)
-            if (e.expected > 0.0f && e.atSec >= 0.0f && e.atSec < horizonSec)
+            if (e.expected > 0.0f && !e.periodic && e.atSec >= 0.0f && e.atSec < horizonSec)
                 out.push_back({ e.atSec, e.expected });
         // The measured damage the model does not explain, as evenly spaced hits (header).
         float const residual = timeline.residualDps;

@@ -200,6 +200,7 @@ namespace IncomingTimeline
                     ev.worst = s.periodic / float(ticks);
                     ev.spellId = spellId;
                     ev.source = e.guid;
+                    ev.periodic = true;
                     t.events.push_back(ev);
                 }
             }

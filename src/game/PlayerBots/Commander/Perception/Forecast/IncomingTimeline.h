@@ -72,6 +72,9 @@ namespace IncomingTimeline
         float worstSpike = 0.0f;    // extra damage if this hit crits (worst case: the biggest one does)
         uint32 spellId = 0;         // 0 = melee swing, heals: the heal
         ObjectGuid source;
+        // A periodic tick (a DoT, a channel spread over its time): no cast pushback
+        // (Unit::DealDamage, CastPushback).
+        bool periodic = false;
     };
 
     // What is done against the damage on top of the events (SurvivalValue: the healers' rate,
