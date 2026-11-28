@@ -446,6 +446,9 @@ public:
     // The food or drink spell used but not cast yet: an instant with a global cooldown is cast
     // at the next spell update, its aura comes only then.
     bool IsRestPending() const;
+    // Before it sits down to eat or drink: a step off a wall it stands against
+    // (Commander/Perception/Spatial/WallClearance.h). True: on the way, sit later.
+    bool StepOffWallToRest();
     // The Commander plan's constraints (TeamPlan::EngageBlock / ForbidsGapCloser, directive
     // types doc), asked by the rotation the same way the arbiter asks them for module proposals.
     // Engage: this bot must not chase / attack `pUnit` (a patrol's path unless it is the bot's
@@ -602,6 +605,16 @@ public:
     // What its last fights cost in mana (Commander/Perception/Values/FightManaSpend.h), every
     // tick in UpdateBody. Not saved: a new session starts from the place's default.
     Commander::FightManaSpendState m_fightManaSpend;
+    // StepOffWallToRest: the step under way (since when), and where the last one ended (no
+    // second step from there: the room is what it found).
+    struct RestStepState
+    {
+        uint32 sinceMs = 0;
+        bool walking = false;
+        bool done = false;
+        float doneX = 0.0f, doneY = 0.0f;
+    };
+    RestStepState m_restStep;
     // Casting or on the global cooldown in the last frame: the next bot update runs in the
     // frame this ends instead of up to a bot interval later (UpdateAI).
     bool m_wasBusy = false;

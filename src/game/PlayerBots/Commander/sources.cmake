@@ -468,6 +468,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.h
   ${COMMANDER_DIR}/Perception/Spatial/TravelTime.cpp
+  ${COMMANDER_DIR}/Perception/Spatial/WallClearance.h
+  ${COMMANDER_DIR}/Perception/Spatial/WallClearance.cpp
   ${COMMANDER_DIR}/Perception/Spatial/NavPather.h
   ${COMMANDER_DIR}/Perception/Spatial/NavPather.cpp
   ${COMMANDER_DIR}/Perception/Spatial/RoadNetwork.h

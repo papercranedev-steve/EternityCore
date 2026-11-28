@@ -46,6 +46,7 @@
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
+#include "Commander/Perception/Spatial/WallClearance.h"
 #include "Commander/Perception/Values/RestValue.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
@@ -1186,6 +1187,10 @@ bool TeamBotAI::StartResting()
     {
         if (me->IsMounted())
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+        // Fix: a mage stopped against a wall (the follow path round a corner hugs the mesh
+        // edge) and sat down half inside it. A step off it first.
+        if (StepOffWallToRest())
+            return true;
         if (me->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
             me->StopMoving();
@@ -1199,6 +1204,41 @@ bool TeamBotAI::StartResting()
     if (startDrink && !ActiveRest(Kind::Drink) && !IsRestPending())
         BeginRest(Kind::Drink);
     return IsResting() || IsRestPending();
+}
+
+bool TeamBotAI::StepOffWallToRest()
+{
+    // A step takes a second or two; one that has not ended by then is given up.
+    uint32 const STEP_MAX_MS = 3000;
+    // Moved this far from where the last step ended: a new place, looked at again.
+    float const STEP_AGAIN_YD = 1.0f;
+
+    uint32 const now = WorldTimer::getMSTime();
+    MotionMaster* const mm = me->GetMotionMaster();
+    if (m_restStep.walking)
+    {
+        if (mm->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE &&
+            WorldTimer::getMSTimeDiff(m_restStep.sinceMs, now) < STEP_MAX_MS)
+            return true;
+        m_restStep.walking = false;
+        m_restStep.done = true;
+        m_restStep.doneX = me->GetPositionX();
+        m_restStep.doneY = me->GetPositionY();
+        return false;
+    }
+    if (m_restStep.done && me->GetDistance2d(m_restStep.doneX, m_restStep.doneY) < STEP_AGAIN_YD)
+        return false;
+    m_restStep.done = false;
+
+    Commander::WallClearance::Spot to;
+    if (!Commander::WallClearance::StepClear(me, Commander::WallClearance::SEATED_YD, to))
+        return false;
+    me->StopMoving();
+    mm->Clear(false, true);
+    mm->MovePoint(0, to.x, to.y, to.z, MOVE_PATHFINDING | MOVE_WALK_MODE);
+    m_restStep.walking = true;
+    m_restStep.sinceMs = now;
+    return true;
 }
 
 float TeamBotAI::DrinkStartShare() const
