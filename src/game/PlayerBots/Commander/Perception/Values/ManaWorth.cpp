@@ -1,5 +1,6 @@
 #include "Commander/Perception/Values/ManaWorth.h"
 #include "Commander/Perception/Forecast/ManaBudget.h"
+#include "Commander/Perception/Forecast/WaveEvent.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include <algorithm>
@@ -50,6 +51,8 @@ namespace ManaWorth
             float incomingDps = 0.0f;
             float headroom = 0.0f;
             float floor = SCARCITY_FLOOR;
+            // The live fight: an event's waves still to come count too (WaveEvent::FutureMana).
+            bool live = false;
         };
 
         Context Live(WorldModel const& world)
@@ -58,6 +61,7 @@ namespace ManaWorth
             c.fightSec = Value::FightRemainingSec(world);
             c.incomingDps = world.rates.incomingDps;
             c.headroom = Headroom(world);
+            c.live = true;
             return c;
         }
 
@@ -71,15 +75,16 @@ namespace ManaWorth
 
         float TensionWith(WorldModel const& world, Context const& c, PartyMemberFacts const& m, float mana)
         {
+            float const future = c.live ? WaveEvent::FutureMana(world, m) : 0.0f;
             if (IsHealer(m))
             {
                 float const needed = ManaBudget::NeededHealing(c.incomingDps, c.fightSec, c.headroom, world.rates.healers);
-                return ManaBudget::Tension(ManaBudget::NeededMana(needed, HealPerMana(m)), mana);
+                return ManaBudget::Tension(ManaBudget::NeededMana(needed, HealPerMana(m)) + future, mana);
             }
             if (m.fillerManaPerSec <= 0.0f)
                 return 0.0f;
             // Fight left / seconds the mana lasts = mana needed / mana.
-            return ManaBudget::Tension(c.fightSec * m.fillerManaPerSec, mana);
+            return ManaBudget::Tension(c.fightSec * m.fillerManaPerSec + future, mana);
         }
 
         float WorthIn(WorldModel const& world, Context const& c, PartyMemberFacts const& member, float mana)

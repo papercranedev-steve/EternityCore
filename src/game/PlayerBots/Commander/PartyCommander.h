@@ -10,6 +10,7 @@
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Forecast/ThreatHistory.h"
 #include "Commander/Perception/Forecast/CombatRates.h"
+#include "Commander/Perception/Forecast/WaveEvent.h"
 #include "Commander/Perception/Spatial/MeleeRoutes.h"
 #include "Commander/Perception/Spatial/PositionFieldBuilder.h"
 #include "Commander/Perception/Forecast/FleePredictor.h"
@@ -66,7 +67,7 @@ namespace Commander
             // The push mode's guide walking a leg (PushBehavior moves it out of combat).
             // A team of bots going for its next fight (HuntAssigner).
             return pulling || m_plan.retreat.active || m_world.HasPartyEnemy() || !m_world.targeted.empty() ||
-                   m_plan.noRest || m_plan.push.walking || m_plan.hunt.Active();
+                   m_plan.noRest || m_plan.noNewRest || m_plan.push.walking || m_plan.hunt.Active();
         }
         uint64 GetTeamKey() const { return m_teamKey; }
         uint32 GetMapId() const { return m_mapId; }
@@ -127,6 +128,7 @@ namespace Commander
         TeamPlan m_plan;
         ThreatHistory m_threatHistory;
         CombatRates m_combatRates;
+        WaveSpend m_waveSpend;
         MeleeRoutes m_meleeRoutes;
         PositionFieldBuilder m_positionField;
         FleePredictor m_fleePredictor;

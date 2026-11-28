@@ -2195,6 +2195,7 @@ namespace WorldModelBuilder
                     f.functions = BotFunctions(f, coverage);
                     f.drinkManaPerSec = ai->DrinkManaPerSec();
                     f.drinkStartShare = ai->DrinkStartShare();
+                    f.fightManaShare = ai->FightManaShare();
                     f.foodHealthPerSec = ai->FoodHealthPerSec();
                     f.drinking = ai->IsDrinking();
                     f.hasDrink = f.drinking || ai->NextRest(BotShared::FoodAndDrink::Kind::Drink) != nullptr;

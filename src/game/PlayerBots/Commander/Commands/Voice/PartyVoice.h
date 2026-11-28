@@ -96,6 +96,9 @@ namespace Commander
         void MemberMoments(Map* map, WorldModel const& world, bool fighting, bool fightEnded, uint32 nowMs);
         void QuietMoments(WorldModel const& world, TeamPlan const& plan, VoiceSettings const& settings, bool fighting,
                           uint32 nowMs);
+        // An event the player paces (WavePace::Player, boss doc 2.3): bots drinking between waves
+        // say so, and once they are done one says the party is ready for the next.
+        void WaveMoments(WorldModel const& world, bool fighting, uint32 nowMs);
         // QuestMoments.cpp: the party's quest progress (who is done, who still needs what).
         void QuestMoments(Map* map, WorldModel const& world, Player const* human, bool fighting, uint32 nowMs);
         void QuestNews(Map* map, WorldModel const& world, Player const* human, uint32 questId, uint32 nowMs);
@@ -127,6 +130,10 @@ namespace Commander
         PullLosBreak m_losBreak = PullLosBreak::None;
         ObjectGuid m_patrolWait;
         bool m_waitChecked = false;     // this pull's "waiting for" was looked at
+        // WaveMoments: the gap (waves arrived when it began) and whether a bot drank in it.
+        uint32 m_waveGap = 0;
+        bool m_waveDrank = false;
+        bool m_waveReadySaid = false;
         bool m_retreat = false;
         bool m_retreatAdvice = false;
         bool m_wipe = false;

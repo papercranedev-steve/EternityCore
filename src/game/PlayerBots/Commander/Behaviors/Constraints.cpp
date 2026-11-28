@@ -321,7 +321,8 @@ namespace Commander
                 case BotActionType::Cast:
                     return BrokenByCast(bot, world, plan, p.action, p.source, nowMs);
                 case BotActionType::Rest:
-                    return plan.ForbidsRest(self) ? "no rest" : nullptr;
+                    // (sitting already: only ForbidsRest stops it; a new rest also noNewRest)
+                    return (bot->IsResting() ? plan.ForbidsRest(self) : plan.ForbidsNewRest(self)) ? "no rest" : nullptr;
                 default:
                     return nullptr;
             }

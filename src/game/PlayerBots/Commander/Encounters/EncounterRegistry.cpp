@@ -5,7 +5,9 @@
 #include "Commander/Encounters/ScarletHerod.h"
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
 #include "Commander/Encounters/GnomereganThermaplugg.h"
+#include "Commander/Encounters/RazorfenBelnistrasz.h"
 #include "Commander/Encounters/ScholomanceGandling.h"
+#include "Commander/Encounters/WailingCavernsNaralex.h"
 #include "Commander/Encounters/StratholmeAnastari.h"
 #include "Commander/Encounters/SunkenTempleHakkar.h"
 #include "Commander/Encounters/ZulFarrakPyramid.h"
@@ -35,7 +37,9 @@ namespace Commander
             { ScarletHerod::MAP_ID,             &Make<ScarletHerod> },
             { ScarletMograineWhitemane::MAP_ID, &Make<ScarletMograineWhitemane> },
             { GnomereganThermaplugg::MAP_ID,    &Make<GnomereganThermaplugg> },
+            { RazorfenBelnistrasz::MAP_ID,      &Make<RazorfenBelnistrasz> },
             { ScholomanceGandling::MAP_ID,      &Make<ScholomanceGandling> },
+            { WailingCavernsNaralex::MAP_ID,    &Make<WailingCavernsNaralex> },
             { StratholmeAnastari::MAP_ID,       &Make<StratholmeAnastari> },
             { SunkenTempleHakkar::MAP_ID,       &Make<SunkenTempleHakkar> },
             { ZulFarrakPyramid::MAP_ID,         &Make<ZulFarrakPyramid> },

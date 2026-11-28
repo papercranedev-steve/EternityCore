@@ -53,6 +53,7 @@ class TeamBotAI : public CombatBotBaseAI
 {
 public:
     TeamBotAI() : CombatBotBaseAI() { m_updateTimer.Reset(2000); }
+    ~TeamBotAI() override;
 
     // The team's leader the bot plays with (the player of a party), null without one.
     virtual Player* GetPartyLeader() const = 0;
@@ -146,6 +147,10 @@ public:
     void SetEmergencyRole(CombatBotRoles role);
     void RestoreRole();
     bool HasEmergencyRole() const { return m_roleBeforeEmergency != ROLE_INVALID; }
+    // Each tick out of combat (UpdateBody): the role it dresses for (its role, the one before an
+    // emergency role) to Shared/GearUpgrade, which compares gear by it. After a change, what it
+    // carries that fits the new role better is put on (a paladin from tank to healer).
+    void PublishGearRole();
 
     bool CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const final;
     // Seconds until CanTryToCastSpell would pass when only the spell's cooldown, the global
@@ -391,6 +396,9 @@ public:
     // cost (RestValue::DrinkStartShare, user 2026-11-24). A fact for the Commander
     // (PartyMemberFacts::drinkStartShare).
     float DrinkStartShare() const;
+    // The average mana share its last fights in this kind of place cost (FightManaSpend), 0
+    // while too few were recorded. PartyMemberFacts::fightManaShare.
+    float FightManaShare() const;
     // StartResting's line for a new drink: DrinkStartShare, or higher while a pull waits for
     // more (RestValue::DrinkBelowShare, PullPlanner::ReadyManaShare).
     float DrinkBelowShareNow() const;
@@ -404,7 +412,10 @@ public:
     // still ticks (poison, bleed: they do not stand it up, the food keeps up with them).
     // Called each tick before the stand-up check, so a full bot stands at once instead of
     // sitting out the aura (stockade-20261114-221943: full at 10 s, sat to 34 s).
-    void EndRestWhenFull();
+    // Both off, full or not, while the Commander's plan forbids rest for it (TeamPlan::
+    // ForbidsRest: the next wave of an event is about to arrive, a retreat; until 2026-11-28
+    // a drink once started ran to full even then).
+    void EndRestWhenDone();
     // Out of its rest (not resting any more): a sitting bot stands up and stays a moment
     // (STAND_BEAT_MIN_MS..MAX) before it goes on (user 2026-11-28: standing up and running in
     // the same instant looked like a machine). `hurry`: no moment (a fight, the leader walks
@@ -522,6 +533,10 @@ public:
     bool m_roleLocked = false;
     // The role before SetEmergencyRole, ROLE_INVALID = no emergency role.
     CombatBotRoles m_roleBeforeEmergency = ROLE_INVALID;
+    // The role it dresses for as published (PublishGearRole), ROLE_INVALID = not yet; the
+    // player it was published for (forgotten with the AI).
+    CombatBotRoles m_gearRole = ROLE_INVALID;
+    ObjectGuid m_gearRoleGuid;
     // Commander position module (Commander/Behaviors/Movement/PositioningBehavior.cpp): the area a melee
     // bot last stepped out of without its victim in reach. After that one step it fights inside
     // the area until it leaves it or the area is gone. Mutable: behaviors get a const bot.

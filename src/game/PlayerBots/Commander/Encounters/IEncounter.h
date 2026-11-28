@@ -32,6 +32,7 @@
 #include "Commander/CommanderTypes.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/WorldModel.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -99,6 +100,13 @@ namespace Commander
         // also runs out of combat (PartyCommander::WantsOutOfCombatControl). Return a value
         // computed in Refresh.
         virtual bool ForbidsRest() const { return false; }
+
+        // An event with waves (boss doc 2.3): how they come, how many are left, when the next
+        // one reaches the party (WaveEventFacts, the module's part). PartyCommander puts it in
+        // WorldModel::waves after Refresh; the mana budget (WaveEvent::FutureMana) and the rest
+        // rule (Coordination/Situation/WaveRest.h) read it. Leave `out` inactive when there is
+        // none. Return values computed in Refresh.
+        virtual void DescribeWaves(WaveEventFacts& /*out*/) const {}
 
         // Fight over or module switched off: forget everything about this attempt.
         virtual void OnReset() = 0;

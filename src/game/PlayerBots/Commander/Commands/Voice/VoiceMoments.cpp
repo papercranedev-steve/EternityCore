@@ -84,7 +84,46 @@ namespace Commander
             m_lastFightEndMs = nowMs;
         QuietMoments(world, plan, settings, fighting, nowMs);
         QuestMoments(map, world, human, fighting, nowMs);
+        WaveMoments(world, fighting, nowMs);
         Remember(world, plan);
+    }
+
+    void PartyVoice::WaveMoments(WorldModel const& world, bool fighting, uint32 nowMs)
+    {
+        WaveEventFacts const& waves = world.waves;
+        if (!waves.active || waves.pace != WavePace::Player || !waves.wavesLeft)
+            return;
+        if (fighting || waves.wavesArrived != m_waveGap)
+        {
+            // A wave on, or a new one came: the next gap starts over.
+            m_waveGap = waves.wavesArrived;
+            m_waveDrank = false;
+            m_waveReadySaid = false;
+            if (fighting)
+                return;
+        }
+        // Drinking: each bot says it once per gap (as while a pull waits, voice.pull.wait.mana).
+        bool resting = false;
+        uint32 said = 0;
+        std::string const gap = std::to_string(m_waveGap);
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.isBot || m.isPet || !m.alive || !(m.drinking || m.eating))
+                continue;
+            resting = true;
+            m_waveDrank = true;
+            if (m.drinking && said < 2)
+            {
+                Say("voice.pull.wait.mana", m.guid, VoiceTier::Essential, nowMs, {}, "wavewait:" + gap + ":" + G(m.guid), 600000);
+                ++said;
+            }
+        }
+        // Everyone up again after somebody had to drink: the party is ready for the next wave.
+        if (!resting && m_waveDrank && !m_waveReadySaid)
+        {
+            m_waveReadySaid = true;
+            Say("voice.event.ready", ObjectGuid(), VoiceTier::Essential, nowMs, {}, "waveready:" + gap, 600000);
+        }
     }
 
     void PartyVoice::PullMoments(Map* map, WorldModel const& world, TeamPlan const& plan, Player const* human, uint32 nowMs)

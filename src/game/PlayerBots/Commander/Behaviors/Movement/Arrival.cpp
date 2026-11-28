@@ -43,7 +43,7 @@ namespace Arrival
         // the resurrection; the walk goes to the body instead (the dead leader's position).
         if (!leader->IsAlive() && leader->GetDeathState() != CORPSE)
         {
-            bot->EndRestWhenFull();
+            bot->EndRestWhenDone();
             if (!bot->IsResting() && bot->NeedsRest())
                 bot->StartResting();
             state.deadlineMs = now + MAX_MS;

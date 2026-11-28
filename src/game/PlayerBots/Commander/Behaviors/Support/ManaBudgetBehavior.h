@@ -21,7 +21,9 @@
  * LOW_MANA_NOTE_REPEAT_MS per healer. What players hear is the party voice's "fight.oom".
  * Sent directly, not through TeamPlan::notes: behaviors only get the plan read-only.
  *
- * Not done: future waves in the fight time, in-combat mana regeneration, ally NPC heal targets.
+ * An event's waves still to come (boss doc 2.3): their mana beyond what the gaps give back is
+ * added to N (WaveEvent::FutureMana, Budget::futureMana).
+ * Not done: in-combat mana regeneration, ally NPC heal targets.
  *
  * Self restore (any role whose class kit has one: ClassKit::SelfManaRestore, mage Evocation;
  * user, 2026-11-01: an emergency resource, only in combat, never right after the fight):
@@ -84,6 +86,7 @@ namespace Commander
             float headroom = 0.0f;       // health the members being hit can lose without a heal
             float neededHealing = 0.0f;  // H (this healer's share)
             float healPerMana = 0.0f;    // E
+            float futureMana = 0.0f;     // part of N: an event's waves still to come
             float neededMana = 0.0f;     // N
             float tension = 0.0f;        // N / M
         };

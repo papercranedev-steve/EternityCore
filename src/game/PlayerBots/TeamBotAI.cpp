@@ -52,9 +52,12 @@
 #include "Commander/Behaviors/Support/RestTopUp.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
+#include "Shared/GearUpgrade.h"
+#include "Shared/Inventory.h"
 
 #include <algorithm>
 #include <random>
+#include <set>
 
 enum TeamBotSpells
 {
@@ -63,8 +66,30 @@ enum TeamBotSpells
     // (Auto Shot, Shoot Wand: Rotations/ClassRotation.h)
 };
 
+TeamBotAI::~TeamBotAI()
+{
+    if (!m_gearRoleGuid.IsEmpty())
+        BotShared::GearUpgrade::SetRole(m_gearRoleGuid, ROLE_INVALID);
+}
+
+void TeamBotAI::PublishGearRole()
+{
+    // (armor cannot be changed in a fight: the new role's gear waits until it is over)
+    CombatBotRoles const role = HasEmergencyRole() ? m_roleBeforeEmergency : m_role;
+    if (role == m_gearRole || me->IsInCombat())
+        return;
+    bool const changed = m_gearRole != ROLE_INVALID;
+    m_gearRole = role;
+    m_gearRoleGuid = me->GetObjectGuid();
+    BotShared::GearUpgrade::SetRole(m_gearRoleGuid, uint8(role));
+    if (changed && me->IsAlive())
+        BotShared::Inventory::WearUpgrades(me, std::set<ObjectGuid>());
+}
+
 bool TeamBotAI::UpdateBody()
 {
+    PublishGearRole();
+
     // What its fights cost in mana, for when it drinks (Commander/Perception/Values/FightManaSpend.h).
     Commander::FightManaSpend::Update(me, m_fightManaSpend);
 
@@ -1180,6 +1205,15 @@ float TeamBotAI::DrinkStartShare() const
     return Commander::RestValue::DrinkStartShare(m_fightManaSpend, me->GetMap()->IsDungeon());
 }
 
+float TeamBotAI::FightManaShare() const
+{
+    float share = 0.0f;
+    if (!Commander::FightManaSpend::Average(m_fightManaSpend, me->GetMap()->IsDungeon(),
+                                            Commander::RestValue::MIN_FIGHTS, share))
+        return 0.0f;
+    return share;
+}
+
 float TeamBotAI::DrinkBelowShareNow() const
 {
     // The same share RestBehavior proposed the rest by (RestValue::Of), from this tick's
@@ -1205,13 +1239,23 @@ bool TeamBotAI::IsRestPending() const
     return false;
 }
 
-void TeamBotAI::EndRestWhenFull()
+void TeamBotAI::EndRestWhenDone()
 {
     using BotShared::FoodAndDrink::Kind;
     SpellEntry const* pDrink = ActiveRest(Kind::Drink);
     SpellEntry const* pFood = ActiveRest(Kind::Food);
     if (!pDrink && !pFood)
         return;
+    if (sCommanderMgr.IsEnabled())
+        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
+            if (commander->GetPlan().ForbidsRest(me->GetObjectGuid()))
+            {
+                if (pDrink)
+                    me->RemoveAurasDueToSpell(pDrink->Id);
+                if (pFood && pFood != pDrink)
+                    me->RemoveAurasDueToSpell(pFood->Id);
+                return;
+            }
     bool const manaFull = me->GetPowerType() != POWER_MANA || me->GetPower(POWER_MANA) >= me->GetMaxPower(POWER_MANA);
     bool const healthFull = me->GetHealth() >= me->GetMaxHealth() &&
         !me->HasAuraType(SPELL_AURA_PERIODIC_DAMAGE) &&

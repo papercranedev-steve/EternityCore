@@ -165,6 +165,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Profiles/ProfileStore.cpp
   ${COMMANDER_DIR}/Perception/Forecast/CombatRates.h
   ${COMMANDER_DIR}/Perception/Forecast/CombatRates.cpp
+  ${COMMANDER_DIR}/Perception/Forecast/WaveEvent.h
+  ${COMMANDER_DIR}/Perception/Forecast/WaveEvent.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/WaveRest.h
+  ${COMMANDER_DIR}/Coordination/Situation/WaveRest.cpp
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.h
   ${COMMANDER_DIR}/Perception/Forecast/DamageIntake.cpp
   ${COMMANDER_DIR}/Perception/Forecast/IncomingTimeline.h
@@ -271,6 +275,10 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.cpp
   ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.h
   ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.cpp
+  ${COMMANDER_DIR}/Encounters/RazorfenBelnistrasz.h
+  ${COMMANDER_DIR}/Encounters/RazorfenBelnistrasz.cpp
+  ${COMMANDER_DIR}/Encounters/WailingCavernsNaralex.h
+  ${COMMANDER_DIR}/Encounters/WailingCavernsNaralex.cpp
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.h
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
   ${COMMANDER_DIR}/Encounters/StratholmeAnastari.h

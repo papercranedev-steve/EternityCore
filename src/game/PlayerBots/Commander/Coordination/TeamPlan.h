@@ -2087,9 +2087,14 @@ namespace Commander
         RouteGuardPlan routeGuard;
         AreaPlan area;
         DoctrinePlan doctrine;
-        // The active boss module forbids eating and drinking (IEncounter::ForbidsRest; written
-        // by PartyCommander every refresh). Read through ForbidsRest.
+        // The active boss module forbids eating and drinking (IEncounter::ForbidsRest), or the
+        // next wave of an event is about to arrive (WaveEvent::RestRuleOf StandUp): sitting
+        // bots stand up too (TeamBotAI::EndRestWhenDone). Written by PartyCommander every
+        // refresh. Read through ForbidsRest.
         bool noRest = false;
+        // The next wave comes too soon for a new drink to pay (WaveEvent::RestRuleOf NoNew):
+        // nobody sits down, those sitting go on. Read through ForbidsNewRest.
+        bool noNewRest = false;
         std::vector<std::string> notes;     // debug data for the note log, flushed by PartyCommander
         // Lines for the players (a boss module's mechanic): taken by the party voice
         // (Commands/Voice/PartyVoice.h) on the same refresh.
@@ -2319,6 +2324,9 @@ namespace Commander
             return !bot.IsEmpty() && bot == pull.tank && pull.phase != PullPhase::None &&
                    pull.phase != PullPhase::WaitReady;
         }
+        // `bot` must not start a rest now (it may go on with one it sits in): ForbidsRest, or
+        // noNewRest.
+        bool ForbidsNewRest(ObjectGuid bot) const { return noNewRest || ForbidsRest(bot); }
     };
 }
 

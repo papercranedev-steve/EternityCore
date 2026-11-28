@@ -3,6 +3,7 @@
 #include "Commander/Perception/WorldModelBuilder.h"
 #include "Commander/Perception/Forecast/SheetTimers.h"
 #include "Commander/Coordination/Situation/ClearPlanner.h"
+#include "Commander/Coordination/Situation/WaveRest.h"
 #include "Commander/Coordination/Situation/Pull/AutoClear.h"
 #include "Commander/Coordination/Situation/Guide.h"
 #include "Commander/Coordination/Situation/PushPlanner.h"
@@ -60,8 +61,14 @@ namespace Commander
         Trace::Scope scope("brain");
         scope.Label("refresh");
         Refresh(bot, nowMs);
+        m_world.waves = WaveEventFacts();
         UpdateEncounter(bot);
-        m_plan.noRest = m_activeEncounter && m_activeEncounter->ForbidsRest();
+        if (m_activeEncounter)
+            m_activeEncounter->DescribeWaves(m_world.waves);
+        m_waveSpend.Annotate(m_world, nowMs);
+        WaveRest::Rule const waveRest = WaveRest::Of(m_world);
+        m_plan.noRest = (m_activeEncounter && m_activeEncounter->ForbidsRest()) || waveRest == WaveRest::Rule::StandUp;
+        m_plan.noNewRest = waveRest == WaveRest::Rule::NoNew;
         RunAssigners(assigners);
         if (m_activeEncounter)
         {

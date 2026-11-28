@@ -59,7 +59,8 @@ namespace Commander
     {
         Player* me = bot->me;
         // Retreat, the boss module's waves, the pull's tank on its way (the plan's constraint).
-        if (plan.ForbidsRest(me->GetObjectGuid()))
+        // The next wave too close for a new drink (noNewRest): one already on goes on.
+        if (bot->IsResting() ? plan.ForbidsRest(me->GetObjectGuid()) : plan.ForbidsNewRest(me->GetObjectGuid()))
             return;
         // The leader walked away: it catches up first (Movement/RestCatchUp.h).
         if (bot->HoldsOffRest())

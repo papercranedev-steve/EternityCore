@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/Support/ManaBudgetBehavior.h"
 #include "Commander/Behaviors/Support/HealPlanBehavior.h"
 #include "Commander/Perception/Forecast/ManaBudget.h"
+#include "Commander/Perception/Forecast/WaveEvent.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Tanks.h"
@@ -111,8 +112,8 @@ namespace Commander
         if (!world.rates.dealtMeasured)
             return false;
 
-        // T: current enemies only. Waves that have not arrived yet (combat scenario 9) are
-        // not counted, so the budget is too generous at the start of a wave.
+        // T: current enemies only. Waves that have not arrived yet are added as mana below
+        // (WaveEvent::FutureMana) when a boss module describes the event.
         out.fightSec = Value::FightRemainingSec(world);
         out.mana = float(mana);
         out.manaPct = float(mana) * 100.0f / float(maxMana);
@@ -132,6 +133,10 @@ namespace Commander
                                                       world.rates.healers);
         out.healPerMana = AverageHealPerMana(bot);
         out.neededMana = ManaBudget::NeededMana(out.neededHealing, out.healPerMana);
+        // An event's waves still to come (boss doc 2.3): their cost beyond what the gaps give back.
+        if (PartyMemberFacts const* self = world.FindMember(bot->me->GetObjectGuid()))
+            out.futureMana = WaveEvent::FutureMana(world, *self);
+        out.neededMana += out.futureMana;
         out.tension = ManaBudget::Tension(out.neededMana, out.mana);
         return true;
     }

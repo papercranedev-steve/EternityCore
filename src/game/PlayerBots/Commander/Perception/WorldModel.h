@@ -759,6 +759,9 @@ namespace Commander
         // Bots: the mana share a new drink starts below, by what their last fights here cost
         // (TeamBotAI::DrinkStartShare, RestValue::DrinkStartShare).
         float drinkStartShare = 0.0f;
+        // Bots: the average mana share their last fights in this kind of place cost (net,
+        // FightManaSpend::Average); 0 = not enough fights recorded yet.
+        float fightManaShare = 0.0f;
         float foodHealthPerSec = 0.0f;  // bots: health per second their food restores
         bool drinking = false;      // bots: the drink is on (TeamBotAI::IsDrinking)
         // Bots: something to drink in the bags (or the free drink, TeamBotAI::NextRest), or the
@@ -845,6 +848,48 @@ namespace Commander
         bool partySide = false;     // party member or pet of this party
         bool inMeleeReach = false;  // enemy can hit this unit in melee -> 110% rule instead of 130%
         float threatPerSec = 0.0f;  // over the last few seconds (ThreatHistory); includes taunt jumps
+    };
+
+    // How the next wave of an event comes (WaveEventFacts::pace, boss doc 2.3).
+    enum class WavePace : uint8
+    {
+        Player,         // a player starts each one (a brazier, a gong): drink to full in between
+        Timer,          // on the script's clock, the last one dead or not (Belnistrasz, Naralex)
+        Continuous,     // the next comes as the last one dies: one long fight (Urok)
+    };
+
+    // An event with waves going on (WorldModel::waves). The boss module fills the first part
+    // (IEncounter::DescribeWaves), Forecast/WaveEvent.h (WaveSpend) the measured part.
+    struct WaveEventFacts
+    {
+        bool active = false;
+        WavePace pace = WavePace::Timer;
+        uint32 wavesArrived = 0;        // waves spawned so far (the one being fought included)
+        uint32 wavesLeft = 0;           // waves still to come (not spawned yet)
+        // Timer: seconds until the next wave reaches the party (its spawn and its walk);
+        // -1 = none coming or not known.
+        float nextArrivalSec = -1.0f;
+        // Timer: the usual seconds between two waves' spawns (Belnistrasz 40).
+        float intervalSec = 0.0f;
+
+        // Measured this event (WaveSpend): mana one wave cost each member (gross, drinking not
+        // subtracted), seconds one wave was fought. Empty / 0 until a wave was fought.
+        struct MemberCost
+        {
+            ObjectGuid guid;
+            float mana = 0.0f;
+        };
+        std::vector<MemberCost> waveMana;
+        float waveFightSec = 0.0f;
+
+        // Measured mana per wave of `member`, or -1.
+        float WaveManaOf(ObjectGuid member) const
+        {
+            for (MemberCost const& c : waveMana)
+                if (c.guid == member)
+                    return c.mana;
+            return -1.0f;
+        }
     };
 
     // An area around a point or an enemy where a spell will land (WorldModel::scriptedHazards).
@@ -1357,6 +1402,9 @@ namespace Commander
         // Hazards a boss module knows of (IEncounter::AddFacts; cleared by RefreshCombat): C++
         // scripted bosses have no spell list for HazardZones to derive them from.
         std::vector<ScriptedHazard> scriptedHazards;
+        // An event with waves going on (boss doc 2.3), told by the boss module
+        // (IEncounter::DescribeWaves) each refresh; inactive otherwise. Forecast/WaveEvent.h.
+        WaveEventFacts waves;
         // Builder bookkeeping: friendly creatures in combat found by the last grid scan
         // (RefreshPacks, once a second), re-read by every RefreshCombat. Not a fact to act on.
         std::vector<ObjectGuid> allyCandidates;
