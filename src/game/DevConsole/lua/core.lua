@@ -262,6 +262,39 @@ function profs(leader)
     return #out > 0 and table.concat(out, "\n") or "no companion in the group"
 end
 
+local SLOT_NAMES = { [0] = "head", "neck", "shoulder", "shirt", "chest", "waist", "legs", "feet", "wrist",
+    "hands", "finger1", "finger2", "trinket1", "trinket2", "back", "mainhand", "offhand", "ranged", "tabard" }
+local QUALITY_NAMES = { [0] = "poor", "white", "green", "blue", "epic", "legend" }
+
+-- What u wears as text rows (u:equipped), e.g. geartable('Ideb'); bags = true adds the gear in
+-- its bags. fit = GearFit score for its gear role with the rolled suffix / with the suffix it
+-- would keep ("<" marks a worse roll, "!" a piece that fits nothing).
+function geartable(u, bags)
+    if type(u) == "string" then u = player(u) end
+    if not u then return "no such player" end
+    local rows = { string.format("%s lv%d class %s role %s", u:name(), u:level(), u:class(), u:info().role or "-") }
+    for _, g in ipairs(u:equipped(bags)) do
+        local where = g.bag and string.format("bag%d:%d", g.bag, g.slot) or (SLOT_NAMES[g.slot] or tostring(g.slot))
+        local name = g.name .. (g.suffixName and (" " .. g.suffixName) or "")
+        local cosmetic = not g.bag and (g.slot == 3 or g.slot == 18)    -- shirt, tabard
+        local mark = cosmetic and "" or (g.best <= 0 and "!" or (g.score + 0.05 < g.best and "<" or ""))
+        rows[#rows + 1] = string.format("  %-10s %-6s i%-3d %6d  %-44s fit %5.1f/%5.1f %s", where,
+            QUALITY_NAMES[g.quality] or g.quality, g.ilvl, g.id, name, g.score, g.best, mark)
+    end
+    return table.concat(rows, "\n")
+end
+
+-- geartable of every bot in the leader's group (default me()).
+function gears(leader, bags)
+    leader = leader or me()
+    if not leader then return "no player online" end
+    local out = {}
+    for _, m in ipairs(leader:group()) do
+        if m:isbot() then out[#out + 1] = geartable(m, bags) end
+    end
+    return #out > 0 and table.concat(out, "\n") or "no bot in the group"
+end
+
 -- u:offline(hours) as one text line, then the table after it.
 function offlinetest(u, hours)
     if type(u) == "string" then u = player(u) end

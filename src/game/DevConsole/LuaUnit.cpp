@@ -2033,6 +2033,63 @@ namespace DevConsole
         lua_pushnumber(L, up.gain); lua_setfield(L, -2, "gain");
         return 1;
     }
+    // u:equipped([bags]) -> what it wears (read only): { {slot, id, name, quality, ilvl, suffix,
+    // suffixName, score, best}, ... }; bags = true adds the gear in the backpack and bags (bag =
+    // 0 backpack or the bag slot 19-22, slot = the slot in it). score: GearFit for its gear role
+    // with the item's own suffix, best: with the suffix it would keep (score < best: a worse roll).
+    static int U_equipped(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        bool const withBags = lua_toboolean(L, 2);
+        uint8 const role = BotShared::GearUpgrade::RoleOf(p);
+        uint8 const classId = p->GetClass();
+
+        lua_newtable(L);
+        int n = 0;
+        // bag: -1 worn, 0 backpack, 19-22 the bag slot
+        auto push = [&](Item* item, int32 bag, uint8 slot)
+        {
+            ItemPrototype const* proto = item->GetProto();
+            if (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR)
+                return;
+            uint32 const suffix = uint32(std::max<int32>(item->GetItemRandomPropertyId(), 0));
+            ItemRandomPropertiesEntry const* prop = suffix ? sItemRandomPropertiesStore.LookupEntry(suffix) : nullptr;
+            lua_createtable(L, 0, 10);
+            if (bag >= 0)
+            {
+                lua_pushinteger(L, bag); lua_setfield(L, -2, "bag");
+            }
+            lua_pushinteger(L, slot); lua_setfield(L, -2, "slot");
+            lua_pushinteger(L, proto->ItemId); lua_setfield(L, -2, "id");
+            lua_pushstring(L, proto->Name1); lua_setfield(L, -2, "name");
+            lua_pushinteger(L, proto->Quality); lua_setfield(L, -2, "quality");
+            lua_pushinteger(L, proto->ItemLevel); lua_setfield(L, -2, "ilvl");
+            lua_pushinteger(L, suffix); lua_setfield(L, -2, "suffix");
+            if (prop && prop->nameSuffix[0] && *prop->nameSuffix[0])
+            {
+                lua_pushstring(L, prop->nameSuffix[0]); lua_setfield(L, -2, "suffixName");
+            }
+            lua_pushnumber(L, BotShared::GearFit::Score(proto, classId, role, suffix)); lua_setfield(L, -2, "score");
+            lua_pushnumber(L, BotShared::GearFit::BestScore(proto, classId, role)); lua_setfield(L, -2, "best");
+            lua_rawseti(L, -2, ++n);
+        };
+
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            if (Item* item = p->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                push(item, -1, slot);
+        if (withBags)
+        {
+            for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+                if (Item* item = p->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                    push(item, 0, slot);
+            for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+                if (Bag* pBag = static_cast<Bag*>(p->GetItemByPos(INVENTORY_SLOT_BAG_0, bag)))
+                    for (uint32 slot = 0; slot < pBag->GetBagSize(); ++slot)
+                        if (Item* item = pBag->GetItemByPos(uint8(slot)))
+                            push(item, bag, uint8(slot));
+        }
+        return 1;
+    }
     // Destroys everything in the backpack and bags (not equipped items, not the bags themselves).
     static int U_clearbags(lua_State* L)
     {
@@ -2787,7 +2844,7 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
-            { "premade", U_premade }, { "gear", U_gear }, { "gearscore", U_gearscore }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
+            { "premade", U_premade }, { "gear", U_gear }, { "gearscore", U_gearscore }, { "equipped", U_equipped }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
             { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags }, { "trainup", U_trainup },
