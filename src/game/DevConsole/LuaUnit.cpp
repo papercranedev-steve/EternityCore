@@ -441,7 +441,8 @@ namespace DevConsole
         Unit* u = LuaUnit_Check(L, 1);
         float radius = float(luaL_optnumber(L, 2, 30.0));
         char const* filter = luaL_optstring(L, 3, "all");
-        radius = std::min(radius, 200.0f);
+        // 300: a boss test setup reaches the far side of a dungeon hall (Sunken Temple protectors)
+        radius = std::min(radius, 300.0f);
 
         std::list<Unit*> found;
         AnyUnitInRangeCheck check(u, radius);

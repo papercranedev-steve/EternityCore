@@ -27,7 +27,11 @@
 --
 -- Boss tests (kind = "boss", bosses.lua; the addon's Boss 测试 window, not the scenario list):
 --   bosses             `creature` guids of the boss and its linked adds: respawned on load, never cleared
---   bossEntries        creature entries never cleared (summoned bosses, e.g. Gandling)
+--   bossEntries        creature entries never cleared (summoned bosses, e.g. Gandling; frozen adds
+--                      that wake during the fight, e.g. Archaedas's earthen); static spawns of them
+--                      are respawned on load. They do not block the waiting spot.
+--   adds               creature entries of awake adds the boss calls in (Argelmach's golems): never
+--                      cleared, static spawns respawned on load, but the waiting spot keeps clear of them
 --   clearRadius        on load every other living creature within this many yards of 'pack' is
 --                      killed (the leader is still in GM mode), so the party walks straight in
 --   entry              the boss's own position: the leader lands there in GM mode, clears, and the
@@ -480,7 +484,16 @@ local function guidSet(list)
     return set
 end
 
--- s.respawn: radius around the pack (default 120) or a list of `creature` guids; s.cleared stays dead
+local function hasEntry(list, c)
+    for _, e in ipairs(list or {}) do
+        if c:entry() == e then return true end
+    end
+    return false
+end
+
+-- s.respawn: radius around the pack (default 120) or a list of `creature` guids; s.cleared stays dead.
+-- Boss tests also respawn static spawns (dbguid ~= 0) of s.bossEntries and s.adds; summoned ones
+-- (Gandling) are left alone.
 local function respawnPack(leader, s)
     local cleared = guidSet(s.cleared)
     local respawn = s.respawn or s.bosses
@@ -493,6 +506,7 @@ local function respawnPack(leader, s)
             local want
             if only then
                 want = only[c:dbguid()]
+                    or (c:dbguid() ~= 0 and (hasEntry(s.bossEntries, c) or hasEntry(s.adds, c)))
             else
                 want = math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2) < radius
             end
@@ -520,15 +534,11 @@ local function killCleared(leader, s)
 end
 
 local function isBoss(s, c, guids)
-    if guids[c:dbguid()] then return true end
-    for _, e in ipairs(s.bossEntries or {}) do
-        if c:entry() == e then return true end
-    end
-    return false
+    return guids[c:dbguid()] or hasEntry(s.bossEntries, c)
 end
 
--- s.clearRadius: kill every living creature within that radius of the pack except the bosses
--- (the leader is in GM mode and stands near the pack: its grids are loaded)
+-- s.clearRadius: kill every living creature within that radius of the pack except the bosses and
+-- s.adds (the leader is in GM mode and stands near the pack: its grids are loaded)
 local function clearAround(leader, s)
     if not s.clearRadius then return 0 end
     local guids = guidSet(s.bosses)
@@ -538,7 +548,7 @@ local function clearAround(leader, s)
     for _, c in ipairs(leader:nearby(math.min(200, s.clearRadius + off), "alive")) do
         local p = c:pos()
         local d = math.sqrt((p.x - s.pack.x) ^ 2 + (p.y - s.pack.y) ^ 2 + (p.z - s.pack.z) ^ 2)
-        if not c:isplayer() and d <= s.clearRadius and not isBoss(s, c, guids) then
+        if not c:isplayer() and d <= s.clearRadius and not isBoss(s, c, guids) and not hasEntry(s.adds, c) then
             c:kill()
             n = n + 1
         end
