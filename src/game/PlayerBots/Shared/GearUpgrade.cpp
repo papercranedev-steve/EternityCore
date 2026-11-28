@@ -53,7 +53,10 @@ namespace GearUpgrade
             return ITEM_SUBCLASS_ARMOR_CLOTH;
         }
 
-        bool Wearable(Player const* player, ItemPrototype const* proto)
+        // A healer wears any armor it can (a holy paladin's cloth and mail healing pieces, as
+        // Shared/RandomGear gives them): the score decides. Until 2026-11-28 only the heaviest
+        // armor here, so a healer never put on a lighter healing piece it looted.
+        bool Wearable(Player const* player, ItemPrototype const* proto, uint8 role)
         {
             if (!proto || (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR))
                 return false;
@@ -63,7 +66,8 @@ namespace GearUpgrade
             // fishing poles and the like are not worn either (GearSources::IsOddity).
             if (GearSources::IsOddity(proto))
                 return false;
-            if (proto->Class == ITEM_CLASS_ARMOR && IsBodyArmor(proto->InventoryType) && proto->SubClass != BestArmor(player))
+            if (proto->Class == ITEM_CLASS_ARMOR && IsBodyArmor(proto->InventoryType) && role != ROLE_HEALER &&
+                proto->SubClass != BestArmor(player))
                 return false;
             return true;
         }
@@ -157,7 +161,7 @@ namespace GearUpgrade
                 if (item == self)
                     continue;
                 ItemPrototype const* proto = item->GetProto();
-                if (!FitsOffHand(c, proto) || !Wearable(c.player, proto))
+                if (!FitsOffHand(c, proto) || !Wearable(c.player, proto, c.role))
                     continue;
                 best = std::max(best, ScoreOf(c, proto, SuffixOf(item)));
             }
@@ -167,13 +171,15 @@ namespace GearUpgrade
         Upgrade EvaluateIn(Player const* player, ItemPrototype const* proto, uint32 randomPropertyId, Item const* self)
         {
             Upgrade out;
-            if (!player || !Wearable(player, proto))
+            if (!player)
                 return out;
 
             Context c;
             c.player = player;
             c.classId = player->GetClass();
             c.role = RoleOf(player);
+            if (!Wearable(player, proto, c.role))
+                return out;
             c.shieldTank = IsShieldTank(c.classId, c.role);
             if (c.shieldTank && proto->InventoryType == INVTYPE_2HWEAPON)
                 return out;
