@@ -25,6 +25,7 @@
 #include "Shared/QuestMirror.h"
 #include "Shared/ArtisanTrainers.h"
 #include "Shared/QuestPlaces.h"
+#include "Shared/GearSources.h"
 #include "Shared/QuestOverrides.h"
 #include "Shared/QuestRules.h"
 #include "Shared/ClassQuestChains.h"
@@ -181,6 +182,8 @@ void PlayerBotMgr::Load()
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [QuestMirror] %u mirror quests made.", BotShared::QuestMirror::BuildAll());
         sLog.Out(LOG_BASIC, LOG_LVL_MINIMAL, ">> [QuestMirror] %u Artisan trip quests made.", BotShared::ArtisanTrainers::BuildQuests());
         BotShared::QuestPlaces::Load();     // where to go for them (the leader's map flag)
+        // Gear sources for random gear stages: a second of database now, not in a game.
+        BotShared::GearSources::Warm();
     }
     sCompanionMgr.Load();
 

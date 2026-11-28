@@ -41,6 +41,9 @@
 --                      spot is searched on a ring around the boss (ringSpot) unless one is recorded
 --   from               {x, y} optional: prefer ring spots on this side (the room's door)
 --   hint               one line of mechanics / lineup notes for the window's tooltip (no ';')
+--   gear               gear stage for everyone (u:gear: "leveling", "fresh60", ...) instead of the
+--                      premade gear templates (twink below 60). Boss tests: leveling below 60,
+--                      fresh60 at 60 (user, 2026-11-28); the spec templates stay.
 --
 -- Lineup: ".scenario <id> [class:role ...]" replaces the default bots, e.g.
 -- ".scenario stockade paladin:tank rogue:meleedps hunter:rangedps druid:healer". The last lineup is
@@ -402,14 +405,24 @@ end
 -- Out of combat first: in combat CanEquipItem only accepts weapons, the armor of the template
 -- lands in the bags and clearbags destroys it. Strat 2026-11-15: the hunter and the resto druid
 -- were flagged in combat with no enemy at finish() and ended up with weapons only.
-local function applyPremades(u, level, role, gm)
+-- 'gearStage' (scenario field gear, e.g. "leveling"): a random set of that gear stage (u:gear,
+-- Shared/GearStages) instead of the premade gear template, which is twink gear below 60.
+local function applyPremades(u, level, role, gm, gearStage)
     local spec = pickPremade("spec", u:class(), level, role)
     if spec then u:premade("spec", spec.entry) end
-    local gear = pickPremade("gear", u:class(), level, role)
-    if gear then
+    local gear
+    if gearStage then
         u:combatstop()
-        u:premade("gear", gear.entry)
+        u:gear(gearStage, role ~= "auto" and role or nil)
         u:clearbags()
+        gear = { stage = gearStage }
+    else
+        gear = pickPremade("gear", u:class(), level, role)
+        if gear then
+            u:combatstop()
+            u:premade("gear", gear.entry)
+            u:clearbags()
+        end
     end
     gm = gm or u
     gm:select(u)
@@ -428,7 +441,7 @@ local function premadeWarnings(u, role, spec, gear)
         end
     end
     check("天赋", spec)
-    check("装备", gear)
+    if not (gear and gear.stage) then check("装备", gear) end
     return out
 end
 
@@ -634,7 +647,7 @@ local function finish(leader, s)
     for i, b in ipairs(bots) do
         local role = (b:ai() and b:ai().role) or "auto"
         local want = entryFor(b, role)
-        local spec, gear = applyPremades(b, s.level, role, leader)
+        local spec, gear = applyPremades(b, s.level, role, leader, s.gear)
         for _, w in ipairs(premadeWarnings(b, role, spec, gear)) do warnings[#warnings + 1] = w end
         -- the template may be of a lower level: trainer spells, class quest abilities and talent
         -- points of the scenario level on top (before stockUp: the supplies follow the spells)
@@ -803,7 +816,7 @@ function scenario.load(leader, id, lineup, fresh)
         -- GM mode while setting up: mobs ignore the leader until the party is in place
         leader:gm(true)
         leader:setlevel(s.level)
-        applyPremades(leader, s.level, LEADER_ROLE[leader:class()] or "meleedps")
+        applyPremades(leader, s.level, LEADER_ROLE[leader:class()] or "meleedps", nil, s.gear)
         leader:refill()
         leader:resetcd()
 

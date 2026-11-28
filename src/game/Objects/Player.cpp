@@ -581,8 +581,11 @@ void Player::AddStartingItems()
     // all item positions resolved
 }
 
-bool Player::StoreNewItemInBestSlots(uint32 itemId, uint32 amount, uint32 enchantId)
+bool Player::StoreNewItemInBestSlots(uint32 itemId, uint32 amount, uint32 enchantId, uint32 randomPropertyId)
 {
+    // 0: rolled as for a drop
+    if (!randomPropertyId)
+        randomPropertyId = uint32(Item::GenerateItemRandomPropertyId(itemId));
     sLog.Out(LOG_BASIC, LOG_LVL_DEBUG, "STORAGE: Creating initial item, itemId = %u, count = %u", itemId, amount);
 
     // attempt equip by one
@@ -602,7 +605,7 @@ bool Player::StoreNewItemInBestSlots(uint32 itemId, uint32 amount, uint32 enchan
                 pItem->SetEnchantment(PERM_ENCHANTMENT_SLOT, enchantId, 0, 0);
                 needReApplyItemMods = true;
             }
-            if (uint32 randomPropertyId = Item::GenerateItemRandomPropertyId(itemId))
+            if (randomPropertyId)
             {
                 pItem->SetItemRandomProperties(randomPropertyId);
                 needReApplyItemMods = true;
@@ -637,7 +640,7 @@ bool Player::StoreNewItemInBestSlots(uint32 itemId, uint32 amount, uint32 enchan
     uint8 msg = CanStoreNewItem(INVENTORY_SLOT_BAG_0, NULL_SLOT, sDest, itemId, amount);
     if (msg == EQUIP_ERR_OK)
     {
-        if (Item* pItem = StoreNewItem(sDest, itemId, true, Item::GenerateItemRandomPropertyId(itemId)))
+        if (Item* pItem = StoreNewItem(sDest, itemId, true, int32(randomPropertyId)))
         {
             if (enchantId)
             {

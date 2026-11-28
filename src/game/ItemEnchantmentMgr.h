@@ -23,7 +23,11 @@
 #define _ITEM_ENCHANTMENT_MGR_H
 
 #include "Common.h"
+#include <vector>
 
 void LoadRandomEnchantmentsTable();
 uint32 GetItemEnchantMod(uint32 entry);
+// Every random property (ItemRandomProperties.dbc id) `entry` can roll; empty: none. PartyBot
+// random gear picks the suffix a player of the class would keep (PlayerBots/Shared/RandomGear).
+std::vector<uint32> GetItemEnchantModChoices(uint32 entry);
 #endif

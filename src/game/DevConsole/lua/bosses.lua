@@ -42,10 +42,10 @@ end
 
 local bosses = {
     {
-        -- 21: VanCleef is 21, the Blackguards 19-20 (premade = the 19 templates)
+        -- VanCleef is 21, the Blackguards 19-20
         -- creature_groups 79336: VanCleef 79336 + stealthed Blackguards 79383, 79368. The deck
         -- (Greenskin patrol, pirates, shipbuilders 17-55 yd) is cleared.
-        id = "vancleef", title = "死亡矿井 范克里夫", level = 21,
+        id = "vancleef", title = "死亡矿井 范克里夫", level = 19,
         entry = { map = 36, x = -87.37, y = -819.90, z = 39.30, o = 0.0 },
         pack = { x = -87.37, y = -819.90, z = 39.30 },
         bosses = { 79336, 79383, 79368 },
@@ -53,10 +53,10 @@ local bosses = {
         hint = "50% 召唤两个迪菲亚爪牙（法术 5200），潜行者在那之前晕住能打断召唤。两个黑衣卫兵是隐身的，开打就上来。",
     },
     {
-        -- 34 = Thermaplugg (bombs 30; premade = the 29 templates)
+        -- Thermaplugg 34 (bombs 30)
         -- boss_thermaplugg 30139; the door GO 142207 locks when the fight starts. Leprous
         -- Machinesmiths, a Guardian and a Nullifier wander ~60 yd west, inside the door.
-        id = "thermaplugg", title = "诺莫瑞根 瑟玛普拉格", level = 34,
+        id = "thermaplugg", title = "诺莫瑞根 瑟玛普拉格", level = 32,
         entry = { map = 90, x = -531.32, y = 670.16, z = -325.19, o = 2.915 },
         pack = { x = -531.32, y = 670.16, z = -325.19 },
         bosses = { 30139 },
@@ -64,11 +64,11 @@ local bosses = {
         hint = "墙上的炸弹口会放出行走炸弹，冰霜新星 / 冰锥术定住或打掉；击退（仇恨降低）。门在开打时锁上。",
     },
     {
-        -- 42 = both bosses (hall trash 34-39; premade = the 39 templates)
+        -- both bosses 42 (hall trash 34-39)
         -- Mograine 40029; Whitemane 39946 behind door GO 104600, joins in phase 1. The pull sends
         -- every live chaplain / wizard / centurion / champion / abbot / monk within 82 yd at the
         -- party: the hall is cleared (90). The event runs once per instance: fresh.
-        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩", level = 42,
+        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩", level = 40,
         fresh = true,
         entry = { map = 189, x = 1153.87, y = 1398.39, z = 32.61, o = 6.126 },
         pack = { x = 1153.87, y = 1398.39, z = 32.61 },
@@ -80,7 +80,7 @@ local bosses = {
         hint = "莫格莱尼倒下后怀特迈恩出场复活他。她会群体催眠，牧师驱散制裁之锤和心灵控制。每个副本只能打一次，开始和重开都会进新副本。",
     },
     {
-        -- 60 = max level (Gandling 61)
+        -- Gandling 61
         -- Gandling is summoned at (180.8, -5.4, 75.6) once the six room bosses are DONE (data 1-6);
         -- setup does that, the last one summons him at once. Wipe: he walks home (data 0 = FAIL) and
         -- stays. After a kill (data 0 = DONE) setup resets data 0 first; never while he is alive
@@ -104,7 +104,7 @@ local bosses = {
         hint = "会把队员传送到周围的房间里（房间里刷骷髅守卫，不能变形，牧师束缚亡灵），奥术飞弹，暗影护盾要驱散。免疫打断。",
     },
     {
-        -- 60 (Anastari 59 elite; premade = the 60 templates)
+        -- Anastari 59 elite
         -- 54238 on the Ziggurat platform (148 yd up); Thuzadin Necromancers / Shadowcasters /
         -- Acolytes and banshees 25-40 yd, ghouls 45-55 yd: cleared. Her death opens Ziggurat GO
         -- 175380 (TYPE_BARONESS). The Ash'ari Crystal (34 yd, above) dies too: it only counts
@@ -118,10 +118,10 @@ local bosses = {
     },
 
     -- Bosses with mechanics from .kiro/docs/2026-11-28-dungeon-boss-encounters.md (section 2).
-    -- Spawns checked against `creature` 2026-11-28. Level = the boss's level (60 at most).
+    -- Spawns checked against `creature` 2026-11-28.
     {
         -- 4275 in the top room; Shadow Port to 3 fixed points (some on the ledges)
-        id = "arugal", title = "影牙城堡 大法师阿鲁高", level = 26,
+        id = "arugal", title = "影牙城堡 大法师阿鲁高", level = 24,
         entry = { map = 33, x = -76.75, y = 2152.41, z = 155.79, o = 2.496 },
         pack = { x = -76.75, y = 2152.41, z = 155.79 },
         bosses = { 16255 },
@@ -130,7 +130,7 @@ local bosses = {
     },
     {
         -- boss_arcanist_doan, library wing
-        id = "doan", title = "血色修道院 奥法师杜安", level = 37,
+        id = "doan", title = "血色修道院 奥法师杜安", level = 35,
         entry = { map = 189, x = 148.32, y = -428.69, z = 18.49, o = 6.248 },
         pack = { x = 148.32, y = -428.69, z = 18.49 },
         bosses = { 40124 },
@@ -139,7 +139,7 @@ local bosses = {
     },
     {
         -- boss_herod, armory wing; 20 Scarlet Trainees spawn when he dies
-        id = "herod", title = "血色修道院 赫洛德", level = 40,
+        id = "herod", title = "血色修道院 赫洛德", level = 38,
         entry = { map = 189, x = 1965.09, y = -431.61, z = 6.26, o = 2.985 },
         pack = { x = 1965.09, y = -431.61, z = 6.26 },
         bosses = { 89097 },
@@ -150,7 +150,7 @@ local bosses = {
         -- boss_archaedas: stone until someone uses the Altar of Archaedas (GO 133234, 9 yd from
         -- him). The wall earthen (custodians 7309, hallshapers 7077), the guardians 7076 and the
         -- vault warders 10120 are frozen adds he wakes: kept and respawned. Leaving 38 yd = evade.
-        id = "archaedas", title = "奥达曼 阿扎达斯", level = 47,
+        id = "archaedas", title = "奥达曼 阿扎达斯", level = 45,
         entry = { map = 70, x = 104.34, y = 272.31, z = -51.70, o = 3.648 },
         pack = { x = 104.34, y = 272.31, z = -51.70 },
         bosses = { 33537 },
@@ -161,7 +161,7 @@ local bosses = {
     },
     {
         -- boss_noxxion
-        id = "noxxion", title = "玛拉顿 诺克赛恩", level = 48,
+        id = "noxxion", title = "玛拉顿 诺克赛恩", level = 46,
         entry = { map = 349, x = 1130.40, y = -191.34, z = -80.00, o = 4.643 },
         pack = { x = 1130.40, y = -191.34, z = -80.00 },
         bosses = { 54445 },
@@ -172,7 +172,7 @@ local bosses = {
         -- 5710 (creature_spells) + Ogom the Wretched 39827 (creature_groups). Behind the barrier
         -- GO 149431 and immune until the six protectors on the upper ring (5712-5717, up to 256 yd
         -- away) are dead and TYPE_PROTECTORS (5) is DONE: setup kills them and sets it.
-        id = "jammalan", title = "阿塔哈卡神庙 预言者迦玛兰", level = 54,
+        id = "jammalan", title = "阿塔哈卡神庙 预言者迦玛兰", level = 52,
         entry = { map = 109, x = -426.68, y = -85.74, z = -88.14, o = 3.211 },
         pack = { x = -426.68, y = -85.74, z = -88.14 },
         bosses = { 39737, 39827 },
@@ -185,7 +185,7 @@ local bosses = {
     },
     {
         -- boss_general_angerforge: 8 reservists + 2 medics below 30% (once)
-        id = "angerforge", title = "黑石深渊 安格弗将军", level = 57,
+        id = "angerforge", title = "黑石深渊 安格弗将军", level = 55,
         entry = { map = 230, x = 652.39, y = 21.37, z = -59.98, o = 0.087 },
         pack = { x = 652.39, y = 21.37, z = -59.98 },
         bosses = { 45954 },
@@ -196,7 +196,7 @@ local bosses = {
         -- npc_golem_lord_argelmach: on aggro every live Ragereaver Golem 8906 / Wrath Hammer
         -- Construct 8907 within 80 yd joins (3 + 3, 6-73 yd). They are kept: the test is about
         -- the pull (clear them first or fight them all).
-        id = "argelmach", title = "黑石深渊 傀儡统帅阿格曼奇", level = 57,
+        id = "argelmach", title = "黑石深渊 傀儡统帅阿格曼奇", level = 55,
         entry = { map = 230, x = 846.80, y = 16.28, z = -53.64, o = 3.142 },
         pack = { x = 846.80, y = 16.28, z = -53.64 },
         bosses = { 45931 },
@@ -207,7 +207,7 @@ local bosses = {
     },
     {
         -- 9156 (creature_spells); Burning Spirits come from the dwarf runes (instance_blackrock_depths)
-        id = "flamelash", title = "黑石深渊 弗莱拉斯大使", level = 57,
+        id = "flamelash", title = "黑石深渊 弗莱拉斯大使", level = 55,
         entry = { map = 230, x = 1009.75, y = -239.02, z = -61.30, o = 2.304 },
         pack = { x = 1009.75, y = -239.02, z = -61.30 },
         bosses = { 47778 },
@@ -218,7 +218,7 @@ local bosses = {
         -- Tomb of the Seven: Anger'rel 9035, Seeth'rel 9038, Dope'rel 9040, Gloom'rel 9037,
         -- Vile'rel 9036, Hate'rel 9034, Doom'rel 9039 (boss_doomrel). Friendly until Doom'rel's
         -- gossip starts the event; once per instance.
-        id = "seven", title = "黑石深渊 七贤之墓", level = 57,
+        id = "seven", title = "黑石深渊 七贤之墓", level = 55,
         entry = { map = 230, x = 1281.14, y = -282.15, z = -78.14, o = 2.251 },
         pack = { x = 1281.14, y = -282.15, z = -78.14 },
         bosses = { 91020, 91021, 91022, 91023, 91024, 91025, 91026 },
@@ -228,7 +228,7 @@ local bosses = {
     },
     {
         -- boss_magmus (Iron Hall, before the throne room); the statues breathe fire at fixed spots
-        id = "magmus", title = "黑石深渊 玛格姆斯", level = 57,
+        id = "magmus", title = "黑石深渊 玛格姆斯", level = 55,
         entry = { map = 230, x = 1380.72, y = -659.31, z = -91.97, o = 1.588 },
         pack = { x = 1380.72, y = -659.31, z = -91.97 },
         bosses = { 47477 },
@@ -237,7 +237,7 @@ local bosses = {
     },
     {
         -- boss_emperor_dagran_thaurissan 47613 + boss_moira_bronzebeard 47217
-        id = "thaurissan", title = "黑石深渊 索瑞森大帝和茉艾拉", level = 60,
+        id = "thaurissan", title = "黑石深渊 索瑞森大帝和茉艾拉", level = 57,
         entry = { map = 230, x = 1380.18, y = -831.65, z = -87.59, o = 1.326 },
         pack = { x = 1382.0, y = -831.5, z = -87.59 },
         bosses = { 47613, 47217 },
@@ -317,8 +317,12 @@ local bosses = {
     },
 }
 
+-- Party level (user, 2026-11-28): the boss's level - 2, as a party that comes in at the level
+-- the dungeon is meant for; level 60 dungeons stay 60. Gear: a normal player's for that level
+-- (Shared/GearStages), not the premade twink templates: leveling below 60, fresh60 at 60.
 for _, b in ipairs(bosses) do
     b.kind = "boss"
+    b.gear = b.gear or (b.level >= 60 and "fresh60" or "leveling")
     b.bots = b.bots or DEFAULT_BOTS
     b.approach = b.approach or { min = 20, max = 30, clear = 20 }
     -- a reload replaces the entry instead of adding a second one

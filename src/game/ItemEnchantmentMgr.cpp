@@ -93,6 +93,16 @@ void LoadRandomEnchantmentsTable()
     }
 }
 
+std::vector<uint32> GetItemEnchantModChoices(uint32 entry)
+{
+    std::vector<uint32> out;
+    EnchantmentStore::const_iterator tab = RandomItemEnch.find(entry);
+    if (tab != RandomItemEnch.end())
+        for (auto const& ench : tab->second)
+            out.push_back(ench.ench);
+    return out;
+}
+
 uint32 GetItemEnchantMod(uint32 entry)
 {
     if (!entry)

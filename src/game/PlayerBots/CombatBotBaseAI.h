@@ -5,24 +5,10 @@
 #include "SpellEntry.h"
 #include "Player.h"
 #include "HealSpells.h"
+#include "Shared/RandomGear.h"     // RandomGearOptions
 
 struct PlayerPremadeSpecTemplate;
 class SpellCastTargets;
-
-// CombatBotBaseAI::EquipRandomGearInEmptySlots limits. The defaults keep the PartyBot behaviour,
-// except for rules every bot follows (no tools, fishing or arena gear; trinkets as below).
-struct RandomGearOptions
-{
-    // Players get their first real trinket late in levelling: below this level the trinket slots
-    // stay empty, and even then never a crafted one (engineering gadgets and the like).
-    uint32 minTrinketLevel = 55;
-    bool allowPvP = true;           // false: no honor rank items, no PvP preference
-    bool allowCosmetic = true;      // false: no armor-less clothes in armor slots (dresses, tuxedos)
-    uint32 maxItemLevel = 0;        // 0 = no cap
-    uint32 qualityWeights[MAX_ITEM_QUALITY] = {};  // per slot, pick a quality first; all 0 = any item
-    uint32 skipSlotMask = 0;        // 1 << EQUIPMENT_SLOT_*: leave these empty
-    uint32 seed = 0;                // != 0: same seed, same picks; 0 = random
-};
 
 // CombatBotBaseAI::ChooseHeal result.
 struct HealChoice

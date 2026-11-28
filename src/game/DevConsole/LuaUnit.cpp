@@ -43,6 +43,7 @@
 #include "Commander/Coordination/Doctrine/Battlefield.h"
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Shared/Inventory.h"
+#include "Shared/RandomGear.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
 #include "Shared/Supplies.h"
@@ -1946,6 +1947,54 @@ namespace DevConsole
             ai->m_resetSpellData = true;
         return 0;
     }
+    // u:gear(stage [, role [, strength [, seed]]]) -> what it wears now: { {slot, id, name,
+    // quality, ilvl, suffix}, ... }. Everything worn is destroyed first, then a new set of the
+    // gear stage (Shared/GearStages: leveling, dungeon, fresh60, preraid, raid1-3). role: a
+    // bot's own when nil; strength 0-100 (default 50); seed: same seed, same set.
+    static int U_gear(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        BotShared::GearStages::StageDef const* stage = BotShared::GearStages::Find(luaL_checkstring(L, 2));
+        if (!stage)
+            return luaL_error(L, "stage must be one of: %s", BotShared::GearStages::Names().c_str());
+        CombatBotRoles role = ROLE_INVALID;
+        if (!lua_isnoneornil(L, 3))
+        {
+            if (!ParseRole(luaL_checkstring(L, 3), role))
+                return luaL_error(L, "role must be tank, healer, meleedps, rangedps or auto");
+        }
+        else if (TeamBotAI* ai = GetTeamBotAI(p))
+            role = ai->m_role;
+        BotShared::RandomGear::StageRequest request;
+        request.stage = stage->stage;
+        request.strength = uint32(luaL_optinteger(L, 4, 50));
+        request.seed = uint32(luaL_optinteger(L, 5, 0));
+
+        p->CombatStop();
+        BotShared::RandomGear::StripEquipment(p);
+        BotShared::RandomGear::EquipStage(p, uint8(role), request);
+        if (PartyBotAI* ai = GetPartyBotAI(p))
+            ai->m_resetSpellData = true;
+
+        lua_newtable(L);
+        int n = 0;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        {
+            Item* item = p->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!item)
+                continue;
+            ItemPrototype const* proto = item->GetProto();
+            lua_createtable(L, 0, 6);
+            lua_pushinteger(L, slot); lua_setfield(L, -2, "slot");
+            lua_pushinteger(L, proto->ItemId); lua_setfield(L, -2, "id");
+            lua_pushstring(L, proto->Name1); lua_setfield(L, -2, "name");
+            lua_pushinteger(L, proto->Quality); lua_setfield(L, -2, "quality");
+            lua_pushinteger(L, proto->ItemLevel); lua_setfield(L, -2, "ilvl");
+            lua_pushinteger(L, item->GetItemRandomPropertyId()); lua_setfield(L, -2, "suffix");
+            lua_rawseti(L, -2, ++n);
+        }
+        return 1;
+    }
     // Destroys everything in the backpack and bags (not equipped items, not the bags themselves).
     static int U_clearbags(lua_State* L)
     {
@@ -2700,7 +2749,7 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
-            { "premade", U_premade }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
+            { "premade", U_premade }, { "gear", U_gear }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
             { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags }, { "trainup", U_trainup },
