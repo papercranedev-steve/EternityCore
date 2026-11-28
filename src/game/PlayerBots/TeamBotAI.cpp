@@ -52,6 +52,7 @@
 #include "Commander/Behaviors/Support/RestTopUp.h"
 #include "SpellMgr.h"
 #include "HealSpells.h"
+#include "Shared/GameNames.h"
 #include "Shared/GearUpgrade.h"
 #include "Shared/Inventory.h"
 
@@ -2259,4 +2260,31 @@ float TeamBotAI::StanceSwapThreatFactor(SpellEntry const* pSpellEntry) const
     if (!pStance)
         return 1.0f;
     return StanceThreat(StanceForm(pStance)) / StanceThreat(me->GetShapeshiftForm());
+}
+
+void TeamBotAI::OnTradeItemsWorn(Player* trader, std::vector<uint32> const& itemIds)
+{
+    if (!trader || trader->IsBot() || itemIds.empty())
+        return;
+    // Gear first (it names the piece), else a bag.
+    uint32 gear = 0;
+    for (uint32 id : itemIds)
+    {
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(id);
+        if (proto && proto->Class != ITEM_CLASS_CONTAINER && proto->Class != ITEM_CLASS_QUIVER)
+        {
+            gear = id;
+            break;
+        }
+    }
+    Commander::VoiceEvent e;
+    e.key = gear ? "voice.gift.gear" : "voice.gift.bag";
+    e.speaker = me->GetObjectGuid();
+    e.tier = Commander::VoiceTier::Social;
+    e.vars = { { "name", trader->GetName() } };
+    if (gear)
+        e.vars.emplace_back("item", BotShared::GameNames::ItemName(gear, trader));
+    e.once = "gift:" + std::to_string(me->GetGUIDLow());
+    e.onceMs = 10 * IN_MILLISECONDS;
+    sCommanderMgr.QueueVoice(me, std::move(e));
 }

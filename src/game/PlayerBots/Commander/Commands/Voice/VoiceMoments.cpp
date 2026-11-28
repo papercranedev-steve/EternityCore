@@ -7,6 +7,7 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Coordination/Situation/Pull/PullPlanner.h"
+#include "TeamBotAI.h"
 #include "Map.h"
 #include "Player.h"
 #include "SpellMgr.h"
@@ -26,7 +27,8 @@ namespace Commander
         constexpr float OOM_EMPTY_PCT = 6.0f;
         // A control breaking with this much time left was broken by someone.
         constexpr uint32 BROKE_LEFT_MS = 3000;
-        constexpr float CLOSE_CALL_PCT = 15.0f;
+        // A bot up again this soon after accepting a resurrection was raised by its caster.
+        constexpr uint32 RAISED_BY_MS = 15000;
         // After arriving on a map: everyone came through the door.
         constexpr uint32 ENTER_SAY_MS = 8000;
 
@@ -79,6 +81,7 @@ namespace Commander
 
         PullMoments(map, world, plan, human, nowMs);
         FightMoments(map, world, plan, human, nowMs);
+        PlayerMoments(map, world, plan, fighting, fightEnded, nowMs);
         MemberMoments(map, world, fighting, fightEnded, nowMs);
         if (fightEnded)
             m_lastFightEndMs = nowMs;
@@ -323,7 +326,18 @@ namespace Commander
             if (m.isBot && prev.alive && !m.alive)
                 Say("voice.death.self", m.guid, VoiceTier::Essential, nowMs, {}, "dead:" + g, 30000);
             if (m.isBot && !prev.alive && m.alive)
-                Say("voice.death.thanks", m.guid, VoiceTier::Social, nowMs, {}, "risen:" + g, 30000);
+            {
+                // Raised by a human (the request it accepted just now): his name in the thanks.
+                Player* p = map->GetPlayer(m.guid);
+                TeamBotAI const* ai = p && p->AI() ? dynamic_cast<TeamBotAI const*>(p->AI()) : nullptr;
+                PartyMemberFacts const* by = ai && WorldTimer::getMSTimeDiff(ai->m_lastResurrectMs, nowMs) < RAISED_BY_MS
+                    ? world.FindMember(ai->m_lastResurrector) : nullptr;
+                if (by && !by->isBot && !by->isPet)
+                    Say("voice.death.thanks.player", m.guid, VoiceTier::Social, nowMs, { { "name", MemberName(map, by->guid) } },
+                        "risen:" + g, 30000);
+                else
+                    Say("voice.death.thanks", m.guid, VoiceTier::Social, nowMs, {}, "risen:" + g, 30000);
+            }
             if (prev.level && m.level > prev.level)
             {
                 std::string const once = "lvl:" + g + ":" + std::to_string(m.level);
@@ -437,6 +451,7 @@ namespace Commander
             s.breaksOnDamage = e.control.breaksOnDamage;
             s.fleeing = e.flee.fleeing;
             s.boss = e.boss;
+            s.victim = e.victim;
             enemies[e.guid.GetRawValue()] = s;
         }
         m_enemies.swap(enemies);

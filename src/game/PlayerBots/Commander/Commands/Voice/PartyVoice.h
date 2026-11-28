@@ -34,6 +34,7 @@
 #include "Commander/Commands/Voice/ControlMarks.h"
 #include "Commander/Commands/Voice/VoiceSettings.h"
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,19 @@ namespace Commander
         // Out of a fight this long with nothing said: a chatty party may talk a little.
         static constexpr uint32 IDLE_CHATTY_MS = 4 * MINUTE * IN_MILLISECONDS;
         static constexpr uint32 IDLE_NORMAL_MS = 10 * MINUTE * IN_MILLISECONDS;
+        // Health a member fell below this fight to have had a close call ("好险"; a bot healed
+        // back from there by a human thanks him, PlayerMoments.cpp).
+        static constexpr float CLOSE_CALL_PCT = 15.0f;
+        // Praise for a human (PlayerMoments.cpp): at most one line per fight, this long apart.
+        static constexpr uint32 PRAISE_GAP_MS = 5 * MINUTE * IN_MILLISECONDS;
+        // A human standing in an area on the ground (or a pulse) this long: told to step out.
+        static constexpr uint32 HAZARD_SAY_MS = 1500;
+        // A human's buff on a bot lasting this long counts (not a short heal over time).
+        static constexpr uint32 BUFF_MIN_MS = 10 * MINUTE * IN_MILLISECONDS;
+        // A round of buffs on several bots is gathered this long into one line.
+        static constexpr uint32 BUFF_SETTLE_MS = 3000;
+        // A dead human back on his feet within this of a bot: "back again".
+        static constexpr float BACK_YD = 40.0f;
 
         // Ask for a line (map thread of the party). Dropped when said within its onceMs.
         void Queue(VoiceEvent event, uint32 nowMs);
@@ -86,6 +100,7 @@ namespace Commander
             bool breaksOnDamage = false;
             bool fleeing = false;
             bool boss = false;
+            ObjectGuid victim;
         };
 
         // VoiceMoments.cpp
@@ -102,6 +117,16 @@ namespace Commander
         // QuestMoments.cpp: the party's quest progress (who is done, who still needs what).
         void QuestMoments(Map* map, WorldModel const& world, Player const* human, bool fighting, uint32 nowMs);
         void QuestNews(Map* map, WorldModel const& world, Player const* human, uint32 questId, uint32 nowMs);
+        // PlayerMoments.cpp: the human players themselves (doc 2026-11-28-player-voice.md): a
+        // human down and raised, standing in fire, an enemy on him, his buffs on bots, praise
+        // after a fight. Before MemberMoments (it may take the boss kill line).
+        void PlayerMoments(Map* map, WorldModel const& world, TeamPlan const& plan, bool fighting, bool fightEnded,
+                           uint32 nowMs);
+        void HumanDeaths(Map* map, WorldModel const& world, TeamPlan const& plan, bool fighting, bool fightEnded,
+                         uint32 nowMs);
+        void HumanInFight(Map* map, WorldModel const& world, TeamPlan const& plan, uint32 nowMs);
+        void Praise(Map* map, WorldModel const& world, uint32 nowMs);
+        void HumanBuffs(Map* map, WorldModel const& world, bool fighting, uint32 nowMs);
         void Remember(WorldModel const& world, TeamPlan const& plan);
 
         // PartyVoice.cpp
@@ -157,6 +182,25 @@ namespace Commander
         std::map<uint64, std::map<uint32, QuestSnap>> m_questSnaps;
         std::map<uint32, uint32> m_questChanged;    // quest -> first change since it was said
         uint32 m_nextQuestLookMs = 0;
+
+        // PlayerMoments.cpp
+        std::map<uint64, uint32> m_humansDown;      // dead humans -> when they died ("back" once up near us)
+        std::map<std::string, uint32> m_hazardSince; // "human:enemy:spell" -> since when he stands in it
+        // This fight: somebody died; bots a human's heal reached below CLOSE_CALL_PCT (bot ->
+        // human); a human's control on an enemy that hit a non-tank or ran (who, who thanks).
+        bool m_deathThisFight = false;
+        std::map<uint64, ObjectGuid> m_savedBy;
+        ObjectGuid m_controlPraiseBy;
+        ObjectGuid m_controlPraiseSpeaker;
+        uint32 m_lastPraiseMs = 0;
+        // Long buffs cast by a human on a bot at the last look (bot raw guid, spell); new ones
+        // since gathered BUFF_SETTLE_MS.
+        std::set<std::pair<uint64, uint32>> m_humanBuffs;
+        bool m_humanBuffsSeen = false;
+        uint32 m_nextBuffLookMs = 0;
+        uint32 m_buffNewsMs = 0;                    // 0 = none
+        ObjectGuid m_buffBy;
+        std::vector<ObjectGuid> m_buffedBots;
 
         ControlMarks m_marks;
     };

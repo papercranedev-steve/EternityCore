@@ -368,6 +368,16 @@ public:
     // items in bags before the current trade, used to find what was received
     std::set<ObjectGuid> m_itemsBeforeTrade;
     bool m_hasTradeSnapshot = false;
+    // Who the current trade is with (set when he accepts, the trade is gone on completion).
+    ObjectGuid m_tradePartner;
+    // A trade completed and EquipOrUseNewItem wore some of what it brought (gear or bags, item
+    // entries): TeamBotAI thanks a human for it in the party voice.
+    virtual void OnTradeItemsWorn(Player* /*trader*/, std::vector<uint32> const& /*itemIds*/) {}
+
+    // The last resurrection asked for it (SMSG_RESURRECT_REQUEST, accepted at once): who and
+    // when (WorldTimer ms). The party voice thanks a human who raised it by name.
+    ObjectGuid m_lastResurrector;
+    uint32 m_lastResurrectMs = 0;
 
     SpellEntry const* m_resurrectionSpell = nullptr;
     std::vector<SpellEntry const*> m_spellListTaunt;

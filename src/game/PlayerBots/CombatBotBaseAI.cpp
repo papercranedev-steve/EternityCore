@@ -3259,6 +3259,21 @@ void CombatBotBaseAI::EquipOrUseNewItem()
         // Bigger bags over smaller ones (the loop above only fills empty bag slots).
         BotShared::Inventory::WearBiggerBags(me, m_itemsBeforeTrade);
 
+        // What of it it wears now (gear and bag slots), for the trader's thanks.
+        std::vector<uint32> worn;
+        for (ObjectGuid const& guid : current)
+        {
+            if (m_itemsBeforeTrade.find(guid) != m_itemsBeforeTrade.end())
+                continue;
+            Item const* pItem = me->GetItemByGuid(guid);
+            if (pItem && pItem->GetBagSlot() == INVENTORY_SLOT_BAG_0 && pItem->GetSlot() < INVENTORY_SLOT_BAG_END)
+                worn.push_back(pItem->GetEntry());
+        }
+        if (!worn.empty())
+            if (Player* trader = me->GetMap() ? me->GetMap()->GetPlayer(m_tradePartner) : nullptr)
+                OnTradeItemsWorn(trader, worn);
+        m_tradePartner.Clear();
+
         m_itemsBeforeTrade.clear();
         m_hasTradeSnapshot = false;
 
@@ -3671,6 +3686,8 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
                 // traded items only move into the bags on completion, so this is still "before"
                 CollectBagItemGuids(m_itemsBeforeTrade);
                 m_hasTradeSnapshot = true;
+                Player const* trader = me->GetTrader();
+                m_tradePartner = trader ? trader->GetObjectGuid() : ObjectGuid();
                 auto data = std::make_unique<WorldPackets::Trade::AcceptTrade>();
                 me->GetSession()->QueuePacket(std::move(data));
             }
@@ -3686,6 +3703,8 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             if (!me)
                 return;
 
+            m_lastResurrector = me->GetResurrector();
+            m_lastResurrectMs = WorldTimer::getMSTime();
             auto data = std::make_unique<WorldPackets::Misc::ResurrectResponse>();
             data->resurrectorGuid = me->GetResurrector();
             data->accept = true;

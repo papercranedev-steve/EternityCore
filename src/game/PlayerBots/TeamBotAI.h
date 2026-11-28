@@ -74,6 +74,9 @@ public:
         static std::vector<std::string> const none;
         return none;
     }
+    // A human traded it gear or a bag it now wears: it thanks him in the party voice
+    // ("voice.gift.*", doc 2026-11-28-player-voice.md moment 12).
+    void OnTradeItemsWorn(Player* trader, std::vector<uint32> const& itemIds) override;
 
     // Every frame, before the bot update's throttle (the subclass's UpdateAI): the Commander's
     // mid-cast checks (CastWatch, area channel, CastBreak), the movement hands (Backpedal,
