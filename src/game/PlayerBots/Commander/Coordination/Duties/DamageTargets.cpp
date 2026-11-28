@@ -85,6 +85,18 @@ namespace DamageTargets
             offTanked = current;
             current = nullptr;
         }
+        // Fodder (doctrine NO_HOLD: dies within seconds to the party) is the area spells' and the
+        // quick hitters': a caster whose filler takes longer than a GCD only takes it when
+        // nothing else is left (rivendare-20261128-230646: the mage started 2.5 s Frostbolts on
+        // skeletons the rogue killed first, stopped them and switched, nine times).
+        bool const slowCaster = (bot.role == ROLE_RANGE_DPS || bot.role == ROLE_HEALER) &&
+                                bot.fillerCastMs > uint32(Value::GCD_SEC * 1000.0f);
+        EnemyFacts const* fodder = nullptr;
+        if (slowCaster && current && ctx.plan.doctrine.Has(current->guid, STAMP_NO_HOLD))
+        {
+            fodder = current;
+            current = nullptr;
+        }
         // The off-tanks' enemies it could hit: the one closest to dying when nothing else is left.
         EnemyFacts const* lastResort = nullptr;
         float const range = current ? (melee ? MELEE_SWITCH_YD : RANGED_SWITCH_YD)
@@ -183,6 +195,13 @@ namespace DamageTargets
                     skip(*e, "the others kill it before its cast lands");
                     continue;
                 }
+                if (!killNow && slowCaster && ctx.plan.doctrine.Has(e->guid, STAMP_NO_HOLD))
+                {
+                    if (!fodder || e->health < fodder->health)
+                        fodder = e;
+                    skip(*e, "fodder: the area spells' and the quick hitters'");
+                    continue;
+                }
 
                 FocusScore const& f = ctx.Score(*e);
                 float const switchCost = SwitchCost::Of(world, bot, *e, reach);
@@ -245,6 +264,13 @@ namespace DamageTargets
         {
             pick.enemy = straggler;
             pick.reason = "keep (a straggler, nothing else)";
+        }
+        else if (fodder)
+        {
+            FocusScore const& f = ctx.Score(*fodder);
+            pick.enemy = fodder;
+            pick.benefit = std::max(f.harmRate * f.killSec * share, idleGain);
+            pick.reason = "fodder, nothing else";
         }
         else if (offTanked)
         {

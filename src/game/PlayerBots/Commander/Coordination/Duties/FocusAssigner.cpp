@@ -285,6 +285,11 @@ namespace Commander
                     bool const ranged = m.role == ROLE_RANGE_DPS;
                     if (!ranged && (m.role != ROLE_MELEE_DPS || n.rangedOnly))
                         continue;
+                    // Fodder (doctrine NO_HOLD) is not for a caster whose filler takes longer
+                    // than a GCD: the others kill it before the cast lands (DamageTargets "fodder").
+                    if (ranged && m.fillerCastMs > uint32(Value::GCD_SEC * 1000.0f) &&
+                        plan.doctrine.Has(e.guid, STAMP_NO_HOLD))
+                        continue;
                     // In a patrol's path: within spell range, they do not walk closer. Melee only
                     // when the enemy is already close (no running across the room).
                     float const range = n.rangedOnly ? FocusAssigner::PATROL_INTERCEPT_RANGE :
