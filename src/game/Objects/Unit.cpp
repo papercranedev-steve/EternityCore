@@ -398,6 +398,16 @@ AutoAttackCheckResult Unit::CanAutoAttackTarget(Unit const* pVictim) const
     if (!CanReachWithMeleeAutoAttack(pVictim))
         return ATTACK_RESULT_NOT_IN_RANGE;
 
+    // Fix: swings went through a closed door (Baron Rivendare held at his shut gate and fought
+    // from outside, rivendare-20261128-191005): melee range ignored line of sight. Only game
+    // objects (doors, gates) block here: the static map's line of sight on uneven ground would
+    // stop ordinary melee.
+    if (IsInWorld() && pVictim->IsInWorld() && GetMap() == pVictim->GetMap() &&
+        !GetMap()->CheckDynamicTreeLoS(GetPositionX(), GetPositionY(), GetPositionZ() + GetCollisionHeight(),
+                                       pVictim->GetPositionX(), pVictim->GetPositionY(),
+                                       pVictim->GetPositionZ() + pVictim->GetCollisionHeight(), true))
+        return ATTACK_RESULT_NOT_IN_RANGE;
+
     if (GetDistance2dToCenter(pVictim) > NO_FACING_CHECKS_DISTANCE)
     {
         if (!HasInArc(pVictim, 2 * M_PI_F / 3))
