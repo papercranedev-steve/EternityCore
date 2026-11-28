@@ -353,6 +353,102 @@ namespace Commander
             p.SetValue(benefit, cost);
             return true;
         }
+
+        // The step out of the zones the bot stands in: the best spot and its proposal (header
+        // "Where" and "Value"). `gaveUp`: melee is back inside the area of its last out-of-reach
+        // step (MeleeGaveUp). False = staying costs nothing or no spot is usable. Read only:
+        // Propose records the melee step (m_hazardGiveUp) itself.
+        // Shared by Propose and CastBreakBenefit: a cast was stopped for a step that Propose then
+        // could not find (Unholy Aura fills Rivendare's room), the rotation cast again and the
+        // next stop came 2 s later, so a mage never finished a 2.5 s Frostbolt
+        // (rivendare-20261128-210517).
+        bool FindMove(TeamBotAI const* bot, WorldModel const& world, std::vector<HazardZone> const& zones,
+                      Context& ctx, bool gaveUp, Proposal& p, HazardZone const*& zoneOut, bool& outOfReach)
+        {
+            Player* me = ctx.me;
+            // Zones the bot is clearly inside (trigger) and the expected loss of staying.
+            std::vector<HazardZone const*> inside;
+            Loss stay;
+            for (HazardZone const& z : zones)
+            {
+                if (!z.DangerousTo(ctx.roleBit) || !Contains(z, ctx.here))
+                    continue;
+                // The area of an enemy chasing this bot moves with it: a step out is undone by the
+                // chase, and stepping straight away again and again walked a mage 100 yd from the
+                // party (strat-20261101-224637). Running to the tank is EscapeBehavior's job.
+                if (ChasesMe(ctx, world, z))
+                    continue;
+                AddLoss(world, z, *ctx.self, Hits(world, z, -1.0f), stay);
+                if (Contains(z, ctx.here, PB::ENTER_MARGIN))
+                    inside.push_back(&z);
+            }
+            if (inside.empty() || stay.points <= 0.0f)
+                return false;
+            // Worst zone first: its ring is tried first.
+            std::sort(inside.begin(), inside.end(), [&](HazardZone const* a, HazardZone const* b)
+            {
+                return a->hitChance * HazardZones::HitPoints(world, *a, *ctx.self) / a->intervalSec >
+                       b->hitChance * HazardZones::HitPoints(world, *b, *ctx.self) / b->intervalSec;
+            });
+
+            ctx.field = world.field.get();
+            if (!ctx.field)
+                return false;   // built whenever the party fights (PositionFieldBuilder)
+
+            // Scanned only once the bot is in a zone (a grid visit; a few ticks per area).
+            SafeRoute::IdleCreatures const idle(me);
+            ctx.idle = &idle;
+
+            ctx.speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+            if (ctx.roleBit == HAZARD_HEALER)
+                ctx.hasHolder = FindHolder(world, me->GetObjectGuid(), ctx.holder);
+            else if (Unit* victim = me->GetVictim())
+            {
+                if (victim->IsAlive())
+                {
+                    ctx.victim = victim;
+                    ctx.victimPos.x = victim->GetPositionX();
+                    ctx.victimPos.y = victim->GetPositionY();
+                    ctx.victimPos.z = victim->GetPositionZ();
+                }
+            }
+
+            bool const hasRangeZone = std::any_of(zones.begin(), zones.end(),
+                [&](HazardZone const& z) { return z.kind == HazardKind::Range && z.DangerousTo(ctx.roleBit); });
+
+            // Pass 1: out of every zone. Pass 2: Range zones (second priority) may stay.
+            uint32 checks = 0;
+            for (uint32 pass = 0; pass < (hasRangeZone ? 2u : 1u); ++pass)
+            {
+                bool const allowRange = pass == 1;
+                uint32 tried = 0;
+                for (HazardZone const* zone : inside)
+                {
+                    if (tried++ >= PB::MAX_ZONES_TRIED || checks >= PB::MAX_GEOMETRY_CHECKS)
+                        break;
+                    if (allowRange && zone->kind == HazardKind::Range)
+                        continue;
+                    Spot spot;
+                    if (!FindSpot(ctx, world, zones, *zone, allowRange, checks, spot))
+                        continue;
+                    Proposal candidate;
+                    bool away = false;
+                    if (!MakeProposal(ctx, world, zones, *zone, spot, stay, candidate, away))
+                        continue;
+                    // Already stepped out once and came back: fight inside. Lethal steps still go.
+                    // Only for that same area: a step out of another one still goes.
+                    TeamBotAI::HazardGiveUp const& last = bot->m_hazardGiveUp;
+                    if (away && gaveUp && candidate.tier != ProposalTier::Urgent &&
+                        last.enemy == zone->enemy && last.spellId == zone->spellId)
+                        continue;
+                    p = candidate;
+                    zoneOut = zone;
+                    outOfReach = away;
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     bool PositioningBehavior::AppliesTo(TeamBotAI const* bot) const
@@ -425,6 +521,17 @@ namespace Commander
         }
         if (waiting.points <= 0.0f)
             return 0.0f;
+        // Only for a step Propose takes: no usable spot (an area filling the room), the cast is
+        // worth finishing. The melee record as Propose reads it (not updated here).
+        {
+            TeamBotAI::HazardGiveUp const& g = bot->m_hazardGiveUp;
+            bool const gaveUp = MeleeLike(ctx.roleBit) && !g.enemy.IsEmpty() && g.returned;
+            Proposal step;
+            HazardZone const* zone = nullptr;
+            bool outOfReach = false;
+            if (!FindMove(bot, world, HazardZones::Get(world), ctx, gaveUp, step, zone, outOfReach))
+                return 0.0f;
+        }
         float benefit = waiting.points;
         bool const lethal = waiting.damage >= float(ctx.self->health);
         if (lethal)
@@ -491,94 +598,21 @@ namespace Commander
         if (zones.empty())
             return;
 
-        // Zones the bot is clearly inside (trigger) and the expected loss of staying.
-        std::vector<HazardZone const*> inside;
-        Loss stay;
-        for (HazardZone const& z : zones)
-        {
-            if (!z.DangerousTo(ctx.roleBit) || !Contains(z, ctx.here))
-                continue;
-            // The area of an enemy chasing this bot moves with it: a step out is undone by the
-            // chase, and stepping straight away again and again walked a mage 100 yd from the
-            // party (strat-20261101-224637). Running to the tank is EscapeBehavior's job.
-            if (ChasesMe(ctx, world, z))
-                continue;
-            AddLoss(world, z, *ctx.self, Hits(world, z, -1.0f), stay);
-            if (Contains(z, ctx.here, ENTER_MARGIN))
-                inside.push_back(&z);
-        }
-        if (inside.empty() || stay.points <= 0.0f)
+        Proposal p;
+        HazardZone const* zone = nullptr;
+        bool outOfReach = false;
+        if (!FindMove(bot, world, zones, ctx, gaveUp, p, zone, outOfReach))
             return;
-        // Worst zone first: its ring is tried first.
-        std::sort(inside.begin(), inside.end(), [&](HazardZone const* a, HazardZone const* b)
+        if (outOfReach)
         {
-            return a->hitChance * HazardZones::HitPoints(world, *a, *ctx.self) / a->intervalSec >
-                   b->hitChance * HazardZones::HitPoints(world, *b, *ctx.self) / b->intervalSec;
-        });
-
-        ctx.field = world.field.get();
-        if (!ctx.field)
-            return;     // built whenever the party fights (PositionFieldBuilder)
-
-        // Scanned only once the bot is in a zone (a grid visit; a few ticks per area).
-        SafeRoute::IdleCreatures const idle(me);
-        ctx.idle = &idle;
-
-        ctx.speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
-        if (ctx.roleBit == HAZARD_HEALER)
-            ctx.hasHolder = FindHolder(world, me->GetObjectGuid(), ctx.holder);
-        else if (Unit* victim = me->GetVictim())
-        {
-            if (victim->IsAlive())
-            {
-                ctx.victim = victim;
-                ctx.victimPos.x = victim->GetPositionX();
-                ctx.victimPos.y = victim->GetPositionY();
-                ctx.victimPos.z = victim->GetPositionZ();
-            }
+            // Record the out-of-reach step (header "Melee out of reach").
+            TeamBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
+            g = TeamBotAI::HazardGiveUp();
+            g.enemy = zone->enemy;
+            g.spellId = zone->spellId;
+            g.movedMs = nowMs;
+            g.holdMs = p.action.holdMs;
         }
-
-        bool const hasRangeZone = std::any_of(zones.begin(), zones.end(),
-            [&](HazardZone const& z) { return z.kind == HazardKind::Range && z.DangerousTo(ctx.roleBit); });
-
-        // Pass 1: out of every zone. Pass 2: Range zones (second priority) may stay.
-        uint32 checks = 0;
-        for (uint32 pass = 0; pass < (hasRangeZone ? 2u : 1u); ++pass)
-        {
-            bool const allowRange = pass == 1;
-            uint32 tried = 0;
-            for (HazardZone const* zone : inside)
-            {
-                if (tried++ >= MAX_ZONES_TRIED || checks >= MAX_GEOMETRY_CHECKS)
-                    break;
-                if (allowRange && zone->kind == HazardKind::Range)
-                    continue;
-                Spot spot;
-                if (!FindSpot(ctx, world, zones, *zone, allowRange, checks, spot))
-                    continue;
-                Proposal p;
-                bool outOfReach = false;
-                if (MakeProposal(ctx, world, zones, *zone, spot, stay, p, outOfReach))
-                {
-                    if (outOfReach)
-                    {
-                        // Already stepped out once and came back: fight inside. Lethal steps still go.
-                        // Only for that same area: a step out of another one still goes.
-                        TeamBotAI::HazardGiveUp const& last = bot->m_hazardGiveUp;
-                        if (gaveUp && p.tier != ProposalTier::Urgent &&
-                            last.enemy == zone->enemy && last.spellId == zone->spellId)
-                            continue;
-                        TeamBotAI::HazardGiveUp& g = bot->m_hazardGiveUp;
-                        g = TeamBotAI::HazardGiveUp();
-                        g.enemy = zone->enemy;
-                        g.spellId = zone->spellId;
-                        g.movedMs = nowMs;
-                        g.holdMs = p.action.holdMs;
-                    }
-                    out.push_back(p);
-                    return;
-                }
-            }
-        }
+        out.push_back(p);
     }
 }

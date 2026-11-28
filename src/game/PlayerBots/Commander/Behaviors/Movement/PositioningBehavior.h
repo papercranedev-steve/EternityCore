@@ -111,7 +111,8 @@ namespace Commander
         // hits taken by staying `castLeftMs` longer before walking out. A cast in progress: its
         // hit when walking out now gets the bot out in time and after the own cast it does not.
         // Otherwise castLeft / repeat delay hits. Plus the death penalty when they would kill it.
-        // Walk = distance to the zone edge + RING_EXTRA (the spot itself is found by Propose).
+        // Walk = distance to the zone edge + RING_EXTRA. 0 when Propose would find no spot to
+        // step to (the same search): an area that fills the room does not stop casts.
         float CastBreakBenefit(TeamBotAI const* bot, WorldModel const& world, TeamPlan const& plan,
                                uint32 castLeftMs, char const*& reason) const override;
     };
