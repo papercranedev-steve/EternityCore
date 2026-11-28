@@ -40,6 +40,13 @@
  * least HealPlan::CastCost per health healed (a tie: the bigger heal); cast when that beats
  * every single-target heal on the members it reaches by more than TIE_FRACTION. No member has
  * to reach its own deficit first: several small gaps together are enough.
+ * With a heal boost ready (Inner Focus; user 2026-11-28): the ranks that cost at least the
+ * mana of the biggest single heal on a hurt member (the one the boost otherwise goes to) are
+ * valued boosted (every target's heal x the crit factor, capped at its missing health); the
+ * biggest boosted heal that passes the rules above is cast with the boost (no comparison with
+ * the single heals: it is free). None passes yet, but PARTY_MIN_HURT of the biggest such rank's
+ * targets miss its boosted heal x (1 - OVERHEAL_MAX) within PARTY_BOOST_WAIT_SEC at the damage
+ * they take: unboosted party heals wait (logged as a dropped order); single heals go on.
  *
  * HoTs and Swiftmend (Behaviors/Support/HotPlan.h, user 2026-11-15): the healer's HoT
  * (Rejuvenation) on a member being hit that has none of its own, the rank by HotPlan::PickHot;
@@ -114,6 +121,9 @@ namespace Commander
         // A party heal needs this many targets that miss health when it lands (user 2026-11-28:
         // "3 or 4 hurt").
         static constexpr uint32 PARTY_MIN_HURT = 3;
+        // A ready Inner Focus holds the small party heals while its boosted big one fills within
+        // this (header "Party heal").
+        static constexpr float PARTY_BOOST_WAIT_SEC = 10.0f;
 
         char const* GetId() const override { return "heal"; }
         bool AppliesTo(TeamBotAI const* bot) const override;

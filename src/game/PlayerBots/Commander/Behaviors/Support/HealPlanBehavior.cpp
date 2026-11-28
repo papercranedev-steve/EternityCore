@@ -188,6 +188,97 @@ namespace Commander
             return best;
         }
 
+        // One castable rank of a party heal and what it does (PartyHealForecast).
+        struct PartyRank
+        {
+            SpellEntry const* spell = nullptr;
+            HealPlan::Option cast;      // mana and cast time only
+            PartyHealForecast::Result r;
+        };
+
+        // `r` with every heal scaled by `factor` (a boost's crit), capped again at the missing
+        // health.
+        PartyHealForecast::Result Scaled(PartyHealForecast::Result const& r, float factor)
+        {
+            PartyHealForecast::Result s = r;
+            s.heal = s.effective = s.hurtHeal = 0.0f;
+            for (PartyHealForecast::Reach& t : s.targets)
+            {
+                t.heal *= factor;
+                t.effective = std::min(t.heal, t.missing);
+                s.heal += t.heal;
+                s.effective += t.effective;
+                if (t.missing > 0.0f)
+                    s.hurtHeal += t.heal;
+            }
+            return s;
+        }
+
+        // The party heal's own rules (header "Party heal"): hurt targets, overheal on them.
+        bool PartyQualifies(PartyHealForecast::Result const& r)
+        {
+            return r.hurt >= HealPlanBehavior::PARTY_MIN_HURT && r.effective > 0.0f &&
+                   r.hurtHeal - r.effective <= HealPlan::OVERHEAL_MAX * r.hurtHeal;
+        }
+
+        // A non-instant heal boost castable now (Inner Focus), as PickBoost checks it.
+        bool ReadyBoost(TeamBotAI const* bot, SpellEntry const*& spell, HealPlan::Boost& boost)
+        {
+            Player* me = bot->me;
+            for (HealBoostSpell const& s : bot->Kit().HealBoosts())
+            {
+                if (!s.spell || s.instant)
+                    continue;
+                if (!me->HasAura(s.spell->Id) && (!me->IsSpellReady(s.spell) || !bot->CanTryToCastSpell(me, s.spell)))
+                    continue;
+                spell = s.spell;
+                boost.free = s.free;
+                boost.critChance = s.critChance;
+                return true;
+            }
+            return false;
+        }
+
+        // The mana a single-target boost would save: the biggest heal on a hurt member (the one
+        // HealPlan::PickBoosted casts with it).
+        float SingleBoostMana(std::vector<Candidate> const& all)
+        {
+            float mana = 0.0f;
+            for (Candidate const& c : all)
+            {
+                if (c.Missing() <= 0.0f)
+                    continue;
+                HealPlan::Option const* big = nullptr;
+                for (HealPlan::Option const& o : c.options)
+                    if (!o.emergencyOnly && o.hotSec <= 0.0f && o.heal > 0.0f && (!big || o.heal > big->heal))
+                        big = &o;
+                if (big)
+                    mana = std::max(mana, big->mana);
+            }
+            return mana;
+        }
+
+        // A ready boost waits for this rank boosted (header "Party heal", Inner Focus): at least
+        // PARTY_MIN_HURT of its targets miss the boosted heal x (1 - OVERHEAL_MAX) within
+        // PARTY_BOOST_WAIT_SEC at the damage they take.
+        bool BoostGapComing(WorldModel const& world, PartyHealForecast::Result const& boosted)
+        {
+            uint32 soon = 0;
+            for (PartyHealForecast::Reach const& t : boosted.targets)
+            {
+                float const need = t.heal * (1.0f - HealPlan::OVERHEAL_MAX) - t.missing;
+                if (need <= 0.0f)
+                {
+                    ++soon;
+                    continue;
+                }
+                float const dps = Value::TakenDps(world, t.guid);
+                if (dps > 0.0f && need / dps <= HealPlanBehavior::PARTY_BOOST_WAIT_SEC)
+                    ++soon;
+            }
+            return soon >= HealPlanBehavior::PARTY_MIN_HURT;
+        }
+
         // A party heal around the healer (Prayer of Healing, every rank; header "Party heal").
         bool ProposePartyHeal(TeamBotAI const* bot, WorldModel const& world, HealPlan::Healer const& healer,
                               std::vector<Candidate> const& all, bool checkAggro, std::vector<Proposal>& out)
@@ -198,42 +289,115 @@ namespace Commander
                 if (c.assessment.need == HealPlan::Need::Emergency)
                     return false;   // the dying one first, by its own heal
 
-            SpellEntry const* bestSpell = nullptr;
-            PartyHealForecast::Result best;
-            float bestRate = 0.0f;
+            // The castable ranks; one that someone it reaches would not last for is out (that
+            // one's own heal first).
+            std::vector<PartyRank> ranks;
             for (SpellEntry const* spell : bot->m_spellListDirectHeal)
             {
                 if (!PartyHealForecast::IsPartyHeal(spell) || kit.CombatHealUse(spell) == HealUse::Never ||
                     !bot->CanTryToCastHeal(me, spell))
                     continue;
-                HealPlan::Option o;
-                o.castSec = float(spell->GetCastTime(me)) / 1000.0f;
-                o.mana = HealSpells::ManaCost(me, spell);
-                PartyHealForecast::Result const r = PartyHealForecast::Of(bot, world, spell, o.castSec);
-                if (r.hurt < HealPlanBehavior::PARTY_MIN_HURT || r.effective <= 0.0f ||
-                    r.hurtHeal - r.effective > HealPlan::OVERHEAL_MAX * r.hurtHeal)
+                PartyRank k;
+                k.spell = spell;
+                k.cast.castSec = float(spell->GetCastTime(me)) / 1000.0f;
+                k.cast.mana = HealSpells::ManaCost(me, spell);
+                k.r = PartyHealForecast::Of(bot, world, spell, k.cast.castSec);
+                if (k.r.targets.empty())
                     continue;
-                // Nobody it waits for sinks to the reserve before it lands: that one's own heal first.
                 bool late = false;
-                for (PartyHealForecast::Reach const& t : r.targets)
+                for (PartyHealForecast::Reach const& t : k.r.targets)
                     for (Candidate const& c : all)
                         if (c.guid == t.guid && t.missing > 0.0f &&
-                            c.assessment.timeToReserve < o.castSec + HealPlan::LANDING_MARGIN_SEC)
+                            c.assessment.timeToReserve < k.cast.castSec + HealPlan::LANDING_MARGIN_SEC)
                             late = true;
-                if (late)
+                if (!late)
+                    ranks.push_back(k);
+            }
+            if (ranks.empty())
+                return false;
+
+            // Inner Focus (user 2026-11-28): on the party heal when that saves more mana than the
+            // single heal it would otherwise wait for, and the boosted heal fills its targets.
+            SpellEntry const* boostSpell = nullptr;
+            HealPlan::Boost boost;
+            if (ReadyBoost(bot, boostSpell, boost))
+            {
+                float const factor = 1.0f + std::min(1.0f, std::max(0.0f, boost.critChance)) * (HealPlan::CRIT_MULT - 1.0f);
+                float const singleMana = SingleBoostMana(all);
+                PartyRank const* pick = nullptr;
+                PartyHealForecast::Result pickR;
+                PartyRank const* waitFor = nullptr;     // the biggest rank worth the boost
+                for (PartyRank const& k : ranks)
+                {
+                    if (k.cast.mana < singleMana)
+                        continue;
+                    PartyHealForecast::Result const s = Scaled(k.r, factor);
+                    if (!waitFor || k.cast.mana > waitFor->cast.mana)
+                        waitFor = &k;
+                    if (!PartyQualifies(s) || (pick && s.effective <= pickR.effective))
+                        continue;
+                    if (checkAggro && ThreatBehavior::HealPullLossOf(bot, world, me, k.spell, s.effective) > 0.0f)
+                        continue;
+                    pick = &k;
+                    pickR = s;
+                }
+                PartyMemberFacts const* self = world.FindMember(me->GetObjectGuid());
+                if (pick && self)
+                {
+                    Proposal p;
+                    p.kind = ProposalKind::HealOrder;
+                    p.tier = ProposalTier::Assigned;
+                    p.source = "heal";
+                    p.reason = "party hurt: boost, big party heal";
+                    p.action.type = BotActionType::Cast;
+                    p.action.target = me->GetObjectGuid();
+                    p.action.spell = pick->spell;
+                    p.action.prepSpell = boostSpell;
+                    float benefit = Value::Points(world, pickR.effective);
+                    if (boost.free)
+                        benefit += ManaWorth::Points(world, *self, pick->cast.mana);
+                    p.SetValue(benefit, Value::Points(world, pickR.heal - pickR.effective));
+                    out.push_back(p);
+                    return true;
+                }
+                // The big gap is coming: no small party heal fills it first (the single heals
+                // still go by their own rules). Written to the decision log as a dropped order.
+                if (waitFor && BoostGapComing(world, Scaled(waitFor->r, factor)))
+                {
+                    Proposal p;
+                    p.kind = ProposalKind::HealOrder;
+                    p.tier = ProposalTier::Assigned;
+                    p.source = "heal";
+                    p.reason = "heal boost ready: party heal held until the boosted big one fills";
+                    p.action.type = BotActionType::Cast;
+                    p.action.target = me->GetObjectGuid();
+                    p.action.spell = waitFor->spell;
+                    p.SetValue(0.0f, 0.0f);
+                    out.push_back(p);
+                    return false;
+                }
+            }
+
+            PartyRank const* bestRank = nullptr;
+            float bestRate = 0.0f;
+            for (PartyRank const& k : ranks)
+            {
+                PartyHealForecast::Result const& r = k.r;
+                if (!PartyQualifies(r))
                     continue;
-                float const rate = HealPlan::CastCost(healer, o) / r.effective;
-                if (bestSpell && (rate > bestRate || (std::fabs(rate - bestRate) <= HealPlan::TIE_FRACTION * bestRate &&
-                                                      r.effective <= best.effective)))
+                float const rate = HealPlan::CastCost(healer, k.cast) / r.effective;
+                if (bestRank && (rate > bestRate || (std::fabs(rate - bestRate) <= HealPlan::TIE_FRACTION * bestRate &&
+                                                     r.effective <= bestRank->r.effective)))
                     continue;
-                if (checkAggro && ThreatBehavior::HealPullLossOf(bot, world, me, spell, r.effective) > 0.0f)
+                if (checkAggro && ThreatBehavior::HealPullLossOf(bot, world, me, k.spell, r.effective) > 0.0f)
                     continue;
-                bestSpell = spell;
-                best = r;
+                bestRank = &k;
                 bestRate = rate;
             }
-            if (!bestSpell)
+            if (!bestRank)
                 return false;
+            SpellEntry const* bestSpell = bestRank->spell;
+            PartyHealForecast::Result const& best = bestRank->r;
 
             // Cheaper per health than any single heal on the members it reaches.
             float single = HealPlan::NO_LIMIT;
@@ -379,7 +543,7 @@ namespace Commander
                 // The heals PickBoosted takes outside an emergency.
                 float biggest = 0.0f;
                 for (HealPlan::Option const& o : options)
-                    if (!o.emergencyOnly)
+                    if (!o.emergencyOnly && o.hotSec <= 0.0f)   // never boosted (HealPlan::PickBoosted)
                         biggest = std::max(biggest, HealPlan::BoostedHeal(o, b));
                 return biggest * (1.0f - HealPlan::OVERHEAL_MAX);
             }
