@@ -6,6 +6,9 @@
 --
 -- Spawns from the world DB (creature guid / position). Killed trash stays dead until its respawn
 -- timer; a reload kills whatever came back.
+--
+-- Order: by dungeon level, then by the boss's place in the dungeon (the window lists them in this
+-- order).
 
 local DEFAULT_BOTS = {
     { class = "warrior", role = "tank" },
@@ -40,7 +43,11 @@ local function killEntries(leader, radius, entries)
     end
 end
 
+-- Bosses from .kiro/docs/2026-11-28-dungeon-boss-encounters.md that a recording has to verify
+-- (sections 2, 2.4, 3 and 7). Spawns checked against `creature` 2026-11-28. Party level: the
+-- boss's level - 2 (see the loop at the bottom).
 local bosses = {
+    -- 死亡矿井 (Deadmines, 36)
     {
         -- VanCleef is 21, the Blackguards 19-20
         -- creature_groups 79336: VanCleef 79336 + stealthed Blackguards 79383, 79368. The deck
@@ -52,6 +59,39 @@ local bosses = {
         clearRadius = 60,
         hint = "50% 召唤两个迪菲亚爪牙（法术 5200），潜行者在那之前晕住能打断召唤。两个黑衣卫兵是隐身的，开打就上来。",
     },
+
+    -- 影牙城堡 (Shadowfang Keep, 33)
+    {
+        -- 4275 in the top room; Shadow Port to 3 fixed points (some on the ledges)
+        id = "arugal", title = "影牙城堡 大法师阿鲁高", level = 24,
+        entry = { map = 33, x = -76.75, y = 2152.41, z = 155.79, o = 2.496 },
+        pack = { x = -76.75, y = 2152.41, z = 155.79 },
+        bosses = { 16255 },
+        clearRadius = 50,
+        hint = "每 22-48 秒暗影传送到房间 3 个固定点之一（有的在高台上）；虚空箭；阿鲁高的诅咒把人变成狼人并控制 10 秒，自己会好，不用打他；近身时放雷霆震击。",
+    },
+
+    -- 剃刀沼泽 (Razorfen Kraul, 47)
+    {
+        -- 4428 (30), creature_spells; section 3: charm -> AllyCharm
+        id = "jargba", title = "剃刀沼泽 亡语者贾格巴", level = 28,
+        entry = { map = 47, x = 2146.43, y = 1411.24, z = 73.95, o = 1.571 },
+        pack = { x = 2146.43, y = 1411.24, z = 73.95 },
+        bosses = { 87400 },
+        clearRadius = 50,
+        hint = "心灵控制一名队员（看通用 AllyCharm：打不快就控住被控的人）。",
+    },
+    {
+        -- 4422 (33); section 3: enrage -> purge / Tranquilizing Shot
+        id = "agathelos", title = "剃刀沼泽 暴怒的阿迦赛罗斯", level = 31,
+        entry = { map = 47, x = 1992.56, y = 1975.00, z = 63.40, o = 0.750 },
+        pack = { x = 1992.56, y = 1975.00, z = 63.40 },
+        bosses = { 87486 },
+        clearRadius = 50,
+        hint = "身上的增益（激怒类、魔法类）：看猎人宁神射击、萨满净化会不会去掉。",
+    },
+
+    -- 诺莫瑞根 (Gnomeregan, 90)
     {
         -- Thermaplugg 34 (bombs 30)
         -- boss_thermaplugg 30139; the door GO 142207 locks when the fight starts. Leprous
@@ -63,71 +103,8 @@ local bosses = {
         clearRadius = 70,
         hint = "墙上的炸弹口会放出行走炸弹，冰霜新星 / 冰锥术定住或打掉；击退（仇恨降低）。门在开打时锁上。",
     },
-    {
-        -- both bosses 42 (hall trash 34-39)
-        -- Mograine 40029; Whitemane 39946 behind door GO 104600, joins in phase 1. The pull sends
-        -- every live chaplain / wizard / centurion / champion / abbot / monk within 82 yd at the
-        -- party: the hall is cleared (90). The event runs once per instance: fresh.
-        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩", level = 40,
-        fresh = true,
-        entry = { map = 189, x = 1153.87, y = 1398.39, z = 32.61, o = 6.126 },
-        pack = { x = 1153.87, y = 1398.39, z = 32.61 },
-        bosses = { 40029, 39946 },
-        clearRadius = 90,
-        -- the hall door side, not behind the altar
-        from = { x = 1100.0, y = 1398.0 },
-        approach = { min = 30, max = 40, clear = 20 },
-        hint = "莫格莱尼倒下后怀特迈恩出场复活他。她会群体催眠，牧师驱散制裁之锤和心灵控制。每个副本只能打一次，开始和重开都会进新副本。",
-    },
-    {
-        -- Gandling 61
-        -- Gandling is summoned at (180.8, -5.4, 75.6) once the six room bosses are DONE (data 1-6);
-        -- setup does that, the last one summons him at once. Wipe: he walks home (data 0 = FAIL) and
-        -- stays. After a kill (data 0 = DONE) setup resets data 0 first; never while he is alive
-        -- (two Gandlings). The hall's rats and the floor above (40 yd up) are cleared.
-        id = "gandling", title = "通灵学院 黑暗院长加丁", level = 60,
-        entry = { map = 289, x = 180.77, y = -5.43, z = 75.57, o = 1.292 },
-        pack = { x = 180.77, y = -5.43, z = 75.57 },
-        bosses = {},
-        bossEntries = { GANDLING },
-        clearRadius = 60,
-        setup = function(leader)
-            for _, c in ipairs(leader:nearby(150, "alive")) do
-                if c:entry() == GANDLING then return end
-            end
-            for _, c in ipairs({ ".instance setdata 0 0", ".instance setdata 1 3", ".instance setdata 2 3",
-                    ".instance setdata 3 3", ".instance setdata 4 3", ".instance setdata 5 3", ".instance setdata 6 3" }) do
-                leader:select(leader)
-                leader:cmd(c)
-            end
-        end,
-        hint = "会把队员传送到周围的房间里（房间里刷骷髅守卫，不能变形，牧师束缚亡灵），奥术飞弹，暗影护盾要驱散。免疫打断。",
-    },
-    {
-        -- Anastari 59 elite
-        -- 54238 on the Ziggurat platform (148 yd up); Thuzadin Necromancers / Shadowcasters /
-        -- Acolytes and banshees 25-40 yd, ghouls 45-55 yd: cleared. Her death opens Ziggurat GO
-        -- 175380 (TYPE_BARONESS). The Ash'ari Crystal (34 yd, above) dies too: it only counts
-        -- for the Slaughterhouse gate.
-        id = "anastari", title = "斯坦索姆 女男爵阿纳斯塔丽", level = 60,
-        entry = { map = 329, x = 3855.34, y = -3715.75, z = 148.18, o = 1.274 },
-        pack = { x = 3855.34, y = -3715.75, z = 148.18 },
-        bosses = { 54238 },
-        clearRadius = 60,
-        hint = "附身：钻进一名队员身体里控制他（她自己隐身），把被附身的打到 25% 血以下她才出来，之后那人回到附身前的血量。女妖哀嚎群体伤害，沉默，女妖诅咒（命中下降）。",
-    },
 
-    -- Bosses with mechanics from .kiro/docs/2026-11-28-dungeon-boss-encounters.md (section 2).
-    -- Spawns checked against `creature` 2026-11-28.
-    {
-        -- 4275 in the top room; Shadow Port to 3 fixed points (some on the ledges)
-        id = "arugal", title = "影牙城堡 大法师阿鲁高", level = 24,
-        entry = { map = 33, x = -76.75, y = 2152.41, z = 155.79, o = 2.496 },
-        pack = { x = -76.75, y = 2152.41, z = 155.79 },
-        bosses = { 16255 },
-        clearRadius = 50,
-        hint = "每 22-48 秒暗影传送到房间 3 个固定点之一（有的在高台上）；虚空箭；阿鲁高的诅咒把人变成狼人并控制 10 秒，自己会好，不用打他；近身时放雷霆震击。",
-    },
+    -- 血色修道院 (Scarlet Monastery, 189)
     {
         -- boss_arcanist_doan, library wing
         id = "doan", title = "血色修道院 奥法师杜安", level = 35,
@@ -147,6 +124,58 @@ local bosses = {
         hint = "每 20-30 秒旋风斩，近战要出去；50% 激怒。死后刷 20 个血色新兵冲过来，别急着坐下。",
     },
     {
+        -- boss_high_inquisitor_fairbanks 40039 (40), cathedral side room. Mograine (40029) is 44 yd
+        -- away in the hall: a small clear radius and a short ring keep him out of it.
+        id = "fairbanks", title = "血色修道院 大检察官法尔班克斯", level = 38,
+        entry = { map = 189, x = 1158.86, y = 1354.27, z = 30.39, o = 4.695 },
+        pack = { x = 1158.86, y = 1354.27, z = 30.39 },
+        bosses = { 40039 },
+        clearRadius = 30,
+        approach = { min = 10, max = 20, clear = 8 },
+        hint = "恐惧、沉睡（随机目标）；真言术盾、治疗自己。看恐惧应对：矮人牧师的防护恐惧结界、萨满的战栗图腾。",
+    },
+    {
+        -- both bosses 42 (hall trash 34-39)
+        -- Mograine 40029; Whitemane 39946 behind door GO 104600, joins in phase 1. The pull sends
+        -- every live chaplain / wizard / centurion / champion / abbot / monk within 82 yd at the
+        -- party: the hall is cleared (90). The event runs once per instance: fresh.
+        id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩", level = 40,
+        fresh = true,
+        entry = { map = 189, x = 1153.87, y = 1398.39, z = 32.61, o = 6.126 },
+        pack = { x = 1153.87, y = 1398.39, z = 32.61 },
+        bosses = { 40029, 39946 },
+        clearRadius = 90,
+        -- the hall door side, not behind the altar
+        from = { x = 1100.0, y = 1398.0 },
+        approach = { min = 30, max = 40, clear = 20 },
+        hint = "莫格莱尼倒下后怀特迈恩出场复活他。她会群体催眠，牧师驱散制裁之锤和心灵控制。每个副本只能打一次，开始和重开都会进新副本。",
+    },
+
+    -- 剃刀高地 (Razorfen Downs, 129). Ragglesnout (31774) is not here: a 30% pool spawn.
+    {
+        -- 8567 (40); section 3: enrage -> purge / Tranquilizing Shot
+        id = "glutton", title = "剃刀高地 贪食者", level = 38,
+        entry = { map = 129, x = 2468.71, y = 1006.83, z = 23.76, o = 6.111 },
+        pack = { x = 2468.71, y = 1006.83, z = 23.76 },
+        bosses = { 87242 },
+        clearRadius = 50,
+        hint = "激怒（看猎人宁神射击、萨满净化会不会去掉）。",
+    },
+
+    -- 奥达曼 (Uldaman, 70)
+    {
+        -- boss_ironaya 54080 (40): stone until ULDAMAN_ENCOUNTER_IRONAYA_DOOR (0) is DONE, then
+        -- instance_uldaman wakes her and opens the seal door after 27 s (animation time)
+        id = "ironaya", title = "奥达曼 艾隆纳亚", level = 38,
+        entry = { map = 70, x = -234.73, y = 312.01, z = -47.51, o = 4.800 },
+        pack = { x = -234.73, y = 312.01, z = -47.51 },
+        bosses = { 54080 },
+        clearRadius = 50,
+        fresh = true,
+        setup = function(leader) markDone(leader, 0, true) end,
+        hint = "设成封印门已开：约 27 秒后她醒来。击退清仇恨（看坦克拉回来）。每次都进新副本。",
+    },
+    {
         -- boss_archaedas: stone until someone uses the Altar of Archaedas (GO 133234, 9 yd from
         -- him). The wall earthen (custodians 7309, hallshapers 7077), the guardians 7076 and the
         -- vault warders 10120 are frozen adds he wakes: kept and respawned. Leaving 38 yd = evade.
@@ -159,6 +188,19 @@ local bosses = {
         fresh = true,
         hint = "右键他脚边的祭坛开打。每 10 秒唤醒墙边土灵，66% 唤醒守护者，33% 唤醒石穴看守者（读条 5 秒）；地面震颤群体昏迷。出房间会脱战。每次都进新副本。",
     },
+
+    -- 祖尔法拉克 (Zul'Farrak, 209)
+    {
+        -- 7267 (48) + Ruuzlu 37997 on the top; section 3: enrage -> purge / Tranquilizing Shot
+        id = "ukorz", title = "祖尔法拉克 乌克兹·沙顶", level = 46,
+        entry = { map = 209, x = 1726.73, y = 1018.31, z = 54.97, o = 4.468 },
+        pack = { x = 1726.73, y = 1018.31, z = 54.97 },
+        bosses = { 37996, 37997 },
+        clearRadius = 50,
+        hint = "和鲁兹鲁一起上。身上的增益：看猎人宁神射击、萨满净化会不会去掉。",
+    },
+
+    -- 玛拉顿 (Maraudon, 349)
     {
         -- boss_noxxion
         id = "noxxion", title = "玛拉顿 诺克赛恩", level = 46,
@@ -167,6 +209,36 @@ local bosses = {
         bosses = { 54445 },
         clearRadius = 60,
         hint = "每 40 秒不能选中 15 秒，召唤 5 个幼体（用群攻清）；剧毒箭雨要驱毒。",
+    },
+    {
+        -- 13601 (50); section 3: frontal cone -> tank facing
+        id = "gizlock", title = "玛拉顿 工匠吉兹洛克", level = 48,
+        entry = { map = 349, x = 134.90, y = -313.73, z = -173.55, o = 6.074 },
+        pack = { x = 134.90, y = -313.73, z = -173.55 },
+        bosses = { 56538 },
+        clearRadius = 50,
+        hint = "地精龙枪正面锥形（看坦克把他转开、其他人不站他正面）。",
+    },
+
+    -- 阿塔哈卡神庙 (Sunken Temple, 109)
+    {
+        -- Weaver 300998 (51) on the balcony ring; Dreamscythe 300997 patrols the same ring ~85 yd
+        -- away and may join. Section 3: frontal cone -> tank facing
+        id = "weaver", title = "阿塔哈卡神庙 织梦者", level = 49,
+        entry = { map = 109, x = -425.12, y = 105.77, z = -90.84, o = 1.986 },
+        pack = { x = -425.12, y = 105.77, z = -90.84 },
+        bosses = { 300998 },
+        clearRadius = 50,
+        hint = "正面酸液吐息、翼击（看坦克把它转开、其他人不站正面）。德姆塞卡尔在同一圈阳台巡逻，可能一起来。",
+    },
+    {
+        -- Morphaz 33657 (52) + Hazzas 33658 (53), side by side
+        id = "morphaz", title = "阿塔哈卡神庙 摩弗拉斯和哈扎斯", level = 50,
+        entry = { map = 109, x = -671.64, y = 73.28, z = -90.83, o = 5.027 },
+        pack = { x = -670.89, y = 70.98, z = -90.83 },
+        bosses = { 33657, 33658 },
+        clearRadius = 50,
+        hint = "两条龙一起上：正面吐息（看坦克把它们转开、其他人不站正面）。",
     },
     {
         -- 5710 (creature_spells) + Ogom the Wretched 39827 (creature_groups). Behind the barrier
@@ -182,6 +254,17 @@ local bosses = {
             markDone(leader, 5)
         end,
         hint = "楼上 6 个保护者已杀、屏障已开。妖术（变身，诅咒类，之后被控）要快驱散；烈焰风暴地面区域要躲；地缚图腾；80% 以下自己放治疗波。奥戈姆一起上。",
+    },
+
+    -- 黑石深渊 (Blackrock Depths, 230)
+    {
+        -- boss_high_interrogator_gerstahn 47250 (52), Detention Block
+        id = "gerstahn", title = "黑石深渊 审讯官格斯塔恩", level = 50,
+        entry = { map = 230, x = 310.56, y = -146.25, z = -70.30, o = 5.515 },
+        pack = { x = 310.56, y = -146.25, z = -70.30 },
+        bosses = { 47250 },
+        clearRadius = 50,
+        hint = "心灵尖啸群体恐惧（看防护恐惧结界、战栗图腾、狂暴之怒提前开）。",
     },
     {
         -- boss_general_angerforge: 8 reservists + 2 medics below 30% (once)
@@ -242,7 +325,39 @@ local bosses = {
         pack = { x = 1382.0, y = -831.5, z = -87.59 },
         bosses = { 47613, 47217 },
         clearRadius = 70,
-        hint = "茉艾拉公主每 10 秒治疗大帝，还会加盾、心灵震爆（联盟任务要她活着，部落可以先杀）；大帝：索瑞森之手随机昏迷，每 18 秒烈焰化身群体火焰伤害。",
+        hint = "茉艾拉公主每 10 秒治疗大帝，还会加盾、心灵震爆（两个阵营的任务都要她活着）；大帝：索瑞森之手随机昏迷，每 18 秒烈焰化身群体火焰伤害。",
+    },
+
+    -- 黑石塔下层 (Lower Blackrock Spire, 229)
+    {
+        -- boss_highlord_omokk 43518 (59); section 3: threat wipe (Knock Away)
+        id = "omokk", title = "黑石塔下层 奥莫克大王", level = 60,
+        entry = { map = 229, x = -22.65, y = -299.75, z = 31.70, o = 4.660 },
+        pack = { x = -22.65, y = -299.75, z = 31.70 },
+        bosses = { 43518 },
+        clearRadius = 50,
+        hint = "击退清仇恨（看坦克拉回来）。",
+    },
+    {
+        -- 10596 (59); Crystallize 16104: frontal 60 deg, 10 yd, 6 s stun, at her victim
+        id = "smolderweb", title = "黑石塔下层 烟网蛛后", level = 60,
+        entry = { map = 229, x = -135.51, y = -565.85, z = 10.17, o = 0.670 },
+        pack = { x = -135.51, y = -565.85, z = 10.17 },
+        bosses = { 44342 },
+        clearRadius = 50,
+        hint = "结晶：正面 60 度、10 码昏迷 6 秒（看坦克把她转开、其他人不站正面）；毒（驱毒）。",
+    },
+    {
+        -- Gizrul 10268 is summoned by Halycon's death (boss_halycon) at (-167.6, -382.4) and walks
+        -- to (-172.6, -324.3). Halycon (40245, 25 yd away) dies in the clear, so he comes at once.
+        id = "gizrul", title = "黑石塔下层 奴役者吉兹鲁尔", level = 60,
+        entry = { map = 229, x = -172.63, y = -324.25, z = 64.40, o = 4.740 },
+        pack = { x = -172.63, y = -324.25, z = 64.40 },
+        bosses = {},
+        bossEntries = { 10268 },
+        clearRadius = 50,
+        fresh = true,
+        hint = "哈雷肯已杀，吉兹鲁尔从通道里跑过来。激怒（看猎人宁神射击、萨满净化会不会去掉）。每次都进新副本。",
     },
     {
         -- boss_overlord_wyrmthalak: 2 Spirestone Warlords + 2 Smolderthorn Berserkers behind
@@ -254,23 +369,16 @@ local bosses = {
         clearRadius = 70,
         hint = "低于 50% 从身后刷 2 个尖石督军和 2 个烟棘狂战士，副坦接住。冲击波、击退、挫志怒吼。",
     },
+
+    -- 厄运之槌 (Dire Maul, 429): east, west, north
     {
-        -- boss_jandice_barov
-        id = "jandice", title = "通灵学院 詹迪斯·巴罗夫", level = 60,
-        entry = { map = 289, x = 268.22, y = 73.63, z = 95.92, o = 1.641 },
-        pack = { x = 268.22, y = 73.63, z = 95.92 },
-        bosses = { 48807 },
+        -- 11488 + her pet Ferra 300146; section 3: ground area (Volley 22908)
+        id = "illyanna", title = "厄运之槌东 伊琳娜·暗木", level = 60,
+        entry = { map = 429, x = -14.61, y = 542.09, z = 28.60, o = 3.106 },
+        pack = { x = -14.61, y = 542.09, z = 28.60 },
+        bosses = { 84381, 300146 },
         clearRadius = 50,
-        hint = "每 25 秒隐身、不能选中，同时召唤一圈幻象（一打就死，用群攻清），她出来后坦克马上接住。血之诅咒，放逐。",
-    },
-    {
-        -- boss_dathrohan_balnazzar 52149 (10812 -> 10813 at 40%), Stratholme live side
-        id = "balnazzar", title = "斯坦索姆 巴纳扎尔", level = 60,
-        entry = { map = 329, x = 3415.84, y = -3044.54, z = 136.81, o = 5.428 },
-        pack = { x = 3415.84, y = -3044.54, z = 136.81 },
-        bosses = { 52149 },
-        clearRadius = 60,
-        hint = "人形阶段：十字军之锤群体昏迷。40% 变身巴纳扎尔：支配（不能驱散）、心灵尖啸群体恐惧、沉睡、暗影震击。",
+        hint = "乱射是地面区域，要走出去（坦克也走）。宠物费拉一起上。",
     },
     {
         -- boss_immol_thar: force field until the 5 pylons are off = TYPE_CRISTAL_EVENT (1) DONE;
@@ -314,6 +422,162 @@ local bosses = {
         clearRadius = 60,
         fresh = true,
         hint = "先杀大王：狂暴冲锋、战争践踏、致死打击。克鲁什是施法者（法师/萨满/牧师技能随机），打断和控制；大王死后他变友好，别打死。每次都进新副本。",
+    },
+
+    -- 通灵学院 (Scholomance, 289)
+    {
+        -- Kirtonos 10506 is summoned by the Brazier of the Herald (GO 175564, lock 1179 = Blood of
+        -- Innocents 13523) at (315.0, 70.5, 102.1); TYPE_KIRTONOS goes IN_PROGRESS: once per instance
+        id = "kirtonos", title = "通灵学院 传令官基尔图诺斯", level = 60,
+        entry = { map = 289, x = 325.12, y = 93.64, z = 101.64, o = 3.5 },
+        pack = { x = 325.12, y = 93.64, z = 101.64 },
+        bosses = {},
+        bossEntries = { 10506 },
+        clearRadius = 50,
+        fresh = true,
+        commands = { ".additem 13523" },
+        approach = { min = 10, max = 20, clear = 10 },
+        hint = "背包里已放无辜者之血：右键门廊的传令官火盆召唤他。每 16-18 秒在鸟形和人形之间切换；支配心灵（看通用 AllyCharm）、缴械、暗影箭雨。每次都进新副本。",
+    },
+    {
+        -- boss_jandice_barov
+        id = "jandice", title = "通灵学院 詹迪斯·巴罗夫", level = 60,
+        entry = { map = 289, x = 268.22, y = 73.63, z = 95.92, o = 1.641 },
+        pack = { x = 268.22, y = 73.63, z = 95.92 },
+        bosses = { 48807 },
+        clearRadius = 50,
+        hint = "每 25 秒隐身、不能选中，同时召唤一圈幻象（一打就死，用群攻清），她出来后坦克马上接住。血之诅咒，放逐。",
+    },
+    {
+        -- 11622 (61); section 3: threat wipe (Knockback 10101)
+        id = "rattlegore", title = "通灵学院 拉特格尔", level = 60,
+        entry = { map = 289, x = 137.15, y = 171.68, z = 95.97, o = 3.281 },
+        pack = { x = 137.15, y = 171.68, z = 95.97 },
+        bosses = { 48910 },
+        clearRadius = 50,
+        hint = "击退清仇恨（看坦克拉回来）。",
+    },
+    {
+        -- boss_boss_ras_frostwhisper 48850 (62)
+        id = "ras", title = "通灵学院 莱斯·霜语", level = 60,
+        entry = { map = 289, x = -25.11, y = 141.28, z = 83.91, o = 0.035 },
+        pack = { x = -25.11, y = 141.28, z = 83.91 },
+        bosses = { 48850 },
+        clearRadius = 50,
+        hint = "恐惧（看防护恐惧结界、战栗图腾、狂暴之怒提前开）。",
+    },
+    {
+        -- boss_the_ravenian 48854; section 3: threat wipe
+        id = "ravenian", title = "通灵学院 拉文尼亚", level = 60,
+        entry = { map = 289, x = 103.31, y = -1.68, z = 75.22, o = 6.178 },
+        pack = { x = 103.31, y = -1.68, z = 75.22 },
+        bosses = { 48854 },
+        clearRadius = 50,
+        hint = "清仇恨（看坦克拉回来）。",
+    },
+    {
+        -- boss_doctor_theolen_krastinov 48925; section 3: enrage -> purge / Tranquilizing Shot
+        id = "krastinov", title = "通灵学院 克拉斯提诺夫博士", level = 60,
+        entry = { map = 289, x = 182.25, y = -95.44, z = 85.31, o = 4.730 },
+        pack = { x = 182.25, y = -95.44, z = 85.31 },
+        bosses = { 48925 },
+        clearRadius = 50,
+        hint = "激怒（看猎人宁神射击、萨满净化会不会去掉）。",
+    },
+    {
+        -- boss_illucia_barov 48857
+        id = "illucia", title = "通灵学院 伊露希亚·巴罗夫", level = 60,
+        entry = { map = 289, x = 265.96, y = 0.90, z = 75.33, o = 3.072 },
+        pack = { x = 265.96, y = 0.90, z = 75.33 },
+        bosses = { 48857 },
+        clearRadius = 50,
+        hint = "恐惧、沉默（看防护恐惧结界、战栗图腾、狂暴之怒提前开）。",
+    },
+    {
+        -- Gandling 61
+        -- Gandling is summoned at (180.8, -5.4, 75.6) once the six room bosses are DONE (data 1-6);
+        -- setup does that, the last one summons him at once. Wipe: he walks home (data 0 = FAIL) and
+        -- stays. After a kill (data 0 = DONE) setup resets data 0 first; never while he is alive
+        -- (two Gandlings). The hall's rats and the floor above (40 yd up) are cleared.
+        id = "gandling", title = "通灵学院 黑暗院长加丁", level = 60,
+        entry = { map = 289, x = 180.77, y = -5.43, z = 75.57, o = 1.292 },
+        pack = { x = 180.77, y = -5.43, z = 75.57 },
+        bosses = {},
+        bossEntries = { GANDLING },
+        clearRadius = 60,
+        setup = function(leader)
+            for _, c in ipairs(leader:nearby(150, "alive")) do
+                if c:entry() == GANDLING then return end
+            end
+            for _, c in ipairs({ ".instance setdata 0 0", ".instance setdata 1 3", ".instance setdata 2 3",
+                    ".instance setdata 3 3", ".instance setdata 4 3", ".instance setdata 5 3", ".instance setdata 6 3" }) do
+                leader:select(leader)
+                leader:cmd(c)
+            end
+        end,
+        hint = "会把队员传送到周围的房间里（房间里刷骷髅守卫，不能变形，牧师束缚亡灵），奥术飞弹，暗影护盾要驱散。免疫打断。",
+    },
+
+    -- 斯坦索姆 (Stratholme, 329): live side, then the undead side
+    {
+        -- boss_dathrohan_balnazzar 52149 (10812 -> 10813 at 40%), Stratholme live side
+        id = "balnazzar", title = "斯坦索姆 巴纳扎尔", level = 60,
+        entry = { map = 329, x = 3415.84, y = -3044.54, z = 136.81, o = 5.428 },
+        pack = { x = 3415.84, y = -3044.54, z = 136.81 },
+        bosses = { 52149 },
+        clearRadius = 60,
+        hint = "人形阶段：十字军之锤群体昏迷。40% 变身巴纳扎尔：支配（不能驱散）、心灵尖啸群体恐惧、沉睡、暗影震击。",
+    },
+    {
+        -- Anastari 59 elite
+        -- 54238 on the Ziggurat platform (148 yd up); Thuzadin Necromancers / Shadowcasters /
+        -- Acolytes and banshees 25-40 yd, ghouls 45-55 yd: cleared. Her death opens Ziggurat GO
+        -- 175380 (TYPE_BARONESS). The Ash'ari Crystal (34 yd, above) dies too: it only counts
+        -- for the Slaughterhouse gate.
+        id = "anastari", title = "斯坦索姆 女男爵阿纳斯塔丽", level = 60,
+        entry = { map = 329, x = 3855.34, y = -3715.75, z = 148.18, o = 1.274 },
+        pack = { x = 3855.34, y = -3715.75, z = 148.18 },
+        bosses = { 54238 },
+        clearRadius = 60,
+        hint = "附身：钻进一名队员身体里控制他（她自己隐身），把被附身的打到 25% 血以下她才出来，之后那人回到附身前的血量。女妖哀嚎群体伤害，沉默，女妖诅咒（命中下降）。",
+    },
+    {
+        -- boss_nerubenkan 54239, on her Ziggurat; section 2.4: summons Undead Scarabs every 6-10 s
+        id = "nerubenkan", title = "斯坦索姆 奈鲁布恩坎", level = 60,
+        entry = { map = 329, x = 3854.98, y = -3528.84, z = 144.29, o = 5.236 },
+        pack = { x = 3854.98, y = -3528.84, z = 144.29 },
+        bosses = { 54239 },
+        clearRadius = 60,
+        hint = "每 6-10 秒召唤不死甲虫（看群攻和集火够不够）。",
+    },
+    {
+        -- boss_ramstein_the_gorger 10439: instance_stratholme summons him at (4032.4, -3380.6) when
+        -- the last of the 13 Slaughter Square abominations (10416 / 10417, 43-65 yd from his spot)
+        -- dies (their EventAI death sets TYPE_RAMSTEIN IN_PROGRESS). The clear kills them; setup
+        -- kills any left and the Bile Slimes 10697 the Bile Spewers drop. Once per instance.
+        id = "ramstein", title = "斯坦索姆 吞咽者拉姆斯登", level = 60,
+        entry = { map = 329, x = 4033.01, y = -3404.33, z = 115.36, o = 4.789 },
+        pack = { x = 4033.01, y = -3404.33, z = 115.36 },
+        bosses = {},
+        bossEntries = { 10439 },
+        clearRadius = 70,
+        fresh = true,
+        setup = function(leader) killEntries(leader, 120, { 10416, 10417, 10697 }) end,
+        hint = "屠宰场广场的憎恶已清，拉姆斯登从门里走出来。击昏（击退加昏迷）、践踏。每次都进新副本。",
+    },
+    {
+        -- 10440 (62), creature_spells. Not selectable until Ramstein is dead: setup sets
+        -- TYPE_RAMSTEIN (4) DONE, which summons 34 Mindless Undead in the square (~95 yd, they walk
+        -- away west) and after 60 s 5 Black Guard Sentries (they stand at (4033, -3420), ~85 yd),
+        -- opens the ziggurat gates and makes the Baron selectable. Once per instance.
+        id = "rivendare", title = "斯坦索姆 瑞文戴尔男爵", level = 60,
+        entry = { map = 329, x = 4035.83, y = -3336.31, z = 115.14, o = 4.677 },
+        pack = { x = 4035.83, y = -3336.31, z = 115.14 },
+        bosses = { 54241 },
+        clearRadius = 50,
+        fresh = true,
+        setup = function(leader) markDone(leader, 4, true) end,
+        hint = "设成拉姆斯登已死：约 60 秒后男爵才能选中，门口会来 5 个黑衣卫兵站岗（离男爵约 85 码）。复活术周期召唤骷髅；被拉出房间会脱战。每次都进新副本。",
     },
 }
 
