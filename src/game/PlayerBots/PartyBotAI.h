@@ -52,6 +52,7 @@
 #include "Life/Errands/AskProvisions.h"
 #include "Life/Errands/LessonReminder.h"
 #include "Life/Pastimes/WaitAround.h"
+#include "Life/Pastimes/CompanionBody.h"
 #include "Companions/Travel/Departure.h"
 #include "Companions/Fight/PullQuestion.h"
 #include "Companions/Travel/HearthAlong.h"
@@ -97,6 +98,8 @@ public:
     void OnPlayerLogin() final;
     void UpdateAI(uint32 const diff) final;
     void OnPacketReceived(WorldPacket const* packet) final;
+    // A real player's text emote aimed at it: answered (Life/Pastimes/CompanionBody).
+    void ReceiveEmote(Player* from, uint32 textEmote) final;
 
     void CloneFromPlayer(Player const* pPlayer);
     void AddToPlayerGroup();
@@ -325,6 +328,9 @@ public:
     Commander::HumanFollow::IdleState m_humanIdle;
     // Waiting at its stay spot (HoldStay).
     Life::Pastimes::WaitAroundState m_waitAround;
+    // Its body language towards the leader (Life/Pastimes/CompanionBody.h): answers to his
+    // emotes, turning to him when he selects it, congratulating his level-up.
+    Life::Pastimes::CompanionBodyState m_body;
     // Out of combat: the walk to corpses of a bot that loots for itself (Life/Errands/LootRun.h).
     Life::LootRunState m_lootRun;
     // Out of combat: a companion skins corpses and opens herb and ore nodes (Life/Errands/GatherRun.h).

@@ -266,7 +266,46 @@ namespace HumanFollow
             }
         }
         if (!bot->IsSittingDown())
+        {
             s.sat = false;
+            s.satWithLeader = false;
+            s.standWithAtMs = 0;
+        }
+
+        // He sits: some sit with him, a moment later; nothing else meanwhile.
+        if (s.leaderStill && leader->IsSittingDown())
+        {
+            s.standWithAtMs = 0;
+            if (!s.sitRolled)
+            {
+                s.sitRolled = true;
+                s.sitsWith = urand(0, 99) < SIT_WITH_PCT;
+                s.sitWithAtMs = now + urand(SIT_WITH_MIN_MS, SIT_WITH_MAX_MS);
+            }
+            if (s.sitsWith && !bot->IsSittingDown() && Due(now, s.sitWithAtMs) && IsStill(bot) &&
+                !bot->IsNonMeleeSpellCasted(false))
+            {
+                bot->SetStandState(UNIT_STAND_STATE_SIT);
+                s.sat = true;
+                s.satWithLeader = true;
+            }
+            return false;
+        }
+        s.sitRolled = false;
+        // He got up and stays: up after him.
+        if (s.satWithLeader && bot->IsSittingDown())
+        {
+            if (!s.standWithAtMs)
+                s.standWithAtMs = now + urand(STAND_WITH_MIN_MS, STAND_WITH_MAX_MS);
+            if (Due(now, s.standWithAtMs))
+            {
+                bot->SetStandState(UNIT_STAND_STATE_STAND);
+                s.sat = false;
+                s.satWithLeader = false;
+                s.standWithAtMs = 0;
+            }
+            return false;
+        }
 
         Personality const p = Of(bot);
         if (!s.leaderStill)

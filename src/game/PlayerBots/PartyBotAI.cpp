@@ -990,6 +990,13 @@ void PartyBotAI::OnPacketReceived(WorldPacket const* packet)
     CombatBotBaseAI::OnPacketReceived(packet);
 }
 
+void PartyBotAI::ReceiveEmote(Player* from, uint32 textEmote)
+{
+    if (!me || !m_initialized)
+        return;
+    Life::Pastimes::CompanionBody::Heard(me, m_body, from, textEmote, WorldTimer::getMSTime());
+}
+
 void PartyBotAI::OnPlayerLogin()
 {
     // A new session: the quests the leader said no to may be asked about again.
@@ -1419,6 +1426,18 @@ void PartyBotAI::UpdateAI(uint32 const diff)
         Player const* follow = GetFollowTarget(pLeader);
         bool const hurry = commanderOutOfCombat || resurrectFirst || staying || (follow && follow->IsMoving());
         if (StandUpBeat(hurry))
+            return;
+    }
+
+    // Body language towards the leader (Life/Pastimes/CompanionBody.h): an answer to his emote,
+    // a gesture once he looks. Standing for it: its follow starts again afterwards (the restart
+    // below). It answers from where it sits while it eats or drinks.
+    {
+        Player const* follow = GetFollowTarget(pLeader);
+        bool const free = !me->IsInCombat() && !commanderOutOfCombat && !resurrectFirst && !me->GetVictim();
+        bool const canStand = free && !needsRest && !commanderResting && !(follow && follow->IsMoving());
+        if (Life::Pastimes::CompanionBody::Update(me, m_body, pLeader, free, canStand, PersonalityTags(),
+                                                  WorldTimer::getMSTime()))
             return;
     }
 

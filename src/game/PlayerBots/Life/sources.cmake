@@ -64,6 +64,8 @@ set(LIFE_SRCS
   ${LIFE_DIR}/Pastimes/EmoteReply.cpp
   ${LIFE_DIR}/Pastimes/Gesture.h
   ${LIFE_DIR}/Pastimes/Gesture.cpp
+  ${LIFE_DIR}/Pastimes/CompanionBody.h
+  ${LIFE_DIR}/Pastimes/CompanionBody.cpp
   ${LIFE_DIR}/Pastimes/WaitAround.h
   ${LIFE_DIR}/Pastimes/WaitAround.cpp
   ${LIFE_DIR}/Errands/Trip/RouteOrder.h

@@ -102,6 +102,12 @@ namespace HumanFollow
     constexpr uint32 STEP_CHANCE = 30;
     // The leader counts as standing while it stays within this of where it stopped.
     constexpr float STILL_YD = 0.5f;
+    // The leader sits down (to eat, to rest, on a whim; player-centric doc block 6, user
+    // 2026-11-28): SIT_WITH_PCT of the bots sit too after SIT_WITH_MIN..MAX_MS each, and get up
+    // STAND_WITH_MIN..MAX_MS after he stands (walking off: the follow stands it up at once).
+    constexpr uint32 SIT_WITH_PCT = 70;
+    constexpr uint32 SIT_WITH_MIN_MS = 1200, SIT_WITH_MAX_MS = 4000;
+    constexpr uint32 STAND_WITH_MIN_MS = 400, STAND_WITH_MAX_MS = 1500;
 
     struct Personality
     {
@@ -123,6 +129,13 @@ namespace HumanFollow
         float stillX = 0.0f;
         float stillY = 0.0f;
         bool sat = false;           // sat down by Tick (stood up again on combat)
+        // The leader sits: whether this bot sits with him this time (rolled once per sit), when;
+        // it sat because he did, and gets up after him (standWithAtMs).
+        bool sitRolled = false;
+        bool sitsWith = false;
+        uint32 sitWithAtMs = 0;
+        bool satWithLeader = false;
+        uint32 standWithAtMs = 0;
         bool stopKnown = false;     // where the leader last stood (REROLL_MOVE_YD)
         float stopX = 0.0f;
         float stopY = 0.0f;
