@@ -972,9 +972,7 @@ namespace Commander
                                        SpellEntry const* spell, float* effectiveOut)
     {
         Player* me = bot->me;
-        ObjectGuid const self = me->GetObjectGuid();
-        PartyMemberFacts const* myFacts = world.FindMember(self);
-        if (!myFacts)
+        if (!world.FindMember(me->GetObjectGuid()))
             return 0.0f;
 
         // Health missing when the heal lands, the same estimate CastWatch checks mid-cast.
@@ -988,6 +986,17 @@ namespace Commander
         float const effective = std::min(atLanding, HealSpells::Estimate(me, target, spell).direct);
         if (effectiveOut)
             *effectiveOut = effective;
+        return HealPullLossOf(bot, world, target, spell, effective);
+    }
+
+    float ThreatBehavior::HealPullLossOf(TeamBotAI const* bot, WorldModel const& world, Unit* target,
+                                         SpellEntry const* spell, float effective)
+    {
+        Player* me = bot->me;
+        ObjectGuid const self = me->GetObjectGuid();
+        PartyMemberFacts const* myFacts = world.FindMember(self);
+        if (!myFacts)
+            return 0.0f;
         std::vector<ThreatView::EnemyThreatDelta> deltas;
         ThreatView::PredictHealThreat(me, target, effective, spell, deltas);
 

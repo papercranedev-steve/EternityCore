@@ -108,11 +108,12 @@ namespace Commander
                 return { { m_bot.m_spells.priest.pHolyNova, false, 0.0f } };
             }
 
-            // Renew: not in combat (user 2026-11-15; Heal ranks do more per mana, and every cast
-            // restarts the five second rule).
+            // Renew: only on a settled gap, a member no enemy hits that is no tank (user
+            // 2026-11-28: a low rank is instant and does the most per mana on a gap that does not
+            // grow; on a tank the overheal cannot be told). Never in combat 2026-11-15..28.
             HealUse CombatHealUse(SpellEntry const* heal) const override
             {
-                return heal->IsFitToFamily<SPELLFAMILY_PRIEST, CF_PRIEST_RENEW>() ? HealUse::Never : HealUse::Normal;
+                return heal->IsFitToFamily<SPELLFAMILY_PRIEST, CF_PRIEST_RENEW>() ? HealUse::SettledOnly : HealUse::Normal;
             }
 
             // Desperate Prayer: no mana cost, 10 min cooldown (spell_template, 1.12).

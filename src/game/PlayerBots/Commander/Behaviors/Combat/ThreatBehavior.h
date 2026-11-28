@@ -128,6 +128,10 @@ namespace Commander
         // missing when it lands. Used by the healer branch here and by HealPlanBehavior.
         static float HealPullLoss(TeamBotAI const* bot, WorldModel const& world, Unit* target,
                                   SpellEntry const* spell, float* effectiveOut = nullptr);
+        // The same for a heal of `effective` healing in total, already known (a party heal:
+        // Prayer of Healing's targets together, PartyHealForecast).
+        static float HealPullLossOf(TeamBotAI const* bot, WorldModel const& world, Unit* target,
+                                    SpellEntry const* spell, float effective);
 
         // Map thread. Hitting `enemy` now would pull it off its holder and that costs more than
         // one tick of `bot`'s damage: on a holder (IsHeldByHolder), not NoHold, room below

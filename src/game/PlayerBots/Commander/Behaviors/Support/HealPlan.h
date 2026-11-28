@@ -41,6 +41,12 @@
  * A heal that also heals others (Option::otherHeal, Chain Heal; 2026-11-15): the overheal is
  * judged on all of it, and only effective / (effective + otherEffective) of its mana spent counts
  * for this target: the same mana also bought the rest elsewhere. The lift itself (LIFT_MAX_SEC) is the target's own.
+ * Mana per health uses CastCost: the mana plus the spirit regeneration the cast takes away
+ * (user 2026-11-28; fewer, bigger casts win a near tie).
+ * A pure HoT on a settled gap (Option::hotSec, priest Renew, user 2026-11-28; party heal doc
+ * .kiro/docs/2026-11-28-party-heal-renew.md) competes in a lift like the direct heals: its
+ * ticks against the gap plus HOT_INTAKE_SHARE of the damage over its duration, its heal per
+ * second over that duration, no LIFT_MAX_SEC. Never for an emergency or a boost.
  *
  * Steady healer (Healer::steady, ClassKit::HealsSteadily: paladin, user 2026-11-16; resting
  * regains it little, so the lift + rest cycle only left it idle and favoured one big Holy Light
@@ -86,6 +92,9 @@ namespace HealPlan
     static constexpr float GCD_SEC = 1.5f;
     static constexpr float TIE_FRACTION = 0.05f;
     static constexpr float NO_LIMIT = 1.0e9f;
+    // A pure HoT option (Option::hotSec): the part of the damage over its duration its ticks
+    // are counted against (as HotPlan::MATCH_SHARE).
+    static constexpr float HOT_INTAKE_SHARE = 0.8f;
 
     struct Target
     {
@@ -126,6 +135,9 @@ namespace HealPlan
         // Lockout: Ground Tremor, an area fear), < 0 = none: no heal of its lands in between.
         float lockoutStartSec = -1.0f;
         float lockoutEndSec = -1.0f;
+        // Seconds left in the five second rule (PartyMemberFacts::fiveSecondRuleMs, 0 = spirit
+        // regeneration runs): what a cast now takes from the rest (CastCost).
+        float fiveSecondLeftSec = 0.0f;
 
         // When a heal of `castSec` started now, or the first one after the lockout, can land
         // last: the next chance to save a target (Assess's outrun, the death penalty).
@@ -144,6 +156,11 @@ namespace HealPlan
         // mana rate, not in an emergency (only the dying target counts there).
         float otherHeal = 0.0f;
         float otherEffective = 0.0f;
+        // > 0: a pure HoT whose ticks land over this many seconds (HealUse::SettledOnly, priest
+        // Renew; party heal doc). `heal` is all its ticks. Not for an emergency or a boost; it
+        // lands on the health missing plus HOT_INTAKE_SHARE of the damage over hotSec; a lift
+        // with it needs its heal per second above the damage, not LIFT_MAX_SEC.
+        float hotSec = 0.0f;
         // Filled by Pick.
         float effective = 0.0f;     // heal capped at the health missing when it lands
     };
@@ -173,6 +190,15 @@ namespace HealPlan
     float ManaWeight(float tension, float manaPct);
 
     float ReserveHealth(Target const& t);
+
+    // What a cast of `o` started now costs in mana: its mana plus the spirit regeneration it
+    // takes away (user 2026-11-28, party heal doc): the five second rule then runs from its
+    // landing, so (regen - regenCasting) x (5 - the part of the rule still left at landing).
+    // The lift + rest cycle (CycleManaRate) counts the rest on its own and does not use it.
+    float CastCost(Healer const& h, Option const& o);
+    // `o`'s heal capped at the health missing when it lands (a pure HoT: when its ticks land,
+    // Option::hotSec). Pick fills Option::effective with it.
+    float EffectiveAtLanding(Target const& t, Option const& o);
 
     Assessment Assess(Target const& t, Healer const& h, std::vector<Option> const& options);
 

@@ -8,6 +8,7 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Forecast/ChainHealForecast.h"
 #include "Commander/Perception/Forecast/IncomingTimeline.h"
+#include "Commander/Perception/Forecast/PartyHealForecast.h"
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/BotDirectives.h"
@@ -20,6 +21,7 @@
 #include "SpellMgr.h"
 #include "Timer.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -44,9 +46,39 @@ namespace Commander
             std::vector<HotPlan::HotOption> hots;
             std::vector<SpellEntry const*> hotSpells;   // same index as hots
             HotPlan::Eat eat;
+            // A member whose gap does not grow by surprise: no tank, no pet, no enemy on it
+            // (HealUse::SettledOnly heals; party heal doc).
+            bool settled = false;
+            // Its health now; target.health of a settled member also counts the HoT ticks still
+            // to come that its damage does not eat (header), so no heal goes on a gap a HoT fills.
+            float rawHealth = 0.0f;
 
             float Missing() const { return std::max(0.0f, target.maxHealth - target.health); }
+            float RawMissing() const { return std::max(0.0f, target.maxHealth - rawHealth); }
         };
+
+        // An enemy that is not controlled has `guid` as its victim.
+        bool EnemyOn(WorldModel const& world, ObjectGuid guid)
+        {
+            return std::any_of(world.enemies.begin(), world.enemies.end(), [guid](EnemyFacts const& e)
+                { return !e.crowdControlled && e.victim == guid; });
+        }
+
+        // HoT healing still to come on `m` beyond the damage over the HoTs' time: what they fill
+        // of its gap.
+        float HotSurplus(WorldModel const& world, PartyMemberFacts const& m)
+        {
+            float left = 0.0f;
+            uint32 longestMs = 0;
+            for (PartyHot const& h : m.hots)
+            {
+                left += h.perTick * float(h.TicksLeft());
+                longestMs = std::max(longestMs, h.remainingMs);
+            }
+            if (left <= 0.0f)
+                return 0.0f;
+            return std::max(0.0f, left - Value::TakenDps(world, m.guid) * float(longestMs) / 1000.0f);
+        }
 
         // The eatable HoT on the member (HotPlan::Eat: Swiftmend takes the one with the least
         // time left, anyone's). Empty when the bot has no eat spell or there is none.
@@ -92,7 +124,7 @@ namespace Commander
                         HotPlan::EatUse use, float tickSec, std::vector<Proposal>& out)
         {
             bool const emergency = use == HotPlan::EatUse::Emergency;
-            float const effective = std::min(c.eat.heal, c.Missing());
+            float const effective = std::min(c.eat.heal, c.RawMissing());
             Proposal p;
             p.kind = ProposalKind::HealOrder;
             p.tier = emergency ? ProposalTier::Urgent : ProposalTier::Assigned;
@@ -134,6 +166,93 @@ namespace Commander
             p.action.target = c.guid;
             p.action.spell = c.hotSpells[index];
             p.SetValue(Value::Points(world, effective), Value::Points(world, o.total - effective));
+            out.push_back(p);
+            return true;
+        }
+
+        // The least CastCost per health of a single-target heal on `c` now: options that heal
+        // (no emergency-only ones) and overheal at most OVERHEAL_MAX when they land.
+        // HealPlan::NO_LIMIT = none.
+        float BestSingleRate(HealPlan::Healer const& healer, Candidate const& c)
+        {
+            float best = HealPlan::NO_LIMIT;
+            for (HealPlan::Option const& o : c.options)
+            {
+                if (o.heal <= 0.0f || o.emergencyOnly)
+                    continue;
+                float const effective = HealPlan::EffectiveAtLanding(c.target, o);
+                if (effective <= 0.0f || o.heal - effective > HealPlan::OVERHEAL_MAX * o.heal)
+                    continue;
+                best = std::min(best, HealPlan::CastCost(healer, o) / effective);
+            }
+            return best;
+        }
+
+        // A party heal around the healer (Prayer of Healing, every rank; header "Party heal").
+        bool ProposePartyHeal(TeamBotAI const* bot, WorldModel const& world, HealPlan::Healer const& healer,
+                              std::vector<Candidate> const& all, bool checkAggro, std::vector<Proposal>& out)
+        {
+            Player* me = bot->me;
+            ClassKit const& kit = bot->Kit();
+            for (Candidate const& c : all)
+                if (c.assessment.need == HealPlan::Need::Emergency)
+                    return false;   // the dying one first, by its own heal
+
+            SpellEntry const* bestSpell = nullptr;
+            PartyHealForecast::Result best;
+            float bestRate = 0.0f;
+            for (SpellEntry const* spell : bot->m_spellListDirectHeal)
+            {
+                if (!PartyHealForecast::IsPartyHeal(spell) || kit.CombatHealUse(spell) == HealUse::Never ||
+                    !bot->CanTryToCastHeal(me, spell))
+                    continue;
+                HealPlan::Option o;
+                o.castSec = float(spell->GetCastTime(me)) / 1000.0f;
+                o.mana = HealSpells::ManaCost(me, spell);
+                PartyHealForecast::Result const r = PartyHealForecast::Of(bot, world, spell, o.castSec);
+                if (r.hurt < HealPlanBehavior::PARTY_MIN_HURT || r.effective <= 0.0f ||
+                    r.hurtHeal - r.effective > HealPlan::OVERHEAL_MAX * r.hurtHeal)
+                    continue;
+                // Nobody it waits for sinks to the reserve before it lands: that one's own heal first.
+                bool late = false;
+                for (PartyHealForecast::Reach const& t : r.targets)
+                    for (Candidate const& c : all)
+                        if (c.guid == t.guid && t.missing > 0.0f &&
+                            c.assessment.timeToReserve < o.castSec + HealPlan::LANDING_MARGIN_SEC)
+                            late = true;
+                if (late)
+                    continue;
+                float const rate = HealPlan::CastCost(healer, o) / r.effective;
+                if (bestSpell && (rate > bestRate || (std::fabs(rate - bestRate) <= HealPlan::TIE_FRACTION * bestRate &&
+                                                      r.effective <= best.effective)))
+                    continue;
+                if (checkAggro && ThreatBehavior::HealPullLossOf(bot, world, me, spell, r.effective) > 0.0f)
+                    continue;
+                bestSpell = spell;
+                best = r;
+                bestRate = rate;
+            }
+            if (!bestSpell)
+                return false;
+
+            // Cheaper per health than any single heal on the members it reaches.
+            float single = HealPlan::NO_LIMIT;
+            for (PartyHealForecast::Reach const& t : best.targets)
+                for (Candidate const& c : all)
+                    if (c.guid == t.guid)
+                        single = std::min(single, BestSingleRate(healer, c));
+            if (single < HealPlan::NO_LIMIT && bestRate >= single * (1.0f - HealPlan::TIE_FRACTION))
+                return false;
+
+            Proposal p;
+            p.kind = ProposalKind::HealOrder;
+            p.tier = ProposalTier::Assigned;
+            p.source = "heal";
+            p.reason = "party hurt: party heal";
+            p.action.type = BotActionType::Cast;
+            p.action.target = me->GetObjectGuid();
+            p.action.spell = bestSpell;
+            p.SetValue(Value::Points(world, best.effective), Value::Points(world, best.heal - best.effective));
             out.push_back(p);
             return true;
         }
@@ -364,6 +483,7 @@ namespace Commander
         float const manaPct = myFacts->maxMana ? float(myFacts->mana) * 100.0f / float(myFacts->maxMana) : 100.0f;
         healer.manaWeight = HealPlan::ManaWeight(tension, manaPct);
         healer.steady = bot->Kit().HealsSteadily();
+        healer.fiveSecondLeftSec = float(myFacts->fiveSecondRuleMs) / 1000.0f;
         // The healer's own coming lockout (an area stun on the party): the last heal before it
         // must carry its targets through it (HealPlan::Healer::NextChanceSec).
         if (IncomingTimeline::Lockout const* lockout = IncomingTimeline::Of(world, *myFacts).NextLockout())
@@ -385,6 +505,20 @@ namespace Commander
                 HealUse const use = kit.CombatHealUse(o.spell);
                 if (o.spell == freeSelfHeal || use == HealUse::Never)
                     continue;
+                if (use == HealUse::SettledOnly)
+                {
+                    // A pure HoT on a settled gap: valued with the direct heals (HealPlan.h).
+                    if (!c.settled || o.amount.direct > 0.0f || o.amount.periodic <= 0.0f || o.amount.periodicSec <= 0.0f)
+                        continue;
+                    HealPlan::Option p;
+                    p.heal = o.amount.periodic;
+                    p.mana = o.mana;
+                    p.castSec = o.castSec;
+                    p.hotSec = o.amount.periodicSec;
+                    c.options.push_back(p);
+                    c.spells.push_back(o.spell);
+                    continue;
+                }
                 if (o.amount.direct <= 0.0f)
                 {
                     // A pure HoT (ProposeHot).
@@ -393,7 +527,11 @@ namespace Commander
                     HotPlan::HotOption h;
                     h.total = o.amount.periodic;
                     h.need = c.Missing() + c.target.intake * o.amount.periodicSec * HotPlan::MATCH_SHARE;
-                    h.mana = o.mana;
+                    // Its mana with the regeneration the cast takes away (HealPlan::CastCost).
+                    HealPlan::Option cast;
+                    cast.mana = o.mana;
+                    cast.castSec = o.castSec;
+                    h.mana = HealPlan::CastCost(healer, cast);
                     c.hots.push_back(h);
                     c.hotSpells.push_back(o.spell);
                     continue;
@@ -459,6 +597,10 @@ namespace Commander
                 c.target.worstTimeToDie = timeline.TimeToLose(health, true);
                 c.target.timeToReserve = timeline.TimeToLose(std::max(0.0f, health - HealPlan::ReserveHealth(c.target)), false);
             }
+            c.rawHealth = c.target.health;
+            c.settled = c.hotTarget == HotPlan::HotTarget::Member && !EnemyOn(world, m.guid);
+            if (c.settled)
+                c.target.health = std::min(c.target.maxHealth, c.target.health + HotSurplus(world, m));
             c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
             addOptions(c, choice, &m);
             c.eat = EatOf(bot, unit, m);
@@ -491,6 +633,7 @@ namespace Commander
             c.hotTarget = HotPlan::HotTarget::Member;
             c.target.health = float(unit->GetHealth());
             c.target.maxHealth = float(unit->GetMaxHealth());
+            c.rawHealth = c.target.health;
             c.target.intake = Value::IncomingOn(world, a);
             if (c.target.intake > 0.0f)
             {
@@ -538,6 +681,10 @@ namespace Commander
             return;
 
         bool const checkAggro = sCommanderMgr.IsModuleEnabled("threat");
+        // A party heal before the single-target heals, also when no single gap reached its
+        // deficit yet (several small gaps together).
+        if (!heldByPull && ProposePartyHeal(bot, world, healer, all, checkAggro, out))
+            return;
         for (Candidate* pc : candidates)
         {
             Candidate& c = *pc;
@@ -547,7 +694,7 @@ namespace Commander
 
             // Swiftmend first (instant; in an emergency before Nature's Swiftness), then the
             // healer's HoT on a lift target, then the heal.
-            HotPlan::EatUse const eatUse = HotPlan::Decide(c.eat, c.Missing(), c.assessment.need);
+            HotPlan::EatUse const eatUse = HotPlan::Decide(c.eat, c.RawMissing(), c.assessment.need);
             if (eatUse != HotPlan::EatUse::None)
             {
                 ProposeEat(bot, world, c, eatUse, healer.tickSec, out);
@@ -629,7 +776,7 @@ namespace Commander
                          });
         for (Candidate* pc : others)
         {
-            HotPlan::EatUse const eatUse = HotPlan::Decide(pc->eat, pc->Missing(), pc->assessment.need);
+            HotPlan::EatUse const eatUse = HotPlan::Decide(pc->eat, pc->RawMissing(), pc->assessment.need);
             if (eatUse != HotPlan::EatUse::None)
             {
                 ProposeEat(bot, world, *pc, eatUse, healer.tickSec, out);

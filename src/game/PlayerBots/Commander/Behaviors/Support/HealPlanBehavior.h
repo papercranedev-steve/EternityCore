@@ -18,11 +18,28 @@
  * chain heals until it is topped up, then rest (no heal, no HoT) so the five second rule ends and
  * spirit regeneration runs. Hybrid heals count their direct part plus
  * HealSpells::HOT_INCOMING_SHARE of the expected damage for the HoT part. The class kit says
- * which heals are used (ClassKit::CombatHealUse, user 2026-11-15): priest Renew never (until
- * then no HoT was used in combat), druid Regrowth and paladin Holy Shock (instant, valued by
- * the heal it triggers: HealSpells::HealingPart; 2026-11-15) only in an emergency. Chain Heal
- * counts its jumps on the others too (ChainHealForecast, HealPlan::Option::otherHeal; 2026-11-15). The target's intake is
- * the damage the HoTs on it do not cover (PartyMemberFacts::hots).
+ * which heals are used (ClassKit::CombatHealUse, user 2026-11-15): druid Regrowth and paladin
+ * Holy Shock (instant, valued by the heal it triggers: HealSpells::HealingPart; 2026-11-15)
+ * only in an emergency. Chain Heal counts its jumps on the others too (ChainHealForecast,
+ * HealPlan::Option::otherHeal; 2026-11-15). The target's intake is the damage the HoTs on it
+ * do not cover (PartyMemberFacts::hots).
+ *
+ * Settled gaps (party heal doc .kiro/docs/2026-11-28-party-heal-renew.md, user 2026-11-28): a
+ * member that is no tank and no pet, with no enemy on it, has a gap that does not grow by
+ * surprise. Only there priest Renew is used (HealUse::SettledOnly; never in combat 2026-11-15
+ * to 28): its ranks are options of the lift like the direct heals (HealPlan::Option::hotSec),
+ * so a low rank wins on a small gap by mana per health. On such a member the HoT ticks still to
+ * come beyond its damage count as healed already (target health), so no heal lands on a gap a
+ * HoT fills.
+ *
+ * Party heal (same doc): before the single-target heals, unless someone needs an emergency
+ * heal. Each castable rank of a heal around the healer (Prayer of Healing, rank 1 too) is
+ * valued by PartyHealForecast: at least PARTY_MIN_HURT targets missing health when it lands,
+ * overheal on those at most HealPlan::OVERHEAL_MAX, nobody it reaches sinking to its reserve
+ * before it lands, no aggro pulled (ThreatBehavior::HealPullLossOf on the total). Of those the
+ * least HealPlan::CastCost per health healed (a tie: the bigger heal); cast when that beats
+ * every single-target heal on the members it reaches by more than TIE_FRACTION. No member has
+ * to reach its own deficit first: several small gaps together are enough.
  *
  * HoTs and Swiftmend (Behaviors/Support/HotPlan.h, user 2026-11-15): the healer's HoT
  * (Rejuvenation) on a member being hit that has none of its own, the rank by HotPlan::PickHot;
@@ -94,6 +111,9 @@ namespace Commander
         // A pet that holds no enemy gets no HoT from this mana weight on (HealPlan::ManaWeight,
         // 0 plentiful .. 1 scarce).
         static constexpr float PET_HOT_MAX_MANA_WEIGHT = 0.5f;
+        // A party heal needs this many targets that miss health when it lands (user 2026-11-28:
+        // "3 or 4 hurt").
+        static constexpr uint32 PARTY_MIN_HURT = 3;
 
         char const* GetId() const override { return "heal"; }
         bool AppliesTo(TeamBotAI const* bot) const override;

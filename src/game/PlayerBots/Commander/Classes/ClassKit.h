@@ -96,6 +96,11 @@ namespace Commander
         Normal,
         EmergencyOnly,
         Never,
+        // A pure HoT only on a member whose gap does not grow by surprise: not a tank, no enemy
+        // on it (party heal doc .kiro/docs/2026-11-28-party-heal-renew.md, user 2026-11-28:
+        // priest Renew, low ranks on a damage dealer or the priest itself). Valued like the
+        // direct heals of a lift (HealPlan::Option::hotSec), not by HotPlan.
+        SettledOnly,
     };
 
     struct HealBoostSpell
@@ -219,8 +224,9 @@ namespace Commander
         // time); the rotations do not cast them while it decides heals.
         virtual std::vector<HealBoostSpell> HealBoosts() const { return {}; }
         // How the heal module may use one of its single-target heals while the party fights
-        // (user 2026-11-15): Renew never (Heal ranks do more per mana), Regrowth only in an
-        // emergency (a fast heal: expensive, its HoT is a bonus).
+        // (user 2026-11-15): Regrowth only in an emergency (a fast heal: expensive, its HoT is a
+        // bonus). Renew only on a settled gap (HealUse::SettledOnly, user 2026-11-28; never
+        // in combat before).
         virtual HealUse CombatHealUse(SpellEntry const* /*heal*/) const { return HealUse::Normal; }
         // Resting between heals regains little (paladin, user 2026-11-16: spirit regeneration is
         // worth little to it): the heal module heals steadily instead of lift + rest

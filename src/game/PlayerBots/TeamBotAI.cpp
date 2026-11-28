@@ -852,9 +852,10 @@ bool TeamBotAI::CastHealOrder()
     if (DoCastWithStance(pTarget, action.spell) != SPELL_CAST_OK)
         return false;
     // A pure HoT starts no heal chain: the target is not topped up by it now, the next heal
-    // waits for its deficit as usual.
+    // waits for its deficit as usual. Nor does a party heal (Prayer of Healing, cast on the
+    // healer itself).
     // (Holy Shock: its triggered heal, HealSpells::HealingPart)
-    if (HealSpells::HealingPart(action.spell)->HasEffect(SPELL_EFFECT_HEAL))
+    if (HealSpells::HealingPart(action.spell)->HasEffect(SPELL_EFFECT_HEAL) && HealSpells::IsSingleTargetHeal(action.spell))
     {
         uint32 const busyMs = std::max(uint32(HealSpells::GCD_SEC * 1000.0f), action.spell->GetCastTime(me));
         m_directives->NoteOrderedHeal(pTarget->GetObjectGuid(), now, busyMs);

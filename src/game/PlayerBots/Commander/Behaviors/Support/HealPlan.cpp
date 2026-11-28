@@ -8,8 +8,12 @@ namespace HealPlan
 {
     namespace
     {
+        // Seconds the option's healing takes: a pure HoT its duration, else its cast (one GCD
+        // at least).
         float Busy(Option const& o)
         {
+            if (o.hotSec > 0.0f)
+                return o.hotSec;
             return std::max(GCD_SEC, o.castSec);
         }
 
@@ -18,36 +22,35 @@ namespace HealPlan
             return std::max(0.0f, t.maxHealth - t.health);
         }
 
-        float EffectiveAtLanding(Target const& t, Option const& o)
-        {
-            float const atLanding = std::min(t.maxHealth, Missing(t) + t.intake * o.castSec);
-            return std::max(0.0f, std::min(o.heal, atLanding));
-        }
-
         bool Tie(float a, float b)
         {
             return std::fabs(a - b) <= TIE_FRACTION * std::max(std::max(std::fabs(a), std::fabs(b)), 1.0f);
         }
 
-        // The most mana-efficient option (heal per mana), -1 if none heals.
-        int MostEfficient(std::vector<Option> const& options)
+        // The most mana-efficient option (heal per CastCost: a cheap low rank pays the five
+        // second rule like a big one; 2026-11-28), -1 if none heals.
+        int MostEfficient(std::vector<Option> const& options, Healer const& h)
         {
             int best = -1;
+            float bestPerMana = 0.0f;
             for (size_t i = 0; i < options.size(); ++i)
             {
                 Option const& o = options[i];
                 if (o.heal <= 0.0f || o.emergencyOnly)
                     continue;
-                float const perMana = o.mana > 0.0f ? o.heal / o.mana : NO_LIMIT;
+                float const cost = CastCost(h, o);
+                float const perMana = cost > 0.0f ? o.heal / cost : NO_LIMIT;
                 if (best < 0)
                 {
                     best = int(i);
+                    bestPerMana = perMana;
                     continue;
                 }
-                Option const& b = options[best];
-                float const bestPerMana = b.mana > 0.0f ? b.heal / b.mana : NO_LIMIT;
                 if (perMana > bestPerMana)
+                {
                     best = int(i);
+                    bestPerMana = perMana;
+                }
             }
             return best;
         }
@@ -71,6 +74,19 @@ namespace HealPlan
     {
         float const lowMana = 1.0f - std::max(0.0f, std::min(100.0f, manaPct)) / 100.0f;
         return std::max(0.0f, std::min(1.0f, std::max(tension, lowMana)));
+    }
+
+    float EffectiveAtLanding(Target const& t, Option const& o)
+    {
+        float const coming = o.hotSec > 0.0f ? t.intake * o.hotSec * HOT_INTAKE_SHARE : t.intake * o.castSec;
+        float const atLanding = std::min(t.maxHealth, Missing(t) + coming);
+        return std::max(0.0f, std::min(o.heal, atLanding));
+    }
+
+    float CastCost(Healer const& h, Option const& o)
+    {
+        float const lost = FIVE_SECOND_RULE_SEC - std::max(0.0f, h.fiveSecondLeftSec - o.castSec);
+        return o.mana + std::max(0.0f, h.regen - h.regenCasting) * std::max(0.0f, lost);
     }
 
     float ReserveHealth(Target const& t)
@@ -118,7 +134,7 @@ namespace HealPlan
         bool const hit = t.intake > 0.0f || a.timeToDie < NO_LIMIT;
         float fastest = NO_LIMIT;
         for (Option const& o : options)
-            if (o.heal > 0.0f)
+            if (o.heal > 0.0f && o.hotSec <= 0.0f)     // a HoT saves nobody in time
                 fastest = std::min(fastest, o.castSec);
         bool const outrun = fastest < NO_LIMIT && a.worstTimeToDie < h.NextChanceSec(fastest);
         if (hit && (t.health <= a.reserve || a.timeToDie < EMERGENCY_TTD_SEC || outrun))
@@ -128,7 +144,7 @@ namespace HealPlan
         }
 
         // Only emergency heals (or none that heals): nothing to lift with.
-        int const efficient = MostEfficient(options);
+        int const efficient = MostEfficient(options, h);
         if (efficient < 0)
             return a;
         Option const& e = options[efficient];
@@ -190,7 +206,8 @@ namespace HealPlan
                 for (size_t i = 0; i < options.size(); ++i)
                 {
                     Option const& o = options[i];
-                    if (o.effective <= 0.0f || o.castSec + LANDING_MARGIN_SEC >= a.timeToDie || (pass == 0 && o.pulls))
+                    if (o.effective <= 0.0f || o.hotSec > 0.0f || o.castSec + LANDING_MARGIN_SEC >= a.timeToDie ||
+                        (pass == 0 && o.pulls))
                         continue;
                     if (best < 0 || (!Tie(o.effective, options[best].effective) && o.effective > options[best].effective) ||
                         (Tie(o.effective, options[best].effective) && o.mana < options[best].mana))
@@ -203,7 +220,7 @@ namespace HealPlan
             for (size_t i = 0; i < options.size(); ++i)
             {
                 Option const& o = options[i];
-                if (o.effective <= 0.0f)
+                if (o.effective <= 0.0f || o.hotSec > 0.0f)
                     continue;
                 if (best < 0 || o.castSec < options[best].castSec ||
                     (o.castSec == options[best].castSec && o.effective > options[best].effective))
@@ -232,6 +249,7 @@ namespace HealPlan
             if (o.pulls || o.emergencyOnly || o.effective <= 0.0f || !overhealOk(o))
                 continue;
             float const hps = o.heal / Busy(o);
+            bool const hot = o.hotSec > 0.0f;
             float rate;
             if (t.intake > 0.0f)
             {
@@ -243,17 +261,19 @@ namespace HealPlan
                     float const above = std::max(0.0f, t.health - a.reserve);
                     if (net < 0.0f && above < -net * STEADY_HOLD_SEC)
                         continue;
-                    rate = o.mana / (o.effective + o.otherEffective);
+                    rate = CastCost(h, o) / (o.effective + o.otherEffective);
                 }
                 else
                 {
-                    if (net <= 0.0f || missing / net > LIFT_MAX_SEC)
+                    // A HoT on a settled gap (nobody hits the target): slow is fine, it only
+                    // has to out-heal the damage it still takes (an area aura).
+                    if (net <= 0.0f || (!hot && missing / net > LIFT_MAX_SEC))
                         continue;
                     rate = CycleManaRate(t, h, o, std::max(a.deficit, missing), shared(o));
                 }
             }
             else
-                rate = o.mana / (o.effective + o.otherEffective);   // mana per health healed
+                rate = CastCost(h, o) / (o.effective + o.otherEffective);   // mana per health healed
 
             if (best >= 0)
             {
@@ -297,7 +317,8 @@ namespace HealPlan
         for (size_t i = 0; i < options.size(); ++i)
         {
             Option const& o = options[i];
-            if (o.pulls || o.heal <= 0.0f || (b.instant && o.castSec <= 0.0f) || (o.emergencyOnly && !emergency))
+            if (o.pulls || o.heal <= 0.0f || o.hotSec > 0.0f || (b.instant && o.castSec <= 0.0f) ||
+                (o.emergencyOnly && !emergency))
                 continue;
             if (big < 0 || o.heal > options[big].heal)
                 big = int(i);
