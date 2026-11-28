@@ -2,6 +2,7 @@
 #include "Commander/Encounters/BlackrockDepthsAngerforge.h"
 #include "Commander/Encounters/BlackrockDepthsFlamelash.h"
 #include "Commander/Encounters/DeadminesVanCleef.h"
+#include "Commander/Encounters/ScarletHerod.h"
 #include "Commander/Encounters/ScarletMograineWhitemane.h"
 #include "Commander/Encounters/GnomereganThermaplugg.h"
 #include "Commander/Encounters/ScholomanceGandling.h"
@@ -30,6 +31,7 @@ namespace Commander
             { BlackrockDepthsAngerforge::MAP_ID, &Make<BlackrockDepthsAngerforge> },
             { BlackrockDepthsFlamelash::MAP_ID, &Make<BlackrockDepthsFlamelash> },
             { DeadminesVanCleef::MAP_ID,        &Make<DeadminesVanCleef> },
+            { ScarletHerod::MAP_ID,             &Make<ScarletHerod> },
             { ScarletMograineWhitemane::MAP_ID, &Make<ScarletMograineWhitemane> },
             { GnomereganThermaplugg::MAP_ID,    &Make<GnomereganThermaplugg> },
             { ScholomanceGandling::MAP_ID,      &Make<ScholomanceGandling> },

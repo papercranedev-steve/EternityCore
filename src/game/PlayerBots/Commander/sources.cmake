@@ -265,6 +265,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/BlackrockDepthsFlamelash.cpp
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.h
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
+  ${COMMANDER_DIR}/Encounters/ScarletHerod.h
+  ${COMMANDER_DIR}/Encounters/ScarletHerod.cpp
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.h
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.cpp
   ${COMMANDER_DIR}/Encounters/GnomereganThermaplugg.h
