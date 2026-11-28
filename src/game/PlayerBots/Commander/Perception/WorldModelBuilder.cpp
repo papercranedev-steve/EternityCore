@@ -33,6 +33,7 @@
 #include "Commander/Team.h"
 #include "Pet.h"
 #include "TemporarySummon.h"
+#include "ScriptedEscortAI.h"
 #include "Player.h"
 #include "Corpse.h"
 #include "ObjectAccessor.h"
@@ -523,6 +524,29 @@ namespace WorldModelBuilder
             return c->IsFriendlyTo(reference);
         }
 
+        // AllyFacts::protect, the builder's rule: an escort on its way (npc_escortAI escorting,
+        // paused included: Belnistrasz's ritual, the Disciple of Naralex's channel). Whose escort
+        // it is is not read (protected in the script): a stranger's escort fighting near the
+        // leader is helped too.
+        bool IsEscortOnItsWay(Creature const* c)
+        {
+            if (!c->IsEscortable())
+                return false;
+            npc_escortAI const* ai = dynamic_cast<npc_escortAI const*>(c->AI());
+            return ai && ai->HasEscortState(STATE_ESCORT_ESCORTING);
+        }
+
+        // `e` hits an ally the party protects, or has one on its threat list.
+        bool FightsProtected(WorldModel const& world, EnemyFacts const& e)
+        {
+            if (world.FindProtected(e.victim))
+                return true;
+            for (ThreatEntry const& t : e.threat)
+                if (t.onList && !t.partySide && world.FindProtected(t.guid))
+                    return true;
+            return false;
+        }
+
         void FillAlly(Creature const* c, AllyFacts& a)
         {
             a.guid = c->GetObjectGuid();
@@ -537,6 +561,7 @@ namespace WorldModelBuilder
             a.pos = PositionOf(c);
             if (Unit const* victim = c->GetVictim())
                 a.victim = victim->GetObjectGuid();
+            a.protect = IsEscortOnItsWay(c);
         }
 
         // PackCreature::controlSpellId: a harmful aura taking an idle creature out (a Sap).
@@ -2350,7 +2375,8 @@ namespace WorldModelBuilder
         {
             EnemyFacts e;
             FillEnemy(enemies[i], partyUnits, e);
-            e.onAllyOnly = i >= partyEnemyCount;
+            e.onProtected = FightsProtected(world, e);
+            e.onAllyOnly = i >= partyEnemyCount && !e.onProtected;
             for (DamageDealt::Rate const& r : DamageDealt::Query(e.guid, WorldTimer::getMSTime()))
                 e.dealtBy.push_back({ r.attacker, r.dps });
             // Line of sight for InterruptAssigner: only casts it may assign (interruptible, on
@@ -2385,6 +2411,17 @@ namespace WorldModelBuilder
         }
 
         UpdateCastStarts(world, partyUnits, WorldTimer::getMSTime());
+    }
+
+    void ApplyProtection(WorldModel& world)
+    {
+        for (EnemyFacts& e : world.enemies)
+        {
+            if (e.onProtected || !FightsProtected(world, e))
+                continue;
+            e.onProtected = true;
+            e.onAllyOnly = false;
+        }
     }
 
     void AddListedEnemies(TeamBotAI* bot, WorldModel& world, std::vector<Creature*> const& creatures)

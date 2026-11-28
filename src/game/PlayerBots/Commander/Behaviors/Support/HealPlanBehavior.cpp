@@ -28,7 +28,10 @@ namespace Commander
         struct Candidate
         {
             Unit* unit = nullptr;
-            PartyMemberFacts const* facts = nullptr;
+            // A member, or an ally the party protects (AllyFacts::protect, boss doc G3).
+            ObjectGuid guid;
+            float healthPct = 0.0f;
+            float deathPenalty = 0.0f;      // Value::DeathPenalty of the member or ally
             // Healed after the players (a pet), unless it holds an enemy for the party (an
             // off-tank, doctrine OffTank.h).
             bool last = false;
@@ -98,11 +101,11 @@ namespace Commander
                        use == HotPlan::EatUse::Free ? "HoT's last tick: eat it, nearly free" :
                                                       "lift: eat HoT instead of a cast";
             p.action.type = BotActionType::Cast;
-            p.action.target = c.facts->guid;
+            p.action.target = c.guid;
             p.action.spell = bot->Kit().HotConsumer();
             float benefit = Value::Points(world, effective);
             if (emergency && c.assessment.timeToDie < HealPlan::GCD_SEC + tickSec * 2.0f)
-                benefit += Value::DeathPenalty(*c.facts);
+                benefit += c.deathPenalty;
             // Cost: the overheal and the ticks the HoT still had.
             p.SetValue(benefit, Value::Points(world, c.eat.heal - effective + c.eat.lost));
             out.push_back(p);
@@ -128,7 +131,7 @@ namespace Commander
             p.source = "heal";
             p.reason = "being hit, no own HoT: HoT";
             p.action.type = BotActionType::Cast;
-            p.action.target = c.facts->guid;
+            p.action.target = c.guid;
             p.action.spell = c.hotSpells[index];
             p.SetValue(Value::Points(world, effective), Value::Points(world, o.total - effective));
             out.push_back(p);
@@ -154,14 +157,14 @@ namespace Commander
             bool const cb = b.assessment.need == HealPlan::Need::Chain;
             if (ca != cb)
                 return ca;
-            return a.facts->healthPct < b.facts->healthPct;
+            return a.healthPct < b.healthPct;
         }
 
         // Power Word: Shield instead of the picked heal (see the header): an emergency the heal
         // does not reach in time, or the healer itself being hit below SHIELD_SELF_PCT before a
         // heal with a cast time (no pushback under the shield). A heal order like the heals.
         bool ProposeShield(TeamBotAI const* bot, WorldModel const& world,
-                           Unit* unit, PartyMemberFacts const& facts, HealPlan::Target const& target,
+                           Unit* unit, ObjectGuid targetGuid, HealPlan::Target const& target,
                            HealPlan::Assessment const& assessment, HealPlan::Option const* heal,
                            std::vector<Proposal>& out)
         {
@@ -193,7 +196,7 @@ namespace Commander
             p.source = "heal";
             p.reason = "hit while casting: shield";
             p.action.type = BotActionType::Cast;
-            p.action.target = facts.guid;
+            p.action.target = targetGuid;
             p.action.spell = shield;
             // Cost: absorb left over when it runs out (like overheal).
             p.SetValue(benefit, Value::Points(world, absorb - taken));
@@ -372,47 +375,10 @@ namespace Commander
         BotDirectives const& directives = bot->Directives();
         ClassKit const& kit = bot->Kit();
         std::vector<Candidate> all;
-        for (PartyMemberFacts const& m : world.party)
+        // Castable heals on `c` (ChooseHeal's options): direct heals into options, pure HoTs into
+        // hots. `m`: the member (Chain Heal's jumps), null for an ally.
+        auto const addOptions = [&](Candidate& c, HealChoice const& choice, PartyMemberFacts const* m)
         {
-            if (!m.alive || m.charmed)
-                continue;
-            Unit* unit = me->GetMap()->GetUnit(m.guid);
-            // A steady healer heals before the hits: full targets too (HealPlan.h).
-            if (!unit || !bot->IsValidHealTarget(unit, healer.steady ? 101.0f : 100.0f))
-                continue;
-
-            // Castable single-target heals; a HoT of the healer's own that is up is left out
-            // (CombatBotBaseAI::ChooseHeal: not refreshed early, not put on twice).
-            HealChoice choice;
-            bot->ChooseHeal(unit, choice, false);
-            if (choice.options.empty())
-                continue;
-
-            Candidate c;
-            c.unit = unit;
-            c.facts = &m;
-            bool const offTank = !plan.doctrine.OffTankEnemyOf(m.guid).IsEmpty();
-            c.last = m.isPet && !offTank;
-            c.hotTarget = c.last ? HotPlan::HotTarget::Pet :
-                          (offTank || m.role == ROLE_TANK) ? HotPlan::HotTarget::Tank : HotPlan::HotTarget::Member;
-            c.target.health = float(unit->GetHealth());
-            c.target.maxHealth = float(unit->GetMaxHealth());
-            // Damage the HoTs already on it do not cover.
-            float hotPerSec = 0.0f;
-            for (PartyHot const& h : m.hots)
-                hotPerSec += h.PerSec();
-            c.target.intake = std::max(0.0f, Value::TakenDps(world, m.guid) - hotPerSec);
-            c.target.burst = m.takenBurst;
-            // The hits coming one by one, the HoT ticks on it between them (IncomingTimeline.h).
-            {
-                IncomingTimeline::Timeline timeline = IncomingTimeline::Of(world, m);
-                timeline.AddHots(m);
-                float const health = c.target.health + m.absorb;
-                c.target.timeToDie = timeline.TimeToLose(health, false);
-                c.target.worstTimeToDie = timeline.TimeToLose(health, true);
-                c.target.timeToReserve = timeline.TimeToLose(std::max(0.0f, health - HealPlan::ReserveHealth(c.target)), false);
-            }
-            c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
             for (HealSpells::Option const& o : choice.options)
             {
                 // The free self heal has its own rule (ProposeFreeSelfHeal).
@@ -441,14 +407,101 @@ namespace Commander
                 p.castSec = o.castSec;
                 p.emergencyOnly = use == HealUse::EmergencyOnly;
                 // Chain Heal: what its jumps heal on the others (2026-11-15).
-                ChainHealForecast::Jumps const jumps = ChainHealForecast::Of(bot, world, m, o.spell, o.castSec);
-                p.otherHeal = jumps.heal;
-                p.otherEffective = jumps.effective;
+                if (m)
+                {
+                    ChainHealForecast::Jumps const jumps = ChainHealForecast::Of(bot, world, *m, o.spell, o.castSec);
+                    p.otherHeal = jumps.heal;
+                    p.otherEffective = jumps.effective;
+                }
                 c.options.push_back(p);
                 c.spells.push_back(o.spell);
             }
+        };
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.alive || m.charmed)
+                continue;
+            Unit* unit = me->GetMap()->GetUnit(m.guid);
+            // A steady healer heals before the hits: full targets too (HealPlan.h).
+            if (!unit || !bot->IsValidHealTarget(unit, healer.steady ? 101.0f : 100.0f))
+                continue;
+
+            // Castable single-target heals; a HoT of the healer's own that is up is left out
+            // (CombatBotBaseAI::ChooseHeal: not refreshed early, not put on twice).
+            HealChoice choice;
+            bot->ChooseHeal(unit, choice, false);
+            if (choice.options.empty())
+                continue;
+
+            Candidate c;
+            c.unit = unit;
+            c.guid = m.guid;
+            c.healthPct = m.healthPct;
+            c.deathPenalty = Value::DeathPenalty(m);
+            bool const offTank = !plan.doctrine.OffTankEnemyOf(m.guid).IsEmpty();
+            c.last = m.isPet && !offTank;
+            c.hotTarget = c.last ? HotPlan::HotTarget::Pet :
+                          (offTank || m.role == ROLE_TANK) ? HotPlan::HotTarget::Tank : HotPlan::HotTarget::Member;
+            c.target.health = float(unit->GetHealth());
+            c.target.maxHealth = float(unit->GetMaxHealth());
+            // Damage the HoTs already on it do not cover.
+            float hotPerSec = 0.0f;
+            for (PartyHot const& h : m.hots)
+                hotPerSec += h.PerSec();
+            c.target.intake = std::max(0.0f, Value::TakenDps(world, m.guid) - hotPerSec);
+            c.target.burst = m.takenBurst;
+            // The hits coming one by one, the HoT ticks on it between them (IncomingTimeline.h).
+            {
+                IncomingTimeline::Timeline timeline = IncomingTimeline::Of(world, m);
+                timeline.AddHots(m);
+                float const health = c.target.health + m.absorb;
+                c.target.timeToDie = timeline.TimeToLose(health, false);
+                c.target.worstTimeToDie = timeline.TimeToLose(health, true);
+                c.target.timeToReserve = timeline.TimeToLose(std::max(0.0f, health - HealPlan::ReserveHealth(c.target)), false);
+            }
+            c.target.chained = directives.IsHealChain(m.guid, now, tickMs + CHAIN_GAP_MS);
+            addOptions(c, choice, &m);
             c.eat = EatOf(bot, unit, m);
             c.target.waitDeficit = HotPlan::WaitDeficit(c.eat);
+            c.target.boostDeficit = BoostWait(bot, c.options);
+            c.assessment = HealPlan::Assess(c.target, healer, c.options);
+            all.push_back(std::move(c));
+        }
+        // Allies the party protects (AllyFacts::protect, boss doc G3): healed like a member, by
+        // the same need rules. Their intake is only the enemies on them now (Value::IncomingOn:
+        // no measured rate, no timeline of casts, no HoTs or shields known on them), so the
+        // time to die is health / intake, the worst case the same.
+        for (AllyFacts const& a : world.allies)
+        {
+            if (!a.protect || !a.health)
+                continue;
+            Unit* unit = me->GetMap()->GetUnit(a.guid);
+            if (!unit || !unit->IsAlive() || !bot->IsValidHealTarget(unit, healer.steady ? 101.0f : 100.0f))
+                continue;
+            HealChoice choice;
+            bot->ChooseHeal(unit, choice, false);
+            if (choice.options.empty())
+                continue;
+
+            Candidate c;
+            c.unit = unit;
+            c.guid = a.guid;
+            c.healthPct = a.healthPct;
+            c.deathPenalty = Value::DeathPenalty(a);
+            c.hotTarget = HotPlan::HotTarget::Member;
+            c.target.health = float(unit->GetHealth());
+            c.target.maxHealth = float(unit->GetMaxHealth());
+            c.target.intake = Value::IncomingOn(world, a);
+            if (c.target.intake > 0.0f)
+            {
+                c.target.timeToDie = c.target.health / c.target.intake;
+                c.target.worstTimeToDie = c.target.timeToDie;
+                c.target.timeToReserve = std::max(0.0f, c.target.health - HealPlan::ReserveHealth(c.target)) / c.target.intake;
+            }
+            else
+                c.target.timeToDie = c.target.worstTimeToDie = c.target.timeToReserve = HealPlan::NO_LIMIT;
+            c.target.chained = directives.IsHealChain(a.guid, now, tickMs + CHAIN_GAP_MS);
+            addOptions(c, choice, nullptr);
             c.target.boostDeficit = BoostWait(bot, c.options);
             c.assessment = HealPlan::Assess(c.target, healer, c.options);
             all.push_back(std::move(c));
@@ -469,7 +522,7 @@ namespace Commander
                 p.source = "heal";
                 p.reason = "heal boost ready: held until one boosted big heal fills the gap";
                 p.action.type = BotActionType::Cast;
-                p.action.target = c.facts->guid;
+                p.action.target = c.guid;
                 p.action.spell = kit.HealBoosts().front().spell;
                 p.SetValue(0.0f, 0.0f);
                 out.push_back(p);
@@ -508,7 +561,7 @@ namespace Commander
                     c.options[i].pulls = ThreatBehavior::HealPullLoss(bot, world, c.unit, c.spells[i]) > 0.0f;
 
             int index = HealPlan::Pick(c.target, healer, c.assessment, c.options);
-            if (ProposeShield(bot, world, c.unit, *c.facts, c.target, c.assessment,
+            if (ProposeShield(bot, world, c.unit, c.guid, c.target, c.assessment,
                               index >= 0 ? &c.options[index] : nullptr, out))
                 return;
 
@@ -539,7 +592,7 @@ namespace Commander
             p.reason = boostSpell ? (boost.instant ? "emergency: boost, instant big heal" : "big deficit: boost, big heal")
                                   : ReasonOf(c.assessment.need);
             p.action.type = BotActionType::Cast;
-            p.action.target = c.facts->guid;
+            p.action.target = c.guid;
             p.action.spell = c.spells[index];
             p.action.prepSpell = boostSpell;
             // Benefit: the health it restores, plus the death it prevents when the target would
@@ -552,7 +605,7 @@ namespace Commander
             if (healer.lockoutStartSec >= 0.0f)     // the last heal before the healer's lockout
                 nextChanceSec = std::max(nextChanceSec, healer.NextChanceSec(castSec));
             if (emergency && c.assessment.timeToDie < nextChanceSec)
-                benefit += Value::DeathPenalty(*c.facts);
+                benefit += c.deathPenalty;
             if (boostSpell && boost.free)
                 benefit += ManaWorth::Points(world, *myFacts, o.mana);
             p.SetValue(benefit, Value::Points(world, heal - effective));

@@ -275,6 +275,72 @@ namespace Value
         return loss;
     }
 
+    float DeathPenalty(AllyFacts const& ally)
+    {
+        return ally.deathPenalty > 0.0f ? ally.deathPenalty : DEATH_PENALTY_PROTECTED;
+    }
+
+    float HitDps(EnemyFacts const& enemy, AllyFacts const& victim)
+    {
+        if (!enemy.acting)
+            return 0.0f;
+        float const melee = enemy.meleePhysical
+            ? enemy.meleeDps * (1.0f - ArmorReduction(victim.armor, enemy.level))
+            : enemy.meleeDps;
+        return melee + enemy.rangedDps;
+    }
+
+    float IncomingOn(WorldModel const& world, AllyFacts const& ally)
+    {
+        float total = 0.0f;
+        for (EnemyFacts const& e : world.enemies)
+            if (!e.crowdControlled && e.victim == ally.guid)
+                total += HitDps(e, ally);
+        return total;
+    }
+
+    float SurviveAllSec(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim)
+    {
+        float dps = IncomingOn(world, victim);
+        if (enemy.victim != victim.guid || enemy.crowdControlled)
+            dps += HitDps(enemy, victim);
+        if (dps <= 0.0f)
+            return ThreatView::NO_LIMIT;
+        return float(victim.health) / dps;
+    }
+
+    namespace
+    {
+        // Damage `onVictim` per second for `seconds` on an ally that dies of everything in
+        // `survive`: the damage until then, the death weighted by this share of it.
+        float AllyLoss(WorldModel const& world, AllyFacts const& victim, float onVictim, float extra,
+                       float survive, float seconds)
+        {
+            seconds = std::max(0.0f, seconds);
+            float loss = Points(world, extra * std::min(seconds, survive));
+            if (seconds >= survive && onVictim > 0.0f)
+            {
+                float const total = float(victim.health) / survive;
+                loss += DeathPenalty(victim) * std::min(1.0f, onVictim / total);
+            }
+            return loss;
+        }
+    }
+
+    float HitLoss(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim, float seconds)
+    {
+        float const onVictim = HitDps(enemy, victim);
+        return AllyLoss(world, victim, onVictim, onVictim, SurviveAllSec(world, enemy, victim), seconds);
+    }
+
+    float MoveLoss(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim,
+                   PartyMemberFacts const& holder, float seconds)
+    {
+        float const onVictim = HitDps(enemy, victim);
+        return AllyLoss(world, victim, onVictim, std::max(0.0f, onVictim - HitDps(enemy, holder)),
+                        SurviveAllSec(world, enemy, victim), seconds);
+    }
+
     namespace
     {
         bool Chases(EnemyFacts const& e, ObjectGuid victim)

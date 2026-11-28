@@ -6,7 +6,9 @@
  *
  * Loose (LooseVictim): acting, not crowd controlled, ours (not on an ally only), its victim a
  * party member who is not a tank (Tanks::IsTank), not mind controlled, not a pet that taunts
- * by itself (PartyMemberFacts::tauntsItself: it growls the enemy back), not an ally.
+ * by itself (PartyMemberFacts::tauntsItself: it growls the enemy back), not an ally. An ally
+ * the party protects is its own case (LooseAlly): Taunt and Threat only, its loss without the
+ * harassment part (LooseEnemy::Victim).
  *
  * Every option: benefit = (loss doing nothing - loss with it) over the horizon, the losses of
  * Perception/Values/LooseEnemy.h (Value::MoveLoss + Value::HarassLoss, at most HORIZON_SEC and the
@@ -48,6 +50,7 @@
 #define MANGOS_COMMANDER_RESCUE_VALUE_H
 
 #include "Commander/Perception/WorldModel.h"
+#include "Commander/Perception/Values/LooseEnemy.h"
 
 class SpellEntry;
 
@@ -83,6 +86,10 @@ namespace Commander
 
         // The member `e` hits instead of a tank (see the header), null = not loose.
         PartyMemberFacts const* LooseVictim(WorldModel const& world, EnemyFacts const& e);
+        // The ally the party protects (AllyFacts::protect, boss doc G3) that `e` hits, when that
+        // ally does not hold enemies itself (not tankLike): taken off it like a loose enemy
+        // (taunt, threat; no threat drop). null = none.
+        AllyFacts const* LooseAlly(WorldModel const& world, EnemyFacts const& e);
 
         // Seconds a taunt holds only through its aura (no SPELL_EFFECT_ATTACK_ME: Mocking Blow,
         // Challenging Shout / Roar; ThreatManager::tauntFadeOut takes the lent threat back),
@@ -110,10 +117,11 @@ namespace Commander
 
         // `distance`: tank to enemy, yards. `tankRate`: LooseEnemy::TankRate.
         // `enemyDps`: NextTauntDps(world, e.guid).
-        Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+        // `victim`: a member (LooseVictim) or a protected ally (LooseAlly).
+        Option Taunt(WorldModel const& world, EnemyFacts const& e, LooseEnemy::Victim const& victim,
                      PartyMemberFacts const& tank, TauntAbility const& taunt, float tankRate, float distance,
                      float enemyDps);
-        Option Threat(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+        Option Threat(WorldModel const& world, EnemyFacts const& e, LooseEnemy::Victim const& victim,
                       PartyMemberFacts const& tank, float tankRate, float distance);
         // `a`: one of victim.threatDrops.
         Option ThreatDrop(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,

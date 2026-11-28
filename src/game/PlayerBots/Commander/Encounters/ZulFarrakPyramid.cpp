@@ -16,15 +16,14 @@
  *     move to the bottom for wave 3 (no holding there). Fleeing is UNIT_STATE_FLEEING or the
  *     15% threshold, whichever comes first; Zealots (no flee) at low health are also let go
  *     once they are outside the radius.
- *   - The Weegli heal picks the smallest castable direct heal (least threat), not the one
- *     that fits his missing health; no HoTs, no shields, no heals for the other prisoners, and
- *     no mana budget (the scenario's Jev question "spend mana on the prisoners?" is not asked).
+ *   - Weegli is healed by the generic heal module (protected ally, boss doc G3); the other
+ *     prisoners are not healed, and the mana budget does not weigh heals on him (the
+ *     scenario's Jev question "spend mana on the prisoners?" is not asked).
  *   - Focus tiers follow scenario 9, 2.1 as fixed rules; the values (dps, kill time) only
  *     pick within a tier. Enemies that cannot be focused (fresh, intercepted) are skipped,
  *     so for NEW_ENEMY_SETTLE_SEC after a group arrives the lower tiers' focus stays.
- *   - An add hitting only a prisoner (no party member on its threat list, onAllyOnly) is not
- *     the party's to hit at all (TargetAssigner), so "hitting Weegli" only counts once a heal
- *     on him put it on our side. Protecting an ally is a generic gap (G3, boss doc).
+ *   - An add hitting only Bly, Raven, Oro or Murta (no party member on its threat list,
+ *     onAllyOnly) is not the party's to hit at all (TargetAssigner); one on Weegli is ours.
  *   - Not done: area damage timing, mana budget over the remaining waves, wave 3 positioning
  *     (Psychic Scream range), crew fight after the event (prisoners turn hostile: that is a
  *     normal fight, the module is no longer active once the phase is KILLED_ALL_TROLLS).
@@ -97,16 +96,6 @@ namespace Commander
             if (e.entry == ZulFarrakPyramid::NPC_CRETIN)
                 return TIER_CRETIN;
             return TIER_OTHER;
-        }
-
-        // Base points of the direct heal effects (no +healing; the rotation uses HealSpells.h).
-        int32 BasePoints(SpellEntry const* spell)
-        {
-            int32 points = 0;
-            for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
-                if (spell->Effect[i] == SPELL_EFFECT_HEAL)
-                    points += spell->EffectBasePoints[i];
-            return points;
         }
     }
 
@@ -231,9 +220,18 @@ namespace Commander
     {
         // Only Bly holds enemies. Weegli has the health for it but must not tank (he opens the
         // door after the event), so damage dealers may take his enemies off him.
+        // Weegli is protected (boss doc G3): healed, his enemies ours and taken off him.
         for (AllyFacts& a : world.allies)
-            if (IsPrisonerEntry(a.entry))
-                a.tankLike = a.entry == NPC_BLY;
+        {
+            if (!IsPrisonerEntry(a.entry))
+                continue;
+            a.tankLike = a.entry == NPC_BLY;
+            if (a.entry == NPC_WEEGLI)
+            {
+                a.protect = true;
+                a.deathPenalty = WEEGLI_DEATH_PENALTY;
+            }
+        }
     }
 
     void ZulFarrakPyramid::ShapeDoctrine(WorldModel const& world, TeamPlan& plan)
@@ -246,7 +244,7 @@ namespace Commander
         for (EnemyFacts const& e : world.enemies)
         {
             if (e.onAllyOnly || !e.acting || !e.health)
-                continue;   // (an add only on a prisoner is not the party's to hit: G3 in the boss doc)
+                continue;   // (an add only on an unprotected prisoner is not the party's to hit)
             FocusTier const tier = TierOf(world, e);
             if (tier != TIER_OTHER)
                 plan.doctrine.SetKillTier(e.guid, tier, TierReason(tier));
@@ -306,41 +304,6 @@ namespace Commander
                 p.reason = "fleeing add below the hold point: stay, ranged finish it";
                 p.SetValue(HOLD_POINTS, Value::LostAction(world, *myFacts, tickSec));
                 out.push_back(p);
-            }
-        }
-
-        // Healer: keep Weegli alive once the party members are safe enough.
-        if (role == ROLE_HEALER)
-        {
-            AllyFacts const* weegli = nullptr;
-            for (AllyFacts const& a : world.allies)
-                if (a.entry == NPC_WEEGLI)
-                    weegli = &a;
-            if (!weegli || weegli->healthPct >= WEEGLI_HEAL_PCT)
-                return;
-            for (PartyMemberFacts const& m : world.party)
-                if (!m.isPet && m.alive && m.healthPct < MEMBERS_FIRST_PCT)
-                    return;     // the rotation heals them first
-
-            Unit* unit = me->GetMap()->GetUnit(weegli->guid);
-            if (!unit || !bot->IsValidHealTarget(unit, WEEGLI_HEAL_PCT))
-                return;
-
-            // m_spellListDirectHeal is ordered strongest first: walk it from the weakest.
-            for (auto itr = bot->m_spellListDirectHeal.rbegin(); itr != bot->m_spellListDirectHeal.rend(); ++itr)
-            {
-                SpellEntry const* spell = *itr;
-                if (!bot->CanTryToCastSpell(unit, spell))
-                    continue;
-                float const missing = float(weegli->maxHealth > weegli->health ? weegli->maxHealth - weegli->health : 0);
-                float const healed = std::min(missing, float(std::max(0, BasePoints(spell))));
-                float const castSec = std::max(Value::GCD_SEC, float(spell->GetCastTime(me)) / 1000.0f);
-                Proposal p = EncounterHelpers::MakeReplace(SOURCE, ProposalTier::Assigned, BotActionType::Cast,
-                                                           weegli->guid, spell);
-                p.reason = "heal Weegli (must survive the event)";
-                p.SetValue(WEEGLI_WEIGHT * Value::Points(world, healed), Value::LostAction(world, *myFacts, castSec));
-                out.push_back(p);
-                return;
             }
         }
     }

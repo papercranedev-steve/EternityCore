@@ -17,6 +17,7 @@ namespace Commander
     struct PartyMemberFacts;
     struct EnemyFacts;
     struct CooldownResetFacts;
+    struct AllyFacts;
 
     namespace Value
     {
@@ -24,6 +25,10 @@ namespace Commander
         static constexpr float DEATH_PENALTY_HEALER = 30.0f;
         static constexpr float DEATH_PENALTY_TANK = 30.0f;
         static constexpr float DEATH_PENALTY_OTHER = 15.0f;
+        // An ally the party protects (AllyFacts::protect, boss doc G3): the escort quest or the
+        // event fails and is done again, like losing a healer or the tank (untested guess,
+        // 2026-11-28). A boss module may set its own (AllyFacts::deathPenalty).
+        static constexpr float DEATH_PENALTY_PROTECTED = 30.0f;
 
         // Global cooldown used for the time cost of an instant ability.
         static constexpr float GCD_SEC = 1.5f;
@@ -137,6 +142,21 @@ namespace Commander
         // (SurviveAllSec), weighted by this enemy's share of that damage.
         // (combat scenario: Stratholme Skeletal Guardians casting at the player, 2026-11-01)
         float MoveLoss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+                       PartyMemberFacts const& holder, float seconds);
+
+        // The same for an ally the party protects (AllyFacts::protect, boss doc G3). Its health
+        // is counted in party points like a member's (the healers pay for it); armor only, its
+        // avoidance is not known. No measured intake: only the enemies on it now.
+        float DeathPenalty(AllyFacts const& ally);
+        float HitDps(EnemyFacts const& enemy, AllyFacts const& victim);
+        float IncomingOn(WorldModel const& world, AllyFacts const& ally);
+        float SurviveAllSec(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim);
+        // Points lost while `enemy` hits `victim` for `seconds`: its damage until the ally dies
+        // of everything on it (SurviveAllSec), plus the death penalty weighted by this enemy's
+        // share of that damage when it does.
+        float HitLoss(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim, float seconds);
+        // As MoveLoss: only what `victim` takes on top of `holder` (armor), and the death.
+        float MoveLoss(WorldModel const& world, EnemyFacts const& enemy, AllyFacts const& victim,
                        PartyMemberFacts const& holder, float seconds);
 
         // Seconds until `enemy` dies at its share of the party's damage.

@@ -36,15 +36,26 @@ namespace Commander
         static constexpr float MELEE_REACH = 5.0f;
         static constexpr float RUN_YARDS_PER_SEC = 7.0f;
 
+        // Who a loose enemy hits: a member, or an ally the party protects (AllyFacts::protect,
+        // boss doc G3: no harassment loss, it does not cast for us).
+        struct Victim
+        {
+            PartyMemberFacts const* member = nullptr;
+            AllyFacts const* ally = nullptr;
+            Victim(PartyMemberFacts const& m) : member(&m) {}
+            Victim(AllyFacts const& a) : ally(&a) {}
+            ObjectGuid Guid() const { return member ? member->guid : ally->guid; }
+        };
+
         // Points lost while `enemy` hits `victim` instead of `holder` for `seconds`.
-        float Loss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+        float Loss(WorldModel const& world, EnemyFacts const& enemy, Victim const& victim,
                    PartyMemberFacts const& holder, float seconds);
 
         // (A thin lead still on the tank: ThreatRisk.h, since 2026-11-13; before, ThinLoss here.)
         // Best threat per second `tank` was measured adding to any enemy (0 = none yet).
         float TankRate(WorldModel const& world, ObjectGuid tank);
         // `distance` = tank to enemy (yards).
-        LooseValue WinBack(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+        LooseValue WinBack(WorldModel const& world, EnemyFacts const& enemy, Victim const& victim,
                            PartyMemberFacts const& tank, float tankRate, float distance);
         // Taunt / win-back weight from the creature override table (tauntMult, 1 = none), and
         // whether it ignores taunts.

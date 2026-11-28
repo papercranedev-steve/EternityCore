@@ -9,11 +9,13 @@ namespace Commander
 {
 namespace LooseEnemy
 {
-    float Loss(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+    float Loss(WorldModel const& world, EnemyFacts const& enemy, Victim const& victim,
                PartyMemberFacts const& holder, float seconds)
     {
-        return Value::MoveLoss(world, enemy, victim, holder, seconds) +
-               Value::HarassLoss(world, enemy, victim, seconds);
+        if (victim.ally)
+            return Value::MoveLoss(world, enemy, *victim.ally, holder, seconds);
+        return Value::MoveLoss(world, enemy, *victim.member, holder, seconds) +
+               Value::HarassLoss(world, enemy, *victim.member, seconds);
     }
 
     float TankRate(WorldModel const& world, ObjectGuid tank)
@@ -25,7 +27,7 @@ namespace LooseEnemy
         return rate;
     }
 
-    LooseValue WinBack(WorldModel const& world, EnemyFacts const& enemy, PartyMemberFacts const& victim,
+    LooseValue WinBack(WorldModel const& world, EnemyFacts const& enemy, Victim const& victim,
                        PartyMemberFacts const& tank, float tankRate, float distance)
     {
         LooseValue v;
@@ -35,7 +37,9 @@ namespace LooseEnemy
         v.walkSec = std::max(0.0f, distance - MELEE_REACH) / RUN_YARDS_PER_SEC;
         v.lossNothing = Loss(world, enemy, victim, tank, v.horizon);
         v.lossThreat = Loss(world, enemy, victim, tank, std::min(v.walkSec + recovery, v.horizon));
-        v.deadly = Value::SurviveAllSec(world, enemy, victim) < v.horizon;
+        float const survive = victim.ally ? Value::SurviveAllSec(world, enemy, *victim.ally)
+                                          : Value::SurviveAllSec(world, enemy, *victim.member);
+        v.deadly = survive < v.horizon;
         return v;
     }
 

@@ -21,7 +21,9 @@
  * Without instance data (script not loaded) the phase is Unknown and only the enemies count.
  *
  * Facts (AddFacts): of the five prisoners only Sergeant Bly (7604) is tankLike. Weegli (7607)
- * has as much health (9.7 x multiplier) but must survive the event (he blows up the door).
+ * has as much health (9.7 x multiplier) but must survive the event (he blows up the door): he
+ * is protected (AllyFacts::protect, WEEGLI_DEATH_PENALTY), so the generic modules heal him,
+ * take his enemies off him and count them as ours (boss doc G3).
  *
  * Doctrine (ShapeDoctrine), waves 1-2 only (wave 3 is left to the generic focus, which scores
  * the Shadowpriest's heals): kill order tiers by scenario 9, 2.1 (DoctrinePlan::SetKillTier),
@@ -38,10 +40,7 @@
  *     point (own position once there), so the original chase does not run down the stairs into
  *     the adds waiting at the bottom. Ranged bots keep shooting it (nothing to propose).
  *     benefit = HOLD_POINTS, cost = one tick of the bot's contribution.
- *   Healer: Weegli below WEEGLI_HEAL_PCT, no party member below MEMBERS_FIRST_PCT -> Assigned
- *     Cast of the smallest direct heal that CanTryToCastSpell allows (smallest = least heal
- *     threat; it is split over every enemy on Weegli's list). benefit = WEEGLI_WEIGHT x points
- *     of the healing, cost = cast time of the healer's contribution.
+ *   (Healing Weegli: the generic heal module since 2026-11-28, he is protected.)
  *
  * Eating and drinking (ForbidsRest, computed in Refresh; TeamPlan::noRest):
  *   WAVE_1 / WAVE_2: never, unless nothing fought for QUIET_STALE_MS (a wipe leaves the phase
@@ -112,9 +111,9 @@ namespace Commander
         // Not running down the stairs: a pull of up to a whole group of waiting adds.
         static constexpr float HOLD_POINTS = 5.0f;
 
-        static constexpr float WEEGLI_HEAL_PCT = 40.0f;
-        static constexpr float MEMBERS_FIRST_PCT = 50.0f;
-        static constexpr float WEEGLI_WEIGHT = 2.0f;        // the event needs him alive
+        // Weegli's death (AllyFacts::deathPenalty): he blows up the door after the event, without
+        // him the rest of the dungeon is shut. Twice an escort's (Value::DEATH_PENALTY_PROTECTED).
+        static constexpr float WEEGLI_DEATH_PENALTY = 60.0f;
 
         static constexpr uint32 PRE_WAVE_2_MS = 10000;      // script major_wave_Timer
         static constexpr float WAVE_TRAVEL_SEC = 7.0f;      // ~60 yd run at speed 1.14

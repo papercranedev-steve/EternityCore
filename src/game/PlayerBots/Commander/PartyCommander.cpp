@@ -229,6 +229,7 @@ namespace Commander
         m_activeEncounter->ListEnemies(bot, m_world, listed);
         WorldModelBuilder::AddListedEnemies(bot, m_world, listed);
         m_activeEncounter->AddFacts(m_world);
+        WorldModelBuilder::ApplyProtection(m_world);     // allies the module marked protected
     }
 
     void PartyCommander::FlushNotes(TeamBotAI* bot)

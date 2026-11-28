@@ -215,6 +215,22 @@ namespace Commander
                 out.urgent = Value::SurviveAllSec(world, e, *victim) < horizon;
                 return true;
             }
+            // The same for a summon (a wave) on an ally the party protects that does not hold
+            // enemies itself (boss doc G3): the tank's rescue is the alternative.
+            if (e.summoned && !victim)
+            {
+                AllyFacts const* ally = world.FindProtected(e.victim);
+                if (ally && !ally->tankLike)
+                {
+                    out.reason = "summon on a protected ally";
+                    out.loose = true;
+                    out.distanceToVictim = PackResolver::Distance(e.pos, ally->pos);
+                    float const horizon = std::min(FocusAssigner::ONE_OFF_HORIZON_SEC, Value::EnemyTimeToDie(world, e));
+                    out.points = Value::HitLoss(world, e, *ally, horizon);
+                    out.urgent = Value::SurviveAllSec(world, e, *ally) < horizon;
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -338,8 +354,11 @@ namespace Commander
 
         // Base: what it deals to whoever it is hitting now (scenario 6: dps / remaining health).
         float dps = 0.0f;
+        AllyFacts const* protectedVictim = world.FindProtected(e.victim);
         if (PartyMemberFacts const* victim = world.FindMember(e.victim))
             dps = Value::HitDps(e, *victim);
+        else if (protectedVictim)
+            dps = Value::HitDps(e, *protectedVictim);
         else if (e.acting)
             dps = e.meleeDps + e.rangedDps;
         float harm = Value::Points(world, dps);
@@ -402,6 +421,19 @@ namespace Commander
         {
             oneOff += QUICK_KILL_POINTS;
             AddReason(s.reason, "dies in %.1fs", float(e.health) / dealt);
+        }
+        // On an ally the party protects (boss doc G3): its share of the ally's death within the
+        // horizon (the damage itself is the base above).
+        if (protectedVictim && dps > 0.0f && protectedVictim->health)
+        {
+            float const survive = Value::SurviveAllSec(world, e, *protectedVictim);
+            if (survive <= ONE_OFF_HORIZON_SEC)
+            {
+                float const total = float(protectedVictim->health) / survive;
+                float const death = Value::DeathPenalty(*protectedVictim) * std::min(1.0f, dps / total);
+                oneOff += death;
+                AddReason(s.reason, "protected ally dies %.1f", death);
+            }
         }
         harm += oneOff / ONE_OFF_HORIZON_SEC;
 

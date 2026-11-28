@@ -47,6 +47,14 @@ namespace RescueValue
         return victim;
     }
 
+    AllyFacts const* LooseAlly(WorldModel const& world, EnemyFacts const& e)
+    {
+        if (!e.acting || e.crowdControlled || e.onAllyOnly || !e.health || e.victim.IsEmpty())
+            return nullptr;
+        AllyFacts const* ally = world.FindProtected(e.victim);
+        return ally && !ally->tankLike ? ally : nullptr;
+    }
+
     float TemporaryTauntSec(SpellEntry const* spell)
     {
         bool aura = false;
@@ -120,7 +128,7 @@ namespace RescueValue
         return reserve;
     }
 
-    Option Taunt(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+    Option Taunt(WorldModel const& world, EnemyFacts const& e, LooseEnemy::Victim const& victim,
                  PartyMemberFacts const& tank, TauntAbility const& taunt, float tankRate, float distance,
                  float enemyDps)
     {
@@ -143,7 +151,7 @@ namespace RescueValue
         return o;
     }
 
-    Option Threat(WorldModel const& world, EnemyFacts const& e, PartyMemberFacts const& victim,
+    Option Threat(WorldModel const& world, EnemyFacts const& e, LooseEnemy::Victim const& victim,
                   PartyMemberFacts const& tank, float tankRate, float distance)
     {
         Option o;

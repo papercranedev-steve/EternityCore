@@ -62,6 +62,12 @@ namespace WorldModelBuilder
     // marked listed). After RefreshCombat on the same refresh.
     void AddListedEnemies(TeamBotAI* bot, WorldModel& world, std::vector<Creature*> const& creatures);
 
+    // Enemies fighting an ally the party protects (AllyFacts::protect) are ours: onProtected
+    // set, onAllyOnly cleared. RefreshCombat applies it for the builder's own rule (escorts);
+    // run again after a boss module's AddFacts marked more allies (same refresh). Only adds:
+    // an ally a module unmarks keeps its enemies ours until the next RefreshCombat.
+    void ApplyProtection(WorldModel& world);
+
     // Out-of-combat creatures near the party, grouped into packs, and the ally candidate scan.
     // Grid searches, run less often. Packs and their walks (PackRoutes) are around `guide` when
     // the party follows one (Guide::Current, null = none), else around the leader.

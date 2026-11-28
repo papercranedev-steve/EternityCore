@@ -66,11 +66,15 @@ namespace Commander
                 tanks.push_back(&m);
         for (EnemyFacts const& e : world.enemies)
         {
-            PartyMemberFacts const* victim = RescueValue::LooseVictim(world, e);
-            if (!victim || !plan.MayEngage(ObjectGuid(), e.guid))
+            // On a member, or on an ally the party protects (boss doc G3: taunt or threat only).
+            PartyMemberFacts const* member = RescueValue::LooseVictim(world, e);
+            AllyFacts const* ally = member ? nullptr : RescueValue::LooseAlly(world, e);
+            if ((!member && !ally) || !plan.MayEngage(ObjectGuid(), e.guid))
                 continue;
+            LooseEnemy::Victim const victim = member ? LooseEnemy::Victim(*member) : LooseEnemy::Victim(*ally);
+            ObjectGuid const victimGuid = victim.Guid();
             // Doctrine (OffTank.h): on the off-tank holding it, it is held.
-            if (plan.doctrine.OffTankHolds(victim->guid, e.guid))
+            if (plan.doctrine.OffTankHolds(victimGuid, e.guid))
                 continue;
             // Doctrine (RoleStamps.h): a self-destruct dies anyway, nobody takes it; NoTaunt (a
             // trap swarm, taunt immune, a totem): no single target taunt (winning it back with
@@ -88,14 +92,14 @@ namespace Commander
             need.kind = DutyKind::Rescue;
             need.target = e.guid;
             need.now = true;
-            need.blockedBy = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::Saved, victim->guid } };
-            need.marks = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::LooseTaken, victim->guid } };
-            need.reason = "loose enemy";
+            need.blockedBy = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::Saved, victimGuid } };
+            need.marks = { { DutyKeyKind::EnemyHandled, e.guid }, { DutyKeyKind::LooseTaken, victimGuid } };
+            need.reason = ally ? "enemy on a protected ally" : "loose enemy";
             // Doctrine HoldPile (Area tactic, TankJob): the tank protects the area caster (the
             // area phase of this refresh's situation step). Which way (taunt, threat, its own
             // threat drop) is still the points'; that it is done first is the doctrine's: Urgent.
             bool const protects = plan.doctrine.tankJob == TankJob::HoldPile &&
-                                  plan.area.CastBy(victim->guid);
+                                  plan.area.CastBy(victimGuid);
             if (protects)
             {
                 need.detail |= DETAIL_URGENT;
@@ -106,7 +110,7 @@ namespace Commander
             float const areaReserve = plan.area.TauntReserveOutside(e.guid);
             auto const add = [&](ObjectGuid bot, uint32 spellId, RescueValue::Option o)
             {
-                if (spellId && bot != victim->guid)
+                if (spellId && bot != victimGuid)
                     o.cost += areaReserve;
                 if (o.Net() <= 0.0f)
                     return;
@@ -135,14 +139,14 @@ namespace Commander
                 bool const walkBlocked = tank->victim != e.guid && distance > MELEE_REACH + e.boundingRadius &&
                                          RouteRisk::Blocked(world, *tank, e, true);
                 if (!walkBlocked)
-                    add(tank->guid, 0, RescueValue::Threat(world, e, *victim, *tank, tankRate, distance));
+                    add(tank->guid, 0, RescueValue::Threat(world, e, victim, *tank, tankRate, distance));
                 for (TauntAbility const& t : tank->taunts)
                 {
                     if (noTaunt)
                         break;
                     if (walkBlocked && distance - e.boundingRadius > t.maxRange)
                         continue;
-                    RescueValue::Option o = RescueValue::Taunt(world, e, *victim, *tank, t, tankRate, distance, enemyDps);
+                    RescueValue::Option o = RescueValue::Taunt(world, e, victim, *tank, t, tankRate, distance, enemyDps);
                     // Kept for an enemy on this tank about to wipe its threat (Knock Away).
                     o.cost += RescueValue::WipeReserve(world, *tank, t, e.guid);
                     add(tank->guid, t.spellId, o);
@@ -154,21 +158,21 @@ namespace Commander
             if (OffTank::MayTake(plan.doctrine, e))
                 for (PartyMemberFacts const& h : world.party)
                 {
-                    if (h.guid == victim->guid || !OffTank::IsFree(world, plan.doctrine, h))
+                    if (h.guid == victimGuid || !OffTank::IsFree(world, plan.doctrine, h))
                         continue;
                     float const distance = PackResolver::Distance(h.pos, e.pos);
                     if (distance > TANK_REACH)
                         continue;
-                    add(h.guid, 0, RescueValue::Threat(world, e, *victim, h, LooseEnemy::TankRate(world, h.guid), distance));
+                    add(h.guid, 0, RescueValue::Threat(world, e, victim, h, LooseEnemy::TankRate(world, h.guid), distance));
                 }
 
             // The victim's own threat drops (Fade, Feint, Cower, Feign Death, Vanish): only now
             // that the enemy hits it (user 2026-11-14: not while it is merely close to the
             // holder's threat, that is ThreatRoom's stop / switch).
             // A bot's pet too (Cower, WorldModelBuilder's pet facts): its owner has it cast.
-            if (victim->isBot || victim->isPet)
-                for (ThreatDropAbility const& a : victim->threatDrops)
-                    add(victim->guid, a.spellId, RescueValue::ThreatDrop(world, e, *victim, a));
+            if (member && (member->isBot || member->isPet))
+                for (ThreatDropAbility const& a : member->threatDrops)
+                    add(member->guid, a.spellId, RescueValue::ThreatDrop(world, e, *member, a));
 
             if (!need.candidates.empty())
                 out.push_back(std::move(need));

@@ -1049,7 +1049,11 @@ namespace Commander
         // No party member or pet is on its threat list: it is here because it fights one of
         // world.allies (combat scenario 9: adds hitting the Zul'Farrak prisoners). Its threat
         // list then only has ally rows (partySide = false) plus our not-listed rows.
+        // Not set when it fights an ally the party protects (onProtected): that is our fight.
         bool onAllyOnly = false;
+        // Fights an ally the party protects (AllyFacts::protect): hits it or has it on its
+        // threat list (boss doc G3). WorldModelBuilder::ApplyProtection.
+        bool onProtected = false;
         // In WorldModel::targeted because the boss module listed it (IEncounter::ListEnemies):
         // the party must kill it though it does not fight us (Flamelash's Burning Spirits).
         bool listed = false;
@@ -1116,6 +1120,14 @@ namespace Commander
         // ALLY_TANK_HEALTH_MULT x the party tank's (Sergeant Bly 18500 vs a level 45 tank ~4000).
         // Boss modules may overwrite it in AddFacts (the Zul'Farrak module keeps it on Bly only).
         bool tankLike = false;
+        // The party protects it (boss doc G3): its enemies are ours (EnemyFacts::onProtected),
+        // healers heal it, enemies on it are killed or taken off it like loose ones. Builder
+        // rule: an escort on its way (npc_escortAI escorting) for a member or for nobody
+        // (Disciple of Naralex, Emi Shortfuse, Belnistrasz). Boss modules may set it in AddFacts
+        // (Weegli in Zul'Farrak).
+        bool protect = false;
+        // Points its death costs (an escort quest or event failed); 0 = Value::DEATH_PENALTY_PROTECTED.
+        float deathPenalty = 0.0f;
     };
 
     enum class PackSource : uint8
@@ -1396,8 +1408,14 @@ namespace Commander
                     return &a;
             return nullptr;
         }
-        // At least one enemy has a party member or pet on its threat list (a fight of ours,
-        // not only an ally's).
+        // An ally the party protects (AllyFacts::protect), or nullptr.
+        AllyFacts const* FindProtected(ObjectGuid guid) const
+        {
+            AllyFacts const* a = FindAlly(guid);
+            return a && a->protect ? a : nullptr;
+        }
+        // At least one enemy has a party member or pet on its threat list, or fights an ally
+        // the party protects (a fight of ours, not only an ally's).
         bool HasPartyEnemy() const
         {
             for (EnemyFacts const& e : enemies)
