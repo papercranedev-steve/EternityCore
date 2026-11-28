@@ -1,6 +1,7 @@
 #include "Commander/Behaviors/Movement/HumanFollow.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/Perception/Profiles/PlayerActivity.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Team.h"
 #include "MotionMaster.h"
@@ -97,6 +98,7 @@ namespace HumanFollow
         {
             std::vector<Spot> taken;
             float depth = DIST_MAX;
+            float arc = ZONE_ARC;           // radians, total width (LOOSE_ARC spread out)
 
             // Distance <-> share 0..1 of the zone's area (area-uniform: as many places near the
             // inner edge as at the outer one).
@@ -110,9 +112,11 @@ namespace HumanFollow
             }
         };
 
-        Zone ZoneOf(Player const* bot, Unit const* leader, float heading)
+        // `loose`: spread out while he stands (LOOSE_*).
+        Zone ZoneOf(Player const* bot, Unit const* leader, float heading, bool loose = false)
         {
             Zone z;
+            z.arc = loose ? LOOSE_ARC : ZONE_ARC;
             uint32 followers = 1;
             float const c = std::cos(-heading);
             float const s = std::sin(-heading);
@@ -134,7 +138,9 @@ namespace HumanFollow
                 float const dy = m->GetPositionY() - leader->GetPositionY();
                 z.taken.push_back({ dx * c - dy * s, dx * s + dy * c });
             }
-            z.depth = std::max(DIST_MAX, std::sqrt(DIST_MIN * DIST_MIN + 2.0f * followers * AREA_PER_FOLLOWER / ZONE_ARC));
+            float const minDepth = loose ? LOOSE_DIST_MAX : DIST_MAX;
+            float const area = loose ? LOOSE_AREA_PER_FOLLOWER : AREA_PER_FOLLOWER;
+            z.depth = std::max(minDepth, std::sqrt(DIST_MIN * DIST_MIN + 2.0f * followers * area / z.arc));
             return z;
         }
 
@@ -148,8 +154,8 @@ namespace HumanFollow
         // candidate MIN_GAP from every taken spot, else the one farthest from them.
         FollowSpot::Offset Place(Zone const& z, float center, float share, float angle, float shareSpread, float angleSpread)
         {
-            float const lo = center - ZONE_ARC / 2.0f;
-            float const hi = center + ZONE_ARC / 2.0f;
+            float const lo = center - z.arc / 2.0f;
+            float const hi = center + z.arc / 2.0f;
             // (within pi of the centre first: FollowSpot's candidates may come as -pi..pi)
             angle = center + std::remainder(angle - center, 2.0f * float(M_PI));
 
@@ -179,14 +185,29 @@ namespace HumanFollow
         // zone (FollowSpot moved it for safety, the tank behind the leader near a pack): it
         // stays there, a drift would clamp it back to where it was not safe; the next stop
         // rerolls.
-        bool Drifted(Player const* bot, Unit const* leader, FollowSpot::Offset const& current, FollowSpot::Offset& next)
+        // Spread out (IdleState::spread): in the loose zone around its centre.
+        bool Drifted(Player const* bot, Unit const* leader, FollowSpot::Offset const& current, FollowSpot::Offset& next,
+                     IdleState const& s)
         {
-            float const center = CenterOf(Leads(bot, leader));
-            if (FollowSpot::AngleGap(current.angle, center) > ZONE_ARC / 2.0f + 0.01f)
+            float const center = s.spread ? s.spreadCenter : CenterOf(Leads(bot, leader));
+            Zone const z = ZoneOf(bot, leader, Heading(bot, leader), s.spread);
+            if (FollowSpot::AngleGap(current.angle, center) > z.arc / 2.0f + 0.01f)
                 return false;
-            Zone const z = ZoneOf(bot, leader, Heading(bot, leader));
             next = Place(z, center, z.ShareOf(current.dist), current.angle, DRIFT_SPREAD, DRIFT_ANGLE);
             return true;
+        }
+
+        // A place in the loose zone (IdleState::spread), the personality's part of it; the lead
+        // behind him while he deals with an NPC.
+        FollowSpot::Offset Spread(Player const* bot, Unit const* leader, PlayerActivity const& act, IdleState& s)
+        {
+            Personality const p = Of(bot);
+            s.spread = true;
+            s.spreadCenter = CenterOf(Leads(bot, leader) && act.atNpc.IsEmpty());
+            Zone const z = ZoneOf(bot, leader, Heading(bot, leader), true);
+            float const share = (p.offset.dist - DIST_MIN) / (DIST_MAX - DIST_MIN);
+            float const side = p.offset.angle - float(M_PI);
+            return Place(z, s.spreadCenter, share, s.spreadCenter + side * (LOOSE_ARC / ZONE_ARC), PLACE_SPREAD, PLACE_ANGLE);
         }
 
         bool IsStill(Unit const* u)
@@ -235,11 +256,17 @@ namespace HumanFollow
             return false;
         }
 
+        // What he is doing (a bot guide: nothing of the sort).
+        PlayerActivity const act = leader->IsPlayer() ? PlayerActivities::Read(leader->ToPlayer()) : PlayerActivity();
+
         // Where the leader stands, and since when.
         bool const still = IsStill(leader) &&
             (!s.leaderStill || leader->GetDistance2d(s.stillX, s.stillY) <= STILL_YD);
         if (!still)
+        {
             s.leaderStill = false;
+            s.spread = false;
+        }
         else if (!s.leaderStill)
         {
             s.leaderStill = true;
@@ -272,15 +299,17 @@ namespace HumanFollow
             s.standWithAtMs = 0;
         }
 
-        // He sits: some sit with him, a moment later; nothing else meanwhile.
-        if (s.leaderStill && leader->IsSittingDown())
+        // He sits: some sit with him, a moment later; nothing else meanwhile. He is away: most
+        // sit, later; the others go on with their idle acts.
+        bool const sits = leader->IsSittingDown();
+        if (s.leaderStill && (sits || act.afk))
         {
             s.standWithAtMs = 0;
             if (!s.sitRolled)
             {
                 s.sitRolled = true;
-                s.sitsWith = urand(0, 99) < SIT_WITH_PCT;
-                s.sitWithAtMs = now + urand(SIT_WITH_MIN_MS, SIT_WITH_MAX_MS);
+                s.sitsWith = urand(0, 99) < (sits ? SIT_WITH_PCT : AFK_SIT_PCT);
+                s.sitWithAtMs = now + (sits ? urand(SIT_WITH_MIN_MS, SIT_WITH_MAX_MS) : urand(AFK_SIT_MIN_MS, AFK_SIT_MAX_MS));
             }
             if (s.sitsWith && !bot->IsSittingDown() && Due(now, s.sitWithAtMs) && IsStill(bot) &&
                 !bot->IsNonMeleeSpellCasted(false))
@@ -289,9 +318,11 @@ namespace HumanFollow
                 s.sat = true;
                 s.satWithLeader = true;
             }
-            return false;
+            if (sits || s.sitsWith)
+                return false;
         }
-        s.sitRolled = false;
+        else
+            s.sitRolled = false;
         // He got up and stays: up after him.
         if (s.satWithLeader && bot->IsSittingDown())
         {
@@ -315,11 +346,12 @@ namespace HumanFollow
             if (!Due(now, s.nextActMs))
                 return false;
             s.nextActMs = 0;
-            return Drifted(bot, leader, current, next);
+            return Drifted(bot, leader, current, next, s);
         }
 
         uint32 const stood = WorldTimer::getMSTimeDiff(s.stillSinceMs, now);
-        if (stood < p.idleAfterMs)
+        bool const waits = act.Waits();
+        if (stood < (waits ? std::min(p.idleAfterMs, BUSY_IDLE_AFTER_MS) : p.idleAfterMs))
             return false;
         if (!s.nextActMs)
         {
@@ -334,6 +366,13 @@ namespace HumanFollow
         if (!IsStill(bot) || bot->IsNonMeleeSpellCasted(false) || bot->IsSittingDown())
             return false;
 
+        // He stays: the first act spreads out.
+        if (!s.spread && stood >= (waits ? BUSY_SPREAD_AFTER_MS : SPREAD_AFTER_MS))
+        {
+            next = Spread(bot, leader, act, s);
+            return true;
+        }
+
         uint32 const roll = urand(0, 99);
         if (roll < LOOK_CHANCE)
         {
@@ -341,7 +380,7 @@ namespace HumanFollow
             return false;
         }
         if (roll < LOOK_CHANCE + STEP_CHANCE || stood < SIT_AFTER_MS)
-            return Drifted(bot, leader, current, next);
+            return Drifted(bot, leader, current, next, s);
         bot->SetStandState(UNIT_STAND_STATE_SIT);
         s.sat = true;
         return false;

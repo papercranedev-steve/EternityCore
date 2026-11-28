@@ -7,6 +7,7 @@
 #include "Commander/Coordination/Situation/ClearPlanner.h"
 #include "Commander/CommanderMgr.h"
 #include "Commander/PartyCommander.h"
+#include "Commander/Perception/Profiles/PlayerActivity.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Tanks.h"
 #include "TeamBotAI.h"
@@ -42,11 +43,27 @@ namespace AutoClear
             plan.notes.push_back(std::move(text));
         }
 
-        // He cannot be followed into a fight now.
+        // He cannot be followed into a fight now (away: AFK).
         bool LeaderBusy(Player* leader)
         {
             return !leader->IsAlive() || leader->IsMounted() || leader->IsTaxiFlying() ||
-                leader->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || leader->InBattleGround();
+                leader->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || leader->InBattleGround() ||
+                PlayerActivities::Read(leader).afk;
+        }
+
+        // Our clear stops (a pull already under way is finished; one waiting for everyone to be
+        // ready is called off).
+        void StopOurClear(TeamPlan& plan, PartyCommander& commander, char const* why)
+        {
+            AutoClearPlan& autoClear = plan.autoClear;
+            if (autoClear.started && plan.clear.active)
+            {
+                if (plan.pull.phase == PullPhase::WaitReady)
+                    plan.pull = PullPlan();
+                ClearPlanner::Stop(commander, why);
+                autoClear.started = false;
+                autoClear.wasActive = false;
+            }
         }
 
         // The team does something else the player asked for. Members told to wait elsewhere
@@ -252,17 +269,22 @@ namespace AutoClear
         if (sCommanderMgr.GetPullStance(leader->GetObjectGuid()) != PullStance::Active)
         {
             PullQuestions::Drop(plan);
-            if (autoClear.started && plan.clear.active)
-            {
-                // A pull waiting for everyone to be ready is called off; one under way is finished.
-                if (plan.pull.phase == PullPhase::WaitReady)
-                    plan.pull = PullPlan();
-                ClearPlanner::Stop(commander, "you start the fights yourself now.");
-                autoClear.started = false;
-                autoClear.wasActive = false;
-            }
+            StopOurClear(plan, commander, "you start the fights yourself now.");
             // His own pulls wait for the party too: who has nothing to drink is still asked.
             PullQuestions::Step(plan, world, map, nullptr, nowMs, false);
+            return;
+        }
+
+        // Away: nothing new, nothing asked; back, the stance goes on without the wait after a
+        // clear (the stop was ours, not an end he should walk away from).
+        if (PlayerActivities::Read(leader).afk)
+        {
+            PullQuestions::Drop(plan);
+            if (autoClear.started && plan.clear.active)
+            {
+                StopOurClear(plan, commander, "you are away: the party waits for you.");
+                autoClear.endedAtMs = 0;
+            }
             return;
         }
 

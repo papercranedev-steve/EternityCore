@@ -27,7 +27,10 @@
  * behind first: where the front is not safe the tank goes behind and stays there (no drift
  * back) until the next stop rerolls a place in front.
  * Tick: while walking the bot's place drifts a little; once the leader has stood a while the
- * bot looks around, takes a step or sits down (out of combat only). A place outside the bot's
+ * bot looks around, takes a step or sits down (out of combat only). What he does
+ * (Perception/Profiles/PlayerActivity, player pacing doc P3): busy where he stands or away, the
+ * idle acts start sooner; standing a while, the first act spreads the bot out (the loose zone);
+ * away, most bots sit down. A place outside the bot's
  * zone (FollowSpot moved it for safety) does not drift: the next stop rerolls.
  * FollowSpot still decides whether the offset is safe: TeamBotAI asks it with Heading() after
  * Reroll() / Tick(); the first move of each MoveFollow is never held back.
@@ -108,6 +111,29 @@ namespace HumanFollow
     constexpr uint32 SIT_WITH_PCT = 70;
     constexpr uint32 SIT_WITH_MIN_MS = 1200, SIT_WITH_MAX_MS = 4000;
     constexpr uint32 STAND_WITH_MIN_MS = 400, STAND_WITH_MAX_MS = 1500;
+    // He is away (his AFK flag, PlayerActivity; player pacing doc P3): AFK_SIT_PCT of the bots
+    // sit after AFK_SIT_MIN..MAX_MS each and get up after him as after his sit; the others go
+    // on with their idle acts.
+    constexpr uint32 AFK_SIT_PCT = 80;
+    constexpr uint32 AFK_SIT_MIN_MS = 3000, AFK_SIT_MAX_MS = 12000;
+    // He is busy where he stands or away (PlayerActivity::Waits: loot, an NPC, a trade, a cast,
+    // eating): the idle acts start after at most BUSY_IDLE_AFTER_MS, he is not walking on.
+    constexpr uint32 BUSY_IDLE_AFTER_MS = 2500;
+    // Spread (player pacing doc P3): once he has stood SPREAD_AFTER_MS (waiting:
+    // BUSY_SPREAD_AFTER_MS), a bot's next idle act is a new place in the loose zone, LOOSE_ARC
+    // wide, LOOSE_AREA_PER_FOLLOWER per follower, at least LOOSE_DIST_MAX deep; its steps stay
+    // in it. The lead stays behind him while he deals with an NPC (not between them). The next
+    // stop after a walk rerolls in the close zone.
+    constexpr uint32 SPREAD_AFTER_MS = 12000;
+    constexpr uint32 BUSY_SPREAD_AFTER_MS = 4000;
+    // Mount with him a moment after he is up (the lead sooner), off a moment after he gets down
+    // (at once when someone fights). Short: he rides off at once and the bot must keep up.
+    constexpr uint32 MOUNT_WITH_MIN_MS = 300, MOUNT_WITH_MAX_MS = 900;
+    constexpr uint32 LEAD_MOUNT_MIN_MS = 150, LEAD_MOUNT_MAX_MS = 400;
+    constexpr uint32 DISMOUNT_WITH_MIN_MS = 200, DISMOUNT_WITH_MAX_MS = 800;
+    constexpr float LOOSE_ARC = 4.4f;
+    constexpr float LOOSE_AREA_PER_FOLLOWER = 8.0f;
+    constexpr float LOOSE_DIST_MAX = 7.0f;
 
     struct Personality
     {
@@ -136,6 +162,10 @@ namespace HumanFollow
         uint32 sitWithAtMs = 0;
         bool satWithLeader = false;
         uint32 standWithAtMs = 0;
+        // Spread out while he stands (a place in the loose zone), around which side (front or
+        // back: CenterOf).
+        bool spread = false;
+        float spreadCenter = 0.0f;
         bool stopKnown = false;     // where the leader last stood (REROLL_MOVE_YD)
         float stopX = 0.0f;
         float stopY = 0.0f;

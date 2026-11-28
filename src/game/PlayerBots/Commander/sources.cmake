@@ -248,6 +248,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Profiles/PetTaunt.cpp
   ${COMMANDER_DIR}/Perception/Profiles/StandIn.h
   ${COMMANDER_DIR}/Perception/Profiles/StandIn.cpp
+  ${COMMANDER_DIR}/Perception/Profiles/PlayerActivity.h
+  ${COMMANDER_DIR}/Perception/Profiles/PlayerActivity.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.h
   ${COMMANDER_DIR}/Perception/Profiles/PetAbilities.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Pull/PullControl.h

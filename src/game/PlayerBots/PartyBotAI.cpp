@@ -1502,10 +1502,27 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     if (!me->IsInCombat())
     {
         // Mount if leader is mounted and we don't have a target (not while waiting elsewhere).
-        if (pLeader->IsMounted() && !me->GetVictim() && !staying)
+        // A moment after him, as a person who sees him mount (player pacing doc P5; HumanFollow
+        // MOUNT_*): before, every bot was up in the same tick he was.
+        uint32 const now = WorldTimer::getMSTime();
+        bool const wantMount = pLeader->IsMounted() && !me->GetVictim() && !staying;
+        if (wantMount == me->IsMounted())
+            m_mountSyncAtMs = 0;
+        else if (!m_mountSyncAtMs)
         {
-            if (!me->IsMounted())
+            using namespace Commander::HumanFollow;
+            m_mountSyncAtMs = now + (!wantMount ? urand(DISMOUNT_WITH_MIN_MS, DISMOUNT_WITH_MAX_MS) :
+                                     Leads(me, pLeader) ? urand(LEAD_MOUNT_MIN_MS, LEAD_MOUNT_MAX_MS) :
+                                     urand(MOUNT_WITH_MIN_MS, MOUNT_WITH_MAX_MS));
+        }
+        // (off at once for a fight, a victim or a stay)
+        bool const syncDue = m_mountSyncAtMs && int32(now - m_mountSyncAtMs) >= 0;
+        bool const offAtOnce = !wantMount && (me->GetVictim() || staying || Life::Errands::GroupFights(me));
+        if (wantMount)
+        {
+            if (!me->IsMounted() && syncDue)
             {
+                m_mountSyncAtMs = 0;
                 // Leave shapeshift before mounting.
                 if (me->IsInDisallowedMountForm() &&
                     me->GetDisplayId() != me->GetNativeDisplayId() &&
@@ -1525,8 +1542,11 @@ void PartyBotAI::UpdateAI(uint32 const diff)
                 }
             }
         }
-        else if (me->IsMounted())
+        else if (me->IsMounted() && (offAtOnce || syncDue))
+        {
+            m_mountSyncAtMs = 0;
             me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+        }
     }
 
     // (follow spot check: before the Commander hook) The stance takeover may have started in

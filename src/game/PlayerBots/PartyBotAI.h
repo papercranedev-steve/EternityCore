@@ -326,6 +326,8 @@ public:
     size_t m_followEventNext = 0;
     uint32 m_followIssues = 0;
     Commander::HumanFollow::IdleState m_humanIdle;
+    // Mounting / dismounting with the leader a moment after him (HumanFollow MOUNT_*): when, 0 = not due.
+    uint32 m_mountSyncAtMs = 0;
     // Waiting at its stay spot (HoldStay).
     Life::Pastimes::WaitAroundState m_waitAround;
     // Its body language towards the leader (Life/Pastimes/CompanionBody.h): answers to his

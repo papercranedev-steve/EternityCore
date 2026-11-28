@@ -28,6 +28,9 @@
  *
  * Passive again: a clear AutoClear started stops (a pull already under way is finished) and
  * the open question is dropped.
+ * He is away (his AFK flag, PlayerActivity; player pacing doc P2): the same, and nothing is
+ * asked (no popup he cannot answer, no timeout taken as "no"). Back: the stance goes on at
+ * once, without the MOVED_YD / RETRY_MS wait after a clear.
  *
  * Runs on the map thread from PartyCommander::Update, after ClearPlanner::Step.
  */
