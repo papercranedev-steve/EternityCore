@@ -86,6 +86,34 @@ namespace WorldModelBuilder
             return healer->ApplyTotalThreatModifier(heal * classMod, SPELL_SCHOOL_MASK_HOLY);
         }
 
+        // PartyMemberFacts::gearLevel.
+        float GearLevelOf(Player const* player)
+        {
+            float sum = 0.0f;
+            uint32 count = 0;
+            for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+            {
+                if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
+                    continue;
+                Item const* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+                ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+                if (!proto)
+                    continue;
+                float bonus = 0.0f;
+                switch (proto->Quality)
+                {
+                    case ITEM_QUALITY_POOR: bonus = -5.0f; break;
+                    case ITEM_QUALITY_NORMAL: bonus = -3.0f; break;
+                    case ITEM_QUALITY_UNCOMMON: bonus = 0.0f; break;
+                    case ITEM_QUALITY_RARE: bonus = 6.0f; break;
+                    default: bonus = 13.0f; break;      // epic and above
+                }
+                sum += std::max(1.0f, float(proto->ItemLevel) + bonus);
+                ++count;
+            }
+            return count ? sum / count : 0.0f;
+        }
+
         // An ability's reach (centre distance minus the target's bounding radius): COMBAT_RANGE
         // for combat range spells, else the DBC range with the caster's range talents
         // (CombatBotBaseAI::SpellMaxRange), at least `floor`.
@@ -2269,6 +2297,7 @@ namespace WorldModelBuilder
             FillPendingHit(member, f);
             FillPendingHeal(member, f);
             f.cap = RoleCapabilities::Assess(member);
+            f.gearLevel = GearLevelOf(member);
             FillDebuffs(member, f);
             FillAfflictions(member, f);
             FillPaladinBuffsOn(member, f);

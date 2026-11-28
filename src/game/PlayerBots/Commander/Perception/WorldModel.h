@@ -611,6 +611,11 @@ namespace Commander
         uint32 maxHealth = 0;
         uint32 level = 0;
         uint32 armor = 0;
+        // Players (bots too, not pets): average item level of what it wears, by quality
+        // (WorldModelBuilder GearLevelOf: poor -5, common -3, rare +6, epic +13 and above);
+        // shirt and tabard left out. Comparable between classes (GearFit scores are not).
+        // 0 = nothing worn.
+        float gearLevel = 0.0f;
         // Melee avoidance as the server rolls it (SpellCaster::RollMeleeOutcomeAgainst), before
         // the attacker's level (Value::MeleeAvoidance): dodge and parry percent (players: their
         // fields, parry only with CanParry and a weapon; creatures: 5 + auras) and the defense

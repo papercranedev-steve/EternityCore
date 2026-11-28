@@ -192,6 +192,15 @@ public:
     // A ground area spell (Blizzard, Rain of Fire) at the point x/y/z, as a player clicks the
     // ground: turns to it when standing, stops for a cast time or a channel.
     SpellCastResult DoCastSpellAt(float x, float y, float z, SpellEntry const* pSpellEntry);
+    // The last spell DoCastSpell / DoCastSpellAt cast (SPELL_CAST_OK), and how many so far:
+    // TeamBotAI's DPS pace sees what the rotation cast in a tick.
+    SpellEntry const* m_lastCastOk = nullptr;
+    uint32 m_castOkCount = 0;
+    void NoteCastOk(SpellEntry const* spell)
+    {
+        m_lastCastOk = spell;
+        ++m_castOkCount;
+    }
     // A spell on itself that goes the way it faces (Blink): stops, turns to `orientation` at
     // once (the server reads the caster's orientation when it picks the destination), casts.
     SpellCastResult DoCastFacing(float orientation, SpellEntry const* pSpellEntry);

@@ -328,6 +328,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Situation/RetreatPlanner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/CrisisAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Situation/DpsPace.h
+  ${COMMANDER_DIR}/Coordination/Situation/DpsPace.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.h
   ${COMMANDER_DIR}/Coordination/Situation/Crisis/RunAwayAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Situation/Hunt/HuntAssigner.h

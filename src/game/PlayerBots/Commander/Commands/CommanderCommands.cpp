@@ -629,16 +629,27 @@ namespace
         Map* map = player->GetMap();
         handler->PSendSysMessage("Damage meter: last %u fights of %.0f s and more%s.", uint32(Commander::DamageMeter::KEEP_FIGHTS),
             Commander::DamageMeter::MIN_FIGHT_SEC, d.fighting ? "" : " (no fight now)");
+        Commander::DpsPacePlan const& pace = commander->GetPlan().dpsPace;
         for (Commander::MemberDamage const& m : d.members)
         {
+            std::string paced;
+            for (Commander::BotPace const& p : pace.bots)
+                if (p.bot == m.guid)
+                {
+                    char buf[96];
+                    snprintf(buf, sizeof(buf), ", cap %.0f, pace %.2f", p.capDps, p.pace);
+                    paced = buf;
+                }
             if (d.fighting)
-                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area), now %u in %.0f s (%.0f dps)",
-                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f, m.currentDamage, d.currentSec,
-                    d.currentSec > 0.0f ? m.currentDamage / d.currentSec : 0.0f);
+                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area)%s, now %u in %.0f s (%.0f dps)",
+                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f, paced.c_str(), m.currentDamage,
+                    d.currentSec, d.currentSec > 0.0f ? m.currentDamage / d.currentSec : 0.0f);
             else
-                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area)",
-                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f);
+                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area)%s",
+                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f, paced.c_str());
         }
+        if (pace.full)
+            handler->PSendSysMessage("Pace: everyone at full now (%s).", pace.reason.c_str());
         return true;
     }
 

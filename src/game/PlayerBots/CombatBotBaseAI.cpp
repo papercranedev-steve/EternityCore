@@ -2977,7 +2977,10 @@ SpellCastResult CombatBotBaseAI::DoCastSpellAt(float x, float y, float z, SpellE
     if (me->IsMounted())
         me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
-    return me->CastSpell(x, y, z, pSpellEntry, false);
+    SpellCastResult const result = me->CastSpell(x, y, z, pSpellEntry, false);
+    if (result == SPELL_CAST_OK)
+        NoteCastOk(pSpellEntry);
+    return result;
 }
 
 SpellCastResult CombatBotBaseAI::DoCastFacing(float orientation, SpellEntry const* pSpellEntry)
@@ -3049,6 +3052,8 @@ SpellCastResult CombatBotBaseAI::DoCastSpell(Unit* pTarget, SpellEntry const* pS
 
     me->SetTargetGuid(pTarget->GetObjectGuid());
     auto result = me->CastSpell(pTarget, pSpellEntry, false);
+    if (result == SPELL_CAST_OK)
+        NoteCastOk(pSpellEntry);
 
     //printf("cast %s result %u\n", pSpellEntry->SpellName[0].c_str(), result);
 

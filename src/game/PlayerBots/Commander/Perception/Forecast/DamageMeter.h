@@ -40,6 +40,7 @@ namespace Commander
     struct DamageMeterFacts
     {
         std::vector<MemberDamage> members;
+        uint32 keptTotal = 0;       // fights kept since the start (+1 each: a new one is in)
         bool fighting = false;
         float currentSec = 0.0f;
         MemberDamage const* Find(ObjectGuid guid) const
@@ -79,6 +80,7 @@ namespace Commander
             Entry& Of(ObjectGuid guid);
         };
         bool m_active = false;
+        uint32 m_keptTotal = 0;
         Fight m_current;
         std::deque<Fight> m_kept;   // newest first
     };

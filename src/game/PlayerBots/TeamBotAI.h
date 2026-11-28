@@ -93,6 +93,8 @@ public:
     void OnDamageSeen(ObjectGuid attacker, ObjectGuid target, uint32 damage, uint32 spellId) override;
     bool m_damageRecorder = false;
     uint32 m_damageRecorderAtMs = 0;
+    // DPS pace (UpdateInCombatAI): the rotation rests until then, 0 = not resting.
+    uint32 m_paceRestUntilMs = 0;
     // (looted raw guid, slot) -> the votes so far (voter, RollVote).
     std::map<std::pair<uint64, uint32>, std::vector<std::pair<ObjectGuid, uint8>>> m_lootVotes;
 

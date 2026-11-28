@@ -1900,8 +1900,29 @@ void TeamBotAI::UpdateInCombatAI()
 {
     // (targets, taunts and crowd control: the Commander)
     // (dispels in combat: the Commander, DispelAssigner / DispelBehavior)
+    // DPS pace (Coordination/Situation/DpsPace.h): a damage dealer whose lead on the player is
+    // too big rests a moment after each damage cast of its rotation, its swings go on. The
+    // Commander's assigned and urgent actions (interrupts, rescues, intercepts) ran before this.
+    uint32 const now = WorldTimer::getMSTime();
+    if (m_paceRestUntilMs && int32(now - m_paceRestUntilMs) < 0)
+        return;
+    m_paceRestUntilMs = 0;
+    uint32 const castsBefore = m_castOkCount;
     if (ClassRotation* pRotation = Rotation())
         pRotation->UpdateInCombat();
+    if (m_castOkCount != castsBefore && m_lastCastOk && !m_lastCastOk->IsPositiveSpell())
+    {
+        float pace = 1.0f;
+        if (std::shared_ptr<Commander::PartyCommander> commander = sCommanderMgr.FindCommander(me))
+            pace = commander->GetPlan().dpsPace.PaceOf(me->GetObjectGuid());
+        if (pace < 1.0f)
+        {
+            float const busySec = std::max(Commander::Value::GCD_SEC, m_lastCastOk->GetCastTime(me) / 1000.0f);
+            uint32 const restMs = uint32(busySec * (1.0f / std::max(0.5f, pace) - 1.0f) * 1000.0f);
+            // (from the end of its cast or global cooldown)
+            m_paceRestUntilMs = (now + uint32(busySec * 1000.0f) + restMs) | 1;
+        }
+    }
 
     if (me->GetVictim())
         UseTrinketEffects();

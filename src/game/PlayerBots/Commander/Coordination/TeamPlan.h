@@ -1931,6 +1931,34 @@ namespace Commander
         std::string forecast;           // FightLoad::Describe
     };
 
+    // ---- DPS pace (Coordination/Situation/DpsPace.h, user 2026-11-28): damage dealer bots do
+    // not leave the player far behind on his damage meter.
+    struct BotPace
+    {
+        ObjectGuid bot;
+        float pace = 1.0f;          // 0.8..1: share of its full output (rest gaps, TeamBotAI)
+        float capDps = 0.0f;        // its cap at the last step (shown by `.partybot ai dps`)
+    };
+    struct DpsPacePlan
+    {
+        std::vector<BotPace> bots;  // set between fights; a bot not listed: 1
+        bool full = false;          // the floors hold now (a boss, a crisis, a save, a death): everyone at 1
+        uint32 seenKept = 0;        // DamageMeterFacts::keptTotal of the last step
+        bool wasFighting = false;
+        bool deathThisFight = false;
+        uint8 fullFightsLeft = 0;   // after a fight with a death: the next fight(s) at full
+        std::string reason;         // why `full` (or empty)
+        float PaceOf(ObjectGuid bot) const
+        {
+            if (full)
+                return 1.0f;
+            for (BotPace const& p : bots)
+                if (p.bot == bot)
+                    return p.pace;
+            return 1.0f;
+        }
+    };
+
     struct CrisisPlan
     {
         uint8 lost = 0;                 // CrisisLoss bits, 0 = no contingency
@@ -2121,6 +2149,7 @@ namespace Commander
         SummonPlan summon;
         RetreatPlan retreat;
         CrisisPlan crisis;
+        DpsPacePlan dpsPace;
         std::vector<EmergencyRole> emergencyRoles;  // kept until the fight is over (CrisisAssigner)
         WipePlan wipe;
         // Dead bots that use their self resurrection now, in the fight (SelfRiseAssigner;

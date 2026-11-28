@@ -56,6 +56,7 @@ namespace Commander
                 if (m_current.sec >= MIN_FIGHT_SEC)
                 {
                     m_kept.push_front(m_current);
+                    ++m_keptTotal;
                     if (m_kept.size() > KEEP_FIGHTS)
                         m_kept.pop_back();
                 }
@@ -66,6 +67,7 @@ namespace Commander
         DamageMeterFacts& out = world.damage;
         out = DamageMeterFacts();
         out.fighting = m_active;
+        out.keptTotal = m_keptTotal;
         out.currentSec = m_active ? m_current.sec : 0.0f;
         auto const member = [&out](ObjectGuid guid) -> MemberDamage&
         {
