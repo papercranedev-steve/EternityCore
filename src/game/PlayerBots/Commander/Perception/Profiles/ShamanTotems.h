@@ -6,8 +6,8 @@
  * One totem per element per shaman; the same totem from two shamans does not stack (the party
  * aura of the same spell), different ones do. Only the totems that help the party without
  * touching enemies: the ones that hit or pull them (Searing, Magma, Fire Nova, Stoneclaw,
- * Earthbind) would break a control, and the situational ones (Tremor, resistances, cleansing)
- * have no module yet.
+ * Earthbind) would break a control. Tremor is situational (TotemAssigner: an enemy that can
+ * fear, charm or sleep us); resistances and cleansing have no module yet.
  */
 
 #ifndef MANGOS_COMMANDER_SHAMAN_TOTEMS_H
@@ -31,7 +31,11 @@ namespace Commander
         GraceOfAir,         // air: agility (melee)
         TranquilAir,        // air: less threat (not for the tank: it is a party aura, the tank gets it too)
         Flametongue,        // fire: fire damage on melee weapons
+        Tremor,             // earth: every 4 s removes fear, charm and sleep within 30 yd (spell 8146)
     };
+
+    // What Tremor Totem removes (8146: MECHANIC_CHARM, MECHANIC_FEAR, MECHANIC_SLEEP), 1 << mechanic.
+    uint32 const TREMOR_MECHANICS = (1u << MECHANIC_CHARM) | (1u << MECHANIC_FEAR) | (1u << MECHANIC_SLEEP);
 
     namespace ShamanTotems
     {

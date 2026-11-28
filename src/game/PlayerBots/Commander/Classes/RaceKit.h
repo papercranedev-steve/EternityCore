@@ -28,6 +28,9 @@ namespace Commander
         // Stoneform also removes a poison, disease or bleed on itself: cast as soon as one is
         // on (StoneformBehavior, user 2026-11-15). Null = not a dwarf.
         SpellEntry const* Stoneform(TeamBotAI const& bot);
+        // Fear Ward (dwarf priest in 1.12, 30 s cooldown): the target is immune to the next fear
+        // for 10 min (one charge). Who gets it: FearWardAssigner (boss doc G8). Null = none.
+        SpellEntry const* FearWard(TeamBotAI const& bot);
     }
 }
 

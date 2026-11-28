@@ -188,9 +188,18 @@ namespace WorldModelBuilder
             f.damageTakenMult = unit->GetTotalAuraMultiplier(SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN);
             f.immunePhysical = unit->IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL);
             f.immuneMagic = unit->IsImmuneToDamage(SpellSchoolMask(SPELL_SCHOOL_MASK_MAGIC));
-            for (uint32 mechanic : { uint32(MECHANIC_SHIELD), uint32(MECHANIC_IMMUNE_SHIELD) })
+            for (uint32 mechanic : { uint32(MECHANIC_SHIELD), uint32(MECHANIC_IMMUNE_SHIELD), uint32(MECHANIC_FEAR),
+                                     uint32(MECHANIC_CHARM), uint32(MECHANIC_SLEEP) })
                 if (unit->IsImmuneToMechanic(Mechanics(mechanic)))
                     f.immuneMechanics |= 1u << mechanic;
+            // What holds it now, for the answers by mechanic (Tremor Totem: boss doc G8).
+            if (unit->HasAuraType(SPELL_AURA_MOD_FEAR))
+                f.controlMechanics |= 1u << MECHANIC_FEAR;
+            if (f.charmed)
+                f.controlMechanics |= 1u << MECHANIC_CHARM;
+            for (Aura const* aura : unit->GetAurasByType(SPELL_AURA_MOD_STUN))
+                if (aura->GetSpellProto()->GetEffectMechanic(aura->GetEffIndex()) == MECHANIC_SLEEP)
+                    f.controlMechanics |= 1u << MECHANIC_SLEEP;
             // Ally boosts (BoostAssigner): what is up already.
             f.manaBoosted = unit->HasAuraType(SPELL_AURA_MOD_POWER_REGEN_PERCENT);
             f.powerBoosted = unit->HasAura(SPELL_POWER_INFUSION) || unit->HasAura(SPELL_ARCANE_POWER);
@@ -716,6 +725,11 @@ namespace WorldModelBuilder
                     f.atHealthPct = ref.healthPct;
                     e.enrages.push_back(f);
                 }
+                // The controls it can put on us, by mechanic (boss doc G8: Tremor Totem).
+                for (CreatureSpellRef const& ref : profile->spells)
+                    if (std::shared_ptr<SpellProfile const> p = sProfileStore.GetSpell(ref.spellId))
+                        if (p->harmful)
+                            e.controlMechanics |= p->controlMechanics;
             }
             e.silenced = creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SILENCED);
             e.maxMana = creature->GetMaxPower(POWER_MANA);
@@ -2105,6 +2119,8 @@ namespace WorldModelBuilder
                         FillPaladinBuffs(ai, f);
                         FillCurses(ai, f);
                         FillTotems(ai, f);
+                        if (SpellEntry const* ward = RaceKit::FearWard(*ai))
+                            f.fearWardSpellId = ward->Id;
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillFillerPower(ai, f);
                         if (SpellEntry const* filler = ai->Kit().Filler())

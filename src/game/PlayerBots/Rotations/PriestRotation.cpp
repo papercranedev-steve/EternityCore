@@ -2,7 +2,8 @@
  * Priest rotation (moved out of PartyBotAI.cpp 2026-11-14).
  *
  * Out of combat: Fortitude (Inner Focus first when it is Prayer of Fortitude, so it costs no
- * mana), Divine Spirit, Shadow Protection (single or prayer), Inner Fire, the heal step
+ * mana), Divine Spirit, Shadow Protection (single or prayer), Inner Fire, Fear Ward on the
+ * member the brain names (FearWardAssigner, dwarves; in a fight FearWardBehavior), the heal step
  * (heals the team: Commander RestTopUp); with a victim (an opener): the combat steps.
  *
  * In combat:
@@ -33,9 +34,12 @@
  */
 
 #include "Rotations/ClassRotation.h"
+#include "Commander/CommanderMgr.h"
+#include "Commander/PartyCommander.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "TeamBotAI.h"
 #include "Player.h"
+#include "SpellMgr.h"
 
 namespace
 {
@@ -55,7 +59,7 @@ namespace
             if (PartyBuff(s.pPowerWordFortitude, s.pPrayerofFortitude, s.pInnerFocus) ||
                 PartyBuff(s.pDivineSpirit, s.pPrayerofSpirit) ||
                 PartyBuff(s.pShadowProtection, s.pPrayerofShadowProtection) ||
-                Buff(me, s.pInnerFire))
+                Buff(me, s.pInnerFire) || KeepFearWard())
                 return;
 
             EndBuffing(s.pPowerWordFortitude);
@@ -90,6 +94,25 @@ namespace
         }
 
     private:
+        // Fear Ward on the member the brain names (FearWardAssigner: the main tank between
+        // fights), like a buff. In a fight: FearWardBehavior.
+        bool KeepFearWard()
+        {
+            Player* me = m_bot.me;
+            std::shared_ptr<Commander::PartyCommander> const commander = sCommanderMgr.FindCommander(me);
+            if (!commander)
+                return false;
+            Commander::FearWardDuty const* duty = commander->GetPlan().fearWards.For(me->GetObjectGuid());
+            if (!duty)
+                return false;
+            Unit* target = me->GetMap()->GetUnit(duty->target);
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(duty->spellId);
+            if (!target || !spell || !target->IsAlive() || target->IsImmuneToMechanic(MECHANIC_FEAR) ||
+                (target != me && !me->IsWithinLOSInMap(target)))
+                return false;
+            return Buff(target, spell);
+        }
+
         // pFreeCast (Inner Focus): cast first when the group version is chosen, so the prayer
         // costs no mana (user, 2026-11-15). The prayer follows on the next update.
         bool PartyBuff(SpellEntry const* pSingle, SpellEntry const* pGroup, SpellEntry const* pFreeCast = nullptr)

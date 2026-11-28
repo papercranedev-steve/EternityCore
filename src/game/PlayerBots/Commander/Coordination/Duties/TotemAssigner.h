@@ -6,7 +6,10 @@
  *
  * Per element, the list Order() gives for the party (players, not pets):
  *   water  Mana Spring when someone uses mana, then Healing Stream
- *   earth  Strength of Earth with melee (tank or melee damage), else Stoneskin first
+ *   earth  Tremor first when an enemy in the fight can fear, charm or sleep us, or a member is
+ *          held so now (boss doc G8: every 4 s it removes them within 30 yd; the other
+ *          earth totem goes to the next shaman); then Strength of Earth with melee (tank or
+ *          melee damage), else Stoneskin first
  *   air    Windfury, then Grace of Air with melee; without melee Tranquil Air
  *   fire   Flametongue with melee; else none
  * Each shaman bot (guid order) takes the first kind of each list it knows that no shaman bot
@@ -34,6 +37,9 @@ namespace Commander
         {
             uint32 melee = 0;       // tanks and melee damage dealers
             uint32 manaUsers = 0;
+            // An enemy in the fight can fear, charm or sleep us (EnemyFacts::controlMechanics),
+            // or a member is held so now (PartyMemberFacts::controlMechanics).
+            bool controlThreat = false;
         };
 
         // The element's totems, most wanted first (header).

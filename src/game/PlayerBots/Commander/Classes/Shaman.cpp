@@ -39,7 +39,8 @@ namespace Commander
             {
                 auto const& s = m_bot.m_spells.shaman;
                 return { s.pManaSpringTotem, s.pHealingStreamTotem, s.pStrengthOfEarthTotem, s.pStoneskinTotem,
-                         s.pWindfuryTotem, s.pGraceOfAirTotem, s.pTranquilAirTotem, s.pFlametongueTotem };
+                         s.pWindfuryTotem, s.pGraceOfAirTotem, s.pTranquilAirTotem, s.pFlametongueTotem,
+                         s.pTremorTotem };
             }
 
             // Mana Tide Totem (talent, 5 min): every party member within 20 yd gets mana 4 times in

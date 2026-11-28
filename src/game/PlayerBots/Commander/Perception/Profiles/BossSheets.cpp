@@ -156,6 +156,30 @@ namespace BossSheets
                 { 9033, {
                     Row(15572, VICTIM, 5000, 10000, 5000, 15000),       // Sunder Armor
                 } },
+
+                // Fears of C++ bosses (boss doc G8: Fear Ward, Tremor Totem, Berserker Rage
+                // before it), only those rows so far.
+                // High Interrogator Gerstahn (boss_high_interrogator_gerstahn.cpp).
+                { 9018, {
+                    Row(13704, SELF, 32000, 32000, 30000, 30000),       // Psychic Scream, area fear
+                } },
+                // High Inquisitor Fairbanks (boss_high_inquisitor_fairbanks.cpp).
+                { 4542, {
+                    Row(12096, NOT_TOP, 40000, 40000, 40000, 40000),    // Fear
+                    Row(8399, VICTIM, 30000, 30000, 30000, 30000),      // Sleep
+                } },
+                // Lady Illucia Barov (boss_illucia_barov.cpp).
+                { 10502, {
+                    Row(6215, VICTIM, 30000, 30000, 30000, 30000),      // Fear
+                } },
+                // Ras Frostwhisper (boss_ras_frostwhisper.cpp): cast on his victim, an area around him.
+                { 10508, {
+                    Row(26070, SELF, 45000, 45000, 30000, 30000),       // Fear, area
+                } },
+                // Captain Kromcrush (instance_dire_maul.cpp boss_kromcrush).
+                { 14325, {
+                    Row(19134, SELF, 10000, 10000, 30000, 35000),       // Intimidating Shout, area fear
+                } },
             };
         }
 

@@ -473,6 +473,7 @@ public:
             SpellEntry const* pGraceOfAirTotem;
             SpellEntry const* pTranquilAirTotem;
             SpellEntry const* pFlametongueTotem;
+            SpellEntry const* pTremorTotem;     // earth, when an enemy can fear, charm or sleep us (boss doc G8)
             SpellEntry const* pManaTideTotem;
             SpellEntry const* pWeaponBuff;
             SpellEntry const* pNaturesSwiftness;

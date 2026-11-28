@@ -650,6 +650,10 @@ namespace Commander
         ObjectGuid charmer;         // who controls it (charmed)
         uint32 charmLeftMs = 0;     // the charm aura's time left (0 = unknown / permanent)
         bool silenced = false;      // can still melee, cannot cast
+        // Every member: what holds it now as 1 << mechanic, for the answers by mechanic
+        // (MECHANIC_FEAR: a fear aura, MECHANIC_CHARM: charmed, MECHANIC_SLEEP; TotemAssigner's
+        // Tremor Totem). Boss doc G8.
+        uint32 controlMechanics = 0;
         // Set up to tank right now: warrior in Defensive Stance, druid in (Dire) Bear Form,
         // paladin with Righteous Fury. A state, not who the tanks are (that is `role`, Tanks.h).
         bool tankStance = false;
@@ -673,6 +677,8 @@ namespace Commander
         std::vector<CurseAbility> curseSpells;
         // Shaman bots: the party totems it knows (kind = TotemKind; TotemAssigner).
         std::vector<TotemAbility> totemSpells;
+        // Dwarf priest bots: Fear Ward (RaceKit::FearWard; FearWardAssigner), 0 = none.
+        uint32 fearWardSpellId = 0;
         // Every member (players, not pets): paladin blessings on it. Paladins: the party aura it
         // keeps up itself (PaladinAuraKind, 0 = none): a player paladin's is left to it.
         std::vector<BlessingOnFacts> blessingsOn;
@@ -686,7 +692,8 @@ namespace Commander
         // Every member (team rescue): absorbs still up (school absorb auras; Mana Shield as far
         // as the mana lasts), damage taken factor of its auras (Shield Wall 0.25), immunities,
         // and mechanics it is immune to as 1 << mechanic (Weakened Soul: MECHANIC_SHIELD,
-        // Forbearance: MECHANIC_IMMUNE_SHIELD).
+        // Forbearance: MECHANIC_IMMUNE_SHIELD; Fear Ward, Berserker Rage, Will of the
+        // Forsaken: MECHANIC_FEAR and the others an enemy control can have, boss doc G8).
         float absorb = 0.0f;
         float damageTakenMult = 1.0f;
         bool immunePhysical = false;
@@ -927,6 +934,9 @@ namespace Commander
         // Herod's Whirlwind): HazardZones' Pulse zones exist while theirs is up.
         std::vector<uint32> periodicAuras;
         std::vector<EnrageFacts> enrages;   // low health melee boosts still to come (EventAI, ability sheets)
+        // The controls its spells (any source of its profile) can put on us, as 1 << mechanic
+        // (SpellProfile::controlMechanics): Tremor Totem for a fear, charm or sleep (boss doc G8).
+        uint32 controlMechanics = 0;
         Position3 pos;
         // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
         float boundingRadius = 0.0f;

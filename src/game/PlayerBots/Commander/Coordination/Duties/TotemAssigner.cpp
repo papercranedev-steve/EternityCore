@@ -27,6 +27,10 @@ namespace Commander
                     return { TotemKind::ManaSpring, TotemKind::HealingStream };
                 return { TotemKind::HealingStream, TotemKind::ManaSpring };
             case TOTEM_SLOT_EARTH:
+                if (mix.controlThreat && melee)
+                    return { TotemKind::Tremor, TotemKind::StrengthOfEarth, TotemKind::Stoneskin };
+                if (mix.controlThreat)
+                    return { TotemKind::Tremor, TotemKind::Stoneskin, TotemKind::StrengthOfEarth };
                 if (melee)
                     return { TotemKind::StrengthOfEarth, TotemKind::Stoneskin };
                 return { TotemKind::Stoneskin, TotemKind::StrengthOfEarth };
@@ -60,7 +64,12 @@ namespace Commander
                 ++mix.manaUsers;
             if (m.isBot && !m.totemSpells.empty())
                 shamans.push_back(&m);
+            if (m.controlMechanics & TREMOR_MECHANICS)
+                mix.controlThreat = true;
         }
+        for (EnemyFacts const& e : world.enemies)
+            if (e.controlMechanics & TREMOR_MECHANICS)
+                mix.controlThreat = true;
         std::stable_sort(shamans.begin(), shamans.end(), [](PartyMemberFacts const* a, PartyMemberFacts const* b)
             { return a->guid.GetRawValue() < b->guid.GetRawValue(); });
 

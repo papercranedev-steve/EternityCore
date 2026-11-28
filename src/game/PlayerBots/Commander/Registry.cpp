@@ -36,6 +36,8 @@
 #include "Commander/Coordination/Duties/ResurrectAssigner.h"
 #include "Commander/Behaviors/Combat/MitigationBehavior.h"
 #include "Commander/Behaviors/Combat/StoneformBehavior.h"
+#include "Commander/Behaviors/Combat/FearBreakAheadBehavior.h"
+#include "Commander/Behaviors/Support/FearWardBehavior.h"
 #include "Commander/Behaviors/Combat/RenewSurvivalBehavior.h"
 #include "Commander/Behaviors/Combat/CurseBehavior.h"
 #include "Commander/Coordination/Duties/CurseAssigner.h"
@@ -43,6 +45,7 @@
 #include "Commander/Coordination/Duties/BoostAssigner.h"
 #include "Commander/Coordination/Duties/BlessingAssigner.h"
 #include "Commander/Coordination/Duties/TotemAssigner.h"
+#include "Commander/Coordination/Duties/FearWardAssigner.h"
 #include "Commander/Coordination/Duties/JudgementAssigner.h"
 #include "Commander/Encounters/EncounterBehavior.h"
 #include "Commander/Coordination/Duties/CrowdControlAssigner.h"
@@ -83,6 +86,8 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RescueBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RenewSurvivalBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<StoneformBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FearBreakAheadBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FearWardBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<FleeStopBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BurstBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<BoostBehavior>()));
@@ -139,6 +144,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<ResurrectAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<BlessingAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TotemAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FearWardAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<JudgementAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CurseAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<SoulstoneAssigner>()));

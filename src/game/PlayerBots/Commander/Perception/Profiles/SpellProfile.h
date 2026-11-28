@@ -9,6 +9,7 @@
 
 #include "Common.h"
 #include "Commander/Perception/Profiles/SpellTags.h"
+#include "SharedDefines.h"
 #include <string>
 
 class SpellEntry;
@@ -44,6 +45,8 @@ namespace Commander
         bool harmful = false;           // negative for the target
         bool controls = false;          // fear, stun, charm, sleep, silence, ... on the target (not on the caster)
         bool breaksOnDamage = false;    // AURA_INTERRUPT_DAMAGE_CANCELS: sleep / sap style, the next hit ends it
+        uint32 controlMechanics = 0;    // SpellTags::ControlMechanics (1 << Mechanics)
+        bool Fears() const { return (controlMechanics & (1u << MECHANIC_FEAR)) != 0; }
         uint8 school = 0;               // spell_template.School (SpellSchools), what an interrupt locks
         uint8 dispel = 0;               // DispelType: 1 magic, 2 curse, 3 disease, 4 poison
         bool hasOverride = false;

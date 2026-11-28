@@ -44,6 +44,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "SharedDefines.h"
 #include <limits>
 #include <vector>
 
@@ -92,6 +93,10 @@ namespace IncomingTimeline
         float endSec = 0.0f;
         uint32 spellId = 0;
         ObjectGuid source;
+        // SpellProfile::controlMechanics, without those the member is immune to
+        // (PartyMemberFacts::immuneMechanics: Fear Ward, Berserker Rage): none left, no lockout.
+        uint32 mechanics = 0;
+        bool Fear() const { return (mechanics & (1u << MECHANIC_FEAR)) != 0; }
     };
 
     struct Timeline

@@ -57,6 +57,31 @@ namespace SpellTags
         }
     }
 
+    uint32 ControlMechanics(SpellEntry const* spell)
+    {
+        uint32 mask = 0;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (!IsControlEffect(spell, i))
+                continue;
+            switch (spell->EffectApplyAuraName[i])
+            {
+                case SPELL_AURA_MOD_FEAR:
+                    mask |= 1u << MECHANIC_FEAR;
+                    break;
+                case SPELL_AURA_MOD_CHARM:
+                case SPELL_AURA_MOD_POSSESS:
+                    mask |= 1u << MECHANIC_CHARM;
+                    break;
+                default:
+                    if (uint32 const mechanic = spell->GetEffectMechanic(SpellEffectIndex(i)))
+                        mask |= 1u << mechanic;
+                    break;
+            }
+        }
+        return mask;
+    }
+
     bool DealsDamage(SpellEntry const* spell)
     {
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)

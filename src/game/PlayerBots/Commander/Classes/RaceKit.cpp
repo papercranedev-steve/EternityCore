@@ -11,6 +11,7 @@ namespace Commander
         uint32 const BLOOD_FURY = 20572;
         uint32 const STONEFORM = 20594;
         uint32 const WILL_OF_THE_FORSAKEN = 7744;
+        uint32 const FEAR_WARD = 6346;
 
         SpellEntry const* Known(TeamBotAI const& bot, uint32 spellId)
         {
@@ -53,6 +54,11 @@ namespace Commander
     SpellEntry const* RaceKit::Stoneform(TeamBotAI const& bot)
     {
         return Known(bot, STONEFORM);
+    }
+
+    SpellEntry const* RaceKit::FearWard(TeamBotAI const& bot)
+    {
+        return Known(bot, FEAR_WARD);
     }
 
     std::vector<SurvivalSpell> RaceKit::Survival(TeamBotAI const& bot)

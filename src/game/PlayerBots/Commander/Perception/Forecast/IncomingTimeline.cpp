@@ -345,9 +345,15 @@ namespace IncomingTimeline
         }
 
         // A control spell sure to reach the member, landing at `landSec` (header: Lockout).
-        void AddLockout(Timeline& t, EnemyFacts const& e, SpellEntry const* spell, SpellProfile const& p, float landSec)
+        void AddLockout(Timeline& t, EnemyFacts const& e, PartyMemberFacts const& m, SpellEntry const* spell,
+                        SpellProfile const& p, float landSec)
         {
             if (!p.controls || landSec >= HORIZON_SEC)
+                return;
+            // Immune to every mechanic it has (Fear Ward on a fear): no lockout. A control
+            // without a known mechanic stays.
+            uint32 const mechanics = p.controlMechanics & ~m.immuneMechanics;
+            if (p.controlMechanics && !mechanics)
                 return;
             float sec = SpellProfiles::Estimate(spell, e.level, e.meleeHit).controlSec;
             if (sec <= 0.0f)
@@ -359,6 +365,7 @@ namespace IncomingTimeline
             l.endSec = landSec + sec;
             l.spellId = spell->Id;
             l.source = e.guid;
+            l.mechanics = mechanics;
             auto const at = std::upper_bound(t.lockouts.begin(), t.lockouts.end(), l,
                                              [](Lockout const& a, Lockout const& b) { return a.startSec < b.startSec; });
             t.lockouts.insert(at, l);
@@ -394,7 +401,7 @@ namespace IncomingTimeline
             float const duration = p->durationMs / 1000.0f;
             float const landSec = leftSec + FlightSec(spell, e, m.pos);
             AddSpellHits(t, e, e.castingSpellId, s, landSec, duration, 1.0f);
-            AddLockout(t, e, spell, *p, landSec);
+            AddLockout(t, e, m, spell, *p, landSec);
         }
 
         // creature_spells rows (CreatureAI::DoSpellsListCasts) over the horizon. Every row
@@ -469,7 +476,7 @@ namespace IncomingTimeline
                             t.events[i].expected *= chance;
                         // Sure to reach it and sure to be cast: a lockout.
                         if (r.share >= 1.0f && r.f->probability >= 100)
-                            AddLockout(t, e, r.spell, *r.profile, landSec);
+                            AddLockout(t, e, m, r.spell, *r.profile, landSec);
                     }
                     uint32 const repeat = (r.f->repeatMinMs + r.f->repeatMaxMs) / 2;
                     r.readyMs = r.f->once ? HORIZON_MS :

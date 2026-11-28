@@ -37,6 +37,11 @@ namespace Commander
         // cannot attack or cast (fear, confuse / polymorph, stun / sleep / sap / shackle /
         // banish, charm). Silence and pacify are left out: the target still fights.
         bool IsDisableEffect(SpellEntry const* spell, uint32 i);
+        // Mechanics of the spell's control effects, 1 << Mechanics: the effect's mechanic or
+        // the spell's, a fear aura always MECHANIC_FEAR, a charm / possess MECHANIC_CHARM
+        // (sleep: MECHANIC_SLEEP from the data). What a mechanic removal or immunity answers
+        // (Tremor Totem: charm, fear, sleep; Fear Ward: fear). Boss doc G8.
+        uint32 ControlMechanics(SpellEntry const* spell);
 
         // Some effect deals damage (direct, weapon, periodic, a ground area like Blizzard /
         // Consecration): wakes a target under a control that breaks on damage.

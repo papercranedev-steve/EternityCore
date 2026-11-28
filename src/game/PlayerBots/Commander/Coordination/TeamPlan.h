@@ -1764,6 +1764,32 @@ namespace Commander
         }
     };
 
+    // Fear Ward: whom each dwarf priest bot wards (FearWardAssigner.h, boss doc G8). Out of a
+    // fight the rotation keeps it on the target; in a fight FearWardBehavior casts it when the
+    // points pay for the global cooldown.
+    struct FearWardDuty
+    {
+        ObjectGuid bot;
+        ObjectGuid target;
+        uint32 spellId = 0;
+        float points = 0.0f;    // the fears it would stop in the coming seconds; 0 = only kept up
+        float atSec = 0.0f;     // the first of them lands in
+        uint32 fearSpellId = 0;
+    };
+
+    struct FearWardPlan
+    {
+        std::vector<FearWardDuty> duties;
+
+        FearWardDuty const* For(ObjectGuid bot) const
+        {
+            for (FearWardDuty const& d : duties)
+                if (d.bot == bot)
+                    return &d;
+            return nullptr;
+        }
+    };
+
     // Warlock damage curses: which one each warlock bot keeps on its victim (CurseAssigner.h).
     // CurseBehavior casts it when CurseValue says it pays.
     struct CurseDuty
@@ -1992,6 +2018,7 @@ namespace Commander
         HealerDamagePlan healerDamage;  // HealerDamageAssigner, every refresh
         BlessingPlan blessings;
         TotemPlan totems;
+        FearWardPlan fearWards;
         JudgementPlan judgements;
         CursePlan curses;
         SoulstonePlan soulstones;

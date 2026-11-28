@@ -33,6 +33,8 @@ namespace ShamanTotems
             return TotemKind::TranquilAir;
         if (Has(spell, "Flametongue Totem"))
             return TotemKind::Flametongue;
+        if (Has(spell, "Tremor Totem"))
+            return TotemKind::Tremor;
         return TotemKind::None;
     }
 
@@ -45,6 +47,7 @@ namespace ShamanTotems
                 return TOTEM_SLOT_WATER;
             case TotemKind::StrengthOfEarth:
             case TotemKind::Stoneskin:
+            case TotemKind::Tremor:
                 return TOTEM_SLOT_EARTH;
             case TotemKind::Windfury:
             case TotemKind::GraceOfAir:

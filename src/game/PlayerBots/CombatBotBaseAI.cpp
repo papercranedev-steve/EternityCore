@@ -490,8 +490,13 @@ void CombatBotBaseAI::PopulateSpellData()
                 }
                 // Party totems the brain chooses from (TotemAssigner). Not learned here any more
                 // (2026-11-15, the random pick is gone): Earthbind, Stoneclaw, Fire Nova, Magma,
-                // Searing (they hit or pull enemies: a control breaks), Tremor, the resistance
-                // and cleansing totems, Windwall (situational, no module yet).
+                // Searing (they hit or pull enemies: a control breaks), the resistance and
+                // cleansing totems, Windwall (situational, no module yet).
+                else if (pSpellEntry->SpellName[0].find("Tremor Totem") != std::string::npos)
+                {
+                    if (IsHigherRankSpell(m_spells.shaman.pTremorTotem))
+                        m_spells.shaman.pTremorTotem = pSpellEntry;
+                }
                 else if (pSpellEntry->SpellName[0].find("Grace of Air Totem") != std::string::npos)
                 {
                     if (IsHigherRankSpell(m_spells.shaman.pGraceOfAirTotem))
