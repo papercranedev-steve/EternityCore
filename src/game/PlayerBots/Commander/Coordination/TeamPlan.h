@@ -2258,6 +2258,9 @@ namespace Commander
         }
         // The same for an area spell, a melee splash or a chained hit: the doctrine's area pile
         // lets them wake a bot's control (STAMP_AREA_MAY_WAKE).
+        // The tank need not hold it (STAMP_NO_HOLD): an area spell treats it as free
+        // (AreaValue::Request::noHold).
+        bool AreaFodder(EnemyFacts const& e) const { return doctrine.Has(e.guid, STAMP_NO_HOLD); }
         bool AreaKeepsUnbroken(EnemyFacts const& e) const
         {
             return KeepsUnbroken(e) && !doctrine.Has(e.guid, STAMP_AREA_MAY_WAKE);

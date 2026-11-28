@@ -108,6 +108,7 @@ namespace Commander
             if (plan.fightSpot.moving)
                 r.turn.busyTanks.push_back(plan.fightSpot.tank);
             r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
+            r.noHold = [&plan](EnemyFacts const& e) { return plan.AreaFodder(e); };
             out = AreaValue::Evaluate(world, r);
             return out.valid;
         }

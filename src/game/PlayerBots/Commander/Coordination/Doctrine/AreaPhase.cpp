@@ -39,6 +39,12 @@ namespace Commander
                    (pull.awaitArrival || pull.packComing || pull.losBreak == PullLosBreak::Active);
         }
 
+        // AreaValue::Request::noHold from the doctrine (TeamPlan::AreaFodder).
+        std::function<bool(EnemyFacts const&)> NoHoldOf(TeamPlan const& plan)
+        {
+            return [&plan](EnemyFacts const& e) { return plan.AreaFodder(e); };
+        }
+
         std::vector<ObjectGuid> AllTanks(WorldModel const& world)
         {
             std::vector<ObjectGuid> out;
@@ -259,6 +265,7 @@ namespace Commander
                 r.from = m->pos;
                 r.settle = false;
                 r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
+                r.noHold = NoHoldOf(plan);
 
                 // Its spot (a ground channel).
                 if (spell->onTarget && spell->channel)
@@ -509,6 +516,7 @@ namespace Commander
                     c.request.centre = e ? e->pos : m.pos;
                     c.request.turn.busyTanks = busy;
                     c.request.forbidden = forbidden;
+                    c.request.noHold = NoHoldOf(plan);
                     c.request.others = planned.damage;
                     c.centre = e ? e->guid : ObjectGuid();
                     if (e && ground)
@@ -668,6 +676,7 @@ namespace Commander
             r.paid = true;
             r.turn.busyTanks = busy;
             r.forbidden = forbidden;
+            r.noHold = NoHoldOf(plan);
             r.others = planned.damage;
             AreaValue::Result const v = AreaValue::Evaluate(world, r);
             AreaCast c;

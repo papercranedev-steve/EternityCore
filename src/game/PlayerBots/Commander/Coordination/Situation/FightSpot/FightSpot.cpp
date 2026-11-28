@@ -123,6 +123,7 @@ namespace FightSpot
                 r.ticks = m.areaChannel.ticksLeft;
                 r.paid = true;
                 r.forbidden = [&plan](EnemyFacts const& e) { return plan.AreaKeepsUnbroken(e); };
+                r.noHold = [&plan](EnemyFacts const& e) { return plan.AreaFodder(e); };
                 AreaValue::Result const v = AreaValue::Evaluate(world, r);
                 ch.hereNet = v.valid ? std::max(0.0f, v.net) : 0.0f;
                 float const radius = spell->radius;

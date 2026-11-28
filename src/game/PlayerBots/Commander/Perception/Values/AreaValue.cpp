@@ -164,7 +164,7 @@ namespace AreaValue
                 continue;
             Target t;
             t.facts = &e;
-            t.free = e.victim.IsEmpty() || e.victim == self.guid;
+            t.free = e.victim.IsEmpty() || e.victim == self.guid || (r.noHold && r.noHold(e));
             if (!t.free)
             {
                 // The tank has not built threat on a new enemy yet.
@@ -202,10 +202,15 @@ namespace AreaValue
         PartyMemberFacts const* tank = Tanks::Main(world);
         if (tank && tank->guid != self.guid)
         {
+            bool anyOnMe = false;
             for (Target const& t : targets)
             {
                 EnemyFacts const& e = *t.facts;
                 if (e.victim != self.guid)
+                    continue;
+                anyOnMe = true;
+                // Fodder stays on it whatever the spell does (header "Fodder").
+                if (r.noHold && r.noHold(e))
                     continue;
                 OnCaster c;
                 c.facts = &e;
@@ -218,10 +223,16 @@ namespace AreaValue
                 c.extraDps = std::max(0.0f, Value::HitDps(e, self) - Value::HitDps(e, *tank));
                 onCaster.push_back(c);
             }
-            if (!r.paid && !onCaster.empty())
+            if (!r.paid && anyOnMe)
             {
                 float const busySec = std::max(Value::GCD_SEC, float(count) * spell.periodSec);
-                if (SurvivalValue::Of(world, self).ttd < SurvivalValue::DANGER_SEC + busySec)
+                SurvivalValue::Danger const danger = SurvivalValue::Of(world, self);
+                // The shield put up first takes hits before its health (Request::turn.extraAbsorb).
+                float const ttd = r.turn.extraAbsorb > 0.0f
+                    ? danger.timeline.TimeToLose(float(self.health) + self.absorb + r.turn.extraAbsorb, false,
+                                                 danger.Healers())
+                    : danger.ttd;
+                if (ttd < SurvivalValue::DANGER_SEC + busySec)
                 {
                     out.invalid = "the caster is in danger under the enemies on it";
                     return out;

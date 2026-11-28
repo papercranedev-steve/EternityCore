@@ -45,6 +45,11 @@
  * the shield put up first) do not take whole cuts the channel's end (Spell::DelayedChannel).
  * The share of the n ticks lost x (benefit - time cost) is added to the turn loss. This is
  * what Ice Barrier keeps ("While the shield holds, spells will not be interrupted").
+ * Fodder (Request::noHold, user 2026-11-28, rivendare-20261128-230646: Arcane Explosion on six
+ * Mindless Skeletons was refused all fight as "a new enemy, the tank has no threat on it yet";
+ * the tank never takes them): such an enemy is free whoever it hits, it does not stop the
+ * spell while new, turns nothing and is not "kept on the caster". The danger rule below still
+ * counts it, with the shield put up first (turn.extraAbsorb) on the caster's health.
  * Others (2026-11-15, several casters in one phase): the damage per second other area spells of
  * the phase put on an enemy is taken off its health first, tick by tick (the worst case for
  * this spell): what this one does to it and the tick that kills it come sooner.
@@ -99,6 +104,9 @@ namespace Commander
             bool settle = true;             // false: a new enemy does not stop it (what a control gives up over its duration)
             AggroTurnCost::Options turn;    // extraAbsorb (a shield first), busyTanks
             std::function<bool(EnemyFacts const&)> forbidden;
+            // The tank need not hold it (the brain's doctrine NO_HOLD: fodder, a trap swarm;
+            // header "Fodder"): free, no settle wait, no turn, not kept on the caster.
+            std::function<bool(EnemyFacts const&)> noHold;
             // Other area spells of the phase on the same enemies (AreaPhase: the casters planned
             // before this one): damage per second each enemy takes from them. This spell only
             // counts what they leave of its health (header "Others").
