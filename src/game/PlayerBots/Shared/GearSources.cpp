@@ -64,6 +64,11 @@ namespace GearSources
         {
             switch (itemId)
             {
+                case 18706:     // Arena Master (trinket, Short John Mithril's chest)
+                case 18709:     // Arena Wristguards
+                case 18710:     // Arena Bracers
+                case 18711:     // Arena Bands
+                case 18712:     // Arena Vambraces
                 case 19024:     // Arena Grand Master (Gurubashi Arena chest quest)
                     return true;
                 default:
