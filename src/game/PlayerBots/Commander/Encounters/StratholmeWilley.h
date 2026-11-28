@@ -3,8 +3,8 @@
  *
  * Script (boss_cannon_master_willey.cpp): while Willey fights, he summons 3 Crimson Riflemen
  * every 10 s with no cap; the player shoots them with the Scarlet cannon. It is one unbroken
- * fight, so nobody sits down until he is dead (WavePace::Continuous; the mana budget keeps for
- * the whole fight, not one wave).
+ * fight, so nobody sits down until he is dead (WavePace::Continuous). The budget keeps one more
+ * average fight of mana on top of the enemies in sight (wavesLeft 1: the riflemen have no end).
  *
  * Match: map 329 and Willey (10997) or a Crimson Rifleman (11054) among the enemies.
  *

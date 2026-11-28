@@ -93,14 +93,18 @@ namespace Commander
         WaveEventFacts const& waves = world.waves;
         if (!waves.active || waves.pace != WavePace::Player || !waves.wavesLeft)
             return;
-        if (fighting || waves.wavesArrived != m_waveGap)
+        if (fighting)
         {
-            // A wave on, or a new one came: the next gap starts over.
-            m_waveGap = waves.wavesArrived;
+            m_waveFought = true;
+            return;
+        }
+        if (m_waveFought)
+        {
+            // A wave was fought: a new gap, its lines may be said again.
+            m_waveFought = false;
+            ++m_waveGap;
             m_waveDrank = false;
             m_waveReadySaid = false;
-            if (fighting)
-                return;
         }
         // Drinking: each bot says it once per gap (as while a pull waits, voice.pull.wait.mana).
         bool resting = false;

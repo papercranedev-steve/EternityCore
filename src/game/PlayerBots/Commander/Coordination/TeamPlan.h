@@ -2088,11 +2088,11 @@ namespace Commander
         AreaPlan area;
         DoctrinePlan doctrine;
         // The active boss module forbids eating and drinking (IEncounter::ForbidsRest), or the
-        // next wave of an event is about to arrive (WaveEvent::RestRuleOf StandUp): sitting
+        // next wave of an event is about to arrive (WaveRest::Of: StandUp): sitting
         // bots stand up too (TeamBotAI::EndRestWhenDone). Written by PartyCommander every
         // refresh. Read through ForbidsRest.
         bool noRest = false;
-        // The next wave comes too soon for a new drink to pay (WaveEvent::RestRuleOf NoNew):
+        // The next wave comes too soon for a new drink to pay (WaveRest::Of: NoNew):
         // nobody sits down, those sitting go on. Read through ForbidsNewRest.
         bool noNewRest = false;
         std::vector<std::string> notes;     // debug data for the note log, flushed by PartyCommander

@@ -12,17 +12,18 @@
  * schedule (WorldModel::waves) so the mana budget counts the waves still to come and bots drink
  * in the gaps (Coordination/Situation/WaveRest.h), and a start note / voice line.
  *
- * Match: map 129 and Belnistrasz (8516) channelling Idol Shutdown, or a wave creature summoned,
- *   until the ritual ends (the aura gone and no wave creature left).
+ * Match: map 129 and a summoned wave creature among the enemies (Matches sees only enemies, so
+ *   the first wave turns it on); then kept on while Belnistrasz (8516, found live: between waves
+ *   he is out of combat and not in WorldModel::allies) carries Idol Shutdown.
  *
- * Timeline: measured from the first refresh that sees the Idol Shutdown aura (up to one
- * perception interval late, as Zul'Farrak's countdown). The spawner then walks its 4 creatures
- * ~15 yd to him; SPAWN_TRAVEL_SEC covers that. wavesArrived is how many SPAWN_SEC are past;
- * wavesLeft the rest; nextArrivalSec the next SPAWN_SEC + travel from now.
+ * Timeline (EncounterHelpers::WaveClock): the script's fixed timers from the aura going up. The
+ * zero is set when the module turns on, back-dated from the first wave creature's first sighting
+ * (EnemyFacts::firstSeenMs) minus its spawn and SPAWN_TRAVEL_SEC.
  *
  * Known limits:
- *   - The ritual phase is not exposed by the instance; the schedule is the script's fixed
- *     timers, read from the aura's start, so a server that retimes the ritual drifts.
+ *   - The ritual phase is not exposed by the instance; a server that retimes the ritual drifts.
+ *   - Waves 1-5 have the same creatures: a module turning on after wave 1 (a reload, a party
+ *     arriving late) takes them for wave 1.
  *   - No positioning: where to stand to meet the waves is the generic modules'.
  */
 
@@ -30,6 +31,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_RAZORFEN_BELNISTRASZ_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Perception/WorldModel.h"
 #include "ObjectGuid.h"
 
@@ -54,10 +56,9 @@ namespace Commander
         void OnReset() override;
 
     private:
-        static bool IsWaveEntry(uint32 entry);
-        bool RitualOn(TeamBotAI* bot, WorldModel const& world) const;
+        bool RitualOn(TeamBotAI* bot) const;
 
-        uint32 m_ritualStartMs = 0;     // first refresh that saw the aura, 0 = not started
+        EncounterHelpers::WaveClock m_clock;
         bool m_active = false;          // ritual on or a wave creature left
         uint32 m_wavesArrived = 0;
         uint32 m_wavesLeft = 0;

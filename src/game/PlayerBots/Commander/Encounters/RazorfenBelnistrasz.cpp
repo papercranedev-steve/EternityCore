@@ -8,7 +8,6 @@
 #include "Creature.h"
 #include "Map.h"
 #include "Player.h"
-#include "Timer.h"
 #include <algorithm>
 
 namespace Commander
@@ -16,46 +15,55 @@ namespace Commander
     namespace
     {
         // Seconds from the Idol Shutdown aura going up to each wave spawning
-        // (razorfen_downs.cpp UpdateEscortAI: 1 s shutdown, then 2, 41, 81, 121, 161, 221 s).
-        // Six waves; the sixth is Plaguemaw alone.
-        constexpr float SPAWN_SEC[] = { 2.0f, 41.0f, 81.0f, 121.0f, 161.0f, 221.0f };
+        // (razorfen_downs.cpp UpdateEscortAI: the aura at ritual phase 0, t = 1 s; waves at
+        // t = 2, 41, 81, 121, 161, Plaguemaw at 221). Six waves; the sixth is Plaguemaw alone.
+        constexpr float SPAWN_SEC[] = { 1.0f, 40.0f, 80.0f, 120.0f, 160.0f, 220.0f };
         constexpr uint32 WAVE_COUNT = 6;
-        // The spawner walks its creatures ~15 yd to him before they reach the party.
+        // The spawner's creatures appear 8-15 yd from him and walk in (untested guess).
         constexpr float SPAWN_TRAVEL_SEC = 4.0f;
         constexpr float INTERVAL_SEC = 40.0f;
+        // He stands at the idol; the party is near him.
+        constexpr float SEARCH_YD = 100.0f;
+
+        // Boars, Quilguards and Geomancers come in waves 1-5 (counted as the first when the
+        // module turns on late), Plaguemaw is the sixth.
+        int WaveOf(EnemyFacts const& e)
+        {
+            if (!e.summoned)
+                return -1;
+            switch (e.entry)
+            {
+                case RazorfenBelnistrasz::NPC_BATTLE_BOAR:
+                case RazorfenBelnistrasz::NPC_QUILGUARD:
+                case RazorfenBelnistrasz::NPC_GEOMANCER:
+                    return 0;
+                case RazorfenBelnistrasz::NPC_PLAGUEMAW:
+                    return int(WAVE_COUNT) - 1;
+                default:
+                    return -1;
+            }
+        }
     }
 
-    bool RazorfenBelnistrasz::IsWaveEntry(uint32 entry)
-    {
-        return entry == NPC_BATTLE_BOAR || entry == NPC_QUILGUARD ||
-               entry == NPC_GEOMANCER || entry == NPC_PLAGUEMAW;
-    }
-
-    bool RazorfenBelnistrasz::RitualOn(TeamBotAI* bot, WorldModel const& world) const
+    bool RazorfenBelnistrasz::RitualOn(TeamBotAI* bot) const
     {
         if (!bot || !bot->me->IsInWorld())
             return false;
-        // Belnistrasz is a friendly NPC near the party: an ally, not an enemy. Read him live.
-        for (AllyFacts const& a : world.allies)
-        {
-            if (a.entry != NPC_BELNISTRASZ)
-                continue;
-            if (Creature const* c = bot->me->GetMap()->GetCreature(a.guid))
-                return c->IsAlive() && c->HasAura(SPELL_IDOL_SHUTDOWN);
-        }
-        return false;
+        // Live: between waves he is out of combat, so not in WorldModel::allies.
+        Creature const* belnistrasz = bot->me->FindNearestCreature(NPC_BELNISTRASZ, SEARCH_YD);
+        return belnistrasz && belnistrasz->HasAura(SPELL_IDOL_SHUTDOWN);
     }
 
     bool RazorfenBelnistrasz::Matches(WorldModel const& world, uint32 mapId) const
     {
         if (mapId != MAP_ID)
             return false;
+        // (Matches runs before Refresh and sees only enemies: the first wave turns the module
+        // on, the aura keeps it on through the gaps.)
         if (m_active)
             return true;
-        for (EnemyFacts const& e : world.enemies)
-            if (e.summoned && IsWaveEntry(e.entry))
-                return true;
-        return false;
+        return std::any_of(world.enemies.begin(), world.enemies.end(),
+                           [](EnemyFacts const& e) { return WaveOf(e) >= 0; });
     }
 
     void RazorfenBelnistrasz::OnReset()
@@ -66,53 +74,34 @@ namespace Commander
     void RazorfenBelnistrasz::Refresh(TeamBotAI* bot, WorldModel const& world)
     {
         uint32 const now = world.refreshedAtMs;
-        bool const ritual = RitualOn(bot, world);
+        bool const ritual = RitualOn(bot);
         bool const waveLeft = std::any_of(world.enemies.begin(), world.enemies.end(),
-            [](EnemyFacts const& e) { return e.summoned && IsWaveEntry(e.entry); });
-
-        if (ritual && !m_ritualStartMs)
-        {
-            m_ritualStartMs = now;
-            if (!m_startNoted)
-            {
-                m_startNoted = true;
-                Note("Belnistrasz's ritual: six waves over about four minutes, 40 s apart; keep him alive. "
-                     "Drink between waves, stand up before the next one.");
-                Say(EncounterHelpers::Line("voice.boss.belnistrasz.ritual", VoiceTier::Essential));
-            }
-        }
+                                          [](EnemyFacts const& e) { return WaveOf(e) >= 0; });
         m_active = ritual || waveLeft;
-        if (!m_active)
+        if (!ritual)
         {
+            // Over (or he died): the waves left alive are a plain fight.
+            m_clock.Clear();
             m_wavesArrived = 0;
             m_wavesLeft = 0;
             m_nextArrivalSec = -1.0f;
             return;
         }
 
-        // Where the schedule stands (from the aura's start). Without the aura seen yet (a wave
-        // creature is around but the ritual start was missed), treat it as the first wave on.
-        float const elapsed = m_ritualStartMs ? WorldTimer::getMSTimeDiff(m_ritualStartMs, now) / 1000.0f : SPAWN_SEC[0];
-        uint32 arrived = 0;
-        float next = -1.0f;
-        for (uint32 i = 0; i < WAVE_COUNT; ++i)
+        m_clock.Start(world, now, SPAWN_SEC, WAVE_COUNT, SPAWN_TRAVEL_SEC, &WaveOf);
+        m_clock.State(now, SPAWN_SEC, WAVE_COUNT, SPAWN_TRAVEL_SEC, m_wavesArrived, m_wavesLeft, m_nextArrivalSec);
+        if (!m_startNoted)
         {
-            if (elapsed >= SPAWN_SEC[i])
-                arrived = i + 1;
-            else
-            {
-                next = SPAWN_SEC[i] - elapsed + SPAWN_TRAVEL_SEC;
-                break;
-            }
+            m_startNoted = true;
+            Note("Belnistrasz's ritual: six waves over about four minutes, 40 s apart; keep him alive. "
+                 "Drink between waves, stand up before the next one.");
+            Say(EncounterHelpers::Line("voice.boss.belnistrasz.ritual", VoiceTier::Essential));
         }
-        m_wavesArrived = arrived;
-        m_wavesLeft = WAVE_COUNT - arrived;
-        m_nextArrivalSec = next;
     }
 
     void RazorfenBelnistrasz::DescribeWaves(WaveEventFacts& out) const
     {
-        if (!m_active)
+        if (!m_clock.zeroMs)
             return;
         out.active = true;
         out.pace = WavePace::Timer;

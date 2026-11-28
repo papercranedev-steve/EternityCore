@@ -71,6 +71,27 @@ namespace Commander
             bool Update(WorldModel const& world);
             uint32 QuietMs(uint32 nowMs) const;
         };
+
+        // Waves on a script's fixed clock (boss doc 2.3: Belnistrasz, the Disciple of Naralex):
+        // `spawnSec[i]` = seconds from the schedule's zero to wave i spawning, `travelSec` until
+        // it reaches the party. The module reads the live event in Refresh and calls Start each
+        // refresh while it is on; Clear when it is over.
+        struct WaveClock
+        {
+            uint32 zeroMs = 0;      // WorldTimer ms of the schedule's zero; 0 = not set
+
+            // Sets the zero once. A wave creature already in sight (the module turned on late:
+            // Matches only sees enemies): its first sighting (EnemyFacts::firstSeenMs) minus its
+            // wave's spawn and travel, the earliest of them; `waveOf` gives a creature's wave
+            // index, -1 for none. None in sight: now (the ritual seen before any wave).
+            void Start(WorldModel const& world, uint32 nowMs, float const* spawnSec, uint32 count,
+                       float travelSec, int (*waveOf)(EnemyFacts const&));
+            // Waves spawned so far and still to come; seconds until the next reaches the party
+            // (-1 = none coming). Nothing before Start.
+            void State(uint32 nowMs, float const* spawnSec, uint32 count, float travelSec,
+                       uint32& arrived, uint32& left, float& nextSec) const;
+            void Clear() { zeroMs = 0; }
+        };
     }
 }
 

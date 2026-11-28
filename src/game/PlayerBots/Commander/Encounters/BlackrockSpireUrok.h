@@ -5,7 +5,8 @@
  * 3 s later one Ogre Magus and two Enforcers appear at the summoning circles, in combat with
  * everyone. Each ogre that dies is replaced at once, up to seven replacements, and the eighth
  * death spawns Urok. There is no breather between replacements, so it is one unbroken fight
- * (WavePace::Continuous): nobody sits down, the mana budget keeps for the whole fight.
+ * (WavePace::Continuous): nobody sits down. The budget keeps one more average fight of mana on
+ * top of the ogres in sight (wavesLeft 1: how many are left is not exposed).
  *
  * Match: map 229 and Urok (10584) or one of his ogres (Enforcer 10601, Ogre Magus 10602) among
  *   the enemies.

@@ -12,8 +12,12 @@
  * sees him channelling and heals him, kills his attackers first). This module adds the wave
  * schedule (WorldModel::waves) for the mana budget and gap drinking, and a start note.
  *
- * Match: map 43 and the disciple (3678) channelling Awakening, or a wave creature summoned,
- *   until the ritual ends.
+ * Match: map 43 and a summoned wave creature among the enemies (Matches sees only enemies, so
+ *   the first wave turns it on); then kept on while the disciple (3678, found live: between
+ *   waves he is out of combat and not in WorldModel::allies) carries Awakening.
+ *
+ * Timeline (EncounterHelpers::WaveClock): the script's fixed timers from the aura going up; the
+ * zero back-dated from the first wave creature's first sighting minus its spawn and travel.
  *
  * Known limits:
  *   - Mutanus (an elite boss, not an add) is the last "wave": the budget treats him like a wave
@@ -25,6 +29,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_WAILING_CAVERNS_NARALEX_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Perception/WorldModel.h"
 #include "ObjectGuid.h"
 
@@ -48,10 +53,9 @@ namespace Commander
         void OnReset() override;
 
     private:
-        static bool IsWaveEntry(uint32 entry);
-        bool RitualOn(TeamBotAI* bot, WorldModel const& world) const;
+        bool RitualOn(TeamBotAI* bot) const;
 
-        uint32 m_ritualStartMs = 0;
+        EncounterHelpers::WaveClock m_clock;
         bool m_active = false;
         uint32 m_wavesArrived = 0;
         uint32 m_wavesLeft = 0;

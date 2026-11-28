@@ -33,7 +33,7 @@ namespace Commander
         static constexpr uint32 MAP_ID = 48;
         // blackfathom_deeps.h: TYPE_SHRINE GetData key, EncounterState IN_PROGRESS.
         static constexpr uint32 DATA_SHRINE = 11;
-        static constexpr uint32 STATE_IN_PROGRESS = 2;
+        static constexpr uint32 STATE_IN_PROGRESS = 1;      // ScriptedInstance.h EncounterState (2 is FAIL)
         // Wave creatures (blackfathom_deeps.h).
         static constexpr uint32 NPC_SNAPJAW = 4825;
         static constexpr uint32 NPC_SERVANT = 4978;

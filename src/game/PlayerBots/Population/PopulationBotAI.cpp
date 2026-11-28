@@ -404,7 +404,7 @@ namespace Population
         bool const commanderOutOfCombat = !inCombat && sCommanderMgr.WantsOutOfCombatControl(this);
 
         // Eating and drinking are the Commander's (RestBehavior), as for party bots.
-        EndRestWhenFull();
+        EndRestWhenDone();
         bool const needsRest = !inCombat && NeedsRest();
         bool const resting = !inCombat && IsResting();
         if (!resting && StandUpBeat(inCombat))

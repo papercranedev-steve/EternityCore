@@ -8,16 +8,25 @@
 #include "Map.h"
 #include "Player.h"
 #include "InstanceData.h"
+#include <algorithm>
 
 namespace Commander
 {
+    bool GnomereganGrubbis::IsEventEntry(EnemyFacts const& e)
+    {
+        // Ambushers and Burrowers also stand in the caves: only Emi's summoned packs count.
+        return e.entry == NPC_GRUBBIS || (e.summoned && (e.entry == NPC_AMBUSHER || e.entry == NPC_BURROWER));
+    }
+
     bool GnomereganGrubbis::Matches(WorldModel const& world, uint32 mapId) const
     {
         if (mapId != MAP_ID)
             return false;
+        // (Matches runs before Refresh: the instance state keeps it on through the lulls once
+        // the first pack made it active.)
         if (m_active)
             return true;
-        return EncounterHelpers::HasEnemyEntry(world, NPC_GRUBBIS);
+        return std::any_of(world.enemies.begin(), world.enemies.end(), IsEventEntry);
     }
 
     void GnomereganGrubbis::OnReset()
@@ -31,7 +40,7 @@ namespace Commander
         if (bot && bot->me->IsInWorld())
             if (InstanceData* data = bot->me->GetMap()->GetInstanceData())
                 inProgress = data->GetData(DATA_GRUBBIS) == STATE_IN_PROGRESS;
-        m_active = inProgress || EncounterHelpers::HasEnemyEntry(world, NPC_GRUBBIS);
+        m_active = inProgress || std::any_of(world.enemies.begin(), world.enemies.end(), IsEventEntry);
 
         if (m_active && !m_startNoted)
         {

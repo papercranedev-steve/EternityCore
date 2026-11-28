@@ -159,6 +159,48 @@ namespace EncounterHelpers
         return lastFightMs ? WorldTimer::getMSTimeDiff(lastFightMs, nowMs) : 0;
     }
 
+    void WaveClock::Start(WorldModel const& world, uint32 nowMs, float const* spawnSec, uint32 count,
+                          float travelSec, int (*waveOf)(EnemyFacts const&))
+    {
+        if (zeroMs)
+            return;
+        // How long ago the zero was: the largest of the sightings' (earliest zero = waves
+        // expected sooner, the side where nobody is still sitting when one arrives).
+        uint32 backMs = 0;
+        for (std::vector<EnemyFacts> const* list : { &world.enemies, &world.targeted })
+            for (EnemyFacts const& e : *list)
+            {
+                int const wave = waveOf(e);
+                if (wave < 0 || uint32(wave) >= count)
+                    continue;
+                uint32 const sinceSeen = e.firstSeenMs ? WorldTimer::getMSTimeDiff(e.firstSeenMs, nowMs) : 0;
+                backMs = std::max(backMs, sinceSeen + uint32((spawnSec[wave] + travelSec) * 1000.0f));
+            }
+        zeroMs = nowMs - backMs;
+        if (!zeroMs)
+            zeroMs = 1;     // (0 means "not set")
+    }
+
+    void WaveClock::State(uint32 nowMs, float const* spawnSec, uint32 count, float travelSec,
+                          uint32& arrived, uint32& left, float& nextSec) const
+    {
+        arrived = 0;
+        left = 0;
+        nextSec = -1.0f;
+        if (!zeroMs)
+            return;
+        float const elapsed = WorldTimer::getMSTimeDiff(zeroMs, nowMs) / 1000.0f;
+        for (uint32 i = 0; i < count; ++i)
+        {
+            if (elapsed >= spawnSec[i])
+                arrived = i + 1;
+            // (a wave spawned and still walking in is the next to reach the party)
+            if (nextSec < 0.0f && elapsed < spawnSec[i] + travelSec)
+                nextSec = spawnSec[i] + travelSec - elapsed;
+        }
+        left = count - arrived;
+    }
+
     Proposal MakeHealVeto(char const* source, ObjectGuid target)
     {
         Proposal p;

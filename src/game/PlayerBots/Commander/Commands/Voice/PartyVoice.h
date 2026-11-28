@@ -130,8 +130,10 @@ namespace Commander
         PullLosBreak m_losBreak = PullLosBreak::None;
         ObjectGuid m_patrolWait;
         bool m_waitChecked = false;     // this pull's "waiting for" was looked at
-        // WaveMoments: the gap (waves arrived when it began) and whether a bot drank in it.
+        // WaveMoments: gaps counted here (a fight ended, the event modules do not number the
+        // player-paced waves), whether a bot drank in this one, "ready" said in it.
         uint32 m_waveGap = 0;
+        bool m_waveFought = false;
         bool m_waveDrank = false;
         bool m_waveReadySaid = false;
         bool m_retreat = false;

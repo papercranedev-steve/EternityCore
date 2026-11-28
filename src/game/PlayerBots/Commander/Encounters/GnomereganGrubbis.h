@@ -9,7 +9,9 @@
  * short and uncertain to drink in, so nobody sits down while the event runs
  * (WavePace::Continuous).
  *
- * Match: map 90 and the Grubbis event in progress (GetData(TYPE_GRUBBIS) == IN_PROGRESS).
+ * Match: map 90 and a summoned Caverndeep Ambusher / Burrower or Grubbis among the enemies
+ *   (Matches cannot read the instance); once active, kept on while GetData(TYPE_GRUBBIS) ==
+ *   IN_PROGRESS, so the lulls between packs count too. Emi dying sets FAIL and ends it.
  *
  * Emi is an escort (npc_escortAI), so the generic protect (boss doc G3) already heals her and
  * kills her attackers first. This module sets the continuous pace and a start note.
@@ -29,8 +31,9 @@ namespace Commander
         static constexpr uint32 MAP_ID = 90;
         // gnomeregan.h: TYPE_GRUBBIS GetData key (index 0), EncounterState IN_PROGRESS.
         static constexpr uint32 DATA_GRUBBIS = 0;
-        static constexpr uint32 STATE_IN_PROGRESS = 2;
+        static constexpr uint32 STATE_IN_PROGRESS = 1;      // ScriptedInstance.h EncounterState (2 is FAIL)
         static constexpr uint32 NPC_AMBUSHER = 6207;
+        static constexpr uint32 NPC_BURROWER = 6206;
         static constexpr uint32 NPC_GRUBBIS = 7361;
 
         char const* GetId() const override { return "gnomer-grubbis"; }
@@ -40,6 +43,8 @@ namespace Commander
         void OnReset() override;
 
     private:
+        static bool IsEventEntry(EnemyFacts const& e);
+
         bool m_active = false;
         bool m_startNoted = false;
     };
