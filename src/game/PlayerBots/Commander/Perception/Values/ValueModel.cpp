@@ -62,11 +62,13 @@ namespace Value
 
     float DeathPenalty(PartyMemberFacts const& member)
     {
+        float base = DEATH_PENALTY_OTHER;
         if (member.HealsTeam())
-            return DEATH_PENALTY_HEALER;
-        if (Tanks::IsTank(member))      // bots and players (Tanks.h)
-            return DEATH_PENALTY_TANK;
-        return DEATH_PENALTY_OTHER;
+            base = DEATH_PENALTY_HEALER;
+        else if (Tanks::IsTank(member))     // bots and players (Tanks.h)
+            base = DEATH_PENALTY_TANK;
+        // (a real player, not his pet)
+        return member.isBot || member.isPet ? base : base * HUMAN_DEATH_WEIGHT;
     }
 
     float HolderDeathPenalty(WorldModel const& world, PartyMemberFacts const& holder)

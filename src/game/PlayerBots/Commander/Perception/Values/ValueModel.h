@@ -25,6 +25,13 @@ namespace Commander
         static constexpr float DEATH_PENALTY_HEALER = 30.0f;
         static constexpr float DEATH_PENALTY_TANK = 30.0f;
         static constexpr float DEATH_PENALTY_OTHER = 15.0f;
+        // A real player's death (not a bot's, not a pet's) costs this many times his function's
+        // (user 2026-11-28, player-centric doc block 2): he is the one playing, a dead player
+        // damage dealer counted half a bot healer before. The same for the whole team, not by
+        // affinity (combat is never gated by affinity): heals, rescues, taunts, spots all lean
+        // to him. A tank's death still sums the team (HolderDeathPenalty, him included), so he
+        // does not outweigh keeping the tank alive. Untested guess.
+        static constexpr float HUMAN_DEATH_WEIGHT = 2.0f;
         // An ally the party protects (AllyFacts::protect, boss doc G3): the escort quest or the
         // event fails and is done again, like losing a healer or the tank (untested guess,
         // 2026-11-28). A boss module may set its own (AllyFacts::deathPenalty).
