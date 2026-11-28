@@ -1255,7 +1255,9 @@ namespace Commander
         STAMP_SWARM         = 1 << 10,  // from a trap (crate insects): no control, no tank threat risk, the area spells'
         STAMP_ALARM         = 1 << 11,  // brings more as it aggroes: display (its summons are in FightLoad)
         STAMP_NO_TAUNT      = 1 << 12,  // no single target taunt (swarm, self-destruct, taunt immune, totem): RescueAssigner
-        STAMP_KILL_ORDER    = 1 << 13,  // killed first (healer, summoner, totem, mana drain, resurrects): the focus is among these
+        // killed first (healer, summoner, totem, mana drain, resurrects; a boss module's): the focus
+        // is among these, the highest DoctrineEnemy::killTier first
+        STAMP_KILL_ORDER    = 1 << 13,
         STAMP_HOLD_FIRE     = 1 << 14,  // a damage shield / spell reflection is on it: nobody hits it (EngageBlock, Constraints)
         STAMP_FREE_ALLY     = 1 << 15,  // it mind controls a party member: the focus, killed at once (TargetAssigner)
         // Stragglers (Coordination/Doctrine/Stragglers.h, battlefield groups doc 3, user 2026-11-13):
@@ -1285,6 +1287,10 @@ namespace Commander
         // the bot sent to intercept it (TeamPlan::MeleeBlock).
         STAMP_NO_MELEE      = 1 << 23,
     };
+
+    // DoctrineEnemy::killTier of the role stamps' kill order (healers, summoners, totems, mana
+    // drains, resurrects). Boss modules place their tiers above (before them) or below it.
+    int8 const KILL_TIER_ROLE = 1;
 
     // Damage on a unit only down to a line (STAMP_DAMAGE_LIMIT, MEMBER_DAMAGE_LIMIT). Read live
     // (the unit's health now, not the refresh's) by Constraints and TeamBotAI: at or below
@@ -1424,6 +1430,12 @@ namespace Commander
         uint16 roles = 0;           // Tags::RolesOf bits
         std::string noMezWhy;       // why STAMP_NO_MEZ ("area pile", "fodder", "cleanup", "player hits it")
         DamageLimit limit;          // STAMP_DAMAGE_LIMIT
+        // Kill order tier (encounter layers doc 2.2): the party focus is chosen among the
+        // eligible enemies of the highest tier, the points pick within it (TargetAssigner).
+        // > 0 is STAMP_KILL_ORDER (KILL_TIER_ROLE from the role stamps), < 0 killed last (a boss
+        // module's "leave it to the end"). Set with DoctrinePlan::SetKillTier.
+        int8 killTier = 0;
+        std::string killWhy;        // why the tier (for the focus reason), empty: the role stamps'
     };
 
     struct DoctrinePlan
@@ -1513,6 +1525,22 @@ namespace Commander
             enemies.emplace_back();
             enemies.back().guid = enemy;
             return enemies.back();
+        }
+        // DoctrineEnemy::killTier, with STAMP_KILL_ORDER on above 0 and off at 0 or below.
+        void SetKillTier(ObjectGuid enemy, int8 tier, std::string why)
+        {
+            DoctrineEnemy& d = Enemy(enemy);
+            d.killTier = tier;
+            d.killWhy = std::move(why);
+            if (tier > 0)
+                d.stamps |= STAMP_KILL_ORDER;
+            else
+                d.stamps &= ~uint32(STAMP_KILL_ORDER);
+        }
+        int8 KillTier(ObjectGuid enemy) const
+        {
+            DoctrineEnemy const* d = Find(enemy);
+            return d ? d->killTier : int8(0);
         }
 
         // Party members the boss module marked (IEncounter::ShapeDoctrine); rebuilt every refresh.

@@ -259,6 +259,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/EncounterBehavior.cpp
   ${COMMANDER_DIR}/Encounters/EncounterHelpers.h
   ${COMMANDER_DIR}/Encounters/EncounterHelpers.cpp
+  ${COMMANDER_DIR}/Encounters/BlackrockDepthsAngerforge.h
+  ${COMMANDER_DIR}/Encounters/BlackrockDepthsAngerforge.cpp
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.h
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.h

@@ -524,7 +524,8 @@ namespace Commander
         if (d.stamps & STAMP_STAND_CLEAR)   s += ", stand clear of its blast";
         if (d.stamps & STAMP_SWARM)         s += ", swarm";
         if (d.stamps & STAMP_NO_TAUNT)      s += ", no taunt";
-        if (d.stamps & STAMP_KILL_ORDER)    s += ", kill first";
+        if (d.killTier > 0)                 s += ", kill first (tier " + std::to_string(int(d.killTier)) + ")";
+        if (d.killTier < 0)                 s += ", kill last (tier " + std::to_string(int(d.killTier)) + ")";
         if (d.stamps & STAMP_HOLD_FIRE)     s += ", hands off (reflects)";
         if (d.stamps & STAMP_FREE_ALLY)     s += ", kill it to free the ally";
         if (d.stamps & STAMP_STRAGGLER)     s += ", straggler (the tank's)";

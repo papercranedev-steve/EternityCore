@@ -19,9 +19,12 @@
  *   - The Weegli heal picks the smallest castable direct heal (least threat), not the one
  *     that fits his missing health; no HoTs, no shields, no heals for the other prisoners, and
  *     no mana budget (the scenario's Jev question "spend mana on the prisoners?" is not asked).
- *   - Focus tiers follow scenario 9, 2.1 as fixed rules; the values (dps, kill time) are
- *     ignored between tiers. Enemies that cannot be focused (fresh, intercepted) are skipped,
- *     so for NEW_ENEMY_SETTLE_SEC after a group arrives FocusAssigner's choice stays.
+ *   - Focus tiers follow scenario 9, 2.1 as fixed rules; the values (dps, kill time) only
+ *     pick within a tier. Enemies that cannot be focused (fresh, intercepted) are skipped,
+ *     so for NEW_ENEMY_SETTLE_SEC after a group arrives the lower tiers' focus stays.
+ *   - An add hitting only a prisoner (no party member on its threat list, onAllyOnly) is not
+ *     the party's to hit at all (TargetAssigner), so "hitting Weegli" only counts once a heal
+ *     on him put it on our side. Protecting an ally is a generic gap (G3, boss doc).
  *   - Not done: area damage timing, mana budget over the remaining waves, wave 3 positioning
  *     (Psychic Scream range), crew fight after the event (prisoners turn hostile: that is a
  *     normal fight, the module is no longer active once the phase is KILLED_ALL_TROLLS).
@@ -29,7 +32,6 @@
 
 #include "Commander/Encounters/ZulFarrakPyramid.h"
 #include "Commander/Encounters/EncounterHelpers.h"
-#include "Commander/Coordination/Duties/FocusAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -50,18 +52,19 @@ namespace Commander
     {
         char const* const SOURCE = "zf-pyramid";
 
-        // Focus tiers (scenario 9, 2.1), lower first.
-        enum FocusTier : uint32
+        // Kill order tiers (scenario 9, 2.1; DoctrineEnemy::killTier), higher first. Anything
+        // else keeps the role stamps' tier (KILL_TIER_ROLE or none).
+        enum FocusTier : int8
         {
-            TIER_ON_SOFT_MEMBER = 0,    // hitting a healer bot or a cloth wearer
-            TIER_ON_WEEGLI      = 1,
-            TIER_ACOLYTE        = 2,
-            TIER_CRETIN         = 3,
-            TIER_OTHER          = 4,
-            TIER_ON_BLY         = 5,
+            TIER_ON_SOFT_MEMBER = KILL_TIER_ROLE + 4,   // hitting a healer bot or a cloth wearer
+            TIER_ON_WEEGLI      = KILL_TIER_ROLE + 3,
+            TIER_ACOLYTE        = KILL_TIER_ROLE + 2,
+            TIER_CRETIN         = KILL_TIER_ROLE + 1,
+            TIER_OTHER          = 0,
+            TIER_ON_BLY         = -1,
         };
 
-        char const* TierReason(uint32 tier)
+        char const* TierReason(int8 tier)
         {
             switch (tier)
             {
@@ -69,8 +72,8 @@ namespace Commander
                 case TIER_ON_WEEGLI:      return "zf pyramid: hitting Weegli";
                 case TIER_ACOLYTE:        return "zf pyramid: Acolyte (mana burn)";
                 case TIER_CRETIN:         return "zf pyramid: Cretin";
-                case TIER_ON_BLY:         return "zf pyramid: on Bly (last)";
-                default:                  return "zf pyramid: wave add";
+                case TIER_ON_BLY:         return "zf pyramid: on Bly";
+                default:                  return "";
             }
         }
 
@@ -79,7 +82,7 @@ namespace Commander
             return classId == CLASS_MAGE || classId == CLASS_PRIEST || classId == CLASS_WARLOCK;
         }
 
-        uint32 TierOf(WorldModel const& world, EnemyFacts const& e)
+        FocusTier TierOf(WorldModel const& world, EnemyFacts const& e)
         {
             if (PartyMemberFacts const* v = world.FindMember(e.victim))
                 if (!v->isPet && ((v->isBot && v->role == ROLE_HEALER) || IsCloth(v->classId)))
@@ -239,60 +242,21 @@ namespace Commander
                 a.tankLike = a.entry == NPC_BLY;
     }
 
-    void ZulFarrakPyramid::AdjustPlan(WorldModel const& world, TeamPlan& plan)
+    void ZulFarrakPyramid::ShapeDoctrine(WorldModel const& world, TeamPlan& plan)
     {
         if (!HoldsTheStairs())
-            return;     // wave 3: FocusAssigner (the Shadowpriest's heals are scored there)
+            return;     // wave 3: the generic focus (the Shadowpriest's heals are scored there)
 
-        PartyMemberFacts const* tank = EncounterHelpers::FindTank(world);
-        auto intercepted = [&plan](ObjectGuid guid)
-        {
-            return std::any_of(plan.intercepts.begin(), plan.intercepts.end(),
-                [guid](InterceptDuty const& d) { return d.enemy == guid; });
-        };
-
-        EnemyFacts const* best = nullptr;
-        uint32 bestTier = 0;
+        // The tiers; TargetAssigner picks the focus among the highest by its points (sticky,
+        // intercepted and fresh enemies skipped as for any focus).
         for (EnemyFacts const& e : world.enemies)
         {
-            // Adds on the prisoners count here (tier 1: on Weegli, tier 5: on Bly).
-            if (!FocusAssigner::IsEligible(world, e, true) || intercepted(e.guid))
-                continue;
-            uint32 const tier = TierOf(world, e);
-            if (!best || tier < bestTier)
-            {
-                best = &e;
-                bestTier = tier;
-                continue;
-            }
-            if (tier > bestTier)
-                continue;
-            // Same tier: keep the current focus, then (tier 4) the tank's enemies, then the
-            // one closest to dying.
-            if (best->guid == plan.focus.enemy)
-                continue;
-            if (e.guid == plan.focus.enemy)
-            {
-                best = &e;
-                continue;
-            }
-            if (tier == TIER_OTHER && tank)
-            {
-                bool const eOnTank = e.victim == tank->guid;
-                bool const bestOnTank = best->victim == tank->guid;
-                if (eOnTank != bestOnTank)
-                {
-                    if (eOnTank)
-                        best = &e;
-                    continue;
-                }
-            }
-            if (e.health < best->health)
-                best = &e;
+            if (e.onAllyOnly || !e.acting || !e.health)
+                continue;   // (an add only on a prisoner is not the party's to hit: G3 in the boss doc)
+            FocusTier const tier = TierOf(world, e);
+            if (tier != TIER_OTHER)
+                plan.doctrine.SetKillTier(e.guid, tier, TierReason(tier));
         }
-
-        if (best)
-            EncounterHelpers::SetFocus(world, plan, *best, TierReason(bestTier));
     }
 
     void ZulFarrakPyramid::Propose(TeamBotAI const* bot, WorldModel const& world,

@@ -155,13 +155,32 @@ namespace Commander
                        !plan.DamageHeld(ObjectGuid(), e.guid, e.healthPct, e.victim);
             };
 
+            // Doctrine kill order (RoleStamps.h, user 2026-11-10: healers, summoners and totems
+            // first; boss modules' tiers, DoctrineEnemy::killTier): the focus is among the
+            // eligible enemies of the highest tier, the points pick among them. Above 0 it is
+            // the kill order; below 0 (a boss module's "last") only once nothing else is left.
+            int8 topTier = 0;
+            bool anyEligible = false;
+            for (EnemyFacts const& e : world.enemies)
+            {
+                if (!eligible(e))
+                    continue;
+                int8 const tier = plan.doctrine.KillTier(e.guid);
+                if (!anyEligible || tier > topTier)
+                    topTier = tier;
+                anyEligible = true;
+            }
+            auto const inTopTier = [&](EnemyFacts const& e)
+            {
+                return eligible(e) && plan.doctrine.KillTier(e.guid) == topTier;
+            };
             // Doctrine (TacticalDoctrine.h, OutlierTactic::KillFirst): the pile is left to area
             // spells, so the focus is an enemy outside it (a caster standing back) while there is
             // one. Not while they are lured to the pile (Lure).
             bool const outliersFirst = plan.doctrine.outliers == OutlierTactic::KillFirst &&
                 std::any_of(world.enemies.begin(), world.enemies.end(), [&](EnemyFacts const& e)
                 {
-                    return plan.doctrine.Has(e.guid, STAMP_OUTLIER) && eligible(e);
+                    return plan.doctrine.Has(e.guid, STAMP_OUTLIER) && inTopTier(e);
                 });
             // Doctrine KillNow (RoleStamps.h): a self-destruct the party kills before it blows is
             // the focus before anything else, fresh or not (it is fresh: it just spawned).
@@ -176,20 +195,14 @@ namespace Commander
             uint32 const urgentStamp = anyFreeAlly ? uint32(STAMP_FREE_ALLY) : uint32(STAMP_KILL_NOW);
             auto const killNow = [&](EnemyFacts const& e) { return stamped(e, urgentStamp); };
             bool const anyKillNow = std::any_of(world.enemies.begin(), world.enemies.end(), killNow);
-            // Doctrine kill order (RoleStamps.h, user 2026-11-10): healers, summoners and totems
-            // first while one is eligible; the points pick among them.
-            bool const killOrder = !anyKillNow &&
-                std::any_of(world.enemies.begin(), world.enemies.end(), [&](EnemyFacts const& e)
-                {
-                    return plan.doctrine.Has(e.guid, STAMP_KILL_ORDER) && eligible(e);
-                });
+            bool const killOrder = !anyKillNow && topTier > 0;
             auto const allowed = [&](EnemyFacts const& e)
             {
                 if (anyKillNow)
                     return killNow(e);
                 if (killOrder)
-                    return eligible(e) && plan.doctrine.Has(e.guid, STAMP_KILL_ORDER);
-                return eligible(e) && (!outliersFirst || plan.doctrine.Has(e.guid, STAMP_OUTLIER));
+                    return inTopTier(e);
+                return inTopTier(e) && (!outliersFirst || plan.doctrine.Has(e.guid, STAMP_OUTLIER));
             };
 
             EnemyFacts const* best = nullptr;
@@ -244,8 +257,13 @@ namespace Commander
                 plan.focus.reason += ", doctrine: kill it to free the mind controlled ally";
             else if (anyKillNow)
                 plan.focus.reason += ", doctrine: kill it before it blows up";
-            else if (killOrder)
-                plan.focus.reason += ", doctrine: kill order (healer, summoner, totem first)";
+            else if (killOrder || topTier < 0)
+            {
+                DoctrineEnemy const* d = plan.doctrine.Find(plan.focus.enemy);
+                std::string const why = d && !d->killWhy.empty() ? d->killWhy : "healer, summoner, totem first";
+                plan.focus.reason += killOrder ? ", doctrine: kill order (" : ", doctrine: killed last (";
+                plan.focus.reason += why + ")";
+            }
             else if (outliersFirst)
                 plan.focus.reason += ", doctrine: outside the area pile first";
         }

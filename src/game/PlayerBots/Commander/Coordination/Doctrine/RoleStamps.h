@@ -16,8 +16,9 @@
  *   NoTaunt       a swarm, a timed self-destruct, TAG_TAUNT_IMMUNE, TAG_TOTEM: no single target
  *                 taunt (RescueAssigner; winning it back with threat, area threat: still).
  *   KillOrder     TAG_HEALER, TAG_SUMMONER, TAG_TOTEM (user 2026-11-10: healers and summoners
- *                 first): the party focus is chosen among them while one is eligible
- *                 (TargetAssigner; after KillNow, before the outliers of KillFirst).
+ *                 first), tier KILL_TIER_ROLE: the party focus is chosen among them while one is
+ *                 eligible (TargetAssigner; after KillNow, before the outliers of KillFirst).
+ *                 Boss modules set other tiers in ShapeDoctrine (DoctrinePlan::SetKillTier).
  *   HoldFire      EnemyFacts::reflectMs (a temporary damage shield or spell reflection): nobody
  *                 attacks, chases or casts damage at it while it lasts, every role alike
  *                 (TeamPlan::EngageBlock, Constraints); when it is the only enemy left, only

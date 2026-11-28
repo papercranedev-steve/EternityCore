@@ -12,8 +12,11 @@
  *     (a CrowdControl primary this allocation), one in a patrol's path, a fresh enemy
  *     (FocusAssigner::IsEligible). Doctrine KillFirst (Coordination/Doctrine/TacticalDoctrine.h,
  *     the Area tactic without a lure, since 2026-11-09/10): only Outlier enemies while one is eligible (the pile is the area
- *     spells'; user: "远程的法师由其他dps解决"). Melee bots that cannot reach the focus keep
- *     fighting the pile (DamageTargets switch range);
+ *     spells'; user: "远程的法师由其他dps解决"). Kill order tiers (DoctrineEnemy::killTier: the
+ *     role stamps' KILL_TIER_ROLE, boss modules' own): the focus is among the eligible enemies
+ *     of the highest tier, the points pick within it (below 0: only when nothing else is
+ *     left). Melee bots that cannot reach the focus keep fighting the pile (DamageTargets
+ *     switch range);
  *  3. Distribute: one target per bot. Also called again when a boss module moves the focus
  *     after the assigners (EncounterHelpers::SetFocus / ClearFocus).
  *

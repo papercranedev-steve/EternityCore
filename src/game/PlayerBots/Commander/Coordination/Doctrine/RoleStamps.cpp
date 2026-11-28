@@ -25,7 +25,10 @@ namespace RoleStamps
         // Kill order (user 2026-11-10, "治疗怪、召唤怪先杀"; mana drainers "非常讨厌"; resurrectors):
         // the points pick among them (a fragile one first).
         if (roles & (TAG_HEALER | TAG_SUMMONER | TAG_TOTEM | TAG_MANA_DRAIN | TAG_RESURRECTS))
+        {
             x.stamps |= STAMP_KILL_ORDER;
+            x.killTier = KILL_TIER_ROLE;
+        }
 
         // A damage shield / spell reflection on it (user 2026-11-10: everyone stops, melee too):
         // nobody hits it while it lasts. Alone in the fight with a long one (Thorns Aura 60 s):

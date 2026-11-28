@@ -23,13 +23,14 @@
  * Facts (AddFacts): of the five prisoners only Sergeant Bly (7604) is tankLike. Weegli (7607)
  * has as much health (9.7 x multiplier) but must survive the event (he blows up the door).
  *
- * Plan (AdjustPlan), waves 1-2 only (wave 3 is left to FocusAssigner, which scores the
- * Shadowpriest's heals): party focus by scenario 9, 2.1:
- *   0 hitting a healer bot or a cloth wearer   1 hitting Weegli   2 Acolyte (Mana Burn)
- *   3 Cretin (elite, Shadow Word: Pain)        4 anything else    5 hitting Bly (last)
- * Within a tier: the current focus stays; tier 4 prefers enemies on the tank bot; then the
- * least health. Fresh (FocusAssigner::IsEligible) and intercepted enemies are skipped like
- * FocusAssigner does. One note for the leader when wave 3 is coming ("go down with them").
+ * Doctrine (ShapeDoctrine), waves 1-2 only (wave 3 is left to the generic focus, which scores
+ * the Shadowpriest's heals): kill order tiers by scenario 9, 2.1 (DoctrinePlan::SetKillTier),
+ * first to last:
+ *   hitting a healer bot or a cloth wearer, hitting Weegli, Acolyte (Mana Burn),
+ *   Cretin (elite, Shadow Word: Pain), anything else (the role stamps' tier), hitting Bly.
+ * TargetAssigner chooses the focus within the highest tier by its points (sticky; fresh and
+ * intercepted enemies skipped as for any focus). One note for the leader when wave 3 is
+ * coming ("go down with them").
  *
  * Proposals:
  *   Melee dps and tank, waves 1-2: their target is fleeing (UNIT_STATE_FLEEING or below
@@ -123,7 +124,7 @@ namespace Commander
         bool Matches(WorldModel const& world, uint32 mapId) const override;
         void Refresh(TeamBotAI* bot, WorldModel const& world) override;
         void AddFacts(WorldModel& world) override;
-        void AdjustPlan(WorldModel const& world, TeamPlan& plan) override;
+        void ShapeDoctrine(WorldModel const& world, TeamPlan& plan) override;
         void Propose(TeamBotAI const* bot, WorldModel const& world,
                      TeamPlan const& plan, std::vector<Proposal>& out) const override;
         bool ForbidsRest() const override { return m_noRest; }
