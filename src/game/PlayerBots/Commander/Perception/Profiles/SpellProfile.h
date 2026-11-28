@@ -46,6 +46,8 @@ namespace Commander
         bool controls = false;          // fear, stun, charm, sleep, silence, ... on the target (not on the caster)
         bool breaksOnDamage = false;    // AURA_INTERRUPT_DAMAGE_CANCELS: sleep / sap style, the next hit ends it
         uint32 controlMechanics = 0;    // SpellTags::ControlMechanics (1 << Mechanics)
+        float coneArc = 0.0f;           // SpellTags::ConeArc: full width (rad), < 0 behind, 0 = not a cone
+        float coneRadius = 0.0f;
         bool Fears() const { return (controlMechanics & (1u << MECHANIC_FEAR)) != 0; }
         uint8 school = 0;               // spell_template.School (SpellSchools), what an interrupt locks
         uint8 dispel = 0;               // DispelType: 1 magic, 2 curse, 3 disease, 4 poison

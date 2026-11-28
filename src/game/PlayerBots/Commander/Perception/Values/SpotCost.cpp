@@ -48,7 +48,7 @@ namespace SpotCost
     {
         HazardLoss loss;
         for (HazardZone const& z : zones)
-            if (z.DangerousTo(roleBit) && HazardZones::DistanceTo(z, p) <= z.radius)
+            if (z.DangerousTo(roleBit) && z.aim != member.guid && HazardZones::Covers(z, p))
                 AddZoneLoss(world, z, member, ZoneHits(z, horizonSec, -1.0f), loss);
         if (loss.damage > 0.0f && loss.damage >= float(member.health))
         {

@@ -325,9 +325,34 @@ namespace IncomingTimeline
 
         // Share of a cast's damage that reaches `m`: an area spell around the caster or around
         // a sure target reaches everyone in its radius; a chain spell its jumps (ReachedFrom).
+        // A cone of `e` (SpellProfile::coneArc) pointed at `aim` (a party member; else where `e`
+        // faces now) reaches `m` (boss doc G4).
+        bool InConeOf(WorldModel const& world, EnemyFacts const& e, SpellProfile const& p, ObjectGuid aim,
+                      PartyMemberFacts const& m)
+        {
+            float facing = e.facing;
+            if (PartyMemberFacts const* at = aim.IsEmpty() ? nullptr : world.FindMember(aim))
+                if (PackResolver::Distance(at->pos, e.pos) > 0.1f)
+                    facing = std::atan2(at->pos.y - e.pos.y, at->pos.x - e.pos.x);
+            return SpellTags::InCone(e.pos.x, e.pos.y, e.pos.z, facing, p.coneArc, p.coneRadius,
+                                     m.pos.x, m.pos.y, m.pos.z);
+        }
+
         float HitShare(WorldModel const& world, EnemyFacts const& e, SpellEntry const* spell, uint8 castTarget,
                        float radius, PartyMemberFacts const& m)
         {
+            // A cone: where it points (its victim, or where it faces), not a circle. At a random
+            // target: the chance that it is the one (it turns to it).
+            std::shared_ptr<SpellProfile const> p = sProfileStore.GetSpell(spell->Id);
+            if (p && p->coneArc != 0.0f)
+            {
+                if (SelfCentred(castTarget) || castTarget == 0xFF)
+                    return InConeOf(world, e, *p, ObjectGuid(), m) ? 1.0f : 0.0f;
+                if (castTarget == TARGET_T_HOSTILE)
+                    return InConeOf(world, e, *p, e.victim, m) ? 1.0f : 0.0f;
+                ObjectGuid aimed;
+                return TargetShare(world, e, castTarget, m, aimed);
+            }
             if (SelfCentred(castTarget))
                 return radius > 0.0f && PackResolver::Distance(e.pos, m.pos) <= radius + e.boundingRadius ? 1.0f : 0.0f;
             ObjectGuid aimed;
@@ -381,7 +406,9 @@ namespace IncomingTimeline
             if (!spell || !p)
                 return;
             bool reaches = e.castTarget == m.guid;
-            if (!reaches && (e.castTarget.IsEmpty() || e.castTarget == e.guid))
+            if (p->coneArc != 0.0f)
+                reaches = InConeOf(world, e, *p, e.castTarget == e.guid ? ObjectGuid() : e.castTarget, m);
+            else if (!reaches && (e.castTarget.IsEmpty() || e.castTarget == e.guid))
                 reaches = p->radius > 0.0f && PackResolver::Distance(e.pos, m.pos) <= p->radius + e.boundingRadius;
             else if (!reaches)
                 reaches = ReachedFrom(world, e, spell, p->radius, e.castTarget, m);

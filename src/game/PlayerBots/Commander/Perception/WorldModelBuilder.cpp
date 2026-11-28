@@ -758,6 +758,19 @@ namespace WorldModelBuilder
                 e.victimThreat = victimRef->getThreat();
             }
 
+            // Where it faces (EnemyFacts::facing, boss doc G4).
+            e.facing = creature->GetOrientation();
+            e.facingAt = ObjectGuid(creature->m_castingTargetGuid);
+            if (e.facingAt == e.guid)
+                e.facingAt.Clear();
+            if (e.facingAt.IsEmpty())
+                if (Unit const* victim = creature->GetVictim())
+                    e.facingAt = victim->GetObjectGuid();
+            if (!e.facingAt.IsEmpty())
+                if (Unit const* at = creature->GetMap()->GetUnit(e.facingAt))
+                    if (at != creature && creature->GetDistance2d(at) > 0.1f)
+                        e.facing = creature->GetAngle(at);
+
             // Every row of the live list. Rows of allies (and anyone else) stay with
             // partySide = false: ThreatView::Headroom needs the victim's threat when an ally
             // tank is the one being hit, VictimLead skips them.

@@ -3,6 +3,7 @@
 #include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Profiles/ProfileStore.h"
 #include "Commander/Perception/Profiles/BossSheets.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Creature.h"            // CreatureInfo::auras
 #include "DBCStores.h"
@@ -12,6 +13,7 @@
 #include "SpellEntry.h"
 #include "SpellMgr.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -31,6 +33,7 @@ namespace HazardZones
             float healthPct = 0.0f;     // EventAI health event threshold, 0 = none
             bool once = false;          // ability sheet: once a fight (gone once seen cast)
             bool everyone = false;      // ability sheet: BOSS_ABILITY_EVERYONE_LEAVES
+            float arc = 0.0f;           // a cone (SpellTags::ConeArc), 0 = a circle
         };
 
         // Effect targets that select "enemies around the caster's position". The source
@@ -153,12 +156,22 @@ namespace HazardZones
                         continue;
                     HazardSource s;
                     float const radius = CasterAreaRadius(spell);
+                    float coneRadius = 0.0f;
+                    float const arc = SpellTags::ConeArc(spell, &coneRadius);
                     if (radius > 0.0f)
                     {
                         s.spellId = spell->Id;
                         s.hitSpellId = spell->Id;
                         s.kind = HazardKind::Burst;
                         s.rawRadius = radius;
+                    }
+                    else if (arc != 0.0f && coneRadius > 0.0f)
+                    {
+                        s.spellId = spell->Id;
+                        s.hitSpellId = spell->Id;
+                        s.kind = HazardKind::Burst;
+                        s.rawRadius = coneRadius;
+                        s.arc = arc;
                     }
                     else if (!PulseOf(spell, true, s) && !RangeOf(spell, ref, s))
                         continue;
@@ -238,6 +251,9 @@ namespace HazardZones
                 return false;
             if (s.kind != HazardKind::Pulse && !CanAfford(e, s.spellId))
                 return false;
+            // A front cone at a random target: where it turns is only known while it is cast.
+            if (s.arc > 0.0f && IsSpreadTarget(s.castTarget) && !castingIt)
+                return false;
 
             SpellEntry const* hit = sSpellMgr.GetSpellEntry(s.hitSpellId);
             std::shared_ptr<SpellProfile const> hp = sProfileStore.GetSpell(s.hitSpellId);
@@ -259,6 +275,10 @@ namespace HazardZones
             z.intervalSec = std::max(0.5f, s.intervalSec);
             z.casting = castingIt;
             z.castRemainingSec = z.casting ? e.castRemainingMs / 1000.0f : 0.0f;
+            z.arc = s.arc;
+            z.facing = e.facing;
+            if (s.arc > 0.0f)
+                z.aim = e.facingAt;
 
             z.roles = 0;
             if (z.control)
@@ -275,6 +295,10 @@ namespace HazardZones
                 if (s.kind == HazardKind::Pulse || z.periodic)
                     z.roles |= HAZARD_MELEE;
             }
+            // A cone: melee too (behind or beside it is out of a front cone, beside it out of a
+            // back one; header).
+            if (z.Cone() && (z.control || z.damage > 0.0f))
+                z.roles |= HAZARD_HEALER | HAZARD_RANGED | HAZARD_MELEE;
             // The sheet says everyone gets out: melee always, the tank while it is being cast
             // (the caster stands still; at other times the boss would follow its tank).
             if (s.everyone && z.damage > 0.0f)
@@ -398,10 +422,39 @@ namespace HazardZones
         return PackResolver::Distance(zone.center, pos);
     }
 
-    bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos)
+    bool Covers(HazardZone const& zone, Position3 const& pos, float marginYd)
+    {
+        if (!zone.Cone())
+            return DistanceTo(zone, pos) <= zone.radius - marginYd;
+        return SpellTags::InCone(zone.center.x, zone.center.y, zone.center.z, zone.facing, zone.arc,
+                                 zone.radius - marginYd, pos.x, pos.y, pos.z, marginYd);
+    }
+
+    float ExitYd(HazardZone const& zone, Position3 const& pos)
+    {
+        if (!Covers(zone, pos))
+            return 0.0f;
+        float const radial = std::max(0.0f, zone.radius - DistanceTo(zone, pos));
+        if (!zone.Cone())
+            return radial;
+        float const dx = pos.x - zone.center.x;
+        float const dy = pos.y - zone.center.y;
+        float const d = std::sqrt(dx * dx + dy * dy);
+        float const pi = float(M_PI);
+        float const dir = zone.arc > 0.0f ? zone.facing : zone.facing + pi;
+        float const diff = std::fabs(std::remainder(std::atan2(dy, dx) - dir, 2.0f * pi));
+        float const half = std::fabs(zone.arc) * 0.5f;
+        // Sideways to the arc's edge: perpendicular distance to that ray (beyond a right angle
+        // the caster itself is the nearest edge point).
+        float const off = half - diff;
+        float const side = off >= pi * 0.5f ? d : d * std::sin(std::max(0.0f, off));
+        return std::min(radial, side);
+    }
+
+    bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos, ObjectGuid spare)
     {
         for (HazardZone const& z : zones)
-            if (z.DangerousTo(roleBit) && DistanceTo(z, pos) <= z.radius)
+            if (z.DangerousTo(roleBit) && (spare.IsEmpty() || z.aim != spare) && Covers(z, pos))
                 return true;
         return false;
     }

@@ -43,6 +43,17 @@ namespace Commander
         // (Tremor Totem: charm, fear, sleep; Fear Ward: fear). Boss doc G8.
         uint32 ControlMechanics(SpellEntry const* spell);
 
+        // A cone from the caster (an effect on TARGET_ENUM_UNITS_ENEMY_IN_CONE_24 / _54): its
+        // full width in radians as Spell.cpp PUSH_IN_CONE takes it (SpellMgr::GetSpellCone,
+        // spell_cone, default 60 degrees), negative = behind the caster (Tail Sweep -120).
+        // 0 = not a cone. `radius`: the largest radius of the cone effects. Boss doc G4.
+        float ConeArc(SpellEntry const* spell, float* radius = nullptr);
+        // `pos` is inside the cone of full width `arc` (ConeArc's sign) and `radius`, from a
+        // caster at `from` facing `facing` (2D angle; distance in 3D like IsWithinDist).
+        // `angleMarginYd` shrinks the arc's edges by that many yards at the distance.
+        bool InCone(float fromX, float fromY, float fromZ, float facing, float arc, float radius,
+                    float x, float y, float z, float angleMarginYd = 0.0f);
+
         // Some effect deals damage (direct, weapon, periodic, a ground area like Blizzard /
         // Consecration): wakes a target under a control that breaks on damage.
         bool DealsDamage(SpellEntry const* spell);

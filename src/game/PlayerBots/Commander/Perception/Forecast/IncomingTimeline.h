@@ -23,7 +23,9 @@
  *           repeat delay. Its target from castTarget: the victim, second / last on the threat
  *           list, nearest / farthest, random (expected = share 1 / candidates, worst = full).
  *           expected x probability, worst = full. An area spell hits everyone in its radius
- *           (around the caster, or around a sure target; cones counted as circles); a chain
+ *           (around the caster, or around a sure target); a cone (SpellProfile::coneArc)
+ *           those in its arc pointed at its victim or cast target (else where it faces), at a
+ *           random target the chance to be the one (boss doc G4); a chain
  *           spell (Cleave, Chain Lightning) its jumps from a sure target as Spell.cpp picks them.
  *   damage  SpellProfiles::Estimate (direct at landing, periodic spread over the duration),
  *           armor for physical spells.

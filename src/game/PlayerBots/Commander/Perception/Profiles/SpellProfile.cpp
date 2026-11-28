@@ -94,6 +94,7 @@ namespace SpellProfiles
         // Sleep / sap style control ends on the next hit (value-scoring: shorter control).
         p.breaksOnDamage = p.controls && spell->HasAuraInterruptFlag(AURA_INTERRUPT_DAMAGE_CANCELS);
         p.controlMechanics = SpellTags::ControlMechanics(spell);
+        p.coneArc = SpellTags::ConeArc(spell, &p.coneRadius);
         return p;
     }
 

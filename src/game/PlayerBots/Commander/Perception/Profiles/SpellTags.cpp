@@ -2,7 +2,9 @@
 #include "SpellEntry.h"
 #include "DBCStores.h"
 #include "ObjectDefines.h"
+#include "SpellMgr.h"
 #include <algorithm>
+#include <cmath>
 
 namespace Commander
 {
@@ -80,6 +82,47 @@ namespace SpellTags
             }
         }
         return mask;
+    }
+
+    float ConeArc(SpellEntry const* spell, float* radius)
+    {
+        bool cone = false;
+        float r = 0.0f;
+        for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (!spell->Effect[i])
+                continue;
+            uint32 const a = spell->EffectImplicitTargetA[i];
+            if (a != TARGET_ENUM_UNITS_ENEMY_IN_CONE_24 && a != TARGET_ENUM_UNITS_ENEMY_IN_CONE_54)
+                continue;
+            cone = true;
+            if (SpellRadiusEntry const* e = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
+                r = std::max(r, e->Radius);
+        }
+        if (radius)
+            *radius = r;
+        return cone ? sSpellMgr.GetSpellCone(spell->Id) : 0.0f;
+    }
+
+    bool InCone(float fromX, float fromY, float fromZ, float facing, float arc, float radius,
+                float x, float y, float z, float angleMarginYd)
+    {
+        float const dx = x - fromX;
+        float const dy = y - fromY;
+        float const dz = z - fromZ;
+        float const d2 = std::sqrt(dx * dx + dy * dy);
+        if (arc == 0.0f || std::sqrt(d2 * d2 + dz * dz) > radius)
+            return false;
+        if (d2 < 0.01f)
+            return false;          // the caster's own spot (an enemy's position asked)
+        float const pi = float(M_PI);
+        // A back cone is the front cone of the opposite facing (Spell.cpp: !HasInArc(2 pi + arc)).
+        float const half = std::fabs(arc) * 0.5f - std::atan2(angleMarginYd, d2);
+        if (half <= 0.0f)
+            return false;
+        float const dir = arc > 0.0f ? facing : facing + pi;
+        float const diff = std::fabs(std::remainder(std::atan2(dy, dx) - dir, 2.0f * pi));
+        return diff <= half;
     }
 
     bool DealsDamage(SpellEntry const* spell)

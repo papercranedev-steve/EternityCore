@@ -938,6 +938,11 @@ namespace Commander
         // (SpellProfile::controlMechanics): Tremor Totem for a fear, charm or sleep (boss doc G8).
         uint32 controlMechanics = 0;
         Position3 pos;
+        // Where it faces (2D angle), for its cones (boss doc G4): a creature faces the target
+        // of the cast it reads, else its victim (Unit::SetInFront on attack and taunt), else its
+        // own orientation. `facingAt` is that unit (empty: none).
+        float facing = 0.0f;
+        ObjectGuid facingAt;
         // UNIT_FIELD_BOUNDINGRADIUS: area spells and melee reach start at its edge, not its centre.
         float boundingRadius = 0.0f;
         float speed = 0.0f;             // run speed now, yards per second (slows included)

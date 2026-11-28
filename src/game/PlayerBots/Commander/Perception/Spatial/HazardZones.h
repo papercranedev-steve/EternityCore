@@ -16,8 +16,15 @@
  *           (Spell.cpp FillAreaTargets PUSH_SRC_CENTER, 3D distance), so the area follows the
  *           caster. Checked in spell_template: Melt Ore 5159, Psychic Scream 13704, Fireball
  *           Volley 15285, Deafening Screech 3589, Fire Shield pulses 11968 / 11351 all use A = 22, B = 15.
+ *           Cones (A = TARGET_ENUM_UNITS_ENEMY_IN_CONE_24 / _54, boss doc G4) are Burst zones
+ *           with an arc (SpellTags::ConeArc: spell_cone, default 60 degrees; negative = behind,
+ *           Tail Sweep) around the enemy's facing (EnemyFacts::facing: its cast target, else
+ *           its victim). A front cone cast at a random target only while it is cast (where it
+ *           turns is not known before). Dangerous to everyone but tanks (TankStanceBehavior
+ *           turns the enemy instead), melee too; the unit it points at (HazardZone::aim)
+ *           cannot leave it. Crystallize 16104 (Mother Smolderweb, 10 yd stun), breaths.
  *           Not counted: AT_DEST_LOC (16, centred on the victim or a point), dynamic objects
- *           (28, placed once), cones (24, 54, in front only), script targets (7, creatures).
+ *           (28, placed once), script targets (7, creatures).
  *  Pulse  - an aura on the creature itself (creature_template.auras, or a self-cast spell list
  *           entry) of type SPELL_AURA_PERIODIC_TRIGGER_SPELL whose triggered spell is a Burst
  *           shape: Fire Shield 11966 -> 11968 every 3 s, 5 yd (Fireguard), 11350 -> 11351
@@ -111,8 +118,15 @@ namespace Commander
         bool casting = false;           // the enemy is casting this spell now
         float castRemainingSec = 0.0f;
         float hitChance = 1.0f;         // Burst / Pulse 1; Range 1 / members in range
+        // A cone (Burst only, boss doc G4): full width in radians, < 0 behind the enemy, 0 = a
+        // circle. `facing`: EnemyFacts::facing; `aim`: the unit a front cone points at (its
+        // victim or cast target), who cannot leave it: the cone turns with it.
+        float arc = 0.0f;
+        float facing = 0.0f;
+        ObjectGuid aim;
 
         bool DangerousTo(uint8 roleBit) const { return (roles & roleBit) != 0; }
+        bool Cone() const { return arc != 0.0f; }
     };
 
     namespace HazardZones
@@ -141,9 +155,18 @@ namespace Commander
         // 3D distance from the zone centre (same metric as Spell.cpp PUSH_SRC_CENTER).
         float DistanceTo(HazardZone const& zone, Position3 const& pos);
 
-        // True if `pos` is inside a zone of `zones` that is dangerous to `roleBit`.
-        // TeamBotAI asks this before following the leader in combat.
-        bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos);
+        // `pos` is in the zone: within the radius less `marginYd`, and for a cone within its
+        // arc less `marginYd` at that distance (SpellTags::InCone).
+        bool Covers(HazardZone const& zone, Position3 const& pos, float marginYd = 0.0f);
+        // Yards from `pos` to the zone's edge (0 outside): radially, or for a cone also sideways
+        // out of its arc, whichever is shorter.
+        float ExitYd(HazardZone const& zone, Position3 const& pos);
+
+        // True if `pos` is inside a zone of `zones` that is dangerous to `roleBit`. `spare`: a
+        // member whose own position is asked; the cones aimed at it do not count (they turn
+        // with it). TeamBotAI asks this before following the leader in combat.
+        bool IsInside(std::vector<HazardZone> const& zones, uint8 roleBit, Position3 const& pos,
+                      ObjectGuid spare = ObjectGuid());
 
         char const* KindName(HazardKind kind);
     }

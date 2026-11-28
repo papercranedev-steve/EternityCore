@@ -49,7 +49,7 @@ namespace Commander
 
         bool Contains(HazardZone const& z, Position3 const& p, float margin = 0.0f)
         {
-            return HazardZones::DistanceTo(z, p) <= z.radius - margin;
+            return HazardZones::Covers(z, p, margin);
         }
 
         // Fights next to its victim: melee damage, and a tank (it only has zones that everyone
@@ -136,6 +136,9 @@ namespace Commander
         // The zone's enemy is chasing the bot in melee and is free to follow (not rooted).
         bool ChasesMe(Context const& ctx, WorldModel const& world, HazardZone const& z)
         {
+            // A cone pointed at the bot turns with it (HazardZone::aim).
+            if (z.aim == ctx.self->guid)
+                return true;
             if (MeleeLike(ctx.roleBit))
                 return false;   // melee stands next to it on purpose
             EnemyFacts const* e = world.FindEnemy(z.enemy);
@@ -170,7 +173,8 @@ namespace Commander
             // Field cells in a band just outside the zone (PositionField.h, FieldSpots.h).
             FieldSpots::Query q;
             q.center = zone.center;
-            q.minYd = zone.radius + (MeleeLike(ctx.roleBit) ? PB::MELEE_RING_EXTRA : PB::RING_EXTRA);
+            // A cone: out to its side too (the cells inside it fail CheapOk).
+            q.minYd = zone.Cone() ? 0.0f : zone.radius + (MeleeLike(ctx.roleBit) ? PB::MELEE_RING_EXTRA : PB::RING_EXTRA);
             q.maxYd = zone.radius + PB::RING_EXTRA + PB::SEARCH_BAND_YD;
             q.patrolBeforeSec = Value::FightRemainingSec(world);
             std::vector<Spot> spots;
@@ -278,7 +282,7 @@ namespace Commander
             bool anyEscaped = false;
             for (HazardZone const& z : zones)
             {
-                if (!z.DangerousTo(ctx.roleBit))
+                if (!z.DangerousTo(ctx.roleBit) || z.aim == self.guid)
                     continue;
                 bool const inHere = Contains(z, ctx.here);
                 bool const inThere = Contains(z, spot.pos);
@@ -392,7 +396,7 @@ namespace Commander
         {
             if (!z.DangerousTo(ctx.roleBit) || !Contains(z, ctx.here, ENTER_MARGIN) || ChasesMe(ctx, world, z))
                 continue;
-            float const toEdge = std::max(0.0f, z.radius + RING_EXTRA - HazardZones::DistanceTo(z, ctx.here));
+            float const toEdge = HazardZones::ExitYd(z, ctx.here) + RING_EXTRA;
             float const walkSec = toEdge * PATH_FACTOR / speed;
             float hits;
             if (z.casting)

@@ -2,7 +2,11 @@
 #include "Commander/Coordination/Situation/FightSpot/FightSpotAssigner.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/Profiles/Tags.h"
+#include "Commander/Perception/Profiles/SpellTags.h"
+#include "Commander/Perception/Spatial/HazardZones.h"
+#include "Commander/Perception/Spatial/PatrolZone.h"
 #include "Commander/Perception/Spatial/SafeRoute.h"
+#include "Commander/Perception/Values/SpotCost.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "TeamBotAI.h"
 #include "Map.h"
@@ -106,6 +110,101 @@ namespace Commander
             }
             p.action.holdMs = WalkHoldMs(me, distance);
             out.push_back(p);
+        }
+
+        // Points the cones of `zones` (an enemy's front cones aimed at this tank) cost the others
+        // over the horizon when it faces `facing` (header "turn").
+        float ConeLoss(WorldModel const& world, std::vector<HazardZone const*> const& zones, ObjectGuid self,
+                       float facing)
+        {
+            float loss = 0.0f;
+            for (HazardZone const* z : zones)
+            {
+                float const hits = SpotCost::ZoneHits(*z, TS::HORIZON_SEC, -1.0f) * z->hitChance;
+                for (PartyMemberFacts const& m : world.party)
+                {
+                    if (m.guid == self || !m.alive)
+                        continue;
+                    if (SpellTags::InCone(z->center.x, z->center.y, z->center.z, facing, z->arc, z->radius,
+                                          m.pos.x, m.pos.y, m.pos.z))
+                        loss += hits * HazardZones::HitPoints(world, *z, m);
+                }
+            }
+            return loss;
+        }
+
+        // Header "turn": true when it proposed (or keeps) the walk around `enemy`.
+        bool ProposeTurn(TeamBotAI const* bot, WorldModel const& world, PartyMemberFacts const& self,
+                         Unit* enemy, std::vector<Proposal>& out)
+        {
+            std::vector<HazardZone const*> cones;
+            for (HazardZone const& z : HazardZones::Get(world))
+                if (z.enemy == enemy->GetObjectGuid() && z.arc > 0.0f && z.aim == self.guid)
+                    cones.push_back(&z);
+            if (cones.empty())
+                return false;
+            Player* me = bot->me;
+            // Walking around it already: keep walking (an instant ability is fine).
+            if (bot->IsMovementHeld() && me->IsMoving())
+            {
+                out.push_back(Make(ProposalTier::Assigned, BotActionType::KeepWalking, "turning its cone away, keep walking"));
+                return true;
+            }
+
+            Position3 const here = Here(me);
+            Position3 const at = cones.front()->center;
+            float const now = std::atan2(here.y - at.y, here.x - at.x);
+            float const nowLoss = ConeLoss(world, cones, self.guid, now);
+            if (nowLoss <= 0.0f)
+                return false;
+
+            struct Candidate
+            {
+                Position3 spot;
+                float loss = 0.0f;
+                float walk = 0.0f;
+            };
+            float const reach = enemy->GetCombatReach() + TS::TURN_GAP_YD;
+            float const speed = std::max(1.0f, me->GetSpeed(MOVE_RUN));
+            std::vector<Candidate> candidates;
+            for (uint32 i = 0; i < TS::TURN_DIRECTIONS; ++i)
+            {
+                float const facing = 2.0f * float(M_PI) * float(i) / float(TS::TURN_DIRECTIONS);
+                Candidate c;
+                c.spot.x = at.x + reach * std::cos(facing);
+                c.spot.y = at.y + reach * std::sin(facing);
+                c.spot.z = here.z;
+                c.walk = SpotCost::Walk(world, self, SafeRoute::Distance2d(here, c.spot) * TS::PATH_FACTOR / speed);
+                c.loss = ConeLoss(world, cones, self.guid, facing) + c.walk;
+                candidates.push_back(c);
+            }
+            std::sort(candidates.begin(), candidates.end(),
+                      [](Candidate const& a, Candidate const& b) { return a.loss < b.loss; });
+
+            // Not worth a step unless it saves more than the margin (no shuffling back and forth).
+            float const margin = SpotCost::Walk(world, self, TS::TURN_MARGIN_SEC);
+            SafeRoute::IdleCreatures const idle(me);
+            std::vector<HazardZone> const& zones = HazardZones::Get(world);
+            float const fightSec = Value::FightRemainingSec(world);
+            for (Candidate& c : candidates)
+            {
+                if (c.loss + margin >= nowLoss)
+                    break;
+                if (!SpotOk(me, idle, here.z, c.spot) || HazardZones::IsInside(zones, HAZARD_TANK, c.spot) ||
+                    PatrolZone::Comes(world, c.spot, fightSec))
+                    continue;
+                Proposal p = Make(ProposalTier::Assigned, BotActionType::MoveTo,
+                                  "turn its cone away from the others");
+                p.action.target = enemy->GetObjectGuid();
+                p.action.x = c.spot.x;
+                p.action.y = c.spot.y;
+                p.action.z = c.spot.z;
+                p.action.holdMs = WalkHoldMs(me, SafeRoute::Distance2d(here, c.spot));
+                p.SetValue(nowLoss - (c.loss - c.walk), c.walk);
+                out.push_back(p);
+                return true;
+            }
+            return false;
         }
 
         // It walks to this tank by itself (header). Not while it casts: it stands until the cast
@@ -310,7 +409,10 @@ namespace Commander
         float current = 0.0f;
         bool const chasing = bot->GetChaseAngle(enemy, current);
         if (me->CanReachWithMeleeAutoAttack(enemy))
+        {
+            ProposeTurn(bot, world, *self, enemy, out);
             return;
+        }
 
         EnemyFacts const* facts = world.FindEnemy(enemy->GetObjectGuid());
         if (!facts)

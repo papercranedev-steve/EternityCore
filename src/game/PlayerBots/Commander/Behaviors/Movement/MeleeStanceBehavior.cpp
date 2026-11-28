@@ -177,7 +177,7 @@ namespace Commander
                         continue;
                     Position3 const s = SpotAt(enemy, a);
                     // (an area is an exclusion here: stepping out of one is the position module's)
-                    if (HazardZones::IsInside(zones, HAZARD_MELEE, s))
+                    if (HazardZones::IsInside(zones, HAZARD_MELEE, s, self.guid))
                         continue;
                     float const loss = SpotLoss(world, self, enemy, s, horizon) +
                                        SpotCost::Walk(world, self, Distance2d(from, s) / speed);

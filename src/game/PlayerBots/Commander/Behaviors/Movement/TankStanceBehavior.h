@@ -50,8 +50,17 @@
  *    "the other duties get it wrong"). Not while hiding from a caster (above). Without a healer
  *    bot nothing.
  *
+ *  - Turn (boss doc G4): its enemy is in melee reach and has a front cone aimed at this tank
+ *    (HazardZones: Crystallize, breaths; the enemy faces its victim). Spots TURN_DIRECTIONS
+ *    around it, TURN_GAP_YD off its edge: the cone then points from the enemy through the
+ *    spot. Loss of a spot = the cone's hits over HORIZON_SEC on every other member in it
+ *    (SpotCost::ZoneHits x HazardZones::HitPoints) + the walk (SpotCost::Walk). The best spot
+ *    that passes SpotOk, no tank zone and no coming patrol, if it saves more than
+ *    TURN_MARGIN_SEC of walk: MoveTo (tier Assigned, value the cone loss saved, cost the walk),
+ *    KeepWalking while it walks. The others also leave the cone themselves (a player tank
+ *    does not turn it): PositioningBehavior and the stances read the cone zones.
+ *
  * Not while: the retreat runs, rooted, on a transport, the bot cannot act.
- * Tank facing (turning enemies away from the party) is not done.
  */
 
 #ifndef MANGOS_COMMANDER_TANK_STANCE_BEHAVIOR_H
@@ -75,6 +84,12 @@ namespace Commander
         static constexpr uint32 UNREACHED_MS = 1000;
         // Out of everyone's sight: the points along the path to the healer tried, nearest first.
         static constexpr float SIGHT_STEPS[] = { 3.0f, 5.0f, 7.0f, 10.0f };
+        // Turning a cone away (header "turn"): spots this many around the enemy, this far from
+        // its edge (in melee reach: it turns, it does not walk), worth a step only when it saves
+        // more than TURN_MARGIN_SEC of walk.
+        static constexpr uint32 TURN_DIRECTIONS = 8;
+        static constexpr float TURN_GAP_YD = 1.0f;
+        static constexpr float TURN_MARGIN_SEC = 1.0f;
 
         char const* GetId() const override { return "tankstance"; }
         bool AppliesTo(TeamBotAI const* bot) const override;

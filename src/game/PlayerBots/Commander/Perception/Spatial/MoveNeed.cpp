@@ -31,7 +31,7 @@ namespace MoveNeed
         if (!melee && Value::IncomingOn(world, m.guid) > 0.0f)
             return MoveReason::Melee;
 
-        if (HazardZones::IsInside(HazardZones::Get(world), HazardZones::RoleBit(m.role), m.pos))
+        if (HazardZones::IsInside(HazardZones::Get(world), HazardZones::RoleBit(m.role), m.pos, m.guid))
             return MoveReason::Hazard;
 
         if (melee)
