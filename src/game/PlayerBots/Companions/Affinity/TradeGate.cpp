@@ -14,14 +14,15 @@ namespace Companions
         namespace
         {
             // Food, drink, a bigger bag, or gear it would wear over what it has.
-            bool Basic(Player const* me, ItemPrototype const* proto)
+            bool Basic(Player const* me, Item const* item)
             {
                 using BotShared::FoodAndDrink::Kind;
+                ItemPrototype const* proto = item->GetProto();
                 if (BotShared::FoodAndDrink::ItemSpell(proto, Kind::Food) || BotShared::FoodAndDrink::ItemSpell(proto, Kind::Drink))
                     return true;
                 if (BotShared::GearUpgrade::IsBagUpgrade(me, proto))
                     return true;
-                return proto->InventoryType != INVTYPE_NON_EQUIP && BotShared::GearUpgrade::IsUpgrade(me, proto);
+                return proto->InventoryType != INVTYPE_NON_EQUIP && BotShared::GearUpgrade::IsUpgrade(me, item);
             }
         }
 
@@ -38,7 +39,7 @@ namespace Companions
                 if (Item* item = his->GetItem(TradeSlots(slot)))
                 {
                     offered = true;
-                    if (slot == TRADE_SLOT_NONTRADED || !Basic(me, item->GetProto()))
+                    if (slot == TRADE_SLOT_NONTRADED || !Basic(me, item))
                         onlyBasic = false;
                 }
             if (!offered)

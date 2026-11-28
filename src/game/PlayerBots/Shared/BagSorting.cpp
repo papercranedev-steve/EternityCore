@@ -85,7 +85,7 @@ namespace BagSorting
             if (GivenItems::IsGiven(item))
                 return Fate::Keep;
             if (proto->Class == ITEM_CLASS_CONTAINER ? GearUpgrade::IsBagUpgrade(player, proto)
-                                                     : GearUpgrade::IsUpgrade(player, proto))
+                                                     : GearUpgrade::IsUpgrade(player, item))
                 return Fate::Keep;
             if (rules.keepUnboundGear && IsGear(proto) && !item->IsSoulBound())
                 return Fate::Keep;

@@ -429,15 +429,16 @@ float PartyBotAI::CraftExtraChance(SpellEntry const* spell) const { return Compa
 uint32 PartyBotAI::SavedReagent(SpellEntry const* spell) { return Companions::TraitEffects::SavedReagent(m_traitEffects, spell); }
 float PartyBotAI::GatherExtraChance() const { return Companions::TraitEffects::GatherExtraChance(m_traitEffects); }
 
-uint8 PartyBotAI::ChooseLootRoll(uint32 itemId) const
+uint8 PartyBotAI::ChooseLootRoll(uint32 itemId, uint32 randomPropertyId) const
 {
     if (!LootsForSelf())
         return ROLL_PASS;
     ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(itemId);
     if (!pProto)
         return ROLL_PASS;
-    // Need what it would wear; greed the rest that sells (as most players do).
-    bool const need = BotShared::GearUpgrade::IsUpgrade(me, pProto);
+    // Need what it would wear (fit for its class and role, Shared/GearUpgrade); greed the rest
+    // that sells (as most players do).
+    bool const need = BotShared::GearUpgrade::IsUpgrade(me, pProto, randomPropertyId);
     uint32 const worth = BotShared::BagSorting::WorthOf(itemId, 1);
     if (!need && !worth)
         return ROLL_PASS;

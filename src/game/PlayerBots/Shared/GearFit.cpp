@@ -35,18 +35,21 @@ namespace GearFit
             float meleeDps, rangedDps;
         };
 
+        // Armor counts a little for everyone and weapon damage a little for casters (they swing
+        // too, at low level and out of mana): a plain white robe or staff beats an empty slot
+        // (Shared/GearUpgrade compares by these scores).
         //                                str   agi   sta   int   spi   armor  ap    rap   spell heal  mp5   hit spHit crit spCrit wSkill dodge parry block bVal  def   mDps rDps
         Weights const TANK_PLATE      = { 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 0.02f, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 5,  0,    0,   0,     1.0f,  10,   10,   5,    0.3f, 1.2f, 0.5f, 0.1f };
         Weights const TANK_BEAR       = { 0.4f, 0.8f, 1.0f, 0.0f, 0.0f, 0.03f, 0.15f,0.0f, 0.0f, 0.0f, 0.0f, 5,  0,    4,   0,     0.0f,  10,   0,    0,    0.0f, 1.0f, 0.0f, 0.0f };
-        Weights const MELEE_STRENGTH  = { 1.0f, 0.6f, 0.25f,0.0f, 0.0f, 0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 12, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.2f };
-        Weights const MELEE_HYBRID    = { 1.0f, 0.5f, 0.25f,0.2f, 0.0f, 0.0f,  0.5f, 0.0f, 0.1f, 0.0f, 0.1f, 12, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.0f };
-        Weights const MELEE_AGILITY   = { 0.5f, 1.0f, 0.25f,0.0f, 0.0f, 0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 14, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.2f };
-        Weights const MELEE_CAT       = { 0.7f, 1.0f, 0.25f,0.0f, 0.0f, 0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 10, 0,    12,  0,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.0f };
-        Weights const RANGED_HUNTER   = { 0.05f,1.0f, 0.25f,0.3f, 0.0f, 0.0f,  0.05f,0.45f,0.0f, 0.0f, 0.1f, 12, 0,    12,  0,     1.0f,  0,    0,    0,    0.0f, 0.0f, 0.3f, 3.0f };
-        Weights const CASTER          = { 0.0f, 0.0f, 0.3f, 0.5f, 0.1f, 0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0,  10,   0,   9,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.4f };
-        Weights const CASTER_WARLOCK  = { 0.0f, 0.0f, 0.45f,0.4f, 0.1f, 0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 0.4f, 0,  10,   0,   8,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.4f };
-        Weights const HEALER          = { 0.0f, 0.0f, 0.25f,0.7f, 0.4f, 0.0f,  0.0f, 0.0f, 0.0f, 0.9f, 1.2f, 0,  0,    0,   5,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.2f };
-        Weights const HEALER_PALADIN  = { 0.0f, 0.0f, 0.25f,1.0f, 0.1f, 0.0f,  0.0f, 0.0f, 0.0f, 0.9f, 1.2f, 0,  0,    0,   6,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.0f };
+        Weights const MELEE_STRENGTH  = { 1.0f, 0.6f, 0.25f,0.0f, 0.0f, 0.01f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 12, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.2f };
+        Weights const MELEE_HYBRID    = { 1.0f, 0.5f, 0.25f,0.2f, 0.0f, 0.01f, 0.5f, 0.0f, 0.1f, 0.0f, 0.1f, 12, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.0f };
+        Weights const MELEE_AGILITY   = { 0.5f, 1.0f, 0.25f,0.0f, 0.0f, 0.01f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 14, 0,    12,  0,     2.0f,  0,    0,    0,    0.0f, 0.0f, 3.0f, 0.2f };
+        Weights const MELEE_CAT       = { 0.7f, 1.0f, 0.25f,0.0f, 0.0f, 0.01f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 10, 0,    12,  0,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.0f, 0.0f };
+        Weights const RANGED_HUNTER   = { 0.05f,1.0f, 0.25f,0.3f, 0.0f, 0.01f, 0.05f,0.45f,0.0f, 0.0f, 0.1f, 12, 0,    12,  0,     1.0f,  0,    0,    0,    0.0f, 0.0f, 0.3f, 3.0f };
+        Weights const CASTER          = { 0.0f, 0.0f, 0.3f, 0.5f, 0.1f, 0.01f, 0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 0,  10,   0,   9,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.1f, 0.4f };
+        Weights const CASTER_WARLOCK  = { 0.0f, 0.0f, 0.45f,0.4f, 0.1f, 0.01f, 0.0f, 0.0f, 1.0f, 0.0f, 0.4f, 0,  10,   0,   8,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.1f, 0.4f };
+        Weights const HEALER          = { 0.0f, 0.0f, 0.25f,0.7f, 0.4f, 0.01f, 0.0f, 0.0f, 0.0f, 0.9f, 1.2f, 0,  0,    0,   5,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.1f, 0.2f };
+        Weights const HEALER_PALADIN  = { 0.0f, 0.0f, 0.25f,1.0f, 0.1f, 0.01f, 0.0f, 0.0f, 0.0f, 0.9f, 1.2f, 0,  0,    0,   6,     0.0f,  0,    0,    0,    0.0f, 0.0f, 0.2f, 0.0f };
 
         Weights const& WeightsFor(uint8 classId, uint8 role)
         {
@@ -292,6 +295,22 @@ namespace GearFit
     float BestScore(ItemPrototype const* proto, uint8 classId, uint8 role)
     {
         return Score(proto, classId, role, BestRandomProperty(proto, classId, role));
+    }
+
+    float ExpectedScore(ItemPrototype const* proto, uint8 classId, uint8 role)
+    {
+        if (!proto->RandomProperty)
+            return Score(proto, classId, role);
+        float sum = 0.0f;
+        uint32 count = 0;
+        for (uint32 prop : GetItemEnchantModChoices(proto->RandomProperty))
+        {
+            if (!sItemRandomPropertiesStore.LookupEntry(prop))
+                continue;
+            sum += Score(proto, classId, role, prop);
+            ++count;
+        }
+        return count ? sum / float(count) : Score(proto, classId, role);
     }
 }
 }

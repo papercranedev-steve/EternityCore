@@ -24,9 +24,10 @@ namespace BotShared
         // Empty slots in the backpack and the bags (special bags such as quivers included).
         uint32 FreeBagSlots(Player const* player);
 
-        // Puts on what came into the bags since `before` and is an upgrade (GearUpgrade.h),
-        // through the equip handler: level, class and proficiency checks apply and the old item
-        // goes to the bags. Returns how many were put on.
+        // Puts on what came into the bags since `before` (empty: all it carries) and is an
+        // upgrade (GearUpgrade.h), into the slot it was measured against, as a player drags it
+        // there: level, class and proficiency checks apply and the old item goes to the bags.
+        // Returns how many were put on.
         uint32 WearUpgrades(Player* player, std::set<ObjectGuid> const& before);
 
         // Puts on the plain bags that came in since `before` and are bigger (GearUpgrade::

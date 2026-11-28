@@ -118,7 +118,7 @@ public:
     // A recruited companion (Companions/CompanionMgr): loots corpses itself, keeps its round
     // robin turns and rolls need / greed like a player. Other party bots leave loot to the player.
     bool LootsForSelf() const;
-    uint8 ChooseLootRoll(uint32 itemId) const override;
+    uint8 ChooseLootRoll(uint32 itemId, uint32 randomPropertyId) const override;
     // Companions buy their reagents and ammo (Life/Errands/MerchantTasks.h); other bots get them.
     bool GetsFreeSupplies() const override;
     // Companions earn class quest abilities (Companions/ClassQuests); other bots get them.

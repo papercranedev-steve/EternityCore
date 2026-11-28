@@ -1,6 +1,6 @@
 /*
  * Shared bot facts (PlayerBots/Shared): which quest reward a bot would pick by itself.
- * The biggest upgrade (Shared/GearUpgrade.h: item levels gained), else the one that sells for
+ * The biggest upgrade (Shared/GearUpgrade.h: fit score gained), else the one that sells for
  * the most. Soul companions doc §4.3 (automatic reward choice).
  */
 

@@ -54,22 +54,34 @@ namespace Inventory
 
     uint32 WearUpgrades(Player* player, std::set<ObjectGuid> const& before)
     {
-        std::set<ObjectGuid> now;
-        CollectBagItemGuids(player, now);
+        // Again while something went on: a one-hand weapon over a two-hand one frees the off
+        // hand for the shield next to it, a ring the other ring slot.
+        constexpr uint32 MAX_PASSES = 3;
         uint32 worn = 0;
-        for (ObjectGuid const& guid : now)
+        for (uint32 pass = 0; pass < MAX_PASSES; ++pass)
         {
-            if (before.find(guid) != before.end())
-                continue;
-            Item* item = player->GetItemByGuid(guid);
-            if (!item || item->IsEquipped() || !GearUpgrade::IsUpgrade(player, item->GetProto()))
-                continue;
-            WorldPackets::Item::AutoEquipItem packet;
-            packet.srcbag = item->GetBagSlot();
-            packet.srcslot = item->GetSlot();
-            player->GetSession()->HandleAutoEquipItemOpcode(packet);
-            if (item->IsEquipped())
-                ++worn;
+            std::set<ObjectGuid> now;
+            CollectBagItemGuids(player, now);
+            uint32 wornThisPass = 0;
+            for (ObjectGuid const& guid : now)
+            {
+                if (before.find(guid) != before.end())
+                    continue;
+                Item* item = player->GetItemByGuid(guid);
+                if (!item || item->IsEquipped())
+                    continue;
+                GearUpgrade::Upgrade const upgrade = GearUpgrade::Evaluate(player, item);
+                if (upgrade.gain <= 0.0f)
+                    continue;
+                // Into the slot it was measured against (the weaker ring, the off hand), as a
+                // player drags it there: the equip checks apply, the old item goes to the bags.
+                player->SwapItem(item->GetPos(), uint16(INVENTORY_SLOT_BAG_0) << 8 | upgrade.slot);
+                if (item->IsEquipped())
+                    ++wornThisPass;
+            }
+            worn += wornThisPass;
+            if (!wornThisPass)
+                break;
         }
         return worn;
     }

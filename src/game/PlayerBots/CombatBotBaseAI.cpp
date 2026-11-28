@@ -3198,7 +3198,7 @@ void CombatBotBaseAI::AddHunterAmmo()
     }
 }
 
-uint8 CombatBotBaseAI::ChooseLootRoll(uint32 /*itemId*/) const
+uint8 CombatBotBaseAI::ChooseLootRoll(uint32 /*itemId*/, uint32 /*randomPropertyId*/) const
 {
     return ROLL_PASS;
 }
@@ -3232,10 +3232,9 @@ void CombatBotBaseAI::EquipOrUseNewItem()
             // Never sold nor destroyed for room by the bot (Shared/BagSorting).
             BotShared::GivenItems::Mark(me, pItem);
 
+            // (weapons and armor: BotShared::Inventory::WearUpgrades below)
             switch (pItem->GetProto()->Class)
             {
-                case ITEM_CLASS_WEAPON:
-                case ITEM_CLASS_ARMOR:
                 case ITEM_CLASS_CONTAINER:
                 case ITEM_CLASS_QUIVER:
                 {
@@ -3255,6 +3254,8 @@ void CombatBotBaseAI::EquipOrUseNewItem()
                 }
             }
         }
+        // Gear that fits it better than what it wears (Shared/GearUpgrade).
+        BotShared::Inventory::WearUpgrades(me, m_itemsBeforeTrade);
         // Bigger bags over smaller ones (the loop above only fills empty bag slots).
         BotShared::Inventory::WearBiggerBags(me, m_itemsBeforeTrade);
 
@@ -3696,15 +3697,17 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             if (!me)
                 return;
 
-            // (WorldPackets::Loot::LootStartRoll: guid, slot, item entry, ...)
+            // (WorldPackets::Loot::LootStartRoll: guid, slot, item entry, random suffix (unused),
+            // random property, countdown)
             uint64 guid = *((uint64*)(*packet).contents());
             uint32 slot = *(((uint32*)(*packet).contents()) + 2);
             uint32 itemId = *(((uint32*)(*packet).contents()) + 3);
+            uint32 randomPropertyId = (*packet).size() >= 6 * sizeof(uint32) ? *(((uint32*)(*packet).contents()) + 5) : 0;
 
             auto data = std::make_unique<WorldPackets::Loot::LootRoll>();
             data->lootedTarget = ObjectGuid(guid);
             data->itemSlot = slot;
-            data->rollType = ChooseLootRoll(itemId);
+            data->rollType = ChooseLootRoll(itemId, randomPropertyId);
             me->GetSession()->QueuePacket(std::move(data));
             return;
         }

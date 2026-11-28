@@ -44,6 +44,8 @@
 #include "Commander/Perception/Spatial/AggroRange.h"
 #include "Shared/Inventory.h"
 #include "Shared/RandomGear.h"
+#include "Shared/GearUpgrade.h"
+#include "Shared/GearFit.h"
 #include "Companions/CompanionMgr.h"
 #include "Companions/Affinity/Gates.h"
 #include "Shared/Supplies.h"
@@ -1995,6 +1997,42 @@ namespace DevConsole
         }
         return 1;
     }
+    // u:gearscore(itemId [, role [, suffix]]) -> why the bot would need or pass an item
+    // (Shared/GearUpgrade fit scoring): { id, name, role, score, upgrade, slot, replaced, gain }.
+    // role: the bot's own when nil; suffix: a random property id, nil = the item's best.
+    static int U_gearscore(lua_State* L)
+    {
+        Player* p = CheckPlayer(L, 1);
+        uint32 itemId = uint32(luaL_checkinteger(L, 2));
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        if (!proto)
+            return luaL_error(L, "no item %u", itemId);
+
+        CombatBotRoles role = BotShared::GearUpgrade::RoleOf(p) == ROLE_INVALID ? ROLE_INVALID
+                                                                                : CombatBotRoles(BotShared::GearUpgrade::RoleOf(p));
+        if (!lua_isnoneornil(L, 3))
+        {
+            if (!ParseRole(luaL_checkstring(L, 3), role))
+                return luaL_error(L, "role must be tank, healer, meleedps, rangedps or auto");
+            BotShared::GearUpgrade::SetRole(p->GetObjectGuid(), uint8(role));
+        }
+        uint32 const suffix = lua_isnoneornil(L, 4)
+            ? BotShared::GearFit::BestRandomProperty(proto, p->GetClass(), uint8(role))
+            : uint32(luaL_checkinteger(L, 4));
+
+        BotShared::GearUpgrade::Upgrade const up = BotShared::GearUpgrade::Evaluate(p, proto, suffix);
+
+        lua_createtable(L, 0, 8);
+        lua_pushinteger(L, proto->ItemId); lua_setfield(L, -2, "id");
+        lua_pushstring(L, proto->Name1); lua_setfield(L, -2, "name");
+        lua_pushinteger(L, role); lua_setfield(L, -2, "role");
+        lua_pushnumber(L, BotShared::GearFit::Score(proto, p->GetClass(), uint8(role), suffix)); lua_setfield(L, -2, "score");
+        lua_pushboolean(L, up.gain > 0.0f); lua_setfield(L, -2, "upgrade");
+        lua_pushinteger(L, up.slot); lua_setfield(L, -2, "slot");
+        lua_pushnumber(L, up.replaced); lua_setfield(L, -2, "replaced");
+        lua_pushnumber(L, up.gain); lua_setfield(L, -2, "gain");
+        return 1;
+    }
     // Destroys everything in the backpack and bags (not equipped items, not the bags themselves).
     static int U_clearbags(lua_State* L)
     {
@@ -2749,7 +2787,7 @@ namespace DevConsole
             { "respawn", U_respawn }, { "combatstop", U_combatstop }, { "say", U_say }, { "tell", U_tell },
             { "addonmsg", U_addonmsg }, { "partysay", U_partysay },
             { "select", U_select }, { "setrole", U_setrole }, { "removebot", U_removebot },
-            { "premade", U_premade }, { "gear", U_gear }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
+            { "premade", U_premade }, { "gear", U_gear }, { "gearscore", U_gearscore }, { "clearbags", U_clearbags }, { "removepet", U_removepet }, { "givepet", U_givepet }, { "cmd", U_cmd },
             { "money", U_money }, { "setmoney", U_setmoney }, { "itemcount", U_itemcount },
             { "freeslots", U_freeslots }, { "supplies", U_supplies }, { "stock", U_stock },
             { "additem", U_additem }, { "canuse", U_canuse }, { "wearbags", U_wearbags }, { "trainup", U_trainup },

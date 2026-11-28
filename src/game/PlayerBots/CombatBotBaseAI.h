@@ -210,9 +210,10 @@ public:
 
     void EquipOrUseNewItem();
     void CollectBagItemGuids(std::set<ObjectGuid>& guids) const;
-    // Group loot roll for `itemId` (a RollVote: ROLL_PASS / ROLL_NEED / ROLL_GREED). Bots pass,
-    // so the player gets the item; PartyBotAI lets companions roll like players.
-    virtual uint8 ChooseLootRoll(uint32 itemId) const;
+    // Group loot roll for `itemId` with its suffix `randomPropertyId` (0 none) (a RollVote:
+    // ROLL_PASS / ROLL_NEED / ROLL_GREED). Bots pass, so the player gets the item; PartyBotAI
+    // lets companions roll like players.
+    virtual uint8 ChooseLootRoll(uint32 itemId, uint32 randomPropertyId) const;
     // Reagents (AddAllSpellReagents, the refill on a failed cast) and hunter ammo (AddHunterAmmo)
     // are created for free. PartyBotAI: not for companions, they buy them.
     virtual bool GetsFreeSupplies() const { return true; }
