@@ -269,6 +269,16 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/BlackrockDepthsFlamelash.cpp
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.h
   ${COMMANDER_DIR}/Encounters/DeadminesVanCleef.cpp
+  ${COMMANDER_DIR}/Encounters/BlackfathomFires.h
+  ${COMMANDER_DIR}/Encounters/BlackfathomFires.cpp
+  ${COMMANDER_DIR}/Encounters/BlackrockSpireUrok.h
+  ${COMMANDER_DIR}/Encounters/BlackrockSpireUrok.cpp
+  ${COMMANDER_DIR}/Encounters/GnomereganGrubbis.h
+  ${COMMANDER_DIR}/Encounters/GnomereganGrubbis.cpp
+  ${COMMANDER_DIR}/Encounters/RazorfenGong.h
+  ${COMMANDER_DIR}/Encounters/RazorfenGong.cpp
+  ${COMMANDER_DIR}/Encounters/StratholmeWilley.h
+  ${COMMANDER_DIR}/Encounters/StratholmeWilley.cpp
   ${COMMANDER_DIR}/Encounters/ScarletHerod.h
   ${COMMANDER_DIR}/Encounters/ScarletHerod.cpp
   ${COMMANDER_DIR}/Encounters/ScarletMograineWhitemane.h
