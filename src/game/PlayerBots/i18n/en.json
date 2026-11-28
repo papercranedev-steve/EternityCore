@@ -1055,6 +1055,7 @@
     "Go, push him!"
   ],
   "voice.boss.flamelash.spirits": "Burning Spirits! Kill them before they reach him!",
+  "voice.boss.herod.trainees": "Don't sit down, his trainees are coming!",
   "voice.quest.alldone": {
     "default": ["\"{quest}\" is done for all of us. Back to {giver}.", "We're done with \"{quest}\", let's hand it in to {giver}."],
     "chatty": "All done with \"{quest}\"! Come on, {giver} owes us a reward!",
