@@ -564,6 +564,17 @@ namespace Commander
         openers.shotRange = rangedRange;
         openers.face = method == PullMethod::Auto || method == PullMethod::Face;
         openers.forced = forceRanged || method == PullMethod::Face;
+        // A boss whose door shuts when he starts (BossPrep::seal): a shot or face pull from
+        // outside would start him with the party there, the door shut between (he was held at
+        // it and fought through it, rivendare-20261128-191005). Walk in, fight in the room.
+        SealedRoom sealed;
+        if (BossPrep const* prep = FindSealedPrep(commander.GetPlan().bossPreps, candidates))
+        {
+            sealed = prep->seal;
+            openers.shotSpell = 0;
+            openers.face = false;
+            openers.forced = false;
+        }
 
         // Each candidate is judged with its best approach (walk in, open from a shot or face
         // pull spot, ambush a patrol on its way), then ranked (Better).
@@ -667,8 +678,9 @@ namespace Commander
         placeIn.estimate = estimate;
         FightPlace::Choice const place = FightPlace::Choose(placeIn);
         // An ambushed patrol is fought where it meets the tank (the spot is near the party).
-        bool const returnToSpot = !best.ambush && place.place == FightPlace::Kind::BringBack;
-        bool const corner = !best.ambush && place.place == FightPlace::Kind::Corner;
+        // (a sealed room: fought inside, the door is shut behind the party)
+        bool const returnToSpot = !best.ambush && !sealed.active && place.place == FightPlace::Kind::BringBack;
+        bool const corner = !best.ambush && !sealed.active && place.place == FightPlace::Kind::Corner;
 
         // Bringing them back: open from range when the tank can (and that brings no more).
         ShotSpot::Spot returnSpot;
@@ -753,7 +765,8 @@ namespace Commander
             pull.faceSpot = best.spot.at;
         }
         pull.corner = corner;
-        pull.placeWhy = place.why;
+        pull.placeWhy = sealed.active ? "the door shuts when the fight starts: everyone goes in with the tank" : place.why;
+        pull.sealed = sealed;
         for (PartyMemberFacts const& m : world.party)
         {
             if (m.isPet)

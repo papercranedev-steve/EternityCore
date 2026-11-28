@@ -254,6 +254,16 @@ namespace Commander
             return;
         for (BossPrep const& prep : m_plan.bossPreps)
         {
+            // A door that shuts at the pull: said before he walks through it alone.
+            if (prep.seal.active && prep.seal.DoorDistance(leader->pos) <= BossPrep::SEAL_WARN_YD)
+            {
+                VoiceEvent e;
+                e.key = "voice.boss.sealed.gather";
+                e.tier = VoiceTier::Essential;
+                e.once = "bossseal:" + std::to_string(prep.boss.GetCounter());
+                e.onceMs = BossPrep::WARN_AGAIN_MS;
+                m_plan.voice.push_back(std::move(e));
+            }
             if (prep.clearFirst.empty() || !prep.voiceKey[0] ||
                 PackResolver::Distance(leader->pos, prep.bossPos) > BossPrep::WARN_YD)
                 continue;

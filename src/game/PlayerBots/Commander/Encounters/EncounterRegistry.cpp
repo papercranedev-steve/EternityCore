@@ -20,6 +20,7 @@
 #include "Commander/Encounters/StratholmeWilley.h"
 #include "Commander/Encounters/WailingCavernsNaralex.h"
 #include "Commander/Encounters/StratholmeAnastari.h"
+#include "Commander/Encounters/StratholmeRivendare.h"
 #include "Commander/Encounters/SunkenTempleHakkar.h"
 #include "Commander/Encounters/ZulFarrakPyramid.h"
 
@@ -63,6 +64,7 @@ namespace Commander
             { StratholmeWilley::MAP_ID,         &Make<StratholmeWilley> },
             { WailingCavernsNaralex::MAP_ID,    &Make<WailingCavernsNaralex> },
             { StratholmeAnastari::MAP_ID,       &Make<StratholmeAnastari> },
+            { StratholmeRivendare::MAP_ID,      &Make<StratholmeRivendare> },
             { SunkenTempleHakkar::MAP_ID,       &Make<SunkenTempleHakkar> },
             { ZulFarrakPyramid::MAP_ID,         &Make<ZulFarrakPyramid> },
         };

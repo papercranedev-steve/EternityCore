@@ -308,6 +308,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
   ${COMMANDER_DIR}/Encounters/StratholmeAnastari.h
   ${COMMANDER_DIR}/Encounters/StratholmeAnastari.cpp
+  ${COMMANDER_DIR}/Encounters/StratholmeRivendare.h
+  ${COMMANDER_DIR}/Encounters/StratholmeRivendare.cpp
   ${COMMANDER_DIR}/Encounters/SunkenTempleHakkar.h
   ${COMMANDER_DIR}/Encounters/SunkenTempleHakkar.cpp
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.h
@@ -460,6 +462,7 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.h
   ${COMMANDER_DIR}/Perception/Spatial/LeaderTrail.cpp
   ${COMMANDER_DIR}/Perception/Spatial/WayIn.h
+  ${COMMANDER_DIR}/Perception/Spatial/SealedRoom.h
   ${COMMANDER_DIR}/Perception/Spatial/WayIn.cpp
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.h
   ${COMMANDER_DIR}/Behaviors/Movement/TrailFollow.cpp

@@ -215,15 +215,74 @@ namespace HumanFollow
             return !u->IsMoving() && u->movespline->Finalized();
         }
 
+        Position3 PosOf(Unit const* u)
+        {
+            Position3 p;
+            p.x = u->GetPositionX();
+            p.y = u->GetPositionY();
+            p.z = u->GetPositionZ();
+            return p;
+        }
+
+        // The close place at a sealed room's door (CLOSE_*): behind the leader, in front of him
+        // towards the boss once he is past the door; the personality's depth and side, scaled.
+        FollowSpot::Offset ClosePlace(Player const* bot, Unit const* leader, float heading, SealedRoom const& seal)
+        {
+            Personality const p = Of(bot);
+            float const share = Clamp01((p.offset.dist - DIST_MIN) / (DIST_MAX - DIST_MIN));
+            float const side = std::remainder(p.offset.angle - float(M_PI), 2.0f * float(M_PI)) / SIDE_MAX * CLOSE_SIDE_MAX;
+            float const center = seal.Inside(PosOf(leader))
+                ? std::remainder(seal.Bearing() - heading, 2.0f * float(M_PI)) : float(M_PI);
+            FollowSpot::Offset o;
+            o.dist = CLOSE_DIST_MIN + share * (CLOSE_DIST_MAX - CLOSE_DIST_MIN);
+            o.angle = center + side;
+            return o;
+        }
+
+        float SpotGap(FollowSpot::Offset const& a, FollowSpot::Offset const& b)
+        {
+            Spot const pa = SpotOf(a);
+            Spot const pb = SpotOf(b);
+            return std::sqrt((pa.x - pb.x) * (pa.x - pb.x) + (pa.y - pb.y) * (pa.y - pb.y));
+        }
+
         bool Due(uint32 now, uint32 at)
         {
             return int32(now - at) >= 0;
         }
     }
 
+    bool NearSealedRoom(Player const* bot, Unit const* leader, SealedRoom& out)
+    {
+        if (bot == leader)
+            return false;
+        std::shared_ptr<PartyCommander> const commander = sCommanderMgr.FindCommander(bot);
+        if (!commander)
+            return false;
+        Position3 const at = PosOf(leader);
+        for (BossPrep const& prep : commander->GetPlan().bossPreps)
+        {
+            if (prep.seal.active && prep.seal.DoorDistance(at) <= SealedRoom::CLOSE_FOLLOW_YD)
+            {
+                out = prep.seal;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool InSealedRoom(Player const* bot, Unit const* leader)
+    {
+        SealedRoom seal;
+        return NearSealedRoom(bot, leader, seal) && seal.Inside(PosOf(leader));
+    }
+
     bool Leads(Player const* bot, Unit const* leader)
     {
         if (bot == leader)
+            return false;
+        SealedRoom seal;
+        if (NearSealedRoom(bot, leader, seal))
             return false;
         // (the commander of the bot's own map: this map thread)
         std::shared_ptr<PartyCommander> const commander = sCommanderMgr.FindCommander(bot);
@@ -235,6 +294,9 @@ namespace HumanFollow
 
     FollowSpot::Offset Reroll(Player const* bot, Unit const* leader, float heading)
     {
+        SealedRoom seal;
+        if (NearSealedRoom(bot, leader, seal))
+            return ClosePlace(bot, leader, heading, seal);
         Personality const p = Of(bot);
         Zone const z = ZoneOf(bot, leader, heading);
         // (the personality's distance as a share of the 1-follower zone: the same part of a
@@ -254,6 +316,33 @@ namespace HumanFollow
                 bot->SetStandState(UNIT_STAND_STATE_STAND);
             s = IdleState();
             return false;
+        }
+
+        // At a sealed room's door: close behind him, nothing else (CLOSE_*).
+        {
+            SealedRoom seal;
+            if (NearSealedRoom(bot, leader, seal))
+            {
+                if (s.sat && bot->IsSittingDown())
+                    bot->SetStandState(UNIT_STAND_STATE_STAND);
+                bool const wasClose = s.close;
+                FollowSpot::Offset const lastWant = s.closeWant;
+                FollowSpot::Offset const want = ClosePlace(bot, leader, Heading(bot, leader), seal);
+                s = IdleState();
+                s.close = true;
+                s.closeWant = want;
+                if (wasClose && SpotGap(lastWant, want) < CLOSE_REISSUE_YD)
+                    return false;
+                next = want;
+                return true;
+            }
+            if (s.close)
+            {
+                // Away from the door again: a place in the usual zone.
+                s = IdleState();
+                next = Reroll(bot, leader, Heading(bot, leader));
+                return true;
+            }
         }
 
         // What he is doing (a bot guide: nothing of the sort).
@@ -407,6 +496,13 @@ namespace HumanFollow
             s.reactionMs = std::min(s.reactionMs, LEAD_REACTION_MS);
             s.startSlack = std::min(s.startSlack, LEAD_START_SLACK);
             s.stopSlack = std::min(s.stopSlack, s.startSlack - BAND_GAP);
+        }
+        SealedRoom seal;
+        if (NearSealedRoom(bot, leader, seal))
+        {
+            s.reactionMs = std::min(s.reactionMs, CLOSE_REACTION_MS);
+            s.startSlack = std::min(s.startSlack, CLOSE_START_SLACK);
+            s.stopSlack = std::min(s.stopSlack, CLOSE_STOP_SLACK);
         }
         s.faceArc = p.faceArc;
         s.turnDelayMs = p.turnDelayMs;

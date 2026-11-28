@@ -44,6 +44,7 @@
 #include "Common.h"
 #include "FollowStyle.h"
 #include "Commander/Behaviors/Movement/FollowSpot.h"
+#include "Commander/Perception/Spatial/SealedRoom.h"
 
 class Player;
 class Unit;
@@ -135,6 +136,24 @@ namespace HumanFollow
     constexpr float LOOSE_AREA_PER_FOLLOWER = 8.0f;
     constexpr float LOOSE_DIST_MAX = 7.0f;
 
+    // Close (user 2026-11-28): the leader within SealedRoom::CLOSE_FOLLOW_YD of a boss door that
+    // shuts when the boss starts (BossPrep::seal; Baron Rivendare's gate shut with the bots
+    // outside, rivendare-20261128-190203). Every bot follows CLOSE_DIST_MIN..MAX right behind
+    // him, its side the personality's scaled to CLOSE_SIDE_MAX; no lead in front (the tank
+    // would step through first), no drift, idle acts, sitting or spreading; it starts at once
+    // (CLOSE_* style). A leader who walks in has them through with him before the door shuts
+    // (the boss's first pulse comes 0-2 s after he is in reach). The leader past the door:
+    // the places are in front of him towards the boss (behind him may still be outside), and
+    // FollowSpot does not move them back (InSealedRoom). A new close place only when the wanted
+    // one moved CLOSE_REISSUE_YD.
+    constexpr float CLOSE_DIST_MIN = 1.5f;
+    constexpr float CLOSE_DIST_MAX = 2.5f;
+    constexpr float CLOSE_SIDE_MAX = 0.4f;          // radians
+    constexpr uint32 CLOSE_REACTION_MS = 100;
+    constexpr float CLOSE_START_SLACK = 0.8f;
+    constexpr float CLOSE_STOP_SLACK = 0.3f;
+    constexpr float CLOSE_REISSUE_YD = 0.75f;
+
     struct Personality
     {
         FollowSpot::Offset offset;
@@ -166,6 +185,9 @@ namespace HumanFollow
         // back: CenterOf).
         bool spread = false;
         float spreadCenter = 0.0f;
+        // Following close at a sealed room's door (CLOSE_*), at this place.
+        bool close = false;
+        FollowSpot::Offset closeWant;
         bool stopKnown = false;     // where the leader last stood (REROLL_MOVE_YD)
         float stopX = 0.0f;
         float stopY = 0.0f;
@@ -173,8 +195,16 @@ namespace HumanFollow
 
     Personality Of(Player const* bot);
 
-    // `bot` walks in front of `leader`: the main tank of its team, not the leader.
+    // `bot` walks in front of `leader`: the main tank of its team, not the leader (not at a
+    // sealed room's door: CLOSE_*).
     bool Leads(Player const* bot, Unit const* leader);
+
+    // The sealed room whose door `leader` is near (CLOSE_*; TeamPlan::bossPreps of the bot's
+    // commander, out of the fight only), or false.
+    bool NearSealedRoom(Player const* bot, Unit const* leader, SealedRoom& out);
+    // `leader` is past the door of that room: FollowSpot must not move the close place back
+    // behind him (outside the door).
+    bool InSealedRoom(Player const* bot, Unit const* leader);
 
     // A new place in the bot's preferred part of its zone (behind `leader`, in front for the
     // lead), MIN_GAP from the team's other members where possible (FollowSpot not asked: the

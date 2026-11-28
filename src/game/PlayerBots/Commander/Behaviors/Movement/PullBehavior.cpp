@@ -464,6 +464,23 @@ namespace Commander
             }
         }
 
+        // A boss room whose door shuts when he starts (PullPlan::sealed): everyone walks in right
+        // behind the tank, or the door shuts with them outside (rivendare-20261128-190203: only
+        // the tank was in). Same refresh as the tank, from the door (ClearPlanner gathers them).
+        if (pull.sealed.active && pull.phase == PullPhase::Approach && !me->IsInCombat())
+        {
+            Position3 const in = pull.sealed.PointPast(SealedRoom::ENTER_YD);
+            float const left = PackResolver::Distance(PositionOf(me), in);
+            if (left > PullBehavior::POINT_ARRIVED_YD)
+            {
+                if (bot->IsMovementHeld() && me->IsMoving())
+                    out.push_back(Make(ProposalTier::Assigned, 5.0f, BotActionType::Hold));
+                else
+                    out.push_back(MoveTo(in, left));
+                return;
+            }
+        }
+
         // Everyone else waits for the tank. Higher-scored proposals (interrupts, threat) still win.
         // Only out of combat: a bot already in a fight (the player attacked first, a patrol joined)
         // must not stand idle. In Settle, past the arrival wait, healers wait until the casters

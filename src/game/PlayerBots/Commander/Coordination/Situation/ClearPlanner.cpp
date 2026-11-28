@@ -151,6 +151,26 @@ namespace ClearPlanner
             return nullptr;
         }
 
+        // The sealed-room BossPrep of a boss in `pack` while not every living member stands at
+        // its door, safely outside (SealedRoom::GATHER_YD); `away` = how many do not. Else null.
+        BossPrep const* SealedNotGathered(TeamPlan const& plan, WorldModel const& world, PackFacts const& pack,
+                                          uint32& away)
+        {
+            for (BossPrep const& prep : plan.bossPreps)
+            {
+                if (!prep.seal.active ||
+                    !AnyMember(pack, [&prep](PackCreature const& c) { return c.guid == prep.boss; }))
+                    continue;
+                away = 0;
+                for (PartyMemberFacts const& m : world.party)
+                    if (m.alive && !m.isPet &&
+                        (!prep.seal.SafeOutside(m.pos) || prep.seal.DoorDistance(m.pos) > SealedRoom::GATHER_YD))
+                        ++away;
+                return away ? &prep : nullptr;
+            }
+            return nullptr;
+        }
+
         // Any of `guids` is in a pack with a boss.
         bool HasBoss(WorldModel const& world, std::vector<ObjectGuid> const& guids)
         {
@@ -756,6 +776,22 @@ namespace ClearPlanner
                             clear.prepNoted.push_back(prep->boss);
                             Note(plan, Format("Not asking about %s yet: %u creature(s) it calls must die first.",
                                 first->GetName(), uint32(prep->clearFirst.size())));
+                        }
+                        continue;
+                    }
+                }
+                // Its door shuts when he starts (BossPrep::seal): asked about and pulled only
+                // with everyone at the door; after a yes too (planned again then).
+                if ((askBoss || approved) && !clear.chosenOnly)
+                {
+                    uint32 away = 0;
+                    if (BossPrep const* prep = SealedNotGathered(plan, world, pack, away))
+                    {
+                        if (!Contains(clear.sealNoted, prep->boss))
+                        {
+                            clear.sealNoted.push_back(prep->boss);
+                            Note(plan, Format("Not starting %s yet: the door shuts when the fight starts; "
+                                "waiting for everyone at the door (%u not there).", first->GetName(), away));
                         }
                         continue;
                     }

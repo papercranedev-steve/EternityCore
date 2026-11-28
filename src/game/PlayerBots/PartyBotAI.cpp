@@ -502,6 +502,11 @@ Commander::FollowSpot::Offset PartyBotAI::ChooseFollowOffset(Unit* pLeader, floa
 {
     // The next check is one bot update away, and the follow generator runs ahead of the leader.
     float const lookaheadSec = sCommanderMgr.GetBotUpdateInterval() / 1000.0f + Commander::FollowSpot::FOLLOW_EXTRAPOLATION_SEC;
+    // The leader went through a door that shuts when the boss starts (HumanFollow CLOSE_*):
+    // the close place in front of him stays; FollowSpot would move it behind him, outside the
+    // door (the boss is within aggro reach of every place in there).
+    if (Commander::HumanFollow::InSealedRoom(me, pLeader))
+        return m_followOffset;
     return Commander::FollowSpot::Choose(me, pLeader, m_followOffset, lookaheadSec, heading);
 }
 

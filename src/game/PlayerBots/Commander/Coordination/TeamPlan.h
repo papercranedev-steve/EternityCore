@@ -15,6 +15,7 @@
 #include "Commander/Perception/Forecast/ThreatRunway.h"
 #include "Commander/Perception/Profiles/StandIn.h"
 #include "Commander/Perception/Spatial/WayIn.h"
+#include "Commander/Perception/Spatial/SealedRoom.h"
 #include "Commander/Coordination/DutyAllocator.h"
 #include <algorithm>
 #include <string>
@@ -138,8 +139,12 @@ namespace Commander
         }
     };
 
-    // A boss whose pull wants creatures dead first (IEncounter::BeforePull, boss doc G9): Golem
-    // Lord Argelmach calls every golem within 80 yd when he is pulled. TeamPlan::bossPreps.
+    // What a boss's pull needs first (IEncounter::BeforePull, boss doc G9). TeamPlan::bossPreps.
+    //  - Creatures dead first: Golem Lord Argelmach calls every golem within 80 yd when he is
+    //    pulled.
+    //  - Everyone in with the tank: a door that shuts when he starts (SealedRoom; Baron
+    //    Rivendare). The party gathers at the door, the boss is asked about then, all walk in
+    //    together, and the bots follow the leader close near it (HumanFollow).
     struct BossPrep
     {
         ObjectGuid boss;
@@ -148,9 +153,21 @@ namespace Commander
         // PlayerBots/i18n key said when the leader comes within BossPrep::WARN_YD ({count}:
         // clearFirst.size()); empty = none.
         char const* voiceKey = "";
+        SealedRoom seal;                        // active: the room shuts at the pull
         static constexpr float WARN_YD = 40.0f;
         static constexpr uint32 WARN_AGAIN_MS = 2 * 60 * 1000;
+        // Sealed room: "the door shuts, we go in together" when the leader comes this near the door.
+        static constexpr float SEAL_WARN_YD = 25.0f;
     };
+
+    // The sealed room of a boss in `guids` (TeamPlan::bossPreps), or null.
+    inline BossPrep const* FindSealedPrep(std::vector<BossPrep> const& preps, std::vector<ObjectGuid> const& guids)
+    {
+        for (BossPrep const& prep : preps)
+            if (prep.seal.active && std::find(guids.begin(), guids.end(), prep.boss) != guids.end())
+                return &prep;
+        return nullptr;
+    }
 
     // A pack a clear would leave that the player may want (ClearPlan::asks): AutoClear asks him.
     struct ClearAsk
@@ -234,6 +251,8 @@ namespace Commander
         std::vector<ObjectGuid> noWayNoted;
         // Bosses passed over for their BossPrep (TeamPlan::bossPreps), already reported.
         std::vector<ObjectGuid> prepNoted;
+        // Sealed-room bosses held until everyone is at the door (SealedRoom::GATHER_YD), already reported.
+        std::vector<ObjectGuid> sealNoted;
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
         // Patrols whose patrol-first pull failed (did not come by, called off): not tried again
         // in this clear (a standing one forgets them with the skips).
@@ -410,6 +429,10 @@ namespace Commander
         // with everyone rested (full tank, full healer mana), again before the tank goes with
         // the party as it is (patrols joining included). No estimate: false.
         bool hard = false;
+        // The boss's door shuts when he starts (BossPrep::seal, PullPlanner::Plan): a walk-in
+        // fought in the room; the others walk in behind the tank (PullBehavior), and nobody
+        // takes a place for the fight before (PullFightSpot: the place would be through the door).
+        SealedRoom sealed;
         // A clear's pull of a patrol before the pack it would join (PullPlanner::FindPatrolFirst):
         // failing it does not stop or skip anything, the pack is planned again.
         bool patrolFirst = false;
@@ -606,6 +629,10 @@ namespace Commander
             }
             // (WaitReady too: members take their places, then eat and drink there)
             if (phase != PullPhase::WaitReady && phase != PullPhase::Approach && phase != PullPhase::Return)
+                return false;
+            // A sealed room: every place for the fight is through the door, and stepping
+            // through starts it (they stay with the leader, then walk in behind the tank).
+            if (sealed.active)
                 return false;
             if (returnToSpot)
                 out = spot;
