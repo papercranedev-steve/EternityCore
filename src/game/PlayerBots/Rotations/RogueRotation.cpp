@@ -2,9 +2,10 @@
  * Rogue rotation (moved out of PartyBotAI.cpp 2026-11-14), combat swords (premade specs of
  * every level since 2026-11-15).
  *
- * Out of combat: main and off hand poisons (a companion's vials only while the Commander has
- * nothing for it to do: no fight, pull or hunt), a Stealth no module wants is cancelled
- * (ClassRotation::DropUnwantedStealth); with a victim (an opener): the combat steps.
+ * Out of combat: main and off hand poisons, a companion's vials or a free-supplies bot's poison
+ * spell (both 3 s casts, only while the Commander has nothing for it to do: no fight, pull or
+ * hunt), a Stealth no module wants is cancelled (ClassRotation::DropUnwantedStealth); with a
+ * victim (an opener): the combat steps.
  *
  * In combat:
  *   1. Stealthed (the Commander put it there: HuntBehavior's opener; not the Sap controller,
@@ -67,19 +68,19 @@ namespace
             Player* me = bot.me;
             auto const& s = bot.m_spells.rogue;
 
-            if (bot.GetsFreeSupplies())
+            // Both ways have the vial's 3 s cast (CombatBotBaseAI::CastWeaponBuff casts the
+            // poison spell as a normal cast): only while the Commander has nothing for the bot.
+            if (IdleForCommander())
             {
-                if (s.pMainHandPoison && bot.CanTryToCastSpell(me, s.pMainHandPoison) &&
-                    bot.CastWeaponBuff(s.pMainHandPoison, EQUIPMENT_SLOT_MAINHAND) == SPELL_CAST_OK)
-                    return;
-
-                if (s.pOffHandPoison && bot.CanTryToCastSpell(me, s.pOffHandPoison) &&
-                    bot.CastWeaponBuff(s.pOffHandPoison, EQUIPMENT_SLOT_OFFHAND) == SPELL_CAST_OK)
+                if (bot.GetsFreeSupplies())
+                {
+                    if (FreePoison(s.pMainHandPoison, EQUIPMENT_SLOT_MAINHAND) ||
+                        FreePoison(s.pOffHandPoison, EQUIPMENT_SLOT_OFFHAND))
+                        return;
+                }
+                else if (PoisonFromBags(EQUIPMENT_SLOT_MAINHAND) || PoisonFromBags(EQUIPMENT_SLOT_OFFHAND))
                     return;
             }
-            else if (IdleForCommander() &&
-                     (PoisonFromBags(EQUIPMENT_SLOT_MAINHAND) || PoisonFromBags(EQUIPMENT_SLOT_OFFHAND)))
-                return;
 
             DropUnwantedStealth(s.pStealth);
 
@@ -128,6 +129,13 @@ namespace
         }
 
     private:
+        // A bot with free supplies casts the poison enchant itself, no vial needed.
+        bool FreePoison(SpellEntry const* poison, EquipmentSlots slot)
+        {
+            return poison && m_bot.CanTryToCastSpell(m_bot.me, poison) &&
+                   m_bot.CastWeaponBuff(poison, slot) == SPELL_CAST_OK;
+        }
+
         // A bot without free supplies (a companion) puts the best poison vial it carries on a
         // weapon without one (the vials are made by Life/Errands/CraftRun). Not while moving:
         // the vial has a cast time.

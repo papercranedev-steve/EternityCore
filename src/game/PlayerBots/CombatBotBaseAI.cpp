@@ -3730,7 +3730,17 @@ SpellCastResult CombatBotBaseAI::CastWeaponBuff(SpellEntry const* pSpellEntry, E
     if (pWeapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
         return SPELL_FAILED_ITEM_ALREADY_ENCHANTED;
 
-    Spell* spell = new Spell(me, pSpellEntry, true, ObjectGuid(), nullptr, nullptr, nullptr);
+    // Fix: a buff with a cast time (a rogue's poison, 3 s) is a normal cast. Triggered, it ran
+    // outside the current spell slot (Spell::prepare): nothing saw it pending, the weapon had
+    // no enchant until it landed, and the bot started another one every update, the cast
+    // animation restarting over and over. Instant ones (shaman weapon buffs) stay triggered.
+    bool const hasCastTime = pSpellEntry->GetCastTime(me) > 0;
+    if (hasCastTime && me->IsMoving())
+        return SPELL_FAILED_MOVING;
+    if (hasCastTime && me->IsNonMeleeSpellCasted(false))
+        return SPELL_FAILED_SPELL_IN_PROGRESS;
+
+    Spell* spell = new Spell(me, pSpellEntry, !hasCastTime, ObjectGuid(), nullptr, nullptr, nullptr);
     SpellCastTargets targets;
     targets.setItemTarget(pWeapon);
     return spell->prepare(std::move(targets), nullptr);
