@@ -1057,6 +1057,8 @@
   "voice.boss.flamelash.spirits": "Burning Spirits! Kill them before they reach him!",
   "voice.boss.herod.trainees": "Don't sit down, his trainees are coming!",
   "voice.boss.hakkar.suppressors": "Suppressors! Kill them before they reach the Shade!",
+  "voice.boss.moira.spare": "The quest needs Moira alive. Emperor first, leave her be!",
+  "voice.boss.argelmach.golems": "Argelmach calls every golem nearby when pulled. Let's clear those {count} first.",
   "voice.boss.belnistrasz.ritual": "Protect Belnistrasz. Waves every 40 s for a few minutes, drink between them.",
   "voice.boss.naralex.ritual": "Keep the disciple alive. Two waves, then Mutanus, so save some mana.",
   "voice.event.ready": {
