@@ -436,11 +436,19 @@ namespace RandomGear
             if (candidates.empty())
                 continue;
 
-            // 1. quality x source, among what this slot has
+            // 1. quality x source, among what this slot has that fits the wearer at all (until
+            // 2026-11-28 among everything: a pair with no fitting item made a mage wear Hand of
+            // Justice); everything only when nothing fits
+            std::map<ItemPrototype const*, float> fit;
+            bool anyFits = false;
+            for (ItemPrototype const* proto : candidates)
+                anyFits |= (fit[proto] = GearFit::BestScore(proto, wearer)) > 0.0f;
             std::map<std::pair<uint32, uint32>, uint32> pairs;
             uint32 total = 0;
             for (ItemPrototype const* proto : candidates)
             {
+                if (anyFits && fit[proto] <= 0.0f)
+                    continue;
                 uint32 const q = QualityIndex(proto);
                 uint32 const bits = sourcesOf[proto->ItemId];
                 for (uint32 s = 0; s < GearSources::SOURCE_COUNT; ++s)
@@ -463,7 +471,7 @@ namespace RandomGear
             std::vector<std::pair<float, ItemPrototype const*>> scored;
             for (ItemPrototype const* proto : candidates)
                 if (QualityIndex(proto) == chosen.first && (sourcesOf[proto->ItemId] & (1u << chosen.second)))
-                    scored.emplace_back(GearFit::BestScore(proto, wearer), proto);
+                    scored.emplace_back(fit[proto], proto);
             if (scored.empty())
                 continue;
 
