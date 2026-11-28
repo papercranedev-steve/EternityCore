@@ -1204,6 +1204,8 @@
   "voice.boss.hakkar.suppressors": "镇压者来了！先杀它们，别让它们走到哈卡之影那儿！",
   "voice.boss.moira.spare": "任务要公主活着。先打大帝，别打死茉艾拉！",
   "voice.boss.argelmach.golems": "阿格曼奇一开打就会叫来附近所有傀儡，先把这 {count} 个清掉。",
+  "voice.boss.sealed.gather": "这道门一开打就会关上。在门口等我们，大家一起进去。",
+  "voice.boss.sealed.locked_out": "门关了，我被关在外面了！我在这儿等着。",
   "voice.boss.kromcrush.retaliation": "他开反击风暴了！近战先停手！",
   "voice.boss.belnistrasz.ritual": "保护贝尼斯特拉兹。接下来几分钟每 40 秒一波，趁空喝水。",
   "voice.boss.naralex.ritual": "护住信徒。两波小怪之后是穆坦努斯，留点蓝。",

@@ -1157,6 +1157,8 @@
   "voice.boss.hakkar.suppressors": "Suppressors! Kill them before they reach the Shade!",
   "voice.boss.moira.spare": "The quest needs Moira alive. Emperor first, leave her be!",
   "voice.boss.argelmach.golems": "Argelmach calls every golem nearby when pulled. Let's clear those {count} first.",
+  "voice.boss.sealed.gather": "That gate shuts the moment the boss starts. Wait for us at the gate, we all go in together.",
+  "voice.boss.sealed.locked_out": "The gate shut, I'm stuck outside! I'll wait here.",
   "voice.boss.kromcrush.retaliation": "Retaliation! Stop hitting him in melee!",
   "voice.boss.belnistrasz.ritual": "Protect Belnistrasz. Waves every 40 s for a few minutes, drink between them.",
   "voice.boss.naralex.ritual": "Keep the disciple alive. Two waves, then Mutanus, so save some mana.",
