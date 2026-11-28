@@ -5,7 +5,7 @@
  * The caller wants a text emote at him (after a buff, leaving him a creature, sorry for one).
  * The bot goes on with what it does and waits up to WAIT_MS for him to look at it
  * (Shared/Gaze). When he does, it stops, turns to him, and after a moment of eye contact
- * (EYE_CONTACT_MIN_MS..MAX) makes the gesture, then stands HOLD_AFTER_MS more. He never looks,
+ * (EYE_CONTACT_MIN_MS..MAX) makes the gesture, then stands HOLD_AFTER_MIN_MS..MAX more. He never looks,
  * goes beyond REACH_YD or leaves: no gesture.
  *
  * One gesture at a time per bot (a new one replaces a waiting one). Map thread of the bot.
@@ -36,8 +36,10 @@ namespace Pastimes
     namespace Gesture
     {
         constexpr uint32 WAIT_MS = 12 * IN_MILLISECONDS;
-        constexpr uint32 EYE_CONTACT_MIN_MS = 500, EYE_CONTACT_MAX_MS = 1000;
-        constexpr uint32 HOLD_AFTER_MS = 1200;
+        constexpr uint32 EYE_CONTACT_MIN_MS = 600, EYE_CONTACT_MAX_MS = 1400;
+        // The emote's animation plays out (~2 s), then a moment more (user 2026-11-28: walking
+        // off right after it looked like a machine).
+        constexpr uint32 HOLD_AFTER_MIN_MS = 2000, HOLD_AFTER_MAX_MS = 3500;
         constexpr float REACH_YD = 40.0f;
 
         // A text emote at him once he looks (replaces a gesture not made yet).

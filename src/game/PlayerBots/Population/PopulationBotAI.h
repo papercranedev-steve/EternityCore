@@ -254,8 +254,14 @@ namespace Population
         bool UpdateRaiseStranger();
         // A passing real player of its faction without its buff (Arcane Intellect, Fortitude,
         // Mark of the Wild, a blessing): it gives it (once per player per BUFFED_AGAIN_MS; the
-        // next bot's buff for him waits BUFF_GAP_MS). True: casting.
+        // next bot's buff for him waits BUFF_GAP_MS). At a human pace (user 2026-11-28: casting
+        // the moment he came in range and walking on the moment it landed looked like a
+        // machine): it stops and turns to him, casts after a moment (BUFF_NOTICE_MIN_MS..MAX),
+        // stays a while (BUFF_LINGER_MIN_MS..MAX; its line once typed), then walks on.
+        // True: it stands for the buff (its walks ended, they start again afterwards).
         bool UpdatePassingBuff();
+        bool ContinuePassingBuff(uint32 now);
+        void DropPassingBuff();
         // The hunt or the prowl left a creature to a player who was about to fight it: a nod,
         // a bow, or "after you" (once per YIELD_REACT_GAP_MS).
         void UpdateYield();
@@ -282,6 +288,13 @@ namespace Population
         static constexpr uint32 BUFF_SAY_PCT = 20;
         // After the buff, a gesture at him (a wave, a blown kiss, a smile, a salute, a bow ...).
         static constexpr uint32 BUFF_EMOTE_PCT = 70;
+        // Seeing him, targeting him: then the cast.
+        static constexpr uint32 BUFF_NOTICE_MIN_MS = 700, BUFF_NOTICE_MAX_MS = 1800;
+        // A noticed buff not cast by then (it sat down, a loot run came first): given up.
+        static constexpr uint32 BUFF_NOTICE_STALE_MS = 4000;
+        // Standing after the cast, looking at him; the line comes while it stands.
+        static constexpr uint32 BUFF_LINGER_MIN_MS = 2000, BUFF_LINGER_MAX_MS = 4000;
+        static constexpr uint32 BUFF_SAY_MIN_MS = 900, BUFF_SAY_MAX_MS = 1800;
         static constexpr uint32 YIELD_REACT_GAP_MS = 60 * IN_MILLISECONDS;
         static constexpr uint32 YIELD_SAY_PCT = 35;
         static constexpr float REACT_YD = 40.0f;
@@ -296,6 +309,14 @@ namespace Population
         std::deque<std::pair<ObjectGuid, uint32>> m_mourned;    // dead players it mourned, when
         uint32 m_nextBuffCheckMs = 0;
         std::deque<std::pair<ObjectGuid, uint32>> m_buffed;     // players it buffed, when
+        struct PassingBuffState
+        {
+            ObjectGuid to;                  // empty: none
+            SpellEntry const* spell = nullptr;
+            uint32 castAtMs = 0;            // != 0: noticed him, the cast then
+            uint32 lingerUntilMs = 0;       // != 0: cast, standing until then
+            uint32 sayAtMs = 0;             // != 0: its line then
+        } m_passingBuff;
         Life::Pastimes::GestureState m_gesture;  // at a player, once he looks
         uint32 m_huntYieldSeenMs = 0;       // HuntPlan::yieldedAtMs reacted to
         uint32 m_prowlYieldSeenMs = 0;      // ProwlState::yieldedAtMs reacted to

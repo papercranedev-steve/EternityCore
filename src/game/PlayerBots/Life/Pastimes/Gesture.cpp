@@ -60,7 +60,7 @@ namespace Gesture
                 return true;
             me->SetFacingToObject(p);
             BotShared::BotChat::TextEmote(me, state.textEmote, p);
-            state.holdUntilMs = now + HOLD_AFTER_MS;
+            state.holdUntilMs = now + urand(HOLD_AFTER_MIN_MS, HOLD_AFTER_MAX_MS);
             return true;
         }
 

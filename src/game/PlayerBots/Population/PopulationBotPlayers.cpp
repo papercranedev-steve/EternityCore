@@ -229,6 +229,8 @@ namespace Population
     bool PopulationBotAI::UpdatePassingBuff()
     {
         uint32 const now = WorldTimer::getMSTime();
+        if (!m_passingBuff.to.IsEmpty())
+            return ContinuePassingBuff(now);
         if (now < m_nextBuffCheckMs)
             return false;
         m_nextBuffCheckMs = now + BUFF_CHECK_MS;
@@ -270,12 +272,56 @@ namespace Population
                 continue;
             if (!ClaimBuff(p->GetObjectGuid(), now, BUFF_GAP_MS))
                 continue;
-            if (DoCastSpell(p, spell) != SPELL_CAST_OK)
-                continue;
+            // It noticed him: it stops, turns to him, and casts in a moment.
+            m_passingBuff = PassingBuffState();
+            m_passingBuff.to = p->GetObjectGuid();
+            m_passingBuff.spell = spell;
+            m_passingBuff.castAtMs = now + urand(BUFF_NOTICE_MIN_MS, BUFF_NOTICE_MAX_MS);
+            Life::Errands::StopWalk(me);
+            Life::Prowl::Stop(me, m_prowl, false);
+            Life::Trip::RoadWalk::Pause(me, m_road);
+            me->SetFacingToObject(p);
+            return true;
+        }
+        return false;
+    }
+
+    bool PopulationBotAI::ContinuePassingBuff(uint32 now)
+    {
+        Player* p = me->GetMap()->GetPlayer(m_passingBuff.to);
+        if (!p || !p->IsInWorld() || !me->IsWithinDistInMap(p, REACT_YD))
+        {
+            DropPassingBuff();
+            return false;
+        }
+
+        if (m_passingBuff.castAtMs)
+        {
+            if (now >= m_passingBuff.castAtMs + BUFF_NOTICE_STALE_MS)
+            {
+                DropPassingBuff();
+                return false;
+            }
+            if (me->IsMoving())
+                Life::Errands::StopWalk(me);
+            me->SetFacingToObject(p);
+            if (now < m_passingBuff.castAtMs)
+                return true;
+            // Still a fitting moment for it (he may have walked on, started a fight ...).
+            SpellEntry const* spell = m_passingBuff.spell;
+            if (!p->IsAlive() || p->IsInCombat() || !me->IsWithinDist(p, BUFF_YD, false) ||
+                !IsValidBuffTarget(p, spell) || !me->IsWithinLOSInMap(p) || !CanTryToCastSpell(p, spell) ||
+                DoCastSpell(p, spell) != SPELL_CAST_OK)
+            {
+                DropPassingBuff();
+                return false;
+            }
             m_buffed.emplace_back(p->GetObjectGuid(), now);
+            m_passingBuff.castAtMs = 0;
+            m_passingBuff.lingerUntilMs = now + urand(BUFF_LINGER_MIN_MS, BUFF_LINGER_MAX_MS);
             if (urand(0, 99) < BUFF_SAY_PCT)
-                SayTo(me, p, "buff.say", m_request.tags);
-            // A wave, a blown kiss ... at him once he looks.
+                m_passingBuff.sayAtMs = now + urand(BUFF_SAY_MIN_MS, BUFF_SAY_MAX_MS);
+            // A wave, a blown kiss ... at him once he looks (it stands facing him meanwhile).
             if (urand(0, 99) < BUFF_EMOTE_PCT)
             {
                 static uint32 const emotes[] = { TEXTEMOTE_WAVE, TEXTEMOTE_WAVE, TEXTEMOTE_KISS, TEXTEMOTE_SMILE,
@@ -285,7 +331,29 @@ namespace Population
             }
             return true;
         }
+
+        // Cast: it stands a while looking at him, its line once typed.
+        if (m_passingBuff.sayAtMs && now >= m_passingBuff.sayAtMs)
+        {
+            m_passingBuff.sayAtMs = 0;
+            SayTo(me, p, "buff.say", m_request.tags);
+        }
+        if (now < m_passingBuff.lingerUntilMs)
+        {
+            if (!me->IsMoving())
+                me->SetFacingToObject(p);
+            return true;
+        }
+        // Its gesture held it past the stand: the line still (not long after, though).
+        if (m_passingBuff.sayAtMs && now < m_passingBuff.lingerUntilMs + BUFF_NOTICE_STALE_MS)
+            SayTo(me, p, "buff.say", m_request.tags);
+        DropPassingBuff();
         return false;
+    }
+
+    void PopulationBotAI::DropPassingBuff()
+    {
+        m_passingBuff = PassingBuffState();
     }
 
     void PopulationBotAI::UpdateYield()
