@@ -275,6 +275,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Encounters/ScholomanceGandling.cpp
   ${COMMANDER_DIR}/Encounters/StratholmeAnastari.h
   ${COMMANDER_DIR}/Encounters/StratholmeAnastari.cpp
+  ${COMMANDER_DIR}/Encounters/SunkenTempleHakkar.h
+  ${COMMANDER_DIR}/Encounters/SunkenTempleHakkar.cpp
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.h
   ${COMMANDER_DIR}/Encounters/ZulFarrakPyramid.cpp
   ${COMMANDER_DIR}/Perception/Spatial/HazardZones.h

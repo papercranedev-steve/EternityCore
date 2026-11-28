@@ -7,6 +7,8 @@
 
 #include "Common.h"
 #include "Commander/CommanderTypes.h"
+#include "Commander/Coordination/DutyAllocator.h"
+#include <vector>
 
 namespace Commander
 {
@@ -14,6 +16,7 @@ namespace Commander
     struct TeamPlan;
     struct EnemyFacts;
     struct PartyMemberFacts;
+    struct Position3;
     struct VoiceEvent;
     enum class VoiceTier : uint8;
 
@@ -48,6 +51,26 @@ namespace Commander
         Proposal MakeReplace(char const* source, ProposalTier tier, BotActionType type,
                              ObjectGuid target = ObjectGuid(), SpellEntry const* spell = nullptr);
         Proposal MakeHealVeto(char const* source, ObjectGuid target);
+
+        // One intercept need (OfferDuties) to kill `e` now, worth `points`: bots that deal
+        // damage, ranged within FocusAssigner::INTERCEPT_RANGE first, melee within
+        // MELEE_INTERCEPT_RANGE, the closest first; never `skip` (the tank on the boss). On equal
+        // points the one closest to `tieTo` first. Its EnemyHandled key keeps FocusAssigner's own
+        // intercept of the same enemy from sending a second bot. No candidate: no need.
+        void AddKillNeed(WorldModel const& world, EnemyFacts const& e, float points, char const* reason,
+                         Position3 const& tieTo, ObjectGuid skip, std::vector<DutyNeed>& needs);
+        static constexpr float KILL_NEED_RANGED_FIRST = 1000.0f;
+
+        // An event in waves (boss doc G5): when anyone last fought (an enemy of ours or of an
+        // ally, an ally in combat, a member in combat). The modules' "no sitting down between
+        // waves" lets the party drink again after a long quiet (a wipe leaves the event on).
+        struct WaveWatch
+        {
+            uint32 lastFightMs = 0;
+            // Once per refresh; true while anyone fights.
+            bool Update(WorldModel const& world);
+            uint32 QuietMs(uint32 nowMs) const;
+        };
     }
 }
 

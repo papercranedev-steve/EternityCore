@@ -57,6 +57,7 @@
 #define MANGOS_COMMANDER_ENCOUNTER_ZULFARRAK_PYRAMID_H
 
 #include "Commander/Encounters/IEncounter.h"
+#include "Commander/Encounters/EncounterHelpers.h"
 #include "Commander/Coordination/TeamPlan.h"
 #include "Commander/Perception/WorldModel.h"
 #include "ObjectGuid.h"
@@ -145,7 +146,7 @@ namespace Commander
 
         Phase m_phase = Phase::NotStarted;
         uint32 m_phaseSinceMs = 0;
-        uint32 m_lastFightMs = 0;       // last refresh with anyone (party or ally) fighting
+        EncounterHelpers::WaveWatch m_waves;    // last refresh with anyone (party or ally) fighting
         uint32 m_wavesLeft = 0;
         bool m_inGap = false;
         bool m_noRest = false;

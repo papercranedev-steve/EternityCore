@@ -174,14 +174,8 @@ namespace Commander
             m_phaseSinceMs = now;
         }
 
-        // Anyone fighting: an enemy of ours or of an ally, an ally in combat (allies are only
-        // listed while in combat), or a party member in combat.
-        bool fighting = !world.enemies.empty() || !world.allies.empty();
-        for (PartyMemberFacts const& m : world.party)
-            fighting = fighting || (!m.isPet && m.alive && m.inCombat);
-        if (fighting || !m_lastFightMs)
-            m_lastFightMs = now;
-        uint32 const quietMs = WorldTimer::getMSTimeDiff(m_lastFightMs, now);
+        bool const fighting = m_waves.Update(world);
+        uint32 const quietMs = m_waves.QuietMs(now);
 
         switch (m_phase)
         {

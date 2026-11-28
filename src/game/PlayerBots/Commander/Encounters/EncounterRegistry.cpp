@@ -7,6 +7,7 @@
 #include "Commander/Encounters/GnomereganThermaplugg.h"
 #include "Commander/Encounters/ScholomanceGandling.h"
 #include "Commander/Encounters/StratholmeAnastari.h"
+#include "Commander/Encounters/SunkenTempleHakkar.h"
 #include "Commander/Encounters/ZulFarrakPyramid.h"
 
 namespace Commander
@@ -36,6 +37,7 @@ namespace Commander
             { GnomereganThermaplugg::MAP_ID,    &Make<GnomereganThermaplugg> },
             { ScholomanceGandling::MAP_ID,      &Make<ScholomanceGandling> },
             { StratholmeAnastari::MAP_ID,       &Make<StratholmeAnastari> },
+            { SunkenTempleHakkar::MAP_ID,       &Make<SunkenTempleHakkar> },
             { ZulFarrakPyramid::MAP_ID,         &Make<ZulFarrakPyramid> },
         };
     }

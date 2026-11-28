@@ -5,8 +5,10 @@
 #include "Commander/Perception/WorldModel.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/CommanderMgr.h"
 #include "TeamBotAI.h"
+#include "Timer.h"
 #include <algorithm>
 
 namespace Commander
@@ -109,6 +111,52 @@ namespace EncounterHelpers
         p.action.target = target;
         p.action.spell = spell;
         return p;
+    }
+
+    void AddKillNeed(WorldModel const& world, EnemyFacts const& e, float points, char const* reason,
+                     Position3 const& tieTo, ObjectGuid skip, std::vector<DutyNeed>& needs)
+    {
+        DutyKey const handled{ DutyKeyKind::EnemyHandled, e.guid };
+        DutyNeed need;
+        need.kind = DutyKind::Intercept;
+        need.target = e.guid;
+        need.now = true;
+        need.points = points;
+        need.reason = reason;
+        need.blockedBy.push_back(handled);
+        need.marks.push_back(handled);
+        need.tieMs = uint32(PackResolver::Distance(e.pos, tieTo) * 1000.0f);
+        for (PartyMemberFacts const& m : world.party)
+        {
+            if (!m.isBot || !m.DealsDamage() || !m.CanAct() || m.guid == skip)
+                continue;
+            bool const ranged = m.role != ROLE_MELEE_DPS && m.role != ROLE_TANK;
+            float const range = ranged ? FocusAssigner::INTERCEPT_RANGE : FocusAssigner::MELEE_INTERCEPT_RANGE;
+            float const d = PackResolver::Distance(m.pos, e.pos);
+            if (d > range)
+                continue;
+            DutyCandidate c;
+            c.bot = m.guid;
+            c.rank = (ranged ? KILL_NEED_RANGED_FIRST : 0.0f) - d;
+            need.candidates.push_back(c);
+        }
+        if (!need.candidates.empty())
+            needs.push_back(std::move(need));
+    }
+
+    bool WaveWatch::Update(WorldModel const& world)
+    {
+        bool fighting = !world.enemies.empty() || !world.allies.empty();
+        for (PartyMemberFacts const& m : world.party)
+            fighting = fighting || (!m.isPet && m.alive && m.inCombat);
+        if (fighting || !lastFightMs)
+            lastFightMs = world.refreshedAtMs;
+        return fighting;
+    }
+
+    uint32 WaveWatch::QuietMs(uint32 nowMs) const
+    {
+        return lastFightMs ? WorldTimer::getMSTimeDiff(lastFightMs, nowMs) : 0;
     }
 
     Proposal MakeHealVeto(char const* source, ObjectGuid target)

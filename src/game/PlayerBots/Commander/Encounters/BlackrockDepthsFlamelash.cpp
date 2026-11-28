@@ -4,8 +4,6 @@
 
 #include "Commander/Encounters/BlackrockDepthsFlamelash.h"
 #include "Commander/Encounters/EncounterHelpers.h"
-#include "Commander/Coordination/Duties/FocusAssigner.h"
-#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Perception/Values/ValueModel.h"
 #include "TeamBotAI.h"
 #include "Creature.h"
@@ -73,38 +71,10 @@ namespace Commander
         float const fightSec = std::max(MIN_FIGHT_SEC, float(boss->health) / std::max(1.0f, Value::DealtDps(world)));
         float const points = Value::Points(world, STACK_DAMAGE / std::max(0.5f, swingSec) * fightSec);
 
+        // The spirit closest to him first; never the one he hits (the tank stays on him).
         for (EnemyFacts const& e : world.targeted)
-        {
-            if (!e.listed || e.entry != NPC_BURNING_SPIRIT || !e.health)
-                continue;
-            DutyKey const handled{ DutyKeyKind::EnemyHandled, e.guid };
-            DutyNeed need;
-            need.kind = DutyKind::Intercept;
-            need.target = e.guid;
-            need.now = true;
-            need.points = points;
-            need.reason = "flamelash: burning spirit on its way to him";
-            need.blockedBy.push_back(handled);
-            need.marks.push_back(handled);
-            // Equal points: the one closest to him first.
-            need.tieMs = uint32(PackResolver::Distance(e.pos, boss->pos) * 1000.0f);
-
-            for (PartyMemberFacts const& m : world.party)
-            {
-                if (!m.isBot || !m.DealsDamage() || !m.CanAct() || m.guid == boss->victim)
-                    continue;
-                bool const ranged = m.role != ROLE_MELEE_DPS && m.role != ROLE_TANK;
-                float const range = ranged ? FocusAssigner::INTERCEPT_RANGE : FocusAssigner::MELEE_INTERCEPT_RANGE;
-                float const d = PackResolver::Distance(m.pos, e.pos);
-                if (d > range)
-                    continue;
-                DutyCandidate c;
-                c.bot = m.guid;
-                c.rank = (ranged ? RANGED_FIRST_RANK : 0.0f) - d;
-                need.candidates.push_back(c);
-            }
-            if (!need.candidates.empty())
-                needs.push_back(std::move(need));
-        }
+            if (e.listed && e.entry == NPC_BURNING_SPIRIT && e.health)
+                EncounterHelpers::AddKillNeed(world, e, points, "flamelash: burning spirit on its way to him",
+                                              boss->pos, boss->victim, needs);
     }
 }

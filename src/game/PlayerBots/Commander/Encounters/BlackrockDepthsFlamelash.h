@@ -11,11 +11,10 @@
  *
  * Eyes (ListEnemies): the spirits within SPIRIT_SEARCH_YD of him, as listed enemies
  *   (WorldModel::targeted, EnemyFacts::listed), so they can be named below.
- * Duties (OfferDuties): one intercept need per spirit, now; points = the stack's extra damage
- *   on his victim (STACK_DAMAGE per swing) over the rest of the fight (his health / the
- *   party's damage), at least MIN_FIGHT_SEC. Candidates: bots that deal damage, ranged within
- *   FocusAssigner::INTERCEPT_RANGE first, melee within MELEE_INTERCEPT_RANGE, never the one
- *   he hits (the tank stays on him); the spirit closest to him first on equal points.
+ * Duties (OfferDuties): one kill need per spirit (EncounterHelpers::AddKillNeed), now; points =
+ *   the stack's extra damage on his victim (STACK_DAMAGE per swing) over the rest of the fight
+ *   (his health / the party's damage), at least MIN_FIGHT_SEC. Never the one he hits (the tank
+ *   stays on him); the spirit closest to him first on equal points.
  * Voice: one line when the first spirit shows up.
  *
  * Known limits:
@@ -47,8 +46,6 @@ namespace Commander
         static constexpr float STACK_DAMAGE = 30.0f;
         // The stack lasts the fight; a fight about to end still counts this long.
         static constexpr float MIN_FIGHT_SEC = 10.0f;
-        // Intercept candidates: ranged before melee, then the closest.
-        static constexpr float RANGED_FIRST_RANK = 1000.0f;
 
         char const* GetId() const override { return "flamelash"; }
         bool Matches(WorldModel const& world, uint32 mapId) const override;
