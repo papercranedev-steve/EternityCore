@@ -7,7 +7,8 @@
  *    (Population/Growth: deliberately poor) and `.partybot add` (PartyBot.AutoEquip = 1). Same
  *    seed, same gear.
  *  - EquipStage with a gear stage (Shared/GearStages): per slot a quality and a source of the
- *    stage, then among the better fitting half (Shared/GearFit) of what is left; random property
+ *    stage, then among the better fitting half (Shared/GearFit) of what is left, none below half
+ *    the best fit; random property
  *    items get the suffix the class would keep. Test scenarios and boss tests (DevConsole
  *    u:gear), later player team bots.
  *

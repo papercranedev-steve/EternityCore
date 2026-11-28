@@ -1,7 +1,8 @@
 /*
  * Shared bot facts (PlayerBots/Shared): how well a piece of gear fits a class and role, by its
- * stats, its equip spells (spell damage, healing, hit, crit, defense...), its armor and weapon
- * damage, and the suffix of a random property item ("of the Bear"). A player keeps what fits
+ * stats, its equip spells (stats, spell damage, healing, hit, crit, defense...), its on-use
+ * effects weighed by uptime (duration / cooldown), its armor and weapon damage, and the suffix
+ * of a random property item ("of the Bear", equip spells in 1.12). A player keeps what fits
  * him: random gear stages pick among the better fitting half (Shared/RandomGear), and what a
  * bot wears, needs, keeps and picks as a quest reward is compared by it (Shared/GearUpgrade).
  * Comparable within one equipment slot only (no stat budget normalising across slots).

@@ -20,6 +20,8 @@ namespace RandomGear
         uint32 const SPELL_MAIL_PROFICIENCY = 8737;
         uint32 const SPELL_PLATE_PROFICIENCY = 750;
         uint32 const SPELL_DUAL_WIELD = 674;
+        // EquipStage keeps no candidate below this share of the slot's best class-role fit.
+        float const MIN_FIT_SHARE = 0.5f;
 
         bool IsShieldClass(uint8 classId)
         {
@@ -464,14 +466,17 @@ namespace RandomGear
             if (scored.empty())
                 continue;
 
-            // 2. the better fitting half (what fits nothing only when nothing fits)
+            // 2. the better fitting half, none below half the best fit (in a slot with few
+            // fitting items the half still held a mage's strength necklace), what fits
+            // nothing only when nothing fits
             std::sort(scored.begin(), scored.end(), [](auto const& a, auto const& b)
             {
                 return a.first != b.first ? a.first > b.first : a.second->ItemId < b.second->ItemId;
             });
             size_t keep = (scored.size() + 1) / 2;
+            float const fitFloor = scored.front().first * MIN_FIT_SHARE;
             if (scored.front().first > 0.0f)
-                while (keep > 1 && scored[keep - 1].first <= 0.0f)
+                while (keep > 1 && scored[keep - 1].first < fitFloor)
                     --keep;
             ItemPrototype const* proto = scored[roll(uint32(keep))].second;
 

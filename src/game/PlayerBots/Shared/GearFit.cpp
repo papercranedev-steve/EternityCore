@@ -6,6 +6,7 @@
 #include "Spells/SpellAuraDefines.h"
 #include "Spells/SpellDefines.h"
 #include "DBCStores.h"
+#include <algorithm>
 #include <vector>
 
 namespace BotShared
@@ -146,7 +147,8 @@ namespace GearFit
             }
         }
 
-        void AddEquipSpell(Stats& s, uint32 spellId, uint32 classSchools)
+        // scale: share of the time the aura is up (1 for equip effects, see OnUseUptime).
+        void AddEquipSpell(Stats& s, uint32 spellId, uint32 classSchools, float scale = 1.0f)
         {
             SpellEntry const* spell = spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
             if (!spell)
@@ -155,10 +157,19 @@ namespace GearFit
             {
                 if (spell->Effect[i] != SPELL_EFFECT_APPLY_AURA)
                     continue;
-                float const amount = float(spell->CalculateSimpleValue(SpellEffectIndex(i)));
+                float const amount = float(spell->CalculateSimpleValue(SpellEffectIndex(i))) * scale;
                 int32 const misc = spell->EffectMiscValue[i];
                 switch (spell->EffectApplyAuraName[i])
                 {
+                    // 1.12 random suffixes ("of the Bear": +Strength, +Stamina) are equip spells
+                    // of this aura, not stat enchantments.
+                    case SPELL_AURA_MOD_STAT:
+                        if (misc < 0 || misc == STAT_STRENGTH) s.str += amount;
+                        if (misc < 0 || misc == STAT_AGILITY) s.agi += amount;
+                        if (misc < 0 || misc == STAT_STAMINA) s.sta += amount;
+                        if (misc < 0 || misc == STAT_INTELLECT) s.intel += amount;
+                        if (misc < 0 || misc == STAT_SPIRIT) s.spi += amount;
+                        break;
                     case SPELL_AURA_MOD_DAMAGE_DONE:
                         s.spell += amount * SchoolShare(uint32(misc), classSchools);
                         break;
@@ -234,6 +245,25 @@ namespace GearFit
             return damage * 1000.0f / float(proto->Delay);
         }
 
+        // Share of a fight an on-use effect is up: its duration over its cooldown (Talisman of
+        // Ephemeral Power: 15 s every 90 s). Without it caster trinkets, which are mostly on-use,
+        // scored 0 and lost to tank trinkets with a little armor or stamina.
+        float OnUseUptime(_ItemSpell const& itemSpell)
+        {
+            SpellEntry const* spell = itemSpell.SpellId ? sSpellMgr.GetSpellEntry(itemSpell.SpellId) : nullptr;
+            if (!spell)
+                return 0.0f;
+            int32 const duration = spell->GetDuration();
+            if (duration <= 0)
+                return 0.0f;
+            int32 cooldown = std::max(itemSpell.SpellCooldown, itemSpell.SpellCategoryCooldown);
+            if (cooldown <= 0)
+                cooldown = int32(spell->GetRecoveryTime());
+            if (cooldown <= duration)
+                return 1.0f;
+            return float(duration) / float(cooldown);
+        }
+
         Stats StatsOf(ItemPrototype const* proto, uint8 classId, uint32 randomPropertyId)
         {
             Stats s;
@@ -241,8 +271,12 @@ namespace GearFit
             for (auto const& stat : proto->ItemStat)
                 AddItemMod(s, stat.ItemStatType, float(stat.ItemStatValue));
             for (auto const& itemSpell : proto->Spells)
+            {
                 if (itemSpell.SpellTrigger == ITEM_SPELLTRIGGER_ON_EQUIP)
                     AddEquipSpell(s, itemSpell.SpellId, schools);
+                else if (itemSpell.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE)
+                    AddEquipSpell(s, itemSpell.SpellId, schools, OnUseUptime(itemSpell));
+            }
             AddRandomProperty(s, randomPropertyId, schools);
             s.armor += float(proto->Armor);
             s.blockValue += float(proto->Block);
