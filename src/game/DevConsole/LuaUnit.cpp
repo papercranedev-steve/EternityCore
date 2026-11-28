@@ -2016,8 +2016,9 @@ namespace DevConsole
                 return luaL_error(L, "role must be tank, healer, meleedps, rangedps or auto");
             BotShared::GearUpgrade::SetRole(p->GetObjectGuid(), uint8(role));
         }
+        BotShared::GearFit::Wearer const wearer = BotShared::GearFit::Of(p, uint8(role));
         uint32 const suffix = lua_isnoneornil(L, 4)
-            ? BotShared::GearFit::BestRandomProperty(proto, p->GetClass(), uint8(role))
+            ? BotShared::GearFit::BestRandomProperty(proto, wearer)
             : uint32(luaL_checkinteger(L, 4));
 
         BotShared::GearUpgrade::Upgrade const up = BotShared::GearUpgrade::Evaluate(p, proto, suffix);
@@ -2026,7 +2027,7 @@ namespace DevConsole
         lua_pushinteger(L, proto->ItemId); lua_setfield(L, -2, "id");
         lua_pushstring(L, proto->Name1); lua_setfield(L, -2, "name");
         lua_pushinteger(L, role); lua_setfield(L, -2, "role");
-        lua_pushnumber(L, BotShared::GearFit::Score(proto, p->GetClass(), uint8(role), suffix)); lua_setfield(L, -2, "score");
+        lua_pushnumber(L, BotShared::GearFit::Score(proto, wearer, suffix)); lua_setfield(L, -2, "score");
         lua_pushboolean(L, up.gain > 0.0f); lua_setfield(L, -2, "upgrade");
         lua_pushinteger(L, up.slot); lua_setfield(L, -2, "slot");
         lua_pushnumber(L, up.replaced); lua_setfield(L, -2, "replaced");
@@ -2041,8 +2042,7 @@ namespace DevConsole
     {
         Player* p = CheckPlayer(L, 1);
         bool const withBags = lua_toboolean(L, 2);
-        uint8 const role = BotShared::GearUpgrade::RoleOf(p);
-        uint8 const classId = p->GetClass();
+        BotShared::GearFit::Wearer const wearer = BotShared::GearFit::Of(p, BotShared::GearUpgrade::RoleOf(p));
 
         lua_newtable(L);
         int n = 0;
@@ -2069,8 +2069,8 @@ namespace DevConsole
             {
                 lua_pushstring(L, prop->nameSuffix[0]); lua_setfield(L, -2, "suffixName");
             }
-            lua_pushnumber(L, BotShared::GearFit::Score(proto, classId, role, suffix)); lua_setfield(L, -2, "score");
-            lua_pushnumber(L, BotShared::GearFit::BestScore(proto, classId, role)); lua_setfield(L, -2, "best");
+            lua_pushnumber(L, BotShared::GearFit::Score(proto, wearer, suffix)); lua_setfield(L, -2, "score");
+            lua_pushnumber(L, BotShared::GearFit::BestScore(proto, wearer)); lua_setfield(L, -2, "best");
             lua_rawseti(L, -2, ++n);
         };
 

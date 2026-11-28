@@ -104,13 +104,14 @@ namespace GearUpgrade
             uint8 classId;
             uint8 role;
             bool shieldTank;
+            GearFit::Wearer wearer;
         };
 
         float ScoreOf(Context const& c, ItemPrototype const* proto, uint32 randomPropertyId)
         {
             float const score = randomPropertyId == UNKNOWN_SUFFIX
-                ? GearFit::ExpectedScore(proto, c.classId, c.role)
-                : GearFit::Score(proto, c.classId, c.role, randomPropertyId);
+                ? GearFit::ExpectedScore(proto, c.wearer)
+                : GearFit::Score(proto, c.wearer, randomPropertyId);
             return score * SkillFactor(c.player, proto, c.classId, c.role);
         }
 
@@ -176,6 +177,7 @@ namespace GearUpgrade
             c.shieldTank = IsShieldTank(c.classId, c.role);
             if (c.shieldTank && proto->InventoryType == INVTYPE_2HWEAPON)
                 return out;
+            c.wearer = GearFit::Of(player, c.role);
 
             float const score = ScoreOf(c, proto, randomPropertyId);
             uint8 slots[4];

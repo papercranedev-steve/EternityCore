@@ -22,7 +22,7 @@
 #include "Shared/GivenItems.h"
 #include "Shared/Inventory.h"
 #include "Shared/PetFood.h"
-#include "Shared/TalentSpread.h"
+#include "Shared/DamageSchools.h"
 
 #include <algorithm>
 #include <map>
@@ -1724,8 +1724,8 @@ void CombatBotBaseAI::PopulateSpellData()
             // Fireball for a fire build, else Frostbolt (until 2026-11-26: Fireball whenever
             // Combustion or Pyroblast was learned, also on a frost build with 11 fire points).
             // Talent tabs: 0 arcane, 1 fire, 2 frost.
-            BotShared::TalentSpread::Points const points = BotShared::TalentSpread::Of(me);
-            bool const fire = points[1] > points[2];
+            // Same rule as the gear it keeps (Shared/DamageSchools).
+            bool const fire = BotShared::DamageSchools::Main(me) == SPELL_SCHOOL_FIRE;
             m_spells.mage.pFiller = fire && m_spells.mage.pFireball ? m_spells.mage.pFireball
                                   : m_spells.mage.pFrostbolt ? m_spells.mage.pFrostbolt : m_spells.mage.pFireball;
             break;

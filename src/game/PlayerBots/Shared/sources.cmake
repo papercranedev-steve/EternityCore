@@ -42,6 +42,8 @@ set(BOTSHARED_SRCS
   ${BOTSHARED_DIR}/WorldDrops.cpp
   ${BOTSHARED_DIR}/GearSources.h
   ${BOTSHARED_DIR}/GearSources.cpp
+  ${BOTSHARED_DIR}/DamageSchools.h
+  ${BOTSHARED_DIR}/DamageSchools.cpp
   ${BOTSHARED_DIR}/GearFit.h
   ${BOTSHARED_DIR}/GearFit.cpp
   ${BOTSHARED_DIR}/GearStages.h

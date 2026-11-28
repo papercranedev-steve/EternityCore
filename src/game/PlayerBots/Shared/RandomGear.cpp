@@ -385,6 +385,7 @@ namespace RandomGear
                 skipSlotMask |= 1u << slot;
 
         bool const shieldTank = role == ROLE_TANK && IsShieldClass(classId);
+        GearFit::Wearer const wearer = GearFit::Of(player, role);
         uint32 const PVP_SOURCE_INDEX = 6;  // GearSources::SOURCE_PVP = 1 << 6
         bool const wantsPvP = sourceWeight[PVP_SOURCE_INDEX] > 0;
 
@@ -462,7 +463,7 @@ namespace RandomGear
             std::vector<std::pair<float, ItemPrototype const*>> scored;
             for (ItemPrototype const* proto : candidates)
                 if (QualityIndex(proto) == chosen.first && (sourcesOf[proto->ItemId] & (1u << chosen.second)))
-                    scored.emplace_back(GearFit::BestScore(proto, classId, role), proto);
+                    scored.emplace_back(GearFit::BestScore(proto, wearer), proto);
             if (scored.empty())
                 continue;
 
@@ -481,7 +482,7 @@ namespace RandomGear
             ItemPrototype const* proto = scored[roll(uint32(keep))].second;
 
             player->SatisfyItemRequirements(proto);
-            uint32 const suffix = GearFit::BestRandomProperty(proto, classId, role, roll(1000));
+            uint32 const suffix = GearFit::BestRandomProperty(proto, wearer, roll(1000));
             if (player->StoreNewItemInBestSlots(proto->ItemId, 1, 0, suffix))
                 ++worn;
         }

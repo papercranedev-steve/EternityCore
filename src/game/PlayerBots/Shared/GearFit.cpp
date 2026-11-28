@@ -6,6 +6,7 @@
 #include "Spells/SpellAuraDefines.h"
 #include "Spells/SpellDefines.h"
 #include "DBCStores.h"
+#include "Player.h"
 #include <algorithm>
 #include <vector>
 
@@ -19,7 +20,7 @@ namespace GearFit
         {
             float str = 0, agi = 0, sta = 0, intel = 0, spi = 0;
             float armor = 0, ap = 0, rap = 0;
-            float spell = 0;            // spell damage of the class's schools (weighed by overlap)
+            float spell = 0;            // spell damage, weighed by the wearer's share in its schools
             float healing = 0, mp5 = 0;
             float hit = 0, spellHit = 0, crit = 0, spellCrit = 0, weaponSkill = 0;
             float dodge = 0, parry = 0, block = 0, blockValue = 0, defense = 0;
@@ -107,30 +108,10 @@ namespace GearFit
             }
         }
 
-        // The schools a caster of the class damages with.
-        uint32 SchoolsOf(uint8 classId)
-        {
-            switch (classId)
-            {
-                case CLASS_MAGE: return SPELL_SCHOOL_MASK_FIRE | SPELL_SCHOOL_MASK_FROST | SPELL_SCHOOL_MASK_ARCANE;
-                case CLASS_WARLOCK: return SPELL_SCHOOL_MASK_SHADOW | SPELL_SCHOOL_MASK_FIRE;
-                case CLASS_PRIEST: return SPELL_SCHOOL_MASK_SHADOW | SPELL_SCHOOL_MASK_HOLY;
-                case CLASS_SHAMAN: return SPELL_SCHOOL_MASK_NATURE | SPELL_SCHOOL_MASK_FIRE | SPELL_SCHOOL_MASK_FROST;
-                case CLASS_DRUID: return SPELL_SCHOOL_MASK_NATURE | SPELL_SCHOOL_MASK_ARCANE;
-                case CLASS_PALADIN: return SPELL_SCHOOL_MASK_HOLY;
-                default: return 0;
-            }
-        }
-
-        // Share of the class's schools a "+damage to <schools>" bonus covers: 1 all of them,
-        // 0.6 some, 0 none.
-        float SchoolShare(uint32 bonusMask, uint32 classSchools)
-        {
-            uint32 const covered = bonusMask & classSchools;
-            if (!covered)
-                return 0.0f;
-            return covered == classSchools ? 1.0f : 0.6f;
-        }
+        // Until 2026-11-28 a fixed school mask per class, any one school of it counted 0.6:
+        // "of Fiery Wrath" scored the same as "of Frozen Wrath" for a frost mage, and the tie
+        // was rolled (a frost mage in fire, frost and arcane pieces).
+        using DamageSchools::Shares;
 
         void AddItemMod(Stats& s, uint32 type, float value)
         {
@@ -148,7 +129,7 @@ namespace GearFit
         }
 
         // scale: share of the time the aura is up (1 for equip effects, see OnUseUptime).
-        void AddEquipSpell(Stats& s, uint32 spellId, uint32 classSchools, float scale = 1.0f)
+        void AddEquipSpell(Stats& s, uint32 spellId, Shares const& schools, float scale = 1.0f)
         {
             SpellEntry const* spell = spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
             if (!spell)
@@ -171,7 +152,7 @@ namespace GearFit
                         if (misc < 0 || misc == STAT_SPIRIT) s.spi += amount;
                         break;
                     case SPELL_AURA_MOD_DAMAGE_DONE:
-                        s.spell += amount * SchoolShare(uint32(misc), classSchools);
+                        s.spell += amount * DamageSchools::Covered(schools, uint32(misc));
                         break;
                     case SPELL_AURA_MOD_HEALING_DONE: s.healing += amount; break;
                     case SPELL_AURA_MOD_ATTACK_POWER: s.ap += amount; break;
@@ -204,7 +185,7 @@ namespace GearFit
             }
         }
 
-        void AddRandomProperty(Stats& s, uint32 randomPropertyId, uint32 classSchools)
+        void AddRandomProperty(Stats& s, uint32 randomPropertyId, Shares const& schools)
         {
             ItemRandomPropertiesEntry const* prop = randomPropertyId ? sItemRandomPropertiesStore.LookupEntry(randomPropertyId) : nullptr;
             if (!prop)
@@ -222,7 +203,7 @@ namespace GearFit
                             AddItemMod(s, ench->spellid[i], float(ench->amount[i]));
                             break;
                         case ITEM_ENCHANTMENT_TYPE_EQUIP_SPELL:
-                            AddEquipSpell(s, ench->spellid[i], classSchools);
+                            AddEquipSpell(s, ench->spellid[i], schools);
                             break;
                         case ITEM_ENCHANTMENT_TYPE_RESISTANCE:
                             if (ench->spellid[i] == SPELL_SCHOOL_NORMAL)
@@ -264,10 +245,9 @@ namespace GearFit
             return float(duration) / float(cooldown);
         }
 
-        Stats StatsOf(ItemPrototype const* proto, uint8 classId, uint32 randomPropertyId)
+        Stats StatsOf(ItemPrototype const* proto, Shares const& schools, uint32 randomPropertyId)
         {
             Stats s;
-            uint32 const schools = SchoolsOf(classId);
             for (auto const& stat : proto->ItemStat)
                 AddItemMod(s, stat.ItemStatType, float(stat.ItemStatValue));
             for (auto const& itemSpell : proto->Spells)
@@ -289,10 +269,30 @@ namespace GearFit
         }
     }
 
-    float Score(ItemPrototype const* proto, uint8 classId, uint8 role, uint32 randomPropertyId)
+    Wearer Of(Player const* player, uint8 role)
     {
-        Weights const& w = WeightsFor(classId, role);
-        Stats const s = StatsOf(proto, classId, randomPropertyId);
+        Wearer w;
+        if (!player)
+            return w;
+        w.classId = player->GetClass();
+        w.role = role;
+        w.schools = DamageSchools::Of(player);
+        return w;
+    }
+
+    Wearer OfClass(uint8 classId, uint8 role)
+    {
+        Wearer w;
+        w.classId = classId;
+        w.role = role;
+        w.schools = DamageSchools::OfClass(classId);
+        return w;
+    }
+
+    float Score(ItemPrototype const* proto, Wearer const& wearer, uint32 randomPropertyId)
+    {
+        Weights const& w = WeightsFor(wearer.classId, wearer.role);
+        Stats const s = StatsOf(proto, wearer.schools, randomPropertyId);
         float const score =
             w.str * s.str + w.agi * s.agi + w.sta * s.sta + w.intel * s.intel + w.spi * s.spi +
             w.armor * s.armor + w.ap * s.ap + w.rap * s.rap +
@@ -304,7 +304,7 @@ namespace GearFit
         return score > 0.0f ? score : 0.0f;
     }
 
-    uint32 BestRandomProperty(ItemPrototype const* proto, uint8 classId, uint8 role, uint32 roll)
+    uint32 BestRandomProperty(ItemPrototype const* proto, Wearer const& wearer, uint32 roll)
     {
         if (!proto->RandomProperty)
             return 0;
@@ -314,7 +314,7 @@ namespace GearFit
         {
             if (!sItemRandomPropertiesStore.LookupEntry(prop))
                 continue;
-            float const score = Score(proto, classId, role, prop);
+            float const score = Score(proto, wearer, prop);
             if (score > bestScore + 0.01f)
             {
                 bestScore = score;
@@ -326,25 +326,25 @@ namespace GearFit
         return best.empty() ? 0 : best[roll % best.size()];
     }
 
-    float BestScore(ItemPrototype const* proto, uint8 classId, uint8 role)
+    float BestScore(ItemPrototype const* proto, Wearer const& wearer)
     {
-        return Score(proto, classId, role, BestRandomProperty(proto, classId, role));
+        return Score(proto, wearer, BestRandomProperty(proto, wearer));
     }
 
-    float ExpectedScore(ItemPrototype const* proto, uint8 classId, uint8 role)
+    float ExpectedScore(ItemPrototype const* proto, Wearer const& wearer)
     {
         if (!proto->RandomProperty)
-            return Score(proto, classId, role);
+            return Score(proto, wearer);
         float sum = 0.0f;
         uint32 count = 0;
         for (uint32 prop : GetItemEnchantModChoices(proto->RandomProperty))
         {
             if (!sItemRandomPropertiesStore.LookupEntry(prop))
                 continue;
-            sum += Score(proto, classId, role, prop);
+            sum += Score(proto, wearer, prop);
             ++count;
         }
-        return count ? sum / float(count) : Score(proto, classId, role);
+        return count ? sum / float(count) : Score(proto, wearer);
     }
 }
 }
