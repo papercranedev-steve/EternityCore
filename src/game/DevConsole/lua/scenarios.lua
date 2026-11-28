@@ -24,6 +24,9 @@
 --                      assumed to have cleared on the way, e.g. one standing on the spot)
 --   commands           GM commands the leader runs once the party is in place (event triggers)
 --   setup              function(leader, s) run after 'commands' (instance state that needs a check)
+--   fresh              true: the event or boss runs once per instance, so every load (start and
+--                      重开) unbinds the leader from the map and enters a new instance (stepping out
+--                      to OUTSIDE first when already inside)
 --
 -- Boss tests (kind = "boss", bosses.lua; the addon's Boss 测试 window, not the scenario list):
 --   bosses             `creature` guids of the boss and its linked adds: respawned on load, never cleared
@@ -47,6 +50,9 @@
 -- when it is removed). Without it the bot is a plain party bot as before.
 
 scenario = scenario or {}
+
+-- GM Island: where a 'fresh' load steps out of the instance before unbinding
+local OUTSIDE = { map = 1, x = 16226.2, y = 16257.0, z = 13.2, o = 0.0 }   -- game_tele GMIsland
 
 local LEADER_ROLE = {
     [1] = "meleedps", [2] = "meleedps", [3] = "rangedps", [4] = "meleedps", [5] = "rangedps",
@@ -227,9 +233,10 @@ scenario.list = {
         -- 8444 (given by 'commands'). The prisoners walk to the stair top, waves 1-3 run on timers
         -- (instance_zulfarrak). Waves are summoned; nothing to respawn. Static mobs at the stair
         -- foot (55-80 yd) are out of aggro range, the prisoners walk into them in wave 3.
-        -- The event runs once per instance: rerun = .instance unbind.
+        -- The event runs once per instance: fresh = a new instance on every load.
         -- Spot fixed: the prisoners' stair-top home; they count as live units for the clear check.
         id = "zfstairs", title = "祖尔法拉克 台阶事件（场景 9）", level = 49,
+        fresh = true,
         entry = { map = 209, x = 1887.2, y = 1264.5, z = 42.0, o = 1.571 },
         spot = { x = 1887.2, y = 1264.5, z = 42.0, o = 1.571 },
         pack = { x = 1886.6, y = 1297.5, z = 48.3 },
@@ -774,8 +781,8 @@ local function placeLeader(leader, s, hops)
     end)
 end
 
--- lineup: { {class=, role=}, ... } or nil = the scenario's default bots
-function scenario.load(leader, id, lineup)
+-- lineup: { {class=, role=}, ... } or nil = the scenario's default bots; fresh: new instance (s.fresh)
+function scenario.load(leader, id, lineup, fresh)
     local s = scenario.find(id)
     if not s then return fail(leader, "没有这个场景：" .. tostring(id)) end
     if scenario.running then return say(leader, "上一个场景还在准备中，请稍等") end
@@ -801,32 +808,57 @@ function scenario.load(leader, id, lineup)
         leader:resetcd()
 
         local e = s.entry
-        local pos = leader:pos()
         local function inMap()
             local p = leader:pos()
             return p.map == e.map and not leader:teleporting()
         end
-        if pos.map ~= e.map then
-            leader:tp(e.map, e.x, e.y, e.z, e.o)
-        else
-            leader:tp(e.x, e.y, e.z, e.o)
+        local function enter()
+            if leader:pos().map ~= e.map then
+                leader:tp(e.map, e.x, e.y, e.z, e.o)
+            else
+                leader:tp(e.x, e.y, e.z, e.o)
+            end
+            waitfor(inMap, function(ok2)
+                if not ok2 then return fail(leader, "传送超时") end
+                -- give the client a moment to finish loading the map
+                after(1500, function()
+                    local okp, err = pcall(placeLeader, leader, s)
+                    if not okp then fail(leader, tostring(err)) end
+                end)
+            end, 30000, 250)
         end
-        waitfor(inMap, function(ok2)
-            if not ok2 then return fail(leader, "传送超时") end
-            -- give the client a moment to finish loading the map
-            after(1500, function()
-                local okp, err = pcall(placeLeader, leader, s)
-                if not okp then fail(leader, tostring(err)) end
-            end)
-        end, 30000, 250)
+        if s.fresh or fresh then
+            -- a new instance: .instance unbind skips the map the player is on, so step out first
+            local function unbindAndEnter()
+                leader:select(leader)
+                leader:cmd(".instance unbind " .. e.map)
+                say(leader, "已解除副本绑定，进入新的副本")
+                enter()
+            end
+            if leader:pos().map == e.map then
+                leader:tp(OUTSIDE.map, OUTSIDE.x, OUTSIDE.y, OUTSIDE.z, OUTSIDE.o)
+                waitfor(function() return leader:pos().map ~= e.map and not leader:teleporting() end, function(ok3)
+                    if not ok3 then return fail(leader, "传送出副本超时") end
+                    -- let the client finish loading GM Island before the next far teleport
+                    after(1000, function()
+                        local okp, err = pcall(unbindAndEnter)
+                        if not okp then fail(leader, tostring(err)) end
+                    end)
+                end, 30000, 250)
+            else
+                unbindAndEnter()
+            end
+        else
+            enter()
+        end
     end, 10000, 250)
 end
 
--- Reload the last scenario (after a wipe).
--- Reload the last scenario (after a wipe), with 'lineup' or the last one.
-function scenario.reset(leader, lineup)
+-- Reload the last scenario (after a wipe), with 'lineup' or the last one; fresh = in a new instance
+-- even if the scenario is not marked fresh (.scenario fresh: instance state stuck after a run)
+function scenario.reset(leader, lineup, fresh)
     if not scenario.current then return say(leader, "还没有加载过场景") end
-    scenario.load(leader, scenario.current, lineup or scenario.lineup)
+    scenario.load(leader, scenario.current, lineup or scenario.lineup, fresh)
 end
 
 function scenario.stop(leader)
@@ -852,7 +884,7 @@ local function sendList(leader, boss)
     leader:tell(prefix .. ";E;" .. (scenario.current or ""))
 end
 
--- .scenario [list | <id> [lineup] | reset [lineup] | stop | status | setspot <id> | mark [text]
+-- .scenario [list | <id> [lineup] | reset [lineup] | fresh [lineup] | stop | status | setspot <id> | mark [text]
 --            | rec list | rec open <file>]      lineup: class:role ... (see the top of this file)
 -- (rec: the addon's fight log window, recview.lua)
 -- list replies: PBSCN;L;<id>;<title>;<level>  PBSCN;B;<id>;<default lineup>  ...  PBSCN;E;<current id>
@@ -871,6 +903,7 @@ function scenario.command(leader, args)
             say(leader, ".scenario <id> 职业:职责 ...  换阵容，例如 .scenario stockade paladin:tank rogue hunter druid:healer")
             say(leader, "职业:职责:好感度  设成这个好感度的同伴（只在内存里），例如 rogue:meleedps:60")
             say(leader, ".scenario reset [阵容]  重开当前场景    .scenario stop  结束")
+            say(leader, ".scenario fresh [阵容]  解除副本绑定，在新的副本里重开当前场景")
             say(leader, ".scenario setspot <id>  把你现在站的位置存为这个场景的开怪站位")
             say(leader, ".scenario mark [说明]  战斗中觉得不对时标记这一刻（记下现场，复盘时看）")
             say(leader, "战斗录像：插件的“战斗录像”窗口（/pbr）")
@@ -917,6 +950,8 @@ function scenario.command(leader, args)
         end
         if id == "reset" then
             scenario.reset(leader, lineup)
+        elseif id == "fresh" then
+            scenario.reset(leader, lineup, true)
         else
             scenario.load(leader, id, lineup)
         end

@@ -67,8 +67,9 @@ local bosses = {
         -- 42 = both bosses (hall trash 34-39; premade = the 39 templates)
         -- Mograine 40029; Whitemane 39946 behind door GO 104600, joins in phase 1. The pull sends
         -- every live chaplain / wizard / centurion / champion / abbot / monk within 82 yd at the
-        -- party: the hall is cleared (90). The event runs once per instance: rerun = .instance unbind.
+        -- party: the hall is cleared (90). The event runs once per instance: fresh.
         id = "cathedral", title = "血色修道院 莫格莱尼和怀特迈恩", level = 42,
+        fresh = true,
         entry = { map = 189, x = 1153.87, y = 1398.39, z = 32.61, o = 6.126 },
         pack = { x = 1153.87, y = 1398.39, z = 32.61 },
         bosses = { 40029, 39946 },
@@ -76,7 +77,7 @@ local bosses = {
         -- the hall door side, not behind the altar
         from = { x = 1100.0, y = 1398.0 },
         approach = { min = 30, max = 40, clear = 20 },
-        hint = "莫格莱尼倒下后怀特迈恩出场复活他。她会群体催眠，牧师驱散制裁之锤和心灵控制。每个副本只能打一次，重打先 .instance unbind。",
+        hint = "莫格莱尼倒下后怀特迈恩出场复活他。她会群体催眠，牧师驱散制裁之锤和心灵控制。每个副本只能打一次，开始和重开都会进新副本。",
     },
     {
         -- 60 = max level (Gandling 61)
@@ -155,7 +156,8 @@ local bosses = {
         bosses = { 33537 },
         bossEntries = { 7309, 7077, 7076, 10120 },
         clearRadius = 70,
-        hint = "右键他脚边的祭坛开打。每 10 秒唤醒墙边土灵，66% 唤醒守护者，33% 唤醒石穴看守者（读条 5 秒）；地面震颤群体昏迷。出房间会脱战。打完重来先 .instance unbind。",
+        fresh = true,
+        hint = "右键他脚边的祭坛开打。每 10 秒唤醒墙边土灵，66% 唤醒守护者，33% 唤醒石穴看守者（读条 5 秒）；地面震颤群体昏迷。出房间会脱战。每次都进新副本。",
     },
     {
         -- boss_noxxion
@@ -221,7 +223,8 @@ local bosses = {
         pack = { x = 1281.14, y = -282.15, z = -78.14 },
         bosses = { 91020, 91021, 91022, 91023, 91024, 91025, 91026 },
         clearRadius = 70,
-        hint = "和杜姆雷尔对话开始。矮人一个接一个上，维尔雷尔是治疗，最后杜姆雷尔自己上并召唤虚空行者。整场不许坐下。打完重来先 .instance unbind。",
+        fresh = true,
+        hint = "和杜姆雷尔对话开始。矮人一个接一个上，维尔雷尔是治疗，最后杜姆雷尔自己上并召唤虚空行者。整场不许坐下。每次都进新副本。",
     },
     {
         -- boss_magmus (Iron Hall, before the throne room); the statues breathe fire at fixed spots
@@ -278,8 +281,9 @@ local bosses = {
         pack = { x = -38.08, y = 812.44, z = -29.45 },
         bosses = { 84376 },
         clearRadius = 70,
+        fresh = true,
         setup = function(leader) markDone(leader, 1, true) end,
-        hint = "5 个水晶塔已设成关掉（打过一次重来先 .instance unbind）。感染撕咬、践踏、伊莫塔尔之眼（召唤小怪，先杀）、传送门（把一个人传走）、激怒。",
+        hint = "5 个水晶塔已设成关掉（每次都进新副本）。感染撕咬、践踏、伊莫塔尔之眼（召唤小怪，先杀）、传送门（把一个人传走）、激怒。",
     },
     {
         -- boss_prince_tortheldrin: immune to players until TYPE_IMMOL_THAR (2) is DONE
@@ -308,7 +312,8 @@ local bosses = {
         pack = { x = 831.8, y = 485.4, z = 37.40 },
         bosses = { 128489, 56945 },
         clearRadius = 60,
-        hint = "先杀大王：狂暴冲锋、战争践踏、致死打击。克鲁什是施法者（法师/萨满/牧师技能随机），打断和控制；大王死后他变友好，别打死。打完重来先 .instance unbind。",
+        fresh = true,
+        hint = "先杀大王：狂暴冲锋、战争践踏、致死打击。克鲁什是施法者（法师/萨满/牧师技能随机），打断和控制；大王死后他变友好，别打死。每次都进新副本。",
     },
 }
 
