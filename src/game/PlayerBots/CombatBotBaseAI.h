@@ -373,6 +373,15 @@ public:
     // A trade completed and EquipOrUseNewItem wore some of what it brought (gear or bags, item
     // entries): TeamBotAI thanks a human for it in the party voice.
     virtual void OnTradeItemsWorn(Player* /*trader*/, std::vector<uint32> const& /*itemIds*/) {}
+    // Group loot rolls it took part in (the group sends every voter each roll, SMSG_LOOT_ROLL,
+    // and the result, SMSG_LOOT_ROLL_WON; rollType a RollVote). TeamBotAI: the party voice's
+    // loot lines.
+    virtual void OnLootRoll(ObjectGuid /*looted*/, uint32 /*slot*/, ObjectGuid /*roller*/, uint8 /*rollType*/) {}
+    virtual void OnLootRollWon(ObjectGuid /*looted*/, uint32 /*slot*/, uint32 /*itemId*/, ObjectGuid /*winner*/,
+                               uint8 /*rollType*/) {}
+    // Someone in sight interrupted `target`'s cast of `interruptedSpellId` (SMSG_SPELLLOGEXECUTE
+    // with SPELL_EFFECT_INTERRUPT_CAST). TeamBotAI: tells the party voice.
+    virtual void OnInterruptSeen(ObjectGuid /*caster*/, ObjectGuid /*target*/, uint32 /*interruptedSpellId*/) {}
 
     // The last resurrection asked for it (SMSG_RESURRECT_REQUEST, accepted at once): who and
     // when (WorldTimer ms). The party voice thanks a human who raised it by name.

@@ -463,6 +463,14 @@ namespace Commander
             commander->GetVoice().Queue(std::move(event), WorldTimer::getMSTime());
     }
 
+    void CommanderMgr::NoteInterrupt(Player const* member, ObjectGuid caster, ObjectGuid target, uint32 spellId)
+    {
+        if (!IsEnabled() || !member)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(member))
+            commander->GetVoice().NoteInterrupt(caster, target, spellId, WorldTimer::getMSTime());
+    }
+
     void CommanderMgr::SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings)
     {
         std::lock_guard<std::mutex> guard(m_voiceLock);

@@ -3730,5 +3730,62 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             me->GetSession()->QueuePacket(std::move(data));
             return;
         }
+        case SMSG_LOOT_ROLL:
+        {
+            // (WorldPackets::Loot::LootRollResponse: looted guid, slot, roller guid, item entry,
+            // random suffix, random property, roll number (uint8), roll type (uint8))
+            if (!me || packet->size() < 34)
+                return;
+            OnLootRoll(ObjectGuid(packet->read<uint64>(0)), packet->read<uint32>(8), ObjectGuid(packet->read<uint64>(12)),
+                       packet->read<uint8>(33));
+            return;
+        }
+        case SMSG_LOOT_ROLL_WON:
+        {
+            // (WorldPackets::Loot::LootRollWon: looted guid, slot, item entry, random suffix, random
+            // property, winner guid, roll number (uint8), roll type (uint8))
+            if (!me || packet->size() < 34)
+                return;
+            OnLootRollWon(ObjectGuid(packet->read<uint64>(0)), packet->read<uint32>(8), packet->read<uint32>(12),
+                          ObjectGuid(packet->read<uint64>(24)), packet->read<uint8>(33));
+            return;
+        }
+        case SMSG_SPELLLOGEXECUTE:
+        {
+            // (WorldPackets::Spell::SpellLogExecute: packed caster guid, spell id, effect count,
+            // then per effect: effect, entry count, entries. SPELL_EFFECT_INTERRUPT_CAST entries:
+            // target guid, interrupted spell id.) Only spells that interrupt are read on; the
+            // blocks of other effects have other sizes, so reading stops at the first of them.
+            if (!me)
+                return;
+            try
+            {
+                WorldPacket data(*packet);
+                data.rpos(0);
+                ObjectGuid const caster(data.readPackGUID());
+                uint32 const spellId = data.read<uint32>();
+                SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+                if (!spell || !spell->HasEffect(SPELL_EFFECT_INTERRUPT_CAST))
+                    return;
+                uint32 const effects = data.read<uint32>();
+                for (uint32 e = 0; e < effects; ++e)
+                {
+                    uint32 const effect = data.read<uint32>();
+                    uint32 const entries = data.read<uint32>();
+                    if (effect != SPELL_EFFECT_INTERRUPT_CAST)
+                        return;
+                    for (uint32 n = 0; n < entries; ++n)
+                    {
+                        ObjectGuid const target(data.read<uint64>());
+                        uint32 const interrupted = data.read<uint32>();
+                        OnInterruptSeen(caster, target, interrupted);
+                    }
+                }
+            }
+            catch (ByteBufferException const&)
+            {
+            }
+            return;
+        }
     }
 }

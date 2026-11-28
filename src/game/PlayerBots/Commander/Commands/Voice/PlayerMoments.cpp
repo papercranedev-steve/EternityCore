@@ -10,7 +10,9 @@
  *    an area on the ground or a pulse dangerous to him (HAZARD_SAY_MS).
  *  - His long buffs on bots, out of a fight, gathered into one thanks (BUFF_SETTLE_MS).
  *  - Praise, after a fight, one line at most and PRAISE_GAP_MS apart (praise is worth something
- *    because it is rare): his heal reached a bot below CLOSE_CALL_PCT that lived; his control
+ *    because it is rare): his heal reached a bot below CLOSE_CALL_PCT that lived; his interrupt
+ *    (NoteInterrupt, from the bots' SMSG_SPELLLOGEXECUTE) of an enemy the brain had an interrupt
+ *    duty for, or of a heal; his control
  *    took an enemy off a non-tank or stopped a runner; he tanked or healed a boss with nobody
  *    dead (the boss kill line's variant).
  * Never blame: the lines say what to do and who helps, not what he did wrong.
@@ -24,6 +26,7 @@
 #include "Map.h"
 #include "Player.h"
 #include "SpellAuras.h"
+#include "SpellMgr.h"
 #include "Timer.h"
 #include "Utilities/Random.h"
 #include <algorithm>
@@ -75,6 +78,7 @@ namespace Commander
             m_savedBy.clear();
             m_controlPraiseBy.Clear();
             m_controlPraiseSpeaker.Clear();
+            m_interruptPraiseBy.Clear();
             m_hazardSince.clear();
         }
         HumanDeaths(map, world, plan, fighting, fightEnded, nowMs);
@@ -83,6 +87,21 @@ namespace Commander
         if (fightEnded)
             Praise(map, world, nowMs);
         HumanBuffs(map, world, fighting, nowMs);
+
+        m_interruptsSeen.clear();
+        m_interruptNeeds.clear();
+        for (InterruptDuty const& d : plan.interrupts)
+            m_interruptNeeds.insert(d.enemy.GetRawValue());
+    }
+
+    void PartyVoice::NoteInterrupt(ObjectGuid caster, ObjectGuid target, uint32 spellId, uint32 nowMs)
+    {
+        for (SeenInterrupt const& s : m_interruptsSeen)
+            if (s.caster == caster && s.target == target && s.spellId == spellId)
+                return;
+        if (m_interruptsSeen.size() >= 16)
+            return;
+        m_interruptsSeen.push_back({ caster, target, spellId, nowMs });
     }
 
     void PartyVoice::HumanDeaths(Map* map, WorldModel const& world, TeamPlan const& plan, bool fighting, bool fightEnded,
@@ -227,6 +246,21 @@ namespace Commander
                     m_savedBy[b.guid.GetRawValue()] = h.guid;
         }
 
+        // ... a human's interrupt of a cast that mattered: the brain wanted that enemy stopped,
+        // or it was a heal.
+        for (SeenInterrupt const& seen : m_interruptsSeen)
+        {
+            if (!m_interruptPraiseBy.IsEmpty())
+                break;
+            PartyMemberFacts const* caster = world.FindMember(seen.caster);
+            if (!caster || !IsHuman(*caster))
+                continue;
+            SpellEntry const* spell = sSpellMgr.GetSpellEntry(seen.spellId);
+            bool const heal = spell && (spell->HasEffect(SPELL_EFFECT_HEAL) || spell->HasEffect(SPELL_EFFECT_HEAL_MAX_HEALTH));
+            if (heal || m_interruptNeeds.count(seen.target.GetRawValue()))
+                m_interruptPraiseBy = caster->guid;
+        }
+
         // ... a human's control on an enemy that hit a non-tank, or ran for help.
         if (m_controlPraiseBy.IsEmpty())
         {
@@ -269,6 +303,15 @@ namespace Commander
             m_lastPraiseMs = nowMs;
             Say("voice.player.saved_me", b->guid, VoiceTier::Social, nowMs, { { "name", MemberName(map, saved.second) } },
                 "praise:" + fight);
+            return;
+        }
+
+        if (!m_interruptPraiseBy.IsEmpty())
+        {
+            PartyMemberFacts const* tank = Tanks::Main(world, true);
+            m_lastPraiseMs = nowMs;
+            Say("voice.player.interrupt", tank && tank->alive ? tank->guid : ObjectGuid(), VoiceTier::Social, nowMs,
+                { { "name", MemberName(map, m_interruptPraiseBy) } }, "praise:" + fight);
             return;
         }
 

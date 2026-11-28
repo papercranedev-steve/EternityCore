@@ -112,6 +112,9 @@ namespace Commander
         // A line for the players from `member`'s party voice (Commands/Voice/PartyVoice.h), e.g.
         // a rotation's. Map thread of the member only. Nothing without a commander there.
         void QueueVoice(Player const* member, VoiceEvent event);
+        // `member` saw `caster` interrupt `target`'s `spellId` (PartyVoice::NoteInterrupt). Same
+        // thread rule as QueueVoice.
+        void NoteInterrupt(Player const* member, ObjectGuid caster, ObjectGuid target, uint32 spellId);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

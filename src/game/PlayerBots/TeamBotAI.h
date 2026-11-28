@@ -43,6 +43,7 @@
 #include "Commander/Behaviors/Support/RestTopUp.h"
 #include "Commander/Perception/Values/FightManaSpend.h"
 #include "Shared/FoodAndDrink.h"
+#include <map>
 #include <memory>
 
 namespace Commander { class BotDirectives; class ClassKit; }
@@ -77,6 +78,16 @@ public:
     // A human traded it gear or a bag it now wears: it thanks him in the party voice
     // ("voice.gift.*", doc 2026-11-28-player-voice.md moment 12).
     void OnTradeItemsWorn(Player* trader, std::vector<uint32> const& itemIds) override;
+    // Group loot rolls with a human (doc moment 14): the votes are kept until the result, then
+    // one line for the party (every voter bot works out the same line; the voice's once key
+    // keeps one): the winner bot's need (sorry when a human needed too), its "yours" when a
+    // human beat its need, else congratulations on a human's need. Uncommon and better only.
+    void OnLootRoll(ObjectGuid looted, uint32 slot, ObjectGuid roller, uint8 rollType) override;
+    void OnLootRollWon(ObjectGuid looted, uint32 slot, uint32 itemId, ObjectGuid winner, uint8 rollType) override;
+    // To the party voice (praise for a human's interrupt, doc moment 13).
+    void OnInterruptSeen(ObjectGuid caster, ObjectGuid target, uint32 interruptedSpellId) override;
+    // (looted raw guid, slot) -> the votes so far (voter, RollVote).
+    std::map<std::pair<uint64, uint32>, std::vector<std::pair<ObjectGuid, uint8>>> m_lootVotes;
 
     // Every frame, before the bot update's throttle (the subclass's UpdateAI): the Commander's
     // mid-cast checks (CastWatch, area channel, CastBreak), the movement hands (Backpedal,

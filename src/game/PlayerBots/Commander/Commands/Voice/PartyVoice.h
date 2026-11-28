@@ -73,6 +73,9 @@ namespace Commander
 
         // Ask for a line (map thread of the party). Dropped when said within its onceMs.
         void Queue(VoiceEvent event, uint32 nowMs);
+        // A member bot saw `caster` interrupt `target`'s cast of `spellId` (TeamBotAI::
+        // OnInterruptSeen; every bot in sight reports it, kept once). PlayerMoments.cpp reads it.
+        void NoteInterrupt(ObjectGuid caster, ObjectGuid target, uint32 spellId, uint32 nowMs);
 
         // PartyCommander::Update, after the planners: this refresh's moments and TeamPlan::voice,
         // the marks, then at most one line.
@@ -192,6 +195,18 @@ namespace Commander
         std::map<uint64, ObjectGuid> m_savedBy;
         ObjectGuid m_controlPraiseBy;
         ObjectGuid m_controlPraiseSpeaker;
+        // ... a human's interrupt of a cast that mattered (an enemy the brain had an interrupt
+        // duty for at the last refresh, or a heal).
+        ObjectGuid m_interruptPraiseBy;
+        struct SeenInterrupt
+        {
+            ObjectGuid caster;
+            ObjectGuid target;
+            uint32 spellId = 0;
+            uint32 atMs = 0;
+        };
+        std::vector<SeenInterrupt> m_interruptsSeen;    // since the last refresh
+        std::set<uint64> m_interruptNeeds;              // enemies with an interrupt duty, last refresh
         uint32 m_lastPraiseMs = 0;
         // Long buffs cast by a human on a bot at the last look (bot raw guid, spell); new ones
         // since gathered BUFF_SETTLE_MS.

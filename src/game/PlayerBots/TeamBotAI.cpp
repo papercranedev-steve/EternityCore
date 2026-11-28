@@ -2288,3 +2288,76 @@ void TeamBotAI::OnTradeItemsWorn(Player* trader, std::vector<uint32> const& item
     e.onceMs = 10 * IN_MILLISECONDS;
     sCommanderMgr.QueueVoice(me, std::move(e));
 }
+
+void TeamBotAI::OnLootRoll(ObjectGuid looted, uint32 slot, ObjectGuid roller, uint8 rollType)
+{
+    std::vector<std::pair<ObjectGuid, uint8>>& votes = m_lootVotes[{ looted.GetRawValue(), slot }];
+    votes.emplace_back(roller, rollType);
+    if (m_lootVotes.size() > 64)    // results that never came (left the group mid-roll)
+        m_lootVotes.clear();
+}
+
+void TeamBotAI::OnLootRollWon(ObjectGuid looted, uint32 slot, uint32 itemId, ObjectGuid winnerGuid, uint8 rollType)
+{
+    std::vector<std::pair<ObjectGuid, uint8>> votes;
+    auto const itr = m_lootVotes.find({ looted.GetRawValue(), slot });
+    if (itr != m_lootVotes.end())
+    {
+        votes.swap(itr->second);
+        m_lootVotes.erase(itr);
+    }
+    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    if (rollType != ROLL_NEED || !proto || proto->Quality < ITEM_QUALITY_UNCOMMON)
+        return;
+    Player* winner = sObjectAccessor.FindPlayer(winnerGuid);
+    if (!winner)
+        return;
+
+    // Who else needed it: a human, and the bot that lost to a human (the lowest guid of them:
+    // every voter bot picks the same one).
+    Player* humanNeeder = nullptr;
+    ObjectGuid botLoser;
+    for (auto const& vote : votes)
+    {
+        if (vote.second != ROLL_NEED || vote.first == winnerGuid)
+            continue;
+        Player* p = sObjectAccessor.FindPlayer(vote.first);
+        if (!p)
+            continue;
+        if (!p->IsBot())
+            humanNeeder = humanNeeder ? humanNeeder : p;
+        else if (botLoser.IsEmpty() || vote.first.GetRawValue() < botLoser.GetRawValue())
+            botLoser = vote.first;
+    }
+
+    Commander::VoiceEvent e;
+    e.tier = Commander::VoiceTier::Social;
+    e.once = "loot:" + std::to_string(looted.GetRawValue()) + ":" + std::to_string(slot);
+    Player* reader = !winner->IsBot() ? winner : humanNeeder;
+    if (!winner->IsBot())
+    {
+        // A human's need won: the bot he beat says it is his, else someone congratulates him.
+        if (!botLoser.IsEmpty() && botLoser != me->GetObjectGuid())
+            return;
+        e.key = botLoser.IsEmpty() ? "voice.loot.grats" : "voice.loot.yours";
+        e.speaker = botLoser;
+        e.vars = { { "name", winner->GetName() } };
+    }
+    else
+    {
+        // A bot's need won: it says so itself, sorry to a human who needed it too.
+        if (winner != me)
+            return;
+        e.key = humanNeeder ? "voice.loot.sorry" : "voice.loot.won";
+        e.speaker = me->GetObjectGuid();
+        if (humanNeeder)
+            e.vars = { { "name", humanNeeder->GetName() } };
+    }
+    e.vars.emplace_back("item", BotShared::GameNames::ItemName(itemId, reader ? reader : me));
+    sCommanderMgr.QueueVoice(me, std::move(e));
+}
+
+void TeamBotAI::OnInterruptSeen(ObjectGuid caster, ObjectGuid target, uint32 interruptedSpellId)
+{
+    sCommanderMgr.NoteInterrupt(me, caster, target, interruptedSpellId);
+}

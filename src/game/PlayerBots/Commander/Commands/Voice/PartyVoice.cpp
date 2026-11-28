@@ -143,6 +143,7 @@ namespace Commander
         {
             // Nobody to tell (a team of bots, the human on another map): keep the facts current.
             m_pending.clear();
+            m_interruptsSeen.clear();
             Remember(world, plan);
             return;
         }
