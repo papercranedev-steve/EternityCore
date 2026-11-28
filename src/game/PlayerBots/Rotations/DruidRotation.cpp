@@ -97,7 +97,11 @@ namespace
                 // while the rest goes on (self-heals, eating and drinking, HoldsFormForRest).
                 if (!bot.HoldsFormForRest() && EnterCombatForm())
                     return;
-                if (me->GetPowerPercent(POWER_MANA) > 80.0f && bot.FindAndHealInjuredAlly())
+                // A team healer tops up as the other healers do: its mana goes into the work
+                // first, then it drinks (RestBehavior). A druid that does not heal for the team
+                // only with mana to spare.
+                if ((bot.HealsForTeam() || me->GetPowerPercent(POWER_MANA) > 80.0f) &&
+                    bot.FindAndHealInjuredAlly())
                     return;
             }
             else if (me->GetShapeshiftForm() == FORM_CAT)
