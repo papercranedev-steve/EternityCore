@@ -53,6 +53,9 @@
  * Others (2026-11-15, several casters in one phase): the damage per second other area spells of
  * the phase put on an enemy is taken off its health first, tick by tick (the worst case for
  * this spell): what this one does to it and the tick that kills it come sooner.
+ * Later (Request::inSec, user 2026-11-29: adds run at whoever they hit while the caster walks
+ * to its spot): every position of an enemy above (in the radius, melee reach of `from`, its
+ * walk back) is where Runners::PosAfter puts it after inSec; health and threat stay as now.
  * Value of n ticks: benefit = LostAction(damage(n) / filler damage per second) [+ paid: the
  * filler's mana for that time, ManaWorth], cost = LostAction(n x period) + turn loss(n).
  *   not paid  the whole spell is judged (user 2026-11-08: a Blizzard is paid in full at the
@@ -111,6 +114,10 @@ namespace Commander
             // before this one): damage per second each enemy takes from them. This spell only
             // counts what they leave of its health (header "Others").
             std::vector<OtherDamage> others;
+            // The spell starts this many seconds from now (the caster walks to `from` first):
+            // enemies are judged where Runners::PosAfter puts them then, those on the caster
+            // running at `from` (header "Later"). 0 = where they are now.
+            float inSec = 0.0f;
         };
 
         struct Result

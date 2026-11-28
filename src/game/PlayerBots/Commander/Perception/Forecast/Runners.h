@@ -38,6 +38,18 @@ namespace Runners
 
     // ArriveSec to within `reach` of `at` (centre to centre), e.g. a Frost Nova's radius.
     float ReachSec(EnemyFacts const& e, Position3 const& at, float reach, AreaSpellFacts const* spell, Position3 const& centre);
+
+    // Where `e` is `sec` seconds from now, running at its victim (user 2026-11-29: the adds a
+    // spell around the caster is aimed at are on their way to whoever they hit). It stands
+    // where it is when it is not acting, crowd controlled, rooted, melee off (a caster
+    // standing back), has no victim, or its victim is not a member or ally; a cast it reads
+    // keeps it in place until the cast ends. Otherwise it runs straight at its speed now
+    // (paths not counted) and stops CHASE_GAP_YD beyond its bounding radius from the victim.
+    // `mover` (a member, empty = none) is counted at `moverAt` (where it walks to) instead
+    // of where it stands. Fears and new targets are not guessed.
+    static constexpr float CHASE_GAP_YD = 1.5f;     // a player's combat reach
+    Position3 PosAfter(WorldModel const& world, EnemyFacts const& e, float sec, ObjectGuid mover,
+                       Position3 const& moverAt);
 }
 }
 

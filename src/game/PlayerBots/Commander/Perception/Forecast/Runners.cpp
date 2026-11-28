@@ -51,5 +51,33 @@ namespace Runners
         p.y += (at.y - e.pos.y) * first / length;
         return spell->periodSec + AreaValue::WalkSecUnder(p, speed, spell->slowPct, centre, spell->radius, at, reach);
     }
+
+    Position3 PosAfter(WorldModel const& world, EnemyFacts const& e, float sec, ObjectGuid mover,
+                       Position3 const& moverAt)
+    {
+        if (sec <= 0.0f || !e.acting || e.crowdControlled || e.rooted || !e.meleeEnabled || !e.health ||
+            e.victim.IsEmpty() || e.speed <= 0.0f)
+            return e.pos;
+        Position3 to;
+        if (!mover.IsEmpty() && e.victim == mover)
+            to = moverAt;
+        else if (PartyMemberFacts const* m = world.FindMember(e.victim))
+            to = m->pos;
+        else if (AllyFacts const* a = world.FindAlly(e.victim))
+            to = a->pos;
+        else
+            return e.pos;
+        float const runSec = sec - (e.castingSpellId ? float(e.castRemainingMs) / 1000.0f : 0.0f);
+        float const length = Distance2d(e.pos, to);
+        float const walk = std::min(std::max(0.0f, length - e.boundingRadius - CHASE_GAP_YD),
+                                    std::max(0.0f, runSec) * e.speed);
+        if (walk <= 0.0f || length <= 0.01f)
+            return e.pos;
+        Position3 p = e.pos;
+        p.x += (to.x - e.pos.x) * walk / length;
+        p.y += (to.y - e.pos.y) * walk / length;
+        p.z += (to.z - e.pos.z) * walk / length;
+        return p;
+    }
 }
 }

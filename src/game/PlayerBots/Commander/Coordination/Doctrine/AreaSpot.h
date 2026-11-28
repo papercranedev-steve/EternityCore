@@ -64,7 +64,9 @@ namespace Commander
         // covers the most adds"): where it stands now, or a cell (CasterCells) within
         // SELF_WALK_YD. Cells ranked by the acting enemies within the spell's radius of them (the
         // most first), then by walk; the best MAX_EVALUATED valued by AreaValue cast there
-        // (centre = from = the cell). Score, move margin and spots as Pick. `base`: caster, spell,
+        // (centre = from = the cell). Both count the enemies where they are once the caster
+        // has walked there (user 2026-11-29: adds run at whoever they hit meanwhile;
+        // Runners::PosAfter, AreaValue::Request::inSec = the walk). Score, move margin and spots as Pick. `base`: caster, spell,
         // turn options, forbidden, noHold; centre and from are set here.
         static constexpr float SELF_WALK_YD = 15.0f;
         Choice PickSelf(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base,

@@ -1,6 +1,7 @@
 #include "Commander/Coordination/Doctrine/AreaSpot.h"
 #include "Commander/Coordination/Situation/Patrol/RouteGuard.h"
 #include "Commander/Coordination/TeamPlan.h"
+#include "Commander/Perception/Forecast/Runners.h"
 #include "Commander/Perception/Spatial/FieldSpots.h"
 #include "Commander/Perception/Spatial/HazardZones.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
@@ -175,19 +176,21 @@ namespace AreaSpot
         if (!world.field)
             return out;
 
-        // Enemies the spell would reach from `p` (AreaValue's target rule, before its checks).
-        auto const covered = [&](Position3 const& p)
+        // Enemies the spell would reach from `p` once the caster is there after `sec` (AreaValue's
+        // target rule, before its checks; they run at their victims meanwhile, Runners::PosAfter).
+        auto const covered = [&](Position3 const& p, float sec)
         {
             uint32 n = 0;
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && !e.onAllyOnly && e.health &&
-                    PackResolver::Distance(p, e.pos) - e.boundingRadius <= spell.radius)
+                    PackResolver::Distance(p, Runners::PosAfter(world, e, sec, m.guid, p)) - e.boundingRadius <= spell.radius)
                     ++n;
             return n;
         };
         struct SelfCell
         {
             Position3 pos;
+            float walkSec = 0.0f;
             float walkCost = 0.0f;
             bool taken = false;
             uint32 covered = 0;
@@ -215,9 +218,10 @@ namespace AreaSpot
                 continue;
             SelfCell c;
             c.pos = s.pos;
-            c.walkCost = SpotCost::Walk(world, m, s.WalkEstimate(PATH_FACTOR) / RUN_YD_PER_SEC);
+            c.walkSec = s.WalkEstimate(PATH_FACTOR) / RUN_YD_PER_SEC;
+            c.walkCost = SpotCost::Walk(world, m, c.walkSec);
             c.taken = s.taken;
-            c.covered = covered(s.pos);
+            c.covered = covered(s.pos, c.walkSec);
             if (c.covered)
                 cells.push_back(c);
         }
@@ -237,6 +241,7 @@ namespace AreaSpot
                 break;
             AreaValue::Request r = base;
             r.centre = r.from = c.pos;
+            r.inSec = c.walkSec;
             c.value = AreaValue::Evaluate(world, r);
             if (!c.value.valid)
                 continue;

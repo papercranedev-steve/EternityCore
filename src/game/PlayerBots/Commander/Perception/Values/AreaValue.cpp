@@ -4,6 +4,7 @@
 #include "Commander/Perception/Values/SurvivalValue.h"
 #include "Commander/Perception/Tanks.h"
 #include "Commander/Perception/Spatial/PackResolver.h"
+#include "Commander/Perception/Forecast/Runners.h"
 #include "Commander/Perception/Forecast/ThreatRoom.h"
 #include "Commander/Perception/Forecast/ThreatView.h"
 #include "Commander/Perception/Values/ValueModel.h"
@@ -26,6 +27,7 @@ namespace AreaValue
             float factor = ThreatView::RANGED_AGGRO_FACTOR;
             float speed = 0.0f;
             PartyMemberFacts const* holder = nullptr;
+            Position3 pos;      // when the spell starts (header "Later")
         };
 
 
@@ -36,10 +38,10 @@ namespace AreaValue
             float fromSec = 0.0f;
         };
 
-        // Seconds from `at` until `e` (running at `speed`) is in melee reach of it.
-        float WalkSec(EnemyFacts const& e, Position3 const& at, float speed)
+        // Seconds from `at` until `e` (at `pos`, running at `speed`) is in melee reach of it.
+        float WalkSec(EnemyFacts const& e, Position3 const& pos, Position3 const& at, float speed)
         {
-            float const yards = std::max(0.0f, PackResolver::Distance(at, e.pos) - e.boundingRadius - MELEE_REACH);
+            float const yards = std::max(0.0f, PackResolver::Distance(at, pos) - e.boundingRadius - MELEE_REACH);
             return yards / (speed > 0.1f ? speed : AggroTurnCost::RUN_YARDS_PER_SEC);
         }
 
@@ -114,16 +116,26 @@ namespace AreaValue
         return sec + rest / speed;
     }
 
+    namespace
+    {
+        // SpeedTo with `e` at `pos` (Request::inSec: where it will be).
+        float SpeedFrom(EnemyFacts const& e, Position3 const& pos, AreaSpellFacts const& spell, Position3 const& centre,
+                        Position3 const& to)
+        {
+            if (spell.slowPct <= 0.0f || e.slowed)
+                return e.speed;
+            float const reach = e.boundingRadius + MELEE_REACH;
+            float const walk = std::max(0.0f, PackResolver::Distance(pos, to) - reach);
+            if (walk <= 0.0f)
+                return e.speed;
+            float const sec = WalkSecUnder(pos, e.speed, spell.slowPct, centre, spell.radius, to, reach);
+            return sec > 0.0f ? walk / sec : e.speed;
+        }
+    }
+
     float SpeedTo(EnemyFacts const& e, AreaSpellFacts const& spell, Position3 const& centre, Position3 const& to)
     {
-        if (spell.slowPct <= 0.0f || e.slowed)
-            return e.speed;
-        float const reach = e.boundingRadius + MELEE_REACH;
-        float const walk = std::max(0.0f, PackResolver::Distance(e.pos, to) - reach);
-        if (walk <= 0.0f)
-            return e.speed;
-        float const sec = WalkSecUnder(e.pos, e.speed, spell.slowPct, centre, spell.radius, to, reach);
-        return sec > 0.0f ? walk / sec : e.speed;
+        return SpeedFrom(e, e.pos, spell, centre, to);
     }
 
     AreaSpellFacts const* SpellOf(PartyMemberFacts const& caster, uint32 spellId)
@@ -148,12 +160,20 @@ namespace AreaValue
         if (!count)
             return out;
 
+        // Where each enemy is when the spell starts (header "Later").
+        auto const posOf = [&](EnemyFacts const& e)
+        {
+            return r.inSec > 0.0f ? Runners::PosAfter(world, e, r.inSec, self.guid, r.from) : e.pos;
+        };
+
         // Targets.
         std::vector<Target> targets;
         for (EnemyFacts const& e : world.enemies)
         {
-            if (!e.acting || e.onAllyOnly || !e.health ||
-                PackResolver::Distance(r.centre, e.pos) - e.boundingRadius > spell.radius)
+            if (!e.acting || e.onAllyOnly || !e.health)
+                continue;
+            Position3 const pos = posOf(e);
+            if (PackResolver::Distance(r.centre, pos) - e.boundingRadius > spell.radius)
                 continue;
             if (r.forbidden && r.forbidden(e))
             {
@@ -164,6 +184,7 @@ namespace AreaValue
                 continue;
             Target t;
             t.facts = &e;
+            t.pos = pos;
             t.free = e.victim.IsEmpty() || e.victim == self.guid || (r.noHold && r.noHold(e));
             if (!t.free)
             {
@@ -176,10 +197,10 @@ namespace AreaValue
                 ThreatEntry const* mine = ThreatView::FindEntry(e, self.guid);
                 t.myThreat = (mine ? mine->threat : 0.0f) + (self.boltTarget == e.guid ? self.boltThreat : 0.0f);
                 t.holderThreat = e.victimThreat;
-                bool const melee = PackResolver::Distance(r.from, e.pos) - e.boundingRadius <= MELEE_REACH;
+                bool const melee = PackResolver::Distance(r.from, pos) - e.boundingRadius <= MELEE_REACH;
                 t.factor = melee ? ThreatView::MELEE_AGGRO_FACTOR : ThreatView::RANGED_AGGRO_FACTOR;
                 t.holder = world.FindMember(e.victim);
-                t.speed = SpeedTo(e, spell, r.centre, r.from);
+                t.speed = SpeedFrom(e, pos, spell, r.centre, r.from);
             }
             targets.push_back(t);
             out.targets.push_back(e.guid);
@@ -218,7 +239,7 @@ namespace AreaValue
                 ThreatEntry const* tanks = ThreatView::FindEntry(e, tank->guid);
                 c.myThreat = (mine ? mine->threat : 0.0f) + (self.boltTarget == e.guid ? self.boltThreat : 0.0f);
                 c.tankThreat = tanks ? tanks->threat : 0.0f;
-                c.tankWalkSec = std::max(0.0f, PackResolver::Distance(tank->pos, e.pos) - MELEE_REACH) /
+                c.tankWalkSec = std::max(0.0f, PackResolver::Distance(tank->pos, t.pos) - MELEE_REACH) /
                                 AggroTurnCost::RUN_YARDS_PER_SEC;
                 c.extraDps = std::max(0.0f, Value::HitDps(e, self) - Value::HitDps(e, *tank));
                 onCaster.push_back(c);
@@ -288,7 +309,7 @@ namespace AreaValue
                 Turning x;
                 x.tick = k;
                 x.guid = t.facts->guid;
-                x.arriveSec = float(k) * spell.periodSec + WalkSec(*t.facts, r.from, t.speed);
+                x.arriveSec = float(k) * spell.periodSec + WalkSec(*t.facts, t.pos, r.from, t.speed);
                 if (t.holder)
                 {
                     // The holder (a melee tank) then needs 110% of mine to take it back.
@@ -319,7 +340,10 @@ namespace AreaValue
         if (spell.channel)
             for (EnemyFacts const& e : world.enemies)
                 if (e.acting && !e.crowdControlled && e.health && e.victim == self.guid)
-                    onMe.push_back({ &e, WalkSec(e, r.from, SpeedTo(e, spell, r.centre, r.from)) });
+                {
+                    Position3 const pos = posOf(e);
+                    onMe.push_back({ &e, WalkSec(e, pos, r.from, SpeedFrom(e, pos, spell, r.centre, r.from)) });
+                }
 
         // The longer the enemies on the caster stay there after n ticks of the spell's threat
         // (the tank wins them back one after another at its measured rate; taunts not counted).
