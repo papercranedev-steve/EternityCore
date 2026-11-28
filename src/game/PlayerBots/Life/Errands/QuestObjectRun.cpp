@@ -102,6 +102,7 @@ namespace QuestObjectRun
             Errands::MarkDone(reached ? state.done : state.unreachable, state.object, DONE_KEEP);
             state.object.Clear();
             state.opening = false;
+            state.atObject = false;
             state.bagsBefore.clear();
             Errands::StopWalk(me);
         }
@@ -117,6 +118,8 @@ namespace QuestObjectRun
 
     void Stop(Player* me, QuestObjectRunState& state)
     {
+        state.beat = Errands::Beat();
+        state.atObject = false;
         if (state.object.IsEmpty())
             return;
         // A cast at the object goes on by itself; the window it may open is closed by the next
@@ -138,6 +141,9 @@ namespace QuestObjectRun
         }
 
         uint32 const now = WorldTimer::getMSTime();
+        // Just used one: a moment before the next.
+        if (state.object.IsEmpty() && Errands::InBeat(me, state.beat, anchor, now))
+            return true;
         GameObject* go = nullptr;
         if (!state.object.IsEmpty())
         {
@@ -148,6 +154,7 @@ namespace QuestObjectRun
                     return true;    // Opening, Pick Lock: the object opens when the cast ends
                 TakeWhatOpened(me, state);
                 Finish(me, state, true);
+                Errands::BeginBeat(state.beat, anchor, now, AFTER_MIN_MS, AFTER_MAX_MS);
                 return true;
             }
             if (!go || !NeedsForQuest(me, go))
@@ -181,8 +188,17 @@ namespace QuestObjectRun
         // Walks up to it like a player, not just into reach (nextMoveMs: it was sent towards it).
         if (go->IsAtInteractDistance(me) && Errands::CloseEnoughToUse(me, go, APPROACH_YD, state.nextMoveMs != 0))
         {
-            if (!me->IsStopped())
-                me->StopMoving();
+            if (!state.atObject)
+            {
+                if (!me->IsStopped())
+                    me->StopMoving();
+                me->SetFacingToObject(go);
+                state.atObject = true;
+                Errands::BeginBeat(state.beat, anchor, now, ARRIVE_MIN_MS, ARRIVE_MAX_MS);
+                return true;
+            }
+            if (Errands::InBeat(me, state.beat, anchor, now))
+                return true;
             BotShared::ObjectUse::Plan const plan = BotShared::ObjectUse::HowToUse(me, go);
             BotShared::Inventory::CollectBagItemGuids(me, state.bagsBefore);
             if (!BotShared::ObjectUse::Start(me, go, plan))
@@ -197,6 +213,7 @@ namespace QuestObjectRun
             {
                 TakeWhatOpened(me, state);
                 Finish(me, state, true);
+                Errands::BeginBeat(state.beat, anchor, now, AFTER_MIN_MS, AFTER_MAX_MS);
             }
             return true;
         }

@@ -19,6 +19,7 @@
 
 #include "Common.h"
 #include "ObjectGuid.h"
+#include "Life/Errands/ErrandCommon.h"
 #include <deque>
 #include <utility>
 
@@ -50,6 +51,7 @@ namespace Life
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
         uint32 arrivedMs = 0;       // standing at the NPC since, 0 = not there yet
+        Errands::Beat after;        // done with it: a moment before it goes on
         std::deque<std::pair<ObjectGuid, uint32>> visited;  // NPC, when it may be visited again
     };
 
@@ -62,6 +64,8 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 20000;
         constexpr uint32 DWELL_MS = 2500;
+        // Done: closing the window, a moment, then on (Errands::Beat).
+        constexpr uint32 AFTER_MIN_MS = 1000, AFTER_MAX_MS = 2000;
         constexpr uint32 RETRY_MS = 5 * MINUTE * IN_MILLISECONDS;
         constexpr size_t VISITED_KEEP = 16;
 

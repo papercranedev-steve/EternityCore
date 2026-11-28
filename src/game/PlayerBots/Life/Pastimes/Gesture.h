@@ -31,6 +31,8 @@ namespace Pastimes
         uint32 waitUntilMs = 0;         // he looks before this, or no gesture
         uint32 actAtMs = 0;             // != 0: he looked, the gesture then
         uint32 holdUntilMs = 0;         // != 0: made, standing until then
+        bool atSpot = false;            // WantAt: at a spot (his body), not waiting for his look
+        float spotX = 0.0f, spotY = 0.0f;
     };
 
     namespace Gesture
@@ -44,6 +46,9 @@ namespace Pastimes
 
         // A text emote at him once he looks (replaces a gesture not made yet).
         void Want(GestureState& state, ObjectGuid to, uint32 textEmote, uint32 now);
+        // A text emote towards a spot (his body: mourning), without waiting for his look: it
+        // stops, turns there, a moment, the emote (at him while his corpse lies there), stands.
+        void WantAt(GestureState& state, ObjectGuid to, uint32 textEmote, float x, float y, uint32 now);
         // True: it stands for the gesture now (its walk was ended; the caller does nothing else
         // with its movement and starts its walk again afterwards). False: no gesture, or still
         // waiting for his look (the bot goes on).

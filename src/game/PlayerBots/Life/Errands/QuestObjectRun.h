@@ -39,6 +39,8 @@ namespace Life
         float closestYd = 0.0f;     // nearest the bot got to the object on this walk
         uint32 closerMs = 0;        // when it last got PROGRESS_YD closer
         bool opening = false;       // the use was started (a cast may be running)
+        bool atObject = false;      // arrived (its moment before the use began)
+        Errands::Beat beat;         // at the object before the use, after it
         std::set<ObjectGuid> bagsBefore;    // to put on what the object gave
         Errands::DoneList done;         // used: forgotten after FORGET_MS
         Errands::DoneList unreachable;  // no safe walk, stuck, cannot open: UNREACHABLE_FORGET_MS
@@ -63,6 +65,9 @@ namespace Life
         constexpr uint32 FORGET_MS = 60000;
         // One it could not reach or open is tried again after this (from elsewhere it may work).
         constexpr uint32 UNREACHABLE_FORGET_MS = 300000;
+        // Arrived: faces it, a moment, the use; used: a moment, then on (Errands::Beat).
+        constexpr uint32 ARRIVE_MIN_MS = 300, ARRIVE_MAX_MS = 800;
+        constexpr uint32 AFTER_MIN_MS = 1000, AFTER_MAX_MS = 2000;
 
         // `anchor`: objects near it only (the party leader); null = near the bot.
         // True: the bot walks to an object or opens one this tick.

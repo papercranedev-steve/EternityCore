@@ -47,6 +47,8 @@ namespace Life
         uint32 startedMs = 0;
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
+        bool atCorpse = false;      // arrived (its moment before it opens it began)
+        Errands::Beat beat;         // at the corpse before it opens it, after it looted
         Errands::DoneList done;    // corpses not tried again (looted, unreachable)
     };
 
@@ -59,6 +61,9 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 15000;
         constexpr size_t DONE_KEEP = 16;
+        // Arrived: faces the corpse, a moment, opens it; looted: a moment, then on (Errands::Beat).
+        constexpr uint32 ARRIVE_MIN_MS = 300, ARRIVE_MAX_MS = 800;
+        constexpr uint32 AFTER_MIN_MS = 600, AFTER_MAX_MS = 1500;
         // Gray items are taken while more bag slots than this are free (they sell at a vendor).
         constexpr uint32 JUNK_ROOM_SLOTS = 4;
 

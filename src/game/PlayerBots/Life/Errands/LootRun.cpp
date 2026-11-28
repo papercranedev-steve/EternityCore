@@ -80,6 +80,8 @@ namespace LootRun
 
     void Stop(Player* me, LootRunState& state)
     {
+        state.beat = Errands::Beat();
+        state.atCorpse = false;
         if (state.corpse.IsEmpty())
             return;
         state.corpse.Clear();
@@ -96,6 +98,9 @@ namespace LootRun
         }
 
         uint32 const now = WorldTimer::getMSTime();
+        // Just looted one: a moment before the next.
+        if (state.corpse.IsEmpty() && Errands::InBeat(me, state.beat, anchor, now))
+            return true;
         Creature* corpse = nullptr;
         if (!state.corpse.IsEmpty())
         {
@@ -120,15 +125,26 @@ namespace LootRun
             state.corpse = corpse->GetObjectGuid();
             state.startedMs = now;
             state.nextMoveMs = 0;
+            state.atCorpse = false;
         }
 
         if (InLootReach(me, corpse))
         {
-            if (!me->IsStopped())
-                me->StopMoving();
+            if (!state.atCorpse)
+            {
+                if (!me->IsStopped())
+                    me->StopMoving();
+                me->SetFacingToObject(corpse);
+                state.atCorpse = true;
+                Errands::BeginBeat(state.beat, anchor, now, ARRIVE_MIN_MS, ARRIVE_MAX_MS);
+                return true;
+            }
+            if (Errands::InBeat(me, state.beat, anchor, now))
+                return true;
             LootCorpse(me, corpse, bags);
             Errands::MarkDone(state.done, corpse->GetObjectGuid(), DONE_KEEP);
             Stop(me, state);
+            Errands::BeginBeat(state.beat, anchor, now, AFTER_MIN_MS, AFTER_MAX_MS);
             return true;
         }
 

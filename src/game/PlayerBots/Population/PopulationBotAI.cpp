@@ -364,13 +364,20 @@ namespace Population
             CountQuestKills(inCombat);
         if (inCombat)
             WatchSharedPrey();
+        uint32 const tickMs = WorldTimer::getMSTime();
         if (m_wasInCombat && !inCombat)
         {
             ++m_fights;
             ApologizeForPrey();
+            // (user 2026-11-28: off to the next thing the instant the creature fell looked
+            // like a machine)
+            m_afterFightUntilMs = tickMs + urand(AFTER_FIGHT_MIN_MS, AFTER_FIGHT_MAX_MS);
         }
+        if (inCombat)
+            m_afterFightUntilMs = 0;
         m_wasInCombat = inCombat;
-        if (quester && !inCombat)
+        bool const afterFight = !inCombat && tickMs < m_afterFightUntilMs;
+        if (quester && !inCombat && !afterFight)
             AdvanceQuest();
 
         // Done (a traveller at the road's end, a field bot moving on) in someone's sight: out of
@@ -400,8 +407,8 @@ namespace Population
         EndRestWhenFull();
         bool const needsRest = !inCombat && NeedsRest();
         bool const resting = !inCombat && IsResting();
-        if (me->GetStandState() != UNIT_STAND_STATE_STAND && !resting)
-            me->SetStandState(UNIT_STAND_STATE_STAND);
+        if (!resting && StandUpBeat(inCombat))
+            return;
 
         if (!inCombat && !me->IsMounted() && !resting)
         {
@@ -412,6 +419,7 @@ namespace Population
 
         // Real players around it: answers to their emotes, the dead raised, buffs for passers-by,
         // a nod for the creature left to one of them.
+        UpdatePendingLine();
         if (inCombat)
         {
             UpdateGesture(true);
@@ -419,8 +427,13 @@ namespace Population
         }
         else
         {
-            if (UpdateEmoteReply(!resting && !me->IsMoving()))
+            // (it stops for the answer: the prowl and the road send a new walk afterwards)
+            if (UpdateEmoteReply(!resting))
+            {
+                Life::Prowl::Stop(me, m_prowl, false);
+                Life::Trip::RoadWalk::Pause(me, m_road);
                 return;
+            }
             if (!resting && !me->GetVictim() && UpdateGesture(false))
                 return;
             if (!resting && !me->GetVictim())
@@ -431,6 +444,14 @@ namespace Population
                     return;
             }
             UpdateYield();
+        }
+
+        // A fight just over: it stands a moment before the loot, the way back, the next fight.
+        if (afterFight && !me->GetVictim())
+        {
+            if (!me->IsStopped())
+                me->StopMoving();
+            return;
         }
 
         // After a fight: its loot, as a player (not with a new victim chosen already).

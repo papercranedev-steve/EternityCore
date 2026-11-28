@@ -55,6 +55,9 @@ namespace BotShared
             bool initiated = false;         // the bot asked for the trade
             bool open = false;              // the window is open on both sides
             bool placed = false;            // the items are in the slots
+            uint32 nextGive = 0;            // index in `give` placed next
+            uint8 slotsUsed = 0;
+            uint32 nextPlaceMs = 0;         // the next stack goes in then
             bool accepted = false;          // the bot's accept stands
             bool partnerAccepted = false;
             // A closing or refusing status came; the next Update sees whether the window is
@@ -69,6 +72,9 @@ namespace BotShared
         constexpr uint32 OPEN_TIMEOUT_MS = 10 * IN_MILLISECONDS;
         constexpr uint32 WINDOW_TIMEOUT_MS = 60 * IN_MILLISECONDS;
         constexpr uint32 ACCEPT_DELAY_MS = 1200;
+        // The stacks go in one by one, this far apart (also the first after the window opens;
+        // user 2026-11-28: all of them in the same instant looked like a machine).
+        constexpr uint32 PLACE_MIN_MS = 300, PLACE_MAX_MS = 700;
         constexpr uint32 MAX_ACCEPTS = 10;
         // At most this many stacks change hands (the seventh slot is not traded).
         constexpr uint32 MAX_ITEMS = 6;

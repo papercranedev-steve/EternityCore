@@ -157,30 +157,74 @@ namespace Population
                 if (dead && !dead->IsRessurectRequested())
                     ReleaseRaise(m_raising);
                 m_raising.Clear();
+                m_raiseArrived = false;
                 Life::Errands::StopWalk(me);
                 return false;
             }
+            // It just saw him: a moment looking over before it goes.
+            if (!m_raiseArrived && now < m_raiseActAtMs)
+            {
+                if (me->IsMoving())
+                    Life::Errands::StopWalk(me);
+                me->SetFacingTo(me->GetAngle(x, y));
+                return true;
+            }
             bool const inReach = me->GetDistance(x, y, z, SizeFactor::None) <= RAISE_CAST_YD &&
                                  me->IsWithinLOS(x, y, z);
-            if (!inReach)
+            if (!inReach && !m_raiseArrived)
             {
                 if (!me->IsMoving())
                     me->GetMotionMaster()->MovePoint(0, x, y, z, MOVE_PATHFINDING | MOVE_RUN_MODE | MOVE_EXCLUDE_STEEP_SLOPES);
                 return true;
             }
-            if (me->IsMoving())
-                me->StopMoving();
-            if (me->IsMounted())
-                me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+            if (!m_raiseArrived)
+            {
+                // There: off the mount, turned to him, a moment, then the cast.
+                if (me->IsMoving())
+                    me->StopMoving();
+                if (me->IsMounted())
+                    me->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+                me->SetFacingTo(me->GetAngle(x, y));
+                m_raiseArrived = true;
+                m_raiseActAtMs = now + urand(RAISE_BEAT_MIN_MS, RAISE_BEAT_MAX_MS);
+                return true;
+            }
+            if (now < m_raiseActAtMs)
+                return true;
             if (CastResurrection(m_resurrectionSpell, m_raising))
             {
-                // His to accept now; nobody else asks him for a while.
+                // His to accept now; nobody else asks him for a while. Its line after the cast.
                 HoldRaise(m_raising, now + RAISE_ASKED_MS);
-                if (urand(0, 99) < RAISE_SAY_PCT)
-                    SayTo(me, dead, "raise.say", m_request.tags);
+                m_raiseSay = urand(0, 99) < RAISE_SAY_PCT;
+                m_raised = m_raising;
+                m_raiseLingerUntilMs = 0;
                 m_raising.Clear();
+                m_raiseArrived = false;
             }
             return true;
+        }
+
+        // Cast (the cast itself is UpdateBody's): it stays by him a moment, its line then.
+        if (!m_raised.IsEmpty())
+        {
+            Player* p = me->GetMap()->GetPlayer(m_raised);
+            if (!m_raiseLingerUntilMs)
+            {
+                m_raiseLingerUntilMs = now + urand(RAISE_LINGER_MIN_MS, RAISE_LINGER_MAX_MS);
+                if (m_raiseSay && p && p->IsInWorld() && p->IsRessurectRequested())
+                    SayTo(me, p, "raise.say", m_request.tags);
+                m_raiseSay = false;
+            }
+            float x, y, z;
+            if (now < m_raiseLingerUntilMs && p && p->IsInWorld())
+            {
+                if (!me->IsMoving() && BodyOf(me, p, x, y, z))
+                    me->SetFacingTo(me->GetAngle(x, y));
+                return true;
+            }
+            m_raised.Clear();
+            m_raiseLingerUntilMs = 0;
+            return false;
         }
 
         if (now < m_nextRaiseCheckMs)
@@ -204,23 +248,24 @@ namespace Population
                 ClaimRaise(p->GetObjectGuid(), now, RAISE_CLAIM_MS))
             {
                 Life::Prowl::Stop(me, m_prowl, true);
+                Life::Trip::RoadWalk::Pause(me, m_road);
+                me->SetFacingTo(me->GetAngle(x, y));
                 m_raising = p->GetObjectGuid();
                 m_raiseDeadlineMs = now + RAISE_GIVE_UP_MS;
+                m_raiseArrived = false;
+                m_raiseActAtMs = now + urand(RAISE_BEAT_MIN_MS, RAISE_BEAT_MAX_MS);
                 return true;
             }
 
-            // Not one who raises (or another bot does): a moment of sorrow for him, once.
+            // Not one who raises (or another bot does): a moment of sorrow for him, once (it
+            // stops, turns to his body, then the emote: Gesture::WantAt).
             if (me->GetDistance(x, y, z, SizeFactor::None) <= MOURN_YD &&
                 !Recently(m_mourned, p->GetObjectGuid(), now, MOURN_AGAIN_MS))
             {
                 m_mourned.emplace_back(p->GetObjectGuid(), now);
                 if (urand(0, 99) < MOURN_PCT)
-                {
-                    if (!me->IsMoving())
-                        me->SetFacingTo(me->GetAngle(x, y));
-                    BotShared::BotChat::TextEmote(me, urand(0, 1) ? TEXTEMOTE_MOURN : TEXTEMOTE_CRY,
-                        p->GetDeathState() == CORPSE ? p : nullptr);
-                }
+                    Life::Pastimes::Gesture::WantAt(m_gesture, p->GetObjectGuid(),
+                        urand(0, 1) ? TEXTEMOTE_MOURN : TEXTEMOTE_CRY, x, y, now);
             }
         }
         return false;
@@ -381,7 +426,7 @@ namespace Population
             return;
         m_nextYieldReactMs = now + YIELD_REACT_GAP_MS;
         if (urand(0, 99) < YIELD_SAY_PCT)
-            SayTo(me, p, "prey.yield", m_request.tags);
+            SayLater(p, "prey.yield", now);
         else
             Life::Pastimes::Gesture::Want(m_gesture, p->GetObjectGuid(), urand(0, 1) ? TEXTEMOTE_NOD : TEXTEMOTE_BOW, now);
     }
@@ -435,6 +480,23 @@ namespace Population
         if (urand(0, 99) < APOLOGY_EMOTE_PCT)
             Life::Pastimes::Gesture::Want(m_gesture, p->GetObjectGuid(), TEXTEMOTE_APOLOGIZE, now);
         else
-            SayTo(me, p, "prey.sorry", m_request.tags);
+            SayLater(p, "prey.sorry", now);
+    }
+
+    void PopulationBotAI::SayLater(Player* to, char const* key, uint32 now)
+    {
+        m_pendingLine.to = to->GetObjectGuid();
+        m_pendingLine.key = key;
+        m_pendingLine.atMs = now + urand(LINE_DELAY_MIN_MS, LINE_DELAY_MAX_MS);
+    }
+
+    void PopulationBotAI::UpdatePendingLine()
+    {
+        if (m_pendingLine.to.IsEmpty() || WorldTimer::getMSTime() < m_pendingLine.atMs)
+            return;
+        Player* p = me->GetMap()->GetPlayer(m_pendingLine.to);
+        if (p && p->IsInWorld() && me->IsWithinDist(p, REACT_YD, false))
+            SayTo(me, p, m_pendingLine.key, m_request.tags);
+        m_pendingLine = PendingLine();
     }
 }

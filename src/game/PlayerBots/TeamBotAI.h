@@ -405,6 +405,12 @@ public:
     // Called each tick before the stand-up check, so a full bot stands at once instead of
     // sitting out the aura (stockade-20261114-221943: full at 10 s, sat to 34 s).
     void EndRestWhenFull();
+    // Out of its rest (not resting any more): a sitting bot stands up and stays a moment
+    // (STAND_BEAT_MIN_MS..MAX) before it goes on (user 2026-11-28: standing up and running in
+    // the same instant looked like a machine). `hurry`: no moment (a fight, the leader walks
+    // on, the Commander's plan). True during the moment: the caller does nothing else this tick.
+    bool StandUpBeat(bool hurry);
+    static constexpr uint32 STAND_BEAT_MIN_MS = 500, STAND_BEAT_MAX_MS = 1500;
     // The eating / drinking aura on the bot now, or null.
     SpellEntry const* ActiveRest(BotShared::FoodAndDrink::Kind kind) const;
     // What it would eat / drink next: the free aura spell (`item` null), a bag item, or nothing.
@@ -539,6 +545,8 @@ public:
     Commander::CastWatchState m_castWatch;
     // Last area channel check (Commander/Behaviors/Combat/AreaDamageBehavior.h WatchChannel).
     uint32 m_areaChannelCheckMs = 0;
+    // StandUpBeat: standing still until then (0: none).
+    uint32 m_standBeatUntilMs = 0;
     // Commander stop of the bot's own cast (Commander/Behaviors/Combat/CastBreak.h), every frame in UpdateAI.
     Commander::CastBreakState m_castBreak;
     // Commander walk backwards (Commander/Behaviors/Movement/Backpedal.h), every frame in UpdateAI.

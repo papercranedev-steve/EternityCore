@@ -53,6 +53,20 @@ namespace Life
 
         // Ends a walk the errand started (idle; the bot's follow starts again next tick).
         void StopWalk(Player* me);
+
+        // A moment the bot stands still: arrived at something before it uses it, done with it
+        // before it goes on (user 2026-11-28: a player does not loot, gather, or walk off in the
+        // same instant he arrives or finishes). Plain data, a member of the errand's state.
+        struct Beat
+        {
+            uint32 untilMs = 0;     // 0: none
+        };
+        // One of minMs..maxMs; with an `anchor` (a companion's leader) half as long: it keeps up.
+        void BeginBeat(Beat& beat, Player const* anchor, uint32 now, uint32 minMs, uint32 maxMs);
+        // True while it lasts (the bot is stopped). Over early when the anchor walks on more
+        // than BEAT_ANCHOR_YD away: no lagging behind for it.
+        bool InBeat(Player* me, Beat& beat, Player const* anchor, uint32 now);
+        constexpr float BEAT_ANCHOR_YD = 15.0f;
     }
 }
 

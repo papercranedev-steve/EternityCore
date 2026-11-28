@@ -1411,8 +1411,15 @@ void PartyBotAI::UpdateAI(uint32 const diff)
     // (and not one sitting at its stay spot, WaitAround)
     bool const idleSitting = (m_humanIdle.sat || (staying && Life::Pastimes::WaitAround::Seated(m_waitAround))) &&
         !me->IsInCombat() && !resurrectFirst;
-    if (me->GetStandState() != UNIT_STAND_STATE_STAND && !commanderResting && !idleSitting)
-        me->SetStandState(UNIT_STAND_STATE_STAND);
+    if (!commanderResting && !idleSitting)
+    {
+        // Up from its rest, a moment before it goes on; not when the one it follows walks on,
+        // nor for the Commander's plan or a resurrection.
+        Player const* follow = GetFollowTarget(pLeader);
+        bool const hurry = commanderOutOfCombat || resurrectFirst || staying || (follow && follow->IsMoving());
+        if (StandUpBeat(hurry))
+            return;
+    }
 
     // (not while retreating: a 10 s resurrection or a buff next to the enemies stops the run)
     if (!me->IsInCombat() && !me->IsMounted() && !commanderResting &&

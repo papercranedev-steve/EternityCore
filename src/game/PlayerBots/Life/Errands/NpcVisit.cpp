@@ -85,6 +85,7 @@ namespace NpcVisit
 
     void Stop(Player* me, NpcVisitState& state)
     {
+        state.after = Errands::Beat();
         if (state.npc.IsEmpty())
             return;
         state.npc.Clear();
@@ -102,6 +103,8 @@ namespace NpcVisit
         }
 
         uint32 const now = WorldTimer::getMSTime();
+        if (state.npc.IsEmpty() && Errands::InBeat(me, state.after, anchor, now))
+            return true;
         Creature* npc = nullptr;
         if (!state.npc.IsEmpty())
         {
@@ -135,13 +138,17 @@ namespace NpcVisit
                 if (!me->IsStopped())
                     me->StopMoving();
                 me->SetFacingToObject(npc);
+                me->HandleEmoteCommand(EMOTE_ONESHOT_TALK);
                 state.arrivedMs = now;
             }
             if (WorldTimer::getMSTimeDiff(state.arrivedMs, now) < DWELL_MS)
                 return true;
-            if (task.Wants(me, npc))
+            bool const did = task.Wants(me, npc);
+            if (did)
                 task.Do(me, npc);
             Finish(me, state, now);
+            if (did)
+                Errands::BeginBeat(state.after, anchor, now, AFTER_MIN_MS, AFTER_MAX_MS);
             return true;
         }
 

@@ -272,6 +272,10 @@ namespace Population
         // says sorry after the fight.
         void WatchSharedPrey();
         void ApologizeForPrey();
+        // A line to him in a moment (LINE_DELAY_MIN_MS..MAX: typed, not the same instant it
+        // happened; user 2026-11-28). One at a time (a new one replaces it).
+        void SayLater(Player* to, char const* key, uint32 now);
+        void UpdatePendingLine();
 
         static constexpr float RAISE_SEE_YD = 35.0f;
         static constexpr float RAISE_CAST_YD = 25.0f;
@@ -280,6 +284,13 @@ namespace Population
         static constexpr uint32 RAISE_GIVE_UP_MS = 30 * IN_MILLISECONDS;
         static constexpr uint32 RAISE_CHECK_MS = 2000;
         static constexpr uint32 RAISE_SAY_PCT = 50;
+        // Seeing the body before it goes; at it before the cast (both this long).
+        static constexpr uint32 RAISE_BEAT_MIN_MS = 500, RAISE_BEAT_MAX_MS = 1200;
+        // By him after the cast (its line then), for his answer.
+        static constexpr uint32 RAISE_LINGER_MIN_MS = 2000, RAISE_LINGER_MAX_MS = 3500;
+        static constexpr uint32 LINE_DELAY_MIN_MS = 1000, LINE_DELAY_MAX_MS = 2000;
+        // A fight over: a moment before the next thing (the quest's way back, the mount, the prowl).
+        static constexpr uint32 AFTER_FIGHT_MIN_MS = 1000, AFTER_FIGHT_MAX_MS = 2500;
         static constexpr float BUFF_YD = 25.0f;
         static constexpr uint32 BUFF_CHECK_MS = 3000;
         static constexpr uint32 BUFFED_AGAIN_MS = 20 * MINUTE * IN_MILLISECONDS;
@@ -305,6 +316,18 @@ namespace Population
         bool m_emoteReplyInit = false;
         ObjectGuid m_raising;               // walking to raise him
         uint32 m_raiseDeadlineMs = 0;
+        bool m_raiseArrived = false;        // by him (its moment before the cast began)
+        uint32 m_raiseActAtMs = 0;          // the walk (just saw him) / the cast (arrived) then
+        ObjectGuid m_raised;                // cast at him: lingering
+        uint32 m_raiseLingerUntilMs = 0;
+        bool m_raiseSay = false;
+        struct PendingLine
+        {
+            ObjectGuid to;                  // empty: none
+            char const* key = nullptr;
+            uint32 atMs = 0;
+        } m_pendingLine;
+        uint32 m_afterFightUntilMs = 0;     // a fight just over: standing until then
         uint32 m_nextRaiseCheckMs = 0;
         std::deque<std::pair<ObjectGuid, uint32>> m_mourned;    // dead players it mourned, when
         uint32 m_nextBuffCheckMs = 0;

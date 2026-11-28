@@ -177,12 +177,15 @@ namespace GatherRun
             Errands::MarkDone(state.done, state.target, DONE_KEEP);
             state.target.Clear();
             state.casting = false;
+            state.atTarget = false;
             Errands::StopWalk(me);
         }
     }
 
     void Stop(Player* me, GatherRunState& state)
     {
+        state.beat = Errands::Beat();
+        state.atTarget = false;
         if (state.target.IsEmpty())
             return;
         state.target.Clear();
@@ -201,6 +204,9 @@ namespace GatherRun
         }
 
         uint32 const now = WorldTimer::getMSTime();
+        // Just gathered: a moment before the next.
+        if (state.target.IsEmpty() && Errands::InBeat(me, state.beat, anchor, now))
+            return true;
         WorldObject* target = nullptr;
         if (!state.target.IsEmpty())
         {
@@ -212,6 +218,7 @@ namespace GatherRun
                 if (me->GetLootGuid() == state.target)
                     BotShared::LootFacts::TakeOpenLoot(me);
                 Finish(me, state);
+                Errands::BeginBeat(state.beat, anchor, now, AFTER_MIN_MS, AFTER_MAX_MS);
                 return true;
             }
             target = Find(me, state.target);
@@ -244,8 +251,17 @@ namespace GatherRun
         // Walks up to it like a player, not just into reach (nextMoveMs: it was sent towards it).
         if (InReach(me, target) && Errands::CloseEnoughToUse(me, target, ApproachYd(target), state.nextMoveMs != 0))
         {
-            if (!me->IsStopped())
-                me->StopMoving();
+            if (!state.atTarget)
+            {
+                if (!me->IsStopped())
+                    me->StopMoving();
+                me->SetFacingToObject(target);
+                state.atTarget = true;
+                Errands::BeginBeat(state.beat, anchor, now, ARRIVE_MIN_MS, ARRIVE_MAX_MS);
+                return true;
+            }
+            if (Errands::InBeat(me, state.beat, anchor, now))
+                return true;
             me->SetFacingToObject(target);
             if (!StartCast(me, target))
             {

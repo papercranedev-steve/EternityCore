@@ -4,6 +4,7 @@
 #include "Group.h"
 #include "MotionMaster.h"
 #include "Timer.h"
+#include "Utilities/Random.h"
 #include <algorithm>
 #include <cmath>
 
@@ -83,6 +84,29 @@ namespace Errands
             me->StopMoving();
         me->GetMotionMaster()->Clear(false, true);
         me->GetMotionMaster()->MoveIdle();
+    }
+
+    void BeginBeat(Beat& beat, Player const* anchor, uint32 now, uint32 minMs, uint32 maxMs)
+    {
+        uint32 ms = urand(minMs, maxMs);
+        if (anchor)
+            ms /= 2;
+        beat.untilMs = std::max<uint32>(now + ms, 1);
+    }
+
+    bool InBeat(Player* me, Beat& beat, Player const* anchor, uint32 now)
+    {
+        if (!beat.untilMs)
+            return false;
+        if (now >= beat.untilMs ||
+            (anchor && anchor->IsMoving() && !me->IsWithinDistInMap(anchor, BEAT_ANCHOR_YD)))
+        {
+            beat.untilMs = 0;
+            return false;
+        }
+        if (!me->IsStopped())
+            me->StopMoving();
+        return true;
     }
 }
 }

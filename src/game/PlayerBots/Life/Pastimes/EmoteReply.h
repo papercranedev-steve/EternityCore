@@ -39,6 +39,8 @@ namespace Pastimes
         uint32 emote = 0;               // his TEXTEMOTE_*
         uint32 answerAtMs = 0;
         uint32 danceUntilMs = 0;        // != 0: dancing along
+        uint32 faceUntilMs = 0;         // != 0: turned to him, the answer then
+        uint32 holdUntilMs = 0;         // != 0: answered, standing until then
         bool walkOff = false;           // insulted (timid): the caller moves it on
         bool sighed = false;            // the spam sigh was given
         std::deque<std::pair<ObjectGuid, uint32>> heard;    // who, when
@@ -54,13 +56,19 @@ namespace Pastimes
         constexpr uint32 DANCE_MIN_MS = 5000, DANCE_MAX_MS = 10000;
         constexpr uint32 HOT_PCT = 20, TIMID_PCT = 20;      // of the bots
         constexpr uint32 CALM_WALK_OFF_PCT = 25;            // a calm one insulted walks off too
+        // When it may stand (user 2026-11-28: answering mid-stride and walking on at once looked
+        // like a machine): it stops, turns to him, meets his eyes this long, answers, and stands
+        // a while after.
+        constexpr uint32 FACE_MIN_MS = 400, FACE_MAX_MS = 900;
+        constexpr uint32 HOLD_MIN_MS = 1500, HOLD_MAX_MS = 3000;
 
         // Once per bot: its temper (seeded: the same bot stays so).
         void Init(EmoteReplyState& state, uint64 seed);
         // `from` emoted at the bot (PlayerAI::ReceiveEmote).
         void Heard(Player* me, EmoteReplyState& state, Player* from, uint32 textEmote, uint32 now);
-        // `canStand`: the bot may stand still a few seconds (a dance along). True while it
-        // dances (the caller keeps still).
+        // `canStand`: the bot may stop and stand still a few seconds (turning to him, a dance
+        // along, after its answer; its walk is ended). True while it stands for it (the caller
+        // keeps still and starts its walk again afterwards).
         bool Update(Player* me, EmoteReplyState& state, bool canStand, uint32 now);
         // Insulted and walking off: true once (the caller sends it elsewhere).
         bool TakeWalkOff(EmoteReplyState& state);

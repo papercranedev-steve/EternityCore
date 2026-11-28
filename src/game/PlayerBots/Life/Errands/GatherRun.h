@@ -35,6 +35,8 @@ namespace Life
         uint32 nextMoveMs = 0;
         uint32 nextSearchMs = 0;
         bool casting = false;       // the gathering cast was started
+        bool atTarget = false;      // arrived (its moment before the cast began)
+        Errands::Beat beat;         // at the target before the cast, after the gathering
         Errands::DoneList done;
     };
 
@@ -49,6 +51,9 @@ namespace Life
         constexpr uint32 REPATH_MS = 2000;
         constexpr uint32 GIVE_UP_MS = 20000;
         constexpr size_t DONE_KEEP = 16;
+        // Arrived: faces it, a moment, the cast; gathered: a moment, then on (Errands::Beat).
+        constexpr uint32 ARRIVE_MIN_MS = 400, ARRIVE_MAX_MS = 1000;
+        constexpr uint32 AFTER_MIN_MS = 800, AFTER_MAX_MS = 2000;
 
         // `anchor`: targets near it only (the party leader); null = near the bot.
         // True: the bot walks to a target or gathers this tick.

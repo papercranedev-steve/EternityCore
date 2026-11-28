@@ -8,6 +8,7 @@
 #include "TradeData.h"
 #include "WorldSession.h"
 #include "Packets/Trade.h"
+#include "Utilities/Random.h"
 #include <memory>
 
 namespace BotShared
@@ -62,22 +63,26 @@ namespace Trade
             Finish(hands, apart ? Result::Failed : Result::Declined);
         }
 
-        void PlaceItems(Player* me, Hands& hands)
+        // One stack per call, PLACE_MIN_MS..MAX apart; `placed` once all are in.
+        void PlaceNext(Player* me, Hands& hands, uint32 now)
         {
-            uint8 slot = 0;
-            for (ObjectGuid const& guid : hands.give)
+            if (now < hands.nextPlaceMs)
+                return;
+            while (hands.nextGive < hands.give.size())
             {
-                Item* item = me->GetItemByGuid(guid);
-                if (!item || !item->CanBeTraded() || slot >= TRADE_SLOT_TRADED_COUNT)
+                Item* item = me->GetItemByGuid(hands.give[hands.nextGive++]);
+                if (!item || !item->CanBeTraded() || hands.slotsUsed >= TRADE_SLOT_TRADED_COUNT)
                     continue;
                 auto packet = std::make_unique<WorldPackets::Trade::SetTradeItem>();
-                packet->tradeSlot = slot++;
+                packet->tradeSlot = hands.slotsUsed++;
                 packet->bag = item->GetBagSlot();
                 packet->slot = item->GetSlot();
                 me->GetSession()->QueuePacket(std::move(packet));
+                hands.nextPlaceMs = now + urand(PLACE_MIN_MS, PLACE_MAX_MS);
+                return;
             }
             hands.placed = true;
-            if (!hands.give.empty() && !slot)
+            if (!hands.give.empty() && !hands.slotsUsed)
             {
                 CloseWindow(me);
                 Finish(hands, Result::Failed);
@@ -106,6 +111,7 @@ namespace Trade
         if (with == partner)
         {
             hands.open = true;
+            hands.nextPlaceMs = hands.startMs + urand(PLACE_MIN_MS, PLACE_MAX_MS);
             return;
         }
         if (with)
@@ -132,6 +138,7 @@ namespace Trade
             case TRADE_STATUS_OPEN_WINDOW:
                 hands.open = true;
                 hands.lastChangeMs = now;
+                hands.nextPlaceMs = now + urand(PLACE_MIN_MS, PLACE_MAX_MS);
                 return true;
             case TRADE_STATUS_TRADE_ACCEPT:
                 hands.partnerAccepted = true;
@@ -179,7 +186,7 @@ namespace Trade
             Finish(hands, Result::Failed);
         else if (!hands.placed)
         {
-            PlaceItems(me, hands);
+            PlaceNext(me, hands, now);
             hands.lastChangeMs = now;
         }
         else if (WorldTimer::getMSTimeDiff(hands.startMs, now) > WINDOW_TIMEOUT_MS)

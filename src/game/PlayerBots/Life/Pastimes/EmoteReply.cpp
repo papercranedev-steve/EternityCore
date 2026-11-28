@@ -1,9 +1,11 @@
 #include "Life/Pastimes/EmoteReply.h"
+#include "Life/Errands/ErrandCommon.h"
 #include "Shared/BotChat.h"
 #include "Map.h"
 #include "Player.h"
 #include "SharedDefines.h"
 #include "Utilities/Random.h"
+#include <algorithm>
 
 namespace Life
 {
@@ -191,6 +193,7 @@ namespace EmoteReply
         state.from = guid;
         state.emote = textEmote;
         state.answerAtMs = now + urand(ANSWER_MIN_MS, ANSWER_MAX_MS);
+        state.faceUntilMs = 0;
     }
 
     bool Update(Player* me, EmoteReplyState& state, bool canStand, uint32 now)
@@ -201,25 +204,57 @@ namespace EmoteReply
                 return true;
             Stop(me, state);
         }
+        if (state.holdUntilMs)
+        {
+            if (now >= state.holdUntilMs || !canStand || me->IsInCombat())
+                state.holdUntilMs = 0;
+            else if (state.from.IsEmpty() || now < state.answerAtMs)
+                return true;    // (another emote of his: answered from where it stands)
+        }
         if (state.from.IsEmpty() || now < state.answerAtMs)
             return false;
 
         ObjectGuid const guid = state.from;
-        state.from.Clear();
-        if (me->IsInCombat())
-            return false;
         Player* from = me->GetMap()->GetPlayer(guid);
-        if (!from || !from->IsInWorld() || !me->IsWithinDist(from, HEAR_YD, false))
+        if (me->IsInCombat() || !from || !from->IsInWorld() || !me->IsWithinDist(from, HEAR_YD, false))
+        {
+            state.from.Clear();
+            state.faceUntilMs = 0;
             return false;
+        }
+        // It stops and turns to him first, a moment of eye contact, then the answer.
+        if (canStand)
+        {
+            if (!state.faceUntilMs)
+            {
+                Errands::StopWalk(me);
+                me->SetFacingToObject(from);
+                state.faceUntilMs = std::max<uint32>(now + urand(FACE_MIN_MS, FACE_MAX_MS), 1);
+                return true;
+            }
+            if (now < state.faceUntilMs)
+            {
+                me->SetFacingToObject(from);
+                return true;
+            }
+        }
+        state.from.Clear();
+        state.faceUntilMs = 0;
         if (!me->IsMoving())
             me->SetFacingToObject(from);
         if (!state.emote)
-        {
             BotShared::BotChat::TextEmote(me, TEXTEMOTE_SIGH, from);
-            return false;
+        else
+            Answer(me, state, from, canStand, now);
+        if (state.danceUntilMs)
+            return true;
+        // Stands a while after it (not one walking off insulted).
+        if (canStand && !state.walkOff)
+        {
+            state.holdUntilMs = now + urand(HOLD_MIN_MS, HOLD_MAX_MS);
+            return true;
         }
-        Answer(me, state, from, canStand, now);
-        return state.danceUntilMs != 0;
+        return false;
     }
 
     bool TakeWalkOff(EmoteReplyState& state)
@@ -231,6 +266,8 @@ namespace EmoteReply
 
     void Stop(Player* me, EmoteReplyState& state)
     {
+        state.holdUntilMs = 0;
+        state.faceUntilMs = 0;
         if (state.danceUntilMs)
         {
             state.danceUntilMs = 0;

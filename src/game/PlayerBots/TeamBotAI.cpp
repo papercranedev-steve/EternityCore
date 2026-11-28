@@ -1224,6 +1224,27 @@ void TeamBotAI::EndRestWhenFull()
         me->RemoveAurasDueToSpell(pFood->Id);
 }
 
+bool TeamBotAI::StandUpBeat(bool hurry)
+{
+    uint32 const now = WorldTimer::getMSTime();
+    hurry = hurry || me->IsInCombat();
+    if (me->GetStandState() != UNIT_STAND_STATE_STAND)
+    {
+        me->SetStandState(UNIT_STAND_STATE_STAND);
+        m_standBeatUntilMs = hurry ? 0 : now + urand(STAND_BEAT_MIN_MS, STAND_BEAT_MAX_MS);
+    }
+    if (!m_standBeatUntilMs)
+        return false;
+    if (hurry || now >= m_standBeatUntilMs)
+    {
+        m_standBeatUntilMs = 0;
+        return false;
+    }
+    if (!me->IsStopped())
+        me->StopMoving();
+    return true;
+}
+
 bool TeamBotAI::CanTryToCastSpell(Unit const* pTarget, SpellEntry const* pSpellEntry) const
 {
     return CombatBotBaseAI::CanTryToCastSpell(pTarget, pSpellEntry) && PassesPartyCastChecks(pTarget, pSpellEntry);
