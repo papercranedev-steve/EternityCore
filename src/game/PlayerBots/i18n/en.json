@@ -1080,6 +1080,31 @@
     "chatty": "A bigger bag! Thanks {name}, I can carry so much more now!",
     "quiet": "Thanks, {name}."
   },
+  "voice.player.interrupt": {
+    "default": ["Nice interrupt, {name}.","Good thing {name} cut that cast short."],
+    "chatty": "{name}, perfect timing on that interrupt, it didn't even finish a word!",
+    "quiet": "Good kick, {name}."
+  },
+  "//voice.loot": "Group loot rolls, need only, uncommon and better (TeamBotAI::OnLootRollWon). {item}; {name}: the human (won: none).",
+  "voice.loot.won": {
+    "default": ["Lucky me, the {item} is mine.","The {item}, just what I needed!"],
+    "chatty": "Ha, the {item}! My lucky day!",
+    "quiet": "Got the {item}."
+  },
+  "voice.loot.sorry": {
+    "default": ["Sorry {name}, the {item} went to me.","{name}, I won the {item}... next one's yours."],
+    "quiet": "Sorry {name}, took the {item}."
+  },
+  "voice.loot.yours": {
+    "default": ["The {item} is yours, {name}, grats!","You beat me, {name}. Enjoy the {item}!"],
+    "chatty": "Aw, {name} outrolled me! The {item} is yours, congrats!",
+    "quiet": "Grats, {name}."
+  },
+  "voice.loot.grats": {
+    "default": ["Grats on the {item}, {name}!","{name}, the {item}! Congrats!"],
+    "chatty": "{name} got the {item}! Put it on, let's see!",
+    "quiet": "Grats, {name}."
+  },
   "voice.enter.dungeon": {
     "default": ["We are in. Stay close.","Watch your step in here."],
     "chatty": "Finally in! Let's see what treasure we find today!"

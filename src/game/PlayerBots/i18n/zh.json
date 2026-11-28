@@ -1127,6 +1127,31 @@
     "chatty": "大包！{name}谢谢，这下能装好多东西了！",
     "quiet": "谢了，{name}。"
   },
+  "voice.player.interrupt": {
+    "default": ["{name}刚才那个打断漂亮。","多亏{name}断了它的读条。"],
+    "chatty": "{name}那一下打断太准了，它法术都没念完！",
+    "quiet": "{name}，断得好。"
+  },
+  "//voice.loot": "Group loot rolls, need only, uncommon and better (TeamBotAI::OnLootRollWon). {item}; {name}: the human (won: none).",
+  "voice.loot.won": {
+    "default": ["运气不错，{item}归我了。","{item}，正好用得上！"],
+    "chatty": "哈哈，{item}到手！今天手气真好！",
+    "quiet": "{item}，拿了。"
+  },
+  "voice.loot.sorry": {
+    "default": ["不好意思{name}，{item}我先拿了。","{name}，{item}让我摇到了……下次一定是你的。"],
+    "quiet": "{name}，抱歉，{item}我拿了。"
+  },
+  "voice.loot.yours": {
+    "default": ["{item}归你了，{name}，恭喜！","{name}摇赢了，{item}拿好！"],
+    "chatty": "哎呀没摇过{name}！{item}给你了，恭喜恭喜！",
+    "quiet": "{name}，恭喜。"
+  },
+  "voice.loot.grats": {
+    "default": ["恭喜{name}，{item}到手！","{name}，{item}，恭喜！"],
+    "chatty": "{name}拿到{item}啦！快穿上让我们看看！",
+    "quiet": "恭喜，{name}。"
+  },
   "voice.enter.dungeon": {
     "default": ["进来了，都跟紧点。","这里不太平，小心点。"],
     "chatty": "终于进来了，看看今天能捞到什么好东西！"
