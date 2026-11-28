@@ -389,6 +389,7 @@ namespace Commander
         SheetTimers::Annotate(m_world, nowMs);
         m_combatRates.Annotate(m_world, nowMs);
         m_leaderRun.Annotate(m_world, nowMs);
+        m_damageMeter.Annotate(m_world, nowMs);
 
         if (m_world.version == 0 || WorldTimer::getMSTimeDiff(m_world.packsRefreshedAtMs, nowMs) >= PACK_REFRESH_MS)
         {

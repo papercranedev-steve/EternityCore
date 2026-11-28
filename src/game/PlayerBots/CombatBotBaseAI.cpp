@@ -3787,5 +3787,76 @@ void CombatBotBaseAI::OnPacketReceived(WorldPacket const* packet)
             }
             return;
         }
+        case SMSG_ATTACKERSTATEUPDATE:
+        {
+            // (WorldPackets::Combat::MeleeAttackingStateUpdate: hit info, packed attacker,
+            // packed victim, total damage, sub damage count, per sub damage school / float /
+            // int / absorb / resist, victim state, attacker state, melee spell id, blocked)
+            if (!me)
+                return;
+            try
+            {
+                WorldPacket data(*packet);
+                data.rpos(0);
+                data.read<uint32>();
+                ObjectGuid const attacker(data.readPackGUID());
+                ObjectGuid const victim(data.readPackGUID());
+                int32 const damage = data.read<int32>();
+                uint8 const subs = data.read<uint8>();
+                data.rpos(data.rpos() + subs * 5 * sizeof(uint32) + 2 * sizeof(uint32));
+                uint32 const spellId = data.read<uint32>();
+                if (damage > 0)
+                    OnDamageSeen(attacker, victim, uint32(damage), spellId);
+            }
+            catch (ByteBufferException const&)
+            {
+            }
+            return;
+        }
+        case SMSG_SPELLNONMELEEDAMAGELOG:
+        {
+            // (WorldPackets::Spell::SpellNonMeleeDamageLog: packed target, packed attacker,
+            // spell id, damage, ...)
+            if (!me)
+                return;
+            try
+            {
+                WorldPacket data(*packet);
+                data.rpos(0);
+                ObjectGuid const target(data.readPackGUID());
+                ObjectGuid const attacker(data.readPackGUID());
+                uint32 const spellId = data.read<uint32>();
+                uint32 const damage = data.read<uint32>();
+                OnDamageSeen(attacker, target, damage, spellId);
+            }
+            catch (ByteBufferException const&)
+            {
+            }
+            return;
+        }
+        case SMSG_PERIODICAURALOG:
+        {
+            // (Unit::SendPeriodicAuraLog: packed target, packed caster, spell id, count 1, aura
+            // type, then for periodic damage: damage, school, absorb, resist)
+            if (!me)
+                return;
+            try
+            {
+                WorldPacket data(*packet);
+                data.rpos(0);
+                ObjectGuid const target(data.readPackGUID());
+                ObjectGuid const caster(data.readPackGUID());
+                uint32 const spellId = data.read<uint32>();
+                data.read<uint32>();
+                uint32 const auraType = data.read<uint32>();
+                if (auraType != SPELL_AURA_PERIODIC_DAMAGE && auraType != SPELL_AURA_PERIODIC_DAMAGE_PERCENT)
+                    return;
+                OnDamageSeen(caster, target, data.read<uint32>(), spellId);
+            }
+            catch (ByteBufferException const&)
+            {
+            }
+            return;
+        }
     }
 }

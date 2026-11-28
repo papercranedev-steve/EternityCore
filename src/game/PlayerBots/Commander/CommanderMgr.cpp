@@ -471,6 +471,14 @@ namespace Commander
             commander->GetVoice().NoteInterrupt(caster, target, spellId, WorldTimer::getMSTime());
     }
 
+    void CommanderMgr::NoteDamage(Player const* reporter, ObjectGuid dealer, uint32 damage, bool area)
+    {
+        if (!IsEnabled() || !reporter)
+            return;
+        if (std::shared_ptr<PartyCommander> commander = FindCommander(reporter))
+            commander->GetDamageMeter().Note(dealer, damage, area, WorldTimer::getMSTime());
+    }
+
     void CommanderMgr::SetVoiceSettings(ObjectGuid player, VoiceSettings const& settings)
     {
         std::lock_guard<std::mutex> guard(m_voiceLock);

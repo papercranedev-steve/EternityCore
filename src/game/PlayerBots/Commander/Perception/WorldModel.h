@@ -12,6 +12,7 @@
 #include "ObjectGuid.h"
 #include "RoleCapability.h"
 #include "Commander/CommanderTypes.h"
+#include "Commander/Perception/Forecast/DamageMeter.h"
 #include <algorithm>
 #include <limits>
 #include <memory>
@@ -1434,6 +1435,7 @@ namespace Commander
         MapKind mapKind = MapKind::World;   // the map the team fights on (the refreshing bot's)
         LeaderRunFacts leaderRun;    // PartyCommander's LeaderRun annotator
         LeaderActivityFacts leaderActivity;     // PartyCommander's LeaderActivity annotator
+        DamageMeterFacts damage;     // PartyCommander's DamageMeter (Perception/Forecast/DamageMeter.h)
         std::vector<PartyMemberFacts> party;
         // Dead members with their body or corpse on this map (a released one's ghost is not in
         // `party` when it waits on another map).

@@ -382,6 +382,10 @@ public:
     // Someone in sight interrupted `target`'s cast of `interruptedSpellId` (SMSG_SPELLLOGEXECUTE
     // with SPELL_EFFECT_INTERRUPT_CAST). TeamBotAI: tells the party voice.
     virtual void OnInterruptSeen(ObjectGuid /*caster*/, ObjectGuid /*target*/, uint32 /*interruptedSpellId*/) {}
+    // Someone in sight dealt `damage` to `target` (combat log: SMSG_ATTACKERSTATEUPDATE, the
+    // melee swing's spell if any; SMSG_SPELLNONMELEEDAMAGELOG; SMSG_PERIODICAURALOG periodic
+    // damage). spellId 0 = a plain swing or shot. TeamBotAI: the damage meter.
+    virtual void OnDamageSeen(ObjectGuid /*attacker*/, ObjectGuid /*target*/, uint32 /*damage*/, uint32 /*spellId*/) {}
 
     // The last resurrection asked for it (SMSG_RESURRECT_REQUEST, accepted at once): who and
     // when (WorldTimer ms). The party voice thanks a human who raised it by name.

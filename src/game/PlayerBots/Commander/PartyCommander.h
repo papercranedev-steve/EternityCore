@@ -96,6 +96,9 @@ namespace Commander
         // What the bots say to the players (Commands/Voice/PartyVoice.h). Map thread only:
         // planners (GatherPlanner) and rotations (the warlock's Soulstone) queue lines here.
         PartyVoice& GetVoice() { return m_voice; }
+        // Damage per member, from the bots' combat log (Perception/Forecast/DamageMeter.h).
+        // Map thread only.
+        DamageMeter& GetDamageMeter() { return m_damageMeter; }
 
     private:
         void Refresh(TeamBotAI* bot, uint32 nowMs);
@@ -139,6 +142,7 @@ namespace Commander
         FleePredictor m_fleePredictor;
         LeaderRun m_leaderRun;
         LeaderActivity m_leaderActivity;
+        DamageMeter m_damageMeter;
         ThreatFeed m_threatFeed;        // addon threat meter of subscribed players
         PartyVoice m_voice;             // what the bots say to the players
         bool m_wasRetreating = false;   // m_plan.retreat.active on the previous refresh

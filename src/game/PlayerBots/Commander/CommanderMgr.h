@@ -115,6 +115,9 @@ namespace Commander
         // `member` saw `caster` interrupt `target`'s `spellId` (PartyVoice::NoteInterrupt). Same
         // thread rule as QueueVoice.
         void NoteInterrupt(Player const* member, ObjectGuid caster, ObjectGuid target, uint32 spellId);
+        // `reporter` (a bot of the team) saw `dealer` (a team member; its pet's damage is its
+        // own) deal `damage` to an enemy (DamageMeter::Note). Map thread of the reporter.
+        void NoteDamage(Player const* reporter, ObjectGuid dealer, uint32 damage, bool area);
 
         BehaviorList const& GetBehaviors() const { return m_behaviors; }
         AssignerList const& GetAssigners() const { return m_assigners; }

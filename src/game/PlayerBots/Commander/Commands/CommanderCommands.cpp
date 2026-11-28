@@ -619,6 +619,29 @@ namespace
     }
 
     // .partybot ai ready
+    // The damage meter (Perception/Forecast/DamageMeter.h), to hold against the player's own.
+    bool ShowDps(ChatHandler* handler, Player* player)
+    {
+        auto commander = CommanderFor(handler, player);
+        if (!commander)
+            return false;
+        Commander::DamageMeterFacts const& d = commander->GetWorld().damage;
+        Map* map = player->GetMap();
+        handler->PSendSysMessage("Damage meter: last %u fights of %.0f s and more%s.", uint32(Commander::DamageMeter::KEEP_FIGHTS),
+            Commander::DamageMeter::MIN_FIGHT_SEC, d.fighting ? "" : " (no fight now)");
+        for (Commander::MemberDamage const& m : d.members)
+        {
+            if (d.fighting)
+                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area), now %u in %.0f s (%.0f dps)",
+                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f, m.currentDamage, d.currentSec,
+                    d.currentSec > 0.0f ? m.currentDamage / d.currentSec : 0.0f);
+            else
+                handler->PSendSysMessage("  %s: %.0f dps (%u fights, %.0f%% area)",
+                    NameOf(map, m.guid).c_str(), m.dps, m.fights, m.areaShare * 100.0f);
+        }
+        return true;
+    }
+
     bool ShowReady(ChatHandler* handler, Player* player)
     {
         auto commander = CommanderFor(handler, player);
@@ -1400,7 +1423,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
     }
 
     if (!strcmp(sub, "threat") || !strcmp(sub, "packs") || !strcmp(sub, "healsim") || !strcmp(sub, "plan") ||
-        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
+        !strcmp(sub, "pull") || !strcmp(sub, "ready") || !strcmp(sub, "dps") || !strcmp(sub, "clear") || !strcmp(sub, "retreat") ||
         !strcmp(sub, "pullmethod") || !strcmp(sub, "pullplace") || !strcmp(sub, "pullstance") || !strcmp(sub, "field") || !strcmp(sub, "wayin") ||
         !strcmp(sub, "guide") || !strcmp(sub, "push"))
     {
@@ -1440,6 +1463,8 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         }
         else if (!strcmp(sub, "ready"))
             ok = ShowReady(this, player);
+        else if (!strcmp(sub, "dps"))
+            ok = ShowDps(this, player);
         else if (!strcmp(sub, "pull"))
             ok = StartPull(this, player, ExtractLiteralArg(&args), GetSelectedCreature());
         else if (!strcmp(sub, "plan"))
@@ -1463,7 +1488,7 @@ bool ChatHandler::HandlePartyBotAiCommand(char* args)
         return ok;
     }
 
-    SendSysMessage("Usage: .partybot ai [status|on|off|debugsay [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|pullstance [active|passive]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
+    SendSysMessage("Usage: .partybot ai [status|on|off|debugsay [on|off]|interval <ms>|stats [reset]|modules|module <id> on|off|reload [overrides]|bot [n]|threat [watch off|target|all]|packs|field|wayin|plan|ready|dps|pull [now|cancel]|pullmethod [auto|ranged|face|melee]|pullplace [auto|corner]|pullstance [active|passive]|clear [radius] [maxmobs]|clear stop|push [radius] [maxmobs]|push stop|guide [off]|retreat [stop]|healsim <amount> [healer]|profile|spell <id> [level]|rates]");
     SetSentErrorMessage(true);
     return false;
 }

@@ -2401,3 +2401,40 @@ void TeamBotAI::OnInterruptSeen(ObjectGuid caster, ObjectGuid target, uint32 int
 {
     sCommanderMgr.NoteInterrupt(me, caster, target, interruptedSpellId);
 }
+
+void TeamBotAI::OnDamageSeen(ObjectGuid attacker, ObjectGuid target, uint32 damage, uint32 spellId)
+{
+    if (!damage || target.IsPlayer() || !me->IsInWorld())
+        return;
+    Player* dealer = nullptr;
+    if (attacker == me->GetObjectGuid())
+        dealer = me;
+    else if (Unit* unit = me->GetMap()->GetUnit(attacker))
+        dealer = unit->GetCharmerOrOwnerPlayerOrPlayerItself();
+    if (!dealer)
+        return;
+    if (dealer != me)
+    {
+        // A bot reports its own; a real player's, the recorder only (header).
+        Group* group = me->GetGroup();
+        if (!group || dealer->GetGroup() != group || (dealer->AI() && dynamic_cast<TeamBotAI const*>(dealer->AI())))
+            return;
+        uint32 const now = WorldTimer::getMSTime();
+        if (!m_damageRecorderAtMs || WorldTimer::getMSTimeDiff(m_damageRecorderAtMs, now) >= 1000)
+        {
+            m_damageRecorderAtMs = now ? now : 1;
+            m_damageRecorder = true;
+            for (GroupReference* itr = group->GetFirstMember(); itr && m_damageRecorder; itr = itr->next())
+            {
+                Player* m = itr->getSource();
+                if (m && m != me && m->IsInWorld() && m->GetMap() == me->GetMap() && m->AI() &&
+                    dynamic_cast<TeamBotAI const*>(m->AI()) && m->GetObjectGuid().GetRawValue() < me->GetObjectGuid().GetRawValue())
+                    m_damageRecorder = false;
+            }
+        }
+        if (!m_damageRecorder)
+            return;
+    }
+    SpellEntry const* spell = spellId ? sSpellMgr.GetSpellEntry(spellId) : nullptr;
+    sCommanderMgr.NoteDamage(me, dealer->GetObjectGuid(), damage, spell && spell->IsAreaOfEffectSpell());
+}

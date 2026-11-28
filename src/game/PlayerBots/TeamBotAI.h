@@ -86,6 +86,13 @@ public:
     void OnLootRollWon(ObjectGuid looted, uint32 slot, uint32 itemId, ObjectGuid winner, uint8 rollType) override;
     // To the party voice (praise for a human's interrupt, doc moment 13).
     void OnInterruptSeen(ObjectGuid caster, ObjectGuid target, uint32 interruptedSpellId) override;
+    // To the damage meter (Commander/Perception/Forecast/DamageMeter.h): its own and its pet's
+    // damage; a real player's (and his pet's) only when this bot is the group's recorder (the
+    // lowest guid bot on this map, checked once a second), so each hit counts once. Not damage
+    // on players.
+    void OnDamageSeen(ObjectGuid attacker, ObjectGuid target, uint32 damage, uint32 spellId) override;
+    bool m_damageRecorder = false;
+    uint32 m_damageRecorderAtMs = 0;
     // (looted raw guid, slot) -> the votes so far (voter, RollVote).
     std::map<std::pair<uint64, uint32>, std::vector<std::pair<ObjectGuid, uint8>>> m_lootVotes;
 
