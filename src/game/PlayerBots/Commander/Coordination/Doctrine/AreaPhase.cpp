@@ -546,7 +546,30 @@ namespace Commander
                             c.value.net -= ch.walkCost;
                         }
                     }
-                    else if (!e || PackResolver::Distance(m.pos, e->pos) <= spell.range)
+                    else if (!e)
+                    {
+                        // Around the caster: here or the cell covering the most (AreaSpot::PickSelf).
+                        AreaSpot::Choice const ch = AreaSpot::PickSelf(world, plan, c.request,
+                            PrevSpot(prev, m.guid, m.pos, ObjectGuid(), spell.spellId));
+                        if (!ch.valid)
+                        {
+                            TraceCandidate(m, spell, e, ch.value.invalid ? ch.value.invalid : "no place to cast it from", nullptr);
+                            continue;
+                        }
+                        c.value = ch.value;
+                        c.netHere = ch.hereValid ? ch.hereNet : 0.0f;
+                        if (ch.move)
+                        {
+                            c.request.centre = c.request.from = ch.spots.front();
+                            c.spots = ch.spots;
+                            c.move = true;
+                            c.moveBenefit = std::max(0.0f, ch.gain + ch.walkCost);
+                            c.moveCost = ch.walkCost;
+                            c.value.cost += ch.walkCost;
+                            c.value.net -= ch.walkCost;
+                        }
+                    }
+                    else if (PackResolver::Distance(m.pos, e->pos) <= spell.range)
                     {
                         c.value = AreaValue::Evaluate(world, c.request);
                         c.netHere = c.value.valid ? c.value.net : 0.0f;

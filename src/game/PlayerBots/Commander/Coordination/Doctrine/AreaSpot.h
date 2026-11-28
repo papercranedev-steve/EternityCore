@@ -60,6 +60,16 @@ namespace Commander
         Choice Pick(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base, bool evaluate,
                     Position3 const* prevSpot);
 
+        // A spell around the caster (Arcane Explosion, Holy Nova; user 2026-11-28: "where it
+        // covers the most adds"): where it stands now, or a cell (CasterCells) within
+        // SELF_WALK_YD. Cells ranked by the acting enemies within the spell's radius of them (the
+        // most first), then by walk; the best MAX_EVALUATED valued by AreaValue cast there
+        // (centre = from = the cell). Score, move margin and spots as Pick. `base`: caster, spell,
+        // turn options, forbidden, noHold; centre and from are set here.
+        static constexpr float SELF_WALK_YD = 15.0f;
+        Choice PickSelf(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base,
+                        Position3 const* prevSpot);
+
         // The parts of Pick's score other modules ask (the fight spot before the fight, tank
         // fight spot doc 3.4: how well the caster can stand for a pile at S).
         // Cells the caster may cast from, within `maxYd` of `around` (Collect's rules, out of

@@ -156,5 +156,109 @@ namespace AreaSpot
                 out.spots.push_back(c.pos);
         return out;
     }
+
+    Choice PickSelf(WorldModel const& world, TeamPlan const& plan, AreaValue::Request const& base,
+                    Position3 const* prevSpot)
+    {
+        Choice out;
+        PartyMemberFacts const& m = *base.caster;
+        AreaSpellFacts const& spell = *base.spell;
+
+        AreaValue::Request here = base;
+        here.centre = here.from = m.pos;
+        AreaValue::Result const hereValue = AreaValue::Evaluate(world, here);
+        bool const idleHere = world.field && world.field->At(m.pos) && world.field->At(m.pos)->idle;
+        out.hereValid = hereValue.valid && !idleHere;
+        out.hereNet = hereValue.valid ? hereValue.net : 0.0f;
+        out.value = hereValue;
+        out.valid = out.hereValid;
+        if (!world.field)
+            return out;
+
+        // Enemies the spell would reach from `p` (AreaValue's target rule, before its checks).
+        auto const covered = [&](Position3 const& p)
+        {
+            uint32 n = 0;
+            for (EnemyFacts const& e : world.enemies)
+                if (e.acting && !e.crowdControlled && !e.onAllyOnly && e.health &&
+                    PackResolver::Distance(p, e.pos) - e.boundingRadius <= spell.radius)
+                    ++n;
+            return n;
+        };
+        struct SelfCell
+        {
+            Position3 pos;
+            float walkCost = 0.0f;
+            bool taken = false;
+            uint32 covered = 0;
+            AreaValue::Result value;
+            float score = 0.0f;
+        };
+        float const margin = SpotCost::Walk(world, m, MOVE_MARGIN_SEC);
+        auto const sticky = [&](SelfCell const& c)
+        {
+            return prevSpot && Distance2d(c.pos, *prevSpot) <= PositionField::CELL_YD ? margin : 0.0f;
+        };
+        // CasterCells' rules, but a ranged hazard the caster stands in already does not rule a
+        // cell out (an aura filling the room, Unholy Aura: every cell would be out).
+        std::vector<SelfCell> cells;
+        std::vector<HazardZone> const& zones = HazardZones::Get(world);
+        FieldSpots::Query q;
+        q.center = m.pos;
+        q.maxYd = SELF_WALK_YD;
+        q.patrolBeforeSec = RouteGuard::StaySec(world, plan);
+        for (FieldSpots::Spot const& s : FieldSpots::Collect(world, m, q))
+        {
+            bool const newHazard = std::any_of(zones.begin(), zones.end(), [&](HazardZone const& z)
+                { return z.DangerousTo(HAZARD_RANGED) && HazardZones::Covers(z, s.pos) && !HazardZones::Covers(z, m.pos); });
+            if (newHazard)
+                continue;
+            SelfCell c;
+            c.pos = s.pos;
+            c.walkCost = SpotCost::Walk(world, m, s.WalkEstimate(PATH_FACTOR) / RUN_YD_PER_SEC);
+            c.taken = s.taken;
+            c.covered = covered(s.pos);
+            if (c.covered)
+                cells.push_back(c);
+        }
+        if (cells.empty())
+            return out;
+        std::sort(cells.begin(), cells.end(), [&](SelfCell const& a, SelfCell const& b)
+        {
+            if (a.covered != b.covered)
+                return a.covered > b.covered;
+            return a.walkCost - sticky(a) < b.walkCost - sticky(b);
+        });
+
+        std::vector<SelfCell> valued;
+        for (SelfCell& c : cells)
+        {
+            if (valued.size() >= MAX_EVALUATED)
+                break;
+            AreaValue::Request r = base;
+            r.centre = r.from = c.pos;
+            c.value = AreaValue::Evaluate(world, r);
+            if (!c.value.valid)
+                continue;
+            c.score = c.value.net - c.walkCost + sticky(c);
+            valued.push_back(c);
+        }
+        if (valued.empty())
+            return out;
+        std::stable_sort(valued.begin(), valued.end(), [](SelfCell const& a, SelfCell const& b) { return a.score > b.score; });
+
+        SelfCell const& best = valued.front();
+        if (out.hereValid && best.score - out.hereNet <= margin)
+            return out;
+        out.valid = true;
+        out.move = true;
+        out.value = best.value;
+        out.walkCost = best.walkCost;
+        out.gain = out.hereValid ? best.score - out.hereNet : best.score;
+        for (SelfCell const& c : valued)
+            if (out.spots.size() < MAX_SPOTS)
+                out.spots.push_back(c.pos);
+        return out;
+    }
 }
 }
