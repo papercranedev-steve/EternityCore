@@ -325,6 +325,8 @@ public:
     // resurrection and dispels, in combat followed by trinkets.
     void UpdateInCombatAI() final;
     void UpdateOutOfCombatAI() final;
+    // UpdateOutOfCombatAI's casts: resurrection, dispel, the rotation's buffs and top-up heal.
+    void RunOutOfCombatWork();
     // The cast waiting for a stance swap (DoCastWithStance). True: it was cast or is still waiting.
     bool ContinueStanceSwap();
     // The form left for a spell (NeedsFormExit), taken back once the global cooldown ends.
@@ -413,6 +415,9 @@ public:
     float RestSecondsLeft() const;
     // Catching up with a leader who walked away (RestCatchUp): no resting until then.
     bool HoldsOffRest() const { return m_restCatchUp.active; }
+    // When UpdateOutOfCombatAI last cast something or was casting (resurrection, dispel, buff,
+    // top-up heal); 0 = never. RestBehavior sits down only once that work has settled.
+    uint32 OutOfCombatWorkMs() const { return m_outOfCombatWorkMs; }
     // Health (when it has food) or mana (when it drinks) below Commander::RestValue::FULL_SHARE.
     bool NeedsRest() const;
     // The mana share a new drink starts below, by what its last fights in this kind of place
@@ -611,6 +616,8 @@ public:
     Commander::RestCatchUpState m_restCatchUp;
     // Out of combat: the members' gaps a heal waits on (Commander/Behaviors/Support/RestTopUp.h).
     Commander::RestTopUpState m_restTopUp;
+    // OutOfCombatWorkMs.
+    uint32 m_outOfCombatWorkMs = 0;
     // What its last fights cost in mana (Commander/Perception/Values/FightManaSpend.h), every
     // tick in UpdateBody. Not saved: a new session starts from the place's default.
     Commander::FightManaSpendState m_fightManaSpend;

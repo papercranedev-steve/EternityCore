@@ -11,6 +11,7 @@
 #include "TeamBotAI.h"
 #include "Map.h"
 #include "HealSpells.h"
+#include "Timer.h"
 #include <algorithm>
 #include <vector>
 
@@ -46,6 +47,27 @@ namespace Commander
             if (bot->GetRole() == ROLE_RANGE_DPS && bot->UsesCasterChase() && beforeFight)
                 return InReach(bot, self.pos, planned, RangedStanceBehavior::CAST_RANGE);
             return true;
+        }
+
+        // Out-of-combat work still going on (header): a cast of UpdateOutOfCombatAI within
+        // WORK_SETTLE_MS, or a resurrection it cast waiting for the member's answer (the risen
+        // one needs buffs and a heal next). Not with the party fighting.
+        bool WorkPending(TeamBotAI const* bot, WorldModel const& world)
+        {
+            if (world.HasPartyEnemy() || !world.targeted.empty())
+                return false;
+            uint32 const workMs = bot->OutOfCombatWorkMs();
+            if (!workMs)
+                return false;
+            uint32 const since = WorldTimer::getMSTimeDiff(workMs, WorldTimer::getMSTime());
+            if (since < RestBehavior::WORK_SETTLE_MS)
+                return true;
+            if (since >= RestBehavior::RES_ANSWER_WAIT_MS)
+                return false;
+            for (CorpseFacts const& c : world.corpses)
+                if (c.resRequested)
+                    return true;
+            return false;
         }
     }
 
@@ -171,6 +193,17 @@ namespace Commander
                 p.action.type = BotActionType::Hold;
                 p.reason = "rest: mana to health first, the next heal after the global cooldown";
             }
+        }
+
+        // Its out-of-combat work first, then one rest (user 2026-11-28): a priest resurrected,
+        // sat down, stood up for the risen one's buffs, sat down, stood up for his heal, sat
+        // down again: each new drink ran to full with the next task a moment away (the risen
+        // member answering, a gap that waits out RestTopUp::STABLE_MS after Fortitude raised
+        // his max health). Not seated yet: it stands until that work has settled.
+        if (p.action.type == BotActionType::Rest && !bot->IsResting() && WorkPending(bot, world))
+        {
+            p.action.type = BotActionType::Hold;
+            p.reason = "rest: out-of-combat work first (resurrection, buffs, heals)";
         }
         out.push_back(p);
     }

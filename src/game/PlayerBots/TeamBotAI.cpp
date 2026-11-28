@@ -1875,6 +1875,15 @@ void TeamBotAI::KeepFacing(Unit* pVictim)
 
 void TeamBotAI::UpdateOutOfCombatAI()
 {
+    // (the time its work last went on: RestBehavior waits for it to settle before a new rest)
+    uint32 const castsBefore = m_castOkCount;
+    RunOutOfCombatWork();
+    if (m_castOkCount != castsBefore || (me->IsNonMeleeSpellCasted(false, false, true) && !IsRestPending()))
+        m_outOfCombatWorkMs = WorldTimer::getMSTime() | 1;
+}
+
+void TeamBotAI::RunOutOfCombatWork()
+{
     if (m_resurrectionSpell)
     {
         if (Player* pTarget = SelectResurrectionTarget())

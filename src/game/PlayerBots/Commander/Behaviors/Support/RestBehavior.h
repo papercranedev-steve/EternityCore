@@ -46,6 +46,11 @@
  * (TeamBotAI::MayLeaveFormOutOfCombat: its mana pays the form back or a drink waits, nothing
  * would catch it out of form); StartResting leaves it, and the rotation keeps caster form until
  * the rest is over (TeamBotAI::HoldsFormForRest).
+ * Out-of-combat work first, then one rest (user 2026-11-28): a bot not seated yet does not sit
+ * down while its out-of-combat AI (resurrection, dispel, buffs, top-up heal) cast something
+ * within WORK_SETTLE_MS, or, within RES_ANSWER_WAIT_MS, while a resurrection waits for its
+ * answer. It stands (Hold) and spends its mana on that work; with no mana left the casts stop
+ * and it sits after WORK_SETTLE_MS. Not with the party fighting.
  * Not while the retreat runs, while casting, or in combat (a hit stands the bot up and puts it
  * in combat; the game does not allow eating or drinking then).
  */
@@ -61,6 +66,12 @@ namespace Commander
     {
     public:
         static constexpr float LOS_EYE_HEIGHT = 2.0f;
+        // Its out-of-combat work settled: no cast for this long (longer than RestTopUp::
+        // STABLE_MS, the wait of a heal gap after a buff changed max health).
+        static constexpr uint32 WORK_SETTLE_MS = 4000;
+        // A resurrection waiting for its answer holds the rest at most this long after the
+        // last cast (a human may leave the request open).
+        static constexpr uint32 RES_ANSWER_WAIT_MS = 15000;
 
         char const* GetId() const override { return "rest"; }
         bool AppliesTo(TeamBotAI const* bot) const override;
