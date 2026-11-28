@@ -450,6 +450,40 @@ namespace WorldModelBuilder
             return f;
         }
 
+        // EnemyFacts::immuneDamageMask and buffs (boss doc G10, G11).
+        void FillImmunityAndBuffs(Creature* creature, EnemyFacts& e)
+        {
+            for (uint32 s = SPELL_SCHOOL_NORMAL; s < MAX_SPELL_SCHOOL; ++s)
+                if (creature->IsImmuneToDamage(SpellSchoolMask(1u << s)))
+                    e.immuneDamageMask |= 1u << s;
+            for (auto const& itr : creature->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = itr.second;
+                if (!holder || !holder->IsPositive())
+                    continue;
+                SpellEntry const* spell = holder->GetSpellProto();
+                if (spell->Dispel != DISPEL_MAGIC && spell->Dispel != DISPEL_ENRAGE)
+                    continue;
+                if (std::any_of(e.buffs.begin(), e.buffs.end(), [spell](EnemyBuffFacts const& b) { return b.spellId == spell->Id; }))
+                    continue;
+                EnemyBuffFacts b;
+                b.spellId = spell->Id;
+                b.dispelType = uint8(spell->Dispel);
+                b.remainingMs = holder->GetAuraDuration() > 0 ? uint32(holder->GetAuraDuration()) : 0;
+                EnrageFacts const boost = EnrageOf(spell->Id);
+                if (boost.spellId)
+                {
+                    b.periodMult = boost.periodMult;
+                    b.damageMult = boost.damageMult;
+                    b.damageFlat = boost.damageFlat;
+                }
+                for (Aura const* aura : creature->GetAurasByType(SPELL_AURA_SCHOOL_ABSORB))
+                    if (aura->GetId() == spell->Id)
+                        b.absorb += std::max(0.0f, float(aura->GetModifier()->m_amount));
+                e.buffs.push_back(b);
+            }
+        }
+
         void AddInterrupt(TeamBotAI const* ai, SpellEntry const* spell, PartyMemberFacts& f)
         {
             if (!spell || !SpellTags::StopsCasts(spell))
@@ -740,6 +774,7 @@ namespace WorldModelBuilder
             }
             e.acting = !creature->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) &&
                        !creature->IsTotalImmune() && !creature->IsInEvadeMode();
+            FillImmunityAndBuffs(creature, e);
             if (creature->IsTemporarySummon())
             {
                 e.summoned = true;
@@ -976,6 +1011,34 @@ namespace WorldModelBuilder
                           spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
                           !ai->IsFormManaReserved(spell);
                 f.dispels.push_back(a);
+            }
+        }
+
+        // Removals of enemy buffs: ClassKit::Purges (PurgeAssigner, boss doc G11).
+        void FillPurges(TeamBotAI const* ai, PartyMemberFacts& f)
+        {
+            Player* me = ai->me;
+            for (SpellEntry const* spell : ai->Kit().Purges())
+            {
+                if (!spell)
+                    continue;
+                DispelAbility a;
+                a.spellId = spell->Id;
+                a.hostileOk = true;
+                for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                    if (spell->Effect[i] == SPELL_EFFECT_DISPEL)
+                        a.dispelMask |= Spells::GetDispellMask(DispelType(spell->EffectMiscValue[i]));
+                if (!a.dispelMask)
+                    continue;
+                a.cooldownSec = spell->GetRecoveryTime() / 1000.0f;
+                a.maxRange = sSpellRangeStore.LookupEntry(spell->rangeIndex) ? CombatBotBaseAI::SpellMaxRange(me, spell) : 30.0f;
+                if (Powers(spell->powerType) == POWER_MANA)
+                    a.manaCost = uint32(Spell::CalculatePowerCost(spell, me));
+                a.ready = !f.controlled && !f.silenced && me->IsSpellReady(spell) &&
+                          me->GetPower(Powers(spell->powerType)) >= Spell::CalculatePowerCost(spell, me) &&
+                          spell->GetErrorAtShapeshiftedCast(me->GetShapeshiftForm()) == SPELL_CAST_OK &&
+                          !ai->IsFormManaReserved(spell);
+                f.purges.push_back(a);
             }
         }
 
@@ -2118,6 +2181,7 @@ namespace WorldModelBuilder
                         FillInterrupts(ai, f);
                         FillCastFailures(ai, f);
                         FillDispels(ai, f);
+                        FillPurges(ai, f);
                         FillControls(ai, f);
                         FillFleeStops(ai, f);
                         FillTaunts(ai, f);
@@ -2134,6 +2198,9 @@ namespace WorldModelBuilder
                         FillTotems(ai, f);
                         if (SpellEntry const* ward = RaceKit::FearWard(*ai))
                             f.fearWardSpellId = ward->Id;
+                        // Weapon fighters (boss doc G10).
+                        if (f.role == ROLE_TANK || f.role == ROLE_MELEE_DPS || f.classId == CLASS_HUNTER)
+                            f.damageSchoolMask = SPELL_SCHOOL_MASK_NORMAL;
                         f.fillerManaPerSec = FillerManaPerSec(ai);
                         FillFillerPower(ai, f);
                         if (SpellEntry const* filler = ai->Kit().Filler())

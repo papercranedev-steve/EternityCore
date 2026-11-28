@@ -58,6 +58,9 @@ namespace Commander
     {
         if (!e.acting || !e.health || e.onAllyOnly)
             return false;
+        // Its weapon does nothing to it (Theka the Martyr, boss doc G10). A tank keeps holding it.
+        if (bot.damageSchoolMask && bot.role != ROLE_TANK && !(bot.damageSchoolMask & ~e.immuneDamageMask))
+            return false;
         if (e.control.spellId && e.control.breaksOnDamage &&
             !plan.controlEnd.Breaks(bot.guid, e.guid, world.refreshedAtMs))
             return false;

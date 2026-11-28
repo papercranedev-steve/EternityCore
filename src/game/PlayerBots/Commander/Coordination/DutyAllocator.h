@@ -65,6 +65,7 @@ namespace Commander
         FleeStop,       // FleeStopAssigner: stun / root / slow an enemy running away (a reservation until it is due)
         Boost,          // BoostAssigner: a cooldown on a party member (Innervate, Power Infusion, Mana Tide)
         Resurrect,      // ResurrectAssigner: a dead healer or tank back in the fight (Rebirth)
+        Purge,          // PurgeAssigner: take a buff off an enemy (Purge, Tranquilizing Shot)
     };
 
     // Needs of different kinds that solve the same problem (team rescue, 2026-11-07): a need is

@@ -22,6 +22,7 @@ namespace DutyAllocator
             case DutyKind::FleeStop: return "flee stop";
             case DutyKind::Boost: return "boost";
             case DutyKind::Resurrect: return "resurrect";
+            case DutyKind::Purge: return "purge";
         }
         return "?";
     }

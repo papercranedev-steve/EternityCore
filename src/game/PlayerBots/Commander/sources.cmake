@@ -483,6 +483,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Coordination/Duties/TotemAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Duties/FearWardAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/FearWardAssigner.cpp
+  ${COMMANDER_DIR}/Coordination/Duties/PurgeAssigner.h
+  ${COMMANDER_DIR}/Coordination/Duties/PurgeAssigner.cpp
   ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.h
   ${COMMANDER_DIR}/Coordination/Duties/JudgementAssigner.cpp
   ${COMMANDER_DIR}/Perception/Profiles/PaladinBuffs.h
@@ -507,6 +509,8 @@ set(COMMANDER_SRCS
   ${COMMANDER_DIR}/Behaviors/Combat/FearBreakAheadBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Support/FearWardBehavior.h
   ${COMMANDER_DIR}/Behaviors/Support/FearWardBehavior.cpp
+  ${COMMANDER_DIR}/Behaviors/Support/PurgeBehavior.h
+  ${COMMANDER_DIR}/Behaviors/Support/PurgeBehavior.cpp
   ${COMMANDER_DIR}/Behaviors/Combat/RenewSurvivalBehavior.h
   ${COMMANDER_DIR}/Behaviors/Combat/RenewSurvivalBehavior.cpp
   ${COMMANDER_DIR}/Perception/Profiles/WarlockCurses.h

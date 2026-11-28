@@ -936,6 +936,16 @@ namespace Commander
         bool manaCritical = false;   // a mana leech takes mana a healer needs (DispelValue::Worth): urgent
     };
 
+    // One buff to take off an enemy, and who does it (PurgeAssigner, boss doc G11).
+    struct PurgeDuty
+    {
+        ObjectGuid enemy;
+        uint32 auraSpellId = 0;      // the buff
+        ObjectGuid bot;
+        uint32 spellId = 0;          // Purge, Dispel Magic, Tranquilizing Shot
+        float points = 0.0f;         // what taking it off is worth (PurgeAssigner::Worth)
+    };
+
     // One control spell to put on an enemy now, and who casts it (CrowdControlAssigner).
     struct ControlDuty
     {
@@ -2037,6 +2047,7 @@ namespace Commander
         PlayerOrders orders;
         std::vector<InterceptDuty> intercepts;
         std::vector<DispelDuty> dispels;
+        std::vector<PurgeDuty> purges;
         std::vector<ControlDuty> controls;
         std::vector<RescueDuty> rescues;
         std::vector<FleeStopDuty> fleeStops;

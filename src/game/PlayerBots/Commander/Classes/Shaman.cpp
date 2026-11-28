@@ -21,6 +21,11 @@ namespace Commander
                 return { s.pCureDisease, s.pCurePoison };
             }
 
+            std::vector<SpellEntry const*> Purges() const override
+            {
+                return { m_bot.m_spells.shaman.pPurge };
+            }
+
             std::vector<SpellEntry const*> FleeStoppers() const override
             {
                 return { m_bot.m_spells.shaman.pFrostShock };

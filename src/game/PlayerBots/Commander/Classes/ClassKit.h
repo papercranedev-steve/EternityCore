@@ -157,6 +157,10 @@ namespace Commander
         // freesMechanics, read from the spell): what DispelAssigner can give it. Only the Commander casts them in
         // combat (DispelBehavior); out of combat the rotation does.
         virtual std::vector<SpellEntry const*> Dispels() const { return {}; }
+        // Removals of an enemy's buffs (shaman Purge, priest Dispel Magic: magic; hunter
+        // Tranquilizing Shot: enrage). What each removes is read from its dispel effects
+        // (PartyMemberFacts::purges); PurgeAssigner chooses, PurgeBehavior casts (boss doc G11).
+        virtual std::vector<SpellEntry const*> Purges() const { return {}; }
         bool CanDispel() const
         {
             for (SpellEntry const* s : Dispels())

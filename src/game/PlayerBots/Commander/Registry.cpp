@@ -38,6 +38,8 @@
 #include "Commander/Behaviors/Combat/StoneformBehavior.h"
 #include "Commander/Behaviors/Combat/FearBreakAheadBehavior.h"
 #include "Commander/Behaviors/Support/FearWardBehavior.h"
+#include "Commander/Behaviors/Support/PurgeBehavior.h"
+#include "Commander/Coordination/Duties/PurgeAssigner.h"
 #include "Commander/Behaviors/Combat/RenewSurvivalBehavior.h"
 #include "Commander/Behaviors/Combat/CurseBehavior.h"
 #include "Commander/Coordination/Duties/CurseAssigner.h"
@@ -82,6 +84,7 @@ namespace Commander
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<InterruptBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PullBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<DispelBehavior>()));
+        out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<PurgeBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<CrowdControlBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RescueBehavior>()));
         out.push_back(std::make_unique<BehaviorSlot>(std::make_unique<RenewSurvivalBehavior>()));
@@ -137,6 +140,7 @@ namespace Commander
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FocusAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<TargetAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<DispelAssigner>()));
+        out.push_back(std::make_unique<AssignerSlot>(std::make_unique<PurgeAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<CrowdControlAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<RescueAssigner>()));
         out.push_back(std::make_unique<AssignerSlot>(std::make_unique<FleeStopAssigner>()));

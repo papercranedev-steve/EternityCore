@@ -64,6 +64,7 @@ namespace Commander
         // Can also target a member mind controlled by a creature (Dispel Magic; the friendly-only
         // ones fail on such a target: TeamBotAI::SelectDispelTarget).
         bool hostileOk = false;
+        uint32 manaCost = 0;         // purges (PurgeAssigner): mana per cast, 0 for other powers
     };
 
     // A crowd control spell a bot has learned (ClassKit::Controls): what it can take out of the
@@ -659,6 +660,11 @@ namespace Commander
         bool tankStance = false;
         std::vector<InterruptAbility> interrupts;   // bots only
         std::vector<DispelAbility> dispels;         // bots only
+        std::vector<DispelAbility> purges;          // bots only: on enemies (ClassKit::Purges)
+        // Bots that fight with their weapon (tanks, melee, hunters): SPELL_SCHOOL_MASK_NORMAL.
+        // An enemy immune to all of it is not their damage target (TargetAssigner, boss doc
+        // G10). 0 = not checked (casters: the hands layer skips an immune spell for the next).
+        uint32 damageSchoolMask = 0;
         std::vector<ControlAbility> controls;       // bots only
         std::vector<TauntAbility> taunts;           // tank-role bots only
         std::vector<MitigationAbility> mitigations; // tank-role bots only
@@ -885,6 +891,20 @@ namespace Commander
         float damageFlat = 0.0f;    // SPELL_AURA_MOD_DAMAGE_DONE (physical), per swing
     };
 
+    // A buff on an enemy a purge can take off (EnemyFacts::buffs, boss doc G11): positive, of
+    // dispel type magic or enrage. What it adds: a melee boost (as EnrageFacts, Frenzy:
+    // haste), an absorb shield (Power Word: Shield). PurgeAssigner values it.
+    struct EnemyBuffFacts
+    {
+        uint32 spellId = 0;
+        uint8 dispelType = 0;       // DispelType (1 magic, 9 enrage)
+        uint32 remainingMs = 0;     // 0 = no end
+        float periodMult = 1.0f;    // its melee boost (EnrageFacts)
+        float damageMult = 1.0f;
+        float damageFlat = 0.0f;
+        float absorb = 0.0f;        // absorb left of its school absorb auras
+    };
+
     // When an enemy last started casting a spell (EnemyFacts::castStarts).
     struct CastStart
     {
@@ -937,6 +957,11 @@ namespace Commander
         // The controls its spells (any source of its profile) can put on us, as 1 << mechanic
         // (SpellProfile::controlMechanics): Tremor Totem for a fear, charm or sleep (boss doc G8).
         uint32 controlMechanics = 0;
+        // Schools its damage does nothing to now (Unit::IsImmuneToDamage: template and auras;
+        // Theka the Martyr's transform: physical and shadow), 1 << school. Boss doc G10.
+        uint32 immuneDamageMask = 0;
+        // Buffs a purge can take off (EnemyBuffFacts, boss doc G11).
+        std::vector<EnemyBuffFacts> buffs;
         Position3 pos;
         // Where it faces (2D angle), for its cones (boss doc G4): a creature faces the target
         // of the cast it reads, else its victim (Unit::SetInFront on attack and taunt), else its

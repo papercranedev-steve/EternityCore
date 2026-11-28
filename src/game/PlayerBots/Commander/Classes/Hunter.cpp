@@ -13,6 +13,11 @@ namespace Commander
         public:
             using ClassKit::ClassKit;
 
+            std::vector<SpellEntry const*> Purges() const override
+            {
+                return { m_bot.m_spells.hunter.pTranquilizingShot };
+            }
+
             // Feign Death: the enemies on the hunter turn to someone else (it may be resisted).
             std::vector<SurvivalSpell> Survival() const override
             {

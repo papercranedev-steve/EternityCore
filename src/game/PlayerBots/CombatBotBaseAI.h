@@ -481,6 +481,7 @@ public:
         struct
         {
             SpellEntry const* pAspectOfTheCheetah;
+            SpellEntry const* pTranquilizingShot;   // removes an enemy's frenzy (PurgeAssigner, boss doc G11)
             SpellEntry const* pAspectOfTheHawk;
             SpellEntry const* pSerpentSting;
             SpellEntry const* pAimedShot;
