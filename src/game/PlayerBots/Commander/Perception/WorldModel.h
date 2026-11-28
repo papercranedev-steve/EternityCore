@@ -465,6 +465,12 @@ namespace Commander
         float hps = 0.0f;           // healing per second: heal (crits included) / max(cast, GCD)
         float perMana = 0.0f;       // healing per mana
         float castSec = 0.0f;       // until the first one lands
+        // The spell and one cast of it (SurvivalValue::SaveByHeal: a backup heal); 0 for the
+        // rates of a FightLoad input made by hand.
+        uint32 spellId = 0;
+        float amount = 0.0f;        // expected heal, crits included
+        uint32 manaCost = 0;
+        float rangeYd = 0.0f;
     };
 
     // One ClassKit::AreaDamage spell of a damage dealer bot, with its numbers on the bot's

@@ -179,6 +179,10 @@ namespace Commander
         }
 
         // 2. Members about to die (Perception/Values/SurvivalValue.h): one spell to keep each alive.
+        // No healer bot that can act (a real player heals, or nobody): the spare healers' heals
+        // count too (header "Backup heals").
+        bool const backupHeals = std::none_of(world.party.begin(), world.party.end(), [](PartyMemberFacts const& h)
+            { return h.isBot && !h.isPet && h.CanAct() && h.HealsTeam(); });
         for (PartyMemberFacts const& m : world.party)
         {
             // Pets: only one that holds enemies for the party (an off-tank, user 2026-11-15:
@@ -220,6 +224,35 @@ namespace Commander
                     need.points = std::max(need.points, o.Net());
                 }
             }
+            // Backup heals (header): no healer bot, the spare healers' best heal that lands in time.
+            if (backupHeals)
+                for (PartyMemberFacts const& b : world.party)
+                {
+                    if (!b.isBot || b.isPet || !b.CanAct() || b.spareHealRates.empty() || Tanks::IsTank(b))
+                        continue;
+                    RescueValue::Option best;
+                    uint32 bestSpell = 0;
+                    for (HealRate const& r : b.spareHealRates)
+                    {
+                        RescueValue::Option const o = SurvivalValue::SaveByHeal(world, m, danger, b, r);
+                        if (o.Net() > best.Net())
+                        {
+                            best = o;
+                            bestSpell = r.spellId;
+                        }
+                    }
+                    if (!bestSpell || best.Net() <= 0.0f)
+                        continue;
+                    DutyCandidate c;
+                    c.bot = b.guid;
+                    c.spellId = bestSpell;
+                    c.rank = best.Net();
+                    c.value = best.Net();
+                    c.valued = true;
+                    need.candidates.push_back(c);
+                    consumable.push_back(false);
+                    need.points = std::max(need.points, best.Net());
+                }
             // The same rule for the allocator's totals: a consumable is worth less than every
             // spell candidate, so it only wins when the spell bots are worth more elsewhere.
             float lowestSpell = std::numeric_limits<float>::max();

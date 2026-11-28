@@ -3,6 +3,8 @@
 #include "HealSpells.h"
 #include "SpellEntry.h"
 #include "SpellMgr.h"
+#include "Spell.h"
+#include "DBCStores.h"
 #include <algorithm>
 
 namespace Commander
@@ -31,6 +33,10 @@ namespace HealCapacity
             r.hps = expected / busySec;
             r.perMana = expected / cost;
             r.castSec = float(spell->GetCastTime(me)) / 1000.0f;
+            r.spellId = spell->Id;
+            r.amount = expected;
+            r.manaCost = uint32(cost);
+            r.rangeYd = Spells::GetSpellMaxRange(sSpellRangeStore.LookupEntry(spell->rangeIndex));
             rates.push_back(r);
         }
     }

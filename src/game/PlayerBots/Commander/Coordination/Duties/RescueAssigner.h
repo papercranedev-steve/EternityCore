@@ -38,6 +38,13 @@
  * threat, must walk into taunt range first, or keeps a waiting taunt's enemy in reach
  * (TankTargets.cpp); EscapeBehavior lets the victim keep casting instead of running to the tank.
  *
+ * Backup heals (player combat doc T3, user 2026-11-28): while no healer bot can act (a real
+ * player heals and may not keep up, or nobody heals), a member about to die also gets the
+ * spare healers' heals as candidates (hybrid bots that are not tanks, PartyMemberFacts::
+ * spareHealRates): per bot its best SurvivalValue::SaveByHeal, offered when it lands before
+ * the member dies and pays. Only the dying: no top-ups, no health thresholds. RescueBehavior
+ * casts it like the other saves (a druid leaves its form first, CanCastWithStance).
+ *
  * Not yet (doc section 5): a shield on the victim, the victim running to the tank
  * (EscapeBehavior still decides that by itself, it only makes the tank's walk shorter), and
  * "someone is about to die" (Shield Wall, Last Stand, Blessing of Protection, Lay on Hands).

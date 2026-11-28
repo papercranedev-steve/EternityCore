@@ -110,6 +110,14 @@ namespace Commander
 
         RescueValue::Option Save(WorldModel const& world, PartyMemberFacts const& member, Danger const& danger,
                                  PartyMemberFacts const& caster, SurvivalAbility const& a);
+        // A backup heal (player combat doc T3): one cast of `heal` (a HealRate with its spell)
+        // by `caster` on `member`. It lands after its cast (after the caster's current cast);
+        // none when that is not before the member would die, out of range or short of mana.
+        // ttd' = the danger's timeline with the heal added there (capped at the health missing).
+        // benefit = DeathPenalty x (Risk(ttd) - Risk(ttd')) + Points(heal used);
+        // cost = LostAction(caster, max(cast, GCD)) + ManaWorth of its mana.
+        RescueValue::Option SaveByHeal(WorldModel const& world, PartyMemberFacts const& member, Danger const& danger,
+                                       PartyMemberFacts const& caster, HealRate const& heal);
     }
 }
 

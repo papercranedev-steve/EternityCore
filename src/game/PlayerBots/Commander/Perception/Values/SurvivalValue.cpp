@@ -229,3 +229,32 @@ namespace SurvivalValue
     }
 }
 }
+namespace Commander
+{
+    namespace SurvivalValue
+    {
+        RescueValue::Option SaveByHeal(WorldModel const& world, PartyMemberFacts const& member, Danger const& danger,
+                                       PartyMemberFacts const& caster, HealRate const& heal)
+        {
+            RescueValue::Option o;
+            if (!heal.spellId || heal.amount <= 0.0f || caster.mana < heal.manaCost)
+                return o;
+            if (caster.guid != member.guid && PackResolver::Distance(caster.pos, member.pos) > heal.rangeYd)
+                return o;
+            float const landSec = heal.castSec + (caster.casting ? caster.castRemainingMs / 1000.0f : 0.0f);
+            if (landSec >= danger.ttd)
+                return o;
+            float const healUsed = std::min(heal.amount, float(member.maxHealth) - float(member.health));
+            if (healUsed <= 0.0f)
+                return o;
+            IncomingTimeline::Timeline timeline = danger.timeline;
+            timeline.AddHeal(landSec, healUsed, heal.spellId, caster.guid);
+            float const ttd = timeline.TimeToLose(float(member.health) + member.absorb, false, danger.Healers());
+            o.benefit = Value::DeathPenalty(member) * (Risk(danger.ttd) - Risk(ttd)) + Value::Points(world, healUsed);
+            o.cost = Value::LostAction(world, caster, std::max(Value::GCD_SEC, heal.castSec)) +
+                     ManaWorth::Points(world, caster, float(heal.manaCost));
+            o.urgent = true;
+            return o;
+        }
+    }
+}
