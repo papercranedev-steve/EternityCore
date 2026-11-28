@@ -8,7 +8,7 @@
  * its own, a target is not exclusive (five bots may share one). Steps of Apply:
  *  1. end player orders whose enemy is gone (ORDER_GRACE_MS after the order) / fight is over;
  *  2. party focus (ChooseFocus): Smith's rule from FocusAssigner::Evaluate, sticky at
- *     FocusAssigner::STICKY_SHARE, never an intercepted enemy, one about to be controlled
+ *     FocusAssigner::STICKY_SHARE (a real player's target at PLAYER_FOCUS_SHARE first), never an intercepted enemy, one about to be controlled
  *     (a CrowdControl primary this allocation), one in a patrol's path, a fresh enemy
  *     (FocusAssigner::IsEligible). Doctrine KillFirst (Coordination/Doctrine/TacticalDoctrine.h,
  *     the Area tactic without a lure, since 2026-11-09/10): only Outlier enemies while one is eligible (the pile is the area
@@ -68,6 +68,10 @@ namespace Commander
         static constexpr uint32 ORDER_GRACE_MS = 3000;
         // A suggested switch ends this long before the switch would come too late (header).
         static constexpr float SUGGEST_MARGIN_SEC = 1.0f;
+        // The focus follows a real player's target (not a tank's; the leader first) when it is
+        // allowed (kill order, doctrine, eligible) and its score is at least this share of the
+        // best (player combat doc T1, user 2026-11-28; untested guess). Beats the sticky rule.
+        static constexpr float PLAYER_FOCUS_SHARE = 0.5f;
 
         AssignStage GetStage() const override { return AssignStage::Duties; }
         char const* GetId() const override { return "target"; }

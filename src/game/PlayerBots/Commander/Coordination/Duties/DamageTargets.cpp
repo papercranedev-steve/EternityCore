@@ -35,8 +35,11 @@ namespace DamageTargets
         if (ctx.plan.doctrine.Has(e.guid, STAMP_NO_HOLD))
             return true;
         // Nobody fights it yet: the tank's first (its opener builds the lead), else the player's.
+        // A real player tanking opens it himself (player combat doc T2, user 2026-11-28): before,
+        // without a tank bot a damage dealer bot hit it first and held it. His orders and the
+        // pull's target are forced before this rule (TargetAssigner.h).
         if (e.victim.IsEmpty())
-            return !ctx.tankBot;
+            return !ctx.tankBot && !ctx.humanTank;
         if (e.victim == bot.guid)
             return true;
         // An off-tank holding it (doctrine OffTank.h) is its holder too.

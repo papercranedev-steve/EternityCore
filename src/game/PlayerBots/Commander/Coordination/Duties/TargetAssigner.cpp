@@ -18,10 +18,12 @@ namespace Commander
     // ---- TargetContext ----
 
     TargetContext::TargetContext(WorldModel const& w, TeamPlan const& p)
-        : world(w), plan(p), tickSec(sCommanderMgr.GetBotUpdateInterval() / 1000.0f), tankBot(false)
+        : world(w), plan(p), tickSec(sCommanderMgr.GetBotUpdateInterval() / 1000.0f), tankBot(false), humanTank(false)
     {
         for (PartyMemberFacts const* t : Tanks::Alive(world, true))
             tankBot = tankBot || t->CanAct();
+        if (PartyMemberFacts const* main = Tanks::Main(world))
+            humanTank = !main->isBot && !main->isPet && main->alive;
 
         for (EnemyFacts const& e : world.enemies)
             if (!e.onAllyOnly)
@@ -132,6 +134,24 @@ namespace Commander
                 orders.leaveAlone.clear();
         }
 
+        // The enemy a real player hits who is not a tank (the leader first), else null.
+        EnemyFacts const* PlayerTarget(WorldModel const& world)
+        {
+            auto const of = [&world](PartyMemberFacts const& m) -> EnemyFacts const*
+            {
+                if (m.isBot || m.isPet || !m.alive || m.victim.IsEmpty() || Tanks::IsTank(m))
+                    return nullptr;
+                return world.FindEnemy(m.victim);
+            };
+            if (PartyMemberFacts const* leader = world.FindMember(world.leader))
+                if (EnemyFacts const* e = of(*leader))
+                    return e;
+            for (PartyMemberFacts const& m : world.party)
+                if (EnemyFacts const* e = of(m))
+                    return e;
+            return nullptr;
+        }
+
         // Moved from FocusAssigner::Apply (2026-11-07): the focus is chosen where the targets are.
         void ChooseFocus(WorldModel const& world, std::vector<DutyResult> const& results, TeamPlan& plan)
         {
@@ -230,9 +250,26 @@ namespace Commander
                 return;
             }
 
+            bool hisChoice = false;
+            // The player's target (player combat doc T1, user 2026-11-28): what a real player who
+            // is not a tank hits is the focus when it is allowed and worth PLAYER_FOCUS_SHARE of
+            // the best; before the sticky rule (he switched: the party follows him).
+            if (EnemyFacts const* his = PlayerTarget(world))
+                if (his->guid != best->guid && allowed(*his))
+                {
+                    FocusScore s = FocusAssigner::Evaluate(world, *his);
+                    if (s.score > 0.0f && s.score >= TargetAssigner::PLAYER_FOCUS_SHARE * bestScore.score)
+                    {
+                        best = his;
+                        bestScore = std::move(s);
+                        bestScore.reason += ", the player's target";
+                        hisChoice = true;
+                    }
+                }
+
             // Sticky: switching costs every damage dealer a target change, and scores move with
-            // health and victims every refresh.
-            if (!plan.focus.enemy.IsEmpty() && plan.focus.enemy != best->guid)
+            // health and victims every refresh. (Not against his choice.)
+            if (!hisChoice && !plan.focus.enemy.IsEmpty() && plan.focus.enemy != best->guid)
             {
                 EnemyFacts const* previous = world.FindEnemy(plan.focus.enemy);
                 if (previous && allowed(*previous))

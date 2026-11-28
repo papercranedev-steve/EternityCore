@@ -76,6 +76,7 @@ namespace Commander
         TeamPlan const& plan;
         float tickSec;
         bool tankBot;                   // an alive tank bot that can act
+        bool humanTank;                 // the main tank is a real player, alive (he opens: player combat doc T2)
         std::vector<EnemyFacts const*> candidates;
 
         EnemyFacts const* Find(ObjectGuid guid) const;
