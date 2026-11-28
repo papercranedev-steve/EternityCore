@@ -1,7 +1,11 @@
 #include "Commander/Encounters/EncounterRegistry.h"
 #include "Commander/Encounters/BlackfathomFires.h"
 #include "Commander/Encounters/BlackrockDepthsAngerforge.h"
+#include "Commander/Encounters/BlackrockDepthsArgelmach.h"
 #include "Commander/Encounters/BlackrockDepthsFlamelash.h"
+#include "Commander/Encounters/BlackrockDepthsRingOfLaw.h"
+#include "Commander/Encounters/BlackrockDepthsSeven.h"
+#include "Commander/Encounters/BlackrockDepthsThaurissan.h"
 #include "Commander/Encounters/BlackrockSpireUrok.h"
 #include "Commander/Encounters/DeadminesVanCleef.h"
 #include "Commander/Encounters/GnomereganGrubbis.h"
@@ -38,7 +42,11 @@ namespace Commander
         {
             { BlackfathomFires::MAP_ID,         &Make<BlackfathomFires> },
             { BlackrockDepthsAngerforge::MAP_ID, &Make<BlackrockDepthsAngerforge> },
+            { BlackrockDepthsArgelmach::MAP_ID, &Make<BlackrockDepthsArgelmach> },
             { BlackrockDepthsFlamelash::MAP_ID, &Make<BlackrockDepthsFlamelash> },
+            { BlackrockDepthsRingOfLaw::MAP_ID, &Make<BlackrockDepthsRingOfLaw> },
+            { BlackrockDepthsSeven::MAP_ID,     &Make<BlackrockDepthsSeven> },
+            { BlackrockDepthsThaurissan::MAP_ID, &Make<BlackrockDepthsThaurissan> },
             { BlackrockSpireUrok::MAP_ID,       &Make<BlackrockSpireUrok> },
             { DeadminesVanCleef::MAP_ID,        &Make<DeadminesVanCleef> },
             { GnomereganGrubbis::MAP_ID,        &Make<GnomereganGrubbis> },

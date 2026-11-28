@@ -17,6 +17,7 @@
 #include "Commander/BotDirectives.h"
 #include "Commander/Commands/BotSpeech.h"
 #include "Commander/Perception/Tanks.h"
+#include "Commander/Perception/Spatial/PackResolver.h"
 #include "Commander/Team.h"
 #include "TeamBotAI.h"
 #include "Group.h"
@@ -63,6 +64,7 @@ namespace Commander
         Refresh(bot, nowMs);
         m_world.waves = WaveEventFacts();
         UpdateEncounter(bot);
+        UpdateBossPreps();
         if (m_activeEncounter)
             m_activeEncounter->DescribeWaves(m_world.waves);
         m_waveSpend.Annotate(m_world, nowMs);
@@ -237,6 +239,32 @@ namespace Commander
         WorldModelBuilder::AddListedEnemies(bot, m_world, listed);
         m_activeEncounter->AddFacts(m_world);
         WorldModelBuilder::ApplyProtection(m_world);     // allies the module marked protected
+    }
+
+    void PartyCommander::UpdateBossPreps()
+    {
+        m_plan.bossPreps.clear();
+        if (m_encounters.empty() || m_world.HasPartyEnemy() || !sCommanderMgr.IsModuleEnabled(EncounterBehavior::Id()))
+            return;
+        for (auto const& encounter : m_encounters)
+            encounter->BeforePull(m_world, m_plan.bossPreps);
+
+        PartyMemberFacts const* leader = m_world.FindMember(m_world.leader);
+        if (!leader || !m_world.humanInTeam)
+            return;
+        for (BossPrep const& prep : m_plan.bossPreps)
+        {
+            if (prep.clearFirst.empty() || !prep.voiceKey[0] ||
+                PackResolver::Distance(leader->pos, prep.bossPos) > BossPrep::WARN_YD)
+                continue;
+            VoiceEvent e;
+            e.key = prep.voiceKey;
+            e.tier = VoiceTier::Essential;
+            e.vars.push_back({ "count", std::to_string(prep.clearFirst.size()) });
+            e.once = "bossprep:" + std::to_string(prep.boss.GetCounter());
+            e.onceMs = BossPrep::WARN_AGAIN_MS;
+            m_plan.voice.push_back(std::move(e));
+        }
     }
 
     void PartyCommander::FlushNotes(TeamBotAI* bot)

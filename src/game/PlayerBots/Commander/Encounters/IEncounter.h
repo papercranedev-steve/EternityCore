@@ -108,6 +108,13 @@ namespace Commander
         // none. Return values computed in Refresh.
         virtual void DescribeWaves(WaveEventFacts& /*out*/) const {}
 
+        // Before a boss is pulled (boss doc G9): what must die first (BossPrep). Called for every
+        // module of the map, active or not, on each refresh while the party does not fight;
+        // facts only (world.packs: idle creatures within PACK_SCAN_RADIUS of the leader).
+        // PartyCommander puts the result in TeamPlan::bossPreps: the clear passes over the boss
+        // while it is not done (ClearPlanner), the party tells the player when he comes near it.
+        virtual void BeforePull(WorldModel const& /*world*/, std::vector<BossPrep>& /*out*/) const {}
+
         // Fight over or module switched off: forget everything about this attempt.
         virtual void OnReset() = 0;
 

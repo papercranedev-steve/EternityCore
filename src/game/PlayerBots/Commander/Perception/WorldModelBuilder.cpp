@@ -535,10 +535,22 @@ namespace WorldModelBuilder
             return c->IsFriendlyTo(reference);
         }
 
-        // Grid visitor: the dynamic objects of harmful persistent area auras (GroundAreaFacts).
+        // Grid visitor: the dynamic objects of harmful persistent area auras (GroundAreaFacts) and
+        // the creatures with a periodic trigger aura up (BystanderAreaFacts candidates).
         struct GroundAreaCollector
         {
             std::vector<DynamicObject*>& found;
+            std::vector<Creature*>& pulsing;
+
+            void Visit(CreatureMapType& m)
+            {
+                for (auto& itr : m)
+                {
+                    Creature* c = itr.getSource();
+                    if (c->IsInWorld() && c->IsAlive() && c->HasAuraType(SPELL_AURA_PERIODIC_TRIGGER_SPELL))
+                        pulsing.push_back(c);
+                }
+            }
 
             void Visit(DynamicObjectMapType& m)
             {
@@ -558,13 +570,30 @@ namespace WorldModelBuilder
         };
 
         // WorldModel::groundAreas: spell areas on the ground placed by something hostile to `me`,
-        // within ALLY_RANGE (plus their radius) of `reference`.
+        // within ALLY_RANGE (plus their radius) of `reference`. WorldModel::bystanderAreas: hostile
+        // creatures there outside the fight, standing still, with a periodic trigger aura up.
         void FillGroundAreas(Player* me, Unit const* reference, WorldModel& world)
         {
             std::vector<DynamicObject*> found;
-            GroundAreaCollector collector{ found };
+            std::vector<Creature*> pulsing;
+            GroundAreaCollector collector{ found, pulsing };
             float const scan = ALLY_RANGE + GROUND_AREA_MAX_RADIUS;
             Cell::VisitGridObjects(reference, collector, scan);
+            for (Creature* c : pulsing)
+            {
+                if (world.FindEnemy(c->GetObjectGuid()) || c->IsMoving() || !c->IsHostileTo(me))
+                    continue;
+                BystanderAreaFacts b;
+                b.guid = c->GetObjectGuid();
+                b.pos = Position3{ c->GetPositionX(), c->GetPositionY(), c->GetPositionZ() };
+                b.level = c->GetLevel();
+                for (Aura const* aura : c->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL))
+                {
+                    int32 const left = aura->GetAuraDuration();
+                    b.auras.push_back({ aura->GetId(), left > 0 ? uint32(left) : 0u });
+                }
+                world.bystanderAreas.push_back(b);
+            }
             for (DynamicObject* d : found)
             {
                 if (!d->IsHostileTo(me) || reference->GetDistance(d) > ALLY_RANGE + d->GetRadius())
@@ -2199,6 +2228,7 @@ namespace WorldModelBuilder
         world.targeted.clear();
         world.scriptedHazards.clear();
         world.groundAreas.clear();
+        world.bystanderAreas.clear();
         world.leader = Team::LeaderOf(me);
         world.humanInTeam = std::any_of(members.begin(), members.end(), [](Player* p)
             { return p && !(p->AI() && dynamic_cast<TeamBotAI const*>(p->AI())); });

@@ -138,6 +138,20 @@ namespace Commander
         }
     };
 
+    // A boss whose pull wants creatures dead first (IEncounter::BeforePull, boss doc G9): Golem
+    // Lord Argelmach calls every golem within 80 yd when he is pulled. TeamPlan::bossPreps.
+    struct BossPrep
+    {
+        ObjectGuid boss;
+        Position3 bossPos;
+        std::vector<ObjectGuid> clearFirst;     // alive and idle now
+        // PlayerBots/i18n key said when the leader comes within BossPrep::WARN_YD ({count}:
+        // clearFirst.size()); empty = none.
+        char const* voiceKey = "";
+        static constexpr float WARN_YD = 40.0f;
+        static constexpr uint32 WARN_AGAIN_MS = 2 * 60 * 1000;
+    };
+
     // A pack a clear would leave that the player may want (ClearPlan::asks): AutoClear asks him.
     struct ClearAsk
     {
@@ -218,6 +232,8 @@ namespace Commander
         // First member of packs in range by straight line but with no walkable way from the
         // leader (PackRouteState::NoWay), already reported. Looked at again every round.
         std::vector<ObjectGuid> noWayNoted;
+        // Bosses passed over for their BossPrep (TeamPlan::bossPreps), already reported.
+        std::vector<ObjectGuid> prepNoted;
         bool missingAmmoNoted = false;  // "No ranged pull: ... no arrows" said once per clear
         // Patrols whose patrol-first pull failed (did not come by, called off): not tried again
         // in this clear (a standing one forgets them with the skips).
@@ -2062,6 +2078,9 @@ namespace Commander
         PullOutcome lastPullOutcome = PullOutcome::None;    // set when a pull ends, read by ClearPlanner
         ClearPlan clear;
         AutoClearPlan autoClear;
+        // Bosses near the party that want creatures dead before their pull (BossPrep), out of
+        // combat only (PartyCommander::UpdateBossPreps; empty while fighting).
+        std::vector<BossPrep> bossPreps;
         PullQuestion pullQuestion;
         ReadyWaiver readyWaiver;    // the player's yes to a NotReady question
         HuntPlan hunt;

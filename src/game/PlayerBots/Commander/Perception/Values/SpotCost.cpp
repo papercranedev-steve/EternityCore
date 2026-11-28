@@ -33,7 +33,7 @@ namespace SpotCost
             horizonSec = std::min(horizonSec, zone.endsInSec);
         if (!zone.casting)
             return horizonSec / zone.intervalSec;
-        float const later = std::max(0.0f, horizonSec - zone.castRemainingSec) / zone.intervalSec;
+        float const later = zone.repeatsHere ? std::max(0.0f, horizonSec - zone.castRemainingSec) / zone.intervalSec : 0.0f;
         bool const current = leaveSec < 0.0f || Dodges(zone, leaveSec);
         return later + (current ? 1.0f : 0.0f);
     }

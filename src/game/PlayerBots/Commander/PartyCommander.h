@@ -103,6 +103,11 @@ namespace Commander
         // Picks the matching boss module (OnReset on the one that stops matching), then its
         // Refresh and AddFacts. Before the assigners.
         void UpdateEncounter(TeamBotAI* bot);
+
+        // TeamPlan::bossPreps from every boss module of the map (IEncounter::BeforePull) while
+        // the party does not fight, and the line to the players when the leader comes within
+        // BossPrep::WARN_YD of such a boss. Empty while fighting.
+        void UpdateBossPreps();
         // TeamPlan::notes: said in party chat by the main tank bot while debug speech is on
         // (BotSpeech::Report); always into the note log.
         void FlushNotes(TeamBotAI* bot);

@@ -67,8 +67,6 @@ namespace HazardZones
         // destination), 0 = none.
         float DestAreaRadius(SpellEntry const* spell)
         {
-            if (!(spell->Targets & TARGET_FLAG_DEST_LOCATION))
-                return 0.0f;
             float radius = 0.0f;
             for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             {
@@ -305,6 +303,7 @@ namespace HazardZones
             z.kind = s.kind;
             z.center = s.atDest ? e.castDest : e.pos;
             z.onGround = s.atDest || s.onGround;
+            z.repeatsHere = !s.atDest;
             z.radius = s.rawRadius + RADIUS_MARGIN;
             z.control = hp->controls && amounts.controlSec > 0.0f;
             z.breaksOnDamage = hp->breaksOnDamage;
@@ -477,6 +476,31 @@ namespace HazardZones
             HazardZone z;
             if (MakeGroundZone(g, z))
                 zones.push_back(z);
+        }
+        // Periodic areas of hostile creatures outside the fight (header: Pulse).
+        for (BystanderAreaFacts const& b : world.bystanderAreas)
+        {
+            EnemyFacts at;
+            at.guid = b.guid;
+            at.pos = b.pos;
+            at.level = b.level;
+            for (BystanderAreaFacts::Aura const& a : b.auras)
+                at.periodicAuras.push_back(a.spellId);
+            for (BystanderAreaFacts::Aura const& a : b.auras)
+            {
+                SpellEntry const* aura = sSpellMgr.GetSpellEntry(a.spellId);
+                HazardSource s;
+                if (!aura || !PulseOf(aura, false, s))
+                    continue;
+                s.onGround = true;
+                HazardZone z;
+                if (!MakeZone(world, at, s, z))
+                    continue;
+                if (z.damage > 0.0f)
+                    z.roles |= HAZARD_TANK;     // it stands where it is, the enemy follows its tank
+                z.endsInSec = a.msLeft / 1000.0f;
+                zones.push_back(z);
+            }
         }
         return zones;
     }

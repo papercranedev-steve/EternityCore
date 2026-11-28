@@ -24,10 +24,12 @@
  *           turns the enemy instead), melee too; the unit it points at (HazardZone::aim)
  *           cannot leave it. Crystallize 16104 (Mother Smolderweb, 10 yd stun), breaths.
  *           At a destination (boss doc G2, 2026-11-28): an effect at TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC
- *           (16) or AT_DYNOBJ_LOC (28) of a spell with TARGET_FLAG_DEST_LOCATION: Flamestrike
- *           12468 (Jammal'an, 16 + a persistent fire at 28). Only while it is read, centred on
- *           EnemyFacts::castDest (SpellCaster::CastSpell gives it its target's position when it
- *           starts); before that where it lands is not known (random targets). Channels
+ *           (16) or AT_DYNOBJ_LOC (28): Flamestrike 12468 (Jammal'an, TARGET_FLAG_DEST_LOCATION,
+ *           16 + a persistent fire at 28), Fiery Burst 13900 (Magmus, 16 around his unit target).
+ *           Only while it is read, centred on EnemyFacts::castDest (the destination
+ *           SpellCaster::CastSpell gives it when it starts, else the unit target's position);
+ *           before that where it lands is not known. Only this cast counts
+ *           (HazardZone::repeatsHere false): the next lands at its next target. Channels
  *           (Volley 22908) place their area at once: the Ground zone counts it.
  *           Not counted: script targets (7, creatures).
  *  Ground - a spell area on the ground (WorldModel::groundAreas: the dynamic object of a harmful
@@ -41,6 +43,9 @@
  *           (EnemyFacts::periodicAuras, since 2026-11-28: a cast one like Herod's Whirlwind
  *           comes and goes, a template one can be dispelled or run out), also when it is
  *           controlled or silenced (periodic triggers ignore both).
+ *           Also of hostile creatures outside the fight that stand still (WorldModel::bystanderAreas):
+ *           Magmus' Ironhand Guardian statues, Gout of Flame 15529 -> 15538. On the ground, the
+ *           tank leaves them too; until the aura ends.
  *  Range  - (second priority) single target control with a random / not-top target
  *           (creature_spells castTarget 2, 3, 4, 5, 7): Druid's Slumber 8040, 30 yd. Standing
  *           outside the spell range takes the member out of the random pick. Spell list and
@@ -146,6 +151,9 @@ namespace Commander
         bool onGround = false;
         // Seconds until it is gone (Ground: the dynamic object's time left), 0 = not known.
         float endsInSec = 0.0f;
+        // Its later casts land here too. False for a cast at a destination: the next one lands
+        // where its next target stands, so leaving only dodges this one.
+        bool repeatsHere = true;
 
         bool DangerousTo(uint8 roleBit) const { return (roles & roleBit) != 0; }
         bool Cone() const { return arc != 0.0f; }

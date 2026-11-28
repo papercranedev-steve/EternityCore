@@ -929,6 +929,24 @@ namespace Commander
         uint32 casterLevel = 0;     // for the tick amounts
     };
 
+    // A hostile creature outside the fight, standing still, with a periodic trigger aura up
+    // (WorldModel::bystanderAreas, boss doc G2): Magmus' Ironhand Guardian statues (8982) breathe
+    // Gout of Flame (15529 -> 15538, 30 yd around them, every second for 10 s) from their spell
+    // list and EventAI, never fighting anyone. HazardZones makes Pulse zones of the auras whose
+    // triggered spell is an area around it, on the ground (it does not move).
+    struct BystanderAreaFacts
+    {
+        ObjectGuid guid;
+        Position3 pos;
+        uint32 level = 0;
+        struct Aura
+        {
+            uint32 spellId = 0;
+            uint32 msLeft = 0;      // 0 = no end
+        };
+        std::vector<Aura> auras;
+    };
+
     // One creature_spells row of an enemy with its live timer (CreatureAI::GetSpellsListTimers),
     // EnemyFacts::spellList. Perception/Forecast/IncomingTimeline.h turns it into hits.
     struct ListSpellFacts
@@ -1430,6 +1448,9 @@ namespace Commander
         // Spell areas on the ground placed by creatures hostile to us (GroundAreaFacts), within
         // ALLY_RANGE of the leader; only while the party fights. Cleared by RefreshCombat.
         std::vector<GroundAreaFacts> groundAreas;
+        // Hostile creatures outside the fight with a periodic area aura up (BystanderAreaFacts),
+        // same scan as groundAreas. Cleared by RefreshCombat.
+        std::vector<BystanderAreaFacts> bystanderAreas;
         // An event with waves going on (boss doc 2.3), told by the boss module
         // (IEncounter::DescribeWaves) each refresh; inactive otherwise. Forecast/WaveEvent.h.
         WaveEventFacts waves;

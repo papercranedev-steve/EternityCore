@@ -141,6 +141,16 @@ namespace ClearPlanner
             return !mutual || other->ApproachYd() < pack.ApproachYd();
         }
 
+        // The BossPrep of a boss in `pack` with creatures still to kill first, or null.
+        BossPrep const* PrepPending(TeamPlan const& plan, PackFacts const& pack)
+        {
+            for (BossPrep const& prep : plan.bossPreps)
+                if (!prep.clearFirst.empty() &&
+                    AnyMember(pack, [&prep](PackCreature const& c) { return c.guid == prep.boss; }))
+                    return &prep;
+            return nullptr;
+        }
+
         // Any of `guids` is in a pack with a boss.
         bool HasBoss(WorldModel const& world, std::vector<ObjectGuid> const& guids)
         {
@@ -735,6 +745,21 @@ namespace ClearPlanner
                 // (another question waiting: the boss after it)
                 if (askBoss && (!clear.ask.pack.empty() || BossWaits::Holds(plan.autoClear, pack, leader->GetSelectionGuid())))
                     continue;
+                // Its boss module wants creatures dead first (TeamPlan::bossPreps, boss doc G9):
+                // passed over until they are; they are packs of their own for this clear.
+                if (askBoss)
+                {
+                    if (BossPrep const* prep = PrepPending(plan, pack))
+                    {
+                        if (!Contains(clear.prepNoted, prep->boss))
+                        {
+                            clear.prepNoted.push_back(prep->boss);
+                            Note(plan, Format("Not asking about %s yet: %u creature(s) it calls must die first.",
+                                first->GetName(), uint32(prep->clearFirst.size())));
+                        }
+                        continue;
+                    }
+                }
                 if ((boss && !askBoss) || passive)
                 {
                     Skip(clear, pack);

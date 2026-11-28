@@ -156,6 +156,80 @@ namespace BossSheets
                 { 9033, {
                     Row(15572, VICTIM, 5000, 10000, 5000, 15000),       // Sunder Armor
                 } },
+                // Magmus (boss_magmus.cpp). Fiery Burst lands around his victim (AT_DEST_LOC,
+                // 10 yd). The hall's Ironhand Guardian statues are on their own spell list and
+                // EventAI (WorldModel::bystanderAreas).
+                { 9938, {
+                    Row(13900, VICTIM, 5000, 5000, 6000, 6000),         // Fiery Burst
+                    Row(24375, SELF, 0, 0, 8000, 8000, 51.0f),          // War Stomp, area stun
+                } },
+                // Doom'rel, last of the Seven (boss_tomb_of_seven.cpp). The event: the boss module.
+                { 9039, {
+                    Row(15245, VICTIM, 10000, 10000, 12000, 12000),     // Shadow Bolt Volley, area
+                    Row(12742, TARGET_T_HOSTILE_RANDOM, 18000, 18000, 25000, 25000), // Immolate
+                    Row(12493, VICTIM, 5000, 5000, 45000, 45000),       // Curse of Weakness
+                    Row(13787, SELF, 16000, 16000, 300000, 300000),     // Demon Armor
+                } },
+                // Emperor Dagran Thaurissan (boss_emperor_dagran_thaurissan.cpp). Hand of
+                // Thaurissan: the script picks a random player but casts on its victim.
+                { 9019, {
+                    Row(17492, VICTIM, 5000, 7500, 10000, 15000),       // Hand of Thaurissan, stun
+                    Row(15636, SELF, 18000, 18000, 18000, 18000),       // Avatar of Flame
+                } },
+                // Ring of Law bosses (one of six at random; the event: the boss module).
+                // Gorosh the Dervish (boss_gorosh_the_dervish.cpp). Whirlwind 15589 is one
+                // instant hit around him, not an aura.
+                { 9027, {
+                    Row(15589, SELF, 12000, 12000, 15000, 15000),       // Whirlwind
+                    Row(15708, VICTIM, 22000, 22000, 15000, 15000),     // Mortal Strike
+                    Row(21049, SELF, 0, 0, 45000, 45000, 51.0f),        // Bloodlust
+                } },
+                // Grizzle (boss_grizzle.cpp).
+                { 9028, {
+                    Row(6524, SELF, 12000, 12000, 8000, 8000),          // Ground Tremor, area stun
+                    Row(8269, SELF, 0, 0, 15000, 15000, 51.0f),         // Frenzy
+                } },
+                // Anub'shiah (boss_anubshiah.cpp).
+                { 9031, {
+                    Row(15472, VICTIM, 7000, 7000, 7000, 7000),         // Shadow Bolt
+                    Row(15470, TARGET_T_HOSTILE_RANDOM, 24000, 24000, 18000, 18000), // Curse of Tongues
+                    Row(12493, VICTIM, 12000, 12000, 45000, 45000),     // Curse of Weakness
+                    Row(13787, SELF, 3000, 3000, 300000, 300000),       // Demon Armor
+                    Row(15471, TARGET_T_HOSTILE_RANDOM, 16000, 16000, 12000, 12000), // Enveloping Web
+                } },
+                // Theldren's band (arena_challenge_ai.cpp, the Banner of Provocation challenge).
+                { 16059, {
+                    Row(17547, VICTIM, 10000, 10000, 8000, 15000),      // Mortal Strike
+                    Row(19134, VICTIM, 30000, 30000, 30000, 40000),     // Intimidating Shout, area fear
+                } },
+                { 16055, {                                              // Va'jashni
+                    Row(17138, TARGET_T_FRIENDLY_INJURED, 10000, 10000, 8000, 14000),  // Flash Heal
+                    Row(20697, TARGET_T_FRIENDLY_INJURED, 20000, 20000, 40000, 50000), // Power Word: Shield
+                    Row(23895, TARGET_T_FRIENDLY_INJURED, 30000, 30000, 55000, 65000), // Renew
+                } },
+                { 16053, {                                              // Korv
+                    Row(21401, TARGET_T_HOSTILE_RANDOM, 10000, 10000, 10000, 12000),   // Frost Shock
+                } },
+                { 16049, {                                              // Lefty
+                    Row(27673, VICTIM, 2000, 2000, 2000, 3000),         // Five Fat Finger Exploding Heart Technique
+                } },
+                { 16051, {                                              // Snokh Blackspine
+                    Row(17273, VICTIM, 15000, 15000, 10000, 20000),     // Pyroblast
+                    Row(13878, VICTIM, 4000, 4000, 3000, 5000),         // Scorch
+                    Row(18399, TARGET_T_HOSTILE_RANDOM, 20000, 20000, 10000, 20000),   // Flamestrike
+                    Row(13323, TARGET_T_HOSTILE_RANDOM, 30000, 30000, 25000, 30000),   // Polymorph
+                } },
+                { 16058, {                                              // Volida
+                    Row(27618, TARGET_T_HOSTILE_RANDOM, 4000, 4000, 14000, 18000),     // Blizzard
+                    Row(12557, VICTIM, 20000, 20000, 20000, 20000),     // Cone of Cold
+                } },
+                // Princess Moira Bronzebeard (same file): heals the Emperor when he is hurt.
+                { 8929, {
+                    Row(15586, TARGET_T_FRIENDLY_INJURED, 12000, 12000, 10000, 10000), // Heal
+                    Row(15587, VICTIM, 16000, 16000, 14000, 14000),     // Mind Blast
+                    Row(15654, VICTIM, 2000, 2000, 18000, 18000),       // Shadow Word: Pain
+                    Row(10934, VICTIM, 8000, 8000, 10000, 10000),       // Smite
+                } },
 
                 // Fears of C++ bosses (boss doc G8: Fear Ward, Tremor Totem, Berserker Rage
                 // before it), only those rows so far.
